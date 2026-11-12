@@ -15,7 +15,9 @@ const { getActorWorkspaceUserId, setActiveTokenAuth, setActiveWorkspaceUser } =
   await import('../../db.ts');
 const { createTestWorkspaceContext } = await import('../../test-helpers.ts');
 const { getActiveWorkspaceId } = createTestWorkspaceContext(await import('../../db.ts'));
-const { ApiError } = await import('../../errors.ts');
+const { apiErrorHandler } = await import('../../errors.ts');
+const { installRequestValidation } = await import('../../http/request-validation.ts');
+const { apiResponseConformance } = await import('../../http/response-conformance.ts');
 const { requirePermission } = await import('../../rbac.ts');
 const { createMission, createProject } = await import('../../repository.ts');
 const { createEverhourExtensionRouter } = await import('./routes.ts');
@@ -54,18 +56,14 @@ async function withEverhourServer(run: (baseUrl: string) => Promise<void>): Prom
     everhourConnectionProvider(validateEverhourApiKey)
   ]);
   const app = express();
+  app.use(apiResponseConformance());
   app.use(express.json());
   app.use(
     '/ext/everhour',
     createEverhourExtensionRouter(makeHandle(), () => profiles)
   );
-  app.use((err: unknown, _req: Request, res: Response, next: NextFunction) => {
-    if (err instanceof ApiError) {
-      res.status(err.status).json({ message: err.message });
-      return;
-    }
-    next(err);
-  });
+  installRequestValidation(app);
+  app.use(apiErrorHandler);
 
   const server = app.listen(0, '127.0.0.1');
   await new Promise<void>(resolve => server.once('listening', resolve));

@@ -18,9 +18,11 @@ info:
     carry x-overlord-extension; the vocabularies are defined in ADR 0048. Every operation has
     request, response and error schemas (phase 4b of the contract migration); an operation
     without them would be marked x-overlord-schema-status stub, and
-    contract/api/openapi-ratchet.json caps how many may be (0). Until phase 4d,
-    contract/api/rest-notes.md remains normative for the behaviour this document cannot yet
-    express; where the two disagree, report the conflict.
+    contract/api/openapi-ratchet.json caps how many may be (0). The backend validates each
+    request against its operation at the route boundary, after authentication, and the backend
+    tests check every response they produce against it (ADR 0051). Rules this document cannot
+    express (authorization, isolation, identity, ordering, side effects and lifecycle) live in
+    the topic documents: architecture.md, authorization.md, protocol.md and data/README.md.
 servers:
   - url: /
     description: The backend origin. Paths are absolute; there is no version prefix.
@@ -263,6 +265,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/OAuthHandoffExchangeResultDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401':
           description: '`{ message: ''This desktop sign-in link has expired or was already used.'' }`.'
           content:
@@ -293,6 +296,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/OAuthHandoffExchangeResultDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401':
           description: '`{ message: ''This browser sign-in link has expired or was already used.'' }`.'
           content:
@@ -372,6 +376,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/AuthProvidersDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '500': { $ref: '#/components/responses/InternalError' }
   /api/health:
     get:
@@ -389,6 +394,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/OkResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '500': { $ref: '#/components/responses/InternalError' }
   /.well-known/oauth-protected-resource:
     get:
@@ -409,6 +415,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/OAuthProtectedResourceMetadata' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '500': { $ref: '#/components/responses/InternalError' }
   /.well-known/oauth-protected-resource/mcp:
     get:
@@ -426,6 +433,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/OAuthProtectedResourceMetadata' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '500': { $ref: '#/components/responses/InternalError' }
   /.well-known/oauth-authorization-server:
     get:
@@ -446,6 +454,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/OAuthAuthorizationServerMetadata' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '500': { $ref: '#/components/responses/InternalError' }
   /oauth/authorize:
     get:
@@ -466,6 +475,7 @@ paths:
             Location:
               required: true
               schema: { type: string }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '500': { $ref: '#/components/responses/InternalError' }
   /oauth/register:
     post:
@@ -495,10 +505,16 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/OAuthClientRegistrationDto' }
         '400':
-          description: '`invalid_redirect_uri`: no acceptable redirect URI.'
+          description: >-
+            `invalid_redirect_uri`: no acceptable redirect URI (`OAuthErrorBody`). A JSON body that does
+            not parse, or a request the boundary refuses (ADR 0051), answers `ErrorEnvelope`
+            (`invalid_json`, `invalid_request`).
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/OAuthErrorBody' }
+              schema:
+                anyOf:
+                  - { $ref: '#/components/schemas/OAuthErrorBody' }
+                  - { $ref: '#/components/schemas/ErrorEnvelope' }
         '413': { $ref: '#/components/responses/PayloadTooLarge' }
         '500': { $ref: '#/components/responses/InternalError' }
   /oauth/token:
@@ -533,10 +549,15 @@ paths:
         '400':
           description: >-
             `unsupported_grant_type`, `invalid_grant` (unknown, expired or mismatched code, or PKCE
-            failure) or `invalid_target` (resource mismatch).
+            failure) or `invalid_target` (resource mismatch), as `OAuthErrorBody`. A JSON body that does
+            not parse, or a request the boundary refuses (ADR 0051), answers `ErrorEnvelope`
+            (`invalid_json`, `invalid_request`).
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/OAuthErrorBody' }
+              schema:
+                anyOf:
+                  - { $ref: '#/components/schemas/OAuthErrorBody' }
+                  - { $ref: '#/components/schemas/ErrorEnvelope' }
         '413': { $ref: '#/components/responses/PayloadTooLarge' }
         '500': { $ref: '#/components/responses/InternalError' }
   /oauth/revoke:
@@ -565,6 +586,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/OkResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '413': { $ref: '#/components/responses/PayloadTooLarge' }
         '500': { $ref: '#/components/responses/InternalError' }
   /oauth/authorize/request:
@@ -655,6 +677,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/McpServerInfoDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401':
           description: >-
             Not authenticated (`{ error: 'Authentication required' }`) with the `WWW-Authenticate` header
@@ -667,6 +690,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '404': { $ref: '#/components/responses/NotFound' }
         '500': { $ref: '#/components/responses/InternalError' }
     post:
       operationId: postMcp
@@ -704,6 +728,7 @@ paths:
                   - $ref: '#/components/schemas/JsonRpcResponse'
                   - type: array
                     items: { $ref: '#/components/schemas/JsonRpcResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401':
           description: As `GET /mcp`.
           headers:
@@ -713,6 +738,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '404': { $ref: '#/components/responses/NotFound' }
         '413': { $ref: '#/components/responses/PayloadTooLarge' }
         '500': { $ref: '#/components/responses/InternalError' }
   /api/agent-session-channels/v1/self:
@@ -732,6 +758,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/AgentSessionChannelSelfDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401':
           description: >-
             No `Authorization: Bearer` value, or one that is not a live channel credential (unknown,
@@ -769,6 +796,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/AgentSessionHeartbeatDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401':
           description: >-
             No `Authorization: Bearer` value, or one that is not a live channel credential (unknown,
@@ -886,6 +914,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/AgentRequestDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401':
           description: >-
             No `Authorization: Bearer` value, or one that is not a live channel credential (unknown,
@@ -931,6 +960,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/AgentRequestLeaseDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401':
           description: >-
             No `Authorization: Bearer` value, or one that is not a live channel credential (unknown,
@@ -978,6 +1008,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ReleasedAgentRequestDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401':
           description: >-
             No `Authorization: Bearer` value, or one that is not a live channel credential (unknown,
@@ -1022,6 +1053,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/OkResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401':
           description: >-
             No `Authorization: Bearer` value, or one that is not a live channel credential (unknown,
@@ -1061,6 +1093,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/AgentRequestResolvedElsewhereDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401':
           description: >-
             No `Authorization: Bearer` value, or one that is not a live channel credential (unknown,
@@ -1092,6 +1125,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ClaimedAgentSessionInputDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401':
           description: >-
             No `Authorization: Bearer` value, or one that is not a live channel credential (unknown,
@@ -1183,6 +1217,7 @@ paths:
                 required: [ acknowledged ]
                 properties:
                   acknowledged: { type: boolean }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401':
           description: >-
             No `Authorization: Bearer` value, or one that is not a live channel credential (unknown,
@@ -1230,6 +1265,7 @@ paths:
                 required: [ failed ]
                 properties:
                   failed: { type: boolean }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401':
           description: >-
             No `Authorization: Bearer` value, or one that is not a live channel credential (unknown,
@@ -1268,6 +1304,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/OkResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401':
           description: >-
             No `Authorization: Bearer` value, or one that is not a live channel credential (unknown,
@@ -1298,6 +1335,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/KnowledgebaseClientMetadataDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '404': { $ref: '#/components/responses/NotFound' }
         '500': { $ref: '#/components/responses/InternalError' }
   /api/connections/knowledgebase/callback:
@@ -1347,10 +1385,14 @@ paths:
             text/html:
               schema: { type: string }
         '400':
-          description: Not connected (or not Cloud), and no return target; a short HTML status page.
+          description: >-
+            Not connected (or not Cloud), and no return target; a short HTML status page. A request
+            carrying a JSON body that does not parse answers `ErrorEnvelope` `invalid_json` (ADR 0051).
           content:
             text/html:
               schema: { type: string }
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
         '500': { $ref: '#/components/responses/InternalError' }
   /api/chat/providers:
     get:
@@ -1379,6 +1421,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ChatProvidersResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404':
           description: >-
@@ -1555,6 +1598,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ChatThreadSnapshotDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404':
           description: >-
@@ -1908,6 +1952,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ChatNotificationListResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404':
           description: >-
@@ -2361,6 +2406,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/AccountConnectionListResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
         '500': { $ref: '#/components/responses/InternalError' }
@@ -2487,6 +2533,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/AccountConnectionDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
         '500': { $ref: '#/components/responses/InternalError' }
@@ -2509,7 +2556,9 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ServerMetaDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
         '500': { $ref: '#/components/responses/InternalError' }
   /api/authorized-workspaces:
     get:
@@ -2532,7 +2581,9 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/AuthorizedWorkspaceDiscoveryDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
         '500': { $ref: '#/components/responses/InternalError' }
   /api/diagnostics/execution-target-migration:
     get:
@@ -2595,6 +2646,7 @@ paths:
               schema: { $ref: '#/components/schemas/MetaDto' }
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
         '413': { $ref: '#/components/responses/PayloadTooLarge' }
         '500': { $ref: '#/components/responses/InternalError' }
@@ -2617,7 +2669,9 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/OrganizationList' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
         '500': { $ref: '#/components/responses/InternalError' }
   "/api/organizations/{id}":
     parameters:
@@ -2683,6 +2737,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/OrganizationAdminList' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -2775,7 +2830,9 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/WorkspaceList' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
         '500': { $ref: '#/components/responses/InternalError' }
     post:
       operationId: postWorkspaces
@@ -2805,6 +2862,7 @@ paths:
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
         '413': { $ref: '#/components/responses/PayloadTooLarge' }
         '500': { $ref: '#/components/responses/InternalError' }
   "/api/workspaces/{id}":
@@ -2864,6 +2922,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/WorkspaceList' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -2894,6 +2953,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/WorkspaceMemberList' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
         '500': { $ref: '#/components/responses/InternalError' }
@@ -2929,6 +2989,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/OkResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -3002,6 +3063,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/WorkspaceInvitationList' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -3070,6 +3132,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/OkResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -3149,6 +3212,7 @@ paths:
           content:
             text/csv:
               schema: { type: string }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -3213,6 +3277,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ProjectStatusList' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -3245,6 +3310,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/WorkspaceExecutionTargetList' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -3363,6 +3429,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/OkResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -3393,6 +3460,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/AgentCatalogDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -3450,6 +3518,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/AgentCatalogDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -3476,6 +3545,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ProfileDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -3530,8 +3600,10 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/DefaultProjectPreferenceDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
         '500': { $ref: '#/components/responses/InternalError' }
     put:
       operationId: putProfileDefaultProject
@@ -3581,8 +3653,10 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/DefaultProjectPreferenceDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
         '500': { $ref: '#/components/responses/InternalError' }
   /api/user-tokens:
     get:
@@ -3603,8 +3677,10 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/UserTokenList' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
         '500': { $ref: '#/components/responses/InternalError' }
     post:
       operationId: postUserTokens
@@ -3692,6 +3768,7 @@ paths:
       responses:
         '204':
           description: Deleted; no body.
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -3722,6 +3799,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/UserTokenDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -3842,6 +3920,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/OkResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -3870,6 +3949,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/CreateWebhookSubscriptionResultDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -3948,6 +4028,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/WebhookDeliveryAttemptsPageDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -4119,6 +4200,7 @@ paths:
             Location:
               required: true
               schema: { type: string }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -4165,8 +4247,10 @@ paths:
           content:
             text/event-stream:
               schema: { $ref: '#/components/schemas/RealtimeStreamEvent' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
         '500': { $ref: '#/components/responses/InternalError' }
   /realtime:
     get:
@@ -4210,8 +4294,10 @@ paths:
           content:
             text/event-stream:
               schema: { $ref: '#/components/schemas/RealtimeStreamEvent' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
         '500': { $ref: '#/components/responses/InternalError' }
   /sync/changes:
     get:
@@ -4246,6 +4332,7 @@ paths:
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
         '500': { $ref: '#/components/responses/InternalError' }
   /api/projects:
     get:
@@ -4273,6 +4360,7 @@ paths:
               schema: { $ref: '#/components/schemas/ProjectList' }
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
         '500': { $ref: '#/components/responses/InternalError' }
     post:
       operationId: postProjects
@@ -4388,6 +4476,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ProjectDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -4437,6 +4526,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/OkResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -4468,6 +4558,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ProjectRunQueuesDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -4578,6 +4669,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/RunQueueEntryDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -4645,6 +4737,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/RunQueueRemovalDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -4730,6 +4823,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/RunQueueEntryDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -4762,6 +4856,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/RunQueueEntryRemovalDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -4789,6 +4884,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ProjectStatusList' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -4914,6 +5010,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/OkResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -4948,6 +5045,7 @@ paths:
               schema: { $ref: '#/components/schemas/ActivityFeedDto' }
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
         '500': { $ref: '#/components/responses/InternalError' }
   /api/objective-transcript:
     get:
@@ -4999,6 +5097,7 @@ paths:
               schema: { $ref: '#/components/schemas/ObjectiveTranscriptPageDto' }
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
         '500': { $ref: '#/components/responses/InternalError' }
   "/api/deliveries/{deliveryId}/deferred-work/{actionId}/resolution":
     parameters:
@@ -5060,6 +5159,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/DeliveryDeferredWorkItemDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -5083,7 +5183,9 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/InboxMissionsResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
         '500': { $ref: '#/components/responses/InternalError' }
   "/api/mobile/live-activities/{activityId}/push-token":
     parameters:
@@ -5161,6 +5263,7 @@ paths:
           description: Registered; no body.
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
         '413': { $ref: '#/components/responses/PayloadTooLarge' }
         '500': { $ref: '#/components/responses/InternalError' }
   /api/mobile/live-activities/start-token/revoke:
@@ -5183,6 +5286,7 @@ paths:
           description: Removed (or absent); no body.
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
         '413': { $ref: '#/components/responses/PayloadTooLarge' }
         '500': { $ref: '#/components/responses/InternalError' }
   /api/mobile/push/device-token:
@@ -5207,6 +5311,7 @@ paths:
           description: Registered; no body.
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
         '413': { $ref: '#/components/responses/PayloadTooLarge' }
         '500': { $ref: '#/components/responses/InternalError' }
   /api/mobile/push/device-token/revoke:
@@ -5229,6 +5334,7 @@ paths:
           description: Removed (or absent); no body.
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
         '413': { $ref: '#/components/responses/PayloadTooLarge' }
         '500': { $ref: '#/components/responses/InternalError' }
   /api/profile/notification-preferences:
@@ -5250,7 +5356,9 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/NotificationPreferencesDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
         '500': { $ref: '#/components/responses/InternalError' }
     put:
       operationId: putProfileNotificationPreferences
@@ -5277,6 +5385,7 @@ paths:
               schema: { $ref: '#/components/schemas/NotificationPreferencesDto' }
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
         '413': { $ref: '#/components/responses/PayloadTooLarge' }
         '500': { $ref: '#/components/responses/InternalError' }
   /api/notifications:
@@ -5300,7 +5409,9 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/NotificationList' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
         '500': { $ref: '#/components/responses/InternalError' }
   "/api/notifications/{id}/read":
     parameters:
@@ -5399,6 +5510,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ProjectTagList' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -5486,6 +5598,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/OkResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -5515,6 +5628,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ProjectResourceList' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -5607,6 +5721,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/OkResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -5645,6 +5760,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/OkResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -5755,6 +5871,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ProjectRepositoryDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -5793,6 +5910,7 @@ paths:
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
         '413': { $ref: '#/components/responses/PayloadTooLarge' }
         '500': { $ref: '#/components/responses/InternalError' }
   "/api/projects/{id}/missions":
@@ -5834,6 +5952,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/MissionList' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -5861,7 +5980,9 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/EverhourUserConnectionDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
         '500': { $ref: '#/components/responses/InternalError' }
     put:
       operationId: putExtEverhourUserConnection
@@ -5904,6 +6025,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '404': { $ref: '#/components/responses/NotFound' }
         '413': { $ref: '#/components/responses/PayloadTooLarge' }
         '429':
           description: >-
@@ -5943,7 +6065,9 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/EverhourUserConnectionDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
         '500': { $ref: '#/components/responses/InternalError' }
   /ext/everhour/integration:
     get:
@@ -5969,7 +6093,9 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/EverhourUserConnectionDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
         '500': { $ref: '#/components/responses/InternalError' }
     put:
       operationId: putExtEverhourIntegration
@@ -6013,6 +6139,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '404': { $ref: '#/components/responses/NotFound' }
         '413': { $ref: '#/components/responses/PayloadTooLarge' }
         '429':
           description: >-
@@ -6053,7 +6180,9 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/EverhourUserConnectionDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
         '500': { $ref: '#/components/responses/InternalError' }
   "/ext/everhour/projects/{projectId}/link":
     parameters:
@@ -6156,6 +6285,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ProjectEverhourLinkDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404':
@@ -6192,6 +6322,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ProjectEverhourStateDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401':
           description: >-
             No session or token (`{ error }` from the authentication middleware), or Everhour refused the
@@ -6659,6 +6790,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/MissionEverhourStateDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401':
           description: >-
             No session or token (`{ error }` from the authentication middleware), or Everhour refused the
@@ -7159,7 +7291,9 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/GitHubUserConnectionDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
         '500': { $ref: '#/components/responses/InternalError' }
     delete:
       operationId: deleteExtGithubUserConnection
@@ -7181,7 +7315,9 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/GitHubUserConnectionDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
         '500': { $ref: '#/components/responses/InternalError' }
   /ext/github/user-connection/authorize:
     post:
@@ -7215,6 +7351,7 @@ paths:
               schema: { $ref: '#/components/schemas/GitHubUserAuthorizationDto' }
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
         '413': { $ref: '#/components/responses/PayloadTooLarge' }
         '429':
           description: Five sign-ins are already open for the caller's GitHub connection.
@@ -7252,6 +7389,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/GitHubRepositoryOwnerList' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401':
           description: >-
             No session or token, the connection needs reauthorization (`Reconnect GitHub to refresh
@@ -7264,6 +7402,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '404': { $ref: '#/components/responses/NotFound' }
         '409':
           description: The caller has no GitHub repository authorization.
           content:
@@ -7557,6 +7696,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ProjectGitHubLinkDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404':
@@ -7669,6 +7809,7 @@ paths:
                     required: [ ok ]
                     properties:
                       ok: { const: true }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404':
@@ -7812,7 +7953,9 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/InboxItemList' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
         '500': { $ref: '#/components/responses/InternalError' }
     post:
       operationId: postInbox
@@ -7836,6 +7979,7 @@ paths:
               schema: { $ref: '#/components/schemas/InboxItemDto' }
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
         '413': { $ref: '#/components/responses/PayloadTooLarge' }
         '500': { $ref: '#/components/responses/InternalError' }
@@ -7860,6 +8004,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/InboxItemDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
         '500': { $ref: '#/components/responses/InternalError' }
@@ -7903,6 +8048,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/OkResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
         '500': { $ref: '#/components/responses/InternalError' }
@@ -8230,6 +8376,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/MissionDetailDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -8280,6 +8427,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/OkResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -8352,6 +8500,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/GenerateCommitMessageResultDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -8387,6 +8536,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ObjectiveList' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -8452,7 +8602,9 @@ paths:
         nothing is read or written.
       security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
       responses:
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
         '410':
           description: >-
             Always: `{ error: 'There are no active session-input controls. Permission and question prompts
@@ -8610,6 +8762,7 @@ paths:
         written.
       security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
       responses:
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '410':
           description: >-
@@ -8669,7 +8822,9 @@ paths:
       description: Retired. Any authenticated caller gets 410; nothing is read or written.
       security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
       responses:
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
         '410':
           description: >-
             Always: `{ error: 'There are no active session-input controls. Permission and question prompts
@@ -8696,7 +8851,9 @@ paths:
       description: Retired. Any authenticated caller gets 410; nothing is read or written.
       security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
       responses:
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
         '410':
           description: >-
             Always: `{ error: 'There are no active session-input controls. Permission and question prompts
@@ -8730,6 +8887,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/MissionEventList' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -8759,6 +8917,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/MissionDeliveriesDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -8790,6 +8949,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/MissionSummaryResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -8858,6 +9018,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ArtifactList' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -8921,6 +9082,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/SharedContextEntryList' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -9064,6 +9226,7 @@ paths:
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
         '413': { $ref: '#/components/responses/PayloadTooLarge' }
         '500': { $ref: '#/components/responses/InternalError' }
   "/api/missions/{id}/schedule":
@@ -9090,6 +9253,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/MissionScheduleDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -9140,6 +9304,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/OkResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -9229,6 +9394,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/OkResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -9300,6 +9466,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ObjectivePromptDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -9424,6 +9591,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ObjectiveAttachmentList' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -9499,6 +9667,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ObjectiveAttachmentList' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -9526,6 +9695,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ObjectiveAttachmentList' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
         '500': { $ref: '#/components/responses/InternalError' }
@@ -9595,6 +9765,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ObjectiveAttachmentList' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
         '500': { $ref: '#/components/responses/InternalError' }
@@ -9993,6 +10164,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/LaunchSettingsDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -10096,6 +10268,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/LaunchSettingsDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -10145,6 +10318,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/LaunchSettingsDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -10191,6 +10365,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/LaunchSettingsDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -10220,6 +10395,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/LaunchPreferenceDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -10247,6 +10423,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/LaunchPreferenceDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -10279,6 +10456,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ProjectExecutionTargetDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -10524,7 +10702,9 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/RunnerStatusDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
         '500': { $ref: '#/components/responses/InternalError' }
   /api/runner/claim:
     post:
@@ -10563,7 +10743,9 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/RunnerClaimResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
         '413': { $ref: '#/components/responses/PayloadTooLarge' }
         '500': { $ref: '#/components/responses/InternalError' }
@@ -10595,6 +10777,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/RunnerClearResultDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
@@ -10630,6 +10813,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/RunnerExecutionRequestDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -10671,6 +10855,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/RunnerExecutionRequestDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -10711,6 +10896,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/RunnerExecutionRequestDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -10869,6 +11055,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/MissionBranchListDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -10892,8 +11079,10 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/WorktreeList' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
         '500': { $ref: '#/components/responses/InternalError' }
   /api/worktrees/remove:
     post:
@@ -11009,7 +11198,9 @@ components:
     BadRequest:
       description: >-
         The request failed validation (hand-written checks in the handler or the service layer, a
-        ServiceError with status 400, or a SQLite foreign-key failure). See ErrorEnvelope.
+        ServiceError with status 400, or a SQLite foreign-key failure), its JSON body did not parse
+        (`invalid_json`), or the boundary refused it (`invalid_request`, ADR 0051): the request does not
+        match this operation and the handler, given it, failed rather than answering. See ErrorEnvelope.
       content:
         application/json:
           schema: { $ref: '#/components/schemas/ErrorEnvelope' }
@@ -11095,10 +11286,13 @@ components:
         (backend/errors.ts), and of the authentication middleware and the project-automation route
         guard. `error` is always present. Which other members appear depends on the error's origin: an
         ApiError writes `detail` and `code` when set; a service-layer ServiceError writes `code` and,
-        when present, `details`; the body parser's 413 writes `code: body_too_large`; a SQLite
-        constraint failure writes `detail` (the driver message) and no `code`; an unexpected failure
-        (500) writes `detail` equal to `error`. Clients branch on `code` and HTTP status, never on
-        `error` text.
+        when present, `details`; the body parser's 413 writes `code: body_too_large`; a JSON body that
+        does not parse writes `code: invalid_json`; a request the boundary refuses (ADR 0051) writes
+        `code: invalid_request`, `detail` (the first issues, as `<location>.<member>: <message>`) and
+        `details: { issues: [{ in, path, code, message }] }`, where `in` is `path`, `query`, `header` or
+        `body`, `path` is the dotted member path and no submitted value is echoed; a SQLite constraint
+        failure writes `detail` (the driver message) and no `code`; an unexpected failure (500) writes
+        `detail` equal to `error`. Clients branch on `code` and HTTP status, never on `error` text.
       required: [ error ]
       properties:
         error:
@@ -11108,8 +11302,8 @@ components:
           type: string
           description: >-
             Machine-readable code when the error carries one (open vocabulary, for example
-            `validation_error`, `not_found`, `invalid_input`, `body_too_large`,
-            `no_execution_target_registered`, `BRANCH_NOT_PREPARED`).
+            `validation_error`, `not_found`, `invalid_input`, `invalid_json`, `invalid_request`,
+            `body_too_large`, `no_execution_target_registered`, `BRANCH_NOT_PREPARED`).
         detail:
           type: string
           description: Additional human-readable detail (ApiError detail, driver message, or the 500 message).
@@ -17414,7 +17608,9 @@ components:
       properties:
         reason:
           type: string
-          enum: [ timeout, local_activity, policy, interrupt ]
+          description: >-
+            `timeout`, `local_activity`, `policy` or `interrupt`. Any other string, including
+            `channel_ended`, is accepted and recorded as `timeout`.
     ReleasedAgentRequestDto:
       type: object
       required: [ released, status, resolution ]
@@ -17427,7 +17623,9 @@ components:
       properties:
         applicationState:
           type: string
-          enum: [ emitted, applied, not_applied, unknown ]
+          description: >-
+            `emitted`, `applied`, `not_applied` or `unknown`. Any other string is accepted and recorded
+            as `unknown`.
     AgentRequestResolvedElsewhereDto:
       type: object
       required: [ changed, status, releasedReason ]
@@ -17466,7 +17664,9 @@ components:
         leaseId: { type: string }
         deliveryOutcome:
           type: string
-          enum: [ delivered, queued_turn_boundary, queued_next_turn, unsupported ]
+          description: >-
+            `delivered`, `queued_turn_boundary`, `queued_next_turn` or `unsupported`. Any other string is
+            accepted and stored as null.
     MarkAgentSessionInputFailedBody:
       type: object
       properties:

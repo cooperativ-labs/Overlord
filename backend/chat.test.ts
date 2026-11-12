@@ -9,6 +9,8 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { type ChatOwner, Conversations } from '../packages/core/service/chat/conversations.ts';
 import { ChatRuns } from '../packages/core/service/chat/runs.ts';
 
+import { installRequestValidation } from './http/request-validation.ts';
+import { apiResponseConformance } from './http/response-conformance.ts';
 import { createChatRouter } from './chat.ts';
 import { type ChatRuntime, ChatRuntimeFailure, ChatWorker } from './chat-worker.ts';
 import { apiErrorHandler } from './errors.ts';
@@ -43,10 +45,11 @@ it('authenticated chat JSON/poll/SSE replay, live append, conflicts and Local gu
     context = new AsyncLocalStorage<ChatOwner>(),
     app = express();
   let cloud = true;
+  app.use(apiResponseConformance());
   app.use(express.json());
   app.use((req, res, next) => {
     if (!req.headers.authorization) {
-      res.sendStatus(401);
+      res.status(401).json({ error: 'Authentication required' });
       return;
     }
     context.run(
@@ -63,6 +66,7 @@ it('authenticated chat JSON/poll/SSE replay, live append, conflicts and Local gu
       streamPollMs: 10
     })
   );
+  installRequestValidation(app);
   app.use(apiErrorHandler);
   const server = app.listen(0, '127.0.0.1');
   await once(server, 'listening');
@@ -193,6 +197,7 @@ it('GET /api/chat/providers reports engine readiness and the caller connections,
     app = express();
   let cloud = true;
   const seen: ChatOwner[] = [];
+  app.use(apiResponseConformance());
   app.use(
     '/api/chat',
     createChatRouter({
@@ -215,6 +220,7 @@ it('GET /api/chat/providers reports engine readiness and the caller connections,
       }
     })
   );
+  installRequestValidation(app);
   app.use(apiErrorHandler);
   const server = app.listen(0);
   await once(server, 'listening');
@@ -272,10 +278,11 @@ it('Create HTTP endpoint enforces caller, revision, Local guard, and receipt rep
     const context = new AsyncLocalStorage<ChatOwner>();
     let cloud = true;
     const app = express();
+    app.use(apiResponseConformance());
     app.use(express.json());
     app.use((req, res, next) => {
       if (!req.headers.authorization) {
-        res.sendStatus(401);
+        res.status(401).json({ error: 'Authentication required' });
         return;
       }
       context.run(
@@ -293,6 +300,7 @@ it('Create HTTP endpoint enforces caller, revision, Local guard, and receipt rep
         owner: () => context.getStore() ?? null
       })
     );
+    installRequestValidation(app);
     app.use(apiErrorHandler);
     const server = app.listen(0, '127.0.0.1');
     await once(server, 'listening');
@@ -342,6 +350,7 @@ it('presence, acknowledgement and notification history routes are owner-scoped a
     context = new AsyncLocalStorage<ChatOwner>(),
     app = express();
   let cloud = true;
+  app.use(apiResponseConformance());
   app.use(express.json());
   app.use((req, _res, next) => {
     context.run(
@@ -357,6 +366,7 @@ it('presence, acknowledgement and notification history routes are owner-scoped a
       owner: () => context.getStore() ?? null
     })
   );
+  installRequestValidation(app);
   app.use(apiErrorHandler);
   const server = app.listen(0, '127.0.0.1');
   await once(server, 'listening');

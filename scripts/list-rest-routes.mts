@@ -32,6 +32,13 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import ts from 'typescript';
 
+import {
+  type ExpressLayer,
+  layerPrefix,
+  normalizePath,
+  toOpenapiPath
+} from '../backend/http/express-routes.ts';
+
 export const REPOSITORY_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 export const HTTP_METHODS = Object.freeze([
@@ -64,7 +71,11 @@ const NON_AUTH_MIDDLEWARE = new Set([
   'rawAttachmentBody',
   // Called by the app-level body-parser selector, not authentication.
   'isRawUploadRequest',
-  'isRunnerCompletionRequest'
+  'isRunnerCompletionRequest',
+  // The REST boundary's request validation (backend/http/request-validation.ts).
+  'apiRequestValidation',
+  'deferredJsonBody',
+  'apiResponseConformance'
 ]);
 
 export type RuntimeRoute = {
@@ -98,15 +109,7 @@ export type StaticRoute = {
   } | null;
 };
 
-/** Express `:param` segments as OpenAPI `{param}` segments. */
-export function toOpenapiPath(expressPath: string): string {
-  return expressPath.replace(/:([A-Za-z0-9_]+)/g, '{$1}');
-}
-
-export function normalizePath(value: string): string {
-  const collapsed = value.replace(/\/{2,}/g, '/');
-  return collapsed.length > 1 && collapsed.endsWith('/') ? collapsed.slice(0, -1) : collapsed;
-}
+export { normalizePath, toOpenapiPath };
 
 export function routeKey(route: { method: string; path: string }): string {
   return `${route.method.toUpperCase()} ${route.path}`;
@@ -114,27 +117,9 @@ export function routeKey(route: { method: string; path: string }): string {
 
 // ---- Runtime walk ---------------------------------------------------------
 
-type Layer = {
-  name: string;
-  regexp: RegExp & { fast_slash?: boolean };
-  keys: { name: string }[];
-  route?: { path: string | string[]; methods: Record<string, boolean>; stack: Layer[] };
-  handle: { stack?: Layer[] };
-};
+type Layer = ExpressLayer;
 
-/** Recovers the literal mount prefix Express 4 compiled into a non-terminal layer. */
-export function layerPrefix(layer: Pick<Layer, 'regexp' | 'keys'>): string {
-  if (layer.regexp.fast_slash) return '';
-  let source = layer.regexp.source;
-  if (source === '^\\/?(?=\\/|$)') return '';
-  source = source.replace(/^\^/, '').replace(/\\\/\?\(\?=\\\/\|\$\)$/, '');
-  let index = 0;
-  source = source.replace(/\(\?:\\\/\(\[\^\\\/\]\+\?\)\)/g, () => `/:${layer.keys[index++]?.name}`);
-  if (/[()[\]*+?|^$]/.test(source.replace(/\\./g, ''))) {
-    throw new Error(`Unsupported mount pattern ${layer.regexp.source}`);
-  }
-  return source.replace(/\\(.)/g, '$1');
-}
+export { layerPrefix };
 
 function prefixApplies(prefix: string, routePath: string): boolean {
   return prefix === '' || routePath === prefix || routePath.startsWith(`${prefix}/`);

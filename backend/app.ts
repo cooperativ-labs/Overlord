@@ -87,6 +87,8 @@ import {
   rawUploadBody,
   readRawUpload
 } from './http/raw-upload.ts';
+import { deferMalformedBody, installRequestValidation } from './http/request-validation.ts';
+import { apiResponseConformance } from './http/response-conformance.ts';
 import { resolveServeSpa } from './http/serve-spa.ts';
 import {
   getSqlStudioState,
@@ -383,6 +385,9 @@ function parsePort(value: string, name: string): number {
 }
 
 const app = express();
+// Records each response against its OpenAPI operation when the backend tests
+// configure a conformance report (ADR 0051); passes through otherwise.
+app.use(apiResponseConformance());
 const allowedBrowserOrigins = getAllowedBrowserOrigins();
 app.use(
   cors({
@@ -503,13 +508,15 @@ app.get(
 
 app.all('/api/auth/*', nativeOAuthHandler);
 
-const jsonBody = express.json();
+// A body that is not valid JSON is answered 400 by the request-validation layer,
+// after the route's authentication (ADR 0051).
+const jsonBody = deferMalformedBody(express.json());
 const urlEncodedBody = express.urlencoded({ extended: false });
 
 // A runner's completion report carries the capability result envelope; bounded
 // repository reads (128 KiB of diff or search text plus JSON escaping and the
 // envelope) exceed the 100 KB default, so this one route accepts up to 1 MiB.
-const runnerCompletionJsonBody = express.json({ limit: '1mb' });
+const runnerCompletionJsonBody = deferMalformedBody(express.json({ limit: '1mb' }));
 function isRunnerCompletionRequest(req: Request): boolean {
   return req.method === 'POST' && /^\/api\/runner\/requests\/[^/]+\/completed$/.test(req.path);
 }
@@ -2358,7 +2365,11 @@ if (resolveServeSpa({ dialect: DATABASE_DIALECT }) && existsSync(distDir)) {
   });
 }
 
-// ---- Error handler -------------------------------------------------------
+// ---- Request validation and error handler --------------------------------
+
+// Every route with an OpenAPI operation gets the request-validation layer just
+// before its handler, after its authentication middleware (ADR 0051).
+installRequestValidation(app);
 
 app.use(apiErrorHandler);
 

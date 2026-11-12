@@ -22,6 +22,8 @@ const { createProject } = await import('../packages/core/service/projects.ts');
 const { protocolCreate } = await import('../packages/core/service/protocol.ts');
 const { seedServiceOperator } = await import('../packages/core/service/test-helpers.ts');
 const { createServiceContext } = await import('../packages/core/service/context.ts');
+const { installRequestValidation } = await import('./http/request-validation.ts');
+const { apiResponseConformance } = await import('./http/response-conformance.ts');
 
 /**
  * The adapter route family, exercised over real HTTP.
@@ -45,11 +47,13 @@ let fixtureProjectId = '';
 
 before(async () => {
   const app = express();
+  app.use(apiResponseConformance());
   app.use(AGENT_SESSION_CHANNEL_ROUTE_PREFIX, createAgentSessionChannelRouter());
   app.use('/api/agent-requests', createAgentRequestHumanRouter());
   app.use('/api/agent-session-inputs', createAgentSessionInputHumanRouter());
   // Everything else demands a human. A channel credential must never reach it.
   app.use('/api', (_req, res) => res.status(401).json({ error: 'Authentication required' }));
+  installRequestValidation(app);
 
   await new Promise<void>(resolve => {
     server = app.listen(0, '127.0.0.1', () => resolve());

@@ -44,8 +44,8 @@ type BodyParserErrorLike = {
 };
 
 /**
- * Map Express/body-parser `PayloadTooLargeError` onto the same JSON error
- * envelope as `ApiError`. Without this, the generic handler returns 500 with
+ * Map Express/body-parser `PayloadTooLargeError` (413) and JSON parse failures
+ * (400) onto the same JSON error envelope as `ApiError`. Without this, the generic handler returns 500 with
  * `{ error, detail }` both set to "request entity too large", which the web
  * client renders as the duplicated "request entity too large — request entity
  * too large" string on the Latch mission widget.
@@ -53,8 +53,15 @@ type BodyParserErrorLike = {
 export function apiErrorFromBodyParser(error: unknown): ApiError | null {
   if (!error || typeof error !== 'object') return null;
   const { type } = error as BodyParserErrorLike;
-  if (type !== 'entity.too.large') return null;
-  return new ApiError(413, 'Request body is too large.', undefined, 'body_too_large');
+  if (type === 'entity.too.large') {
+    return new ApiError(413, 'Request body is too large.', undefined, 'body_too_large');
+  }
+  // A body that is not valid JSON (the request-validation layer answers the same
+  // after authentication; this covers route-level parsers and validation `off`).
+  if (type === 'entity.parse.failed') {
+    return new ApiError(400, 'Request body is not valid JSON.', undefined, 'invalid_json');
+  }
+  return null;
 }
 
 /** Map better-sqlite3 constraint failures to actionable API errors. */

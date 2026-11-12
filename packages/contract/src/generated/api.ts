@@ -39,7 +39,7 @@ export type JsonValue = unknown;
 export const jsonValueSchema: z.ZodType<JsonValue> = z.unknown();
 
 /**
- * The one JSON error body of every route that forwards errors to `apiErrorHandler` (backend/errors.ts), and of the authentication middleware and the project-automation route guard. `error` is always present. Which other members appear depends on the error's origin: an ApiError writes `detail` and `code` when set; a service-layer ServiceError writes `code` and, when present, `details`; the body parser's 413 writes `code: body_too_large`; a SQLite constraint failure writes `detail` (the driver message) and no `code`; an unexpected failure (500) writes `detail` equal to `error`. Clients branch on `code` and HTTP status, never on `error` text.
+ * The one JSON error body of every route that forwards errors to `apiErrorHandler` (backend/errors.ts), and of the authentication middleware and the project-automation route guard. `error` is always present. Which other members appear depends on the error's origin: an ApiError writes `detail` and `code` when set; a service-layer ServiceError writes `code` and, when present, `details`; the body parser's 413 writes `code: body_too_large`; a JSON body that does not parse writes `code: invalid_json`; a request the boundary refuses (ADR 0051) writes `code: invalid_request`, `detail` (the first issues, as `<location>.<member>: <message>`) and `details: { issues: [{ in, path, code, message }] }`, where `in` is `path`, `query`, `header` or `body`, `path` is the dotted member path and no submitted value is echoed; a SQLite constraint failure writes `detail` (the driver message) and no `code`; an unexpected failure (500) writes `detail` equal to `error`. Clients branch on `code` and HTTP status, never on `error` text.
  */
 export interface ErrorEnvelope {
   /**
@@ -47,7 +47,7 @@ export interface ErrorEnvelope {
    */
   error: string;
   /**
-   * Machine-readable code when the error carries one (open vocabulary, for example `validation_error`, `not_found`, `invalid_input`, `body_too_large`, `no_execution_target_registered`, `BRANCH_NOT_PREPARED`).
+   * Machine-readable code when the error carries one (open vocabulary, for example `validation_error`, `not_found`, `invalid_input`, `invalid_json`, `invalid_request`, `body_too_large`, `no_execution_target_registered`, `BRANCH_NOT_PREPARED`).
    */
   code?: string;
   /**
@@ -4677,9 +4677,12 @@ export interface AgentRequestLeaseDto {
 export const agentRequestLeaseDtoSchema: z.ZodType<AgentRequestLeaseDto> = z.object({ "leaseId": z.string(), "leaseExpiresAt": dateTimeSchema, "status": agentRequestStatusSchema, "revision": z.int().min(1), "resolution": jsonValueSchema });
 
 export interface ReleaseAgentRequestBody {
-  reason?: "timeout" | "local_activity" | "policy" | "interrupt";
+  /**
+   * `timeout`, `local_activity`, `policy` or `interrupt`. Any other string, including `channel_ended`, is accepted and recorded as `timeout`.
+   */
+  reason?: string;
 }
-export const releaseAgentRequestBodySchema: z.ZodType<ReleaseAgentRequestBody> = z.object({ "reason": z.exactOptional(z.enum(["timeout", "local_activity", "policy", "interrupt"])) });
+export const releaseAgentRequestBodySchema: z.ZodType<ReleaseAgentRequestBody> = z.object({ "reason": z.exactOptional(z.string()) });
 
 export interface ReleasedAgentRequestDto {
   released: boolean;
@@ -4689,9 +4692,12 @@ export interface ReleasedAgentRequestDto {
 export const releasedAgentRequestDtoSchema: z.ZodType<ReleasedAgentRequestDto> = z.object({ "released": z.boolean(), "status": agentRequestStatusSchema, "resolution": jsonValueSchema });
 
 export interface RecordAgentRequestApplicationBody {
-  applicationState?: "emitted" | "applied" | "not_applied" | "unknown";
+  /**
+   * `emitted`, `applied`, `not_applied` or `unknown`. Any other string is accepted and recorded as `unknown`.
+   */
+  applicationState?: string;
 }
-export const recordAgentRequestApplicationBodySchema: z.ZodType<RecordAgentRequestApplicationBody> = z.object({ "applicationState": z.exactOptional(z.enum(["emitted", "applied", "not_applied", "unknown"])) });
+export const recordAgentRequestApplicationBodySchema: z.ZodType<RecordAgentRequestApplicationBody> = z.object({ "applicationState": z.exactOptional(z.string()) });
 
 export interface AgentRequestResolvedElsewhereDto {
   changed: boolean;
@@ -4719,9 +4725,12 @@ export const claimedAgentSessionInputDtoSchema: z.ZodType<ClaimedAgentSessionInp
 
 export interface MarkAgentSessionInputEmittedBody {
   leaseId: string;
-  deliveryOutcome?: "delivered" | "queued_turn_boundary" | "queued_next_turn" | "unsupported";
+  /**
+   * `delivered`, `queued_turn_boundary`, `queued_next_turn` or `unsupported`. Any other string is accepted and stored as null.
+   */
+  deliveryOutcome?: string;
 }
-export const markAgentSessionInputEmittedBodySchema: z.ZodType<MarkAgentSessionInputEmittedBody> = z.object({ "leaseId": z.string(), "deliveryOutcome": z.exactOptional(z.enum(["delivered", "queued_turn_boundary", "queued_next_turn", "unsupported"])) });
+export const markAgentSessionInputEmittedBodySchema: z.ZodType<MarkAgentSessionInputEmittedBody> = z.object({ "leaseId": z.string(), "deliveryOutcome": z.exactOptional(z.string()) });
 
 export interface MarkAgentSessionInputFailedBody {
   /**
@@ -5842,6 +5851,12 @@ export const getAuthCallbackGithubRepositoryResponse200TextSchema: z.ZodType<Get
 
 export type GetAuthCallbackGithubRepositoryResponse400Text = string;
 export const getAuthCallbackGithubRepositoryResponse400TextSchema: z.ZodType<GetAuthCallbackGithubRepositoryResponse400Text> = z.string();
+
+export type PostOauthRegisterResponse400 = OAuthErrorBody | ErrorEnvelope;
+export const postOauthRegisterResponse400Schema: z.ZodType<PostOauthRegisterResponse400> = z.union([oAuthErrorBodySchema, errorEnvelopeSchema]);
+
+export type PostOauthTokenResponse400 = OAuthErrorBody | ErrorEnvelope;
+export const postOauthTokenResponse400Schema: z.ZodType<PostOauthTokenResponse400> = z.union([oAuthErrorBodySchema, errorEnvelopeSchema]);
 
 export type PostMcpRequestBody = JsonRpcRequest | JsonRpcRequest[];
 export const postMcpRequestBodySchema: z.ZodType<PostMcpRequestBody> = z.union([jsonRpcRequestSchema, z.array(jsonRpcRequestSchema)]);
@@ -8116,7 +8131,7 @@ export const apiOperations = {
     security: [],
     parameters: { path: null, query: null, header: null },
     requestBody: { required: true, content: { "application/json": { kind: "json", schema: oAuthHandoffExchangeBodySchema } } },
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: oAuthHandoffExchangeResultDtoSchema } } }, "401": { headers: [], content: { "application/json": { kind: "json", schema: messageErrorBodySchema } } }, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: oAuthHandoffExchangeResultDtoSchema } } }, "400": apiResponses.BadRequest, "401": { headers: [], content: { "application/json": { kind: "json", schema: messageErrorBodySchema } } }, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
   },
   /**
    * POST /api/auth/browser/exchange: Exchange a hosted-web sign-in ticket for a session token
@@ -8135,7 +8150,7 @@ export const apiOperations = {
     security: [],
     parameters: { path: null, query: null, header: null },
     requestBody: { required: true, content: { "application/json": { kind: "json", schema: oAuthHandoffExchangeBodySchema } } },
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: oAuthHandoffExchangeResultDtoSchema } } }, "401": { headers: [], content: { "application/json": { kind: "json", schema: messageErrorBodySchema } } }, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: oAuthHandoffExchangeResultDtoSchema } } }, "400": apiResponses.BadRequest, "401": { headers: [], content: { "application/json": { kind: "json", schema: messageErrorBodySchema } } }, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
   },
   /**
    * GET /api/auth/callback/github/repository: GitHub repository-access OAuth callback
@@ -8173,7 +8188,7 @@ export const apiOperations = {
     security: [],
     parameters: { path: null, query: null, header: null },
     requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: authProvidersDtoSchema } } }, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: authProvidersDtoSchema } } }, "400": apiResponses.BadRequest, "500": apiResponses.InternalError }
   },
   /**
    * GET /api/health: Liveness probe
@@ -8192,7 +8207,7 @@ export const apiOperations = {
     security: [],
     parameters: { path: null, query: null, header: null },
     requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: okResponseSchema } } }, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: okResponseSchema } } }, "400": apiResponses.BadRequest, "500": apiResponses.InternalError }
   },
   /**
    * GET /.well-known/oauth-protected-resource: OAuth protected-resource metadata (RFC 9728)
@@ -8211,7 +8226,7 @@ export const apiOperations = {
     security: [],
     parameters: { path: null, query: null, header: null },
     requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: oAuthProtectedResourceMetadataSchema } } }, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: oAuthProtectedResourceMetadataSchema } } }, "400": apiResponses.BadRequest, "500": apiResponses.InternalError }
   },
   /**
    * GET /.well-known/oauth-protected-resource/mcp: OAuth protected-resource metadata for /mcp (path-inserted form)
@@ -8230,7 +8245,7 @@ export const apiOperations = {
     security: [],
     parameters: { path: null, query: null, header: null },
     requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: oAuthProtectedResourceMetadataSchema } } }, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: oAuthProtectedResourceMetadataSchema } } }, "400": apiResponses.BadRequest, "500": apiResponses.InternalError }
   },
   /**
    * GET /.well-known/oauth-authorization-server: OAuth authorization-server metadata (RFC 8414)
@@ -8249,7 +8264,7 @@ export const apiOperations = {
     security: [],
     parameters: { path: null, query: null, header: null },
     requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: oAuthAuthorizationServerMetadataSchema } } }, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: oAuthAuthorizationServerMetadataSchema } } }, "400": apiResponses.BadRequest, "500": apiResponses.InternalError }
   },
   /**
    * GET /oauth/authorize: Redirect an authorization request to the web approval page
@@ -8268,7 +8283,7 @@ export const apiOperations = {
     security: [],
     parameters: { path: null, query: null, header: null },
     requestBody: null,
-    responses: { "302": { headers: ["Location"], content: {} }, "500": apiResponses.InternalError }
+    responses: { "302": { headers: ["Location"], content: {} }, "400": apiResponses.BadRequest, "500": apiResponses.InternalError }
   },
   /**
    * POST /oauth/register: Dynamic client registration (RFC 7591)
@@ -8287,7 +8302,7 @@ export const apiOperations = {
     security: [],
     parameters: { path: null, query: null, header: null },
     requestBody: { required: true, content: { "application/json": { kind: "json", schema: oAuthClientRegistrationBodySchema }, "application/x-www-form-urlencoded": { kind: "form", schema: oAuthClientRegistrationBodySchema } } },
-    responses: { "201": { headers: [], content: { "application/json": { kind: "json", schema: oAuthClientRegistrationDtoSchema } } }, "400": { headers: [], content: { "application/json": { kind: "json", schema: oAuthErrorBodySchema } } }, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+    responses: { "201": { headers: [], content: { "application/json": { kind: "json", schema: oAuthClientRegistrationDtoSchema } } }, "400": { headers: [], content: { "application/json": { kind: "json", schema: postOauthRegisterResponse400Schema } } }, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
   },
   /**
    * POST /oauth/token: Exchange an authorization code for an access token
@@ -8306,7 +8321,7 @@ export const apiOperations = {
     security: [],
     parameters: { path: null, query: null, header: null },
     requestBody: { required: true, content: { "application/x-www-form-urlencoded": { kind: "form", schema: oAuthTokenRequestBodySchema }, "application/json": { kind: "json", schema: oAuthTokenRequestBodySchema } } },
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: oAuthTokenResponseDtoSchema } } }, "400": { headers: [], content: { "application/json": { kind: "json", schema: oAuthErrorBodySchema } } }, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: oAuthTokenResponseDtoSchema } } }, "400": { headers: [], content: { "application/json": { kind: "json", schema: postOauthTokenResponse400Schema } } }, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
   },
   /**
    * POST /oauth/revoke: Revoke an access token (RFC 7009)
@@ -8325,7 +8340,7 @@ export const apiOperations = {
     security: [],
     parameters: { path: null, query: null, header: null },
     requestBody: { required: false, content: { "application/x-www-form-urlencoded": { kind: "form", schema: oAuthRevokeBodySchema }, "application/json": { kind: "json", schema: oAuthRevokeBodySchema } } },
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: okResponseSchema } } }, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: okResponseSchema } } }, "400": apiResponses.BadRequest, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
   },
   /**
    * POST /oauth/authorize/request: Validate an authorization request for the approval page
@@ -8382,7 +8397,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: null, query: null, header: null },
     requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: mcpServerInfoDtoSchema } } }, "401": { headers: ["WWW-Authenticate"], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: mcpServerInfoDtoSchema } } }, "400": apiResponses.BadRequest, "401": { headers: ["WWW-Authenticate"], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
   },
   /**
    * POST /mcp: MCP JSON-RPC transport
@@ -8401,7 +8416,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: null, query: null, header: null },
     requestBody: { required: true, content: { "application/json": { kind: "json", schema: postMcpRequestBodySchema } } },
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: postMcpResponse200Schema } } }, "401": { headers: ["WWW-Authenticate"], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: postMcpResponse200Schema } } }, "400": apiResponses.BadRequest, "401": { headers: ["WWW-Authenticate"], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "404": apiResponses.NotFound, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
   },
   /**
    * GET /api/agent-session-channels/v1/self: Read the calling channel
@@ -8420,7 +8435,7 @@ export const apiOperations = {
     security: [{"channelCredential":[]}],
     parameters: { path: null, query: null, header: null },
     requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: agentSessionChannelSelfDtoSchema } } }, "401": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: agentSessionChannelSelfDtoSchema } } }, "400": apiResponses.BadRequest, "401": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "500": apiResponses.InternalError }
   },
   /**
    * POST /api/agent-session-channels/v1/heartbeat: Renew the channel lease
@@ -8439,7 +8454,7 @@ export const apiOperations = {
     security: [{"channelCredential":[]}],
     parameters: { path: null, query: null, header: null },
     requestBody: { required: false, content: { "application/json": { kind: "json", schema: agentSessionHeartbeatBodySchema } } },
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: agentSessionHeartbeatDtoSchema } } }, "401": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "409": apiResponses.Conflict, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: agentSessionHeartbeatDtoSchema } } }, "400": apiResponses.BadRequest, "401": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "409": apiResponses.Conflict, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
   },
   /**
    * POST /api/agent-session-channels/v1/events: Append normalized session events
@@ -8496,7 +8511,7 @@ export const apiOperations = {
     security: [{"channelCredential":[]}],
     parameters: { path: getAgentSessionChannelsV1RequestsByIdPathParamsSchema, query: null, header: null },
     requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: agentRequestDtoSchema } } }, "401": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: agentRequestDtoSchema } } }, "400": apiResponses.BadRequest, "401": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
   },
   /**
    * POST /api/agent-session-channels/v1/requests/{id}/lease: Acquire or renew the waiter lease on a request
@@ -8515,7 +8530,7 @@ export const apiOperations = {
     security: [{"channelCredential":[]}],
     parameters: { path: postAgentSessionChannelsV1RequestsByIdLeasePathParamsSchema, query: null, header: null },
     requestBody: { required: false, content: { "application/json": { kind: "json", schema: agentRequestLeaseBodySchema } } },
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: agentRequestLeaseDtoSchema } } }, "401": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: agentRequestLeaseDtoSchema } } }, "400": apiResponses.BadRequest, "401": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
   },
   /**
    * POST /api/agent-session-channels/v1/requests/{id}/release: Release a request to the terminal
@@ -8534,7 +8549,7 @@ export const apiOperations = {
     security: [{"channelCredential":[]}],
     parameters: { path: postAgentSessionChannelsV1RequestsByIdReleasePathParamsSchema, query: null, header: null },
     requestBody: { required: false, content: { "application/json": { kind: "json", schema: releaseAgentRequestBodySchema } } },
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: releasedAgentRequestDtoSchema } } }, "401": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "404": apiResponses.NotFound, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: releasedAgentRequestDtoSchema } } }, "400": apiResponses.BadRequest, "401": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "404": apiResponses.NotFound, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
   },
   /**
    * POST /api/agent-session-channels/v1/requests/{id}/application: Record whether a resolution was applied
@@ -8553,7 +8568,7 @@ export const apiOperations = {
     security: [{"channelCredential":[]}],
     parameters: { path: postAgentSessionChannelsV1RequestsByIdApplicationPathParamsSchema, query: null, header: null },
     requestBody: { required: false, content: { "application/json": { kind: "json", schema: recordAgentRequestApplicationBodySchema } } },
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: okResponseSchema } } }, "401": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "404": apiResponses.NotFound, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: okResponseSchema } } }, "400": apiResponses.BadRequest, "401": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "404": apiResponses.NotFound, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
   },
   /**
    * POST /api/agent-session-channels/v1/requests/{id}/resolved-elsewhere: Report that a request was answered in the terminal
@@ -8572,7 +8587,7 @@ export const apiOperations = {
     security: [{"channelCredential":[]}],
     parameters: { path: postAgentSessionChannelsV1RequestsByIdResolvedElsewherePathParamsSchema, query: null, header: null },
     requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: agentRequestResolvedElsewhereDtoSchema } } }, "401": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: agentRequestResolvedElsewhereDtoSchema } } }, "400": apiResponses.BadRequest, "401": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
   },
   /**
    * POST /api/agent-session-channels/v1/inputs/claim: Lease the channel's next queued input
@@ -8591,7 +8606,7 @@ export const apiOperations = {
     security: [{"channelCredential":[]}],
     parameters: { path: null, query: null, header: null },
     requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: claimedAgentSessionInputDtoSchema } } }, "401": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: claimedAgentSessionInputDtoSchema } } }, "400": apiResponses.BadRequest, "401": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "500": apiResponses.InternalError }
   },
   /**
    * POST /api/agent-session-channels/v1/inputs/{id}/emitted: Mark a leased input emitted
@@ -8629,7 +8644,7 @@ export const apiOperations = {
     security: [{"channelCredential":[]}],
     parameters: { path: postAgentSessionChannelsV1InputsByIdAcknowledgedPathParamsSchema, query: null, header: null },
     requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: postAgentSessionChannelsV1InputsByIdAcknowledgedResponse200Schema } } }, "401": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: postAgentSessionChannelsV1InputsByIdAcknowledgedResponse200Schema } } }, "400": apiResponses.BadRequest, "401": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
   },
   /**
    * POST /api/agent-session-channels/v1/inputs/{id}/failed: Mark a queued or leased input failed
@@ -8648,7 +8663,7 @@ export const apiOperations = {
     security: [{"channelCredential":[]}],
     parameters: { path: postAgentSessionChannelsV1InputsByIdFailedPathParamsSchema, query: null, header: null },
     requestBody: { required: false, content: { "application/json": { kind: "json", schema: markAgentSessionInputFailedBodySchema } } },
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: postAgentSessionChannelsV1InputsByIdFailedResponse200Schema } } }, "401": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "404": apiResponses.NotFound, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: postAgentSessionChannelsV1InputsByIdFailedResponse200Schema } } }, "400": apiResponses.BadRequest, "401": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "404": apiResponses.NotFound, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
   },
   /**
    * POST /api/agent-session-channels/v1/end: End the channel
@@ -8667,7 +8682,7 @@ export const apiOperations = {
     security: [{"channelCredential":[]}],
     parameters: { path: null, query: null, header: null },
     requestBody: { required: false, content: { "application/json": { kind: "json", schema: endAgentSessionChannelBodySchema } } },
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: okResponseSchema } } }, "401": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: okResponseSchema } } }, "400": apiResponses.BadRequest, "401": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
   },
   /**
    * GET /oauth/clients/knowledgebase.json: Knowledgebase OAuth client metadata document
@@ -8686,7 +8701,7 @@ export const apiOperations = {
     security: [],
     parameters: { path: null, query: null, header: null },
     requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: knowledgebaseClientMetadataDtoSchema } } }, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: knowledgebaseClientMetadataDtoSchema } } }, "400": apiResponses.BadRequest, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
   },
   /**
    * GET /api/connections/knowledgebase/callback: Knowledgebase OAuth callback
@@ -8705,7 +8720,7 @@ export const apiOperations = {
     security: [],
     parameters: { path: null, query: getConnectionsKnowledgebaseCallbackQueryParamsSchema, header: null },
     requestBody: null,
-    responses: { "200": { headers: [], content: { "text/html": { kind: "text", schema: getConnectionsKnowledgebaseCallbackResponse200TextSchema } } }, "302": { headers: ["Location"], content: {} }, "400": { headers: [], content: { "text/html": { kind: "text", schema: getConnectionsKnowledgebaseCallbackResponse400TextSchema } } }, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "text/html": { kind: "text", schema: getConnectionsKnowledgebaseCallbackResponse200TextSchema } } }, "302": { headers: ["Location"], content: {} }, "400": { headers: [], content: { "text/html": { kind: "text", schema: getConnectionsKnowledgebaseCallbackResponse400TextSchema }, "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "500": apiResponses.InternalError }
   },
   /**
    * GET /api/chat/providers: Assistant engine readiness and the caller's organization connections
@@ -8724,7 +8739,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: null, query: null, header: null },
     requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: chatProvidersResponseSchema } } }, "401": apiResponses.Unauthorized, "404": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "500": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } } }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: chatProvidersResponseSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "500": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } } }
   },
   /**
    * GET /api/chat/threads: List the caller's chat threads
@@ -8781,7 +8796,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: getChatThreadsByIdPathParamsSchema, query: getChatThreadsByIdQueryParamsSchema, header: null },
     requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: chatThreadSnapshotDtoSchema } } }, "401": apiResponses.Unauthorized, "404": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "500": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } } }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: chatThreadSnapshotDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "500": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } } }
   },
   /**
    * PATCH /api/chat/threads/{id}: Rename or archive a chat thread
@@ -8895,7 +8910,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: null, query: null, header: null },
     requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: chatNotificationListResponseSchema } } }, "401": apiResponses.Unauthorized, "404": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "500": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } } }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: chatNotificationListResponseSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "500": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } } }
   },
   /**
    * POST /api/chat/notifications/{id}/read: Mark a conversation notification read
@@ -9028,7 +9043,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: null, query: getConnectionsQueryParamsSchema, header: null },
     requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: accountConnectionListResponseSchema } } }, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: accountConnectionListResponseSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
   },
   /**
    * POST /api/connections: Start an OAuth account connection
@@ -9085,7 +9100,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: deleteConnectionsByIdPathParamsSchema, query: null, header: null },
     requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: accountConnectionDtoSchema } } }, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: accountConnectionDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
   },
   /**
    * PATCH /api/connections/{id}: Change a Knowledgebase connection's settings
@@ -9123,7 +9138,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: null, query: null, header: null },
     requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: serverMetaDtoSchema } } }, "401": apiResponses.Unauthorized, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: serverMetaDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
   },
   /**
    * GET /api/authorized-workspaces: The caller's authorization snapshot
@@ -9142,7 +9157,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: null, query: null, header: null },
     requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: authorizedWorkspaceDiscoveryDtoSchema } } }, "401": apiResponses.Unauthorized, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: authorizedWorkspaceDiscoveryDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
   },
   /**
    * GET /api/diagnostics/execution-target-migration: Execution targets stamped with the backend host
@@ -9180,7 +9195,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: null, query: null, header: null },
     requestBody: { required: true, content: { "application/json": { kind: "json", schema: createOrganizationOnboardingBodySchema } } },
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: metaDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "409": apiResponses.Conflict, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: metaDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
   },
   /**
    * GET /api/organizations: List the caller's organizations
@@ -9199,7 +9214,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: null, query: null, header: null },
     requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: organizationListSchema } } }, "401": apiResponses.Unauthorized, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: organizationListSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
   },
   /**
    * PATCH /api/organizations/{id}: Rename an organization or set its logo
@@ -9237,7 +9252,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: getOrganizationsByIdAdminsPathParamsSchema, query: null, header: null },
     requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: organizationAdminListSchema } } }, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: organizationAdminListSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
   },
   /**
    * POST /api/organizations/{id}/admins: Make a member an organization admin
@@ -9294,7 +9309,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: null, query: null, header: null },
     requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: workspaceListSchema } } }, "401": apiResponses.Unauthorized, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: workspaceListSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
   },
   /**
    * POST /api/workspaces: Create a workspace in an organization
@@ -9313,7 +9328,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: null, query: null, header: null },
     requestBody: { required: true, content: { "application/json": { kind: "json", schema: createWorkspaceBodySchema } } },
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: workspaceDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: workspaceDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
   },
   /**
    * DELETE /api/workspaces/{id}: Delete a workspace
@@ -9332,7 +9347,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: deleteWorkspacesByIdPathParamsSchema, query: null, header: null },
     requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: workspaceListSchema } } }, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: workspaceListSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
   },
   /**
    * PATCH /api/workspaces/{id}: Rename a workspace or toggle SQL Studio
@@ -9370,7 +9385,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: getWorkspacesByIdMembersPathParamsSchema, query: null, header: null },
     requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: workspaceMemberListSchema } } }, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: workspaceMemberListSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
   },
   /**
    * DELETE /api/workspaces/{id}/members/{workspaceUserId}: Remove a member from a workspace
@@ -9389,7 +9404,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: deleteWorkspacesByIdMembersByWorkspaceUserIdPathParamsSchema, query: null, header: null },
     requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: okResponseSchema } } }, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: okResponseSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "500": apiResponses.InternalError }
   },
   /**
    * PATCH /api/workspaces/{id}/members/{workspaceUserId}/role: Set a member's workspace role
@@ -9427,7 +9442,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: getWorkspacesByIdInvitationsPathParamsSchema, query: null, header: null },
     requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: workspaceInvitationListSchema } } }, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: workspaceInvitationListSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
   },
   /**
    * POST /api/workspaces/{id}/invitations: Invite an email address to a workspace
@@ -9465,7 +9480,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: deleteWorkspacesByIdInvitationsByInvitationIdPathParamsSchema, query: null, header: null },
     requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: okResponseSchema } } }, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: okResponseSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
   },
   /**
    * POST /api/invitations/accept: Accept a workspace invitation
@@ -9503,7 +9518,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: getWorkspacesByIdObjectivesCsvPathParamsSchema, query: null, header: null },
     requestBody: null,
-    responses: { "200": { headers: ["Content-Disposition"], content: { "text/csv": { kind: "text", schema: getWorkspacesByIdObjectivesCsvResponse200TextSchema } } }, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+    responses: { "200": { headers: ["Content-Disposition"], content: { "text/csv": { kind: "text", schema: getWorkspacesByIdObjectivesCsvResponse200TextSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
   },
   /**
    * GET /api/workspaces/{id}/projects: List one workspace's projects
@@ -9541,7 +9556,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: getWorkspacesByIdProjectStatusesPathParamsSchema, query: null, header: null },
     requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: projectStatusListSchema } } }, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: projectStatusListSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
   },
   /**
    * GET /api/workspaces/{id}/execution-targets: List a workspace's execution targets
@@ -9560,7 +9575,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: getWorkspacesByIdExecutionTargetsPathParamsSchema, query: null, header: null },
     requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: workspaceExecutionTargetListSchema } } }, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: workspaceExecutionTargetListSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
   },
   /**
    * POST /api/workspaces/{id}/execution-targets: Register the calling machine as an execution target
@@ -9598,7 +9613,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: deleteWorkspacesByIdExecutionTargetsByTargetIdPathParamsSchema, query: null, header: null },
     requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: okResponseSchema } } }, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: okResponseSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "500": apiResponses.InternalError }
   },
   /**
    * PATCH /api/workspaces/{id}/execution-targets/{targetId}: Rename, disable or enable an execution target
@@ -9636,7 +9651,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: getWorkspacesByIdAgentCatalogPathParamsSchema, query: null, header: null },
     requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: agentCatalogDtoSchema } } }, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: agentCatalogDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
   },
   /**
    * PUT /api/workspaces/{id}/agent-catalog: Replace a workspace's agent catalog
@@ -9674,7 +9689,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: postWorkspacesByIdAgentCatalogRefreshPathParamsSchema, query: null, header: null },
     requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: agentCatalogDtoSchema } } }, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: agentCatalogDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
   },
   /**
    * GET /api/profile: Read the caller's own profile
@@ -9693,7 +9708,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: null, query: null, header: null },
     requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: profileDtoSchema } } }, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: profileDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
   },
   /**
    * PATCH /api/profile: Edit the caller's own profile
@@ -9731,7 +9746,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: null, query: null, header: null },
     requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: defaultProjectPreferenceDtoSchema } } }, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: defaultProjectPreferenceDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
   },
   /**
    * PUT /api/profile/default-project: Set the caller's default project
@@ -9769,7 +9784,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: null, query: null, header: null },
     requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: defaultProjectPreferenceDtoSchema } } }, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: defaultProjectPreferenceDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
   },
   /**
    * GET /api/user-tokens: List the caller's personal tokens
@@ -9788,7 +9803,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: null, query: null, header: null },
     requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: userTokenListSchema } } }, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: userTokenListSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
   },
   /**
    * POST /api/user-tokens: Mint a personal token
@@ -9826,7 +9841,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: deleteUserTokensByIdPathParamsSchema, query: null, header: null },
     requestBody: null,
-    responses: { "204": { headers: [], content: {} }, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "500": apiResponses.InternalError }
+    responses: { "204": { headers: [], content: {} }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "500": apiResponses.InternalError }
   },
   /**
    * PATCH /api/user-tokens/{id}: Rename a personal token
@@ -9864,7 +9879,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: postUserTokensByIdRevokePathParamsSchema, query: null, header: null },
     requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: userTokenDtoSchema } } }, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: userTokenDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "500": apiResponses.InternalError }
   },
   /**
    * GET /api/webhooks: List a workspace's webhook subscriptions
@@ -9921,7 +9936,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: deleteWebhooksByIdPathParamsSchema, query: null, header: null },
     requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: okResponseSchema } } }, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: okResponseSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
   },
   /**
    * PATCH /api/webhooks/{id}: Update a webhook subscription
@@ -9959,7 +9974,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: postWebhooksByIdRotateSecretPathParamsSchema, query: null, header: null },
     requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: createWebhookSubscriptionResultDtoSchema } } }, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: createWebhookSubscriptionResultDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
   },
   /**
    * POST /api/webhooks/{id}/test: Send a test delivery
@@ -9997,7 +10012,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: getWebhooksByIdDeliveriesPathParamsSchema, query: getWebhooksByIdDeliveriesQueryParamsSchema, header: null },
     requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: webhookDeliveryAttemptsPageDtoSchema } } }, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: webhookDeliveryAttemptsPageDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
   },
   /**
    * POST /api/webhooks/{id}/deliveries/{outboxId}/redeliver: Re-queue a delivery
@@ -10054,7 +10069,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: getStorageByBucketKeyByStorageKeyPathParamsSchema, query: null, header: null },
     requestBody: null,
-    responses: { "200": { headers: ["Cache-Control", "Content-Disposition", "X-Content-Type-Options"], content: { "*/*": { kind: "binary", schema: binaryDownloadSchema } } }, "302": { headers: ["Location"], content: {} }, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+    responses: { "200": { headers: ["Cache-Control", "Content-Disposition", "X-Content-Type-Options"], content: { "*/*": { kind: "binary", schema: binaryDownloadSchema } } }, "302": { headers: ["Location"], content: {} }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
   },
   /**
    * GET /api/stream: Realtime change stream (compatibility alias of /realtime)
@@ -10073,7 +10088,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: null, query: getStreamQueryParamsSchema, header: getStreamHeaderParamsSchema },
     requestBody: null,
-    responses: { "200": { headers: [], content: { "text/event-stream": { kind: "event-stream", event: realtimeStreamEventSchema } } }, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "text/event-stream": { kind: "event-stream", event: realtimeStreamEventSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
   },
   /**
    * GET /realtime: Realtime change stream (Server-Sent Events)
@@ -10092,7 +10107,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: null, query: getRealtimeQueryParamsSchema, header: getRealtimeHeaderParamsSchema },
     requestBody: null,
-    responses: { "200": { headers: [], content: { "text/event-stream": { kind: "event-stream", event: realtimeStreamEventSchema } } }, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "text/event-stream": { kind: "event-stream", event: realtimeStreamEventSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
   },
   /**
    * GET /sync/changes: Change feed catch-up
@@ -10111,7 +10126,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: null, query: getSyncChangesQueryParamsSchema, header: null },
     requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: syncChangesDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: syncChangesDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
   },
   /**
    * GET /api/projects: List readable projects across the caller's workspaces
@@ -10130,7 +10145,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: null, query: getProjectsQueryParamsSchema, header: null },
     requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: projectListSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: projectListSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
   },
   /**
    * POST /api/projects: Create a project
@@ -10206,7 +10221,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: getProjectsByIdPathParamsSchema, query: null, header: null },
     requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: projectDtoSchema } } }, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: projectDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
   },
   /**
    * DELETE /api/projects/{id}: Soft-delete a project
@@ -10225,7 +10240,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: deleteProjectsByIdPathParamsSchema, query: null, header: null },
     requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: okResponseSchema } } }, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: okResponseSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
   },
   /**
    * PATCH /api/projects/{id}: Update a project
@@ -10263,7 +10278,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: getProjectsByIdRunQueuesPathParamsSchema, query: null, header: null },
     requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: projectRunQueuesDtoSchema } } }, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: projectRunQueuesDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
   },
   /**
    * POST /api/projects/{id}/run-queues: Create a Run Queue
@@ -10320,7 +10335,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: postProjectsByIdRunQueuesEntriesPathParamsSchema, query: null, header: null },
     requestBody: { required: true, content: { "application/json": { kind: "json", schema: enqueueRunQueueEntryBodySchema } } },
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: runQueueEntryDtoSchema } } }, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: runQueueEntryDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
   },
   /**
    * DELETE /api/run-queues/{queueId}: Delete a Run Queue
@@ -10339,7 +10354,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: deleteRunQueuesByQueueIdPathParamsSchema, query: null, header: null },
     requestBody: { required: false, content: { "application/json": { kind: "json", schema: deleteRunQueueBodySchema } } },
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: runQueueRemovalDtoSchema } } }, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: runQueueRemovalDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
   },
   /**
    * PATCH /api/run-queues/{queueId}: Rename, pause or resume a Run Queue
@@ -10396,7 +10411,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: deleteRunQueuesEntriesByEntryIdPathParamsSchema, query: null, header: null },
     requestBody: { required: false, content: { "application/json": { kind: "json", schema: deleteRunQueueEntryBodySchema } } },
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: runQueueEntryRemovalDtoSchema } } }, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: runQueueEntryRemovalDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
   },
   /**
    * PATCH /api/run-queues/entries/{entryId}: Move or retry a Run Queue entry
@@ -10415,7 +10430,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: patchRunQueuesEntriesByEntryIdPathParamsSchema, query: null, header: null },
     requestBody: { required: true, content: { "application/json": { kind: "json", schema: updateRunQueueEntryBodySchema } } },
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: runQueueEntryDtoSchema } } }, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: runQueueEntryDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
   },
   /**
    * GET /api/projects/{id}/statuses: List a project's statuses
@@ -10434,7 +10449,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: getProjectsByIdStatusesPathParamsSchema, query: null, header: null },
     requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: projectStatusListSchema } } }, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: projectStatusListSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
   },
   /**
    * POST /api/projects/{id}/statuses: Create a project status
@@ -10491,7 +10506,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: deleteProjectsByIdStatusesByStatusIdPathParamsSchema, query: null, header: null },
     requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: okResponseSchema } } }, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: okResponseSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "500": apiResponses.InternalError }
   },
   /**
    * PATCH /api/projects/{id}/statuses/{statusId}: Rename a status or make it the default
@@ -10529,7 +10544,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: null, query: getActivityFeedQueryParamsSchema, header: null },
     requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: activityFeedDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: activityFeedDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
   },
   /**
    * GET /api/objective-transcript: Full-text objective history across workspaces
@@ -10548,7 +10563,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: null, query: getObjectiveTranscriptQueryParamsSchema, header: null },
     requestBody: null,
-    responses: { "200": { headers: ["Cache-Control"], content: { "application/json": { kind: "json", schema: objectiveTranscriptPageDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "500": apiResponses.InternalError }
+    responses: { "200": { headers: ["Cache-Control"], content: { "application/json": { kind: "json", schema: objectiveTranscriptPageDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
   },
   /**
    * PUT /api/deliveries/{deliveryId}/deferred-work/{actionId}/resolution: Record the operator's decision on a deferred-work item
@@ -10586,7 +10601,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: deleteDeliveriesByDeliveryIdDeferredWorkByActionIdResolutionPathParamsSchema, query: null, header: null },
     requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: deliveryDeferredWorkItemDtoSchema } } }, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: deliveryDeferredWorkItemDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
   },
   /**
    * GET /api/inbox/missions: Cross-workspace Inbox triage missions
@@ -10605,7 +10620,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: null, query: null, header: null },
     requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: inboxMissionsResponseSchema } } }, "401": apiResponses.Unauthorized, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: inboxMissionsResponseSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
   },
   /**
    * PUT /api/mobile/live-activities/{activityId}/push-token: Register a Live Activity update token
@@ -10662,7 +10677,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: null, query: null, header: null },
     requestBody: { required: true, content: { "application/json": { kind: "json", schema: registerLiveActivityStartTokenBodySchema } } },
-    responses: { "204": { headers: [], content: {} }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+    responses: { "204": { headers: [], content: {} }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
   },
   /**
    * POST /api/mobile/live-activities/start-token/revoke: Withdraw a Live Activity push-to-start token
@@ -10681,7 +10696,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: null, query: null, header: null },
     requestBody: { required: true, content: { "application/json": { kind: "json", schema: revokeLiveActivityStartTokenBodySchema } } },
-    responses: { "204": { headers: [], content: {} }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+    responses: { "204": { headers: [], content: {} }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
   },
   /**
    * PUT /api/mobile/push/device-token: Register an APNs device token
@@ -10700,7 +10715,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: null, query: null, header: null },
     requestBody: { required: true, content: { "application/json": { kind: "json", schema: registerDevicePushTokenBodySchema } } },
-    responses: { "204": { headers: [], content: {} }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+    responses: { "204": { headers: [], content: {} }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
   },
   /**
    * POST /api/mobile/push/device-token/revoke: Remove an APNs device token
@@ -10719,7 +10734,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: null, query: null, header: null },
     requestBody: { required: true, content: { "application/json": { kind: "json", schema: revokeDevicePushTokenBodySchema } } },
-    responses: { "204": { headers: [], content: {} }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+    responses: { "204": { headers: [], content: {} }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
   },
   /**
    * GET /api/profile/notification-preferences: Read the caller's notification preferences
@@ -10738,7 +10753,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: null, query: null, header: null },
     requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: notificationPreferencesDtoSchema } } }, "401": apiResponses.Unauthorized, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: notificationPreferencesDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
   },
   /**
    * PUT /api/profile/notification-preferences: Update the caller's notification preferences
@@ -10757,7 +10772,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: null, query: null, header: null },
     requestBody: { required: true, content: { "application/json": { kind: "json", schema: updateNotificationPreferencesBodySchema } } },
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: notificationPreferencesDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: notificationPreferencesDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
   },
   /**
    * GET /api/notifications: List the caller's notifications
@@ -10776,7 +10791,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: null, query: null, header: null },
     requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: notificationListSchema } } }, "401": apiResponses.Unauthorized, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: notificationListSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
   },
   /**
    * PATCH /api/notifications/{id}/read: Mark a notification read
@@ -10833,7 +10848,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: getProjectsByIdTagsPathParamsSchema, query: null, header: null },
     requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: projectTagListSchema } } }, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: projectTagListSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
   },
   /**
    * POST /api/projects/{id}/tags: Create a project tag
@@ -10871,7 +10886,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: deleteProjectsByIdTagsByTagIdPathParamsSchema, query: null, header: null },
     requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: okResponseSchema } } }, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: okResponseSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
   },
   /**
    * PATCH /api/projects/{id}/tags/{tagId}: Update a project tag
@@ -10909,7 +10924,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: getProjectsByIdResourcesPathParamsSchema, query: null, header: null },
     requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: projectResourceListSchema } } }, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: projectResourceListSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
   },
   /**
    * POST /api/projects/{id}/resources: Link a project resource or add a source to one
@@ -10947,7 +10962,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: deleteProjectsByIdResourcesByResourceIdPathParamsSchema, query: null, header: null },
     requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: okResponseSchema } } }, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: okResponseSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
   },
   /**
    * PATCH /api/projects/{id}/resources/{resourceId}: Update a project resource
@@ -10985,7 +11000,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: deleteProjectsByIdResourcesByResourceIdSourcesBySourceIdPathParamsSchema, query: null, header: null },
     requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: okResponseSchema } } }, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: okResponseSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
   },
   /**
    * PATCH /api/projects/{id}/resources/{resourceId}/sources/{sourceId}: Replace a resource source's launch defaults
@@ -11042,7 +11057,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: getProjectsByIdRepositoryPathParamsSchema, query: getProjectsByIdRepositoryQueryParamsSchema, header: null },
     requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: projectRepositoryDtoSchema } } }, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: projectRepositoryDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
   },
   /**
    * POST /api/local-target/invoke: Run a checkout-local capability on the backend host (development proxy)
@@ -11061,7 +11076,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: null, query: null, header: null },
     requestBody: { required: true, content: { "application/json": { kind: "json", schema: localTargetBridgeCallBodySchema } } },
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: capabilityResultDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: capabilityResultDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
   },
   /**
    * GET /api/projects/{id}/missions: List a project's board missions
@@ -11080,7 +11095,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: getProjectsByIdMissionsPathParamsSchema, query: getProjectsByIdMissionsQueryParamsSchema, header: null },
     requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: missionListSchema } } }, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: missionListSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
   },
   /**
    * GET /ext/everhour/user-connection: The caller's Everhour connection (compatibility alias)
@@ -11099,7 +11114,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: null, query: null, header: null },
     requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: everhourUserConnectionDtoSchema } } }, "401": apiResponses.Unauthorized, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: everhourUserConnectionDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
   },
   /**
    * PUT /ext/everhour/user-connection: Connect or rotate the caller's Everhour API key (compatibility alias)
@@ -11118,7 +11133,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: null, query: null, header: null },
     requestBody: { required: true, content: { "application/json": { kind: "json", schema: updateEverhourIntegrationBodySchema } } },
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: everhourUserConnectionDtoSchema } } }, "400": apiResponses.BadRequest, "401": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "403": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "413": apiResponses.PayloadTooLarge, "429": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "500": apiResponses.InternalError, "502": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "503": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } } }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: everhourUserConnectionDtoSchema } } }, "400": apiResponses.BadRequest, "401": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "403": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "404": apiResponses.NotFound, "413": apiResponses.PayloadTooLarge, "429": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "500": apiResponses.InternalError, "502": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "503": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } } }
   },
   /**
    * DELETE /ext/everhour/user-connection: Disconnect the caller's Everhour key (compatibility alias)
@@ -11137,7 +11152,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: null, query: null, header: null },
     requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: everhourUserConnectionDtoSchema } } }, "401": apiResponses.Unauthorized, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: everhourUserConnectionDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
   },
   /**
    * GET /ext/everhour/integration: The caller's Everhour connection (deprecated alias of /user-connection)
@@ -11157,7 +11172,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: null, query: null, header: null },
     requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: everhourUserConnectionDtoSchema } } }, "401": apiResponses.Unauthorized, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: everhourUserConnectionDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
   },
   /**
    * PUT /ext/everhour/integration: Connect or rotate the caller's Everhour API key (deprecated alias of /user-connection)
@@ -11177,7 +11192,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: null, query: null, header: null },
     requestBody: { required: true, content: { "application/json": { kind: "json", schema: updateEverhourIntegrationBodySchema } } },
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: everhourUserConnectionDtoSchema } } }, "400": apiResponses.BadRequest, "401": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "403": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "413": apiResponses.PayloadTooLarge, "429": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "500": apiResponses.InternalError, "502": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "503": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } } }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: everhourUserConnectionDtoSchema } } }, "400": apiResponses.BadRequest, "401": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "403": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "404": apiResponses.NotFound, "413": apiResponses.PayloadTooLarge, "429": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "500": apiResponses.InternalError, "502": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "503": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } } }
   },
   /**
    * DELETE /ext/everhour/integration: Disconnect the caller's Everhour key (deprecated alias of /user-connection)
@@ -11197,7 +11212,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: null, query: null, header: null },
     requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: everhourUserConnectionDtoSchema } } }, "401": apiResponses.Unauthorized, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: everhourUserConnectionDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
   },
   /**
    * GET /ext/everhour/projects/{projectId}/link: Read a project's Everhour link
@@ -11216,7 +11231,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: getExtEverhourProjectsByProjectIdLinkPathParamsSchema, query: null, header: null },
     requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: projectEverhourLinkDtoSchema } } }, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: projectEverhourLinkDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "500": apiResponses.InternalError }
   },
   /**
    * PUT /ext/everhour/projects/{projectId}/link: Link a project to an Everhour project by name, or unlink it
@@ -11254,7 +11269,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: getExtEverhourProjectsByProjectIdPathParamsSchema, query: null, header: null },
     requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: projectEverhourStateDtoSchema } } }, "401": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "403": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "404": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "429": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "500": apiResponses.InternalError, "502": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "503": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } } }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: projectEverhourStateDtoSchema } } }, "400": apiResponses.BadRequest, "401": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "403": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "404": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "429": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "500": apiResponses.InternalError, "502": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "503": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } } }
   },
   /**
    * POST /ext/everhour/projects/{projectId}/timer/start: Start the project's Everhour timer
@@ -11368,7 +11383,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: getExtEverhourMissionsByMissionIdPathParamsSchema, query: null, header: null },
     requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: missionEverhourStateDtoSchema } } }, "401": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "403": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "404": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "409": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "429": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "500": apiResponses.InternalError, "502": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "503": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } } }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: missionEverhourStateDtoSchema } } }, "400": apiResponses.BadRequest, "401": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "403": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "404": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "409": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "429": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "500": apiResponses.InternalError, "502": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "503": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } } }
   },
   /**
    * POST /ext/everhour/missions/{missionId}/timer/start: Start the mission's Everhour timer
@@ -11482,7 +11497,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: null, query: null, header: null },
     requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: gitHubUserConnectionDtoSchema } } }, "401": apiResponses.Unauthorized, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: gitHubUserConnectionDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
   },
   /**
    * DELETE /ext/github/user-connection: Disconnect the caller's GitHub repository authorization (compatibility alias)
@@ -11501,7 +11516,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: null, query: null, header: null },
     requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: gitHubUserConnectionDtoSchema } } }, "401": apiResponses.Unauthorized, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: gitHubUserConnectionDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
   },
   /**
    * POST /ext/github/user-connection/authorize: Start GitHub repository authorization (compatibility alias)
@@ -11520,7 +11535,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: null, query: null, header: null },
     requestBody: { required: false, content: { "application/json": { kind: "json", schema: beginGitHubUserAuthorizationBodySchema } } },
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: gitHubUserAuthorizationDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "413": apiResponses.PayloadTooLarge, "429": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "500": apiResponses.InternalError, "503": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } } }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: gitHubUserAuthorizationDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "413": apiResponses.PayloadTooLarge, "429": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "500": apiResponses.InternalError, "503": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } } }
   },
   /**
    * GET /ext/github/repository-owners: List the GitHub owners the caller can create private repositories under
@@ -11539,7 +11554,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: null, query: null, header: null },
     requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: gitHubRepositoryOwnerListSchema } } }, "401": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "403": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "409": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "500": apiResponses.InternalError, "502": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "503": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } } }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: gitHubRepositoryOwnerListSchema } } }, "400": apiResponses.BadRequest, "401": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "403": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "404": apiResponses.NotFound, "409": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "500": apiResponses.InternalError, "502": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "503": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } } }
   },
   /**
    * GET /ext/github/integration: Read a workspace's GitHub App installation
@@ -11653,7 +11668,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: getExtGithubProjectsByProjectIdLinkPathParamsSchema, query: null, header: null },
     requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: projectGitHubLinkDtoSchema } } }, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: projectGitHubLinkDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "500": apiResponses.InternalError }
   },
   /**
    * PUT /ext/github/projects/{projectId}/link: Link a project to a GitHub repository, or unlink it
@@ -11691,7 +11706,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: getExtGithubMissionsByMissionIdPullRequestPathParamsSchema, query: null, header: null },
     requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: getExtGithubMissionsByMissionIdPullRequestResponse200Schema } } }, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "409": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: getExtGithubMissionsByMissionIdPullRequestResponse200Schema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "409": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "500": apiResponses.InternalError }
   },
   /**
    * POST /ext/github/missions/{missionId}/pull-request: Open a pull request for a mission's branch
@@ -11748,7 +11763,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: null, query: null, header: null },
     requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: inboxItemListSchema } } }, "401": apiResponses.Unauthorized, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: inboxItemListSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
   },
   /**
    * POST /api/inbox: Capture an Inbox item
@@ -11767,7 +11782,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: null, query: null, header: null },
     requestBody: { required: true, content: { "application/json": { kind: "json", schema: createInboxItemBodySchema } } },
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: inboxItemDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "409": apiResponses.Conflict, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: inboxItemDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
   },
   /**
    * GET /api/inbox/{id}: Read an owned Inbox item
@@ -11786,7 +11801,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: getInboxByIdPathParamsSchema, query: null, header: null },
     requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: inboxItemDtoSchema } } }, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: inboxItemDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
   },
   /**
    * DELETE /api/inbox/{id}: Delete an owned Inbox item
@@ -11805,7 +11820,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: deleteInboxByIdPathParamsSchema, query: null, header: null },
     requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: okResponseSchema } } }, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: okResponseSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
   },
   /**
    * PATCH /api/inbox/{id}: Edit an owned Inbox item
@@ -11938,7 +11953,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: getMissionsByIdPathParamsSchema, query: null, header: null },
     requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: missionDetailDtoSchema } } }, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: missionDetailDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "500": apiResponses.InternalError }
   },
   /**
    * DELETE /api/missions/{id}: Soft-delete a mission
@@ -11957,7 +11972,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: deleteMissionsByIdPathParamsSchema, query: null, header: null },
     requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: okResponseSchema } } }, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: okResponseSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "500": apiResponses.InternalError }
   },
   /**
    * PATCH /api/missions/{id}: Update or move a mission
@@ -12014,7 +12029,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: postMissionsByIdGenerateCommitMessagePathParamsSchema, query: null, header: null },
     requestBody: { required: false, content: { "application/json": { kind: "json", schema: generateCommitMessageBodySchema } } },
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: generateCommitMessageResultDtoSchema } } }, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError, "502": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } } }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: generateCommitMessageResultDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError, "502": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } } }
   },
   /**
    * GET /api/missions/{id}/objectives: List a mission's objectives
@@ -12033,7 +12048,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: getMissionsByIdObjectivesPathParamsSchema, query: null, header: null },
     requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: objectiveListSchema } } }, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: objectiveListSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "500": apiResponses.InternalError }
   },
   /**
    * PATCH /api/missions/{id}/objectives/reorder: Reorder a mission's future objectives
@@ -12071,7 +12086,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: postMissionsByIdSessionChannelPathParamsSchema, query: null, header: null },
     requestBody: null,
-    responses: { "401": apiResponses.Unauthorized, "410": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+    responses: { "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "410": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
   },
   /**
    * POST /api/missions/{id}/terminal-sessions/forget: Forget a mission's mapped Latch terminal session
@@ -12147,7 +12162,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: postAgentRequestsByIdReleasePathParamsSchema, query: null, header: null },
     requestBody: null,
-    responses: { "401": apiResponses.Unauthorized, "410": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+    responses: { "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "410": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
   },
   /**
    * GET /api/agent-session-inputs: List a mission's session inputs and its latest channel
@@ -12185,7 +12200,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: null, query: null, header: null },
     requestBody: null,
-    responses: { "401": apiResponses.Unauthorized, "410": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+    responses: { "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "410": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
   },
   /**
    * POST /api/agent-session-inputs/{id}/cancel: Cancel a session input (retired)
@@ -12204,7 +12219,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: postAgentSessionInputsByIdCancelPathParamsSchema, query: null, header: null },
     requestBody: null,
-    responses: { "401": apiResponses.Unauthorized, "410": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+    responses: { "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "410": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
   },
   /**
    * GET /api/missions/{id}/events: List a mission's workflow events
@@ -12223,7 +12238,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: getMissionsByIdEventsPathParamsSchema, query: null, header: null },
     requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: missionEventListSchema } } }, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: missionEventListSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "500": apiResponses.InternalError }
   },
   /**
    * GET /api/missions/{id}/deliveries: List a mission's deliveries
@@ -12242,7 +12257,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: getMissionsByIdDeliveriesPathParamsSchema, query: null, header: null },
     requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: missionDeliveriesDtoSchema } } }, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: missionDeliveriesDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "500": apiResponses.InternalError }
   },
   /**
    * GET /api/missions/{id}/summary: Read the operator mission summary
@@ -12261,7 +12276,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: getMissionsByIdSummaryPathParamsSchema, query: null, header: null },
     requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: missionSummaryResponseSchema } } }, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: missionSummaryResponseSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "500": apiResponses.InternalError }
   },
   /**
    * PUT /api/missions/{id}/summary/seen: Acknowledge displayed summary evidence
@@ -12299,7 +12314,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: getMissionsByIdArtifactsPathParamsSchema, query: null, header: null },
     requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: artifactListSchema } } }, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: artifactListSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "500": apiResponses.InternalError }
   },
   /**
    * POST /api/missions/{id}/artifacts: Create a mission artifact without a delivery
@@ -12337,7 +12352,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: getMissionsByIdContextPathParamsSchema, query: null, header: null },
     requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: sharedContextEntryListSchema } } }, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: sharedContextEntryListSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "500": apiResponses.InternalError }
   },
   /**
    * PUT /api/missions/{id}/context: Upsert one shared-context entry
@@ -12413,7 +12428,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: null, query: null, header: null },
     requestBody: { required: true, content: { "application/json": { kind: "json", schema: previewScheduleBodySchema } } },
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: schedulePreviewDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: schedulePreviewDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
   },
   /**
    * GET /api/missions/{id}/schedule: Read a mission's schedule
@@ -12432,7 +12447,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: getMissionsByIdSchedulePathParamsSchema, query: null, header: null },
     requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: missionScheduleDtoSchema } } }, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: missionScheduleDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "500": apiResponses.InternalError }
   },
   /**
    * PUT /api/missions/{id}/schedule: Create or replace a mission's schedule
@@ -12470,7 +12485,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: deleteMissionsByIdSchedulePathParamsSchema, query: null, header: null },
     requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: okResponseSchema } } }, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: okResponseSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "500": apiResponses.InternalError }
   },
   /**
    * POST /api/objectives: Add an objective to a mission
@@ -12508,7 +12523,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: deleteObjectivesByIdPathParamsSchema, query: null, header: null },
     requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: okResponseSchema } } }, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: okResponseSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "500": apiResponses.InternalError }
   },
   /**
    * PATCH /api/objectives/{id}: Update an objective
@@ -12565,7 +12580,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: getObjectivesByIdPromptPathParamsSchema, query: null, header: null },
     requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: objectivePromptDtoSchema } } }, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: objectivePromptDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "500": apiResponses.InternalError }
   },
   /**
    * GET /api/objectives/{id}/launch-command: Paste-ready ovld launch command
@@ -12622,7 +12637,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: getObjectivesByIdAttachmentsPathParamsSchema, query: null, header: null },
     requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: objectiveAttachmentListSchema } } }, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: objectiveAttachmentListSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "500": apiResponses.InternalError }
   },
   /**
    * POST /api/objectives/{id}/attachments: Upload a file to an objective
@@ -12660,7 +12675,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: deleteObjectivesByIdAttachmentsByAttachmentIdPathParamsSchema, query: null, header: null },
     requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: objectiveAttachmentListSchema } } }, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: objectiveAttachmentListSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "500": apiResponses.InternalError }
   },
   /**
    * GET /api/inbox/{id}/attachments: List an owned Inbox item's attachments
@@ -12679,7 +12694,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: getInboxByIdAttachmentsPathParamsSchema, query: null, header: null },
     requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: objectiveAttachmentListSchema } } }, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: objectiveAttachmentListSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
   },
   /**
    * POST /api/inbox/{id}/attachments: Upload a file to an owned Inbox item
@@ -12717,7 +12732,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: deleteInboxByIdAttachmentsByAttachmentIdPathParamsSchema, query: null, header: null },
     requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: objectiveAttachmentListSchema } } }, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: objectiveAttachmentListSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
   },
   /**
    * GET /api/agent-catalog: Read an agent catalog (workspace in the query)
@@ -12888,7 +12903,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: getWorkspacesByIdLaunchSettingsPathParamsSchema, query: null, header: getWorkspacesByIdLaunchSettingsHeaderParamsSchema },
     requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: launchSettingsDtoSchema } } }, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: launchSettingsDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
   },
   /**
    * PATCH /api/workspaces/{id}/launch-settings/agents/{agentKey}: Set the caller's launch mechanics for one agent
@@ -12926,7 +12941,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: patchWorkspacesByIdLaunchSettingsTerminalProfilePathParamsSchema, query: null, header: patchWorkspacesByIdLaunchSettingsTerminalProfileHeaderParamsSchema },
     requestBody: { required: true, content: { "application/json": { kind: "json", schema: updateTerminalProfileBodySchema } } },
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: launchSettingsDtoSchema } } }, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: launchSettingsDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
   },
   /**
    * PATCH /api/workspaces/{id}/launch-settings/session-defaults: Set the caller's launch-session defaults
@@ -12945,7 +12960,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: patchWorkspacesByIdLaunchSettingsSessionDefaultsPathParamsSchema, query: null, header: patchWorkspacesByIdLaunchSettingsSessionDefaultsHeaderParamsSchema },
     requestBody: { required: true, content: { "application/json": { kind: "json", schema: updateLaunchSessionDefaultsBodySchema } } },
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: launchSettingsDtoSchema } } }, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: launchSettingsDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
   },
   /**
    * PATCH /api/workspaces/{id}/launch-settings/worktree-branch-automation: Turn the caller's worktree and branch automation on or off
@@ -12964,7 +12979,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: patchWorkspacesByIdLaunchSettingsWorktreeBranchAutomationPathParamsSchema, query: null, header: patchWorkspacesByIdLaunchSettingsWorktreeBranchAutomationHeaderParamsSchema },
     requestBody: { required: true, content: { "application/json": { kind: "json", schema: updateWorktreeBranchAutomationBodySchema } } },
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: launchSettingsDtoSchema } } }, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: launchSettingsDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
   },
   /**
    * GET /api/projects/{id}/launch-preference: Read the caller's launch preference for a project
@@ -12983,7 +12998,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: getProjectsByIdLaunchPreferencePathParamsSchema, query: null, header: null },
     requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: launchPreferenceDtoSchema } } }, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: launchPreferenceDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
   },
   /**
    * PUT /api/projects/{id}/launch-preference: Update the caller's launch preference for a project
@@ -13002,7 +13017,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: putProjectsByIdLaunchPreferencePathParamsSchema, query: null, header: null },
     requestBody: { required: true, content: { "application/json": { kind: "json", schema: updateLaunchPreferenceBodySchema } } },
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: launchPreferenceDtoSchema } } }, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: launchPreferenceDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
   },
   /**
    * GET /api/projects/{id}/execution-target: Read the caller's execution target selection for a project
@@ -13021,7 +13036,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: getProjectsByIdExecutionTargetPathParamsSchema, query: null, header: null },
     requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: projectExecutionTargetDtoSchema } } }, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: projectExecutionTargetDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
   },
   /**
    * PUT /api/projects/{id}/execution-target: Set the caller's execution target for a project
@@ -13116,7 +13131,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: null, query: getRunnerStatusQueryParamsSchema, header: null },
     requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: runnerStatusDtoSchema } } }, "401": apiResponses.Unauthorized, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: runnerStatusDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
   },
   /**
    * POST /api/runner/claim: Claim the next queued execution request
@@ -13135,7 +13150,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: null, query: null, header: null },
     requestBody: { required: false, content: { "application/json": { kind: "json", schema: runnerClaimBodySchema } } },
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: runnerClaimResponseSchema } } }, "401": apiResponses.Unauthorized, "409": apiResponses.Conflict, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: runnerClaimResponseSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
   },
   /**
    * POST /api/runner/clear: Clear active execution requests
@@ -13154,7 +13169,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: null, query: null, header: null },
     requestBody: { required: false, content: { "application/json": { kind: "json", schema: runnerClearBodySchema } } },
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: runnerClearResultDtoSchema } } }, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: runnerClearResultDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
   },
   /**
    * POST /api/runner/requests/{id}/launching: Mark an execution request launching
@@ -13173,7 +13188,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: postRunnerRequestsByIdLaunchingPathParamsSchema, query: null, header: null },
     requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: runnerExecutionRequestDtoSchema } } }, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: runnerExecutionRequestDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "500": apiResponses.InternalError }
   },
   /**
    * POST /api/runner/requests/{id}/launched: Mark an execution request launched
@@ -13192,7 +13207,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: postRunnerRequestsByIdLaunchedPathParamsSchema, query: null, header: null },
     requestBody: { required: false, content: { "application/json": { kind: "json", schema: runnerLaunchedBodySchema } } },
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: runnerExecutionRequestDtoSchema } } }, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: runnerExecutionRequestDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
   },
   /**
    * POST /api/runner/requests/{id}/failed: Mark an execution request failed
@@ -13211,7 +13226,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: postRunnerRequestsByIdFailedPathParamsSchema, query: null, header: null },
     requestBody: { required: false, content: { "application/json": { kind: "json", schema: runnerFailedBodySchema } } },
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: runnerExecutionRequestDtoSchema } } }, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: runnerExecutionRequestDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
   },
   /**
    * POST /api/runner/requests/{id}/completed: Report the result of a local-target mutation
@@ -13287,7 +13302,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: getMissionsByIdBranchesPathParamsSchema, query: null, header: null },
     requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: missionBranchListDtoSchema } } }, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: missionBranchListDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "500": apiResponses.InternalError }
   },
   /**
    * GET /api/worktrees: List Overlord-managed worktrees
@@ -13306,7 +13321,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: null, query: null, header: null },
     requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: worktreeListSchema } } }, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: worktreeListSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
   },
   /**
    * POST /api/worktrees/remove: Remove one managed worktree

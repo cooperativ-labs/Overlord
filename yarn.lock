@@ -2883,6 +2883,7 @@ __metadata:
     resend: "npm:^6.16.0"
     tsx: "npm:^4.22.4"
     typescript: "npm:^6.0.3"
+    zod: "npm:^4.6.7"
   languageName: unknown
   linkType: soft
 
