@@ -211,6 +211,18 @@ schema must change.
 - **G6** `$ref` with sibling keywords (`description`) on a property. Valid OpenAPI 3.1;
   the Clear Comply generator ignores the siblings, which is harmless.
 
+- **G7** `format: uuid` on server-minted ids. The Clear Comply generator renders it as
+  `z.string().uuid()`, but the backend test fixtures use readable ids
+  (`local-workspace`, `operator-workspace-user`, `test-organization`), so validating
+  responses in backend tests (ADR 0006) will reject them unless the fixtures move to
+  UUIDs or 4c renders the format leniently. Batch 1's own response check accepted any
+  string for `uuid` for this reason.
+- **G8** A JSON response that is a `oneOf` of two object schemas distinguished only by
+  their key sets (`getMissionsByIdFileChanges`: `MissionFileChangesDto` is
+  `additionalProperties: false` so it cannot also match `ObjectiveFileChangesDto`).
+  Needs `.strict()` on that member, which the generator already emits.
+
 ## 5. Operations left as stubs
 
-None so far.
+None from batch 1: every operation tagged missions, objectives, deliveries, activity,
+inbox, projects, project-statuses and project-resources (81) has schemas.
