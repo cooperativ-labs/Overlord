@@ -2,7 +2,13 @@ export const SEED_WORKSPACE_ID = 'local-workspace';
 export const SEED_WORKSPACE_SLUG = 'local';
 export const SEED_WORKSPACE_USER_ID = 'local-workspace-user';
 export const SEED_USER_ID = 'local-user';
-export const CONTRACT_VERSION = '1';
+/**
+ * Version of the database schema contract recorded in
+ * `schema_migrations.contract_version` for every applied migration
+ * (contract/data/README.md). Unrelated to the Overlord contract version in
+ * contract/VERSION.
+ */
+export const SCHEMA_CONTRACT_VERSION = '1';
 
 export const DEFAULT_STATUSES = [
   {

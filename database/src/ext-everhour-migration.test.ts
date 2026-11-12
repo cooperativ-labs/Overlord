@@ -11,12 +11,12 @@ import {
 } from './ext-everhour-migration-runtime.js';
 import {
   bindBool,
-  CONTRACT_VERSION,
   DEFAULT_STATUSES,
   listSqliteMigrationFiles,
   loadBetterSqlite3,
   migrateDatabase,
-  type OverlordDatabase
+  type OverlordDatabase,
+  SCHEMA_CONTRACT_VERSION
 } from './index.js';
 import { resolveAppliedMigrationSqlite } from './migration-ledger.js';
 import {
@@ -108,7 +108,7 @@ function applySqliteMigrationFile(
     ).run(
       pending.version,
       pending.component,
-      CONTRACT_VERSION,
+      SCHEMA_CONTRACT_VERSION,
       pending.checksum,
       new Date().toISOString()
     );
@@ -368,7 +368,7 @@ test('migrateDatabase prunes retired migration ledger versions', () => {
       `INSERT INTO schema_migrations (
          version, adapter, component, contract_version, checksum, applied_at
        ) VALUES (?, 'sqlite', 'core', ?, 'retired', ?)`
-    ).run('20260625000000', CONTRACT_VERSION, new Date().toISOString());
+    ).run('20260625000000', SCHEMA_CONTRACT_VERSION, new Date().toISOString());
 
     migrateDatabase(db);
 

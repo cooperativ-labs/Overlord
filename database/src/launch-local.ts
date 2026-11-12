@@ -2,7 +2,7 @@ import { mkdirSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { CONTRACT_VERSION } from './constants.js';
+import { SCHEMA_CONTRACT_VERSION } from './constants.js';
 import {
   finalizeExtEverhourMissionLinksSqlite,
   isExtEverhourPersistenceMigration
@@ -246,7 +246,7 @@ function recordMigration(db: DatabaseInstance, migration: Migration): void {
   ).run(
     migration.version,
     migration.component,
-    CONTRACT_VERSION,
+    SCHEMA_CONTRACT_VERSION,
     migration.checksum,
     new Date().toISOString()
   );

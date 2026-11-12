@@ -3,7 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { type BetterSqlite3Database, loadBetterSqlite3 } from './better-sqlite3-loader.js';
-import { CONTRACT_VERSION } from './constants.js';
+import { SCHEMA_CONTRACT_VERSION } from './constants.js';
 import {
   finalizeExtEverhourMissionLinksSqlite,
   isExtEverhourPersistenceMigration
@@ -109,7 +109,7 @@ function applyMigration(
   ).run(
     migration.version,
     migration.component,
-    CONTRACT_VERSION,
+    SCHEMA_CONTRACT_VERSION,
     migration.checksum,
     new Date().toISOString()
   );
@@ -163,7 +163,7 @@ export function migrateDatabase(db: OverlordDatabase): void {
         ).run(
           pending.version,
           pending.component,
-          CONTRACT_VERSION,
+          SCHEMA_CONTRACT_VERSION,
           pending.checksum,
           new Date().toISOString()
         );

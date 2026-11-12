@@ -3,7 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import type { DatabaseClient } from './client.js';
-import { CONTRACT_VERSION } from './constants.js';
+import { SCHEMA_CONTRACT_VERSION } from './constants.js';
 import {
   finalizeExtEverhourMissionLinksPostgres,
   isExtEverhourPersistenceMigration
@@ -78,7 +78,7 @@ async function recordMigration(
     [
       migration.version,
       migration.component,
-      CONTRACT_VERSION,
+      SCHEMA_CONTRACT_VERSION,
       migration.checksum,
       new Date().toISOString()
     ]

@@ -33,10 +33,10 @@ export {
   resolveDefaultDatabasePath
 } from './connection.js';
 export {
-  CONTRACT_VERSION,
   DEFAULT_STATUSES,
   OBJECTIVE_STATES,
   type ObjectiveState,
+  SCHEMA_CONTRACT_VERSION,
   SEED_USER_ID,
   SEED_WORKSPACE_ID,
   SEED_WORKSPACE_SLUG,
