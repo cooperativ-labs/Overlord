@@ -20,6 +20,7 @@ import {
   type LaunchSessionDefaults,
   normalizeExecutionProvider,
   resolveLaunchSession,
+  type TerminalLaunchPlacement,
   type TerminalProfile
 } from '@overlord/core/service/terminal-profile-types';
 import { type DatabaseClient } from '@overlord/database';
@@ -126,7 +127,8 @@ function toTerminalProfileDto(profile: TerminalProfile): TerminalProfileDto {
 function fromTerminalProfileDto(dto: TerminalProfileDto): TerminalProfile {
   return {
     launcher: dto.launcher ?? null,
-    placement: dto.placement ?? 'window',
+    // A stored placement is read back as written (schema-disagreements.md L4).
+    placement: (dto.placement ?? 'window') as TerminalLaunchPlacement,
     chord: dto.chord ?? null,
     background: dto.background ?? false,
     ...(dto.executionProvider ? { executionProvider: dto.executionProvider } : {}),

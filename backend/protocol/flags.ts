@@ -1,5 +1,5 @@
 import { type Permission } from '@overlord/auth';
-import { missionDisplayIdFromObjectiveRef } from '@overlord/contract';
+import { missionDisplayIdFromObjectiveRef, type ProtocolRequestBody } from '@overlord/contract';
 
 import { type ServiceContext } from '../../packages/core/service/context.ts';
 import { ApiError } from '../errors.ts';
@@ -10,18 +10,8 @@ import { ApiError } from '../errors.ts';
 // under ./protocol/. This module imports nothing from either, so a group module
 // never has to reach back through the dispatcher for its helpers.
 
-/** Envelope posted by the CLI's `runProtocolCommand`. */
-export interface ProtocolRequestBody {
-  args?: string[];
-  positional?: string[];
-  flags?: Record<string, string | boolean>;
-  /**
-   * Per-flag payloads keyed by the `--*-file` flag name, so multiple file inputs
-   * in one call remain unambiguous.
-   */
-  fileInputs?: Record<string, string>;
-  externalSessionId?: string | null;
-}
+/** Envelope posted by the CLI's `runProtocolCommand` (generated from contract/api/openapi.yaml). */
+export type { ProtocolRequestBody };
 
 export type Handler = (ctx: ServiceContext, body: ProtocolRequestBody) => unknown;
 

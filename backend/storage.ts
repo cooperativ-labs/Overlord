@@ -158,7 +158,7 @@ interface WrittenObject {
   id: string;
   storageKey: string;
   sizeBytes: number;
-  contentType: string;
+  contentType: StoredImageDto['contentType'];
   checksum: string;
   publicUrl: string;
 }
@@ -228,7 +228,8 @@ async function writeImageObject(
     id,
     storageKey,
     sizeBytes: input.bytes.length,
-    contentType,
+    // extensionForImage refused every other content type.
+    contentType: contentType as StoredImageDto['contentType'],
     checksum: createHash('sha256').update(input.bytes).digest('hex'),
     publicUrl: publicUrlFor(bucket.bucket_key, storageKey)
   };

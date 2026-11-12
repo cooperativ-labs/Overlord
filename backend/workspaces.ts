@@ -962,7 +962,7 @@ function toWorkspaceInvitationDto(row: WorkspaceInvitationRow): WorkspaceInvitat
     id: row.id,
     workspaceId: row.workspace_id,
     email: row.email,
-    roleKey: row.role_key,
+    roleKey: row.role_key as WorkspaceInvitationDto['roleKey'],
     status: row.status as WorkspaceInvitationDto['status'],
     tokenPrefix: row.token_prefix,
     expiresAt: row.expires_at,

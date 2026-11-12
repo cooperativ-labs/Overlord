@@ -1,5 +1,5 @@
 import { PERMISSIONS } from '@overlord/auth';
-import { missionDisplayIdFromObjectiveRef } from '@overlord/contract';
+import { type AgentRequestDeliveryDto, missionDisplayIdFromObjectiveRef } from '@overlord/contract';
 import express, { type NextFunction, type Request, type Response, Router } from 'express';
 
 import {
@@ -558,13 +558,6 @@ function requestDto(request: Awaited<ReturnType<typeof getRequest>>): Record<str
     createdAt: request.created_at
   };
 }
-
-type AgentRequestDeliveryDto = {
-  mode: 'latch' | 'read_only';
-  reason: 'no_latch_session' | 'latch_session_exited' | 'target_offline' | 'request_closed' | null;
-  state: 'emitted' | 'applied' | 'not_applied' | 'unknown' | null;
-  observedAt: string | null;
-};
 
 async function requestDelivery(
   ctx: ServiceContext,
