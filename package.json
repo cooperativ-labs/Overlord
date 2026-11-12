@@ -45,7 +45,7 @@
     "check:workspace-scoping": "node scripts/check-workspace-scoping.mjs",
     "check:conformance-versions": "node scripts/check-conformance-versions.mjs",
     "contract:check": "sh scripts/check-contract.sh",
-    "contract:test": "node --test scripts/version-contract.test.mjs scripts/contract-impact.test.mjs scripts/check-conformance-versions.test.mjs scripts/openapi.test.mjs scripts/generate-api-contract.test.mjs",
+    "contract:test": "node --test scripts/version-contract.test.mjs scripts/contract-impact.test.mjs scripts/check-conformance-versions.test.mjs scripts/openapi.test.mjs scripts/generate-api-contract.test.mjs scripts/api-conformance-report.test.mjs",
     "contract:parity": "node scripts/with-ovld-home.mjs node --import tsx --test backend/openapi-route-parity.test.ts",
     "api:generate": "node scripts/generate-api-contract.mjs",
     "api:generate:check": "node scripts/generate-api-contract.mjs --check && yarn workspace @overlord/contract typecheck",

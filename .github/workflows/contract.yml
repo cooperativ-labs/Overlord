@@ -15,7 +15,7 @@ permissions:
 jobs:
   validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     env:
       COREPACK_ENABLE_DOWNLOAD_PROMPT: 0
     steps:
@@ -41,3 +41,11 @@ jobs:
         run: yarn contract:build:prod && yarn db:build:prod && yarn auth:build:prod && yarn automations:build:prod
       - name: OpenAPI route parity
         run: yarn contract:parity
+      # The backend suite runs under scripts/api-conformance-report.mjs (ADR 0051): it
+      # holds the request-validation tests, and every response a test produces is
+      # checked against its OpenAPI operation; the run fails on any mismatch. The
+      # end-to-end tests drive the built CLI.
+      - name: Build the core package and the CLI
+        run: yarn core:build:prod && yarn cli:build:prod
+      - name: Backend tests with REST request validation and response conformance
+        run: yarn test:backend
