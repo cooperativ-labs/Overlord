@@ -3886,15 +3886,19 @@ paths:
       x-overlord-consumers: [webapp]
       summary: Delete a project tag
       description: >-
-        Intended: requires `project:update`, soft-deletes the tag and removes it from every mission.
+        Requires `project:update` in the project's workspace. Soft-deletes the tag and removes it from
+        every mission, then answers. An unknown or foreign project or tag answers 404.
       security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
       responses:
         '200':
-          description: Always, whatever the deletion's outcome (see description).
+          description: The tag was deleted.
           content:
             application/json:
               schema: { $ref: '#/components/schemas/OkResponse' }
         '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
   "/api/projects/{id}/resources":
     parameters:
       - name: id
@@ -4002,16 +4006,20 @@ paths:
       x-overlord-consumers: [webapp]
       summary: Delete a project resource
       description: >-
-        Intended: requires `project:update`, soft-deletes the resource and promotes the oldest remaining
-        resource to primary when none is left.
+        Requires `project:update` in the project's workspace. Soft-deletes the resource and promotes the
+        oldest remaining resource to primary when none is left, then answers. An unknown or foreign
+        project or resource answers 404.
       security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
       responses:
         '200':
-          description: Always, whatever the deletion's outcome (see description).
+          description: The resource was deleted.
           content:
             application/json:
               schema: { $ref: '#/components/schemas/OkResponse' }
         '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
   "/api/projects/{id}/resources/{resourceId}/sources/{sourceId}":
     parameters:
       - name: id
