@@ -357,6 +357,41 @@ the code does not do.
   without a providers function (`createChatRouter`); `backend/app.ts` always supplies one, so it is
   not described. `getChatProviders`.
 
+### Everhour and GitHub extensions (batch 4)
+
+- **B1** (open). The Everhour compatibility aliases (`/ext/everhour/user-connection` and the older
+  `/ext/everhour/integration`, GET, PUT, DELETE) keep `x-overlord-consumers: [unverified]`: no caller
+  exists in webapp, cli, desktop, mcp or OverlordMobile, which use `/api/connections`. The
+  `/integration` operations are marked `deprecated: true`, as `backend/ext/everhour/routes.ts` and the
+  `@deprecated` `EverhourIntegrationDto` describe them. Their schema is `EverhourUserConnectionDto`.
+- **B2** (open; reproduced). The `/ext/everhour/missions/{missionId}…` and
+  `/ext/github/missions/{missionId}/pull-request` routes authorize a mission display id
+  (`requireMissionPermission`), but the services read the mission by UUID only (`getMissionRow` in
+  `backend/ext/everhour/service.ts`; `getMissionGitHubPullRequest`,
+  `createMissionGitHubPullRequest` in `backend/ext/github/service.ts`), so a display id answers 404
+  (as M6). The eight mission operations of both extensions.
+- **B3** (open). `CreateEverhourTimeBody.date` says it defaults to "today (server timezone)"; the code
+  uses today's UTC date (`todayIso`). `MissionEverhourStateDto.connected` and
+  `ProjectEverhourStateDto.connected` ("the acting user has connected their key") are true only when
+  the key can be opened; an unopenable key answers 503 on the state routes, while `GET
+  /ext/everhour/user-connection` reports it as `connected: false` (or `true` when only the sealing
+  key is missing) (`readEverhourApiKey`, `getEverhourIntegration`). Both Everhour state reads and the
+  connection aliases adopt an unambiguous legacy workspace key onto the profile as they read.
+- **D1** (open; reproduced). `GET /ext/github/missions/{missionId}/pull-request` is typed
+  `GitHubPullRequestDto | null` (webapp `lib/api/github.ts`); without a recorded pull request
+  `getMissionGitHubPullRequest` returns null and `handle()` answers `{ ok: true }`. The schema is a
+  `oneOf` of `GitHubPullRequestDto` and `OkResponse`. `getExtGithubMissionsByMissionIdPullRequest`.
+- **D2** (open). `GET /ext/github/projects/{projectId}/link` always answers `repo.private: false`
+  (`repoDto`), although linking stores and answers the repository's visibility.
+  `GitHubIntegrationDto.workspaceName` is typed `string | null` but is always a string (`''` when the
+  workspace is gone). `getExtGithubProjectsByProjectIdLink`, `getExtGithubIntegration`.
+- **D3** (open). The GitHub compatibility aliases (`GET` and `DELETE /ext/github/user-connection`,
+  `POST /ext/github/user-connection/authorize`) keep `x-overlord-consumers: [unverified]`: no caller
+  exists in webapp, cli, desktop, mcp or OverlordMobile, which use `/api/connections`.
+  `GET /ext/github/callback` answers JSON `{ connected: true }` to the browser GitHub redirects,
+  rather than redirecting it on; its permission stays `workspace:update`, checked first in any of the
+  caller's workspaces (`handle(…, { requires })`) and then in the workspace the state names.
+
 ## 2. Non-conforming error shapes
 
 Every route in `backend/app.ts` that forwards errors through `handle()` or `next(err)`
@@ -404,6 +439,12 @@ project-automation route guard (404).
   otherwise, without passing through `apiErrorHandler`; after the stream starts it can only end the
   stream (`createChatRouter`, `backend/chat.ts`). All of these still match `ErrorEnvelope`.
   `getChatThreadsByIdEvents` and every chat operation.
+- **E9** (open; batch 4). The Everhour and GitHub extension routes forward an upstream client error
+  with the same HTTP status (`everhourFetch`, `githubFetch`): a 401, 403, 404 or 429 from these
+  routes can describe Everhour's or GitHub's answer rather than Overlord's own authentication,
+  authorization or lookup, distinguishable only by the `error` text (`Everhour API error (<status>):
+  …`, `GitHub API error (<status>): …`). The body is still an `ErrorEnvelope` without `code`. Every
+  `/ext/*` operation that calls a provider.
 
 ## 3. Suspected code defects
 
@@ -487,6 +528,9 @@ schema must change.
 - **G16** Unions discriminated only by a `const` member and no OpenAPI `discriminator`:
   `ChatBlockDto` (`kind`), `ChatSourceLocatorDto` (`kind`), `ChatEventDto` (`kind`, eleven
   variants) and `ChatStreamFrameDto` (`type`). Needs `z.discriminatedUnion` (or `z.union`) (batch 4).
+- **G17** The operation-level `deprecated: true` flag on `getExtEverhourIntegration`,
+  `putExtEverhourIntegration` and `deleteExtEverhourIntegration`; generated clients should carry it
+  as a deprecation marker (batch 4).
 
 ## 5. Operations left as stubs
 

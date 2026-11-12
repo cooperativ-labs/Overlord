@@ -5851,7 +5851,23 @@ paths:
       x-overlord-edition: both
       x-overlord-consumers: [unverified]
       x-overlord-extension: everhour
-      x-overlord-schema-status: stub
+      summary: The caller's Everhour connection (compatibility alias)
+      description: >-
+        Compatibility alias over the shared account-connections module; `GET /api/connections?scope=all`
+        is the canonical listing. Owner-scoped, both editions, no RBAC action. Writes as it reads: a
+        legacy workspace Everhour key the caller unambiguously connected is adopted onto the profile.
+        `connected` is true only for a `connected` connection whose key can be opened (or whose sealing
+        key is not configured); the account name is refreshed from Everhour best-effort, so an unreachable
+        Everhour or a rejected key still reports `connected: true` with the stored name.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      responses:
+        '200':
+          description: The caller's Everhour connection state; the key is never returned.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EverhourUserConnectionDto' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '500': { $ref: '#/components/responses/InternalError' }
     put:
       operationId: putExtEverhourUserConnection
       tags: [everhour]
@@ -5859,7 +5875,60 @@ paths:
       x-overlord-edition: both
       x-overlord-consumers: [unverified]
       x-overlord-extension: everhour
-      x-overlord-schema-status: stub
+      summary: Connect or rotate the caller's Everhour API key (compatibility alias)
+      description: >-
+        Compatibility alias over the shared account-connections module; `POST /api/connections/api-keys`
+        is the canonical call. Owner-scoped, both editions. `apiKey` (coerced to a string, trimmed) must
+        not be blank (400 `Enter an Everhour API key.`). The key is validated against Everhour before it
+        is stored: Everhour's client errors are forwarded with their status (`Everhour API error
+        (<status>): …`; 401 for a rejected key), an unreachable Everhour or a server error answers 502.
+        With no write key to seal it the route answers 503. Stores or rotates the caller's profile-scoped
+        connection.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateEverhourIntegrationBody' }
+      responses:
+        '200':
+          description: The caller's Everhour connection state; the key is never returned.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EverhourUserConnectionDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401':
+          description: >-
+            No session or token (`{ error }` from the authentication middleware), or Everhour refused the
+            stored API key (`Everhour API error (401): …`, forwarded from upstream).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '403':
+          description: Everhour refused the key (forwarded).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '429':
+          description: >-
+            Everhour's rate limit (`Everhour API error (429): …`, forwarded from upstream).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '500': { $ref: '#/components/responses/InternalError' }
+        '502':
+          description: >-
+            Everhour could not be reached (`Could not reach Everhour: …`) or answered a server error, or
+            returned no task id or no usable section.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '503':
+          description: '`Everhour API-key encryption is not configured on this Overlord server.`'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
     delete:
       operationId: deleteExtEverhourUserConnection
       tags: [everhour]
@@ -5867,7 +5936,20 @@ paths:
       x-overlord-edition: both
       x-overlord-consumers: [unverified]
       x-overlord-extension: everhour
-      x-overlord-schema-status: stub
+      summary: Disconnect the caller's Everhour key (compatibility alias)
+      description: >-
+        Compatibility alias over the shared account-connections module; `DELETE /api/connections/{id}` is
+        the canonical call. Owner-scoped, both editions. Erases the caller's Everhour connection, if any,
+        and tombstones the legacy row. Always answers `{ connected: false, accountName: null }`.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      responses:
+        '200':
+          description: The caller's Everhour connection state; the key is never returned.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EverhourUserConnectionDto' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '500': { $ref: '#/components/responses/InternalError' }
   /ext/everhour/integration:
     get:
       operationId: getExtEverhourIntegration
@@ -5876,7 +5958,24 @@ paths:
       x-overlord-edition: both
       x-overlord-consumers: [unverified]
       x-overlord-extension: everhour
-      x-overlord-schema-status: stub
+      deprecated: true
+      summary: The caller's Everhour connection (deprecated alias of /user-connection)
+      description: >-
+        Compatibility alias over the shared account-connections module; `GET /api/connections?scope=all`
+        is the canonical listing. Owner-scoped, both editions, no RBAC action. Writes as it reads: a
+        legacy workspace Everhour key the caller unambiguously connected is adopted onto the profile.
+        `connected` is true only for a `connected` connection whose key can be opened (or whose sealing
+        key is not configured); the account name is refreshed from Everhour best-effort, so an unreachable
+        Everhour or a rejected key still reports `connected: true` with the stored name.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      responses:
+        '200':
+          description: The caller's Everhour connection state; the key is never returned.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EverhourUserConnectionDto' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '500': { $ref: '#/components/responses/InternalError' }
     put:
       operationId: putExtEverhourIntegration
       tags: [everhour]
@@ -5884,7 +5983,61 @@ paths:
       x-overlord-edition: both
       x-overlord-consumers: [unverified]
       x-overlord-extension: everhour
-      x-overlord-schema-status: stub
+      deprecated: true
+      summary: Connect or rotate the caller's Everhour API key (deprecated alias of /user-connection)
+      description: >-
+        Compatibility alias over the shared account-connections module; `POST /api/connections/api-keys`
+        is the canonical call. Owner-scoped, both editions. `apiKey` (coerced to a string, trimmed) must
+        not be blank (400 `Enter an Everhour API key.`). The key is validated against Everhour before it
+        is stored: Everhour's client errors are forwarded with their status (`Everhour API error
+        (<status>): …`; 401 for a rejected key), an unreachable Everhour or a server error answers 502.
+        With no write key to seal it the route answers 503. Stores or rotates the caller's profile-scoped
+        connection.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateEverhourIntegrationBody' }
+      responses:
+        '200':
+          description: The caller's Everhour connection state; the key is never returned.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EverhourUserConnectionDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401':
+          description: >-
+            No session or token (`{ error }` from the authentication middleware), or Everhour refused the
+            stored API key (`Everhour API error (401): …`, forwarded from upstream).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '403':
+          description: Everhour refused the key (forwarded).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '429':
+          description: >-
+            Everhour's rate limit (`Everhour API error (429): …`, forwarded from upstream).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '500': { $ref: '#/components/responses/InternalError' }
+        '502':
+          description: >-
+            Everhour could not be reached (`Could not reach Everhour: …`) or answered a server error, or
+            returned no task id or no usable section.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '503':
+          description: '`Everhour API-key encryption is not configured on this Overlord server.`'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
     delete:
       operationId: deleteExtEverhourIntegration
       tags: [everhour]
@@ -5892,14 +6045,28 @@ paths:
       x-overlord-edition: both
       x-overlord-consumers: [unverified]
       x-overlord-extension: everhour
-      x-overlord-schema-status: stub
+      deprecated: true
+      summary: Disconnect the caller's Everhour key (deprecated alias of /user-connection)
+      description: >-
+        Compatibility alias over the shared account-connections module; `DELETE /api/connections/{id}` is
+        the canonical call. Owner-scoped, both editions. Erases the caller's Everhour connection, if any,
+        and tombstones the legacy row. Always answers `{ connected: false, accountName: null }`.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      responses:
+        '200':
+          description: The caller's Everhour connection state; the key is never returned.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EverhourUserConnectionDto' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '500': { $ref: '#/components/responses/InternalError' }
   "/ext/everhour/projects/{projectId}/link":
     parameters:
       - name: projectId
         in: path
         required: true
-        schema:
-          type: string
+        description: Project UUID (404 for an unknown, deleted or foreign project).
+        schema: { type: string }
     put:
       operationId: putExtEverhourProjectsByProjectIdLink
       tags: [everhour]
@@ -5907,7 +6074,77 @@ paths:
       x-overlord-edition: both
       x-overlord-consumers: [webapp]
       x-overlord-extension: everhour
-      x-overlord-schema-status: stub
+      summary: Link a project to an Everhour project by name, or unlink it
+      description: >-
+        Calls Everhour (`https://api.everhour.com`) with the caller's own API key, read from their
+        profile-scoped Everhour account connection (a legacy workspace key the caller unambiguously
+        connected is adopted onto the profile first). Without a connection the route answers 400 `Connect
+        Everhour in Settings → Integrations first.` Everhour's client errors are answered with the same
+        status and `error` `Everhour API error (<status>): <message>`; an unreachable Everhour or a server
+        error answers 502. Requires `project:update` in the project's workspace. A missing, null or blank
+        `everhourProjectName` removes the link without calling Everhour. Otherwise, with the caller's
+        Everhour key, the route reuses a native (`ev:`) Everhour project whose name matches
+        case-insensitively, else creates a board project; adds the key's user to it; resolves its first
+        section, creating an `Overlord` section when it has none; and stores the link with the submitted
+        trimmed name.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LinkProjectEverhourBody' }
+      responses:
+        '200':
+          description: The link; both fields null after unlinking.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProjectEverhourLinkDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401':
+          description: >-
+            No session or token (`{ error }` from the authentication middleware), or Everhour refused the
+            stored API key (`Everhour API error (401): …`, forwarded from upstream).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '403':
+          description: >-
+            The caller lacks the route's RBAC action in the resource's workspace (`Permission denied: …`),
+            or Everhour denied the request (forwarded; a denied task creation reads `Everhour denied
+            creating …`).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '404':
+          description: >-
+            Unknown, deleted or foreign project, or one outside a project_automation token's projects
+            (`Project not found`); or Everhour answered 404 (forwarded).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '429':
+          description: >-
+            Everhour's rate limit (`Everhour API error (429): …`, forwarded from upstream).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '500': { $ref: '#/components/responses/InternalError' }
+        '502':
+          description: >-
+            Everhour could not be reached (`Could not reach Everhour: …`) or answered a server error, or
+            returned no task id or no usable section.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '503':
+          description: >-
+            The stored key cannot be opened: its sealing key is not configured (`Everhour API-key
+            encryption is not configured on this Overlord server.`) or it is unreadable (`The stored
+            Everhour connection cannot be decrypted.`).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
     get:
       operationId: getExtEverhourProjectsByProjectIdLink
       tags: [everhour]
@@ -5915,14 +6152,30 @@ paths:
       x-overlord-edition: both
       x-overlord-consumers: [webapp]
       x-overlord-extension: everhour
-      x-overlord-schema-status: stub
+      summary: Read a project's Everhour link
+      description: Requires `project:read` in the project's workspace. Does not call Everhour.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      responses:
+        '200':
+          description: The link; both Everhour fields null when unlinked.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProjectEverhourLinkDto' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404':
+          description: Unknown, deleted or foreign project (`Project not found`).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '500': { $ref: '#/components/responses/InternalError' }
   "/ext/everhour/projects/{projectId}":
     parameters:
       - name: projectId
         in: path
         required: true
-        schema:
-          type: string
+        description: Project UUID (404 for an unknown, deleted or foreign project).
+        schema: { type: string }
     get:
       operationId: getExtEverhourProjectsByProjectId
       tags: [everhour]
@@ -5930,14 +6183,71 @@ paths:
       x-overlord-edition: both
       x-overlord-consumers: [webapp]
       x-overlord-extension: everhour
-      x-overlord-schema-status: stub
+      summary: Read a project's Everhour time state
+      description: >-
+        Requires `project:read` in the project's workspace. Without an Everhour connection the route
+        answers `connected: false` with empty records and does not call Everhour. With one it reads the
+        project's `general` task's time records (about two years back through tomorrow) and the caller's
+        running timer from Everhour; Everhour's client errors are forwarded with their status and an
+        unreachable Everhour answers 502.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      responses:
+        '200':
+          description: The project's Everhour state.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProjectEverhourStateDto' }
+        '401':
+          description: >-
+            No session or token (`{ error }` from the authentication middleware), or Everhour refused the
+            stored API key (`Everhour API error (401): …`, forwarded from upstream).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '403':
+          description: >-
+            The caller lacks the route's RBAC action in the resource's workspace (`Permission denied: …`),
+            or Everhour denied the request (forwarded; a denied task creation reads `Everhour denied
+            creating …`).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '404':
+          description: >-
+            Unknown, deleted or foreign project, or one outside a project_automation token's projects
+            (`Project not found`); or Everhour answered 404 (forwarded).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '429':
+          description: >-
+            Everhour's rate limit (`Everhour API error (429): …`, forwarded from upstream).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '500': { $ref: '#/components/responses/InternalError' }
+        '502':
+          description: >-
+            Everhour could not be reached (`Could not reach Everhour: …`) or answered a server error, or
+            returned no task id or no usable section.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '503':
+          description: >-
+            The stored key cannot be opened: its sealing key is not configured (`Everhour API-key
+            encryption is not configured on this Overlord server.`) or it is unreadable (`The stored
+            Everhour connection cannot be decrypted.`).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
   "/ext/everhour/projects/{projectId}/timer/start":
     parameters:
       - name: projectId
         in: path
         required: true
-        schema:
-          type: string
+        description: Project UUID (404 for an unknown, deleted or foreign project).
+        schema: { type: string }
     post:
       operationId: postExtEverhourProjectsByProjectIdTimerStart
       tags: [everhour]
@@ -5945,14 +6255,76 @@ paths:
       x-overlord-edition: both
       x-overlord-consumers: [webapp]
       x-overlord-extension: everhour
-      x-overlord-schema-status: stub
+      summary: Start the project's Everhour timer
+      description: >-
+        Calls Everhour (`https://api.everhour.com`) with the caller's own API key, read from their
+        profile-scoped Everhour account connection (a legacy workspace key the caller unambiguously
+        connected is adopted onto the profile first). Without a connection the route answers 400 `Connect
+        Everhour in Settings → Integrations first.` Everhour's client errors are answered with the same
+        status and `error` `Everhour API error (<status>): <message>`; an unreachable Everhour or a server
+        error answers 502. Requires `project:update` in the project's workspace. Starts (or restarts) the
+        caller's Everhour timer on the project's `general` task, finding or creating that task in the
+        linked Everhour project first. An unlinked project, or one linked to an integration-backed
+        (non-`ev:`) Everhour project, answers 400.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      responses:
+        '200':
+          description: The project's Everhour state, read again after the change (which calls Everhour again).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProjectEverhourStateDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401':
+          description: >-
+            No session or token (`{ error }` from the authentication middleware), or Everhour refused the
+            stored API key (`Everhour API error (401): …`, forwarded from upstream).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '403':
+          description: >-
+            The caller lacks the route's RBAC action in the resource's workspace (`Permission denied: …`),
+            or Everhour denied the request (forwarded; a denied task creation reads `Everhour denied
+            creating …`).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '404':
+          description: >-
+            Unknown, deleted or foreign project, or one outside a project_automation token's projects
+            (`Project not found`); or Everhour answered 404 (forwarded).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '429':
+          description: >-
+            Everhour's rate limit (`Everhour API error (429): …`, forwarded from upstream).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '500': { $ref: '#/components/responses/InternalError' }
+        '502':
+          description: >-
+            Everhour could not be reached (`Could not reach Everhour: …`) or answered a server error, or
+            returned no task id or no usable section.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '503':
+          description: >-
+            The stored key cannot be opened: its sealing key is not configured (`Everhour API-key
+            encryption is not configured on this Overlord server.`) or it is unreadable (`The stored
+            Everhour connection cannot be decrypted.`).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
   "/ext/everhour/projects/{projectId}/timer/stop":
     parameters:
       - name: projectId
         in: path
         required: true
-        schema:
-          type: string
+        description: Project UUID (404 for an unknown, deleted or foreign project).
+        schema: { type: string }
     post:
       operationId: postExtEverhourProjectsByProjectIdTimerStop
       tags: [everhour]
@@ -5960,14 +6332,75 @@ paths:
       x-overlord-edition: both
       x-overlord-consumers: [webapp]
       x-overlord-extension: everhour
-      x-overlord-schema-status: stub
+      summary: Stop the caller's running Everhour timer
+      description: >-
+        Calls Everhour (`https://api.everhour.com`) with the caller's own API key, read from their
+        profile-scoped Everhour account connection (a legacy workspace key the caller unambiguously
+        connected is adopted onto the profile first). Without a connection the route answers 400 `Connect
+        Everhour in Settings → Integrations first.` Everhour's client errors are answered with the same
+        status and `error` `Everhour API error (<status>): <message>`; an unreachable Everhour or a server
+        error answers 502. Requires `project:update` in the project's workspace. Stops the caller's
+        currently running Everhour timer, whichever task it is on; an Everhour 400 or 404 (no active
+        timer) is not an error.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      responses:
+        '200':
+          description: The project's Everhour state, read again after the change (which calls Everhour again).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProjectEverhourStateDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401':
+          description: >-
+            No session or token (`{ error }` from the authentication middleware), or Everhour refused the
+            stored API key (`Everhour API error (401): …`, forwarded from upstream).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '403':
+          description: >-
+            The caller lacks the route's RBAC action in the resource's workspace (`Permission denied: …`),
+            or Everhour denied the request (forwarded; a denied task creation reads `Everhour denied
+            creating …`).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '404':
+          description: >-
+            Unknown, deleted or foreign project, or one outside a project_automation token's projects
+            (`Project not found`); or Everhour answered 404 (forwarded).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '429':
+          description: >-
+            Everhour's rate limit (`Everhour API error (429): …`, forwarded from upstream).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '500': { $ref: '#/components/responses/InternalError' }
+        '502':
+          description: >-
+            Everhour could not be reached (`Could not reach Everhour: …`) or answered a server error, or
+            returned no task id or no usable section.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '503':
+          description: >-
+            The stored key cannot be opened: its sealing key is not configured (`Everhour API-key
+            encryption is not configured on this Overlord server.`) or it is unreadable (`The stored
+            Everhour connection cannot be decrypted.`).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
   "/ext/everhour/projects/{projectId}/time":
     parameters:
       - name: projectId
         in: path
         required: true
-        schema:
-          type: string
+        description: Project UUID (404 for an unknown, deleted or foreign project).
+        schema: { type: string }
     post:
       operationId: postExtEverhourProjectsByProjectIdTime
       tags: [everhour]
@@ -5975,19 +6408,90 @@ paths:
       x-overlord-edition: both
       x-overlord-consumers: [webapp]
       x-overlord-extension: everhour
-      x-overlord-schema-status: stub
+      summary: Add time to the project's general task
+      description: >-
+        Calls Everhour (`https://api.everhour.com`) with the caller's own API key, read from their
+        profile-scoped Everhour account connection (a legacy workspace key the caller unambiguously
+        connected is adopted onto the profile first). Without a connection the route answers 400 `Connect
+        Everhour in Settings → Integrations first.` Everhour's client errors are answered with the same
+        status and `error` `Everhour API error (<status>): <message>`; an unreachable Everhour or a server
+        error answers 502. Requires `project:update` in the project's workspace. After the connection
+        check, `timeSeconds` must be a finite number greater than 0 (400 `Enter a positive duration.`); it
+        is rounded to whole seconds. `date` defaults to today's UTC date; a blank `comment` is omitted.
+        The `general` task is found or created as for timer start (400 when the project is unlinked or
+        integration-backed).
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateEverhourTimeBody' }
+      responses:
+        '200':
+          description: The project's Everhour state, read again after the change (which calls Everhour again).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProjectEverhourStateDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401':
+          description: >-
+            No session or token (`{ error }` from the authentication middleware), or Everhour refused the
+            stored API key (`Everhour API error (401): …`, forwarded from upstream).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '403':
+          description: >-
+            The caller lacks the route's RBAC action in the resource's workspace (`Permission denied: …`),
+            or Everhour denied the request (forwarded; a denied task creation reads `Everhour denied
+            creating …`).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '404':
+          description: >-
+            Unknown, deleted or foreign project, or one outside a project_automation token's projects
+            (`Project not found`); or Everhour answered 404 (forwarded).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '429':
+          description: >-
+            Everhour's rate limit (`Everhour API error (429): …`, forwarded from upstream).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '500': { $ref: '#/components/responses/InternalError' }
+        '502':
+          description: >-
+            Everhour could not be reached (`Could not reach Everhour: …`) or answered a server error, or
+            returned no task id or no usable section.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '503':
+          description: >-
+            The stored key cannot be opened: its sealing key is not configured (`Everhour API-key
+            encryption is not configured on this Overlord server.`) or it is unreadable (`The stored
+            Everhour connection cannot be decrypted.`).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
   "/ext/everhour/projects/{projectId}/time/{recordId}":
     parameters:
       - name: projectId
         in: path
         required: true
-        schema:
-          type: string
+        description: Project UUID (404 for an unknown, deleted or foreign project).
+        schema: { type: string }
       - name: recordId
         in: path
         required: true
-        schema:
-          type: string
+        description: >-
+          Everhour time-record id, passed to Everhour as given; Everhour decides whether the caller's key
+          may change it.
+        schema: { type: string }
     patch:
       operationId: patchExtEverhourProjectsByProjectIdTimeByRecordId
       tags: [everhour]
@@ -5995,7 +6499,74 @@ paths:
       x-overlord-edition: both
       x-overlord-consumers: [webapp]
       x-overlord-extension: everhour
-      x-overlord-schema-status: stub
+      summary: Change an Everhour time record
+      description: >-
+        Calls Everhour (`https://api.everhour.com`) with the caller's own API key, read from their
+        profile-scoped Everhour account connection (a legacy workspace key the caller unambiguously
+        connected is adopted onto the profile first). Without a connection the route answers 400 `Connect
+        Everhour in Settings → Integrations first.` Everhour's client errors are answered with the same
+        status and `error` `Everhour API error (<status>): <message>`; an unreachable Everhour or a server
+        error answers 502. Requires `project:update` in the project's workspace. After the connection
+        check, `timeSeconds` must be a finite number greater than 0 (400); it is rounded to whole seconds.
+        A present `comment` replaces the record's comment (trimmed; null clears it).
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateEverhourTimeBody' }
+      responses:
+        '200':
+          description: The project's Everhour state, read again after the change (which calls Everhour again).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProjectEverhourStateDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401':
+          description: >-
+            No session or token (`{ error }` from the authentication middleware), or Everhour refused the
+            stored API key (`Everhour API error (401): …`, forwarded from upstream).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '403':
+          description: >-
+            The caller lacks the route's RBAC action in the resource's workspace (`Permission denied: …`),
+            or Everhour denied the request (forwarded; a denied task creation reads `Everhour denied
+            creating …`).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '404':
+          description: >-
+            Unknown, deleted or foreign project, or one outside a project_automation token's projects
+            (`Project not found`); or Everhour answered 404 (forwarded).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '429':
+          description: >-
+            Everhour's rate limit (`Everhour API error (429): …`, forwarded from upstream).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '500': { $ref: '#/components/responses/InternalError' }
+        '502':
+          description: >-
+            Everhour could not be reached (`Could not reach Everhour: …`) or answered a server error, or
+            returned no task id or no usable section.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '503':
+          description: >-
+            The stored key cannot be opened: its sealing key is not configured (`Everhour API-key
+            encryption is not configured on this Overlord server.`) or it is unreadable (`The stored
+            Everhour connection cannot be decrypted.`).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
     delete:
       operationId: deleteExtEverhourProjectsByProjectIdTimeByRecordId
       tags: [everhour]
@@ -6003,14 +6574,75 @@ paths:
       x-overlord-edition: both
       x-overlord-consumers: [webapp]
       x-overlord-extension: everhour
-      x-overlord-schema-status: stub
+      summary: Delete an Everhour time record
+      description: >-
+        Calls Everhour (`https://api.everhour.com`) with the caller's own API key, read from their
+        profile-scoped Everhour account connection (a legacy workspace key the caller unambiguously
+        connected is adopted onto the profile first). Without a connection the route answers 400 `Connect
+        Everhour in Settings → Integrations first.` Everhour's client errors are answered with the same
+        status and `error` `Everhour API error (<status>): <message>`; an unreachable Everhour or a server
+        error answers 502. Requires `project:update` in the project's workspace.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      responses:
+        '200':
+          description: The project's Everhour state, read again after the change (which calls Everhour again).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProjectEverhourStateDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401':
+          description: >-
+            No session or token (`{ error }` from the authentication middleware), or Everhour refused the
+            stored API key (`Everhour API error (401): …`, forwarded from upstream).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '403':
+          description: >-
+            The caller lacks the route's RBAC action in the resource's workspace (`Permission denied: …`),
+            or Everhour denied the request (forwarded; a denied task creation reads `Everhour denied
+            creating …`).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '404':
+          description: >-
+            Unknown, deleted or foreign project, or one outside a project_automation token's projects
+            (`Project not found`); or Everhour answered 404 (forwarded).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '429':
+          description: >-
+            Everhour's rate limit (`Everhour API error (429): …`, forwarded from upstream).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '500': { $ref: '#/components/responses/InternalError' }
+        '502':
+          description: >-
+            Everhour could not be reached (`Could not reach Everhour: …`) or answered a server error, or
+            returned no task id or no usable section.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '503':
+          description: >-
+            The stored key cannot be opened: its sealing key is not configured (`Everhour API-key
+            encryption is not configured on this Overlord server.`) or it is unreadable (`The stored
+            Everhour connection cannot be decrypted.`).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
   "/ext/everhour/missions/{missionId}":
     parameters:
       - name: missionId
         in: path
         required: true
-        schema:
-          type: string
+        description: >-
+          Mission UUID. A display id passes authorization but is not found by the Everhour service (404);
+          an ambiguous display id answers 409.
+        schema: { type: string }
     get:
       operationId: getExtEverhourMissionsByMissionId
       tags: [everhour]
@@ -6018,14 +6650,79 @@ paths:
       x-overlord-edition: both
       x-overlord-consumers: [webapp]
       x-overlord-extension: everhour
-      x-overlord-schema-status: stub
+      summary: Read a mission's Everhour time state
+      description: >-
+        Requires `mission:read` in the mission's workspace. Without an Everhour connection, or before the
+        mission has an Everhour task, the route answers empty records and does not call Everhour.
+        Otherwise it reads the task's time records (about two years back through tomorrow) and the
+        caller's running timer; Everhour's client errors are forwarded with their status and an
+        unreachable Everhour answers 502.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      responses:
+        '200':
+          description: The mission's Everhour state.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MissionEverhourStateDto' }
+        '401':
+          description: >-
+            No session or token (`{ error }` from the authentication middleware), or Everhour refused the
+            stored API key (`Everhour API error (401): …`, forwarded from upstream).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '403':
+          description: >-
+            The caller lacks the route's RBAC action in the resource's workspace (`Permission denied: …`),
+            or Everhour denied the request (forwarded; a denied task creation reads `Everhour denied
+            creating …`).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '404':
+          description: >-
+            Unknown, deleted or foreign mission (`Mission not found`), including a display id: the route
+            authorizes a display id but then reads the mission by UUID; or Everhour answered 404
+            (forwarded).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '409':
+          description: The mission display id is ambiguous in the caller's organization.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '429':
+          description: >-
+            Everhour's rate limit (`Everhour API error (429): …`, forwarded from upstream).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '500': { $ref: '#/components/responses/InternalError' }
+        '502':
+          description: >-
+            Everhour could not be reached (`Could not reach Everhour: …`) or answered a server error, or
+            returned no task id or no usable section.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '503':
+          description: >-
+            The stored key cannot be opened: its sealing key is not configured (`Everhour API-key
+            encryption is not configured on this Overlord server.`) or it is unreadable (`The stored
+            Everhour connection cannot be decrypted.`).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
   "/ext/everhour/missions/{missionId}/timer/start":
     parameters:
       - name: missionId
         in: path
         required: true
-        schema:
-          type: string
+        description: >-
+          Mission UUID. A display id passes authorization but is not found by the Everhour service (404);
+          an ambiguous display id answers 409.
+        schema: { type: string }
     post:
       operationId: postExtEverhourMissionsByMissionIdTimerStart
       tags: [everhour]
@@ -6033,14 +6730,84 @@ paths:
       x-overlord-edition: both
       x-overlord-consumers: [webapp]
       x-overlord-extension: everhour
-      x-overlord-schema-status: stub
+      summary: Start the mission's Everhour timer
+      description: >-
+        Calls Everhour (`https://api.everhour.com`) with the caller's own API key, read from their
+        profile-scoped Everhour account connection (a legacy workspace key the caller unambiguously
+        connected is adopted onto the profile first). Without a connection the route answers 400 `Connect
+        Everhour in Settings → Integrations first.` Everhour's client errors are answered with the same
+        status and `error` `Everhour API error (<status>): <message>`; an unreachable Everhour or a server
+        error answers 502. Requires `mission:update` in the mission's workspace. Starts (or restarts) the
+        caller's Everhour timer on the mission's task, creating the task (named after the mission) in the
+        project's linked Everhour project on first use. An unlinked project, or one linked to an
+        integration-backed (non-`ev:`) Everhour project, answers 400.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      responses:
+        '200':
+          description: The mission's Everhour state, read again after the change (which calls Everhour again).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MissionEverhourStateDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401':
+          description: >-
+            No session or token (`{ error }` from the authentication middleware), or Everhour refused the
+            stored API key (`Everhour API error (401): …`, forwarded from upstream).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '403':
+          description: >-
+            The caller lacks the route's RBAC action in the resource's workspace (`Permission denied: …`),
+            or Everhour denied the request (forwarded; a denied task creation reads `Everhour denied
+            creating …`).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '404':
+          description: >-
+            Unknown, deleted or foreign mission (`Mission not found`), including a display id: the route
+            authorizes a display id but then reads the mission by UUID; or Everhour answered 404
+            (forwarded).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '409':
+          description: The mission display id is ambiguous in the caller's organization.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '429':
+          description: >-
+            Everhour's rate limit (`Everhour API error (429): …`, forwarded from upstream).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '500': { $ref: '#/components/responses/InternalError' }
+        '502':
+          description: >-
+            Everhour could not be reached (`Could not reach Everhour: …`) or answered a server error, or
+            returned no task id or no usable section.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '503':
+          description: >-
+            The stored key cannot be opened: its sealing key is not configured (`Everhour API-key
+            encryption is not configured on this Overlord server.`) or it is unreadable (`The stored
+            Everhour connection cannot be decrypted.`).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
   "/ext/everhour/missions/{missionId}/timer/stop":
     parameters:
       - name: missionId
         in: path
         required: true
-        schema:
-          type: string
+        description: >-
+          Mission UUID. A display id passes authorization but is not found by the Everhour service (404);
+          an ambiguous display id answers 409.
+        schema: { type: string }
     post:
       operationId: postExtEverhourMissionsByMissionIdTimerStop
       tags: [everhour]
@@ -6048,14 +6815,83 @@ paths:
       x-overlord-edition: both
       x-overlord-consumers: [webapp]
       x-overlord-extension: everhour
-      x-overlord-schema-status: stub
+      summary: Stop the caller's running Everhour timer
+      description: >-
+        Calls Everhour (`https://api.everhour.com`) with the caller's own API key, read from their
+        profile-scoped Everhour account connection (a legacy workspace key the caller unambiguously
+        connected is adopted onto the profile first). Without a connection the route answers 400 `Connect
+        Everhour in Settings → Integrations first.` Everhour's client errors are answered with the same
+        status and `error` `Everhour API error (<status>): <message>`; an unreachable Everhour or a server
+        error answers 502. Requires `mission:update` in the mission's workspace. Stops the caller's
+        currently running Everhour timer, whichever task it is on; an Everhour 400 or 404 (no active
+        timer) is not an error.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      responses:
+        '200':
+          description: The mission's Everhour state, read again after the change (which calls Everhour again).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MissionEverhourStateDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401':
+          description: >-
+            No session or token (`{ error }` from the authentication middleware), or Everhour refused the
+            stored API key (`Everhour API error (401): …`, forwarded from upstream).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '403':
+          description: >-
+            The caller lacks the route's RBAC action in the resource's workspace (`Permission denied: …`),
+            or Everhour denied the request (forwarded; a denied task creation reads `Everhour denied
+            creating …`).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '404':
+          description: >-
+            Unknown, deleted or foreign mission (`Mission not found`), including a display id: the route
+            authorizes a display id but then reads the mission by UUID; or Everhour answered 404
+            (forwarded).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '409':
+          description: The mission display id is ambiguous in the caller's organization.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '429':
+          description: >-
+            Everhour's rate limit (`Everhour API error (429): …`, forwarded from upstream).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '500': { $ref: '#/components/responses/InternalError' }
+        '502':
+          description: >-
+            Everhour could not be reached (`Could not reach Everhour: …`) or answered a server error, or
+            returned no task id or no usable section.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '503':
+          description: >-
+            The stored key cannot be opened: its sealing key is not configured (`Everhour API-key
+            encryption is not configured on this Overlord server.`) or it is unreadable (`The stored
+            Everhour connection cannot be decrypted.`).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
   "/ext/everhour/missions/{missionId}/time":
     parameters:
       - name: missionId
         in: path
         required: true
-        schema:
-          type: string
+        description: >-
+          Mission UUID. A display id passes authorization but is not found by the Everhour service (404);
+          an ambiguous display id answers 409.
+        schema: { type: string }
     post:
       operationId: postExtEverhourMissionsByMissionIdTime
       tags: [everhour]
@@ -6063,19 +6899,95 @@ paths:
       x-overlord-edition: both
       x-overlord-consumers: [webapp]
       x-overlord-extension: everhour
-      x-overlord-schema-status: stub
+      summary: Add time to the mission's Everhour task
+      description: >-
+        Calls Everhour (`https://api.everhour.com`) with the caller's own API key, read from their
+        profile-scoped Everhour account connection (a legacy workspace key the caller unambiguously
+        connected is adopted onto the profile first). Without a connection the route answers 400 `Connect
+        Everhour in Settings → Integrations first.` Everhour's client errors are answered with the same
+        status and `error` `Everhour API error (<status>): <message>`; an unreachable Everhour or a server
+        error answers 502. Requires `mission:update` in the mission's workspace. After the connection
+        check, `timeSeconds` must be a finite number greater than 0 (400 `Enter a positive duration.`); it
+        is rounded to whole seconds. `date` defaults to today's UTC date; a blank `comment` is omitted.
+        The mission's task is created on first use as for timer start.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateEverhourTimeBody' }
+      responses:
+        '200':
+          description: The mission's Everhour state, read again after the change (which calls Everhour again).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MissionEverhourStateDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401':
+          description: >-
+            No session or token (`{ error }` from the authentication middleware), or Everhour refused the
+            stored API key (`Everhour API error (401): …`, forwarded from upstream).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '403':
+          description: >-
+            The caller lacks the route's RBAC action in the resource's workspace (`Permission denied: …`),
+            or Everhour denied the request (forwarded; a denied task creation reads `Everhour denied
+            creating …`).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '404':
+          description: >-
+            Unknown, deleted or foreign mission (`Mission not found`), including a display id: the route
+            authorizes a display id but then reads the mission by UUID; or Everhour answered 404
+            (forwarded).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '409':
+          description: The mission display id is ambiguous in the caller's organization.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '429':
+          description: >-
+            Everhour's rate limit (`Everhour API error (429): …`, forwarded from upstream).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '500': { $ref: '#/components/responses/InternalError' }
+        '502':
+          description: >-
+            Everhour could not be reached (`Could not reach Everhour: …`) or answered a server error, or
+            returned no task id or no usable section.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '503':
+          description: >-
+            The stored key cannot be opened: its sealing key is not configured (`Everhour API-key
+            encryption is not configured on this Overlord server.`) or it is unreadable (`The stored
+            Everhour connection cannot be decrypted.`).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
   "/ext/everhour/missions/{missionId}/time/{recordId}":
     parameters:
       - name: missionId
         in: path
         required: true
-        schema:
-          type: string
+        description: Mission UUID (see the mission routes).
+        schema: { type: string }
       - name: recordId
         in: path
         required: true
-        schema:
-          type: string
+        description: >-
+          Everhour time-record id, passed to Everhour as given; Everhour decides whether the caller's key
+          may change it.
+        schema: { type: string }
     patch:
       operationId: patchExtEverhourMissionsByMissionIdTimeByRecordId
       tags: [everhour]
@@ -6083,7 +6995,80 @@ paths:
       x-overlord-edition: both
       x-overlord-consumers: [webapp]
       x-overlord-extension: everhour
-      x-overlord-schema-status: stub
+      summary: Change an Everhour time record
+      description: >-
+        Calls Everhour (`https://api.everhour.com`) with the caller's own API key, read from their
+        profile-scoped Everhour account connection (a legacy workspace key the caller unambiguously
+        connected is adopted onto the profile first). Without a connection the route answers 400 `Connect
+        Everhour in Settings → Integrations first.` Everhour's client errors are answered with the same
+        status and `error` `Everhour API error (<status>): <message>`; an unreachable Everhour or a server
+        error answers 502. Requires `mission:update` in the mission's workspace. After the connection
+        check, `timeSeconds` must be a finite number greater than 0 (400); it is rounded to whole seconds.
+        A present `comment` replaces the record's comment (trimmed; null clears it).
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateEverhourTimeBody' }
+      responses:
+        '200':
+          description: The mission's Everhour state, read again after the change (which calls Everhour again).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MissionEverhourStateDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401':
+          description: >-
+            No session or token (`{ error }` from the authentication middleware), or Everhour refused the
+            stored API key (`Everhour API error (401): …`, forwarded from upstream).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '403':
+          description: >-
+            The caller lacks the route's RBAC action in the resource's workspace (`Permission denied: …`),
+            or Everhour denied the request (forwarded; a denied task creation reads `Everhour denied
+            creating …`).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '404':
+          description: >-
+            Unknown, deleted or foreign mission (`Mission not found`), including a display id: the route
+            authorizes a display id but then reads the mission by UUID; or Everhour answered 404
+            (forwarded).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '409':
+          description: The mission display id is ambiguous in the caller's organization.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '429':
+          description: >-
+            Everhour's rate limit (`Everhour API error (429): …`, forwarded from upstream).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '500': { $ref: '#/components/responses/InternalError' }
+        '502':
+          description: >-
+            Everhour could not be reached (`Could not reach Everhour: …`) or answered a server error, or
+            returned no task id or no usable section.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '503':
+          description: >-
+            The stored key cannot be opened: its sealing key is not configured (`Everhour API-key
+            encryption is not configured on this Overlord server.`) or it is unreadable (`The stored
+            Everhour connection cannot be decrypted.`).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
     delete:
       operationId: deleteExtEverhourMissionsByMissionIdTimeByRecordId
       tags: [everhour]
@@ -6091,7 +7076,72 @@ paths:
       x-overlord-edition: both
       x-overlord-consumers: [webapp]
       x-overlord-extension: everhour
-      x-overlord-schema-status: stub
+      summary: Delete an Everhour time record
+      description: >-
+        Calls Everhour (`https://api.everhour.com`) with the caller's own API key, read from their
+        profile-scoped Everhour account connection (a legacy workspace key the caller unambiguously
+        connected is adopted onto the profile first). Without a connection the route answers 400 `Connect
+        Everhour in Settings → Integrations first.` Everhour's client errors are answered with the same
+        status and `error` `Everhour API error (<status>): <message>`; an unreachable Everhour or a server
+        error answers 502. Requires `mission:update` in the mission's workspace.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      responses:
+        '200':
+          description: The mission's Everhour state, read again after the change (which calls Everhour again).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MissionEverhourStateDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401':
+          description: >-
+            No session or token (`{ error }` from the authentication middleware), or Everhour refused the
+            stored API key (`Everhour API error (401): …`, forwarded from upstream).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '403':
+          description: >-
+            The caller lacks the route's RBAC action in the resource's workspace (`Permission denied: …`),
+            or Everhour denied the request (forwarded; a denied task creation reads `Everhour denied
+            creating …`).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '404':
+          description: >-
+            Unknown, deleted or foreign mission (`Mission not found`), including a display id: the route
+            authorizes a display id but then reads the mission by UUID; or Everhour answered 404
+            (forwarded).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '409':
+          description: The mission display id is ambiguous in the caller's organization.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '429':
+          description: >-
+            Everhour's rate limit (`Everhour API error (429): …`, forwarded from upstream).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '500': { $ref: '#/components/responses/InternalError' }
+        '502':
+          description: >-
+            Everhour could not be reached (`Could not reach Everhour: …`) or answered a server error, or
+            returned no task id or no usable section.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '503':
+          description: >-
+            The stored key cannot be opened: its sealing key is not configured (`Everhour API-key
+            encryption is not configured on this Overlord server.`) or it is unreadable (`The stored
+            Everhour connection cannot be decrypted.`).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
   /ext/github/user-connection:
     get:
       operationId: getExtGithubUserConnection
@@ -16903,3 +17953,132 @@ components:
           minimum: 0
           description: The last returned `seq`, or the request's `after` when none.
         hasMore: { type: boolean }
+    EverhourUserConnectionDto:
+      type: object
+      description: The caller's Everhour connection state (never includes the key).
+      required: [ connected, accountName ]
+      properties:
+        connected: { type: boolean }
+        accountName:
+          description: The Everhour user's name when known; null when not connected.
+          oneOf: [ { type: string }, { type: 'null' } ]
+    UpdateEverhourIntegrationBody:
+      type: object
+      required: [ apiKey ]
+      properties:
+        apiKey:
+          type: string
+          description: The caller's personal Everhour API key; coerced to a string and trimmed, never echoed.
+    ProjectEverhourLinkDto:
+      type: object
+      required: [ projectId, everhourProjectName, everhourProjectId ]
+      properties:
+        projectId: { type: string, format: uuid }
+        everhourProjectName:
+          description: The name submitted when linking.
+          oneOf: [ { type: string }, { type: 'null' } ]
+        everhourProjectId:
+          oneOf: [ { type: string }, { type: 'null' } ]
+    LinkProjectEverhourBody:
+      type: object
+      properties:
+        everhourProjectName:
+          description: A name to find or create; missing, null or blank unlinks.
+          oneOf: [ { type: string }, { type: 'null' } ]
+    EverhourTimeRecordDto:
+      type: object
+      required: [ id, timeSeconds, date, comment ]
+      properties:
+        id:
+          type: string
+          description: Everhour's record id as a string; records without an id are dropped.
+        timeSeconds: { type: number }
+        date:
+          type: string
+          description: '`YYYY-MM-DD` as reported by Everhour (`''''` when Everhour gives none).'
+        comment:
+          oneOf: [ { type: string }, { type: 'null' } ]
+    EverhourTimerDto:
+      type: object
+      required: [ taskId, startedAt, durationSeconds, comment ]
+      properties:
+        taskId: { type: string }
+        startedAt:
+          description: Everhour's start time as reported (`YYYY-MM-DD HH:MM:SS`), not ISO-8601.
+          oneOf: [ { type: string }, { type: 'null' } ]
+        durationSeconds: { type: number }
+        comment:
+          oneOf: [ { type: string }, { type: 'null' } ]
+    MissionEverhourStateDto:
+      type: object
+      required: [ connected, projectLinked, taskId, records, totalSeconds, runningTimer ]
+      properties:
+        connected:
+          type: boolean
+          description: True when the caller's Everhour key could be read.
+        projectLinked: { type: boolean }
+        taskId:
+          oneOf: [ { type: string }, { type: 'null' } ]
+        records:
+          type: array
+          description: Newest date first; empty without a connection or task.
+          items: { $ref: '#/components/schemas/EverhourTimeRecordDto' }
+        totalSeconds: { type: number }
+        runningTimer:
+          description: The caller's running timer when it is on this mission's task, else null.
+          oneOf: [ { $ref: '#/components/schemas/EverhourTimerDto' }, { type: 'null' } ]
+    ProjectEverhourStateDto:
+      type: object
+      required:
+        [
+          connected,
+          projectLinked,
+          taskId,
+          records,
+          totalSeconds,
+          runningTimer,
+          hasRunningTimerInProject
+        ]
+      properties:
+        connected:
+          type: boolean
+          description: True when the caller's Everhour key could be read.
+        projectLinked: { type: boolean }
+        taskId:
+          description: The project's `general` task, or null before one is created.
+          oneOf: [ { type: string }, { type: 'null' } ]
+        records:
+          type: array
+          description: Newest date first; empty without a connection or task.
+          items: { $ref: '#/components/schemas/EverhourTimeRecordDto' }
+        totalSeconds: { type: number }
+        runningTimer:
+          description: The caller's running timer when it is on the `general` task, else null.
+          oneOf: [ { $ref: '#/components/schemas/EverhourTimerDto' }, { type: 'null' } ]
+        hasRunningTimerInProject:
+          type: boolean
+          description: True when the caller's running timer is on the `general` task or any of the project's
+            mission tasks.
+    CreateEverhourTimeBody:
+      type: object
+      required: [ timeSeconds ]
+      properties:
+        timeSeconds:
+          type: number
+          description: Greater than 0; rounded to whole seconds.
+        date:
+          type: string
+          description: '`YYYY-MM-DD`; defaults to today''s UTC date when missing or blank.'
+        comment:
+          description: Omitted when null or blank.
+          oneOf: [ { type: string }, { type: 'null' } ]
+    UpdateEverhourTimeBody:
+      type: object
+      required: [ timeSeconds ]
+      properties:
+        timeSeconds:
+          type: number
+          description: Greater than 0; rounded to whole seconds.
+        comment:
+          description: When present, replaces the comment (trimmed); null clears it.
+          oneOf: [ { type: string }, { type: 'null' } ]
