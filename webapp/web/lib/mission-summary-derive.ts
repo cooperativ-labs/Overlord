@@ -13,11 +13,11 @@
  * `contract/mission-summary-derive-fixtures.json`.
  */
 import type {
-  AgentRequestDto,
   FileChangeDto,
   FileChangeSource,
   HumanActionCategory,
   HumanActionResolutionDto,
+  HumanAgentRequestDto,
   MissionSummaryDto,
   MissionSummaryEvidenceDto,
   MissionSummaryResponse,
@@ -75,9 +75,9 @@ const ANSWERABLE_REQUEST_KINDS = new Set(['question', 'choice']);
 
 /** Open `question` and `choice` requests of this mission: the ones an operator answers. */
 export function openSummaryQuestions(
-  requests: readonly AgentRequestDto[],
+  requests: readonly HumanAgentRequestDto[],
   missionId: string
-): AgentRequestDto[] {
+): HumanAgentRequestDto[] {
   return requests.filter(
     request =>
       request.status === 'open' &&
@@ -127,7 +127,7 @@ export function normaliseSummaryText(text: string): string {
  */
 export function missionSummaryRunningSentences(
   objectives: readonly SummaryObjective[],
-  openQuestions: readonly AgentRequestDto[]
+  openQuestions: readonly HumanAgentRequestDto[]
 ): string[] {
   const waiting = new Set(openQuestions.map(request => request.objectiveId).filter(Boolean));
   return objectives
@@ -223,7 +223,7 @@ export function missionSummaryActions({
   baseline
 }: {
   evidence: MissionSummaryEvidenceDto;
-  openQuestions: readonly AgentRequestDto[];
+  openQuestions: readonly HumanAgentRequestDto[];
   objectives: readonly SummaryObjective[];
   baseline: string | null;
 }): SummaryActionRow[] {
@@ -547,7 +547,7 @@ export function laterWatermark(a: string | null, b: string | null): string | nul
 export function summaryWatermarkIsDisplayed(
   watermark: string | null,
   evidence: MissionSummaryEvidenceDto,
-  questions: readonly Pick<AgentRequestDto, 'createdAt'>[]
+  questions: readonly Pick<HumanAgentRequestDto, 'createdAt'>[]
 ): boolean {
   if (watermark === null) return false;
   const stamps = [

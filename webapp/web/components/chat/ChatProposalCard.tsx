@@ -10,7 +10,9 @@ import { clearRequestId, stableRequestId } from '@/lib/chat/request-ids.ts';
 import type { ChatThreadStream } from '@/lib/chat/thread-stream.ts';
 import { useMission } from '@/lib/queries/missions.ts';
 
-const SOURCE_LABEL: Record<ChatAssignmentDto['source'], string> = {
+// The server writes `project_default` or `assistant_selection`; `user_preference` is
+// kept for proposals stored before that (schema-disagreements.md Y1).
+const SOURCE_LABEL: Record<ChatAssignmentDto['source'] | 'user_preference', string> = {
   project_default: 'project default',
   user_preference: 'your preference',
   assistant_selection: 'chosen by the assistant'

@@ -15,7 +15,9 @@ const baseProfile: TerminalProfileDto = {
   launcher: 'iTerm2',
   placement: 'window',
   chord: null,
-  background: false
+  background: false,
+  executionProvider: null,
+  openViewerOnLaunch: null
 };
 
 const directDefaults: LaunchSessionDefaultsDto = {

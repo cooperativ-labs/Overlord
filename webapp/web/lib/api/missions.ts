@@ -8,7 +8,6 @@ import type {
 
 import type {
   ActivityFeedDto,
-  AgentRequestDto,
   AgentSessionInputDto,
   AgentSessionInputsResponse,
   ArtifactDto,
@@ -18,6 +17,7 @@ import type {
   CreateMissionBody,
   GenerateCommitMessageBody,
   GenerateCommitMessageResultDto,
+  HumanAgentRequestDto,
   InboxItemDto,
   InboxMissionsResponse,
   MarkMissionSummarySeenBody,
@@ -243,7 +243,7 @@ export const missionsApi = {
     }>('POST', '/api/agent-session-inputs', body),
 
   listAgentRequests: (missionId: string, objectiveId?: string | null) =>
-    request<{ requests: AgentRequestDto[] }>(
+    request<{ requests: HumanAgentRequestDto[] }>(
       'GET',
       `/api/agent-requests?missionId=${encodeURIComponent(missionId)}${
         objectiveId ? `&objectiveId=${encodeURIComponent(objectiveId)}` : ''
@@ -257,14 +257,14 @@ export const missionsApi = {
     requestId: string,
     body: { resolution: Record<string, unknown>; expectedRevision: number }
   ) =>
-    request<{ resolved: boolean; request: AgentRequestDto }>(
+    request<{ resolved: boolean; request: HumanAgentRequestDto }>(
       'POST',
       `/api/agent-requests/${encodeURIComponent(requestId)}/resolve`,
       body
     ),
   /** Hand the decision back to the native terminal prompt without answering it. */
   releaseAgentRequest: (requestId: string) =>
-    request<{ released: boolean; request: AgentRequestDto }>(
+    request<{ released: boolean; request: HumanAgentRequestDto }>(
       'POST',
       `/api/agent-requests/${encodeURIComponent(requestId)}/release`
     )

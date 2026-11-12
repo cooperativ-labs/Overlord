@@ -1,6 +1,9 @@
 import { CheckCircle2, Terminal, TimerOff, XCircle } from 'lucide-react';
 
-import type { AgentRequestDto, AgentSessionChannelSnapshotDto } from '../../../shared/contract.ts';
+import type {
+  AgentSessionChannelSnapshotDto,
+  HumanAgentRequestDto
+} from '../../../shared/contract.ts';
 import { isChannelLive } from '../../lib/mission-feed.ts';
 
 /**
@@ -20,10 +23,9 @@ const RELEASE_REASON_TEXT: Record<string, string> = {
   channel_ended: 'The session ended before this was answered.'
 };
 
-function resolutionLabel(resolution: Record<string, unknown> | null): string | null {
-  if (!resolution) return null;
-  const optionId = resolution.optionId;
-  const text = resolution.text;
+function resolutionLabel(resolution: unknown): string | null {
+  if (!resolution || typeof resolution !== 'object') return null;
+  const { optionId, text } = resolution as Record<string, unknown>;
   if (typeof optionId === 'string' && optionId.trim()) return optionId;
   if (typeof text === 'string' && text.trim()) {
     return text.length > 120 ? `${text.slice(0, 119)}…` : text;
@@ -35,7 +37,7 @@ export function ReleasedElsewhereBanner({
   request,
   channel
 }: {
-  request: AgentRequestDto;
+  request: HumanAgentRequestDto;
   channel: AgentSessionChannelSnapshotDto | null;
 }) {
   if (request.status === 'resolved') {

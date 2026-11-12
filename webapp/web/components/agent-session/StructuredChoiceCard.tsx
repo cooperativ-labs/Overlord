@@ -1,6 +1,6 @@
 import { ListChecks } from 'lucide-react';
 
-import type { AgentRequestDto } from '../../../shared/contract.ts';
+import type { HumanAgentRequestDto } from '../../../shared/contract.ts';
 
 import {
   AgentSessionCardShell,
@@ -21,7 +21,7 @@ import { isQuestionDeliveryAnswerable, QuestionAnswerForm } from './QuestionAnsw
  * A choice that arrives with no options is a broken request, not an empty one — it is shown as
  * unanswerable here rather than rendered as a card with nothing to click.
  */
-export function StructuredChoiceCard({ request }: { request: AgentRequestDto }) {
+export function StructuredChoiceCard({ request }: { request: HumanAgentRequestDto }) {
   const remainingMs = useWindowCountdown(request.windowExpiresAt);
   const answerable = isQuestionDeliveryAnswerable(request) && request.options.length > 0;
   const windowClosed = remainingMs !== null && remainingMs <= 0;

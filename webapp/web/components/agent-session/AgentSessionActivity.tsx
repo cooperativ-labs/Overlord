@@ -1,4 +1,4 @@
-import type { AgentRequestDto } from '../../../shared/contract.ts';
+import type { HumanAgentRequestDto } from '../../../shared/contract.ts';
 import { useMissionAgentRequests } from '../../lib/queries.ts';
 
 import { BlockingQuestionCard } from './BlockingQuestionCard.tsx';
@@ -19,7 +19,7 @@ type QuestionOrChoiceItem = {
   kind: 'agent_request';
   createdAt: string;
   id: string;
-  request: AgentRequestDto;
+  request: HumanAgentRequestDto;
 };
 
 export function useAgentSessionFeed(

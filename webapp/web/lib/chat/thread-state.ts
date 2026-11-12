@@ -2,13 +2,31 @@ import type {
   ChatBlockDto,
   ChatEventDto,
   ChatMessageDto,
+  ChatMissionBlockDto,
   ChatProposalDto,
+  ChatQuestionBlockDto,
   ChatQuestionDto,
   ChatRunDto,
   ChatThreadDto,
   ChatThreadSnapshotDto,
-  ChatToolCallState
+  ChatToolCallState,
+  ChatUnavailableBlockDto
 } from '@overlord/contract';
+
+/**
+ * A block as the client holds it: what the server writes (`ChatBlockDto`), the
+ * `question` and `mission` kinds the client still renders although no current writer
+ * produces them (schema-disagreements.md Y1), and the client's own placeholder for
+ * content withheld until the next snapshot.
+ */
+export type ClientChatBlock =
+  | ChatBlockDto
+  | ChatQuestionBlockDto
+  | ChatMissionBlockDto
+  | (Omit<ChatUnavailableBlockDto, 'id' | 'regenerable'> & { id: string; regenerable: boolean });
+
+/** A message as the client holds it. */
+export type ClientChatMessage = Omit<ChatMessageDto, 'blocks'> & { blocks: ClientChatBlock[] };
 
 /**
  * Client projection of one private chat thread: an authorized snapshot plus every
@@ -25,7 +43,7 @@ export interface ChatToolActivity {
 export interface ChatThreadState {
   thread: ChatThreadDto;
   /** Oldest first. */
-  messages: ChatMessageDto[];
+  messages: ClientChatMessage[];
   hasEarlierMessages: boolean;
   activeRun: ChatRunDto | null;
   latestRun: ChatRunDto | null;
@@ -77,7 +95,10 @@ export function prependEarlier(
   };
 }
 
-function upsertMessage(messages: ChatMessageDto[], message: ChatMessageDto): ChatMessageDto[] {
+function upsertMessage(
+  messages: ClientChatMessage[],
+  message: ChatMessageDto
+): ClientChatMessage[] {
   const index = messages.findIndex(existing => existing.id === message.id);
   if (index === -1) return [...messages, message];
   // Never let an older revision overwrite a newer one.
@@ -88,17 +109,17 @@ function upsertMessage(messages: ChatMessageDto[], message: ChatMessageDto): Cha
 }
 
 function appendDelta(
-  messages: ChatMessageDto[],
+  messages: ClientChatMessage[],
   messageId: string,
   blockId: string,
   text: string
-): ChatMessageDto[] {
+): ClientChatMessage[] {
   const index = messages.findIndex(message => message.id === messageId);
   if (index === -1) return messages;
   const message = messages[index]!;
   if (message.state !== 'streaming') return messages;
   let found = false;
-  const blocks: ChatBlockDto[] = message.blocks.map(block => {
+  const blocks: ClientChatBlock[] = message.blocks.map(block => {
     if (block.id !== blockId || block.kind !== 'text') return block;
     found = true;
     return { ...block, text: block.text + text, fallbackText: block.fallbackText + text };

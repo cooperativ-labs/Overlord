@@ -3,8 +3,8 @@ import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 
 import type {
-  AgentRequestDto,
   FileChangeDto,
+  HumanAgentRequestDto,
   MissionSummaryDto,
   MissionSummaryEvidenceDto,
   MissionSummaryResponse,
@@ -42,7 +42,7 @@ const fixture = JSON.parse(
     mission: { id: string; statusType: StatusType; objectives: SummaryObjective[] };
     deliveries: SummaryDeliveryStamp[];
     summaryResponse: Extract<MissionSummaryResponse, { eligible: true }>;
-    agentRequests: AgentRequestDto[];
+    agentRequests: HumanAgentRequestDto[];
     fileChanges: { truncated: boolean; items: FileChangeDto[] };
   };
   expected: Record<string, any>;
@@ -266,7 +266,7 @@ test('a choice request reads as a choice and a question without an objective sta
   const requests = [
     { ...input.agentRequests[0], id: 'c1', kind: 'choice', objectiveId: 'obj-d' },
     { ...input.agentRequests[0], id: 'q9', objectiveId: null, summary: '' }
-  ] as AgentRequestDto[];
+  ] as HumanAgentRequestDto[];
   const rows = missionSummaryActions({
     evidence: emptyEvidence,
     openQuestions: openSummaryQuestions(requests, input.mission.id),
@@ -292,7 +292,7 @@ test('requests of another mission, other kinds and closed states are not questio
     { ...input.agentRequests[0], id: 'b', kind: 'retry' },
     { ...input.agentRequests[0], id: 'c', status: 'expired' },
     { ...input.agentRequests[0], id: 'd' }
-  ] as AgentRequestDto[];
+  ] as HumanAgentRequestDto[];
   assert.deepEqual(
     openSummaryQuestions(requests, input.mission.id).map(request => request.id),
     ['d']

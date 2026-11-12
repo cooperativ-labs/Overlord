@@ -244,7 +244,7 @@ describe('chat thread stream', () => {
       revision: 2,
       blocks: [
         {
-          id: 'u',
+          id: 'unavailable',
           kind: 'unavailable',
           reason: 'source_access_lost',
           regenerable: true,

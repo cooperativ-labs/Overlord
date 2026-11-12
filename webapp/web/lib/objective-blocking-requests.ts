@@ -1,4 +1,4 @@
-import type { AgentRequestDto } from '../../shared/contract.ts';
+import type { HumanAgentRequestDto } from '../../shared/contract.ts';
 
 /**
  * Which of an objective's agent requests are still waiting on a human, and
@@ -15,8 +15,8 @@ import type { AgentRequestDto } from '../../shared/contract.ts';
  * set, this module owns what those two facts mean.
  */
 
-/** The request shape this module needs — a subset of {@link AgentRequestDto}. */
-export type BlockingRequestLike = Pick<AgentRequestDto, 'id' | 'kind' | 'status'>;
+/** The request shape this module needs — a subset of {@link HumanAgentRequestDto}. */
+export type BlockingRequestLike = Pick<HumanAgentRequestDto, 'id' | 'kind' | 'status'>;
 
 export type ObjectiveBlockingRequests = {
   /** Ids of every open question/choice request, in the order given. */

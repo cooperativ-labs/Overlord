@@ -1,7 +1,7 @@
 import type {
-  AgentRequestDto,
   AgentSessionChannelSnapshotDto,
   AgentSessionInputDto,
+  HumanAgentRequestDto,
   MissionEventDto
 } from '../../shared/contract.ts';
 
@@ -99,7 +99,7 @@ export function resolveEventPresentation(
 
 /** One Agent Session Module row: an answerable request, or an instruction sent into the session. */
 export type AgentSessionFeedItem =
-  | { kind: 'agent_request'; createdAt: string; id: string; request: AgentRequestDto }
+  | { kind: 'agent_request'; createdAt: string; id: string; request: HumanAgentRequestDto }
   | { kind: 'agent_session_input'; createdAt: string; id: string; input: AgentSessionInputDto };
 
 /**
@@ -226,7 +226,7 @@ export function isChannelLive(channel: AgentSessionChannelSnapshotDto | null): b
  * nothing is worse than no control.
  */
 export function isRequestAnswerable(
-  request: Pick<AgentRequestDto, 'status' | 'windowExpiresAt'>,
+  request: Pick<HumanAgentRequestDto, 'status' | 'windowExpiresAt'>,
   channel: AgentSessionChannelSnapshotDto | null,
   now: number = Date.now()
 ): boolean {

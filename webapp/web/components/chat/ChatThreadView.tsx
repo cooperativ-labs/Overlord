@@ -1,9 +1,4 @@
-import type {
-  ChatKnowledgebaseWriteDto,
-  ChatMessageDto,
-  ChatRunDto,
-  ChatRunFailureCode
-} from '@overlord/contract';
+import type { ChatKnowledgebaseWriteDto, ChatRunDto, ChatRunFailureCode } from '@overlord/contract';
 import { Archive, ArchiveRestore, Loader2, Pencil, Square, Wifi } from 'lucide-react';
 import { type ReactNode, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
@@ -19,7 +14,11 @@ import {
 } from '@/lib/chat/knowledgebase-writes.ts';
 import { beginChatPaint, bindChatPaint, observeChatTextPaint } from '@/lib/chat/performance.ts';
 import { clearRequestId, stableRequestId } from '@/lib/chat/request-ids.ts';
-import { type ChatThreadState, composerMode } from '@/lib/chat/thread-state.ts';
+import {
+  type ChatThreadState,
+  type ClientChatMessage,
+  composerMode
+} from '@/lib/chat/thread-state.ts';
 import type { ChatStreamStatus, ChatThreadStream } from '@/lib/chat/thread-stream.ts';
 import { useChatPresence, useChatProviders, useChatThreadStream } from '@/lib/chat/use-chat.ts';
 import { cn } from '@/lib/utils.ts';
@@ -217,7 +216,13 @@ function questionHasBlock(state: ChatThreadState): boolean {
   );
 }
 
-function MessageRow({ message, context }: { message: ChatMessageDto; context: ChatBlockContext }) {
+function MessageRow({
+  message,
+  context
+}: {
+  message: ClientChatMessage;
+  context: ChatBlockContext;
+}) {
   const hasText =
     message.role === 'assistant' &&
     message.blocks.some(b => b.kind === 'text' && b.text.length > 0);

@@ -1,14 +1,9 @@
-import type {
-  ChatBlockDto,
-  ChatEvidenceDto,
-  ChatMessageDto,
-  ChatProposalDto,
-  ChatQuestionDto
-} from '@overlord/contract';
+import type { ChatEvidenceDto, ChatProposalDto, ChatQuestionDto } from '@overlord/contract';
 import { Link } from '@tanstack/react-router';
 import { BookOpen, Database, FileCode2, ShieldOff } from 'lucide-react';
 
 import { Markdown } from '@/components/Markdown.tsx';
+import type { ClientChatBlock, ClientChatMessage } from '@/lib/chat/thread-state.ts';
 import type { ChatThreadStream } from '@/lib/chat/thread-stream.ts';
 
 import { ChatProposalCard } from './ChatProposalCard.tsx';
@@ -28,7 +23,7 @@ export function ChatMessageBlocks({
   message,
   context
 }: {
-  message: ChatMessageDto;
+  message: ClientChatMessage;
   context: ChatBlockContext;
 }) {
   return (
@@ -43,7 +38,13 @@ export function ChatMessageBlocks({
   );
 }
 
-export function ChatBlock({ block, context }: { block: ChatBlockDto; context: ChatBlockContext }) {
+export function ChatBlock({
+  block,
+  context
+}: {
+  block: ClientChatBlock;
+  context: ChatBlockContext;
+}) {
   switch (block.kind) {
     case 'text':
       return block.text.length > 0 ? <Markdown text={block.text} /> : null;

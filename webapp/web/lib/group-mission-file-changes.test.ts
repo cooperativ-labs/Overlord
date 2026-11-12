@@ -18,6 +18,8 @@ function resource(overrides: Partial<ProjectResourceDto> = {}): ProjectResourceD
     isPrimary: true,
     accessMode: 'read_write',
     status: 'active',
+    observedAt: null,
+    observationSource: null,
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
     revision: 1,

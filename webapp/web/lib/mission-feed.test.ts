@@ -2,8 +2,8 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
 import type {
-  AgentRequestDto,
   AgentSessionChannelSnapshotDto,
+  HumanAgentRequestDto,
   MissionEventDto
 } from '../../shared/contract.ts';
 
@@ -32,7 +32,7 @@ function event(overrides: Partial<MissionEventDto> & { id: string }): MissionEve
   };
 }
 
-function channel(state: string): AgentSessionChannelSnapshotDto {
+function channel(state: AgentSessionChannelSnapshotDto['state']): AgentSessionChannelSnapshotDto {
   return {
     id: 'channel-1',
     state,
@@ -45,7 +45,7 @@ function channel(state: string): AgentSessionChannelSnapshotDto {
   };
 }
 
-function request(overrides: Partial<AgentRequestDto> = {}): AgentRequestDto {
+function request(overrides: Partial<HumanAgentRequestDto> = {}): HumanAgentRequestDto {
   return {
     id: 'request-1',
     channelId: 'channel-1',
@@ -134,7 +134,7 @@ describe('isRequestAnswerable', () => {
   });
 
   it('refuses once the request left the open state', () => {
-    for (const status of ['resolved', 'released_to_terminal', 'expired', 'cancelled']) {
+    for (const status of ['resolved', 'released_to_terminal', 'expired', 'cancelled'] as const) {
       assert.equal(isRequestAnswerable(request({ status }), channel('online'), now), false);
     }
   });

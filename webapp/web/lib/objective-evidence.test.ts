@@ -57,6 +57,7 @@ function session(
     agentSessionId: null,
     executable: 'latch',
     viewerKind: 'iterm',
+    viewerOpenAs: 'window',
     createdAt: '2026-08-30T09:00:00.000Z',
     lastObservedState: 'running',
     ...overrides

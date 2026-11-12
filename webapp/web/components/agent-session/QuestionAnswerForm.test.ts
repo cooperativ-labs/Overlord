@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import type { AgentRequestDto } from '../../../shared/contract.ts';
+import type { HumanAgentRequestDto } from '../../../shared/contract.ts';
 import { ApiRequestError } from '../../lib/api.ts';
 
 import {
@@ -12,7 +12,7 @@ import {
   questionReadOnlyReason
 } from './question-answer-model.ts';
 
-function request(overrides: Partial<AgentRequestDto> = {}): AgentRequestDto {
+function request(overrides: Partial<HumanAgentRequestDto> = {}): HumanAgentRequestDto {
   return {
     id: 'request-1',
     channelId: 'channel-1',

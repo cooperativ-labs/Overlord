@@ -1,3 +1,4 @@
+import type { WorkspaceRoleKey } from '@overlord/contract';
 import { Loader2, Mail, RotateCw, Shield, ShieldOff, UserMinus, X } from 'lucide-react';
 import { useState } from 'react';
 
@@ -30,8 +31,6 @@ import {
   useUpdateWorkspaceMemberRole,
   useWorkspaceInvitations
 } from '@/lib/queries';
-
-type WorkspaceRoleKey = 'ADMIN' | 'MANAGER' | 'MEMBER';
 
 type MembersPageProps = {
   workspaceId: string;

@@ -46,8 +46,12 @@ import {
 import {
   type AgentLaunchConfigDto,
   agentLaunchFlagKey,
-  type TerminalProfileDto
+  type TerminalProfileDto,
+  type UpdateTerminalProfileBody
 } from '../../../shared/contract.ts';
+
+/** The placements the terminal-profile update accepts; a launch-settings read answers one. */
+type TerminalPlacement = NonNullable<UpdateTerminalProfileBody['placement']>;
 
 type IdePageProps = {
   open: boolean;
@@ -89,7 +93,7 @@ function profileToDraft(profile: TerminalProfileDto) {
         : CUSTOM_LAUNCHER
       : INLINE_LAUNCHER,
     customLauncher: profile.launcher && !preset ? profile.launcher : '',
-    placement: profile.placement,
+    placement: profile.placement as TerminalPlacement,
     chord: profile.chord ?? '',
     background: profile.background
   };
@@ -107,13 +111,13 @@ function normalizeProfile({
 }: {
   launcherChoice: string;
   customLauncher: string;
-  placement: TerminalProfileDto['placement'];
+  placement: TerminalPlacement;
   chord: string;
   background: boolean;
   providerChoice: ProviderChoice;
   latchExecutable: string;
   openViewerOverride: boolean | null;
-}): TerminalProfileDto {
+}): TerminalProfileDto & { placement: TerminalPlacement } {
   const launcher =
     launcherChoice === INLINE_LAUNCHER
       ? null
@@ -179,7 +183,7 @@ export function IdePage({ open }: IdePageProps) {
 
   const [launcherChoice, setLauncherChoice] = useState<string>('Terminal');
   const [customLauncher, setCustomLauncher] = useState('');
-  const [placement, setPlacement] = useState<TerminalProfileDto['placement']>('window');
+  const [placement, setPlacement] = useState<TerminalPlacement>('window');
   const [chord, setChord] = useState('');
   const [background, setBackground] = useState(false);
   const [providerChoice, setProviderChoice] = useState<ProviderChoice>('inherit');
@@ -555,9 +559,7 @@ export function IdePage({ open }: IdePageProps) {
             <Select
               value={placement}
               disabled={draftProfile.launcher === null}
-              onValueChange={value =>
-                setPlacement((value as TerminalProfileDto['placement'] | null) ?? 'window')
-              }
+              onValueChange={value => setPlacement((value as TerminalPlacement | null) ?? 'window')}
             >
               <SelectTrigger id="execution-target-placement">
                 <SelectValue />

@@ -172,15 +172,6 @@ export function DraftObjectiveActions({ objective }: DraftObjectiveActionsProps)
                   <p className="mt-1 text-xs text-muted-foreground">
                     {queueRank && queueRank > 0 ? `Position ${queueRank}` : 'Position loading…'}
                   </p>
-                  {queueEntry.precededBy ? (
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      After{' '}
-                      {queueEntry.precededBy.objectiveTitle ??
-                        queueEntry.precededBy.objectiveDisplayId}
-                      {' · '}
-                      {queueEntry.precededBy.missionTitle}
-                    </p>
-                  ) : null}
                   {queueStatus?.detail ? (
                     <p className={cn('mt-1 text-xs', QUEUE_STATUS_DETAIL_CLASS[queueStatus.tone])}>
                       {queueStatus.detail}

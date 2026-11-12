@@ -1,6 +1,6 @@
 import { HelpCircle } from 'lucide-react';
 
-import type { AgentRequestDto } from '../../../shared/contract.ts';
+import type { HumanAgentRequestDto } from '../../../shared/contract.ts';
 
 import {
   AgentSessionCardShell,
@@ -22,7 +22,7 @@ import { isQuestionDeliveryAnswerable, QuestionAnswerForm } from './QuestionAnsw
  * `delivery.mode` is authoritative: non-Latch sessions are rendered read-only, and this card
  * never offers the retired terminal-release action for a question.
  */
-export function BlockingQuestionCard({ request }: { request: AgentRequestDto }) {
+export function BlockingQuestionCard({ request }: { request: HumanAgentRequestDto }) {
   const remainingMs = useWindowCountdown(request.windowExpiresAt);
   const answerable = isQuestionDeliveryAnswerable(request);
   const windowClosed = remainingMs !== null && remainingMs <= 0;

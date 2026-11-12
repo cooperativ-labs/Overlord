@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 
-import type { AgentRequestDto } from '../../../shared/contract.ts';
+import type { HumanAgentRequestDto } from '../../../shared/contract.ts';
 import { useResolveAgentRequest } from '../../lib/queries.ts';
 
 import {
@@ -29,7 +29,7 @@ export function QuestionAnswerForm({
   request,
   allowText = questionAllowsFreeText(request)
 }: {
-  request: AgentRequestDto;
+  request: HumanAgentRequestDto;
   allowText?: boolean;
 }) {
   const resolve = useResolveAgentRequest(request.missionId ?? '');

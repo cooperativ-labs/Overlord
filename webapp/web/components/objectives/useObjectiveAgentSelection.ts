@@ -21,8 +21,9 @@ import type { AgentModelSelection } from './AgentModelSelector.tsx';
  */
 type SelectableObjective = Pick<
   ObjectiveDto,
-  'id' | 'projectId' | 'assignedAgent' | 'model' | 'reasoningEffort' | 'launchConfigOverrides'
->;
+  'id' | 'projectId' | 'assignedAgent' | 'model' | 'reasoningEffort'
+> &
+  Partial<Pick<ObjectiveDto, 'launchConfigOverrides'>>;
 
 /**
  * Wires an objective's agent/model selection to its storage owners, following
