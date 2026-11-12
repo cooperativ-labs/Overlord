@@ -78,9 +78,11 @@ export async function forgetMissionLatchSession(
   missionRef: string,
   body: unknown
 ): Promise<Record<string, unknown>> {
+  // Forgetting rewrites the execution request's session metadata, so it needs
+  // the session write action, not only read access.
   const scope = await requireMissionPermission({
     missionRef,
-    permission: PERMISSIONS.SESSION_READ
+    permission: PERMISSIONS.SESSION_ATTACH
   });
   const ctx = await buildWebappServiceContextForWorkspace(
     scope.workspaceId,

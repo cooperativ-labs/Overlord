@@ -5539,7 +5539,12 @@ export async function promoteInboxItem(id: string, projectId: string): Promise<M
  * Persists the result and returns the refreshed mission detail.
  */
 export async function generateMissionTitle(missionRef: string): Promise<MissionDetailDto> {
-  const detail = await getMissionDetail(missionRef);
+  // Regenerating rewrites the title, so it needs the mission write action.
+  const scope = await requireMissionPermission({
+    missionRef,
+    permission: PERMISSIONS.MISSION_UPDATE
+  });
+  const detail = await getMissionDetail(scope.missionId);
   const instructionText = detail.objectives
     .find(objective => objective.instructionText.trim().length > 0)
     ?.instructionText.trim();
@@ -5556,7 +5561,7 @@ export async function generateMissionTitle(missionRef: string): Promise<MissionD
     throw new ApiError(502, 'Failed to generate a title.');
   }
 
-  return getMissionDetail(missionRef);
+  return getMissionDetail(scope.missionId);
 }
 
 /**
