@@ -5,6 +5,67 @@ is the current version and must equal [VERSION](VERSION); `yarn version:contract
 writes its skeleton. Dates use ISO 8601 and describe the contract change, not
 merely the files edited.
 
+## [168.1.0] - 2026-11-12
+
+Phase 4a of `planning/feature-plans/contract-adr-openapi-migration.md`: the REST surface
+gains a normative, machine-readable description of the routes the backend already
+serves. Nothing on the wire, in authorization, in stored data or in behaviour changed.
+
+### Version
+
+- Minor contract version 168.1.0, from 168.0.4. Minor rather than patch because the
+  change adds a normative interface document with new obligations: every registered
+  route must have an operation, `info.version` must move when the description
+  changes, and the schema-stub count may only fall. They are backwards compatible:
+  every existing consumer, connector, manifest and stored row continues to work
+  unchanged.
+
+### Added
+
+- [api/openapi.yaml](api/openapi.yaml), OpenAPI 3.1, `info.version` `1.0.0`: 279
+  operations on 217 paths, one for every registered method and path at the path it
+  is served (ADR 0007), each with a unique camelCase `operationId`, declared path
+  parameters and a route-family tag, plus `x-overlord-permission`,
+  `x-overlord-edition`, `x-overlord-consumers`, `x-overlord-extension` (Everhour and
+  GitHub routes) and `x-overlord-schema-status: stub`. `x-overlord-route-exclusions`
+  lists the two registered routes it omits: Better Auth's provider-owned
+  `/api/auth/*` handler and the Local SPA fallback `GET *`.
+- [api/openapi-ratchet.json](api/openapi-ratchet.json): 279 stub operations;
+  `yarn contract:check` fails when the document has more or fewer.
+- [ADR 0048](decisions/0048-openapi-route-inventory.md): the inventory method, the
+  route parity rule, the exclusion list and the vocabularies of the operation
+  extensions.
+- Route parity (`yarn contract:parity`, in `.github/workflows/contract.yml` and the
+  backend suite), OpenAPI 3.1 validation and extension-vocabulary checks
+  (`yarn contract:test`), and the route inventory `yarn api:routes`.
+
+### Changed
+
+- [CONTRACT.md](CONTRACT.md) sections 2, 4, 5 and 6 list `api/openapi.yaml` and its
+  ratchet as normative and machine-readable contract files, drop "once it exists"
+  from the OpenAPI version rules, and add the parity and validation checks.
+  [api/rest-notes.md](api/rest-notes.md) stays normative for what the description
+  does not yet express, until phase 4d.
+
+### Known gaps, for review
+
+- `x-overlord-permission` is `unknown` on 28 operations whose guard the bootstrap
+  could not establish (6 of them list `x-overlord-permission-candidates`), and
+  `x-overlord-consumers` is `[unverified]` on 16; phase 4b resolves them.
+- [architecture.md](architecture.md) "Virtual Gateway → REST", [conformance.md](conformance.md)
+  and `packages/contract` describe a `/api/virtual-targets/v1/*` surface that the
+  backend does not register. It is not in the description; the divergence predates
+  this version.
+
+### Impact on modules
+
+- Backend: `backend/app.ts` builds the Express app and `backend/index.ts` starts it;
+  no route or middleware changed. A new route needs an operation in the same change.
+- Web app, CLI, runner, desktop, mobile, gateways: none.
+- Extensions: their routes are described with `x-overlord-extension`.
+- Connectors: generated harness capability manifests restamped to 168.1.0; no
+  hand-maintained manifest changes (same major).
+
 ## [168.0.4] - 2026-11-12
 
 Sentence-level audit of the sixty provenance entries `[168]`–`[95]` that 168.0.3 did not

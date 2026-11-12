@@ -34,6 +34,7 @@ Every plan and material change summary declares exactly one of `Contract impact:
 | File | What it describes | When to update |
 | --- | --- | --- |
 | `CONTRACT.md`, `architecture.md`, `protocol.md`, `authorization.md`, `conformance.md`, `data/README.md`, `api/rest-notes.md` | The normative specification (see `CONTRACT.md` section 2) | Any contract change touching that topic |
+| `api/openapi.yaml`, `api/openapi-ratchet.json` | The REST surface: one operation per registered route, with `x-overlord-permission`, `-edition`, `-consumers`, `-extension` and `-schema-status`; the stub ratchet (ADR 0048) | Any REST route added, removed or changed; move `info.version` with every change to the description; `yarn contract:parity` enforces route parity |
 | `VERSION`, `CHANGELOG.md` | Contract version and its history | Every version increment, through `yarn version:contract` |
 | `decisions/` | ADRs | Architecture, security, isolation, data-meaning, migration or service-boundary decisions |
 | `components.yaml` | Component registry: capabilities, ownership, interaction surfaces, contract version (written by `yarn version:contract`) | New component, new surface, new capability |

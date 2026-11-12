@@ -19,7 +19,8 @@ override it.
 | `contract/authorization.md` | Auth Layer, tokens, RBAC, native sign-in, hosted MCP OAuth |
 | `contract/conformance.md` | Conformance requirements and controlled vocabularies |
 | `contract/data/README.md` | Database schema contract |
-| `contract/api/rest-notes.md` | REST API Layer and REST route detail (holding file until `contract/api/openapi.yaml` replaces it) |
+| `contract/api/openapi.yaml` | The REST surface: one operation per registered route with permission, edition, consumers and extension (ADR 0048); `info.version` moves with every change |
+| `contract/api/rest-notes.md` | REST API Layer and route detail OpenAPI does not yet express (holding file until phase 4d) |
 | `contract/*.yaml`, `*.schema.yaml` | Machine-readable registry, protocol commands, extension points, manifest schemas |
 | `contract/decisions/` | ADRs |
 | `contract/VERSION`, `contract/CHANGELOG.md` | Current version and history (entries at or below `168` are non-normative provenance) |
@@ -145,7 +146,7 @@ declaring a `contractVersion` with the current major
 | New interaction surface | `contract/components.yaml` + interaction surfaces in `contract/architecture.md` (or `protocol.md` / `authorization.md`) |
 | New protocol command | `contract/protocol-commands.yaml` + `contract/protocol.md` |
 | Changed command flag (breaking) | `contract/protocol-commands.yaml` + `contract/protocol.md` + `major` |
-| New REST endpoint | REST API Layer in `contract/api/rest-notes.md` |
+| New REST endpoint | An operation in `contract/api/openapi.yaml` (bump its `info.version`; `yarn contract:parity` fails without it) and any rule it cannot express in `contract/api/rest-notes.md` |
 | New database table/column | `contract/data/README.md` |
 | New extension point | `contract/extension-points.yaml` + `contract/architecture.md` |
 | New connector capability flag | `contract/extension-points.yaml` `approvedConnectorCapabilities` list |
@@ -179,4 +180,4 @@ changes, not documentation noise. If a contract file was written from a shell
 command rather than a native edit tool, declare it with `--paths` so it appears
 among the objective's changed files.
 
-<!-- version: 2.0.1 -->
+<!-- version: 2.0.2 -->
