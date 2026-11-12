@@ -15,7 +15,7 @@ permissions:
 jobs:
   validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     env:
       COREPACK_ENABLE_DOWNLOAD_PROMPT: 0
     steps:
@@ -31,3 +31,9 @@ jobs:
         run: yarn contract:test
       - name: Check conformance manifest versions
         run: yarn check:conformance-versions
+      # The route parity test loads the real Express app (backend/app.ts), which
+      # imports the built workspace packages.
+      - name: Build the workspace packages the backend imports
+        run: yarn contract:build:prod && yarn db:build:prod && yarn auth:build:prod && yarn automations:build:prod
+      - name: OpenAPI route parity
+        run: yarn contract:parity

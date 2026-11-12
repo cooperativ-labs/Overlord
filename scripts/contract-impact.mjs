@@ -139,8 +139,8 @@ export function contractRangeViolations({ rangeStart, head, declaredImpact, repo
     );
   }
 
-  // The OpenAPI description arrives in phase 4. A range in which it does not
-  // exist at either end has nothing to check here.
+  // contract/api/openapi.yaml exists since phase 4a. A range in which it does
+  // not exist at either end (an older range) has nothing to check here.
   if (changedPaths.includes(CONTRACT_PATHS.openapi)) {
     const startOpenapi = repository.readFile(rangeStart, CONTRACT_PATHS.openapi) ?? '';
     const headOpenapi = repository.readFile(head, CONTRACT_PATHS.openapi) ?? '';

@@ -324,12 +324,12 @@ describe('repository contract check', () => {
   function checkFixture() {
     const root = mkdtempSync(path.join(tmpdir(), 'check-contract-'));
     fixtures.push(root);
-    writeFixture(root, { openapi: false });
+    writeFixture(root);
     mkdirSync(path.join(root, 'scripts'));
     mkdirSync(path.join(root, 'contract/data'), { recursive: true });
     mkdirSync(path.join(root, 'contract/api'), { recursive: true });
     mkdirSync(path.join(root, 'contract/decisions'), { recursive: true });
-    for (const script of ['check-contract.sh', 'version-contract.mjs']) {
+    for (const script of ['check-contract.sh', 'version-contract.mjs', 'check-openapi.mjs']) {
       copyFileSync(path.join(repoRoot, 'scripts', script), path.join(root, 'scripts', script));
     }
     for (const document of [
@@ -346,6 +346,10 @@ describe('repository contract check', () => {
     ]) {
       writeFileSync(path.join(root, 'contract', document), 'normative\n');
     }
+    writeFileSync(
+      path.join(root, 'contract/api/openapi-ratchet.json'),
+      `${JSON.stringify({ stubOperations: 0 })}\n`
+    );
     writeFileSync(
       path.join(root, 'contract/decisions/README.md'),
       '# Decisions\n\n- [0001 — First](0001-first.md)\n'
@@ -367,10 +371,31 @@ describe('repository contract check', () => {
     assert.equal(run(), 'contract check passed for 1.4.2\n');
   });
 
-  it('fails when the REST surface has no specification', () => {
+  it('requires the OpenAPI description, its ratchet and, until phase 4d, the REST notes', () => {
+    for (const document of ['api/openapi.yaml', 'api/openapi-ratchet.json', 'api/rest-notes.md']) {
+      const { root, run } = checkFixture();
+      rmSync(path.join(root, 'contract', document));
+      assert.throws(run, new RegExp(`missing contract/${document.replace('.', '\\.')}`));
+    }
+  });
+
+  it('fails when the OpenAPI schema-stub count disagrees with the ratchet', () => {
     const { root, run } = checkFixture();
-    rmSync(path.join(root, 'contract/api/rest-notes.md'));
-    assert.throws(run, /missing contract\/api\/rest-notes\.md/);
+    writeFileSync(
+      path.join(root, 'contract/api/openapi-ratchet.json'),
+      `${JSON.stringify({ stubOperations: 3 })}\n`
+    );
+    assert.throws(run, /structural check/);
+  });
+
+  it('fails when the OpenAPI contract-version extension disagrees with VERSION', () => {
+    const { root, run } = checkFixture();
+    const file = path.join(root, 'contract/api/openapi.yaml');
+    writeFileSync(
+      file,
+      readFileSync(file, 'utf8').replace(/x-overlord-contract-version: .*/, 'x-overlord-contract-version: 1.4.1')
+    );
+    assert.throws(run, /inconsistent/);
   });
 
   it('fails when a root CONTRACT.md reappears', () => {

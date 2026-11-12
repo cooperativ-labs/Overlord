@@ -25,18 +25,23 @@ components.yaml
 protocol-commands.yaml
 extension-points.yaml
 conformance-manifest.schema.yaml
-harness-capabilities.schema.yaml'
+harness-capabilities.schema.yaml
+api/openapi.yaml
+api/openapi-ratchet.json
+api/rest-notes.md'
 
 printf '%s\n' "$required_files" | while IFS= read -r relative_path; do
   [ -f "$contract_dir/$relative_path" ] || fail "missing contract/$relative_path"
   [ -s "$contract_dir/$relative_path" ] || fail "empty contract/$relative_path"
 done
 
-# The REST surface is specified by contract/api/openapi.yaml once phase 4 of
-# the migration lands; until then the holding file contract/api/rest-notes.md
-# carries that normative text. One of the two must exist and be non-empty.
-[ -s "$contract_dir/api/rest-notes.md" ] || [ -s "$contract_dir/api/openapi.yaml" ] \
-  || fail "missing contract/api/rest-notes.md (or contract/api/openapi.yaml): the REST surface has no specification"
+# The REST surface is specified by contract/api/openapi.yaml (ADR 0006). Until
+# phase 4d of the migration moves what OpenAPI cannot express into the topic
+# documents, the holding file contract/api/rest-notes.md stays normative too, so
+# both are required above. The OpenAPI structural check (operationIds and the
+# schema-stub ratchet, ADR 0048) is dependency-free like this script.
+node "$root_dir/scripts/check-openapi.mjs" >/dev/null \
+  || fail "contract/api/openapi.yaml failed its structural check (see above)"
 
 # The contract has one home. A root CONTRACT.md would be a second authority.
 [ ! -e "$root_dir/CONTRACT.md" ] \
@@ -62,8 +67,9 @@ done
 
 # The shared strict Semantic Versioning parser validates the contract version:
 # VERSION, the CONTRACT.md header, the current CHANGELOG.md heading, the
-# components.yaml contractVersion and (once it exists) the OpenAPI
-# info.x-overlord-contract-version must agree.
+# components.yaml contractVersion and the OpenAPI
+# info.x-overlord-contract-version must agree; OpenAPI info.version is checked
+# for strict Semantic Versioning only.
 node "$root_dir/scripts/version-contract.mjs" --check >/dev/null \
   || fail "contract version files are inconsistent (see above)"
 

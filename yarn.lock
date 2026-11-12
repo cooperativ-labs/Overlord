@@ -3473,6 +3473,21 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@seriousme/openapi-schema-validator@npm:^2.11.0":
+  version: 2.11.0
+  resolution: "@seriousme/openapi-schema-validator@npm:2.11.0"
+  dependencies:
+    ajv: "npm:^8.20.0"
+    ajv-draft-04: "npm:^1.0.0"
+    ajv-formats: "npm:^3.0.1"
+    yaml: "npm:^2.9.1"
+  bin:
+    bundle-api: bin/bundle-api-cli.js
+    validate-api: bin/validate-api-cli.js
+  checksum: 10c0/69d233f7ff0cb32de3d1549f8786ebb4e8030eca2f36454a389e5cc0f4449b515be301ddfb9aefd4d5e369e89bdb07a8ab6e134981121ecee1a03357f218e0da
+  languageName: node
+  linkType: hard
+
 "@serwist/build@npm:9.5.11":
   version: 9.5.11
   resolution: "@serwist/build@npm:9.5.11"
@@ -4684,6 +4699,18 @@ __metadata:
   languageName: node
   linkType: hard
 
+"ajv-draft-04@npm:^1.0.0":
+  version: 1.0.0
+  resolution: "ajv-draft-04@npm:1.0.0"
+  peerDependencies:
+    ajv: ^8.5.0
+  peerDependenciesMeta:
+    ajv:
+      optional: true
+  checksum: 10c0/6044310bd38c17d77549fd326bd40ce1506fa10b0794540aa130180808bf94117fac8c9b448c621512bea60e4a947278f6a978e87f10d342950c15b33ddd9271
+  languageName: node
+  linkType: hard
+
 "ajv-formats@npm:^3.0.1":
   version: 3.0.1
   resolution: "ajv-formats@npm:3.0.1"
@@ -4710,7 +4737,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"ajv@npm:^8.0.0, ajv@npm:^8.17.1, ajv@npm:^8.18.0":
+"ajv@npm:^8.0.0, ajv@npm:^8.17.1, ajv@npm:^8.18.0, ajv@npm:^8.20.0":
   version: 8.20.0
   resolution: "ajv@npm:8.20.0"
   dependencies:
@@ -11317,6 +11344,7 @@ __metadata:
     "@eslint/js": "npm:^9.39.4"
     "@overlord/auth": "workspace:*"
     "@overlord/database": "workspace:*"
+    "@seriousme/openapi-schema-validator": "npm:^2.11.0"
     "@types/better-sqlite3": "npm:^7.6.13"
     "@types/node": "npm:^25.9.3"
     "@types/pg": "npm:^8.20.0"
@@ -14989,6 +15017,15 @@ __metadata:
   bin:
     yaml: bin.mjs
   checksum: 10c0/f340718df45e97a9551b9bf9dac61c80050bc464513b710debfb5067c380c8472e3b67809cffacb4ab5ffb5e66ef9310816c88b05f371cec60abfedd8c88e0a2
+  languageName: node
+  linkType: hard
+
+"yaml@npm:^2.9.1":
+  version: 2.9.1
+  resolution: "yaml@npm:2.9.1"
+  bin:
+    yaml: bin.mjs
+  checksum: 10c0/9d06676ef02b89559a8b10a71882bd2cdae81e8393dc8dbc871615c3259475d9609ad973d19cb3c9e71e72d6206e3d1e7aa241c7e55f3d16fd2e77db305827d6
   languageName: node
   linkType: hard
 

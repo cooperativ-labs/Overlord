@@ -81,7 +81,7 @@ Each mutable table uses `revision` optimistic concurrency and soft-delete via
 
 ## Route naming
 
-All endpoints live under `/ext/everhour/` (registered in `backend/index.ts`).
+All endpoints live under `/ext/everhour/` (registered in `backend/app.ts`).
 
 | Method | Route | Permission |
 | --- | --- | --- |
@@ -164,7 +164,8 @@ Replace `everhour` with your extension key (`myapp`) everywhere:
    contract package; do not extend core DTOs.
 5. **Backend** — implement `backend/ext/myapp/service.ts` (DB + outbound API)
    and `routes.ts` (thin HTTP layer); register at `/ext/myapp` in
-   `backend/index.ts`.
+   `backend/app.ts`, and describe each route in `contract/api/openapi.yaml`
+   with `x-overlord-extension`.
 6. **Webapp** — add API client methods, query hooks, invalidation rules, and
    optional first-party UI components that call `/ext/myapp/`.
 7. **Vocabulary** — declare any new `entity_changes.entity_type` (or other

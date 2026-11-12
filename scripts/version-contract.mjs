@@ -3,8 +3,8 @@
 // Contract Semantic Versioning utility. It is the only supported writer of
 // contract/VERSION and owns exactly these locations: VERSION, the
 // contract/CONTRACT.md header, the contract/CHANGELOG.md skeleton,
-// `contractVersion` in contract/components.yaml, and — once it exists — the
-// OpenAPI info.x-overlord-contract-version extension in contract/api/openapi.yaml.
+// `contractVersion` in contract/components.yaml, and the OpenAPI
+// info.x-overlord-contract-version extension in contract/api/openapi.yaml.
 // It never writes package.json, OpenAPI info.version or conformance manifests,
 // which have their own owners (contract/CONTRACT.md section 4).
 //
@@ -154,9 +154,10 @@ export async function readContractState(root = ROOT) {
     read(CONTRACT_PATHS.contract),
     read(CONTRACT_PATHS.changelog),
     read(CONTRACT_PATHS.components),
-    // The OpenAPI description arrives in phase 4 of the contract migration
-    // (planning/feature-plans/contract-adr-openapi-migration.md). Until then its
-    // absence is not an error; once present it is checked like every other location.
+    // The OpenAPI description exists since phase 4a of the contract migration
+    // (planning/feature-plans/contract-adr-openapi-migration.md);
+    // scripts/check-contract.sh requires it. This reader still tolerates its
+    // absence so the parser and the range checker work on any revision.
     readOptional(path.join(root, CONTRACT_PATHS.openapi))
   ]);
   return {

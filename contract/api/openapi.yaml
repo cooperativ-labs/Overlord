@@ -1,0 +1,3197 @@
+openapi: 3.1.0
+info:
+  title: Overlord API
+  # info.version is the API description's own Semantic Version; it changes when
+  # this document changes and is never compared with the contract version.
+  version: 1.0.0
+  # The contract version (contract/VERSION) this document belongs to. Written
+  # only by `yarn version:contract`.
+  x-overlord-contract-version: 168.0.4
+  description: >-
+    Normative description of Overlord's REST surface (ADR 0006): one operation for every
+    method and path the backend registers, at the path it is served (ADR 0007), excluding
+    only the routes listed in x-overlord-route-exclusions. backend/openapi-route-parity.test.ts
+    fails when a registered route has no operation or an operation has no registered route.
+    It describes REST only; the agent protocol is specified by protocol-commands.yaml and the
+    MCP tools by the generated tool catalog (ADR 0008). Every operation carries
+    x-overlord-permission, x-overlord-edition and x-overlord-consumers, and extension routes
+    carry x-overlord-extension; the vocabularies are defined in ADR 0048. Request and response
+    schemas are being added (phase 4b of the contract migration); an operation without them
+    is marked x-overlord-schema-status stub, and contract/api/openapi-ratchet.json caps how
+    many may be. Until phase 4d, contract/api/rest-notes.md remains normative for the
+    behaviour this document cannot yet express; where the two disagree, report the conflict.
+servers:
+  - url: /
+    description: The backend origin. Paths are absolute; there is no version prefix.
+# Registered routes that are deliberately not described here (ADR 0048). The parity
+# test treats exactly these as registered-but-undescribed; anything else must have an
+# operation.
+x-overlord-route-exclusions:
+  - method: ALL
+    path: /api/auth/*
+    kind: provider-owned
+    reason: >-
+      Better Auth's handler (backend/app.ts, `app.all('/api/auth/*')`). Its sign-in, session,
+      sign-out and social-callback routes are defined and versioned by the Better Auth library,
+      not by Overlord. Overlord's own handlers under /api/auth (desktop and browser sign-in
+      handoffs and the GitHub repository-consent callback) are registered before the wildcard
+      and are described as operations.
+  - method: GET
+    path: '*'
+    kind: non-api
+    reason: >-
+      Single-page web app fallback, registered together with express.static only when a
+      Local (SQLite) backend has a built web app next to it (backend/http/serve-spa.ts).
+      It serves HTML for client-side routes; /api/* paths fall through to the API.
+tags:
+  - name: activity
+    description: "Workspace activity feed and objective transcripts."
+  - name: agent-catalog
+    description: "Workspace agent catalog."
+  - name: agent-requests
+    description: "Human inbox of agent-session requests."
+  - name: agent-session-channels
+    description: "Agent Session Exchange adapter channel (channel credential only)."
+  - name: agent-session-inputs
+    description: "Human-to-agent session inputs."
+  - name: auth
+    description: "Overlord-owned sign-in handoffs and login-provider advertisement (Better Auth routes are excluded)."
+  - name: chat
+    description: "Private assistant conversations (Cloud)."
+  - name: connections
+    description: "Account connections."
+  - name: deliveries
+    description: "Delivery deferred-work resolutions."
+  - name: everhour
+    description: "Everhour extension routes."
+  - name: execution-targets
+    description: "Execution targets and their observations."
+  - name: github
+    description: "GitHub extension routes."
+  - name: inbox
+    description: "Profile-owned inbox capture."
+  - name: launch-settings
+    description: "Launch settings and preferences."
+  - name: local-target
+    description: "Co-located local-target capability calls."
+  - name: mcp
+    description: "MCP Streamable HTTP endpoint; tools are specified by the generated tool catalog (ADR 0008)."
+  - name: meta
+    description: "Health, metadata and diagnostics."
+  - name: missions
+    description: "Missions, mission search and mission sub-resources."
+  - name: mobile
+    description: "Mobile push and Live Activity registration."
+  - name: notifications
+    description: "In-app notifications and notification preferences."
+  - name: oauth
+    description: "Hosted MCP OAuth authorization server and discovery."
+  - name: objectives
+    description: "Objectives and objective sub-resources."
+  - name: organizations
+    description: "Organizations and onboarding."
+  - name: profile
+    description: "Own profile and default project."
+  - name: project-resources
+    description: "Project resources and sources."
+  - name: project-statuses
+    description: "Project statuses."
+  - name: projects
+    description: "Projects and project sub-resources."
+  - name: protocol
+    description: "Agent protocol transport; subcommands are specified by protocol-commands.yaml (ADR 0008)."
+  - name: realtime
+    description: "Realtime streams and the change feed."
+  - name: run-queues
+    description: "Project Run Queues."
+  - name: runner
+    description: "Runner queue operations."
+  - name: storage
+    description: "Uploads and stored objects."
+  - name: user-tokens
+    description: "Personal user tokens."
+  - name: webhooks
+    description: "Webhook subscriptions and deliveries."
+  - name: workspaces
+    description: "Workspaces, members and invitations."
+  - name: worktrees
+    description: "Overlord-managed worktrees."
+paths:
+  /api/auth/desktop/github:
+    get:
+      operationId: getAuthDesktopGithub
+      tags: [auth]
+      x-overlord-permission: public
+      x-overlord-edition: both
+      x-overlord-consumers: [mobile, webapp]
+      x-overlord-schema-status: stub
+  /api/auth/desktop/callback:
+    get:
+      operationId: getAuthDesktopCallback
+      tags: [auth]
+      x-overlord-permission: authenticated
+      x-overlord-edition: both
+      x-overlord-consumers: [external]
+      x-overlord-schema-status: stub
+  /api/auth/browser/callback:
+    get:
+      operationId: getAuthBrowserCallback
+      tags: [auth]
+      x-overlord-permission: authenticated
+      x-overlord-edition: both
+      x-overlord-consumers: [webapp]
+      x-overlord-schema-status: stub
+  /api/auth/desktop/exchange:
+    post:
+      operationId: postAuthDesktopExchange
+      tags: [auth]
+      x-overlord-permission: public
+      x-overlord-edition: both
+      x-overlord-consumers: [desktop, mobile]
+      x-overlord-schema-status: stub
+  /api/auth/browser/exchange:
+    post:
+      operationId: postAuthBrowserExchange
+      tags: [auth]
+      x-overlord-permission: public
+      x-overlord-edition: both
+      x-overlord-consumers: [webapp]
+      x-overlord-schema-status: stub
+  /api/auth/callback/github/repository:
+    get:
+      operationId: getAuthCallbackGithubRepository
+      tags: [auth]
+      x-overlord-permission: public
+      x-overlord-edition: both
+      x-overlord-consumers: [external]
+      x-overlord-schema-status: stub
+  /api/auth-providers:
+    get:
+      operationId: getAuthProviders
+      tags: [auth]
+      x-overlord-permission: public
+      x-overlord-edition: both
+      x-overlord-consumers: [mobile, webapp]
+      x-overlord-schema-status: stub
+  /api/health:
+    get:
+      operationId: getHealth
+      tags: [meta]
+      x-overlord-permission: public
+      x-overlord-edition: both
+      x-overlord-consumers: [cli, desktop]
+      x-overlord-schema-status: stub
+  /.well-known/oauth-protected-resource:
+    get:
+      operationId: getWellKnownOauthProtectedResource
+      tags: [oauth]
+      x-overlord-permission: public
+      x-overlord-edition: both
+      x-overlord-consumers: [external]
+      x-overlord-schema-status: stub
+  /.well-known/oauth-protected-resource/mcp:
+    get:
+      operationId: getWellKnownOauthProtectedResourceMcp
+      tags: [oauth]
+      x-overlord-permission: public
+      x-overlord-edition: both
+      x-overlord-consumers: [external]
+      x-overlord-schema-status: stub
+  /.well-known/oauth-authorization-server:
+    get:
+      operationId: getWellKnownOauthAuthorizationServer
+      tags: [oauth]
+      x-overlord-permission: public
+      x-overlord-edition: both
+      x-overlord-consumers: [external]
+      x-overlord-schema-status: stub
+  /oauth/authorize:
+    get:
+      operationId: getOauthAuthorize
+      tags: [oauth]
+      x-overlord-permission: public
+      x-overlord-edition: both
+      x-overlord-consumers: [external]
+      x-overlord-schema-status: stub
+  /oauth/register:
+    post:
+      operationId: postOauthRegister
+      tags: [oauth]
+      x-overlord-permission: public
+      x-overlord-edition: both
+      x-overlord-consumers: [external]
+      x-overlord-schema-status: stub
+  /oauth/token:
+    post:
+      operationId: postOauthToken
+      tags: [oauth]
+      x-overlord-permission: public
+      x-overlord-edition: both
+      x-overlord-consumers: [external]
+      x-overlord-schema-status: stub
+  /oauth/revoke:
+    post:
+      operationId: postOauthRevoke
+      tags: [oauth]
+      x-overlord-permission: public
+      x-overlord-edition: both
+      x-overlord-consumers: [external]
+      x-overlord-schema-status: stub
+  /oauth/authorize/request:
+    post:
+      operationId: postOauthAuthorizeRequest
+      tags: [oauth]
+      x-overlord-permission: unknown
+      x-overlord-edition: both
+      x-overlord-consumers: [webapp]
+      x-overlord-schema-status: stub
+  /oauth/authorize/approve:
+    post:
+      operationId: postOauthAuthorizeApprove
+      tags: [oauth]
+      x-overlord-permission: user_token:self:create
+      x-overlord-edition: both
+      x-overlord-consumers: [webapp]
+      x-overlord-schema-status: stub
+  /mcp:
+    get:
+      operationId: getMcp
+      tags: [mcp]
+      x-overlord-permission: unknown
+      x-overlord-edition: both
+      x-overlord-consumers: [external]
+      x-overlord-schema-status: stub
+    post:
+      operationId: postMcp
+      tags: [mcp]
+      x-overlord-permission: unknown
+      x-overlord-edition: both
+      x-overlord-consumers: [external, mobile]
+      x-overlord-schema-status: stub
+  /api/agent-session-channels/v1/self:
+    get:
+      operationId: getAgentSessionChannelsV1Self
+      tags: [agent-session-channels]
+      x-overlord-permission: channel-credential
+      x-overlord-edition: both
+      x-overlord-consumers: [unverified]
+      x-overlord-schema-status: stub
+  /api/agent-session-channels/v1/heartbeat:
+    post:
+      operationId: postAgentSessionChannelsV1Heartbeat
+      tags: [agent-session-channels]
+      x-overlord-permission: channel-credential
+      x-overlord-edition: both
+      x-overlord-consumers: [cli]
+      x-overlord-schema-status: stub
+  /api/agent-session-channels/v1/events:
+    post:
+      operationId: postAgentSessionChannelsV1Events
+      tags: [agent-session-channels]
+      x-overlord-permission: channel-credential
+      x-overlord-edition: both
+      x-overlord-consumers: [cli]
+      x-overlord-schema-status: stub
+  /api/agent-session-channels/v1/requests:
+    post:
+      operationId: postAgentSessionChannelsV1Requests
+      tags: [agent-session-channels]
+      x-overlord-permission: channel-credential
+      x-overlord-edition: both
+      x-overlord-consumers: [cli]
+      x-overlord-schema-status: stub
+  "/api/agent-session-channels/v1/requests/{id}":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      operationId: getAgentSessionChannelsV1RequestsById
+      tags: [agent-session-channels]
+      x-overlord-permission: channel-credential
+      x-overlord-edition: both
+      x-overlord-consumers: [cli]
+      x-overlord-schema-status: stub
+  "/api/agent-session-channels/v1/requests/{id}/lease":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      operationId: postAgentSessionChannelsV1RequestsByIdLease
+      tags: [agent-session-channels]
+      x-overlord-permission: channel-credential
+      x-overlord-edition: both
+      x-overlord-consumers: [cli]
+      x-overlord-schema-status: stub
+  "/api/agent-session-channels/v1/requests/{id}/release":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      operationId: postAgentSessionChannelsV1RequestsByIdRelease
+      tags: [agent-session-channels]
+      x-overlord-permission: channel-credential
+      x-overlord-edition: both
+      x-overlord-consumers: [cli]
+      x-overlord-schema-status: stub
+  "/api/agent-session-channels/v1/requests/{id}/application":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      operationId: postAgentSessionChannelsV1RequestsByIdApplication
+      tags: [agent-session-channels]
+      x-overlord-permission: channel-credential
+      x-overlord-edition: both
+      x-overlord-consumers: [cli]
+      x-overlord-schema-status: stub
+  "/api/agent-session-channels/v1/requests/{id}/resolved-elsewhere":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      operationId: postAgentSessionChannelsV1RequestsByIdResolvedElsewhere
+      tags: [agent-session-channels]
+      x-overlord-permission: channel-credential
+      x-overlord-edition: both
+      x-overlord-consumers: [cli]
+      x-overlord-schema-status: stub
+  /api/agent-session-channels/v1/inputs/claim:
+    post:
+      operationId: postAgentSessionChannelsV1InputsClaim
+      tags: [agent-session-channels]
+      x-overlord-permission: channel-credential
+      x-overlord-edition: both
+      x-overlord-consumers: [cli]
+      x-overlord-schema-status: stub
+  "/api/agent-session-channels/v1/inputs/{id}/emitted":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      operationId: postAgentSessionChannelsV1InputsByIdEmitted
+      tags: [agent-session-channels]
+      x-overlord-permission: channel-credential
+      x-overlord-edition: both
+      x-overlord-consumers: [cli]
+      x-overlord-schema-status: stub
+  "/api/agent-session-channels/v1/inputs/{id}/acknowledged":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      operationId: postAgentSessionChannelsV1InputsByIdAcknowledged
+      tags: [agent-session-channels]
+      x-overlord-permission: channel-credential
+      x-overlord-edition: both
+      x-overlord-consumers: [cli]
+      x-overlord-schema-status: stub
+  "/api/agent-session-channels/v1/inputs/{id}/failed":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      operationId: postAgentSessionChannelsV1InputsByIdFailed
+      tags: [agent-session-channels]
+      x-overlord-permission: channel-credential
+      x-overlord-edition: both
+      x-overlord-consumers: [cli]
+      x-overlord-schema-status: stub
+  /api/agent-session-channels/v1/end:
+    post:
+      operationId: postAgentSessionChannelsV1End
+      tags: [agent-session-channels]
+      x-overlord-permission: channel-credential
+      x-overlord-edition: both
+      x-overlord-consumers: [cli]
+      x-overlord-schema-status: stub
+  /oauth/clients/knowledgebase.json:
+    get:
+      operationId: getOauthClientsKnowledgebaseJson
+      tags: [connections]
+      x-overlord-permission: public
+      x-overlord-edition: cloud
+      x-overlord-consumers: [external]
+      x-overlord-schema-status: stub
+  /api/connections/knowledgebase/callback:
+    get:
+      operationId: getConnectionsKnowledgebaseCallback
+      tags: [connections]
+      x-overlord-permission: public
+      x-overlord-edition: cloud
+      x-overlord-consumers: [external]
+      x-overlord-schema-status: stub
+  /api/chat/providers:
+    get:
+      operationId: getChatProviders
+      tags: [chat]
+      x-overlord-permission: owner
+      x-overlord-edition: cloud
+      x-overlord-consumers: [mobile, webapp]
+      x-overlord-schema-status: stub
+  /api/chat/threads:
+    get:
+      operationId: getChatThreads
+      tags: [chat]
+      x-overlord-permission: owner
+      x-overlord-edition: cloud
+      x-overlord-consumers: [mobile, webapp]
+      x-overlord-schema-status: stub
+    post:
+      operationId: postChatThreads
+      tags: [chat]
+      x-overlord-permission: owner
+      x-overlord-edition: cloud
+      x-overlord-consumers: [mobile, webapp]
+      x-overlord-schema-status: stub
+  "/api/chat/threads/{id}":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      operationId: getChatThreadsById
+      tags: [chat]
+      x-overlord-permission: owner
+      x-overlord-edition: cloud
+      x-overlord-consumers: [mobile, webapp]
+      x-overlord-schema-status: stub
+    patch:
+      operationId: patchChatThreadsById
+      tags: [chat]
+      x-overlord-permission: owner
+      x-overlord-edition: cloud
+      x-overlord-consumers: [mobile, webapp]
+      x-overlord-schema-status: stub
+  "/api/chat/threads/{id}/diagnostics":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      operationId: getChatThreadsByIdDiagnostics
+      tags: [chat]
+      x-overlord-permission: owner
+      x-overlord-edition: cloud
+      x-overlord-consumers: [webapp]
+      x-overlord-schema-status: stub
+  "/api/chat/threads/{id}/messages":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      operationId: postChatThreadsByIdMessages
+      tags: [chat]
+      x-overlord-permission: owner
+      x-overlord-edition: cloud
+      x-overlord-consumers: [mobile, webapp]
+      x-overlord-schema-status: stub
+  "/api/chat/threads/{id}/presence":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    put:
+      operationId: putChatThreadsByIdPresence
+      tags: [chat]
+      x-overlord-permission: owner
+      x-overlord-edition: cloud
+      x-overlord-consumers: [mobile, webapp]
+      x-overlord-schema-status: stub
+  "/api/chat/threads/{id}/ack":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      operationId: postChatThreadsByIdAck
+      tags: [chat]
+      x-overlord-permission: owner
+      x-overlord-edition: cloud
+      x-overlord-consumers: [mobile, webapp]
+      x-overlord-schema-status: stub
+  /api/chat/notifications:
+    get:
+      operationId: getChatNotifications
+      tags: [chat]
+      x-overlord-permission: owner
+      x-overlord-edition: cloud
+      x-overlord-consumers: [mobile]
+      x-overlord-schema-status: stub
+  "/api/chat/notifications/{id}/read":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      operationId: postChatNotificationsByIdRead
+      tags: [chat]
+      x-overlord-permission: owner
+      x-overlord-edition: cloud
+      x-overlord-consumers: [mobile]
+      x-overlord-schema-status: stub
+  "/api/chat/proposals/{id}/create":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      operationId: postChatProposalsByIdCreate
+      tags: [chat]
+      x-overlord-permission: owner
+      x-overlord-edition: cloud
+      x-overlord-consumers: [mobile, webapp]
+      x-overlord-schema-status: stub
+  "/api/chat/questions/{id}/answer":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      operationId: postChatQuestionsByIdAnswer
+      tags: [chat]
+      x-overlord-permission: owner
+      x-overlord-edition: cloud
+      x-overlord-consumers: [mobile, webapp]
+      x-overlord-schema-status: stub
+  "/api/chat/runs/{id}/cancel":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      operationId: postChatRunsByIdCancel
+      tags: [chat]
+      x-overlord-permission: owner
+      x-overlord-edition: cloud
+      x-overlord-consumers: [mobile, webapp]
+      x-overlord-schema-status: stub
+  "/api/chat/runs/{id}/continue":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      operationId: postChatRunsByIdContinue
+      tags: [chat]
+      x-overlord-permission: owner
+      x-overlord-edition: cloud
+      x-overlord-consumers: [mobile, webapp]
+      x-overlord-schema-status: stub
+  "/api/chat/threads/{id}/events":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      operationId: getChatThreadsByIdEvents
+      tags: [chat]
+      x-overlord-permission: owner
+      x-overlord-edition: cloud
+      x-overlord-consumers: [mobile, webapp]
+      x-overlord-schema-status: stub
+  /api/connections:
+    get:
+      operationId: getConnections
+      tags: [connections]
+      x-overlord-permission: owner
+      x-overlord-edition: both
+      x-overlord-consumers: [mobile, webapp]
+      x-overlord-schema-status: stub
+    post:
+      operationId: postConnections
+      tags: [connections]
+      x-overlord-permission: owner
+      x-overlord-edition: both
+      x-overlord-consumers: [mobile, webapp]
+      x-overlord-schema-status: stub
+  /api/connections/api-keys:
+    post:
+      operationId: postConnectionsApiKeys
+      tags: [connections]
+      x-overlord-permission: owner
+      x-overlord-edition: both
+      x-overlord-consumers: [mobile, webapp]
+      x-overlord-schema-status: stub
+  "/api/connections/{id}":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    patch:
+      operationId: patchConnectionsById
+      tags: [connections]
+      x-overlord-permission: owner
+      x-overlord-edition: cloud
+      x-overlord-consumers: [webapp]
+      x-overlord-schema-status: stub
+    delete:
+      operationId: deleteConnectionsById
+      tags: [connections]
+      x-overlord-permission: owner
+      x-overlord-edition: both
+      x-overlord-consumers: [mobile, webapp]
+      x-overlord-schema-status: stub
+  /api/meta:
+    get:
+      operationId: getMeta
+      tags: [meta]
+      x-overlord-permission: unknown
+      x-overlord-edition: both
+      x-overlord-consumers: [cli, mobile, webapp]
+      x-overlord-schema-status: stub
+  /api/authorized-workspaces:
+    get:
+      operationId: getAuthorizedWorkspaces
+      tags: [meta]
+      x-overlord-permission: unknown
+      x-overlord-edition: both
+      x-overlord-consumers: [mobile]
+      x-overlord-schema-status: stub
+  /api/diagnostics/execution-target-migration:
+    get:
+      operationId: getDiagnosticsExecutionTargetMigration
+      tags: [meta]
+      x-overlord-permission: workspace:read
+      x-overlord-edition: both
+      x-overlord-consumers: [cli]
+      x-overlord-schema-status: stub
+  /api/onboarding:
+    post:
+      operationId: postOnboarding
+      tags: [organizations]
+      x-overlord-permission: unknown
+      x-overlord-edition: both
+      x-overlord-consumers: [cli, webapp]
+      x-overlord-schema-status: stub
+  /api/organizations:
+    get:
+      operationId: getOrganizations
+      tags: [organizations]
+      x-overlord-permission: unknown
+      x-overlord-edition: both
+      x-overlord-consumers: [webapp]
+      x-overlord-schema-status: stub
+  "/api/organizations/{id}":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    patch:
+      operationId: patchOrganizationsById
+      tags: [organizations]
+      x-overlord-permission: organization-admin
+      x-overlord-edition: both
+      x-overlord-consumers: [cli, webapp]
+      x-overlord-schema-status: stub
+  "/api/organizations/{id}/admins":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      operationId: getOrganizationsByIdAdmins
+      tags: [organizations]
+      x-overlord-permission: organization-admin
+      x-overlord-edition: both
+      x-overlord-consumers: [webapp]
+      x-overlord-schema-status: stub
+    post:
+      operationId: postOrganizationsByIdAdmins
+      tags: [organizations]
+      x-overlord-permission: organization-admin
+      x-overlord-edition: both
+      x-overlord-consumers: [webapp]
+      x-overlord-schema-status: stub
+  "/api/organizations/{id}/admins/{userId}":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: userId
+        in: path
+        required: true
+        schema:
+          type: string
+    delete:
+      operationId: deleteOrganizationsByIdAdminsByUserId
+      tags: [organizations]
+      x-overlord-permission: organization-admin
+      x-overlord-edition: both
+      x-overlord-consumers: [webapp]
+      x-overlord-schema-status: stub
+  /api/workspaces:
+    get:
+      operationId: getWorkspaces
+      tags: [workspaces]
+      x-overlord-permission: unknown
+      x-overlord-edition: both
+      x-overlord-consumers: [cli, webapp]
+      x-overlord-schema-status: stub
+    post:
+      operationId: postWorkspaces
+      tags: [workspaces]
+      x-overlord-permission: workspace:create
+      x-overlord-edition: both
+      x-overlord-consumers: [webapp]
+      x-overlord-schema-status: stub
+  "/api/workspaces/{id}":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    patch:
+      operationId: patchWorkspacesById
+      tags: [workspaces]
+      x-overlord-permission: workspace-manager
+      x-overlord-edition: both
+      x-overlord-consumers: [mobile, webapp]
+      x-overlord-schema-status: stub
+    delete:
+      operationId: deleteWorkspacesById
+      tags: [workspaces]
+      x-overlord-permission: workspace-admin
+      x-overlord-edition: both
+      x-overlord-consumers: [webapp]
+      x-overlord-schema-status: stub
+  "/api/workspaces/{id}/members":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      operationId: getWorkspacesByIdMembers
+      tags: [workspaces]
+      x-overlord-permission: workspace-member
+      x-overlord-edition: both
+      x-overlord-consumers: [mobile, webapp]
+      x-overlord-schema-status: stub
+  "/api/workspaces/{id}/members/{workspaceUserId}":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: workspaceUserId
+        in: path
+        required: true
+        schema:
+          type: string
+    delete:
+      operationId: deleteWorkspacesByIdMembersByWorkspaceUserId
+      tags: [workspaces]
+      x-overlord-permission: workspace-manager
+      x-overlord-edition: both
+      x-overlord-consumers: [webapp]
+      x-overlord-schema-status: stub
+  "/api/workspaces/{id}/members/{workspaceUserId}/role":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: workspaceUserId
+        in: path
+        required: true
+        schema:
+          type: string
+    patch:
+      operationId: patchWorkspacesByIdMembersByWorkspaceUserIdRole
+      tags: [workspaces]
+      x-overlord-permission: workspace-manager
+      x-overlord-edition: both
+      x-overlord-consumers: [webapp]
+      x-overlord-schema-status: stub
+  "/api/workspaces/{id}/invitations":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      operationId: getWorkspacesByIdInvitations
+      tags: [workspaces]
+      x-overlord-permission: workspace-manager
+      x-overlord-edition: both
+      x-overlord-consumers: [webapp]
+      x-overlord-schema-status: stub
+    post:
+      operationId: postWorkspacesByIdInvitations
+      tags: [workspaces]
+      x-overlord-permission: workspace-manager
+      x-overlord-edition: both
+      x-overlord-consumers: [webapp]
+      x-overlord-schema-status: stub
+  "/api/workspaces/{id}/invitations/{invitationId}":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: invitationId
+        in: path
+        required: true
+        schema:
+          type: string
+    delete:
+      operationId: deleteWorkspacesByIdInvitationsByInvitationId
+      tags: [workspaces]
+      x-overlord-permission: workspace-manager
+      x-overlord-edition: both
+      x-overlord-consumers: [webapp]
+      x-overlord-schema-status: stub
+  /api/invitations/accept:
+    post:
+      operationId: postInvitationsAccept
+      tags: [workspaces]
+      x-overlord-permission: unknown
+      x-overlord-edition: both
+      x-overlord-consumers: [webapp]
+      x-overlord-schema-status: stub
+  "/api/workspaces/{id}/objectives.csv":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      operationId: getWorkspacesByIdObjectivesCsv
+      tags: [workspaces]
+      x-overlord-permission: workspace:read
+      x-overlord-edition: both
+      x-overlord-consumers: [webapp]
+      x-overlord-schema-status: stub
+  "/api/workspaces/{id}/projects":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      operationId: getWorkspacesByIdProjects
+      tags: [projects]
+      x-overlord-permission: project:read
+      x-overlord-edition: both
+      x-overlord-consumers: [cli, mobile, webapp]
+      x-overlord-schema-status: stub
+  "/api/workspaces/{id}/project-statuses":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      operationId: getWorkspacesByIdProjectStatuses
+      tags: [project-statuses]
+      x-overlord-permission: workspace:read
+      x-overlord-edition: both
+      x-overlord-consumers: [mobile, webapp]
+      x-overlord-schema-status: stub
+  "/api/workspaces/{id}/execution-targets":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      operationId: getWorkspacesByIdExecutionTargets
+      tags: [execution-targets]
+      x-overlord-permission: workspace:read
+      x-overlord-edition: both
+      x-overlord-consumers: [webapp]
+      x-overlord-schema-status: stub
+    post:
+      operationId: postWorkspacesByIdExecutionTargets
+      tags: [execution-targets]
+      x-overlord-permission: execution_request:claim
+      x-overlord-edition: both
+      x-overlord-consumers: [webapp]
+      x-overlord-schema-status: stub
+  "/api/workspaces/{id}/execution-targets/{targetId}":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: targetId
+        in: path
+        required: true
+        schema:
+          type: string
+    patch:
+      operationId: patchWorkspacesByIdExecutionTargetsByTargetId
+      tags: [execution-targets]
+      x-overlord-permission: workspace:update
+      x-overlord-edition: both
+      x-overlord-consumers: [webapp]
+      x-overlord-schema-status: stub
+    delete:
+      operationId: deleteWorkspacesByIdExecutionTargetsByTargetId
+      tags: [execution-targets]
+      x-overlord-permission: workspace:update
+      x-overlord-edition: both
+      x-overlord-consumers: [webapp]
+      x-overlord-schema-status: stub
+  "/api/workspaces/{id}/agent-catalog":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      operationId: getWorkspacesByIdAgentCatalog
+      tags: [agent-catalog]
+      x-overlord-permission: launch:read
+      x-overlord-edition: both
+      x-overlord-consumers: [mobile, webapp]
+      x-overlord-schema-status: stub
+    put:
+      operationId: putWorkspacesByIdAgentCatalog
+      tags: [agent-catalog]
+      x-overlord-permission: launch:configure
+      x-overlord-edition: both
+      x-overlord-consumers: [mobile, webapp]
+      x-overlord-schema-status: stub
+  "/api/workspaces/{id}/agent-catalog/refresh":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      operationId: postWorkspacesByIdAgentCatalogRefresh
+      tags: [agent-catalog]
+      x-overlord-permission: launch:configure
+      x-overlord-edition: both
+      x-overlord-consumers: [mobile, webapp]
+      x-overlord-schema-status: stub
+  /api/profile:
+    get:
+      operationId: getProfile
+      tags: [profile]
+      x-overlord-permission: profile:self:read
+      x-overlord-edition: both
+      x-overlord-consumers: [webapp]
+      x-overlord-schema-status: stub
+    patch:
+      operationId: patchProfile
+      tags: [profile]
+      x-overlord-permission: profile:self:update
+      x-overlord-edition: both
+      x-overlord-consumers: [webapp]
+      x-overlord-schema-status: stub
+  /api/profile/default-project:
+    get:
+      operationId: getProfileDefaultProject
+      tags: [profile]
+      x-overlord-permission: profile:self:read
+      x-overlord-edition: both
+      x-overlord-consumers: [webapp]
+      x-overlord-schema-status: stub
+    put:
+      operationId: putProfileDefaultProject
+      tags: [profile]
+      x-overlord-permission: profile:self:update
+      x-overlord-edition: both
+      x-overlord-consumers: [mobile, webapp]
+      x-overlord-schema-status: stub
+    delete:
+      operationId: deleteProfileDefaultProject
+      tags: [profile]
+      x-overlord-permission: profile:self:update
+      x-overlord-edition: both
+      x-overlord-consumers: [webapp]
+      x-overlord-schema-status: stub
+  /api/user-tokens:
+    get:
+      operationId: getUserTokens
+      tags: [user-tokens]
+      x-overlord-permission: user_token:self:list
+      x-overlord-edition: both
+      x-overlord-consumers: [cli, webapp]
+      x-overlord-schema-status: stub
+    post:
+      operationId: postUserTokens
+      tags: [user-tokens]
+      x-overlord-permission: user_token:self:create
+      x-overlord-edition: both
+      x-overlord-consumers: [cli, webapp]
+      x-overlord-schema-status: stub
+  "/api/user-tokens/{id}":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    patch:
+      operationId: patchUserTokensById
+      tags: [user-tokens]
+      x-overlord-permission: user_token:self:rotate
+      x-overlord-edition: both
+      x-overlord-consumers: [cli, webapp]
+      x-overlord-schema-status: stub
+    delete:
+      operationId: deleteUserTokensById
+      tags: [user-tokens]
+      x-overlord-permission: user_token:self:revoke
+      x-overlord-edition: both
+      x-overlord-consumers: [webapp]
+      x-overlord-schema-status: stub
+  "/api/user-tokens/{id}/revoke":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      operationId: postUserTokensByIdRevoke
+      tags: [user-tokens]
+      x-overlord-permission: user_token:self:revoke
+      x-overlord-edition: both
+      x-overlord-consumers: [cli, webapp]
+      x-overlord-schema-status: stub
+  /api/webhooks:
+    get:
+      operationId: getWebhooks
+      tags: [webhooks]
+      x-overlord-permission: webhook:read
+      x-overlord-edition: both
+      x-overlord-consumers: [webapp]
+      x-overlord-schema-status: stub
+    post:
+      operationId: postWebhooks
+      tags: [webhooks]
+      x-overlord-permission: webhook:create
+      x-overlord-edition: both
+      x-overlord-consumers: [webapp]
+      x-overlord-schema-status: stub
+  "/api/webhooks/{id}":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    patch:
+      operationId: patchWebhooksById
+      tags: [webhooks]
+      x-overlord-permission: webhook:update
+      x-overlord-edition: both
+      x-overlord-consumers: [webapp]
+      x-overlord-schema-status: stub
+    delete:
+      operationId: deleteWebhooksById
+      tags: [webhooks]
+      x-overlord-permission: webhook:delete
+      x-overlord-edition: both
+      x-overlord-consumers: [webapp]
+      x-overlord-schema-status: stub
+  "/api/webhooks/{id}/rotate-secret":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      operationId: postWebhooksByIdRotateSecret
+      tags: [webhooks]
+      x-overlord-permission: webhook:update
+      x-overlord-edition: both
+      x-overlord-consumers: [webapp]
+      x-overlord-schema-status: stub
+  "/api/webhooks/{id}/test":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      operationId: postWebhooksByIdTest
+      tags: [webhooks]
+      x-overlord-permission: webhook:update
+      x-overlord-edition: both
+      x-overlord-consumers: [webapp]
+      x-overlord-schema-status: stub
+  "/api/webhooks/{id}/deliveries":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      operationId: getWebhooksByIdDeliveries
+      tags: [webhooks]
+      x-overlord-permission: webhook:read
+      x-overlord-edition: both
+      x-overlord-consumers: [webapp]
+      x-overlord-schema-status: stub
+  "/api/webhooks/{id}/deliveries/{outboxId}/redeliver":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: outboxId
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      operationId: postWebhooksByIdDeliveriesByOutboxIdRedeliver
+      tags: [webhooks]
+      x-overlord-permission: webhook:update
+      x-overlord-edition: both
+      x-overlord-consumers: [webapp]
+      x-overlord-schema-status: stub
+  "/api/uploads/{bucketKey}":
+    parameters:
+      - name: bucketKey
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      operationId: postUploadsByBucketKey
+      tags: [storage]
+      x-overlord-permission: unknown
+      x-overlord-edition: both
+      x-overlord-consumers: [cli, webapp]
+      x-overlord-schema-status: stub
+  "/api/storage/{bucketKey}/{storageKey}":
+    parameters:
+      - name: bucketKey
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: storageKey
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      operationId: getStorageByBucketKeyByStorageKey
+      tags: [storage]
+      x-overlord-permission: unknown
+      x-overlord-edition: both
+      x-overlord-consumers: [cli, mobile, webapp]
+      x-overlord-schema-status: stub
+  /api/stream:
+    get:
+      operationId: getStream
+      tags: [realtime]
+      x-overlord-permission: unknown
+      x-overlord-edition: both
+      x-overlord-consumers: [unverified]
+      x-overlord-schema-status: stub
+  /realtime:
+    get:
+      operationId: getRealtime
+      tags: [realtime]
+      x-overlord-permission: unknown
+      x-overlord-edition: both
+      x-overlord-consumers: [mobile, webapp]
+      x-overlord-schema-status: stub
+  /sync/changes:
+    get:
+      operationId: getSyncChanges
+      tags: [realtime]
+      x-overlord-permission: project:read
+      x-overlord-edition: both
+      x-overlord-consumers: [mobile, webapp]
+      x-overlord-schema-status: stub
+  /api/projects:
+    get:
+      operationId: getProjects
+      tags: [projects]
+      x-overlord-permission: project:read
+      x-overlord-edition: both
+      x-overlord-consumers: [cli, mobile, webapp]
+      x-overlord-schema-status: stub
+    post:
+      operationId: postProjects
+      tags: [projects]
+      x-overlord-permission: project:create
+      x-overlord-edition: both
+      x-overlord-consumers: [cli, webapp]
+      x-overlord-schema-status: stub
+  /api/projects/initialize:
+    post:
+      operationId: postProjectsInitialize
+      tags: [projects]
+      x-overlord-permission: project:create
+      x-overlord-edition: both
+      x-overlord-consumers: [mobile]
+      x-overlord-schema-status: stub
+  /api/projects/reorder:
+    patch:
+      operationId: patchProjectsReorder
+      tags: [projects]
+      x-overlord-permission: project:update
+      x-overlord-edition: both
+      x-overlord-consumers: [webapp]
+      x-overlord-schema-status: stub
+  "/api/projects/{id}":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      operationId: getProjectsById
+      tags: [projects]
+      x-overlord-permission: project:read
+      x-overlord-edition: both
+      x-overlord-consumers: [cli, webapp]
+      x-overlord-schema-status: stub
+    patch:
+      operationId: patchProjectsById
+      tags: [projects]
+      x-overlord-permission: project:update
+      x-overlord-edition: both
+      x-overlord-consumers: [mobile, webapp]
+      x-overlord-schema-status: stub
+    delete:
+      operationId: deleteProjectsById
+      tags: [projects]
+      x-overlord-permission: project:delete
+      x-overlord-edition: both
+      x-overlord-consumers: [webapp]
+      x-overlord-schema-status: stub
+  "/api/projects/{id}/run-queues":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      operationId: getProjectsByIdRunQueues
+      tags: [run-queues]
+      x-overlord-permission: objective:read
+      x-overlord-edition: both
+      x-overlord-consumers: [mobile, webapp]
+      x-overlord-schema-status: stub
+    post:
+      operationId: postProjectsByIdRunQueues
+      tags: [run-queues]
+      x-overlord-permission: project:update
+      x-overlord-edition: both
+      x-overlord-consumers: [mobile, webapp]
+      x-overlord-schema-status: stub
+  "/api/projects/{id}/run-queues/order":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    patch:
+      operationId: patchProjectsByIdRunQueuesOrder
+      tags: [run-queues]
+      x-overlord-permission: project:update
+      x-overlord-edition: both
+      x-overlord-consumers: [mobile, webapp]
+      x-overlord-schema-status: stub
+  "/api/projects/{id}/run-queues/entries":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      operationId: postProjectsByIdRunQueuesEntries
+      tags: [run-queues]
+      x-overlord-permission: execution_request:create
+      x-overlord-edition: both
+      x-overlord-consumers: [mobile, webapp]
+      x-overlord-schema-status: stub
+  "/api/run-queues/{queueId}":
+    parameters:
+      - name: queueId
+        in: path
+        required: true
+        schema:
+          type: string
+    patch:
+      operationId: patchRunQueuesByQueueId
+      tags: [run-queues]
+      x-overlord-permission: project:update
+      x-overlord-edition: both
+      x-overlord-consumers: [mobile, webapp]
+      x-overlord-schema-status: stub
+    delete:
+      operationId: deleteRunQueuesByQueueId
+      tags: [run-queues]
+      x-overlord-permission: project:update
+      x-overlord-edition: both
+      x-overlord-consumers: [mobile, webapp]
+      x-overlord-schema-status: stub
+  "/api/run-queues/{queueId}/order":
+    parameters:
+      - name: queueId
+        in: path
+        required: true
+        schema:
+          type: string
+    patch:
+      operationId: patchRunQueuesByQueueIdOrder
+      tags: [run-queues]
+      x-overlord-permission: execution_request:create
+      x-overlord-edition: both
+      x-overlord-consumers: [mobile, webapp]
+      x-overlord-schema-status: stub
+  "/api/run-queues/entries/{entryId}":
+    parameters:
+      - name: entryId
+        in: path
+        required: true
+        schema:
+          type: string
+    patch:
+      operationId: patchRunQueuesEntriesByEntryId
+      tags: [run-queues]
+      x-overlord-permission: execution_request:create
+      x-overlord-edition: both
+      x-overlord-consumers: [mobile, webapp]
+      x-overlord-schema-status: stub
+    delete:
+      operationId: deleteRunQueuesEntriesByEntryId
+      tags: [run-queues]
+      x-overlord-permission: execution_request:create
+      x-overlord-edition: both
+      x-overlord-consumers: [mobile, webapp]
+      x-overlord-schema-status: stub
+  "/api/projects/{id}/statuses":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      operationId: getProjectsByIdStatuses
+      tags: [project-statuses]
+      x-overlord-permission: project:read
+      x-overlord-edition: both
+      x-overlord-consumers: [cli, webapp]
+      x-overlord-schema-status: stub
+    post:
+      operationId: postProjectsByIdStatuses
+      tags: [project-statuses]
+      x-overlord-permission: project:update
+      x-overlord-edition: both
+      x-overlord-consumers: [mobile, webapp]
+      x-overlord-schema-status: stub
+  "/api/projects/{id}/statuses/reorder":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    patch:
+      operationId: patchProjectsByIdStatusesReorder
+      tags: [project-statuses]
+      x-overlord-permission: project:update
+      x-overlord-edition: both
+      x-overlord-consumers: [mobile, webapp]
+      x-overlord-schema-status: stub
+  "/api/projects/{id}/statuses/{statusId}":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: statusId
+        in: path
+        required: true
+        schema:
+          type: string
+    patch:
+      operationId: patchProjectsByIdStatusesByStatusId
+      tags: [project-statuses]
+      x-overlord-permission: project:update
+      x-overlord-edition: both
+      x-overlord-consumers: [mobile, webapp]
+      x-overlord-schema-status: stub
+    delete:
+      operationId: deleteProjectsByIdStatusesByStatusId
+      tags: [project-statuses]
+      x-overlord-permission: project:update
+      x-overlord-edition: both
+      x-overlord-consumers: [mobile, webapp]
+      x-overlord-schema-status: stub
+  /api/activity-feed:
+    get:
+      operationId: getActivityFeed
+      tags: [activity]
+      x-overlord-permission: mission:read
+      x-overlord-edition: both
+      x-overlord-consumers: [mobile, webapp]
+      x-overlord-schema-status: stub
+  /api/objective-transcript:
+    get:
+      operationId: getObjectiveTranscript
+      tags: [activity]
+      x-overlord-permission: unknown
+      x-overlord-permission-candidates: [mission:read, objective:read]
+      x-overlord-edition: both
+      x-overlord-consumers: [mobile]
+      x-overlord-schema-status: stub
+  "/api/deliveries/{deliveryId}/deferred-work/{actionId}/resolution":
+    parameters:
+      - name: deliveryId
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: actionId
+        in: path
+        required: true
+        schema:
+          type: string
+    put:
+      operationId: putDeliveriesByDeliveryIdDeferredWorkByActionIdResolution
+      tags: [deliveries]
+      x-overlord-permission: mission:update
+      x-overlord-edition: both
+      x-overlord-consumers: [mobile, webapp]
+      x-overlord-schema-status: stub
+    delete:
+      operationId: deleteDeliveriesByDeliveryIdDeferredWorkByActionIdResolution
+      tags: [deliveries]
+      x-overlord-permission: mission:update
+      x-overlord-edition: both
+      x-overlord-consumers: [mobile, webapp]
+      x-overlord-schema-status: stub
+  /api/inbox/missions:
+    get:
+      operationId: getInboxMissions
+      tags: [inbox]
+      x-overlord-permission: mission:read
+      x-overlord-edition: both
+      x-overlord-consumers: [mobile, webapp]
+      x-overlord-schema-status: stub
+  "/api/mobile/live-activities/{activityId}/push-token":
+    parameters:
+      - name: activityId
+        in: path
+        required: true
+        schema:
+          type: string
+    put:
+      operationId: putMobileLiveActivitiesByActivityIdPushToken
+      tags: [mobile]
+      x-overlord-permission: owner
+      x-overlord-edition: both
+      x-overlord-consumers: [mobile]
+      x-overlord-schema-status: stub
+    delete:
+      operationId: deleteMobileLiveActivitiesByActivityIdPushToken
+      tags: [mobile]
+      x-overlord-permission: owner
+      x-overlord-edition: both
+      x-overlord-consumers: [mobile]
+      x-overlord-schema-status: stub
+  /api/mobile/live-activities/start-token:
+    put:
+      operationId: putMobileLiveActivitiesStartToken
+      tags: [mobile]
+      x-overlord-permission: owner
+      x-overlord-edition: both
+      x-overlord-consumers: [mobile]
+      x-overlord-schema-status: stub
+  /api/mobile/live-activities/start-token/revoke:
+    post:
+      operationId: postMobileLiveActivitiesStartTokenRevoke
+      tags: [mobile]
+      x-overlord-permission: owner
+      x-overlord-edition: both
+      x-overlord-consumers: [mobile]
+      x-overlord-schema-status: stub
+  /api/mobile/push/device-token:
+    put:
+      operationId: putMobilePushDeviceToken
+      tags: [mobile]
+      x-overlord-permission: owner
+      x-overlord-edition: both
+      x-overlord-consumers: [mobile]
+      x-overlord-schema-status: stub
+  /api/mobile/push/device-token/revoke:
+    post:
+      operationId: postMobilePushDeviceTokenRevoke
+      tags: [mobile]
+      x-overlord-permission: owner
+      x-overlord-edition: both
+      x-overlord-consumers: [mobile]
+      x-overlord-schema-status: stub
+  /api/profile/notification-preferences:
+    get:
+      operationId: getProfileNotificationPreferences
+      tags: [notifications]
+      x-overlord-permission: owner
+      x-overlord-edition: both
+      x-overlord-consumers: [mobile, webapp]
+      x-overlord-schema-status: stub
+    put:
+      operationId: putProfileNotificationPreferences
+      tags: [notifications]
+      x-overlord-permission: owner
+      x-overlord-edition: both
+      x-overlord-consumers: [mobile, webapp]
+      x-overlord-schema-status: stub
+  /api/notifications:
+    get:
+      operationId: getNotifications
+      tags: [notifications]
+      x-overlord-permission: owner
+      x-overlord-edition: both
+      x-overlord-consumers: [mobile, webapp]
+      x-overlord-schema-status: stub
+  "/api/notifications/{id}/read":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    patch:
+      operationId: patchNotificationsByIdRead
+      tags: [notifications]
+      x-overlord-permission: owner
+      x-overlord-edition: both
+      x-overlord-consumers: [mobile, webapp]
+      x-overlord-schema-status: stub
+  "/api/notifications/{id}":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    delete:
+      operationId: deleteNotificationsById
+      tags: [notifications]
+      x-overlord-permission: owner
+      x-overlord-edition: both
+      x-overlord-consumers: [mobile, webapp]
+      x-overlord-schema-status: stub
+  "/api/projects/{id}/tags":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      operationId: getProjectsByIdTags
+      tags: [projects]
+      x-overlord-permission: project:read
+      x-overlord-edition: both
+      x-overlord-consumers: [mobile, webapp]
+      x-overlord-schema-status: stub
+    post:
+      operationId: postProjectsByIdTags
+      tags: [projects]
+      x-overlord-permission: project:update
+      x-overlord-edition: both
+      x-overlord-consumers: [mobile, webapp]
+      x-overlord-schema-status: stub
+  "/api/projects/{id}/tags/{tagId}":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: tagId
+        in: path
+        required: true
+        schema:
+          type: string
+    patch:
+      operationId: patchProjectsByIdTagsByTagId
+      tags: [projects]
+      x-overlord-permission: project:update
+      x-overlord-edition: both
+      x-overlord-consumers: [mobile, webapp]
+      x-overlord-schema-status: stub
+    delete:
+      operationId: deleteProjectsByIdTagsByTagId
+      tags: [projects]
+      x-overlord-permission: project:update
+      x-overlord-edition: both
+      x-overlord-consumers: [webapp]
+      x-overlord-schema-status: stub
+  "/api/projects/{id}/resources":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      operationId: getProjectsByIdResources
+      tags: [project-resources]
+      x-overlord-permission: project:read
+      x-overlord-edition: both
+      x-overlord-consumers: [cli, mobile, webapp]
+      x-overlord-schema-status: stub
+    post:
+      operationId: postProjectsByIdResources
+      tags: [project-resources]
+      x-overlord-permission: project:update
+      x-overlord-edition: both
+      x-overlord-consumers: [cli, webapp]
+      x-overlord-schema-status: stub
+  "/api/projects/{id}/resources/{resourceId}":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: resourceId
+        in: path
+        required: true
+        schema:
+          type: string
+    patch:
+      operationId: patchProjectsByIdResourcesByResourceId
+      tags: [project-resources]
+      x-overlord-permission: project:update
+      x-overlord-edition: both
+      x-overlord-consumers: [webapp]
+      x-overlord-schema-status: stub
+    delete:
+      operationId: deleteProjectsByIdResourcesByResourceId
+      tags: [project-resources]
+      x-overlord-permission: project:update
+      x-overlord-edition: both
+      x-overlord-consumers: [webapp]
+      x-overlord-schema-status: stub
+  "/api/projects/{id}/resources/{resourceId}/sources/{sourceId}":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: resourceId
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: sourceId
+        in: path
+        required: true
+        schema:
+          type: string
+    delete:
+      operationId: deleteProjectsByIdResourcesByResourceIdSourcesBySourceId
+      tags: [project-resources]
+      x-overlord-permission: project:update
+      x-overlord-edition: both
+      x-overlord-consumers: [webapp]
+      x-overlord-schema-status: stub
+    patch:
+      operationId: patchProjectsByIdResourcesByResourceIdSourcesBySourceId
+      tags: [project-resources]
+      x-overlord-permission: project:update
+      x-overlord-edition: both
+      x-overlord-consumers: [webapp]
+      x-overlord-schema-status: stub
+  "/api/projects/{id}/repository-reads":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      operationId: postProjectsByIdRepositoryReads
+      tags: [projects]
+      x-overlord-permission: project:read
+      x-overlord-edition: both
+      x-overlord-consumers: [unverified]
+      x-overlord-schema-status: stub
+  "/api/projects/{id}/repository":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      operationId: getProjectsByIdRepository
+      tags: [projects]
+      x-overlord-permission: project:read
+      x-overlord-edition: both
+      x-overlord-consumers: [webapp]
+      x-overlord-schema-status: stub
+  /api/local-target/invoke:
+    post:
+      operationId: postLocalTargetInvoke
+      tags: [local-target]
+      x-overlord-permission: project:read
+      x-overlord-edition: local
+      x-overlord-consumers: [webapp]
+      x-overlord-schema-status: stub
+  "/api/projects/{id}/missions":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      operationId: getProjectsByIdMissions
+      tags: [missions]
+      x-overlord-permission: unknown
+      x-overlord-permission-candidates: [mission:read, objective:read]
+      x-overlord-edition: both
+      x-overlord-consumers: [mobile, webapp]
+      x-overlord-schema-status: stub
+  /ext/everhour/user-connection:
+    get:
+      operationId: getExtEverhourUserConnection
+      tags: [everhour]
+      x-overlord-permission: owner
+      x-overlord-edition: both
+      x-overlord-consumers: [unverified]
+      x-overlord-extension: everhour
+      x-overlord-schema-status: stub
+    put:
+      operationId: putExtEverhourUserConnection
+      tags: [everhour]
+      x-overlord-permission: owner
+      x-overlord-edition: both
+      x-overlord-consumers: [unverified]
+      x-overlord-extension: everhour
+      x-overlord-schema-status: stub
+    delete:
+      operationId: deleteExtEverhourUserConnection
+      tags: [everhour]
+      x-overlord-permission: owner
+      x-overlord-edition: both
+      x-overlord-consumers: [unverified]
+      x-overlord-extension: everhour
+      x-overlord-schema-status: stub
+  /ext/everhour/integration:
+    get:
+      operationId: getExtEverhourIntegration
+      tags: [everhour]
+      x-overlord-permission: owner
+      x-overlord-edition: both
+      x-overlord-consumers: [unverified]
+      x-overlord-extension: everhour
+      x-overlord-schema-status: stub
+    put:
+      operationId: putExtEverhourIntegration
+      tags: [everhour]
+      x-overlord-permission: owner
+      x-overlord-edition: both
+      x-overlord-consumers: [unverified]
+      x-overlord-extension: everhour
+      x-overlord-schema-status: stub
+    delete:
+      operationId: deleteExtEverhourIntegration
+      tags: [everhour]
+      x-overlord-permission: owner
+      x-overlord-edition: both
+      x-overlord-consumers: [unverified]
+      x-overlord-extension: everhour
+      x-overlord-schema-status: stub
+  "/ext/everhour/projects/{projectId}/link":
+    parameters:
+      - name: projectId
+        in: path
+        required: true
+        schema:
+          type: string
+    put:
+      operationId: putExtEverhourProjectsByProjectIdLink
+      tags: [everhour]
+      x-overlord-permission: project:update
+      x-overlord-edition: both
+      x-overlord-consumers: [webapp]
+      x-overlord-extension: everhour
+      x-overlord-schema-status: stub
+    get:
+      operationId: getExtEverhourProjectsByProjectIdLink
+      tags: [everhour]
+      x-overlord-permission: project:read
+      x-overlord-edition: both
+      x-overlord-consumers: [webapp]
+      x-overlord-extension: everhour
+      x-overlord-schema-status: stub
+  "/ext/everhour/projects/{projectId}":
+    parameters:
+      - name: projectId
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      operationId: getExtEverhourProjectsByProjectId
+      tags: [everhour]
+      x-overlord-permission: project:read
+      x-overlord-edition: both
+      x-overlord-consumers: [webapp]
+      x-overlord-extension: everhour
+      x-overlord-schema-status: stub
+  "/ext/everhour/projects/{projectId}/timer/start":
+    parameters:
+      - name: projectId
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      operationId: postExtEverhourProjectsByProjectIdTimerStart
+      tags: [everhour]
+      x-overlord-permission: project:update
+      x-overlord-edition: both
+      x-overlord-consumers: [webapp]
+      x-overlord-extension: everhour
+      x-overlord-schema-status: stub
+  "/ext/everhour/projects/{projectId}/timer/stop":
+    parameters:
+      - name: projectId
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      operationId: postExtEverhourProjectsByProjectIdTimerStop
+      tags: [everhour]
+      x-overlord-permission: project:update
+      x-overlord-edition: both
+      x-overlord-consumers: [webapp]
+      x-overlord-extension: everhour
+      x-overlord-schema-status: stub
+  "/ext/everhour/projects/{projectId}/time":
+    parameters:
+      - name: projectId
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      operationId: postExtEverhourProjectsByProjectIdTime
+      tags: [everhour]
+      x-overlord-permission: project:update
+      x-overlord-edition: both
+      x-overlord-consumers: [webapp]
+      x-overlord-extension: everhour
+      x-overlord-schema-status: stub
+  "/ext/everhour/projects/{projectId}/time/{recordId}":
+    parameters:
+      - name: projectId
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: recordId
+        in: path
+        required: true
+        schema:
+          type: string
+    patch:
+      operationId: patchExtEverhourProjectsByProjectIdTimeByRecordId
+      tags: [everhour]
+      x-overlord-permission: project:update
+      x-overlord-edition: both
+      x-overlord-consumers: [webapp]
+      x-overlord-extension: everhour
+      x-overlord-schema-status: stub
+    delete:
+      operationId: deleteExtEverhourProjectsByProjectIdTimeByRecordId
+      tags: [everhour]
+      x-overlord-permission: project:update
+      x-overlord-edition: both
+      x-overlord-consumers: [webapp]
+      x-overlord-extension: everhour
+      x-overlord-schema-status: stub
+  "/ext/everhour/missions/{missionId}":
+    parameters:
+      - name: missionId
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      operationId: getExtEverhourMissionsByMissionId
+      tags: [everhour]
+      x-overlord-permission: mission:read
+      x-overlord-edition: both
+      x-overlord-consumers: [webapp]
+      x-overlord-extension: everhour
+      x-overlord-schema-status: stub
+  "/ext/everhour/missions/{missionId}/timer/start":
+    parameters:
+      - name: missionId
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      operationId: postExtEverhourMissionsByMissionIdTimerStart
+      tags: [everhour]
+      x-overlord-permission: mission:update
+      x-overlord-edition: both
+      x-overlord-consumers: [webapp]
+      x-overlord-extension: everhour
+      x-overlord-schema-status: stub
+  "/ext/everhour/missions/{missionId}/timer/stop":
+    parameters:
+      - name: missionId
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      operationId: postExtEverhourMissionsByMissionIdTimerStop
+      tags: [everhour]
+      x-overlord-permission: mission:update
+      x-overlord-edition: both
+      x-overlord-consumers: [webapp]
+      x-overlord-extension: everhour
+      x-overlord-schema-status: stub
+  "/ext/everhour/missions/{missionId}/time":
+    parameters:
+      - name: missionId
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      operationId: postExtEverhourMissionsByMissionIdTime
+      tags: [everhour]
+      x-overlord-permission: mission:update
+      x-overlord-edition: both
+      x-overlord-consumers: [webapp]
+      x-overlord-extension: everhour
+      x-overlord-schema-status: stub
+  "/ext/everhour/missions/{missionId}/time/{recordId}":
+    parameters:
+      - name: missionId
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: recordId
+        in: path
+        required: true
+        schema:
+          type: string
+    patch:
+      operationId: patchExtEverhourMissionsByMissionIdTimeByRecordId
+      tags: [everhour]
+      x-overlord-permission: mission:update
+      x-overlord-edition: both
+      x-overlord-consumers: [webapp]
+      x-overlord-extension: everhour
+      x-overlord-schema-status: stub
+    delete:
+      operationId: deleteExtEverhourMissionsByMissionIdTimeByRecordId
+      tags: [everhour]
+      x-overlord-permission: mission:update
+      x-overlord-edition: both
+      x-overlord-consumers: [webapp]
+      x-overlord-extension: everhour
+      x-overlord-schema-status: stub
+  /ext/github/user-connection:
+    get:
+      operationId: getExtGithubUserConnection
+      tags: [github]
+      x-overlord-permission: owner
+      x-overlord-edition: both
+      x-overlord-consumers: [unverified]
+      x-overlord-extension: github
+      x-overlord-schema-status: stub
+    delete:
+      operationId: deleteExtGithubUserConnection
+      tags: [github]
+      x-overlord-permission: owner
+      x-overlord-edition: both
+      x-overlord-consumers: [unverified]
+      x-overlord-extension: github
+      x-overlord-schema-status: stub
+  /ext/github/user-connection/authorize:
+    post:
+      operationId: postExtGithubUserConnectionAuthorize
+      tags: [github]
+      x-overlord-permission: owner
+      x-overlord-edition: both
+      x-overlord-consumers: [unverified]
+      x-overlord-extension: github
+      x-overlord-schema-status: stub
+  /ext/github/repository-owners:
+    get:
+      operationId: getExtGithubRepositoryOwners
+      tags: [github]
+      x-overlord-permission: owner
+      x-overlord-edition: both
+      x-overlord-consumers: [mobile]
+      x-overlord-extension: github
+      x-overlord-schema-status: stub
+  /ext/github/integration:
+    get:
+      operationId: getExtGithubIntegration
+      tags: [github]
+      x-overlord-permission: workspace:read
+      x-overlord-edition: both
+      x-overlord-consumers: [webapp]
+      x-overlord-extension: github
+      x-overlord-schema-status: stub
+    delete:
+      operationId: deleteExtGithubIntegration
+      tags: [github]
+      x-overlord-permission: workspace:update
+      x-overlord-edition: both
+      x-overlord-consumers: [webapp]
+      x-overlord-extension: github
+      x-overlord-schema-status: stub
+  /ext/github/install:
+    post:
+      operationId: postExtGithubInstall
+      tags: [github]
+      x-overlord-permission: workspace:update
+      x-overlord-edition: both
+      x-overlord-consumers: [webapp]
+      x-overlord-extension: github
+      x-overlord-schema-status: stub
+  /ext/github/callback:
+    get:
+      operationId: getExtGithubCallback
+      tags: [github]
+      x-overlord-permission: workspace:update
+      x-overlord-edition: both
+      x-overlord-consumers: [external]
+      x-overlord-extension: github
+      x-overlord-schema-status: stub
+  /ext/github/repos:
+    get:
+      operationId: getExtGithubRepos
+      tags: [github]
+      x-overlord-permission: project:read
+      x-overlord-edition: both
+      x-overlord-consumers: [webapp]
+      x-overlord-extension: github
+      x-overlord-schema-status: stub
+  "/ext/github/projects/{projectId}/link":
+    parameters:
+      - name: projectId
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      operationId: getExtGithubProjectsByProjectIdLink
+      tags: [github]
+      x-overlord-permission: project:read
+      x-overlord-edition: both
+      x-overlord-consumers: [webapp]
+      x-overlord-extension: github
+      x-overlord-schema-status: stub
+    put:
+      operationId: putExtGithubProjectsByProjectIdLink
+      tags: [github]
+      x-overlord-permission: project:update
+      x-overlord-edition: both
+      x-overlord-consumers: [webapp]
+      x-overlord-extension: github
+      x-overlord-schema-status: stub
+  "/ext/github/missions/{missionId}/pull-request":
+    parameters:
+      - name: missionId
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      operationId: getExtGithubMissionsByMissionIdPullRequest
+      tags: [github]
+      x-overlord-permission: mission:read
+      x-overlord-edition: both
+      x-overlord-consumers: [webapp]
+      x-overlord-extension: github
+      x-overlord-schema-status: stub
+    post:
+      operationId: postExtGithubMissionsByMissionIdPullRequest
+      tags: [github]
+      x-overlord-permission: mission:update
+      x-overlord-edition: both
+      x-overlord-consumers: [webapp]
+      x-overlord-extension: github
+      x-overlord-schema-status: stub
+  "/api/projects/{id}/board/reorder":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    patch:
+      operationId: patchProjectsByIdBoardReorder
+      tags: [projects]
+      x-overlord-permission: mission:update
+      x-overlord-edition: both
+      x-overlord-consumers: [mobile, webapp]
+      x-overlord-schema-status: stub
+  /api/inbox:
+    get:
+      operationId: getInbox
+      tags: [inbox]
+      x-overlord-permission: owner
+      x-overlord-edition: both
+      x-overlord-consumers: [mobile, webapp]
+      x-overlord-schema-status: stub
+    post:
+      operationId: postInbox
+      tags: [inbox]
+      x-overlord-permission: owner
+      x-overlord-edition: both
+      x-overlord-consumers: [mobile, webapp]
+      x-overlord-schema-status: stub
+  "/api/inbox/{id}":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      operationId: getInboxById
+      tags: [inbox]
+      x-overlord-permission: owner
+      x-overlord-edition: both
+      x-overlord-consumers: [mobile]
+      x-overlord-schema-status: stub
+    patch:
+      operationId: patchInboxById
+      tags: [inbox]
+      x-overlord-permission: owner
+      x-overlord-edition: both
+      x-overlord-consumers: [mobile, webapp]
+      x-overlord-schema-status: stub
+    delete:
+      operationId: deleteInboxById
+      tags: [inbox]
+      x-overlord-permission: owner
+      x-overlord-edition: both
+      x-overlord-consumers: [mobile, webapp]
+      x-overlord-schema-status: stub
+  "/api/inbox/{id}/promote":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      operationId: postInboxByIdPromote
+      tags: [inbox]
+      x-overlord-permission: mission:create
+      x-overlord-edition: both
+      x-overlord-consumers: [mobile, webapp]
+      x-overlord-schema-status: stub
+  /api/missions/search:
+    get:
+      operationId: getMissionsSearch
+      tags: [missions]
+      x-overlord-permission: mission:read
+      x-overlord-edition: both
+      x-overlord-consumers: [cli, webapp]
+      x-overlord-schema-status: stub
+  /api/missions/search/v2:
+    get:
+      operationId: getMissionsSearchV2
+      tags: [missions]
+      x-overlord-permission: mission:read
+      x-overlord-edition: both
+      x-overlord-consumers: [webapp]
+      x-overlord-schema-status: stub
+  /api/search/v3:
+    get:
+      operationId: getSearchV3
+      tags: [missions]
+      x-overlord-permission: mission:read
+      x-overlord-edition: both
+      x-overlord-consumers: [mobile, webapp]
+      x-overlord-schema-status: stub
+  /api/missions:
+    post:
+      operationId: postMissions
+      tags: [missions]
+      x-overlord-permission: mission:create
+      x-overlord-edition: both
+      x-overlord-consumers: [cli, mobile, webapp]
+      x-overlord-schema-status: stub
+  "/api/missions/{id}":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      operationId: getMissionsById
+      tags: [missions]
+      x-overlord-permission: unknown
+      x-overlord-permission-candidates: [mission:read, objective:read]
+      x-overlord-edition: both
+      x-overlord-consumers: [cli, mobile, webapp]
+      x-overlord-schema-status: stub
+    patch:
+      operationId: patchMissionsById
+      tags: [missions]
+      x-overlord-permission: mission:update
+      x-overlord-edition: both
+      x-overlord-consumers: [mobile, webapp]
+      x-overlord-schema-status: stub
+    delete:
+      operationId: deleteMissionsById
+      tags: [missions]
+      x-overlord-permission: mission:delete
+      x-overlord-edition: both
+      x-overlord-consumers: [mobile, webapp]
+      x-overlord-schema-status: stub
+  "/api/missions/{id}/generate-title":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      operationId: postMissionsByIdGenerateTitle
+      tags: [missions]
+      x-overlord-permission: unknown
+      x-overlord-permission-candidates: [mission:read, objective:read]
+      x-overlord-edition: both
+      x-overlord-consumers: [webapp]
+      x-overlord-schema-status: stub
+  "/api/missions/{id}/generate-commit-message":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      operationId: postMissionsByIdGenerateCommitMessage
+      tags: [missions]
+      x-overlord-permission: mission:update
+      x-overlord-edition: both
+      x-overlord-consumers: [webapp]
+      x-overlord-schema-status: stub
+  "/api/missions/{id}/objectives":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      operationId: getMissionsByIdObjectives
+      tags: [missions]
+      x-overlord-permission: objective:read
+      x-overlord-edition: both
+      x-overlord-consumers: [unverified]
+      x-overlord-schema-status: stub
+  "/api/missions/{id}/objectives/reorder":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    patch:
+      operationId: patchMissionsByIdObjectivesReorder
+      tags: [missions]
+      x-overlord-permission: objective:update
+      x-overlord-edition: both
+      x-overlord-consumers: [mobile, webapp]
+      x-overlord-schema-status: stub
+  "/api/missions/{id}/session-channel":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      operationId: postMissionsByIdSessionChannel
+      tags: [agent-session-channels]
+      x-overlord-permission: unknown
+      x-overlord-edition: both
+      x-overlord-consumers: [unverified]
+      x-overlord-schema-status: stub
+  "/api/missions/{id}/terminal-sessions/forget":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      operationId: postMissionsByIdTerminalSessionsForget
+      tags: [missions]
+      x-overlord-permission: session:read
+      x-overlord-edition: both
+      x-overlord-consumers: [webapp]
+      x-overlord-schema-status: stub
+  /api/agent-requests:
+    get:
+      operationId: getAgentRequests
+      tags: [agent-requests]
+      x-overlord-permission: session:read
+      x-overlord-edition: both
+      x-overlord-consumers: [cli, mobile, webapp]
+      x-overlord-schema-status: stub
+  "/api/agent-requests/{id}/resolve":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      operationId: postAgentRequestsByIdResolve
+      tags: [agent-requests]
+      x-overlord-permission: session:attach
+      x-overlord-edition: both
+      x-overlord-consumers: [cli, mobile, webapp]
+      x-overlord-schema-status: stub
+  "/api/agent-requests/{id}/release":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      operationId: postAgentRequestsByIdRelease
+      tags: [agent-requests]
+      x-overlord-permission: unknown
+      x-overlord-edition: both
+      x-overlord-consumers: [webapp]
+      x-overlord-schema-status: stub
+  /api/agent-session-inputs:
+    get:
+      operationId: getAgentSessionInputs
+      tags: [agent-session-inputs]
+      x-overlord-permission: session:read
+      x-overlord-edition: both
+      x-overlord-consumers: [cli, webapp]
+      x-overlord-schema-status: stub
+    post:
+      operationId: postAgentSessionInputs
+      tags: [agent-session-inputs]
+      x-overlord-permission: unknown
+      x-overlord-edition: both
+      x-overlord-consumers: [cli, webapp]
+      x-overlord-schema-status: stub
+  "/api/agent-session-inputs/{id}/cancel":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      operationId: postAgentSessionInputsByIdCancel
+      tags: [agent-session-inputs]
+      x-overlord-permission: unknown
+      x-overlord-edition: both
+      x-overlord-consumers: [webapp]
+      x-overlord-schema-status: stub
+  "/api/missions/{id}/events":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      operationId: getMissionsByIdEvents
+      tags: [missions]
+      x-overlord-permission: event:read
+      x-overlord-edition: both
+      x-overlord-consumers: [cli, mobile, webapp]
+      x-overlord-schema-status: stub
+  "/api/missions/{id}/deliveries":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      operationId: getMissionsByIdDeliveries
+      tags: [missions]
+      x-overlord-permission: mission:read
+      x-overlord-edition: both
+      x-overlord-consumers: [cli, mobile, webapp]
+      x-overlord-schema-status: stub
+  "/api/missions/{id}/summary":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      operationId: getMissionsByIdSummary
+      tags: [missions]
+      x-overlord-permission: mission:read
+      x-overlord-edition: both
+      x-overlord-consumers: [mobile, webapp]
+      x-overlord-schema-status: stub
+  "/api/missions/{id}/summary/seen":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    put:
+      operationId: putMissionsByIdSummarySeen
+      tags: [missions]
+      x-overlord-permission: mission:read
+      x-overlord-edition: both
+      x-overlord-consumers: [mobile, webapp]
+      x-overlord-schema-status: stub
+  "/api/missions/{id}/artifacts":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      operationId: getMissionsByIdArtifacts
+      tags: [missions]
+      x-overlord-permission: artifact:read
+      x-overlord-edition: both
+      x-overlord-consumers: [cli, mobile, webapp]
+      x-overlord-schema-status: stub
+    post:
+      operationId: postMissionsByIdArtifacts
+      tags: [missions]
+      x-overlord-permission: artifact:create
+      x-overlord-edition: both
+      x-overlord-consumers: [webapp]
+      x-overlord-schema-status: stub
+  "/api/missions/{id}/context":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      operationId: getMissionsByIdContext
+      tags: [missions]
+      x-overlord-permission: mission:read
+      x-overlord-edition: both
+      x-overlord-consumers: [webapp]
+      x-overlord-schema-status: stub
+    put:
+      operationId: putMissionsByIdContext
+      tags: [missions]
+      x-overlord-permission: mission:update
+      x-overlord-edition: both
+      x-overlord-consumers: [webapp]
+      x-overlord-schema-status: stub
+  "/api/missions/{id}/artifacts/{artifactId}":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: artifactId
+        in: path
+        required: true
+        schema:
+          type: string
+    patch:
+      operationId: patchMissionsByIdArtifactsByArtifactId
+      tags: [missions]
+      x-overlord-permission: mission:update
+      x-overlord-edition: both
+      x-overlord-consumers: [mobile, webapp]
+      x-overlord-schema-status: stub
+  "/api/missions/{id}/file-changes":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      operationId: getMissionsByIdFileChanges
+      tags: [missions]
+      x-overlord-permission: mission:read
+      x-overlord-edition: both
+      x-overlord-consumers: [cli, mobile, webapp]
+      x-overlord-schema-status: stub
+  /api/missions/schedule/preview:
+    post:
+      operationId: postMissionsSchedulePreview
+      tags: [missions]
+      x-overlord-permission: mission:read
+      x-overlord-edition: both
+      x-overlord-consumers: [webapp]
+      x-overlord-schema-status: stub
+  "/api/missions/{id}/schedule":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      operationId: getMissionsByIdSchedule
+      tags: [missions]
+      x-overlord-permission: mission:read
+      x-overlord-edition: both
+      x-overlord-consumers: [webapp]
+      x-overlord-schema-status: stub
+    put:
+      operationId: putMissionsByIdSchedule
+      tags: [missions]
+      x-overlord-permission: mission:update
+      x-overlord-edition: both
+      x-overlord-consumers: [webapp]
+      x-overlord-schema-status: stub
+    delete:
+      operationId: deleteMissionsByIdSchedule
+      tags: [missions]
+      x-overlord-permission: mission:update
+      x-overlord-edition: both
+      x-overlord-consumers: [webapp]
+      x-overlord-schema-status: stub
+  /api/objectives:
+    post:
+      operationId: postObjectives
+      tags: [objectives]
+      x-overlord-permission: objective:update
+      x-overlord-edition: both
+      x-overlord-consumers: [mobile, webapp]
+      x-overlord-schema-status: stub
+  "/api/objectives/{id}":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    patch:
+      operationId: patchObjectivesById
+      tags: [objectives]
+      x-overlord-permission: objective:update
+      x-overlord-edition: both
+      x-overlord-consumers: [mobile, webapp]
+      x-overlord-schema-status: stub
+    delete:
+      operationId: deleteObjectivesById
+      tags: [objectives]
+      x-overlord-permission: objective:update
+      x-overlord-edition: both
+      x-overlord-consumers: [mobile, webapp]
+      x-overlord-schema-status: stub
+  "/api/objectives/{id}/launch":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      operationId: postObjectivesByIdLaunch
+      tags: [objectives]
+      x-overlord-permission: execution_request:create
+      x-overlord-edition: both
+      x-overlord-consumers: [cli, mobile, webapp]
+      x-overlord-schema-status: stub
+  "/api/objectives/{id}/prompt":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      operationId: getObjectivesByIdPrompt
+      tags: [objectives]
+      x-overlord-permission: objective:read
+      x-overlord-edition: both
+      x-overlord-consumers: [webapp]
+      x-overlord-schema-status: stub
+  "/api/objectives/{id}/launch-command":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      operationId: getObjectivesByIdLaunchCommand
+      tags: [objectives]
+      x-overlord-permission: objective:read
+      x-overlord-edition: both
+      x-overlord-consumers: [webapp]
+      x-overlord-schema-status: stub
+  "/api/objectives/{id}/effective-launch-config":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      operationId: getObjectivesByIdEffectiveLaunchConfig
+      tags: [objectives]
+      x-overlord-permission: objective:read
+      x-overlord-edition: both
+      x-overlord-consumers: [webapp]
+      x-overlord-schema-status: stub
+  "/api/objectives/{id}/attachments":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      operationId: getObjectivesByIdAttachments
+      tags: [objectives]
+      x-overlord-permission: attachment:read
+      x-overlord-edition: both
+      x-overlord-consumers: [cli, mobile, webapp]
+      x-overlord-schema-status: stub
+    post:
+      operationId: postObjectivesByIdAttachments
+      tags: [objectives]
+      x-overlord-permission: attachment:create
+      x-overlord-edition: both
+      x-overlord-consumers: [webapp]
+      x-overlord-schema-status: stub
+  "/api/objectives/{id}/attachments/{attachmentId}":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: attachmentId
+        in: path
+        required: true
+        schema:
+          type: string
+    delete:
+      operationId: deleteObjectivesByIdAttachmentsByAttachmentId
+      tags: [objectives]
+      x-overlord-permission: attachment:delete
+      x-overlord-edition: both
+      x-overlord-consumers: [webapp]
+      x-overlord-schema-status: stub
+  "/api/inbox/{id}/attachments":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      operationId: getInboxByIdAttachments
+      tags: [inbox]
+      x-overlord-permission: owner
+      x-overlord-edition: both
+      x-overlord-consumers: [mobile, webapp]
+      x-overlord-schema-status: stub
+    post:
+      operationId: postInboxByIdAttachments
+      tags: [inbox]
+      x-overlord-permission: owner
+      x-overlord-edition: both
+      x-overlord-consumers: [webapp]
+      x-overlord-schema-status: stub
+  "/api/inbox/{id}/attachments/{attachmentId}":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: attachmentId
+        in: path
+        required: true
+        schema:
+          type: string
+    delete:
+      operationId: deleteInboxByIdAttachmentsByAttachmentId
+      tags: [inbox]
+      x-overlord-permission: owner
+      x-overlord-edition: both
+      x-overlord-consumers: [mobile, webapp]
+      x-overlord-schema-status: stub
+  /api/agent-catalog:
+    get:
+      operationId: getAgentCatalog
+      tags: [agent-catalog]
+      x-overlord-permission: launch:read
+      x-overlord-edition: both
+      x-overlord-consumers: [webapp]
+      x-overlord-schema-status: stub
+    put:
+      operationId: putAgentCatalog
+      tags: [agent-catalog]
+      x-overlord-permission: launch:configure
+      x-overlord-edition: both
+      x-overlord-consumers: [webapp]
+      x-overlord-schema-status: stub
+  /api/agent-catalog/refresh:
+    post:
+      operationId: postAgentCatalogRefresh
+      tags: [agent-catalog]
+      x-overlord-permission: launch:configure
+      x-overlord-edition: both
+      x-overlord-consumers: [webapp]
+      x-overlord-schema-status: stub
+  /api/launch-settings:
+    get:
+      operationId: getLaunchSettings
+      tags: [launch-settings]
+      x-overlord-permission: launch:read
+      x-overlord-edition: both
+      x-overlord-consumers: [cli, webapp]
+      x-overlord-schema-status: stub
+  "/api/launch-settings/agents/{agentKey}":
+    parameters:
+      - name: agentKey
+        in: path
+        required: true
+        schema:
+          type: string
+    patch:
+      operationId: patchLaunchSettingsAgentsByAgentKey
+      tags: [launch-settings]
+      x-overlord-permission: launch:configure
+      x-overlord-edition: both
+      x-overlord-consumers: [webapp]
+      x-overlord-schema-status: stub
+  /api/launch-settings/terminal-profile:
+    patch:
+      operationId: patchLaunchSettingsTerminalProfile
+      tags: [launch-settings]
+      x-overlord-permission: launch:configure
+      x-overlord-edition: both
+      x-overlord-consumers: [webapp]
+      x-overlord-schema-status: stub
+  /api/launch-settings/session-defaults:
+    patch:
+      operationId: patchLaunchSettingsSessionDefaults
+      tags: [launch-settings]
+      x-overlord-permission: launch:configure
+      x-overlord-edition: both
+      x-overlord-consumers: [webapp]
+      x-overlord-schema-status: stub
+  /api/launch-settings/worktree-branch-automation:
+    patch:
+      operationId: patchLaunchSettingsWorktreeBranchAutomation
+      tags: [launch-settings]
+      x-overlord-permission: launch:configure
+      x-overlord-edition: both
+      x-overlord-consumers: [unverified]
+      x-overlord-schema-status: stub
+  "/api/workspaces/{id}/launch-settings":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      operationId: getWorkspacesByIdLaunchSettings
+      tags: [launch-settings]
+      x-overlord-permission: launch:read
+      x-overlord-edition: both
+      x-overlord-consumers: [cli, mobile, webapp]
+      x-overlord-schema-status: stub
+  "/api/workspaces/{id}/launch-settings/agents/{agentKey}":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: agentKey
+        in: path
+        required: true
+        schema:
+          type: string
+    patch:
+      operationId: patchWorkspacesByIdLaunchSettingsAgentsByAgentKey
+      tags: [launch-settings]
+      x-overlord-permission: launch:configure
+      x-overlord-edition: both
+      x-overlord-consumers: [webapp]
+      x-overlord-schema-status: stub
+  "/api/workspaces/{id}/launch-settings/terminal-profile":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    patch:
+      operationId: patchWorkspacesByIdLaunchSettingsTerminalProfile
+      tags: [launch-settings]
+      x-overlord-permission: launch:configure
+      x-overlord-edition: both
+      x-overlord-consumers: [webapp]
+      x-overlord-schema-status: stub
+  "/api/workspaces/{id}/launch-settings/session-defaults":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    patch:
+      operationId: patchWorkspacesByIdLaunchSettingsSessionDefaults
+      tags: [launch-settings]
+      x-overlord-permission: launch:configure
+      x-overlord-edition: both
+      x-overlord-consumers: [webapp]
+      x-overlord-schema-status: stub
+  "/api/workspaces/{id}/launch-settings/worktree-branch-automation":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    patch:
+      operationId: patchWorkspacesByIdLaunchSettingsWorktreeBranchAutomation
+      tags: [launch-settings]
+      x-overlord-permission: launch:configure
+      x-overlord-edition: both
+      x-overlord-consumers: [unverified]
+      x-overlord-schema-status: stub
+  "/api/projects/{id}/launch-preference":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      operationId: getProjectsByIdLaunchPreference
+      tags: [launch-settings]
+      x-overlord-permission: launch:read
+      x-overlord-edition: both
+      x-overlord-consumers: [webapp]
+      x-overlord-schema-status: stub
+    put:
+      operationId: putProjectsByIdLaunchPreference
+      tags: [launch-settings]
+      x-overlord-permission: launch:configure
+      x-overlord-edition: both
+      x-overlord-consumers: [webapp]
+      x-overlord-schema-status: stub
+  "/api/projects/{id}/execution-target":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      operationId: getProjectsByIdExecutionTarget
+      tags: [execution-targets]
+      x-overlord-permission: launch:read
+      x-overlord-edition: both
+      x-overlord-consumers: [mobile, webapp]
+      x-overlord-schema-status: stub
+    put:
+      operationId: putProjectsByIdExecutionTarget
+      tags: [execution-targets]
+      x-overlord-permission: launch:configure
+      x-overlord-edition: both
+      x-overlord-consumers: [mobile, webapp]
+      x-overlord-schema-status: stub
+  "/api/execution-targets/{id}/observations":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      operationId: postExecutionTargetsByIdObservations
+      tags: [execution-targets]
+      x-overlord-permission: unknown
+      x-overlord-permission-candidates: [execution_request:claim, launch:configure]
+      x-overlord-edition: both
+      x-overlord-consumers: [runner, webapp]
+      x-overlord-schema-status: stub
+  "/api/execution-targets/{id}/mission-branch-observations":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      operationId: postExecutionTargetsByIdMissionBranchObservations
+      tags: [execution-targets]
+      x-overlord-permission: unknown
+      x-overlord-permission-candidates: [execution_request:claim, launch:configure]
+      x-overlord-edition: both
+      x-overlord-consumers: [webapp]
+      x-overlord-schema-status: stub
+  "/api/protocol/{subcommand}":
+    parameters:
+      - name: subcommand
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      operationId: postProtocolBySubcommand
+      tags: [protocol]
+      x-overlord-permission: unknown
+      x-overlord-edition: both
+      x-overlord-consumers: [cli]
+      x-overlord-schema-status: stub
+  /api/runner/status:
+    get:
+      operationId: getRunnerStatus
+      tags: [runner]
+      x-overlord-permission: unknown
+      x-overlord-edition: both
+      x-overlord-consumers: [runner, webapp]
+      x-overlord-schema-status: stub
+  /api/runner/claim:
+    post:
+      operationId: postRunnerClaim
+      tags: [runner]
+      x-overlord-permission: unknown
+      x-overlord-edition: both
+      x-overlord-consumers: [runner]
+      x-overlord-schema-status: stub
+  /api/runner/clear:
+    post:
+      operationId: postRunnerClear
+      tags: [runner]
+      x-overlord-permission: unknown
+      x-overlord-edition: both
+      x-overlord-consumers: [runner, webapp]
+      x-overlord-schema-status: stub
+  "/api/runner/requests/{id}/launching":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      operationId: postRunnerRequestsByIdLaunching
+      tags: [runner]
+      x-overlord-permission: execution_request:claim
+      x-overlord-edition: both
+      x-overlord-consumers: [runner]
+      x-overlord-schema-status: stub
+  "/api/runner/requests/{id}/launched":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      operationId: postRunnerRequestsByIdLaunched
+      tags: [runner]
+      x-overlord-permission: execution_request:claim
+      x-overlord-edition: both
+      x-overlord-consumers: [runner]
+      x-overlord-schema-status: stub
+  "/api/runner/requests/{id}/failed":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      operationId: postRunnerRequestsByIdFailed
+      tags: [runner]
+      x-overlord-permission: execution_request:claim
+      x-overlord-edition: both
+      x-overlord-consumers: [runner]
+      x-overlord-schema-status: stub
+  "/api/runner/requests/{id}/completed":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      operationId: postRunnerRequestsByIdCompleted
+      tags: [runner]
+      x-overlord-permission: execution_request:claim
+      x-overlord-edition: both
+      x-overlord-consumers: [runner]
+      x-overlord-schema-status: stub
+  "/api/missions/{id}/branch-prepared":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      operationId: postMissionsByIdBranchPrepared
+      tags: [missions]
+      x-overlord-permission: unknown
+      x-overlord-edition: both
+      x-overlord-consumers: [runner]
+      x-overlord-schema-status: stub
+  "/api/missions/{id}/branch/action":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      operationId: postMissionsByIdBranchAction
+      tags: [missions]
+      x-overlord-permission: mission:update
+      x-overlord-edition: both
+      x-overlord-consumers: [webapp]
+      x-overlord-schema-status: stub
+  "/api/missions/{id}/branches":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      operationId: getMissionsByIdBranches
+      tags: [missions]
+      x-overlord-permission: mission:read
+      x-overlord-edition: both
+      x-overlord-consumers: [webapp]
+      x-overlord-schema-status: stub
+  /api/worktrees:
+    get:
+      operationId: getWorktrees
+      tags: [worktrees]
+      x-overlord-permission: project:read
+      x-overlord-edition: both
+      x-overlord-consumers: [webapp]
+      x-overlord-schema-status: stub
+  /api/worktrees/remove:
+    post:
+      operationId: postWorktreesRemove
+      tags: [worktrees]
+      x-overlord-permission: project:update
+      x-overlord-edition: both
+      x-overlord-consumers: [webapp]
+      x-overlord-schema-status: stub
+  /api/worktrees/purge-merged:
+    post:
+      operationId: postWorktreesPurgeMerged
+      tags: [worktrees]
+      x-overlord-permission: project:update
+      x-overlord-edition: both
+      x-overlord-consumers: [webapp]
+      x-overlord-schema-status: stub

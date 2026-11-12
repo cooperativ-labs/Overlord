@@ -36,7 +36,7 @@ Key source files, in the order an event flows through them:
    `outbox_messages` rows and delivers HMAC-signed HTTP POSTs with retry/backoff.
 3. `backend/webhook-security.ts` — SSRF guard, `OVERLORD_WEBHOOK_INTERNAL_HOSTS` internal-host
    detection, and Stripe-style signature generation.
-4. `backend/webhooks.ts` + the `/api/webhooks*` routes in `backend/index.ts` — subscription
+4. `backend/webhooks.ts` + the `/api/webhooks*` routes in `backend/app.ts` — subscription
    management (list/create/update/delete/rotate-secret/test/deliveries/redeliver).
 5. `webapp/web/components/settings/WebhooksPage.tsx` — the management UI.
 

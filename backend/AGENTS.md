@@ -42,7 +42,7 @@ REST endpoints are stable interfaces. URL paths and HTTP method contracts, once 
 1. **Confirm the DTO shape** against `contract/data/README.md`. Response field names are camelCase versions of the logical schema column names. Add or extend types in `@overlord/contract` (`packages/contract/`) when the response is new.
 2. **Update `contract/api/rest-notes.md`** REST API Layer section with the new path, method, and response shape, in the same change as the handler.
 3. **Increment the contract version** in `contract/components.yaml` if the new endpoint changes a previously-stable response schema or removes/renames an existing path.
-4. **Implement in `backend/`**: put domain logic in a top-level module (e.g. `backend/webhooks.ts`) or an existing subdirectory (`backend/execution/`, `backend/branching/`, `backend/http/`), colocating tests as `backend/<name>.test.ts`. Register the HTTP route in `backend/index.ts` behind `requireAuthenticatedSession` (already applied to `/api` via `app.use('/api', …)` for most routes). Follow the existing `handle(...)` helper for auth-gated handlers.
+4. **Implement in `backend/`**: put domain logic in a top-level module (e.g. `backend/webhooks.ts`) or an existing subdirectory (`backend/execution/`, `backend/branching/`, `backend/http/`), colocating tests as `backend/<name>.test.ts`. Register the HTTP route in `backend/app.ts` behind `requireAuthenticatedSession` (already applied to `/api` via `app.use('/api', …)` for most routes). Follow the existing `handle(...)` helper for auth-gated handlers. Add the operation to `contract/api/openapi.yaml` in the same change; `yarn contract:parity` (`backend/openapi-route-parity.test.ts`) fails when a registered route has no operation.
 5. **Auth before service call**: validate the request token via the Auth Layer, resolve the `Actor`, then call `can(actor, action, resource)` / `requirePermission(...)` before any mutation.
 6. **Reach persistence only through the service layer** — the same service functions used by `cli/` and protocol surfaces.
 7. **Idempotency**: write-operations that can be retried (e.g. from a client retry on timeout) must use REST-scope idempotency keys in `idempotency_keys`.
@@ -87,7 +87,7 @@ Third-party REST extensions use a namespaced endpoint prefix so they cannot conf
 
 1. **Create `backend/ext/<name>/routes.ts`** with the namespaced route prefix (see `backend/ext/github/` and `backend/ext/everhour/` as references).
 2. **Create `backend/ext/<name>/conformance-manifest.yaml`** declaring `componentType: rest-module` and `componentKey: <name>`.
-3. **Register the extension router** in `backend/index.ts` with `app.use('/ext/<name>', requireAuthenticatedSession, create…Router(handle))`.
+3. **Register the extension router** in `backend/app.ts` with `app.use('/ext/<name>', requireAuthenticatedSession, create…Router(handle))`.
 4. **Validate**: `ovld contract check backend/ext/<name>/conformance-manifest.yaml`.
 
 ---
@@ -96,7 +96,8 @@ Third-party REST extensions use a namespaced endpoint prefix so they cannot conf
 
 ```
 backend/
-  index.ts              ← Express app entry; route registration
+  app.ts                ← Express app: middleware and route registration (no listen)
+  index.ts              ← entrypoint: imports app.ts and starts the server
   db.ts                 ← DatabaseClient connection + entity_changes writer
   repository.ts         ← core per-resource reads/mutations
   realtime.ts           ← SSE emitter driven by the entity_changes feed
