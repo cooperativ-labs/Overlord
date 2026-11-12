@@ -111,7 +111,8 @@ No caller was found in the web app, CLI, desktop app, MCP server or mobile app.
 
 The backend tests check every response they produce against its operation
 (ADR 0051), but 147 of the 279 operations had no response reached by a test at
-phase 4d. Their schemas are as good as the code reading behind them and are
+phase 4d, and again in the phase 5 run (359 responses checked across 132
+operations). Their schemas are as good as the code reading behind them and are
 not yet exercised. To list them:
 
 ```sh
@@ -128,6 +129,7 @@ cd backend && node ../scripts/with-ovld-home.mjs node ../scripts/api-conformance
 | `yarn contract:test` | Passed, including the release-gate and `server:deploy` tests |
 | `yarn api:generate:check` | Passed |
 | `yarn contract:parity` | Passed |
+| Backend suite under `scripts/api-conformance-report.mjs --uncovered` | 817 passed, 0 failed (SQLite batteries); every checked response conforms; 147 operations uncovered |
 | `yarn check:conformance-versions` | Passed; every manifest at 169.2.1 |
 | `yarn connectors:check` | Passed |
 | `ovld contract check` on every manifest (and `cli/test/contract-check.test.ts`) | Passed for all 15 manifests here and `OverlordMobile`'s |
