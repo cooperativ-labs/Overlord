@@ -2331,18 +2331,92 @@ paths:
     get:
       operationId: getStream
       tags: [realtime]
-      x-overlord-permission: unknown
+      x-overlord-permission: project:read
       x-overlord-edition: both
       x-overlord-consumers: [unverified]
-      x-overlord-schema-status: stub
+      summary: Realtime change stream (compatibility alias of /realtime)
+      description: >-
+        A Server-Sent Events stream of `entity_changes` deltas; there is no WebSocket transport. Admission
+        needs `project:read` in at least one workspace of the request's authorization snapshot (403 `{
+        error: 'Permission denied: realtime stream' }` otherwise); deltas are filtered to those workspaces
+        and, for a `project_automation` token, to its projects. The stream starts with `retry: 2000` and a
+        `hello` event, then sends `change` events (each with `id: <cursor>`) and, to clients without a
+        project filter, `refresh` events when state changed outside the change feed; a `: ping` comment
+        every 25 seconds keeps it open. The server ends every open stream when a membership, role, token
+        or workspace change is committed, so the client reconnects through authentication and resumes from
+        its last cursor. With `after` (or `Last-Event-ID`) below the server's cursor, the missed visible
+        changes are replayed as `change` events first, in pages of at most 500.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      parameters:
+        - name: after
+          in: query
+          required: false
+          description: >-
+            Resume cursor (an `entity_changes.seq`). A non-negative number (floored); anything else is
+            ignored and `Last-Event-ID` is tried.
+          schema: { type: string }
+        - name: Last-Event-ID
+          in: header
+          required: false
+          description: The EventSource resume header, read like `after` when `after` is absent or invalid.
+          schema: { type: string }
+      responses:
+        '200':
+          description: >-
+            `text/event-stream`. Events: `hello` with `{ type: 'hello', cursor }` (the server's current
+            global cursor); `change` with `RealtimeChangeEventDto`; `refresh` with `{ type: 'refresh' }`.
+            Headers `Cache-Control: no-cache, no-transform` and `X-Accel-Buffering: no`.
+          content:
+            text/event-stream:
+              schema: { $ref: '#/components/schemas/RealtimeStreamEvent' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/InternalError' }
   /realtime:
     get:
       operationId: getRealtime
       tags: [realtime]
-      x-overlord-permission: unknown
+      x-overlord-permission: project:read
       x-overlord-edition: both
       x-overlord-consumers: [mobile, webapp]
-      x-overlord-schema-status: stub
+      summary: Realtime change stream (Server-Sent Events)
+      description: >-
+        A Server-Sent Events stream of `entity_changes` deltas; there is no WebSocket transport. Admission
+        needs `project:read` in at least one workspace of the request's authorization snapshot (403 `{
+        error: 'Permission denied: realtime stream' }` otherwise); deltas are filtered to those workspaces
+        and, for a `project_automation` token, to its projects. The stream starts with `retry: 2000` and a
+        `hello` event, then sends `change` events (each with `id: <cursor>`) and, to clients without a
+        project filter, `refresh` events when state changed outside the change feed; a `: ping` comment
+        every 25 seconds keeps it open. The server ends every open stream when a membership, role, token
+        or workspace change is committed, so the client reconnects through authentication and resumes from
+        its last cursor. With `after` (or `Last-Event-ID`) below the server's cursor, the missed visible
+        changes are replayed as `change` events first, in pages of at most 500.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      parameters:
+        - name: after
+          in: query
+          required: false
+          description: >-
+            Resume cursor (an `entity_changes.seq`). A non-negative number (floored); anything else is
+            ignored and `Last-Event-ID` is tried.
+          schema: { type: string }
+        - name: Last-Event-ID
+          in: header
+          required: false
+          description: The EventSource resume header, read like `after` when `after` is absent or invalid.
+          schema: { type: string }
+      responses:
+        '200':
+          description: >-
+            `text/event-stream`. Events: `hello` with `{ type: 'hello', cursor }` (the server's current
+            global cursor); `change` with `RealtimeChangeEventDto`; `refresh` with `{ type: 'refresh' }`.
+            Headers `Cache-Control: no-cache, no-transform` and `X-Accel-Buffering: no`.
+          content:
+            text/event-stream:
+              schema: { $ref: '#/components/schemas/RealtimeStreamEvent' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/InternalError' }
   /sync/changes:
     get:
       operationId: getSyncChanges
@@ -2350,7 +2424,33 @@ paths:
       x-overlord-permission: project:read
       x-overlord-edition: both
       x-overlord-consumers: [mobile, webapp]
-      x-overlord-schema-status: stub
+      summary: Change feed catch-up
+      description: >-
+        Pages `entity_changes` after a sequence cursor, ascending, filtered to the workspaces of the
+        authorization snapshot where the caller has `project:read` (403 `{ error: 'Permission denied:
+        realtime catch-up' }` when there are none) and, for a `project_automation` token, to its projects.
+        The server scans up to its current high-water mark: `cursor` advances past rows the caller may not
+        see, so a page can be empty with `hasMore: false` and a larger `cursor`. At most 500 changes per
+        page; `hasMore` means call again with `after` set to `cursor`.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      parameters:
+        - name: after
+          in: query
+          required: true
+          description: >-
+            The cursor to read after (`0` for the beginning). Must be a non-negative number (floored);
+            absent, blank, negative or non-numeric answers 400 `{ error }`.
+          schema: { type: string }
+      responses:
+        '200':
+          description: One page of changes.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SyncChangesDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/InternalError' }
   /api/projects:
     get:
       operationId: getProjects
@@ -10564,3 +10664,78 @@ components:
         sizeBytes: { type: integer, minimum: 1, maximum: 8388608 }
         url: { type: string, description: 'Server-relative `/api/storage/<bucket>/<percent-encoded key>`.' }
         createdAt: { $ref: '#/components/schemas/DateTime' }
+    EntityChangeOperation:
+      type: string
+      enum: [ insert, update, delete, restore ]
+    EntityChangeDto:
+      type: object
+      required:
+        [
+          seq,
+          workspaceId,
+          entityType,
+          entityId,
+          operation,
+          projectId,
+          missionId,
+          objectiveId,
+          changedFields,
+          occurredAt
+        ]
+      properties:
+        seq: { type: integer, minimum: 1 }
+        workspaceId: { type: string, format: uuid }
+        entityType:
+          {
+            type: string,
+            description: 'Open vocabulary (`mission`, `objective`, `project`, `workspace_user`, …).'
+          }
+        entityId: { type: string }
+        operation: { $ref: '#/components/schemas/EntityChangeOperation' }
+        projectId:
+          oneOf: [ { type: string }, { type: 'null' } ]
+        missionId:
+          oneOf: [ { type: string }, { type: 'null' } ]
+        objectiveId:
+          oneOf: [ { type: string }, { type: 'null' } ]
+        changedFields:
+          type: array
+          description: Column names parsed from `changed_fields_json`; empty when none were recorded.
+          items: { type: string }
+        occurredAt: { $ref: '#/components/schemas/DateTime' }
+    SyncChangesDto:
+      type: object
+      required: [ changes, cursor, hasMore ]
+      properties:
+        changes:
+          type: array
+          items: { $ref: '#/components/schemas/EntityChangeDto' }
+        cursor:
+          type: integer
+          minimum: 0
+          description: The next `after`; the last returned `seq` when `hasMore`, else the scanned high-water mark.
+        hasMore: { type: boolean }
+    RealtimeChangeEventDto:
+      type: object
+      required: [ type, changes, cursor ]
+      properties:
+        type: { const: change }
+        changes:
+          type: array
+          items: { $ref: '#/components/schemas/EntityChangeDto' }
+        cursor: { type: integer, minimum: 0 }
+    RealtimeStreamEvent:
+      description: >-
+        The JSON `data` of one stream event. The stream itself is `text/event-stream` framing (`event:`,
+        `id:`, `data:` lines and `: ping` comments), not JSON.
+      oneOf:
+        - type: object
+          required: [ type, cursor ]
+          properties:
+            type: { const: hello }
+            cursor: { type: integer, minimum: 0 }
+        - $ref: '#/components/schemas/RealtimeChangeEventDto'
+        - type: object
+          required: [ type ]
+          properties:
+            type: { const: refresh }

@@ -157,6 +157,21 @@ the code does not do.
   entity change, and the returned `id` names no row (`uploadOrganizationImage`).
   `postUploadsByBucketKey`.
 
+### Realtime (batch 2)
+
+- **R1** (open). rest-notes.md calls `/realtime` (and its alias `/api/stream`) an
+  "SSE/WebSocket endpoint"; the backend serves Server-Sent Events only (`RealtimeHub.addClient`,
+  `backend/realtime.ts`) and registers no WebSocket upgrade. `getRealtime`, `getStream`.
+- **R2** (open). `getStream` keeps `x-overlord-consumers: [unverified]`: no caller of
+  `/api/stream` exists in webapp, cli, desktop, mcp or OverlordMobile (all use `/realtime`
+  and `/sync/changes`). Its permission is `project:read` (admission needs it in at least one
+  authorized workspace), as for `/realtime`.
+- **R3** (open). A stream ends whenever any `role_assignment`, `user_token`,
+  `user_token_workspace`, `workspace` or `workspace_user` change is committed anywhere on the
+  server, not only in the subscriber's workspaces (`reconnectClientsForAuthorizationChange`
+  closes every client). Reproduced: renaming a workspace closed an open stream. Clients
+  reconnect, so this is load, not data loss.
+
 ## 2. Non-conforming error shapes
 
 Every route in `backend/app.ts` that forwards errors through `handle()` or `next(err)`
