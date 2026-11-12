@@ -1947,96 +1947,255 @@ paths:
       x-overlord-permission: webhook:read
       x-overlord-edition: both
       x-overlord-consumers: [webapp]
-      x-overlord-schema-status: stub
+      summary: List a workspace's webhook subscriptions
+      description: >-
+        Requires `webhook:read` on the named workspace (a workspace outside the caller's authorized set
+        answers 404). Authenticated requests carry no ambient workspace, so `workspaceId` is required in
+        practice. Newest first; never includes a secret.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      parameters:
+        - name: workspaceId
+          in: query
+          required: true
+          description: Workspace UUID, trimmed; blank or absent answers 400.
+          schema: { type: string }
+      responses:
+        '200':
+          description: The subscriptions.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WebhookSubscriptionList' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
     post:
       operationId: postWebhooks
       tags: [webhooks]
       x-overlord-permission: webhook:create
       x-overlord-edition: both
       x-overlord-consumers: [webapp]
-      x-overlord-schema-status: stub
+      summary: Create a webhook subscription
+      description: >-
+        Requires `webhook:create` on the subscription's workspace: the named project's workspace when
+        `projectId` is given (then `workspaceId` is ignored), else `workspaceId`. The endpoint must use
+        `https://`, or `http://` for an internal host (`OVERLORD_WEBHOOK_INTERNAL_HOSTS`, plus loopback on
+        Local); private addresses are not refused here, only at dispatch. Records a `webhook_subscription`
+        change. The signing secret (`whsec_…`) is returned only here and by rotation.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateWebhookSubscriptionBody' }
+      responses:
+        '200':
+          description: The subscription and its signing secret.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CreateWebhookSubscriptionResultDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
   "/api/webhooks/{id}":
     parameters:
       - name: id
         in: path
         required: true
-        schema:
-          type: string
+        description: Subscription UUID; an unknown, deleted or foreign subscription answers 404.
+        schema: { type: string }
     patch:
       operationId: patchWebhooksById
       tags: [webhooks]
       x-overlord-permission: webhook:update
       x-overlord-edition: both
       x-overlord-consumers: [webapp]
-      x-overlord-schema-status: stub
+      summary: Update a webhook subscription
+      description: >-
+        Requires `webhook:update` on the subscription's workspace. Omitted members are unchanged; an empty
+        body answers the subscription unchanged. Re-enabling resets `consecutiveFailures` and clears
+        `disabledReason`; disabling sets `disabledReason: manual`. A concurrent change answers 409.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateWebhookSubscriptionBody' }
+      responses:
+        '200':
+          description: The subscription.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WebhookSubscriptionDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
     delete:
       operationId: deleteWebhooksById
       tags: [webhooks]
       x-overlord-permission: webhook:delete
       x-overlord-edition: both
       x-overlord-consumers: [webapp]
-      x-overlord-schema-status: stub
+      summary: Delete a webhook subscription
+      description: Requires `webhook:delete` on the subscription's workspace. Soft-deletes it and records a change.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      responses:
+        '200':
+          description: Deleted.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OkResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
   "/api/webhooks/{id}/rotate-secret":
     parameters:
       - name: id
         in: path
         required: true
-        schema:
-          type: string
+        description: Subscription UUID; an unknown, deleted or foreign subscription answers 404.
+        schema: { type: string }
     post:
       operationId: postWebhooksByIdRotateSecret
       tags: [webhooks]
       x-overlord-permission: webhook:update
       x-overlord-edition: both
       x-overlord-consumers: [webapp]
-      x-overlord-schema-status: stub
+      summary: Rotate a webhook signing secret
+      description: >-
+        Requires `webhook:update`. Replaces the secret immediately (the old one stops signing at once) and
+        returns the new one. Takes no body.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      responses:
+        '200':
+          description: The subscription and its new secret.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CreateWebhookSubscriptionResultDto' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
   "/api/webhooks/{id}/test":
     parameters:
       - name: id
         in: path
         required: true
-        schema:
-          type: string
+        description: Subscription UUID; an unknown, deleted or foreign subscription answers 404.
+        schema: { type: string }
     post:
       operationId: postWebhooksByIdTest
       tags: [webhooks]
       x-overlord-permission: webhook:update
       x-overlord-edition: both
       x-overlord-consumers: [webapp]
-      x-overlord-schema-status: stub
+      summary: Send a test delivery
+      description: >-
+        Requires `webhook:update`. Synchronously POSTs a signed `webhook.ping` envelope (no mission data)
+        to the endpoint with a 10-second timeout and no redirects, and records the attempt in the delivery
+        log. Works on a disabled subscription. A non-2xx answer, a timeout or a network failure answers
+        502 `Test delivery failed: <reason>`. Unlike the dispatcher, it does not refuse private-network
+        addresses. Takes no body.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      responses:
+        '200':
+          description: The endpoint answered 2xx.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WebhookTestResultDto' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+        '502': { $ref: '#/components/responses/BadGateway' }
   "/api/webhooks/{id}/deliveries":
     parameters:
       - name: id
         in: path
         required: true
-        schema:
-          type: string
+        description: Subscription UUID; an unknown, deleted or foreign subscription answers 404.
+        schema: { type: string }
     get:
       operationId: getWebhooksByIdDeliveries
       tags: [webhooks]
       x-overlord-permission: webhook:read
       x-overlord-edition: both
       x-overlord-consumers: [webapp]
-      x-overlord-schema-status: stub
+      summary: A subscription's delivery attempt log
+      description: >-
+        Requires `webhook:read`. Attempts newest first by `attemptedAt`, at most `limit`; `hasMore` says
+        whether older attempts exist. Page with `before` set to the last `attemptedAt`. Includes test
+        pings.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      parameters:
+        - name: before
+          in: query
+          required: false
+          description: >-
+            Only attempts with `attemptedAt` lexically before this value (not validated; pass a previous
+            `attemptedAt`).
+          schema: { type: string }
+        - name: limit
+          in: query
+          required: false
+          description: >-
+            Page size, default 25, clamped to 1–100. Read with `Number()`; a value that is not an integer
+            (`abc`, `2.5`) answers 500 `datatype mismatch` on SQLite (see schema-disagreements.md).
+          schema: { type: string }
+      responses:
+        '200':
+          description: One page of attempts.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WebhookDeliveryAttemptsPageDto' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
   "/api/webhooks/{id}/deliveries/{outboxId}/redeliver":
     parameters:
       - name: id
         in: path
         required: true
-        schema:
-          type: string
+        description: Subscription UUID; an unknown, deleted or foreign subscription answers 404.
+        schema: { type: string }
       - name: outboxId
         in: path
         required: true
-        schema:
-          type: string
+        description: The `outboxMessageId` of a delivery attempt of this subscription.
+        schema: { type: string }
     post:
       operationId: postWebhooksByIdDeliveriesByOutboxIdRedeliver
       tags: [webhooks]
       x-overlord-permission: webhook:update
       x-overlord-edition: both
       x-overlord-consumers: [webapp]
-      x-overlord-schema-status: stub
+      summary: Re-queue a delivery
+      description: >-
+        Requires `webhook:update`. The outbox message must belong to the subscription's workspace and name
+        this subscription (404 otherwise). Resets it to `pending` with its attempt count cleared, for the
+        dispatcher to pick up; no entity change is recorded. Takes no body.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      responses:
+        '200':
+          description: Re-queued.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OkResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
   "/api/uploads/{bucketKey}":
     parameters:
       - name: bucketKey
@@ -10108,3 +10267,168 @@ components:
         deviceToken:
           type: string
           description: Trimmed; blank or longer than 512 characters answers 400.
+    WebhookEventType:
+      type: string
+      enum:
+        [
+          mission.delivered,
+          mission.status_changed,
+          objective.completed,
+          mission.blocked,
+          mission.unblocked
+        ]
+    WebhookPayloadMode:
+      type: string
+      enum: [ thin, full ]
+    WebhookDisabledReason:
+      type: string
+      enum: [ manual, failures, owner_revoked ]
+    WebhookSubscriptionDto:
+      type: object
+      required:
+        [
+          id,
+          projectId,
+          name,
+          endpointUrl,
+          isInternal,
+          eventTypes,
+          payloadMode,
+          enabled,
+          disabledReason,
+          consecutiveFailures,
+          lastSuccessAt,
+          lastFailureAt,
+          createdByWorkspaceUserId,
+          createdAt,
+          updatedAt,
+          revision
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        projectId:
+          description: The project the subscription is limited to, or null for the whole workspace.
+          oneOf: [ { type: string }, { type: 'null' } ]
+        name: { type: string }
+        endpointUrl: { type: string, description: The normalized endpoint URL. }
+        isInternal: { type: boolean, description: Whether the endpoint host is internal (evaluated on read). }
+        eventTypes:
+          type: array
+          description: Stored types that are still known; unknown stored values are dropped.
+          items: { $ref: '#/components/schemas/WebhookEventType' }
+        payloadMode: { $ref: '#/components/schemas/WebhookPayloadMode' }
+        enabled: { type: boolean }
+        disabledReason:
+          oneOf: [ { $ref: '#/components/schemas/WebhookDisabledReason' }, { type: 'null' } ]
+        consecutiveFailures: { type: integer, minimum: 0 }
+        lastSuccessAt:
+          oneOf: [ { $ref: '#/components/schemas/DateTime' }, { type: 'null' } ]
+        lastFailureAt:
+          oneOf: [ { $ref: '#/components/schemas/DateTime' }, { type: 'null' } ]
+        createdByWorkspaceUserId: { type: string }
+        createdAt: { $ref: '#/components/schemas/DateTime' }
+        updatedAt: { $ref: '#/components/schemas/DateTime' }
+        revision: { type: integer, minimum: 1 }
+    WebhookSubscriptionList:
+      type: array
+      items: { $ref: '#/components/schemas/WebhookSubscriptionDto' }
+    CreateWebhookSubscriptionBody:
+      type: object
+      required: [ name, endpointUrl, eventTypes ]
+      properties:
+        workspaceId:
+          type: string
+          description: The owning workspace when `projectId` is absent (400 when both are missing).
+        projectId:
+          type: string
+          description: >-
+            Limits the subscription to one project and selects its workspace. An unknown project answers
+            400; a project outside the caller's authorized workspaces 404.
+        name:
+          type: string
+          description: Trimmed; blank or absent answers 400.
+        endpointUrl:
+          type: string
+          description: >-
+            Absolute URL; unparseable answers 400, as does `http://` to a host that is not internal.
+        eventTypes:
+          type: array
+          minItems: 1
+          description: Non-empty; duplicates are removed; an unknown type answers 400.
+          items: { $ref: '#/components/schemas/WebhookEventType' }
+        payloadMode:
+          description: Defaults to `full` for an internal host and `thin` otherwise; another value answers 400.
+          oneOf: [ { $ref: '#/components/schemas/WebhookPayloadMode' }, { type: 'null' } ]
+    UpdateWebhookSubscriptionBody:
+      type: object
+      description: Partial update; omitted members are unchanged.
+      properties:
+        name:
+          type: string
+          description: Trimmed; blank answers 400.
+        endpointUrl:
+          type: string
+          description: Validated as on create.
+        projectId:
+          description: >-
+            A project of the subscription's workspace (400 otherwise), or null to widen it to the whole
+            workspace.
+          oneOf: [ { type: string }, { type: 'null' } ]
+        eventTypes:
+          type: array
+          minItems: 1
+          description: Replaces the list; validated as on create.
+          items: { $ref: '#/components/schemas/WebhookEventType' }
+        payloadMode: { $ref: '#/components/schemas/WebhookPayloadMode' }
+        enabled:
+          type: boolean
+          description: Not type-checked; any truthy value enables.
+    CreateWebhookSubscriptionResultDto:
+      type: object
+      required: [ subscription, secret ]
+      properties:
+        subscription: { $ref: '#/components/schemas/WebhookSubscriptionDto' }
+        secret: { type: string, description: 'The HMAC signing secret, `whsec_…`; shown only here.' }
+    WebhookTestResultDto:
+      type: object
+      required: [ ok, responseStatus ]
+      properties:
+        ok: { const: true }
+        responseStatus: { type: integer, description: The endpoint's 2xx status. }
+    WebhookDeliveryAttemptDto:
+      type: object
+      required:
+        [
+          id,
+          outboxMessageId,
+          eventType,
+          attemptNumber,
+          responseStatus,
+          responseSnippet,
+          error,
+          durationMs,
+          attemptedAt
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        outboxMessageId: { type: string }
+        eventType: { type: string, description: 'A webhook event type, or `webhook.ping` for a test delivery.' }
+        attemptNumber: { type: integer, minimum: 1 }
+        responseStatus:
+          oneOf: [ { type: integer }, { type: 'null' } ]
+        responseSnippet:
+          description: A redacted prefix of the endpoint's response body (null for test pings).
+          oneOf: [ { type: string }, { type: 'null' } ]
+        error:
+          oneOf: [ { type: string }, { type: 'null' } ]
+        durationMs:
+          oneOf: [ { type: integer, minimum: 0 }, { type: 'null' } ]
+        attemptedAt: { $ref: '#/components/schemas/DateTime' }
+    WebhookDeliveryAttemptsPageDto:
+      type: object
+      required: [ attempts, hasMore ]
+      properties:
+        attempts:
+          type: array
+          items: { $ref: '#/components/schemas/WebhookDeliveryAttemptDto' }
+        hasMore: { type: boolean }

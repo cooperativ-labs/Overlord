@@ -316,6 +316,30 @@ decision and, if confirmed, a fix with its own contract impact.
   workspace keeps seeing, and a token bound to another organization can read, the current
   titles of missions in it. `getNotifications`.
 
+- **X24** (open, security; reproduced in part). `POST /api/webhooks/{id}/test`
+  (`testWebhookSubscription`, `backend/webhooks.ts`) fetches the stored endpoint without
+  `assertPublicWebhookTarget`, the private-network guard the dispatcher applies before every
+  delivery, and save-time validation (`parseWebhookEndpointUrl`) checks only the scheme. An
+  admin with `webhook:update` can therefore make the backend connect to RFC 1918, loopback
+  or link-local addresses over HTTPS and read back the status or the network error in the
+  502 body and the delivery log. Reproduced on Local: a subscription to
+  `https://10.255.255.1/hook` is accepted and its test answers 502 `Test delivery failed:
+  fetch failed` (a connection attempt) where the dispatcher would refuse with `Endpoint
+  resolves to a private address`. `postWebhooksByIdTest`, `postWebhooks`, `patchWebhooksById`.
+- **X25** (open; reproduced). `GET /api/webhooks/{id}/deliveries` reads `limit` with
+  `Number()` and clamps it with `Math.min`/`Math.max`, which keep `NaN` and fractions; any
+  non-integer (`abc`, `2.5`) reaches SQLite as the LIMIT and answers 500 `datatype mismatch`
+  instead of 400 or the default. `before` is compared as text without validation.
+  `getWebhooksByIdDeliveries`.
+- **X26** (open; reproduced in part). Test pings write a `cancelled` placeholder outbox row
+  naming the subscription, so `POST /api/webhooks/{id}/deliveries/{outboxId}/redeliver`
+  accepts a ping's `outboxMessageId` (200) and resets it to `pending` under topic
+  `webhook.ping`, which the dispatcher never claims (it reads only `webhook.deliver.v1`):
+  the redelivery is acknowledged and never happens. Read only for the dispatcher half.
+  `postWebhooksByIdDeliveriesByOutboxIdRedeliver`.
+- **X6** also covers webhook `name` (create and update); `UpdateWebhookSubscriptionBody.enabled`
+  is not type-checked (any truthy value enables).
+
 ## 4. Generator constructs needed
 
 Constructs used beyond the subset Clear Comply's generator
