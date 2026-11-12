@@ -4,7 +4,7 @@
 #
 # Validate with: ovld contract check conformance-manifest.yaml
 
-contractVersion: "168.0.3"
+contractVersion: "168.0.4"
 componentType: connector
 componentKey: claude
 label: "Claude Code Connector"

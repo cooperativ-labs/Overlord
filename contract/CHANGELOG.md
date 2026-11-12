@@ -5,6 +5,61 @@ is the current version and must equal [VERSION](VERSION); `yarn version:contract
 writes its skeleton. Dates use ISO 8601 and describe the contract change, not
 merely the files edited.
 
+## [168.0.4] - 2026-11-12
+
+Sentence-level audit of the sixty provenance entries `[168]`–`[95]` that 168.0.3 did not
+audit, completing phase 3 of `planning/feature-plans/contract-adr-openapi-migration.md`.
+Nothing on the wire, in the protocol, in stored data or in behaviour changed; every
+hoisted or corrected statement describes behaviour the code already has.
+
+### Added
+
+- [decisions/backfill-register.md](decisions/backfill-register.md) "Remaining sixty
+  entries (168.0.4)": per-version counts (650 sentences: 381 present, 56 hoisted, 58
+  superseded, 153 non-binding, 2 contradicting the code), every hoisted statement by
+  destination, every superseded statement with the version that replaced it, and each
+  contradiction with its code location. All 71 rows now read `sentence-audited`.
+
+### Changed
+
+- Binding statements that only these entries carried are now in the normative
+  documents: one implementation for schedules, profile metadata, status seeding and board
+  position, absolute `OVLD_HOME`, desktop diagnostics capture, `workspace_not_authorized`,
+  single-flight source checks and the Latch viewer `background` rules in
+  [architecture.md](architecture.md); `update-objective` authorization, human-action
+  `blocking` meaning, deterministic-action `link`/`sourceRef`/`verify`, mutation-window
+  classification proof and `project_selection_required` candidate fields in
+  [protocol.md](protocol.md); Run Queue hold reasons, serial-mission arbitration, drops,
+  retry reset, attempt ceiling, dispatch triggers and safety sweep, mission-scoped queue
+  uniqueness, the draft-reset guarantee and search entity weights in
+  [data/README.md](data/README.md); Inbox attachment local buckets, summary `deliveredAt`
+  provenance, mission objectives by display id, connection and resolution DTO names,
+  running-sibling seeding, re-queue placement, `CreateMissionBody` launch selection, the
+  retired `BRANCH_WORKTREE_MISMATCH`, worktree automation as a user default, Inbox slice
+  caps, dispatch-failure redaction, forced-removal response fields, v3 child identity and
+  search quota units in [api/rest-notes.md](api/rest-notes.md); and the mission display
+  order fallback in `components.yaml`.
+- Corrected to the code: [data/README.md](data/README.md) named the Run Queue dispatch
+  idempotency key `run_queue:<entryId>`, while the dispatcher keys each attempt
+  `run_queue:<entryId>:attempt:<n>`; [protocol.md](protocol.md) said `queue-objective`
+  creates the mission queue before falling back to the project default, while the
+  handler takes an existing default queue first; `components.yaml` named the assistant
+  system prompt `overlord-assistant-v5`, while the code uses `overlord-assistant-v8`.
+- Contradictions recorded, not resolved: `[144]` says the mission-panel Latch re-open stays
+  foreground, while `openLatchSession` sends no focus flag and leaves Latch's own default in
+  charge; `[106]` says Protocol `queue-objective` creates the mission queue on demand like
+  REST, while the Protocol handler prefers an existing project default queue.
+
+### Version
+
+- Patch contract version 168.0.4, from 168.0.3: clarifications that copy existing
+  obligations into the normative documents and corrections of stale text to the enforced
+  behaviour, with no change to any interface, invariant, security property, data meaning
+  or observable behaviour. No ADR: the audit records earlier decisions, which ADRs
+  0017–0047 already cover, and makes none. `yarn connectors:capabilities` restamped the
+  generated connector manifests; hand-maintained manifests keep `168.0.0`, which shares
+  the major version (ADR 0009).
+
 ## [168.0.3] - 2026-11-12
 
 Sentence-level audit of the eleven largest provenance entries (`[152]`, `[153]`,
