@@ -1,8 +1,9 @@
 # Move Overlord's contract to the Clear Comply model (ADRs, changelog, versioned OpenAPI)
 
-Status: approved in principle 2026-11-12 (section 3 decisions accepted; versions 1–94 stay in git only)
+Status: completed 2026-11-12 (all five phases; section 8 lists what differs from this plan)
 Contract impact of this plan document: none. The migration it describes ends in a
-baseline version cut (section 4) with no wire or behaviour change.
+baseline (section 4) with no wire or behaviour change of its own; the baseline is
+`169.2.1` (ADR 0053), not a separate major cut.
 
 ## 1. What is true today
 
@@ -104,9 +105,13 @@ notes. Schemas win over prose on wire shape.
 
 Accepted 2026-11-12. Each is recorded as an ADR in phase 1.
 
-1. **Continue the number line: the baseline is `169.0.0`.** The code, commit
-   history and tickets say "contract v153" in hundreds of places; restarting at
-   `1.0.0` would make every one ambiguous.
+1. **Continue the number line; the baseline is the version in force when phase 5
+   finishes.** The code, commit history and tickets say "contract v153" in hundreds
+   of places; restarting at `1.0.0` would make every one ambiguous. The plan first
+   reserved `169.0.0` for the baseline, but a breaking change (ADR 0049) took the
+   contract to `169.0.0` and phase 4 to `169.2.0` before phase 5 ran, so no further
+   major is cut: the baseline is `169.2.1`, phase 5's own patch increment (ADR 0053,
+   amending ADR 0002).
 2. **Changelog keeps the old summaries verbatim.** Each "Version N Change Summary"
    becomes a `## [N]` entry in `CHANGELOG.md`, sorted, with a marked boundary: entries
    at or below 168 are provenance and are not normative. Nothing is lost and nothing
@@ -222,19 +227,22 @@ place; the register is kept as the audit record.
 Exit: zero stubs; parity, generation and response checks green; `api/rest-notes.md`
 deleted; REST prose in other documents reduced to what OpenAPI cannot express.
 
-### Phase 5 — Baseline cut and production gate (1 day)
+### Phase 5 — Baseline and production gate (1 day)
 
-- `yarn version:contract major` → `169.0.0`. Changelog entry states that nothing on
-  the wire changed. `info.version` `1.0.0`.
-- Update all 15 manifests, the generated harness capability artifacts, and
+- No major bump: the baseline is the contract version in force when this phase
+  finishes, `169.2.1` (`yarn version:contract patch`, ADR 0053). Changelog entry
+  states that nothing on the wire changed. `info.version` stays `2.2.0`.
+- Restamp all 15 manifests, the generated harness capability artifacts, and
   `OverlordMobile` (`conformance-manifest.yaml`,
-  `scripts/check-contract-conformance.mjs`).
-- Build the release gate in section 5a.
-- Tag the baseline and record the register and approvals under
-  `contract/releases/169.0.0/`.
+  `scripts/check-contract-conformance.mjs`) to `169.2.1`.
+- Build the release gate in section 5a (ADR 0052).
+- Record the baseline, the candidate SHA, the open disagreements and the
+  approvals under `contract/releases/169.2.1/`; the first `yarn release:finish`
+  places the `production` tag on the baseline commit.
 
 Exit, and the condition for pushing to production: `CONTRACT.md` at the root is
-gone, phases 1–4 exits hold, and the range check passes from the baseline tag.
+gone, phases 1–4 exits hold, and the range check passes from the recorded
+baseline range start.
 
 ## 5a. Release gate for the manual deploy
 
@@ -261,7 +269,9 @@ The gate keeps the release manual and adds one command before and one after.
    release, not with every push to `main`. This is a setting in the Vercel project
    and is the only step that cannot be done from the repository.
 
-The first `production` tag is placed on the `169.0.0` baseline commit.
+The first `production` tag is placed on the `169.2.1` baseline commit by the first
+`yarn release:finish`; until it exists, preflight starts the range at the candidate
+SHA recorded in `contract/releases/baseline.json`.
 
 ## 5. Impact on modules
 
@@ -304,5 +314,36 @@ generated code.
 ## 7. Resolved questions
 
 1. Production deploy is manual; the gate is section 5a.
-2. The baseline is `169.0.0`.
+2. The baseline is `169.2.1`, the version in force when phase 5 finished (ADR 0053;
+   originally `169.0.0`).
 3. Versions 1–94 are not recovered; they remain in git history.
+
+## 8. Outcome
+
+Completed 2026-11-12. Phase 5 delivered the release gate (ADR 0052) and the baseline
+record. What differs from this plan:
+
+- **Baseline version.** `169.2.1`, not `169.0.0` (ADR 0053): the contract had already
+  reached `169.2.0` through a breaking change and phase 4, so phase 5 made a patch
+  increment rather than a further major. `info.version` is `2.2.0`, not `1.0.0`.
+- **No baseline tag in the repository change.** A commit cannot name its own SHA, so,
+  as in Clear Comply, the record names the candidate SHA (`9a71cf44`, contract
+  `169.2.0`) as the first range start (`contract/releases/baseline.json`), and the
+  first `yarn release:finish` places the `production` tag and `prod` branch on the
+  baseline commit; its SHA is recorded afterwards.
+- **Preflight also runs `check:conformance-versions`**, and its stamp also records
+  OpenAPI `info.version`, the range start and a timestamp.
+- **Release records are not contract changes.** The range check ignores
+  `contract/releases/` under `none`, so recording a release or signing approvals does
+  not force a version increment.
+- **Escape hatch.** `--skip-release-gate` / `OVERLORD_SKIP_RELEASE_GATE=1` on the three
+  publish steps only; preflight and finish have none.
+- **`server:deploy`** wraps the Railway CLI on `PATH`; the `railway` devDependency is the
+  TypeScript SDK for `.railway/railway.ts`, not the CLI.
+- **Left to the owner:** signing the approvals, the one-time Vercel production-branch
+  change to `prod`, checking that Railway does not also deploy the backend
+  automatically from `main`, and running the first release
+  (`contract/releases/README.md`).
+- **Not verified:** Postgres conformance batteries, a real S3 provider, successful
+  provider calls, and the release commands' real side effects
+  (`contract/releases/169.2.1/README.md`).
