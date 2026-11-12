@@ -146,6 +146,17 @@ the code does not do.
   active workspace membership (403 `No active workspace membership` without one, to address
   the dispatch job). `putMobileLiveActivitiesByActivityIdPushToken`.
 
+### Storage (batch 2)
+
+- **S1** (open). rest-notes.md and the comment on the serve route (`backend/app.ts`) say
+  `/storage/:bucketKey/:storageKey` serves bytes "only after an exact active metadata lookup
+  for `(storage_bucket_id, storage_key)`". The `organization-images` branch of
+  `resolveStoredObject` (`backend/storage.ts`) has no metadata table and reads the key as
+  given from the selected organization's bucket (see X27). `getStorageByBucketKeyByStorageKey`.
+- **S2** (open). An `organization-images` upload writes bytes only: no metadata row, no
+  entity change, and the returned `id` names no row (`uploadOrganizationImage`).
+  `postUploadsByBucketKey`.
+
 ## 2. Non-conforming error shapes
 
 Every route in `backend/app.ts` that forwards errors through `handle()` or `next(err)`
@@ -339,6 +350,26 @@ decision and, if confirmed, a fix with its own contract impact.
   `postWebhooksByIdDeliveriesByOutboxIdRedeliver`.
 - **X6** also covers webhook `name` (create and update); `UpdateWebhookSubscriptionBody.enabled`
   is not type-checked (any truthy value enables).
+
+- **X27** (open, critical, security; reproduced). Path traversal in
+  `GET /api/storage/organization-images/{storageKey}`: `resolveStoredObject`
+  (`backend/storage.ts`) skips the metadata lookup for the organization-scoped bucket and
+  `finalizeStoredObject` serves `path.join(<bucket local_path>, storageKey)` with
+  `res.sendFile`. Express decodes `%2F`, so `..%2F` segments escape the storage root.
+  Reproduced on Local: any authenticated member (the read action is `organization_image:read`)
+  fetched `/api/storage/organization-images/..%2F..%2F..%2Fpackage.json` and received the
+  repository's `package.json` (200, `application/octet-stream`); the same reaches any file the
+  server process can read, including the SQLite database. On an S3-compatible bucket the key
+  is used verbatim, so any object key in the bucket (other organizations' and workspaces'
+  files) can be read the same way. `getStorageByBucketKeyByStorageKey`.
+- **X28** (open, reproduced). `POST /api/uploads/user-images` records the image against the
+  wrong profile: `operatorUserId` (`backend/storage.ts`) reads the request's attributed
+  workspace member, which session and token requests never have, and falls back to the oldest
+  active human profile. Reproduced: an upload by a second account was stored as
+  `user-images/<first account's id>/…` with `user_images.profile_id` of the first account.
+  `postUploadsByBucketKey`.
+- **X5** also applies to image uploads: the raw parser limit equals `MAX_IMAGE_BYTES`, so
+  `writeImageObject`'s own 413 message is unreachable (reproduced: 413 `body_too_large`).
 
 ## 4. Generator constructs needed
 
