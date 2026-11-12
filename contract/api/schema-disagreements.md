@@ -44,6 +44,30 @@ the code does not do.
   `MissionDetailDto.branch` is nullable in the type but always an object from
   `getMissionDetail`.
 
+### Missions (batch 1)
+
+- **M1** (open). rest-notes.md "Mission search versioning" calls `GET /api/missions/search`
+  "frozen as its v1 array-shaped response"; the handler (`backend/app.ts`) answers an
+  object `{ missions: MissionDto[] }`. `getMissionsSearch`.
+- **M2** (open). `MissionEventDto` (packages/contract) says events are "ordered
+  oldest-first by `createdAt`"; `listMissionEvents` returns them newest first, capped at
+  200. `getMissionsByIdEvents`.
+- **M3** (open). `GenerateCommitMessageResultDto` and `generateCommitMessage`'s comment
+  say the diff is gathered through the local-target provider and that a clean worktree
+  answers `BRANCH_NOTHING_TO_COMMIT`. The handler only accepts a client-supplied `diff`;
+  without one it answers 409 `LOCAL_FILESYSTEM_UNAVAILABLE`, and it never emits
+  `BRANCH_NOTHING_TO_COMMIT`. `postMissionsByIdGenerateCommitMessage`.
+- **M4** (open). `MissionBranchListDto` is documented as "available branches in a mission
+  project's primary repository"; `listMissionBranches` returns at most the mission's
+  current (prepared or pinned) branch. `getMissionsByIdBranches`.
+- **M5** (open). `MissionBranchDto.hasUnpushedCommits` and `observationSource: 'server'`
+  are declared but never produced by `missionBranchDto` /
+  `mergeMissionBranchObservation`; `observedAt` and `observationSource` are absent rather
+  than null before an observation.
+- **M6** (open). rest-notes.md says mission routes accept a mission display id. `PATCH
+  /api/missions/{id}/objectives/reorder` authorizes the display id but then queries by the
+  raw reference and answers 404 (X10).
+
 ## 2. Non-conforming error shapes
 
 Every route in `backend/app.ts` that forwards errors through `handle()` or `next(err)`
@@ -108,6 +132,36 @@ decision and, if confirmed, a fix with its own contract impact.
   project, archived included, but answers with `listProjectsForWorkspace`'s default
   `active` lifecycle, so the reordered archived projects are missing from the response.
 
+- **X10** (open). `reorderFutureObjectives` (`backend/repository.ts`) resolves the mission
+  reference for authorization but reads the mission and its objectives with the raw
+  `missionId` argument, so a display id answers 404 `Mission not found`.
+  `patchMissionsByIdObjectivesReorder`.
+- **X11** (open, authorization). `POST /api/missions/{id}/generate-title`
+  (`postMissionsByIdGenerateTitle`) rewrites the mission title after checking only
+  `mission:read` and `objective:read` (`generateMissionTitle` → `getMissionDetail`); no
+  `mission:update` check.
+- **X12** (open, authorization). `POST /api/missions/{id}/terminal-sessions/forget`
+  (`postMissionsByIdTerminalSessionsForget`) rewrites an execution request's metadata
+  after checking only `session:read` (`forgetMissionLatchSession`).
+- **X13** (open, authorization and isolation). `POST /api/missions/{id}/branch-prepared`
+  (`postMissionsByIdBranchPrepared`, `recordBranchPrepared` in
+  `backend/execution/runner.ts`) evaluates no RBAC action: any active member can move a
+  mission's active branch. It resolves the mission across every active membership of the
+  profile (`callerWorkspaceMemberships`), not the request's organization-bounded and
+  token-consented workspace set, and takes the first row when a display id matches in
+  several workspaces instead of answering 409. Its permission is recorded as
+  `workspace-member` to describe what the code does.
+- **X14** (open). Mission search `limit` (v1, v2, v3) has no upper bound
+  (`searchWorkspaceMissions`, `allocateWorkspaceSearchLimits`), and `statusTypes` values
+  are not validated. `getMissionsSearch`, `getMissionsSearchV2`, `getSearchV3`.
+- **X15** (open, SQLite). A cross-project `PATCH /api/missions/{id}` turns
+  `PRAGMA foreign_keys` off on the shared SQLite connection around its transaction
+  (`updateMission`); any statement another request runs in that window is not
+  foreign-key checked. `patchMissionsById`.
+- **X16** (open). `PUT /api/missions/{id}/context` stores every non-object value as its
+  string form (`writeSharedContext`): `null` reads back as the string `"null"` and `5` as
+  `"5"`. `putMissionsByIdContext`.
+
 ## 4. Generator constructs needed
 
 Constructs used beyond the subset Clear Comply's generator
@@ -126,7 +180,7 @@ schema must change.
 - **G4** String bounds (`minLength`, `maxLength`) are ignored by the Clear Comply
   generator; they are documentation until 4c renders them.
 - **G5** `allOf` for a DTO that extends another (`MissionDetailDto` = `MissionDto` +
-  detail projections). Needs `.extend()`/`z.intersection`; the alternative is
+  detail projections; `SearchResultV3`, `SearchAppliedFiltersV3`). Needs `.extend()`/`z.intersection`; the alternative is
   repeating every `MissionDto` property in each extension.
 - **G6** `$ref` with sibling keywords (`description`) on a property. Valid OpenAPI 3.1;
   the Clear Comply generator ignores the siblings, which is harmless.
