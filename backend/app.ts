@@ -177,11 +177,7 @@ import {
   revokeDevicePushToken,
   updateNotificationPreferences
 } from './push-notifications.ts';
-import {
-  requireAnyWorkspacePermission,
-  requirePermission,
-  requireWorkspacePermission
-} from './rbac.ts';
+import { requireAnyWorkspacePermission, requireWorkspacePermission } from './rbac.ts';
 import { readableChangeFeedWorkspaceIds, readChangesAfter, realtime } from './realtime.ts';
 import {
   ApiError,
@@ -787,8 +783,8 @@ app.get(
 app.post(
   '/api/onboarding',
   handle(
-    async (req, res) => {
-      const result = await createOrganizationOnboarding(req.body);
+    async req => {
+      await createOrganizationOnboarding(req.body);
       realtime.refreshAll();
       return buildMeta();
     },
@@ -851,7 +847,7 @@ app.get(
 app.post(
   '/api/workspaces',
   handle(
-    async (req, res) => {
+    async req => {
       if (getActorWorkspaceUserId())
         await requireAnyWorkspacePermission(PERMISSIONS.WORKSPACE_CREATE);
       const result = await createWorkspace(req.body);
@@ -878,7 +874,7 @@ app.patch(
 app.delete(
   '/api/workspaces/:id',
   handle(
-    async (req, res) => {
+    async req => {
       const result = await deleteWorkspace(req.params.id);
       // Resync all subscribers.
       realtime.refreshAll();
@@ -936,7 +932,7 @@ app.delete(
 app.post(
   '/api/invitations/accept',
   handle(
-    async (req, res) => {
+    async req => {
       const result = await acceptWorkspaceInvitation(req.body);
       realtime.refreshAll();
       return result;

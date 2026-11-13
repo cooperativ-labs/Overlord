@@ -6,7 +6,7 @@ export const RELEVANCE_POLICY_VERSION = 'expandable-families-v1';
 export const TOOL_FAMILIES = ['status', 'repository', 'knowledgebase', 'feature'] as const;
 export type ToolFamily = (typeof TOOL_FAMILIES)[number];
 export const EXPAND_CAPABILITIES_TOOL = 'expand_capabilities';
-export const EXPANSION_DECLARATION: ChatToolDeclaration = {
+const EXPANSION_DECLARATION: ChatToolDeclaration = {
   name: EXPAND_CAPABILITIES_TOOL,
   description:
     'Discover available capabilities (omit families), or add tool families for the next turn: status (missions), repository (code), knowledgebase (notes and authorized edits), feature (handoff). Use all when unsure. This changes relevance only, never permissions. Tools outside the current manifest need expansion before calling.',
@@ -61,7 +61,7 @@ export function initialFamilies(text: string, writeGrant = false): ToolFamily[] 
   return TOOL_FAMILIES.filter(f => selected.has(f));
 }
 
-export function toolFamilies(d: ChatToolDeclaration): ToolFamily[] {
+function toolFamilies(d: ChatToolDeclaration): ToolFamily[] {
   if (d.name.startsWith('kb_')) return ['knowledgebase', 'feature'];
   if (d.name === 'overlord_find_feature_missions') return ['feature'];
   if (d.name === 'overlord_get_mission') return ['status', 'feature'];

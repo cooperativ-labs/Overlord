@@ -104,6 +104,7 @@ import { listObjectiveFileChanges } from '../packages/core/service/changes.ts';
 import type { ServiceContext } from '../packages/core/service/context.ts';
 import { readDeliveryReport } from '../packages/core/service/delivery-report.ts';
 import { ServiceError } from '../packages/core/service/errors.ts';
+import { LAUNCHABLE_OBJECTIVE_STATES } from '../packages/core/service/execution-requests.ts';
 import {
   declareActingDeviceTarget,
   NO_EXECUTION_TARGET_REGISTERED,
@@ -192,11 +193,7 @@ import {
   scheduleObjectiveTitleGeneration
 } from './automation/title-automation.ts';
 import { listMissionTerminalSessions } from './execution/latch-sessions.ts';
-import {
-  dequeueObjective,
-  LAUNCHABLE_STATES,
-  listMissionExecutionRequests
-} from './execution/launch.ts';
+import { dequeueObjective, listMissionExecutionRequests } from './execution/launch.ts';
 import { resolveProjectLocalTargetProvider } from './execution/local-target-mutation-queue.ts';
 import {
   createProjectInitialization,
@@ -7376,7 +7373,7 @@ async function updateObjectiveTx(
     if (
       body.state !== undefined &&
       body.state !== existing.state &&
-      (disconnectingToQueue || !LAUNCHABLE_STATES.includes(body.state))
+      (disconnectingToQueue || !LAUNCHABLE_OBJECTIVE_STATES.includes(body.state))
     ) {
       await dequeueObjective({
         objectiveId: id,

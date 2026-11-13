@@ -3,7 +3,7 @@ import type { DatabaseClient } from '@overlord/database';
 import type { ConnectionRow } from './service.ts';
 
 /** Shorter than the provider's 30 s refresh-reuse grace, longer than the 10 s token timeout. */
-export const REFRESH_LEASE_MS = 15_000;
+const REFRESH_LEASE_MS = 15_000;
 const ACCESS_EXPIRY_SKEW_MS = 60_000;
 
 /** Typed access failure for credential consumers (outbound MCP, source checks). */
@@ -121,7 +121,7 @@ export function storeConnectionGrant(
   );
 }
 
-export function acquireRefreshLease(
+function acquireRefreshLease(
   db: DatabaseClient,
   row: ConnectionRow,
   lockOwner: string,
@@ -134,7 +134,7 @@ export function acquireRefreshLease(
   );
 }
 
-export function releaseRefreshLease(
+function releaseRefreshLease(
   db: DatabaseClient,
   row: ConnectionRow,
   lockOwner: string,

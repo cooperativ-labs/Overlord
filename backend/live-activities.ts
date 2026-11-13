@@ -9,10 +9,6 @@ import { requireDatabaseClient, resolveActiveProfileId } from './db.ts';
 import { ApiError, requiredString } from './errors.ts';
 import { bounded, presentationText, presentationTitle } from './text-presentation.ts';
 
-// Re-exported so existing importers (push notifications, tests) keep one source
-// for bounded APNs text while the helpers themselves stay free of database imports.
-export { bounded, presentationTitle };
-
 const MAX_RUNNING = 2;
 const COMPLETION_HOLD_MS = 30 * 60 * 1000;
 const START_TOKEN_MAX_LENGTH = 512;
@@ -25,7 +21,7 @@ const ASK_QUESTION_MAX_LENGTH = 140;
 const ASK_MAX_AGE_MS = 3 * 24 * 60 * 60 * 1000;
 
 /** Static ActivityKit attributes for the account-level mission activity. */
-export const LIVE_ACTIVITY_ATTRIBUTES_TYPE = 'OverlordActivityAttributes';
+const LIVE_ACTIVITY_ATTRIBUTES_TYPE = 'OverlordActivityAttributes';
 export const LIVE_ACTIVITY_ACCOUNT_LABEL = 'My Missions';
 
 /**

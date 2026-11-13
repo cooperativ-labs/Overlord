@@ -24,7 +24,7 @@ export interface EgressResponse {
   bytes: number;
 }
 
-export function assertEgress(url: string, allowedOrigins: readonly string[]): URL {
+function assertEgress(url: string, allowedOrigins: readonly string[]): URL {
   let parsed: URL;
   try {
     parsed = new URL(url);

@@ -122,8 +122,6 @@ interface LaunchObjectiveRow {
   revision: number;
 }
 
-export { LAUNCHABLE_OBJECTIVE_STATES as LAUNCHABLE_STATES } from '../../packages/core/service/execution-requests.ts';
-
 /**
  * Remove an objective from the runner queue when a user manually completes,
  * disconnects, or deletes it in the UI. Clears any active (queued/claimed/

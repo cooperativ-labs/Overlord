@@ -88,7 +88,7 @@ export interface KnowledgebaseToolResult {
   detail: string | null;
 }
 
-export const KNOWLEDGEBASE_BOUNDS = {
+const KNOWLEDGEBASE_BOUNDS = {
   /** Text returned to the engine per call. */
   outputBytes: 64 * 1024,
   /** Raw response bytes read from the network (wire framing included). */
@@ -602,7 +602,7 @@ export class KnowledgebaseMcp {
   }
 }
 
-export function parseRpcMessage(text: string, id: number): Record<string, unknown> | null {
+function parseRpcMessage(text: string, id: number): Record<string, unknown> | null {
   const candidates: string[] = [];
   const trimmed = text.trim();
   if (trimmed.startsWith('{')) candidates.push(trimmed);

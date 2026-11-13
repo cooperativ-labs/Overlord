@@ -3,10 +3,7 @@ import { mkdtempSync } from 'node:fs';
 import path from 'node:path';
 import { describe, it } from 'node:test';
 
-import {
-  assertScopedToResourceWorkspace,
-  setupSecondaryWorkspaceFixture
-} from './secondary-workspace-fixture.ts';
+import { setupSecondaryWorkspaceFixture } from './secondary-workspace-fixture.ts';
 
 // coo:135 follow-up: a mission/objective belonging to a workspace OTHER than the
 // caller's currently-active workspace must still load and be editable. The

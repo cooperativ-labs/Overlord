@@ -3,7 +3,7 @@
  * (organization → workspace → project). Workspaces remain the sole RBAC
  * layer — "organization admin" is a derived concept (`isOrganizationAdmin` in
  * `backend/rbac.ts`: ADMIN of every live constituent workspace), not a stored
- * role. See planning/feature-plans/organization-workspace-hierarchy.md.
+ * role (contract/authorization.md "Role-based access control").
  *
  * Org mutations (rename, logo, admin changes) don't fit the workspace-scoped
  * `entity_changes` feed (`workspace_id NOT NULL`) — every write here fans out
@@ -89,7 +89,7 @@ async function toOrganizationDto(
 }
 
 /** The organization a live workspace belongs to, or `null` if the workspace doesn't exist. */
-export async function resolveOrganizationIdForWorkspace(
+async function resolveOrganizationIdForWorkspace(
   workspaceId: string,
   client: DatabaseClient = requireDatabaseClient()
 ): Promise<string | null> {

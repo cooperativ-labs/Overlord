@@ -15,7 +15,7 @@ export function loadRepoEnvForProfile(repoRoot: string, profile: EnvProfile): vo
   // `OVERLORD_BACKEND_URL` so the dev and prod channels never collide.
 }
 
-export function loadRepoEnvFiles(paths: string[]): void {
+function loadRepoEnvFiles(paths: string[]): void {
   const merged: Record<string, string> = {};
 
   for (const envPath of paths) {

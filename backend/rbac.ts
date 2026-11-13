@@ -412,8 +412,7 @@ export async function requireMissionPermission({
 // ---- Organization admin (derived, not a stored role) ----------------------
 //
 // "Organization admin" has no row of its own: it is ADMIN of every live
-// constituent workspace of the organization (Q2 in
-// planning/feature-plans/organization-workspace-hierarchy.md). Any workspace
+// constituent workspace of the organization. Any workspace
 // admin may *view* org settings; only a full org admin may mutate them —
 // otherwise a single-workspace ADMIN could add themselves as org admin and
 // escalate to every workspace in the org (R1).

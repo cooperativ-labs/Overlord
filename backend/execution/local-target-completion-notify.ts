@@ -13,9 +13,9 @@ import { armPostgresListener } from './pg-listen.ts';
 const COMPLETION_CHANNEL = 'overlord_execution_request_completed';
 
 /** Bound LISTEN `connect()` so a hung Postgres handshake cannot stall a caller. */
-export const COMPLETION_LISTEN_CONNECT_TIMEOUT_MS = 3_000;
+const COMPLETION_LISTEN_CONNECT_TIMEOUT_MS = 3_000;
 /** Never hold one LISTEN longer than this; the waiter re-reads and re-arms. */
-export const COMPLETION_LISTEN_MAX_WAIT_MS = 25_000;
+const COMPLETION_LISTEN_MAX_WAIT_MS = 25_000;
 
 /**
  * Build the listener factory `RunnerQueueProvider` hands to the waiter.

@@ -1,4 +1,4 @@
-import { type Permission, PERMISSIONS } from '@overlord/auth';
+import type { Permission } from '@overlord/auth';
 import express, { type NextFunction, type Request, type Response } from 'express';
 import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync } from 'node:fs';

@@ -26,8 +26,8 @@ import { newId, nowIso } from '../packages/core/service/util.ts';
 
 import { requireDatabaseClient, resolveActiveProfileId } from './db.ts';
 import { ApiError, requiredString } from './errors.ts';
-import { bounded } from './live-activities.ts';
 import { notificationBody, notificationSubject } from './notification-presentation.ts';
+import { bounded } from './text-presentation.ts';
 
 const DEVICE_TOKEN_MAX_LENGTH = 512;
 const BUNDLE_ID_MAX_LENGTH = 255;

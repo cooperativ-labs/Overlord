@@ -22,7 +22,7 @@ import { GeminiChatRuntime } from './gemini-runtime.ts';
 import { GeminiStaticCache } from './static-cache.ts';
 
 /** Default chat model (milestone one); `CHAT_GEMINI_MODEL` overrides it. */
-export const DEFAULT_CHAT_MODEL = 'gemini-3.8-flash';
+const DEFAULT_CHAT_MODEL = 'gemini-3.8-flash';
 
 /** Source checkers for the kinds owned outside the connections module. */
 export function chatSourceCheckers(
@@ -32,7 +32,7 @@ export function chatSourceCheckers(
 }
 
 /** The production repository reader: the same core service as `POST /api/projects/:id/repository-reads`. */
-export const queuedRepositoryReader: ChatRepositoryReader = ({ ctx, request, scopeKey, signal }) =>
+const queuedRepositoryReader: ChatRepositoryReader = ({ ctx, request, scopeKey, signal }) =>
   performRepositoryRead({
     ctx,
     request,

@@ -200,7 +200,7 @@ function profileCompletionPage(label: string, status: ProfileCallbackOutcome['st
 }
 
 /** Where the browser goes after a profile-scoped callback, or null for the status page. */
-export function profileCallbackTarget(
+function profileCallbackTarget(
   provider: ProfileProvider,
   outcome: ProfileCallbackOutcome,
   webReturnOrigin: string | null

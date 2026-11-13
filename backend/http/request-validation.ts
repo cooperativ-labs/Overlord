@@ -134,7 +134,7 @@ function requestPathname(req: Request): string {
 }
 
 /** Validates one request against its operation; empty when it conforms. */
-export function validateRequest(operation: ApiOperation, req: Request): RequestIssue[] {
+function validateRequest(operation: ApiOperation, req: Request): RequestIssue[] {
   const issues: RequestIssue[] = [];
   check(operation.parameters.path, pathParameters(operation, requestPathname(req)), 'path', issues);
   check(operation.parameters.query, req.query, 'query', issues);
@@ -182,7 +182,7 @@ function located(issue: RequestIssue): string {
 }
 
 /** The ErrorEnvelope a rejected request answers with. */
-export function validationErrorBody(issues: readonly RequestIssue[]) {
+function validationErrorBody(issues: readonly RequestIssue[]) {
   const first = issues[0];
   return {
     error: first ? `Invalid request: ${located(first)}: ${first.message}` : 'Invalid request',
@@ -195,7 +195,7 @@ export function validationErrorBody(issues: readonly RequestIssue[]) {
   };
 }
 
-export const MALFORMED_JSON_ERROR = {
+const MALFORMED_JSON_ERROR = {
   error: 'Request body is not valid JSON.',
   code: 'invalid_json'
 } as const;

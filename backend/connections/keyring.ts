@@ -38,7 +38,7 @@ export interface KeyRing {
 
 export const EVERHOUR_ENV_KEY_ID = 'everhour-env';
 export const GITHUB_USER_ENV_KEY_ID = 'github-user-env';
-export const PLATFORM_KEY_ID_PREFIX = 'platform-';
+const PLATFORM_KEY_ID_PREFIX = 'platform-';
 const RESERVED_KEY_IDS = new Set([EVERHOUR_ENV_KEY_ID, GITHUB_USER_ENV_KEY_ID]);
 /** Better Auth's own minimum; a shorter secret is not a credential-grade root. */
 const MIN_PLATFORM_SECRET_LENGTH = 32;

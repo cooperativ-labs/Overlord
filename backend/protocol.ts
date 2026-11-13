@@ -38,7 +38,6 @@ import {
 import { callerWorkspaceMemberships } from './repository.ts';
 
 export type { ProtocolRequestBody } from './protocol/flags.ts';
-export { type ProjectChoice, ProjectSelectionRequiredError } from './protocol/project-refs.ts';
 
 // ---- Protocol command dispatch -------------------------------------------
 //

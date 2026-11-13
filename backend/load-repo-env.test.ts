@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, it } from 'node:test';
 
-import { loadRepoEnv, loadRepoEnvFiles, loadRepoEnvForProfile } from './load-repo-env.ts';
+import { loadRepoEnv, loadRepoEnvForProfile } from './load-repo-env.ts';
 
 const ENV_KEYS = [
   'GEMINI_API_KEY',

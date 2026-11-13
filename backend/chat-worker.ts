@@ -20,7 +20,7 @@ export class ChatRuntimeFailure extends Error {
   }
 }
 /** No mock answers in production. Phase C injects the real provider runtime. */
-export const unavailableChatRuntime: ChatRuntime = {
+const unavailableChatRuntime: ChatRuntime = {
   identity: {
     provider: 'gemini',
     model: 'gemini-3.8-flash',
