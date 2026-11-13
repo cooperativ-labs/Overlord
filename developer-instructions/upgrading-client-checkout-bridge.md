@@ -43,6 +43,4 @@ for optional admin SQL to list or clear orphaned queue rows.
   bridge — not on the hosted backend.
 - Workspaces with backend-host execution targets must migrate using the steps
   above.
-- Browser-only Cloud use remains **degraded** (see product decisions in
-  [`planning/feature-plans/client-checkout-bridge-unification.md`](../planning/feature-plans/client-checkout-bridge-unification.md)
-  §12).
+- Browser-only Cloud use remains **degraded**.

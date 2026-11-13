@@ -340,9 +340,8 @@ change anywhere can violate a cross-module boundary.
 
 ## Phased Rollout
 
-Test work is sequenced to land alongside the implementation phases in
-[`planning/feature-plans/README.md`](planning/feature-plans/README.md). Each phase
-ships its tests with its code — never after.
+Test work is sequenced to land alongside the implementation phases below. Each
+phase ships its tests with its code — never after.
 
 | Phase | Implementation focus | Tests that land with it |
 | --- | --- | --- |

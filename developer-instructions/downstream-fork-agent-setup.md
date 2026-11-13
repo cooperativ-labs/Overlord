@@ -38,8 +38,7 @@ Read these files first in the downstream repo:
 - `contract/conformance-manifest.schema.yaml`
 - `developer-instructions/upstream-adoption.md`
 - `developer-instructions/custom-instance-setup.md`
-- `planning/feature-plans/desktop-app-module.md`
-- `planning/feature-plans/desktop-app-packaging.md`
+- `desktop/docs/desktop-app.md`
 - `README.md`
 
 The current upstream preparation that matters for downstream work:
