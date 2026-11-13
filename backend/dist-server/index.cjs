@@ -112094,31 +112094,7 @@ var CHAT_NOTIFICATION_CATALOG = {
   }
 };
 var CHAT_NOTIFICATION_DEEP_LINK = "overlord://chat/threads/:threadId";
-var ACCOUNT_CONNECTION_PROVIDERS = vocabulary()([
-  "knowledgebase",
-  "everhour",
-  "github"
-]);
-var ACCOUNT_CONNECTION_SCOPES = vocabulary()([
-  "organization",
-  "profile"
-]);
-var ACCOUNT_CONNECTION_CREDENTIAL_KINDS = vocabulary()([
-  "oauth",
-  "api_key"
-]);
-var ACCOUNT_CONNECTION_STATES = vocabulary()([
-  "pending",
-  "connected",
-  "reauthorization_required",
-  "disconnected"
-]);
 var ACCOUNT_CONNECTION_ASSISTANT_WRITE_SCOPES = vocabulary()(["per_request", "all_workspaces"]);
-var ACCOUNT_CONNECTION_UNAVAILABLE_REASONS = vocabulary()([
-  "not_offered_on_edition",
-  "not_configured",
-  "encryption_not_configured"
-]);
 var REPOSITORY_READ_OPERATIONS = vocabulary()([
   "observe",
   "tree",
@@ -112476,7 +112452,7 @@ function missionDisplayIdFromObjectiveRef(ref) {
 }
 
 // ../packages/contract/dist/search.js
-var SEARCH_OBJECTIVE_STATES = [
+var SEARCH_OBJECTIVE_STATES = vocabulary()([
   "future",
   "draft",
   "submitted",
@@ -112484,7 +112460,7 @@ var SEARCH_OBJECTIVE_STATES = [
   "executing",
   "pending_delivery",
   "complete"
-];
+]);
 var DEFAULT_SEARCH_ENTITY_TYPES = [
   "mission",
   "objective",
@@ -132673,6 +132649,9 @@ function authDatabaseFromAdapter(adapter2) {
   return adapter2.schema ? { type: "postgres", connectionString: adapter2.connectionString, schema: adapter2.schema } : { type: "postgres", connectionString: adapter2.connectionString };
 }
 
+// ../auth/dist/auth/token.js
+var import_node_crypto6 = require("node:crypto");
+
 // ../auth/dist/rbac/types.js
 var Role;
 (function(Role2) {
@@ -132851,7 +132830,6 @@ async function execute(db, sql2, params = []) {
 }
 
 // ../auth/dist/auth/token.js
-var import_node_crypto6 = require("node:crypto");
 var USER_TOKEN_PREFIX = "out_";
 var USER_TOKEN_HASH_ALGORITHM = "sha256";
 var DEFAULT_USER_TOKEN_TTL_DAYS = 90;
@@ -136878,12 +136856,12 @@ function emptyEntityCounts() {
   return { mission: 0, objective: 0, delivery: 0, event: 0 };
 }
 function addEntityCount({
-  counts: counts2,
+  counts,
   entityType,
   amount = 1
 }) {
   if (entityType === "mission" || entityType === "objective" || entityType === "delivery" || entityType === "event") {
-    counts2[entityType] += amount;
+    counts[entityType] += amount;
   }
 }
 function sqlPlaceholders2(count) {
@@ -142021,7 +141999,6 @@ function renewedExpiry({
 
 // ../packages/core/service/agent-session/requests.ts
 var WAITER_LEASE_SECONDS = 20;
-var REMOTE_WINDOW_AWAY_SECONDS = 30 * 60;
 var MAX_REQUEST_SUMMARY_LENGTH = 2e3;
 var MAX_REQUEST_OPTIONS = 12;
 var AGENT_REQUEST_KINDS = vocabulary()([
@@ -142460,9 +142437,6 @@ var LOCAL_TARGET_CAPABILITY_NAMES = [
   "sendLatchMessage",
   "doctor"
 ];
-var QUEUEABLE_LOCAL_TARGET_CAPABILITY_NAMES = LOCAL_TARGET_CAPABILITY_NAMES.filter(
-  (name2) => name2 !== "launchAgent"
-);
 function isQueueableCapabilityName(value2) {
   return typeof value2 === "string" && value2 !== "launchAgent" && LOCAL_TARGET_CAPABILITY_NAMES.includes(value2);
 }
@@ -145875,66 +145849,6 @@ async function getMissionSummary({
     updatedAt: row.updated_at,
     objectiveCount: row.objective_count
   };
-}
-async function searchMissionsWorkspace({
-  ctx,
-  query,
-  statusTypes,
-  projectId,
-  resourceKeys,
-  dateField,
-  from,
-  to,
-  limit: limit2 = 25
-}) {
-  const projectIds = projectId ? [await resolveProjectId(ctx, projectId)] : ctx.allowedProjectIds === null || ctx.allowedProjectIds === void 0 ? [] : ctx.allowedProjectIds.length ? [...ctx.allowedProjectIds] : ["__no_project__"];
-  return searchWorkspaceMissions({
-    db: ctx.db,
-    workspaceId: ctx.workspace.id,
-    query: query ?? null,
-    projectIds,
-    statusTypes: statusTypes ?? null,
-    resourceKeys: resourceKeys ?? null,
-    dateField: dateField ?? null,
-    from: from ?? null,
-    to: to ?? null,
-    limit: limit2
-  });
-}
-async function searchMissions({
-  ctx,
-  query,
-  statusTypes,
-  projectId,
-  resourceKeys,
-  dateField,
-  from,
-  to,
-  limit: limit2 = 25
-}) {
-  const result2 = await searchMissionsWorkspace({
-    ctx,
-    query: query ?? null,
-    statusTypes: statusTypes ?? null,
-    projectId: projectId ?? null,
-    resourceKeys: resourceKeys ?? null,
-    dateField: dateField ?? null,
-    from: from ?? null,
-    to: to ?? null,
-    limit: limit2
-  });
-  return result2.hits.map((hit) => ({
-    id: hit.id,
-    displayId: hit.displayId,
-    projectId: hit.projectId,
-    title: hit.title,
-    statusType: hit.statusType,
-    statusId: hit.statusId,
-    priority: hit.priority,
-    createdAt: hit.createdAt,
-    updatedAt: hit.updatedAt,
-    objectiveCount: hit.objectiveCount
-  }));
 }
 async function searchMissionsV3({
   ctx,
@@ -163823,7 +163737,8 @@ var missionSubcommands = {
     handler: async (ctx, body) => {
       const objectives = objectiveInputs(body);
       const projectId = strFlag(body, "--project-id");
-      const unassignedToProject = boolFlag(body, "--unassigned-to-project") || boolFlag(body, "--inbox");
+      rejectRemovedProtocolFlags(body, ["--inbox"]);
+      const unassignedToProject = boolFlag(body, "--unassigned-to-project");
       if (unassignedToProject) {
         if (getActiveTokenProjectIds() !== null) throw new ApiError(404, "Not found");
         if (projectId) {
@@ -163935,9 +163850,10 @@ var missionSubcommands = {
       return reorderFutureObjectives(missionRefFlag(body), { orderedObjectiveIds });
     }
   },
-  "search-missions": {
+  search: {
+    // Not enforced at dispatch: v2/v3 and --reference authorize per workspace or project.
     permission: PERMISSIONS.MISSION_READ,
-    handler: async (ctx, body) => {
+    handler: async (_ctx, body) => {
       if (hasFlag(body, "--reference")) {
         const reference = strFlag(body, "--reference");
         if (!reference) throw new ApiError(400, "--reference requires a value");
@@ -163946,8 +163862,16 @@ var missionSubcommands = {
       if (hasFlag(body, "--cursor")) {
         throw new ApiError(400, "--cursor applies only to an exact --reference lookup");
       }
-      const responseVersion = intFlag(body, "--response-version");
-      const version4 = responseVersion === 3 ? 3 : responseVersion === 2 ? 2 : 1;
+      const responseVersion = hasFlag(body, "--response-version") ? intFlag(body, "--response-version") : 3;
+      if (responseVersion !== 2 && responseVersion !== 3) {
+        throw new ApiError(
+          400,
+          "--response-version must be 2 or 3 (version 1 is retired)",
+          void 0,
+          "invalid_input"
+        );
+      }
+      const version4 = responseVersion;
       const options = parseMissionSearchOptions(
         {
           q: strFlag(body, "--query"),
@@ -163965,7 +163889,6 @@ var missionSubcommands = {
       );
       const projectRef = strFlag(body, "--project-id") ?? null;
       const limit2 = options.limit ?? 25;
-      if (version4 === 1) return searchMissions({ ctx, ...options, projectId: projectRef, limit: limit2 });
       const search = {
         ...options,
         projectIds: await resolveV2SearchProjectId(projectRef, strFlag(body, "--workspace-id")),
@@ -171107,14 +171030,6 @@ var projectSubcommands = {
     // Enforced per-target inside the handler, as for create-project.
     permission: null,
     handler: (_ctx, body) => registerTargetFromProtocol(body)
-  },
-  // Predates the real `organizations` table/hierarchy (coo:135) — despite the
-  // name, this returns only the caller's current *workspace* context (never
-  // an organization row), kept as-is to avoid a breaking protocol rename.
-  // Use `GET /api/organizations` (web) for real organization data.
-  "list-organizations": {
-    permission: PERMISSIONS.PROJECT_READ,
-    handler: (ctx) => [{ id: ctx.workspace.id, slug: ctx.workspace.slug, name: ctx.workspace.name }]
   }
 };
 
@@ -171722,11 +171637,10 @@ var SUBCOMMAND_PERMISSIONS = Object.fromEntries(
   Object.entries(SUBCOMMANDS).map(([name2, entry]) => [name2, entry.permission])
 );
 async function runProtocolSubcommand(subcommand, body) {
-  const canonicalSubcommand = subcommand === "search" ? "search-missions" : subcommand;
   if (getActiveTokenProjectIds() !== null && !(/* @__PURE__ */ new Set([
     "create",
     "load-context",
-    "search-missions",
+    "search",
     "discover-project",
     "statuses",
     "list-deliveries",
@@ -171734,13 +171648,13 @@ async function runProtocolSubcommand(subcommand, body) {
     "attachment-list",
     "attachment-download-url",
     "auth-status"
-  ])).has(canonicalSubcommand)) {
+  ])).has(subcommand)) {
     throw new ApiError(404, "Not found");
   }
-  if (getActiveTokenProjectIds() !== null && canonicalSubcommand === "discover-project" && !strFlag(body, "--project-id")) {
+  if (getActiveTokenProjectIds() !== null && subcommand === "discover-project" && !strFlag(body, "--project-id")) {
     throw new ApiError(404, "Not found");
   }
-  const entry = Object.hasOwn(SUBCOMMANDS, canonicalSubcommand) ? SUBCOMMANDS[canonicalSubcommand] : void 0;
+  const entry = Object.hasOwn(SUBCOMMANDS, subcommand) ? SUBCOMMANDS[subcommand] : void 0;
   if (!entry) {
     throw new ApiError(
       404,
@@ -171748,11 +171662,10 @@ async function runProtocolSubcommand(subcommand, body) {
       `Supported subcommands: ${Object.keys(SUBCOMMANDS).sort().join(", ")}`
     );
   }
-  const isAggregateSearch = canonicalSubcommand === "search-missions" && (intFlag(body, "--response-version") === 2 || intFlag(body, "--response-version") === 3 || hasFlag(body, "--reference"));
-  const requiredPermission = isAggregateSearch ? null : entry.permission;
+  const requiredPermission = subcommand === "search" ? null : entry.permission;
   try {
     const ctx = await buildProtocolContext(body, requiredPermission);
-    await validateObjectiveAddressing({ ctx, body, subcommand: canonicalSubcommand });
+    await validateObjectiveAddressing({ ctx, body, subcommand });
     return await entry.handler(ctx, body);
   } catch (error64) {
     if (error64 instanceof ProjectSelectionRequiredError) {
@@ -180332,9 +180245,6 @@ var AccountConnections = class {
       [JSON.stringify(workspaces), this.timestamp(), id2, JSON.stringify(workspaces)]
     );
   }
-  async recordError(id2, code) {
-    await recordError(this.db, id2, code, this.timestamp());
-  }
   seal(row, credentials) {
     const { encryption } = this.ready();
     return sealSecret({
@@ -181409,9 +181319,6 @@ var ProfileConnections = class {
   }
   async requireReauthorization(row, code, lockOwner) {
     await requireReauthorization(this.db, row.id, code, this.timestamp(), lockOwner);
-  }
-  async recordError(id2, code) {
-    await recordError(this.db, id2, code, this.timestamp());
   }
 };
 
@@ -182854,29 +182761,6 @@ function everhourConnectionProvider(validateApiKey) {
 // ext/everhour/routes.ts
 var import_express2 = __toESM(require_express2(), 1);
 
-// connections/alias-telemetry.ts
-var counts = /* @__PURE__ */ new Map();
-var LOG_INTERVAL_MS = 60 * 60 * 1e3;
-var lastLoggedAt = Date.now();
-function clientFamily(req) {
-  const declared = req.get("x-overlord-client")?.trim().toLowerCase();
-  if (declared && /^[a-z0-9_-]{1,32}$/.test(declared)) return declared;
-  const agent = req.get("user-agent") ?? "";
-  if (/OverlordMobile|CFNetwork|Darwin/i.test(agent)) return "mobile";
-  if (/Electron/i.test(agent)) return "desktop";
-  if (/Mozilla/i.test(agent)) return "web";
-  return "other";
-}
-function recordConnectionAliasHit(route, req, now2 = Date.now()) {
-  const key = `${req.method} ${route} ${clientFamily(req)}`;
-  counts.set(key, (counts.get(key) ?? 0) + 1);
-  if (now2 - lastLoggedAt < LOG_INTERVAL_MS) return;
-  lastLoggedAt = now2;
-  const summary = [...counts.entries()].map(([k5, n3]) => `${k5}=${n3}`).join(", ");
-  counts.clear();
-  console.warn(`[connections] legacy alias hits in the last hour: ${summary}`);
-}
-
 // ext/resource-routes.ts
 function projectRoute(permission, fn) {
   return async (req) => {
@@ -183089,47 +182973,6 @@ function createEverhourService(connections) {
     } catch (err) {
       throw accessErrorToApiError(err);
     }
-  }
-  async function getEverhourIntegration() {
-    const connection = await readActorUserConnection();
-    if (!connection || connection.state !== "connected")
-      return { connected: false, accountName: null };
-    let apiKey;
-    try {
-      const found = await connections().credential(connection.owner_profile_id, "everhour");
-      apiKey = found?.credential.kind === "api_key" ? found.credential.apiKey : null;
-    } catch (err) {
-      if (!(err instanceof ConnectionAccessError)) throw err;
-      if (err.code === "unavailable")
-        return { connected: true, accountName: connection.external_account_label };
-      return { connected: false, accountName: null };
-    }
-    if (!apiKey) return { connected: false, accountName: null };
-    try {
-      const user = await everhourFetch(apiKey, "/users/me");
-      return { connected: true, accountName: user?.name ?? connection.external_account_label };
-    } catch {
-      return { connected: true, accountName: connection.external_account_label };
-    }
-  }
-  async function setEverhourApiKey(rawKey2) {
-    const apiKey = rawKey2.trim();
-    if (!apiKey) throw new ApiError(400, "Enter an Everhour API key.");
-    const user = await everhourFetch(apiKey, "/users/me");
-    const profileId = await requireActorProfileId();
-    try {
-      await connections().storeApiKey(profileId, "everhour", apiKey, everhourAccount(user));
-    } catch (err) {
-      if (err instanceof ChatError && err.code === "provider_not_ready")
-        throw new ApiError(503, ENCRYPTION_NOT_CONFIGURED);
-      throw err;
-    }
-    return { connected: true, accountName: user?.name ?? null };
-  }
-  async function clearEverhourApiKey() {
-    const profileId = await requireActorProfileId();
-    await connections().disconnectProvider(profileId, "everhour");
-    return { connected: false, accountName: null };
   }
   async function readProjectLink2(projectId, workspaceId2, client = requireDatabaseClient()) {
     const row = await client.get(
@@ -183762,9 +183605,6 @@ function createEverhourService(connections) {
     return getMissionEverhourState(missionId);
   }
   return {
-    getEverhourIntegration,
-    setEverhourApiKey,
-    clearEverhourApiKey,
     getProjectEverhourLink,
     linkProjectEverhour,
     getMissionEverhourState,
@@ -183787,15 +183627,12 @@ function createEverhourExtensionRouter(handle4, connections) {
   const {
     addMissionTime,
     addProjectTime,
-    clearEverhourApiKey,
     deleteMissionTime,
     deleteProjectTime,
-    getEverhourIntegration,
     getMissionEverhourState,
     getProjectEverhourLink,
     getProjectEverhourState,
     linkProjectEverhour,
-    setEverhourApiKey,
     startMissionTimer,
     startProjectTimer,
     stopMissionTimer,
@@ -183804,36 +183641,6 @@ function createEverhourExtensionRouter(handle4, connections) {
     updateProjectTime
   } = createEverhourService(connections);
   const router2 = (0, import_express2.Router)();
-  for (const path29 of ["/user-connection", "/integration"]) {
-    const alias = (req) => recordConnectionAliasHit(`/ext/everhour${path29}`, req);
-    router2.get(
-      path29,
-      handle4((req) => {
-        alias(req);
-        return getEverhourIntegration();
-      })
-    );
-    router2.put(
-      path29,
-      handle4(
-        (req) => {
-          alias(req);
-          return setEverhourApiKey(String(req.body?.apiKey ?? ""));
-        },
-        { mutates: true }
-      )
-    );
-    router2.delete(
-      path29,
-      handle4(
-        (req) => {
-          alias(req);
-          return clearEverhourApiKey();
-        },
-        { mutates: true }
-      )
-    );
-  }
   router2.put(
     "/projects/:projectId/link",
     handle4(
@@ -184205,81 +184012,6 @@ function createGitHubUserOAuth(connections) {
     if (!profileId) throw new ApiError(401, "Authentication required.");
     return profileId;
   }
-  function connectionDto2(row) {
-    const connected = row?.state === "connected";
-    return {
-      configured: githubUserOAuthConfigured(),
-      connected,
-      account: connected && row.external_account_id && row.external_account_label ? {
-        id: row.external_account_id,
-        login: row.external_account_label,
-        avatarUrl: row.external_account_avatar_url
-      } : null,
-      scopes: connected ? parseGitHubScopes(row.granted_scopes_json) : []
-    };
-  }
-  async function getGitHubUserConnection() {
-    const client = requireDatabaseClient();
-    const profileId = await activeProfileId(client);
-    return connectionDto2(await connections().find(profileId, "github"));
-  }
-  function validatedReturnUrl(value2, allowedBrowserOrigins2) {
-    if (value2 === void 0 || value2 === null || value2 === "") return null;
-    if (typeof value2 !== "string") throw new ApiError(400, "GitHub return URL is invalid.");
-    let url2;
-    try {
-      url2 = new URL(value2);
-    } catch {
-      throw new ApiError(400, "GitHub return URL is invalid.");
-    }
-    if (url2.protocol === "overlord:" && url2.hostname === "github" && url2.pathname === "/callback" && !url2.username && !url2.password) {
-      return url2.toString();
-    }
-    if ((url2.protocol === "https:" || url2.protocol === "http:") && allowedBrowserOrigins2.includes(url2.origin)) {
-      return url2.toString();
-    }
-    throw new ApiError(400, "GitHub return URL is not an allowed Overlord destination.");
-  }
-  async function beginGitHubUserAuthorization(body, allowedBrowserOrigins2) {
-    const client = requireDatabaseClient();
-    const store = connections();
-    if (!store.available("github")) throw new ApiError(503, NOT_CONFIGURED);
-    const profileId = await activeProfileId(client);
-    const returnUrl = validatedReturnUrl(body.returnTo, allowedBrowserOrigins2);
-    try {
-      const started = await store.beginOAuth(profileId, "github", {
-        returnTo: returnUrl?.startsWith("overlord:") ? "mobile" : "web",
-        returnUrl
-      });
-      return { authorizationUrl: started.authorizeUrl };
-    } catch (error64) {
-      if (error64 instanceof ChatError && error64.code === "provider_not_ready")
-        throw new ApiError(503, NOT_CONFIGURED);
-      if (error64 instanceof ChatError && error64.code === "limit_exceeded")
-        throw new ApiError(429, "Too many GitHub sign-ins are open; try again in a few minutes.");
-      throw error64;
-    }
-  }
-  async function completeGitHubUserAuthorization(input2) {
-    const client = requireDatabaseClient();
-    const outcome = await connections().completeOAuth("github", input2);
-    if (outcome.status === "expired")
-      throw new ApiError(400, "GitHub authorization state has expired or was already used.");
-    if (outcome.status !== "connected") {
-      if (outcome.errorCode === "insufficient_scope")
-        throw new ApiError(
-          403,
-          "GitHub authorization did not grant private-repository and organization access."
-        );
-      if (outcome.errorCode === "account_in_use")
-        throw new ApiError(409, "This GitHub account is already connected to another user.");
-      throw new ApiError(502, "GitHub did not complete repository authorization.");
-    }
-    const row = await client.get("SELECT * FROM account_connections WHERE id = ?", [
-      outcome.connectionId
-    ]);
-    return { connection: connectionDto2(row ?? null), returnUrl: outcome.returnUrl };
-  }
   function accessError(error64, notConnected) {
     if (!(error64 instanceof ConnectionAccessError)) return error64;
     if (error64.code === "not_found") return new ApiError(409, notConnected);
@@ -184443,20 +184175,9 @@ function createGitHubUserOAuth(connections) {
       cloneUrl: response.clone_url
     };
   }
-  async function disconnectGitHubUser() {
-    const client = requireDatabaseClient();
-    const profileId = await activeProfileId(client);
-    await connections().disconnectProvider(profileId, "github");
-    return connectionDto2(null);
-  }
   return {
-    githubUserOAuthConfigured,
-    getGitHubUserConnection,
-    beginGitHubUserAuthorization,
-    completeGitHubUserAuthorization,
     listGitHubRepositoryOwners,
-    createPrivateGitHubRepository: createPrivateGitHubRepository2,
-    disconnectGitHubUser
+    createPrivateGitHubRepository: createPrivateGitHubRepository2
   };
 }
 
@@ -184467,46 +184188,8 @@ function workspaceId(req) {
   return value2;
 }
 function createGitHubExtensionRouter(handle4, options) {
-  const {
-    beginGitHubUserAuthorization,
-    disconnectGitHubUser,
-    getGitHubUserConnection,
-    listGitHubRepositoryOwners
-  } = createGitHubUserOAuth(options.connections);
+  const { listGitHubRepositoryOwners } = createGitHubUserOAuth(options.connections);
   const router2 = (0, import_express3.Router)();
-  const alias = (path29, req) => recordConnectionAliasHit(`/ext/github${path29}`, req);
-  router2.get(
-    "/user-connection",
-    handle4((req) => {
-      alias("/user-connection", req);
-      return getGitHubUserConnection();
-    })
-  );
-  router2.post(
-    "/user-connection/authorize",
-    handle4(
-      (req) => {
-        alias("/user-connection/authorize", req);
-        return beginGitHubUserAuthorization(
-          {
-            returnTo: typeof req.body?.returnTo === "string" ? req.body.returnTo : void 0
-          },
-          options.allowedBrowserOrigins ?? []
-        );
-      },
-      { mutates: true }
-    )
-  );
-  router2.delete(
-    "/user-connection",
-    handle4(
-      (req) => {
-        alias("/user-connection", req);
-        return disconnectGitHubUser();
-      },
-      { mutates: true }
-    )
-  );
   router2.get(
     "/repository-owners",
     handle4(() => listGitHubRepositoryOwners())
@@ -185073,8 +184756,6 @@ var chatNotificationListResponseSchema = external_exports.object({ "items": exte
 var markChatNotificationReadBodySchema = external_exports.object({ "expectedRevision": external_exports.int().min(1) });
 var chatDiagnosticDtoSchema = external_exports.object({ "seq": external_exports.int().min(1), "threadId": external_exports.string(), "runId": external_exports.string().nullable(), "attemptId": external_exports.string().nullable(), "kind": external_exports.string(), "createdAt": dateTimeSchema, "payload": jsonValueSchema });
 var chatDiagnosticPageDtoSchema = external_exports.object({ "entries": external_exports.array(chatDiagnosticDtoSchema).max(100), "nextCursor": external_exports.int().min(0), "hasMore": external_exports.boolean() });
-var everhourUserConnectionDtoSchema = external_exports.object({ "connected": external_exports.boolean(), "accountName": external_exports.string().nullable() });
-var updateEverhourIntegrationBodySchema = external_exports.object({ "apiKey": external_exports.string() });
 var projectEverhourLinkDtoSchema = external_exports.object({ "projectId": external_exports.string(), "everhourProjectName": external_exports.string().nullable(), "everhourProjectId": external_exports.string().nullable() });
 var linkProjectEverhourBodySchema = external_exports.object({ "everhourProjectName": external_exports.exactOptional(external_exports.string().nullable()) });
 var everhourTimeRecordDtoSchema = external_exports.object({ "id": external_exports.string(), "timeSeconds": external_exports.number(), "date": external_exports.string(), "comment": external_exports.string().nullable() });
@@ -185083,10 +184764,6 @@ var missionEverhourStateDtoSchema = external_exports.object({ "connected": exter
 var projectEverhourStateDtoSchema = external_exports.object({ "connected": external_exports.boolean(), "projectLinked": external_exports.boolean(), "taskId": external_exports.string().nullable(), "records": external_exports.array(everhourTimeRecordDtoSchema), "totalSeconds": external_exports.number(), "runningTimer": everhourTimerDtoSchema.nullable(), "hasRunningTimerInProject": external_exports.boolean() });
 var createEverhourTimeBodySchema = external_exports.object({ "timeSeconds": external_exports.number(), "date": external_exports.exactOptional(external_exports.string()), "comment": external_exports.exactOptional(external_exports.string().nullable()) });
 var updateEverhourTimeBodySchema = external_exports.object({ "timeSeconds": external_exports.number(), "comment": external_exports.exactOptional(external_exports.string().nullable()) });
-var gitHubUserAccountDtoSchema = external_exports.object({ "id": external_exports.string(), "login": external_exports.string(), "avatarUrl": external_exports.string().nullable() });
-var gitHubUserConnectionDtoSchema = external_exports.object({ "configured": external_exports.boolean(), "connected": external_exports.boolean(), "account": gitHubUserAccountDtoSchema.nullable(), "scopes": external_exports.array(external_exports.string()) });
-var gitHubUserAuthorizationDtoSchema = external_exports.object({ "authorizationUrl": external_exports.string() });
-var beginGitHubUserAuthorizationBodySchema = external_exports.object({ "returnTo": external_exports.exactOptional(external_exports.string()) });
 var gitHubRepositoryOwnerDtoSchema = external_exports.object({ "login": external_exports.string(), "type": external_exports.enum(["personal", "organization"]), "avatarUrl": external_exports.string().nullable(), "canCreateRepositories": external_exports.literal(true) });
 var gitHubRepositoryOwnerListSchema = external_exports.array(gitHubRepositoryOwnerDtoSchema).min(1);
 var gitHubIntegrationDtoSchema = external_exports.object({ "configured": external_exports.boolean(), "connected": external_exports.boolean(), "accountLogin": external_exports.string().nullable(), "accountType": external_exports.string().nullable(), "workspaceName": external_exports.string() });
@@ -185274,9 +184951,7 @@ var postMissionsByIdSessionChannelPathParamsSchema = external_exports.object({ "
 var postMissionsByIdTerminalSessionsForgetPathParamsSchema = external_exports.object({ "id": external_exports.string() });
 var getAgentRequestsQueryParamsSchema = external_exports.object({ "missionId": external_exports.exactOptional(external_exports.string()), "objectiveId": external_exports.exactOptional(external_exports.string()) });
 var postAgentRequestsByIdResolvePathParamsSchema = external_exports.object({ "id": external_exports.string() });
-var postAgentRequestsByIdReleasePathParamsSchema = external_exports.object({ "id": external_exports.string() });
 var getAgentSessionInputsQueryParamsSchema = external_exports.object({ "missionId": external_exports.exactOptional(external_exports.string()), "objectiveId": external_exports.exactOptional(external_exports.string()) });
-var postAgentSessionInputsByIdCancelPathParamsSchema = external_exports.object({ "id": external_exports.string() });
 var getMissionsByIdEventsPathParamsSchema = external_exports.object({ "id": external_exports.string() });
 var getMissionsByIdDeliveriesPathParamsSchema = external_exports.object({ "id": external_exports.string() });
 var getMissionsByIdSummaryPathParamsSchema = external_exports.object({ "id": external_exports.string() });
@@ -187067,7 +186742,7 @@ var apiOperations = {
     permission: "unknown",
     permissionCandidates: ["profile:self:update", "project:read"],
     edition: "both",
-    consumers: ["mobile", "webapp"],
+    consumers: ["mobile"],
     extension: null,
     security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
     parameters: { path: null, query: null, header: null },
@@ -187086,7 +186761,7 @@ var apiOperations = {
     permission: "profile:self:update",
     permissionCandidates: [],
     edition: "both",
-    consumers: ["webapp"],
+    consumers: ["unverified"],
     extension: null,
     security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
     parameters: { path: null, query: null, header: null },
@@ -187447,7 +187122,7 @@ var apiOperations = {
     permission: "project:read",
     permissionCandidates: [],
     edition: "both",
-    consumers: ["cli", "mobile", "webapp"],
+    consumers: ["cli", "mobile"],
     extension: null,
     security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
     parameters: { path: null, query: getProjectsQueryParamsSchema, header: null },
@@ -188405,123 +188080,6 @@ var apiOperations = {
     responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: missionListSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
   },
   /**
-   * GET /ext/everhour/user-connection: The caller's Everhour connection (compatibility alias)
-   */
-  getExtEverhourUserConnection: {
-    operationId: "getExtEverhourUserConnection",
-    method: "GET",
-    path: "/ext/everhour/user-connection",
-    tags: ["everhour"],
-    deprecated: false,
-    permission: "owner",
-    permissionCandidates: [],
-    edition: "both",
-    consumers: ["unverified"],
-    extension: "everhour",
-    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
-    parameters: { path: null, query: null, header: null },
-    requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: everhourUserConnectionDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
-  },
-  /**
-   * PUT /ext/everhour/user-connection: Connect or rotate the caller's Everhour API key (compatibility alias)
-   */
-  putExtEverhourUserConnection: {
-    operationId: "putExtEverhourUserConnection",
-    method: "PUT",
-    path: "/ext/everhour/user-connection",
-    tags: ["everhour"],
-    deprecated: false,
-    permission: "owner",
-    permissionCandidates: [],
-    edition: "both",
-    consumers: ["unverified"],
-    extension: "everhour",
-    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
-    parameters: { path: null, query: null, header: null },
-    requestBody: { required: true, content: { "application/json": { kind: "json", schema: updateEverhourIntegrationBodySchema } } },
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: everhourUserConnectionDtoSchema } } }, "400": apiResponses.BadRequest, "401": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "403": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "404": apiResponses.NotFound, "413": apiResponses.PayloadTooLarge, "429": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "500": apiResponses.InternalError, "502": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "503": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } } }
-  },
-  /**
-   * DELETE /ext/everhour/user-connection: Disconnect the caller's Everhour key (compatibility alias)
-   */
-  deleteExtEverhourUserConnection: {
-    operationId: "deleteExtEverhourUserConnection",
-    method: "DELETE",
-    path: "/ext/everhour/user-connection",
-    tags: ["everhour"],
-    deprecated: false,
-    permission: "owner",
-    permissionCandidates: [],
-    edition: "both",
-    consumers: ["unverified"],
-    extension: "everhour",
-    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
-    parameters: { path: null, query: null, header: null },
-    requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: everhourUserConnectionDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
-  },
-  /**
-   * GET /ext/everhour/integration: The caller's Everhour connection (deprecated alias of /user-connection)
-   * @deprecated
-   */
-  getExtEverhourIntegration: {
-    operationId: "getExtEverhourIntegration",
-    method: "GET",
-    path: "/ext/everhour/integration",
-    tags: ["everhour"],
-    deprecated: true,
-    permission: "owner",
-    permissionCandidates: [],
-    edition: "both",
-    consumers: ["unverified"],
-    extension: "everhour",
-    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
-    parameters: { path: null, query: null, header: null },
-    requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: everhourUserConnectionDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
-  },
-  /**
-   * PUT /ext/everhour/integration: Connect or rotate the caller's Everhour API key (deprecated alias of /user-connection)
-   * @deprecated
-   */
-  putExtEverhourIntegration: {
-    operationId: "putExtEverhourIntegration",
-    method: "PUT",
-    path: "/ext/everhour/integration",
-    tags: ["everhour"],
-    deprecated: true,
-    permission: "owner",
-    permissionCandidates: [],
-    edition: "both",
-    consumers: ["unverified"],
-    extension: "everhour",
-    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
-    parameters: { path: null, query: null, header: null },
-    requestBody: { required: true, content: { "application/json": { kind: "json", schema: updateEverhourIntegrationBodySchema } } },
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: everhourUserConnectionDtoSchema } } }, "400": apiResponses.BadRequest, "401": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "403": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "404": apiResponses.NotFound, "413": apiResponses.PayloadTooLarge, "429": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "500": apiResponses.InternalError, "502": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "503": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } } }
-  },
-  /**
-   * DELETE /ext/everhour/integration: Disconnect the caller's Everhour key (deprecated alias of /user-connection)
-   * @deprecated
-   */
-  deleteExtEverhourIntegration: {
-    operationId: "deleteExtEverhourIntegration",
-    method: "DELETE",
-    path: "/ext/everhour/integration",
-    tags: ["everhour"],
-    deprecated: true,
-    permission: "owner",
-    permissionCandidates: [],
-    edition: "both",
-    consumers: ["unverified"],
-    extension: "everhour",
-    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
-    parameters: { path: null, query: null, header: null },
-    requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: everhourUserConnectionDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
-  },
-  /**
    * GET /ext/everhour/projects/{projectId}/link: Read a project's Everhour link
    */
   getExtEverhourProjectsByProjectIdLink: {
@@ -188788,63 +188346,6 @@ var apiOperations = {
     responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: missionEverhourStateDtoSchema } } }, "400": apiResponses.BadRequest, "401": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "403": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "404": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "409": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "413": apiResponses.PayloadTooLarge, "429": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "500": apiResponses.InternalError, "502": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "503": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } } }
   },
   /**
-   * GET /ext/github/user-connection: The caller's GitHub repository authorization (compatibility alias)
-   */
-  getExtGithubUserConnection: {
-    operationId: "getExtGithubUserConnection",
-    method: "GET",
-    path: "/ext/github/user-connection",
-    tags: ["github"],
-    deprecated: false,
-    permission: "owner",
-    permissionCandidates: [],
-    edition: "both",
-    consumers: ["unverified"],
-    extension: "github",
-    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
-    parameters: { path: null, query: null, header: null },
-    requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: gitHubUserConnectionDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
-  },
-  /**
-   * DELETE /ext/github/user-connection: Disconnect the caller's GitHub repository authorization (compatibility alias)
-   */
-  deleteExtGithubUserConnection: {
-    operationId: "deleteExtGithubUserConnection",
-    method: "DELETE",
-    path: "/ext/github/user-connection",
-    tags: ["github"],
-    deprecated: false,
-    permission: "owner",
-    permissionCandidates: [],
-    edition: "both",
-    consumers: ["unverified"],
-    extension: "github",
-    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
-    parameters: { path: null, query: null, header: null },
-    requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: gitHubUserConnectionDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
-  },
-  /**
-   * POST /ext/github/user-connection/authorize: Start GitHub repository authorization (compatibility alias)
-   */
-  postExtGithubUserConnectionAuthorize: {
-    operationId: "postExtGithubUserConnectionAuthorize",
-    method: "POST",
-    path: "/ext/github/user-connection/authorize",
-    tags: ["github"],
-    deprecated: false,
-    permission: "owner",
-    permissionCandidates: [],
-    edition: "both",
-    consumers: ["unverified"],
-    extension: "github",
-    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
-    parameters: { path: null, query: null, header: null },
-    requestBody: { required: false, content: { "application/json": { kind: "json", schema: beginGitHubUserAuthorizationBodySchema } } },
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: gitHubUserAuthorizationDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "413": apiResponses.PayloadTooLarge, "429": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "500": apiResponses.InternalError, "503": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } } }
-  },
-  /**
    * GET /ext/github/repository-owners: List the GitHub owners the caller can create private repositories under
    */
   getExtGithubRepositoryOwners: {
@@ -188951,7 +188452,7 @@ var apiOperations = {
     permission: "project:read",
     permissionCandidates: [],
     edition: "both",
-    consumers: ["webapp"],
+    consumers: ["unverified"],
     extension: "github",
     security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
     parameters: { path: null, query: getExtGithubReposQueryParamsSchema, header: null },
@@ -189179,7 +188680,7 @@ var apiOperations = {
     permission: "mission:read",
     permissionCandidates: [],
     edition: "both",
-    consumers: ["cli", "webapp"],
+    consumers: ["cli"],
     extension: null,
     security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
     parameters: { path: null, query: getMissionsSearchQueryParamsSchema, header: null },
@@ -189453,25 +188954,6 @@ var apiOperations = {
     responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: resolveAgentRequestResultDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "410": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
   },
   /**
-   * POST /api/agent-requests/{id}/release: Release an agent request to the terminal (retired)
-   */
-  postAgentRequestsByIdRelease: {
-    operationId: "postAgentRequestsByIdRelease",
-    method: "POST",
-    path: "/api/agent-requests/{id}/release",
-    tags: ["agent-requests"],
-    deprecated: false,
-    permission: "authenticated",
-    permissionCandidates: [],
-    edition: "both",
-    consumers: ["webapp"],
-    extension: null,
-    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
-    parameters: { path: postAgentRequestsByIdReleasePathParamsSchema, query: null, header: null },
-    requestBody: null,
-    responses: { "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "410": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
-  },
-  /**
    * GET /api/agent-session-inputs: List a mission's session inputs and its latest channel
    */
   getAgentSessionInputs: {
@@ -189483,7 +188965,7 @@ var apiOperations = {
     permission: "session:read",
     permissionCandidates: [],
     edition: "both",
-    consumers: ["cli", "webapp"],
+    consumers: ["cli"],
     extension: null,
     security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
     parameters: { path: null, query: getAgentSessionInputsQueryParamsSchema, header: null },
@@ -189502,29 +188984,10 @@ var apiOperations = {
     permission: "authenticated",
     permissionCandidates: [],
     edition: "both",
-    consumers: ["cli", "webapp"],
+    consumers: ["cli"],
     extension: null,
     security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
     parameters: { path: null, query: null, header: null },
-    requestBody: null,
-    responses: { "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "410": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
-  },
-  /**
-   * POST /api/agent-session-inputs/{id}/cancel: Cancel a session input (retired)
-   */
-  postAgentSessionInputsByIdCancel: {
-    operationId: "postAgentSessionInputsByIdCancel",
-    method: "POST",
-    path: "/api/agent-session-inputs/{id}/cancel",
-    tags: ["agent-session-inputs"],
-    deprecated: false,
-    permission: "authenticated",
-    permissionCandidates: [],
-    edition: "both",
-    consumers: ["webapp"],
-    extension: null,
-    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
-    parameters: { path: postAgentSessionInputsByIdCancelPathParamsSchema, query: null, header: null },
     requestBody: null,
     responses: { "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "410": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
   },
@@ -189635,7 +189098,7 @@ var apiOperations = {
     permission: "artifact:create",
     permissionCandidates: [],
     edition: "both",
-    consumers: ["webapp"],
+    consumers: ["unverified"],
     extension: null,
     security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
     parameters: { path: postMissionsByIdArtifactsPathParamsSchema, query: null, header: null },
@@ -192587,10 +192050,6 @@ function createAgentRequestHumanRouter() {
       };
     })
   );
-  router2.post(
-    "/:id/release",
-    handle2(async () => sessionControlsGone())
-  );
   return router2;
 }
 function inputDto(input2) {
@@ -192691,10 +192150,6 @@ function createAgentSessionInputHumanRouter() {
   );
   router2.post(
     "/",
-    handle2(async () => sessionControlsGone())
-  );
-  router2.post(
-    "/:id/cancel",
     handle2(async () => sessionControlsGone())
   );
   return router2;
@@ -193703,7 +193158,7 @@ function createChatRouter(options) {
 }
 
 // chat-notification-dispatcher.ts
-var import_node_crypto40 = require("node:crypto");
+var import_node_crypto39 = require("node:crypto");
 
 // ../packages/core/service/push-notification-jobs.ts
 var PUSH_NOTIFICATION_DISPATCH_JOB_TYPE = "overlord.push_notification.dispatch.v1";
@@ -193801,9 +193256,6 @@ async function sendApnsRequest({
   });
 }
 
-// live-activities.ts
-var import_node_crypto39 = require("node:crypto");
-
 // text-presentation.ts
 var TITLE_MAX_LENGTH = 80;
 function bounded(value2, max) {
@@ -193817,333 +193269,6 @@ function presentationText(value2, max) {
 }
 function presentationTitle(value2) {
   return presentationText(value2, TITLE_MAX_LENGTH);
-}
-
-// live-activities.ts
-var MAX_RUNNING = 2;
-var COMPLETION_HOLD_MS = 30 * 60 * 1e3;
-var START_TOKEN_MAX_LENGTH = 512;
-var BUNDLE_ID_MAX_LENGTH = 255;
-var ACTIVITY_TYPE_MAX_LENGTH = 128;
-var APP_VERSION_MAX_LENGTH = 64;
-var ASK_QUESTION_MAX_LENGTH = 140;
-var ASK_MAX_AGE_MS = 3 * 24 * 60 * 60 * 1e3;
-var LIVE_ACTIVITY_ATTRIBUTES_TYPE = "OverlordActivityAttributes";
-var LIVE_ACTIVITY_ACCOUNT_LABEL = "My Missions";
-function projectColor(settingsJson) {
-  try {
-    const value2 = JSON.parse(settingsJson);
-    const configured = value2["overlord.color"] ?? value2.color;
-    const color = typeof configured === "string" ? configured.trim() : "";
-    return color ? color.startsWith("#") ? color : `#${color}` : "#2563eb";
-  } catch {
-    return "#2563eb";
-  }
-}
-function asBool(value2) {
-  return value2 === true || value2 === 1;
-}
-function toSnapshot(row) {
-  return {
-    id: row.id,
-    title: presentationTitle(row.title),
-    displayId: row.display_id,
-    projectName: bounded(row.project_name.trim() || "Project", 40),
-    projectColorHex: projectColor(row.project_settings_json),
-    objectiveId: null,
-    missionDisplayId: row.display_id,
-    missionTitle: presentationTitle(row.title)
-  };
-}
-function toRunningSnapshot(row) {
-  const missionTitle = presentationTitle(row.mission_title);
-  const objectiveTitle = row.objective_title ? presentationTitle(row.objective_title) : "";
-  return {
-    id: row.mission_id,
-    title: objectiveTitle || missionTitle,
-    displayId: formatObjectiveDisplayId({
-      missionDisplayId: row.mission_display_id,
-      displayKey: row.display_key
-    }),
-    projectName: bounded(row.project_name.trim() || "Project", 40),
-    projectColorHex: projectColor(row.project_settings_json),
-    objectiveId: row.objective_id,
-    missionDisplayId: row.mission_display_id,
-    missionTitle
-  };
-}
-async function toCompletionSnapshot(db, row) {
-  const objective = await db.get(
-    `SELECT id, title, display_key FROM objectives
-      WHERE mission_id = ? AND deleted_at IS NULL AND state = 'complete'
-      ORDER BY updated_at DESC, id ASC LIMIT 1`,
-    [row.id]
-  );
-  const mission = toSnapshot(row);
-  if (!objective) return mission;
-  return {
-    ...mission,
-    title: (objective.title ? presentationTitle(objective.title) : "") || mission.missionTitle,
-    displayId: formatObjectiveDisplayId({
-      missionDisplayId: row.display_id,
-      displayKey: objective.display_key
-    }),
-    objectiveId: objective.id
-  };
-}
-async function requireOwnWorkspaceId(db, profileId) {
-  const workspace2 = await db.get(
-    `SELECT w.id FROM workspace_users wu JOIN workspaces w ON w.id = wu.workspace_id
-      WHERE wu.profile_id = ? AND wu.status = 'active' AND wu.deleted_at IS NULL
-        AND w.deleted_at IS NULL ORDER BY wu.created_at ASC LIMIT 1`,
-    [profileId]
-  );
-  if (!workspace2) throw new ApiError(403, "No active workspace membership");
-  return workspace2.id;
-}
-async function requireOwnProfileId(db) {
-  const profileId = await resolveActiveProfileId(db);
-  if (!profileId) throw new ApiError(401, "Authentication required");
-  return profileId;
-}
-async function registerLiveActivityPushToken(activityId, body) {
-  const normalizedActivityId = activityId.trim();
-  const pushToken = typeof body.pushToken === "string" ? body.pushToken.trim() : "";
-  if (!normalizedActivityId || !pushToken) {
-    throw new ApiError(400, "activityId and pushToken are required");
-  }
-  if (normalizedActivityId.length > 255 || pushToken.length > 4096) {
-    throw new ApiError(400, "Live Activity registration is too large");
-  }
-  const bundleId = requiredString(body.bundleId, "bundleId", BUNDLE_ID_MAX_LENGTH);
-  const environmentRaw = typeof body.environment === "string" ? body.environment.trim() : "";
-  if (environmentRaw !== "sandbox" && environmentRaw !== "production") {
-    throw new ApiError(400, "environment must be sandbox or production");
-  }
-  const environment = environmentRaw;
-  if (body.startedByPush !== void 0 && typeof body.startedByPush !== "boolean") {
-    throw new ApiError(400, "startedByPush must be a boolean");
-  }
-  const origin = body.startedByPush === true ? "push_to_start" : "local";
-  const db = requireDatabaseClient();
-  const profileId = await requireOwnProfileId(db);
-  const workspaceId2 = await requireOwnWorkspaceId(db, profileId);
-  const now2 = nowIso();
-  await db.transaction(async (tx) => {
-    const existing = await tx.get(
-      `SELECT id FROM live_activity_push_tokens WHERE profile_id = ? AND activity_id = ?`,
-      [profileId, normalizedActivityId]
-    );
-    if (existing) {
-      await tx.run(
-        `UPDATE live_activity_push_tokens
-            SET push_token = ?, environment = ?, bundle_id = ?, origin = ?,
-                last_content_hash = NULL, last_sent_at = NULL, updated_at = ?
-          WHERE id = ?`,
-        [pushToken, environment, bundleId, origin, now2, existing.id]
-      );
-    } else {
-      await tx.run(
-        `INSERT INTO live_activity_push_tokens
-           (id, profile_id, activity_id, push_token, environment, bundle_id, origin,
-            created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [
-          newId(),
-          profileId,
-          normalizedActivityId,
-          pushToken,
-          environment,
-          bundleId,
-          origin,
-          now2,
-          now2
-        ]
-      );
-    }
-    await enqueueLiveActivityDispatchJob({
-      db: tx,
-      workspaceId: workspaceId2,
-      profileId,
-      now: now2
-    });
-  });
-}
-async function registerLiveActivityStartToken(body) {
-  const startToken = requiredString(body.startToken, "startToken", START_TOKEN_MAX_LENGTH);
-  const bundleId = requiredString(body.bundleId, "bundleId", BUNDLE_ID_MAX_LENGTH);
-  const environmentRaw = typeof body.environment === "string" ? body.environment.trim() : "";
-  if (environmentRaw !== "sandbox" && environmentRaw !== "production") {
-    throw new ApiError(400, "environment must be sandbox or production");
-  }
-  const environment = environmentRaw;
-  const activityTypeRaw = typeof body.activityType === "string" ? body.activityType.trim() : "";
-  if (activityTypeRaw.length > ACTIVITY_TYPE_MAX_LENGTH) {
-    throw new ApiError(400, "activityType is too long");
-  }
-  const activityType = activityTypeRaw || LIVE_ACTIVITY_ATTRIBUTES_TYPE;
-  const appVersionRaw = typeof body.appVersion === "string" ? body.appVersion.trim() : "";
-  if (appVersionRaw.length > APP_VERSION_MAX_LENGTH) {
-    throw new ApiError(400, "appVersion is too long");
-  }
-  const appVersion = appVersionRaw || null;
-  const db = requireDatabaseClient();
-  const profileId = await requireOwnProfileId(db);
-  const now2 = nowIso();
-  await db.transaction(async (tx) => {
-    const existing = await tx.get(
-      `SELECT id FROM live_activity_start_tokens WHERE start_token = ?`,
-      [startToken]
-    );
-    if (existing) {
-      await tx.run(
-        `UPDATE live_activity_start_tokens
-            SET profile_id = ?, platform = 'ios', environment = ?, bundle_id = ?,
-                activity_type = ?, app_version = ?, last_registered_at = ?, updated_at = ?
-          WHERE id = ?`,
-        [profileId, environment, bundleId, activityType, appVersion, now2, now2, existing.id]
-      );
-      return;
-    }
-    await tx.run(
-      `INSERT INTO live_activity_start_tokens
-         (id, profile_id, start_token, platform, environment, bundle_id, activity_type,
-          app_version, last_registered_at, last_started_at, created_at, updated_at)
-       VALUES (?, ?, ?, 'ios', ?, ?, ?, ?, ?, NULL, ?, ?)`,
-      [
-        newId(),
-        profileId,
-        startToken,
-        environment,
-        bundleId,
-        activityType,
-        appVersion,
-        now2,
-        now2,
-        now2
-      ]
-    );
-  });
-}
-async function revokeLiveActivityStartToken(body) {
-  const startToken = requiredString(body.startToken, "startToken", START_TOKEN_MAX_LENGTH);
-  const db = requireDatabaseClient();
-  const profileId = await requireOwnProfileId(db);
-  await db.run(`DELETE FROM live_activity_start_tokens WHERE profile_id = ? AND start_token = ?`, [
-    profileId,
-    startToken
-  ]);
-}
-async function revokeLiveActivityPushToken(activityId) {
-  const normalizedActivityId = activityId.trim();
-  if (!normalizedActivityId) throw new ApiError(400, "activityId is required");
-  const db = requireDatabaseClient();
-  const profileId = await requireOwnProfileId(db);
-  await db.run(`DELETE FROM live_activity_push_tokens WHERE profile_id = ? AND activity_id = ?`, [
-    profileId,
-    normalizedActivityId
-  ]);
-}
-async function loadPendingAsk(db, profileId, now2) {
-  const askRequestId = jsonTextFieldSql("e.payload_json", "agentRequestId", db.dialect);
-  const answerRequestId = jsonTextFieldSql("answer.payload_json", "agentRequestId", db.dialect);
-  const row = await db.get(
-    `SELECT e.mission_id, m.display_id AS mission_display_id, e.summary, e.created_at,
-            ${askRequestId} AS agent_request_id
-       FROM mission_events e
-       JOIN missions m ON m.id = e.mission_id AND m.deleted_at IS NULL
-       JOIN projects p ON p.id = m.project_id AND p.deleted_at IS NULL
-       JOIN workspace_users wu ON wu.id = m.assigned_workspace_user_id
-       JOIN workspaces w ON w.id = m.workspace_id AND w.deleted_at IS NULL
-      WHERE e.type = 'ask'
-        AND wu.profile_id = ? AND wu.status = 'active' AND wu.deleted_at IS NULL
-        AND e.created_at >= ?
-        AND EXISTS (
-          SELECT 1 FROM objectives ao
-           WHERE ao.mission_id = e.mission_id AND ao.deleted_at IS NULL
-             AND ao.state IN ('executing', 'pending_delivery')
-             AND (e.objective_id IS NULL OR ao.id = e.objective_id)
-        )
-        AND NOT EXISTS (
-          SELECT 1 FROM mission_status_seen mss
-           WHERE mss.mission_id = e.mission_id AND mss.status_id = 'blocking_question'
-             AND mss.seen_at >= e.created_at
-        )
-        AND NOT EXISTS (
-          SELECT 1 FROM mission_events answer
-           WHERE answer.mission_id = e.mission_id AND answer.type = 'answer'
-             AND ${answerRequestId} = ${askRequestId}
-        )
-      ORDER BY e.created_at DESC, e.id DESC
-      LIMIT 1`,
-    [profileId, new Date(now2.getTime() - ASK_MAX_AGE_MS).toISOString()]
-  );
-  if (!row) return null;
-  const question = presentationText(row.summary, ASK_QUESTION_MAX_LENGTH);
-  const askedAt = Date.parse(row.created_at);
-  return {
-    missionId: row.mission_id,
-    missionDisplayId: row.mission_display_id,
-    question: question || null,
-    askedAt: Math.floor((Number.isFinite(askedAt) ? askedAt : now2.getTime()) / 1e3),
-    agentRequestId: row.agent_request_id
-  };
-}
-async function buildLiveActivityContentState(db, profileId, now2 = /* @__PURE__ */ new Date()) {
-  const rows = await db.all(
-    `SELECT m.id, m.title, m.display_id, p.name AS project_name, p.settings_json AS project_settings_json,
-            m.updated_at, m.status_type,
-            EXISTS(SELECT 1 FROM objectives o WHERE o.mission_id = m.id AND o.deleted_at IS NULL AND o.state IN ('executing', 'pending_delivery')) AS has_executing_objective,
-            EXISTS(SELECT 1 FROM objectives o WHERE o.mission_id = m.id AND o.deleted_at IS NULL AND o.state = 'complete') AS has_completed_objective
-       FROM missions m
-       JOIN projects p ON p.id = m.project_id AND p.deleted_at IS NULL
-       JOIN workspace_users wu ON wu.id = m.assigned_workspace_user_id
-       JOIN workspaces w ON w.id = m.workspace_id AND w.deleted_at IS NULL
-      WHERE m.deleted_at IS NULL AND wu.profile_id = ? AND wu.status = 'active' AND wu.deleted_at IS NULL
-      ORDER BY m.updated_at DESC, m.id ASC`,
-    [profileId]
-  );
-  const runningRows = await db.all(
-    `SELECT o.id AS objective_id, o.title AS objective_title, o.display_key,
-            m.id AS mission_id, m.title AS mission_title, m.display_id AS mission_display_id,
-            p.name AS project_name, p.settings_json AS project_settings_json
-       FROM objectives o
-       JOIN missions m ON m.id = o.mission_id AND m.deleted_at IS NULL
-       JOIN projects p ON p.id = m.project_id AND p.deleted_at IS NULL
-       JOIN workspace_users wu ON wu.id = m.assigned_workspace_user_id
-       JOIN workspaces w ON w.id = m.workspace_id AND w.deleted_at IS NULL
-      WHERE o.deleted_at IS NULL AND o.state IN ('executing', 'pending_delivery')
-        AND wu.profile_id = ? AND wu.status = 'active' AND wu.deleted_at IS NULL
-      ORDER BY o.updated_at DESC, o.id ASC`,
-    [profileId]
-  );
-  const running = runningRows.slice(0, MAX_RUNNING);
-  const completion = rows.find((row) => {
-    if (asBool(row.has_executing_objective)) return false;
-    if (!asBool(row.has_completed_objective) && row.status_type !== "complete") return false;
-    const updated = Date.parse(row.updated_at);
-    return Number.isFinite(updated) && now2.getTime() - updated <= COMPLETION_HOLD_MS;
-  });
-  if (running.length === 0 && !completion) return null;
-  return {
-    running: running.map(toRunningSnapshot),
-    recentCompletion: completion ? await toCompletionSnapshot(db, completion) : null,
-    // Only an executing objective can hold a pending ask, so a state with no
-    // running rows never needs one.
-    pendingAsk: running.length > 0 ? await loadPendingAsk(db, profileId, now2) : null,
-    updatedAt: Math.floor(now2.getTime() / 1e3)
-  };
-}
-function liveActivityContentHash(state2) {
-  return (0, import_node_crypto39.createHash)("sha256").update(
-    JSON.stringify(
-      state2 && {
-        running: state2.running,
-        recentCompletion: state2.recentCompletion,
-        pendingAsk: state2.pendingAsk
-      }
-    )
-  ).digest("hex");
 }
 
 // notification-presentation.ts
@@ -194170,8 +193295,8 @@ function notificationBody(subject, verb) {
 
 // push-notifications.ts
 var DEVICE_TOKEN_MAX_LENGTH = 512;
-var BUNDLE_ID_MAX_LENGTH2 = 255;
-var APP_VERSION_MAX_LENGTH2 = 64;
+var BUNDLE_ID_MAX_LENGTH = 255;
+var APP_VERSION_MAX_LENGTH = 64;
 var PROJECT_NAME_MAX_LENGTH = 40;
 var DEFAULT_MODE = "alert";
 var PREFERENCE_TYPES = [
@@ -194184,14 +193309,14 @@ var CATEGORY_VERBS = Object.fromEntries(
 );
 async function registerDevicePushToken(body) {
   const deviceToken = requiredString(body.deviceToken, "deviceToken", DEVICE_TOKEN_MAX_LENGTH);
-  const bundleId = requiredString(body.bundleId, "bundleId", BUNDLE_ID_MAX_LENGTH2);
+  const bundleId = requiredString(body.bundleId, "bundleId", BUNDLE_ID_MAX_LENGTH);
   const environmentRaw = typeof body.environment === "string" ? body.environment.trim() : "";
   if (environmentRaw !== "sandbox" && environmentRaw !== "production") {
     throw new ApiError(400, "environment must be sandbox or production");
   }
   const environment = environmentRaw;
   const appVersionRaw = typeof body.appVersion === "string" ? body.appVersion.trim() : "";
-  if (appVersionRaw.length > APP_VERSION_MAX_LENGTH2) {
+  if (appVersionRaw.length > APP_VERSION_MAX_LENGTH) {
     throw new ApiError(400, "appVersion is too long");
   }
   const appVersion = appVersionRaw || null;
@@ -194665,7 +193790,7 @@ var ChatNotificationDispatcher = class extends PollLoop {
   db;
   options;
   send;
-  workerId = `chat-notifications:${(0, import_node_crypto40.randomUUID)()}`;
+  workerId = `chat-notifications:${(0, import_node_crypto39.randomUUID)()}`;
   /** One claim/deliver pass. Returns how many candidates it processed. */
   async tick() {
     return await this.poll() ?? 0;
@@ -195217,7 +194342,7 @@ function boundComposeText(value2, maxChars) {
 var deliveryComposeWorker = new DeliveryComposeWorker();
 
 // desktop-oauth-handoff.ts
-var import_node_crypto41 = require("node:crypto");
+var import_node_crypto40 = require("node:crypto");
 var HANDOFF_TTL_MS = 6e4;
 var TICKET_PATTERN = /^[A-Za-z0-9_-]{32,128}$/;
 var handoffs = /* @__PURE__ */ new Map();
@@ -195228,7 +194353,7 @@ function discardExpiredHandoffs(now2 = Date.now()) {
 }
 function createOAuthHandoff(sessionToken, audience) {
   discardExpiredHandoffs();
-  const ticket = (0, import_node_crypto41.randomBytes)(32).toString("base64url");
+  const ticket = (0, import_node_crypto40.randomBytes)(32).toString("base64url");
   handoffs.set(ticket, { audience, sessionToken, expiresAt: Date.now() + HANDOFF_TTL_MS });
   return ticket;
 }
@@ -195271,6 +194396,334 @@ function beginDesktopGitHubOAuth(auth2, authBaseUrl2) {
       })
     })
   );
+}
+
+// live-activities.ts
+var import_node_crypto41 = require("node:crypto");
+var MAX_RUNNING = 2;
+var COMPLETION_HOLD_MS = 30 * 60 * 1e3;
+var START_TOKEN_MAX_LENGTH = 512;
+var BUNDLE_ID_MAX_LENGTH2 = 255;
+var ACTIVITY_TYPE_MAX_LENGTH = 128;
+var APP_VERSION_MAX_LENGTH2 = 64;
+var ASK_QUESTION_MAX_LENGTH = 140;
+var ASK_MAX_AGE_MS = 3 * 24 * 60 * 60 * 1e3;
+var LIVE_ACTIVITY_ATTRIBUTES_TYPE = "OverlordActivityAttributes";
+var LIVE_ACTIVITY_ACCOUNT_LABEL = "My Missions";
+function projectColor(settingsJson) {
+  try {
+    const value2 = JSON.parse(settingsJson);
+    const configured = value2["overlord.color"] ?? value2.color;
+    const color = typeof configured === "string" ? configured.trim() : "";
+    return color ? color.startsWith("#") ? color : `#${color}` : "#2563eb";
+  } catch {
+    return "#2563eb";
+  }
+}
+function asBool(value2) {
+  return value2 === true || value2 === 1;
+}
+function toSnapshot(row) {
+  return {
+    id: row.id,
+    title: presentationTitle(row.title),
+    displayId: row.display_id,
+    projectName: bounded(row.project_name.trim() || "Project", 40),
+    projectColorHex: projectColor(row.project_settings_json),
+    objectiveId: null,
+    missionDisplayId: row.display_id,
+    missionTitle: presentationTitle(row.title)
+  };
+}
+function toRunningSnapshot(row) {
+  const missionTitle = presentationTitle(row.mission_title);
+  const objectiveTitle = row.objective_title ? presentationTitle(row.objective_title) : "";
+  return {
+    id: row.mission_id,
+    title: objectiveTitle || missionTitle,
+    displayId: formatObjectiveDisplayId({
+      missionDisplayId: row.mission_display_id,
+      displayKey: row.display_key
+    }),
+    projectName: bounded(row.project_name.trim() || "Project", 40),
+    projectColorHex: projectColor(row.project_settings_json),
+    objectiveId: row.objective_id,
+    missionDisplayId: row.mission_display_id,
+    missionTitle
+  };
+}
+async function toCompletionSnapshot(db, row) {
+  const objective = await db.get(
+    `SELECT id, title, display_key FROM objectives
+      WHERE mission_id = ? AND deleted_at IS NULL AND state = 'complete'
+      ORDER BY updated_at DESC, id ASC LIMIT 1`,
+    [row.id]
+  );
+  const mission = toSnapshot(row);
+  if (!objective) return mission;
+  return {
+    ...mission,
+    title: (objective.title ? presentationTitle(objective.title) : "") || mission.missionTitle,
+    displayId: formatObjectiveDisplayId({
+      missionDisplayId: row.display_id,
+      displayKey: objective.display_key
+    }),
+    objectiveId: objective.id
+  };
+}
+async function requireOwnWorkspaceId(db, profileId) {
+  const workspace2 = await db.get(
+    `SELECT w.id FROM workspace_users wu JOIN workspaces w ON w.id = wu.workspace_id
+      WHERE wu.profile_id = ? AND wu.status = 'active' AND wu.deleted_at IS NULL
+        AND w.deleted_at IS NULL ORDER BY wu.created_at ASC LIMIT 1`,
+    [profileId]
+  );
+  if (!workspace2) throw new ApiError(403, "No active workspace membership");
+  return workspace2.id;
+}
+async function requireOwnProfileId(db) {
+  const profileId = await resolveActiveProfileId(db);
+  if (!profileId) throw new ApiError(401, "Authentication required");
+  return profileId;
+}
+async function registerLiveActivityPushToken(activityId, body) {
+  const normalizedActivityId = activityId.trim();
+  const pushToken = typeof body.pushToken === "string" ? body.pushToken.trim() : "";
+  if (!normalizedActivityId || !pushToken) {
+    throw new ApiError(400, "activityId and pushToken are required");
+  }
+  if (normalizedActivityId.length > 255 || pushToken.length > 4096) {
+    throw new ApiError(400, "Live Activity registration is too large");
+  }
+  const bundleId = requiredString(body.bundleId, "bundleId", BUNDLE_ID_MAX_LENGTH2);
+  const environmentRaw = typeof body.environment === "string" ? body.environment.trim() : "";
+  if (environmentRaw !== "sandbox" && environmentRaw !== "production") {
+    throw new ApiError(400, "environment must be sandbox or production");
+  }
+  const environment = environmentRaw;
+  if (body.startedByPush !== void 0 && typeof body.startedByPush !== "boolean") {
+    throw new ApiError(400, "startedByPush must be a boolean");
+  }
+  const origin = body.startedByPush === true ? "push_to_start" : "local";
+  const db = requireDatabaseClient();
+  const profileId = await requireOwnProfileId(db);
+  const workspaceId2 = await requireOwnWorkspaceId(db, profileId);
+  const now2 = nowIso();
+  await db.transaction(async (tx) => {
+    const existing = await tx.get(
+      `SELECT id FROM live_activity_push_tokens WHERE profile_id = ? AND activity_id = ?`,
+      [profileId, normalizedActivityId]
+    );
+    if (existing) {
+      await tx.run(
+        `UPDATE live_activity_push_tokens
+            SET push_token = ?, environment = ?, bundle_id = ?, origin = ?,
+                last_content_hash = NULL, last_sent_at = NULL, updated_at = ?
+          WHERE id = ?`,
+        [pushToken, environment, bundleId, origin, now2, existing.id]
+      );
+    } else {
+      await tx.run(
+        `INSERT INTO live_activity_push_tokens
+           (id, profile_id, activity_id, push_token, environment, bundle_id, origin,
+            created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          newId(),
+          profileId,
+          normalizedActivityId,
+          pushToken,
+          environment,
+          bundleId,
+          origin,
+          now2,
+          now2
+        ]
+      );
+    }
+    await enqueueLiveActivityDispatchJob({
+      db: tx,
+      workspaceId: workspaceId2,
+      profileId,
+      now: now2
+    });
+  });
+}
+async function registerLiveActivityStartToken(body) {
+  const startToken = requiredString(body.startToken, "startToken", START_TOKEN_MAX_LENGTH);
+  const bundleId = requiredString(body.bundleId, "bundleId", BUNDLE_ID_MAX_LENGTH2);
+  const environmentRaw = typeof body.environment === "string" ? body.environment.trim() : "";
+  if (environmentRaw !== "sandbox" && environmentRaw !== "production") {
+    throw new ApiError(400, "environment must be sandbox or production");
+  }
+  const environment = environmentRaw;
+  const activityTypeRaw = typeof body.activityType === "string" ? body.activityType.trim() : "";
+  if (activityTypeRaw.length > ACTIVITY_TYPE_MAX_LENGTH) {
+    throw new ApiError(400, "activityType is too long");
+  }
+  const activityType = activityTypeRaw || LIVE_ACTIVITY_ATTRIBUTES_TYPE;
+  const appVersionRaw = typeof body.appVersion === "string" ? body.appVersion.trim() : "";
+  if (appVersionRaw.length > APP_VERSION_MAX_LENGTH2) {
+    throw new ApiError(400, "appVersion is too long");
+  }
+  const appVersion = appVersionRaw || null;
+  const db = requireDatabaseClient();
+  const profileId = await requireOwnProfileId(db);
+  const now2 = nowIso();
+  await db.transaction(async (tx) => {
+    const existing = await tx.get(
+      `SELECT id FROM live_activity_start_tokens WHERE start_token = ?`,
+      [startToken]
+    );
+    if (existing) {
+      await tx.run(
+        `UPDATE live_activity_start_tokens
+            SET profile_id = ?, platform = 'ios', environment = ?, bundle_id = ?,
+                activity_type = ?, app_version = ?, last_registered_at = ?, updated_at = ?
+          WHERE id = ?`,
+        [profileId, environment, bundleId, activityType, appVersion, now2, now2, existing.id]
+      );
+      return;
+    }
+    await tx.run(
+      `INSERT INTO live_activity_start_tokens
+         (id, profile_id, start_token, platform, environment, bundle_id, activity_type,
+          app_version, last_registered_at, last_started_at, created_at, updated_at)
+       VALUES (?, ?, ?, 'ios', ?, ?, ?, ?, ?, NULL, ?, ?)`,
+      [
+        newId(),
+        profileId,
+        startToken,
+        environment,
+        bundleId,
+        activityType,
+        appVersion,
+        now2,
+        now2,
+        now2
+      ]
+    );
+  });
+}
+async function revokeLiveActivityStartToken(body) {
+  const startToken = requiredString(body.startToken, "startToken", START_TOKEN_MAX_LENGTH);
+  const db = requireDatabaseClient();
+  const profileId = await requireOwnProfileId(db);
+  await db.run(`DELETE FROM live_activity_start_tokens WHERE profile_id = ? AND start_token = ?`, [
+    profileId,
+    startToken
+  ]);
+}
+async function revokeLiveActivityPushToken(activityId) {
+  const normalizedActivityId = activityId.trim();
+  if (!normalizedActivityId) throw new ApiError(400, "activityId is required");
+  const db = requireDatabaseClient();
+  const profileId = await requireOwnProfileId(db);
+  await db.run(`DELETE FROM live_activity_push_tokens WHERE profile_id = ? AND activity_id = ?`, [
+    profileId,
+    normalizedActivityId
+  ]);
+}
+async function loadPendingAsk(db, profileId, now2) {
+  const askRequestId = jsonTextFieldSql("e.payload_json", "agentRequestId", db.dialect);
+  const answerRequestId = jsonTextFieldSql("answer.payload_json", "agentRequestId", db.dialect);
+  const row = await db.get(
+    `SELECT e.mission_id, m.display_id AS mission_display_id, e.summary, e.created_at,
+            ${askRequestId} AS agent_request_id
+       FROM mission_events e
+       JOIN missions m ON m.id = e.mission_id AND m.deleted_at IS NULL
+       JOIN projects p ON p.id = m.project_id AND p.deleted_at IS NULL
+       JOIN workspace_users wu ON wu.id = m.assigned_workspace_user_id
+       JOIN workspaces w ON w.id = m.workspace_id AND w.deleted_at IS NULL
+      WHERE e.type = 'ask'
+        AND wu.profile_id = ? AND wu.status = 'active' AND wu.deleted_at IS NULL
+        AND e.created_at >= ?
+        AND EXISTS (
+          SELECT 1 FROM objectives ao
+           WHERE ao.mission_id = e.mission_id AND ao.deleted_at IS NULL
+             AND ao.state IN ('executing', 'pending_delivery')
+             AND (e.objective_id IS NULL OR ao.id = e.objective_id)
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM mission_status_seen mss
+           WHERE mss.mission_id = e.mission_id AND mss.status_id = 'blocking_question'
+             AND mss.seen_at >= e.created_at
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM mission_events answer
+           WHERE answer.mission_id = e.mission_id AND answer.type = 'answer'
+             AND ${answerRequestId} = ${askRequestId}
+        )
+      ORDER BY e.created_at DESC, e.id DESC
+      LIMIT 1`,
+    [profileId, new Date(now2.getTime() - ASK_MAX_AGE_MS).toISOString()]
+  );
+  if (!row) return null;
+  const question = presentationText(row.summary, ASK_QUESTION_MAX_LENGTH);
+  const askedAt = Date.parse(row.created_at);
+  return {
+    missionId: row.mission_id,
+    missionDisplayId: row.mission_display_id,
+    question: question || null,
+    askedAt: Math.floor((Number.isFinite(askedAt) ? askedAt : now2.getTime()) / 1e3),
+    agentRequestId: row.agent_request_id
+  };
+}
+async function buildLiveActivityContentState(db, profileId, now2 = /* @__PURE__ */ new Date()) {
+  const rows = await db.all(
+    `SELECT m.id, m.title, m.display_id, p.name AS project_name, p.settings_json AS project_settings_json,
+            m.updated_at, m.status_type,
+            EXISTS(SELECT 1 FROM objectives o WHERE o.mission_id = m.id AND o.deleted_at IS NULL AND o.state IN ('executing', 'pending_delivery')) AS has_executing_objective,
+            EXISTS(SELECT 1 FROM objectives o WHERE o.mission_id = m.id AND o.deleted_at IS NULL AND o.state = 'complete') AS has_completed_objective
+       FROM missions m
+       JOIN projects p ON p.id = m.project_id AND p.deleted_at IS NULL
+       JOIN workspace_users wu ON wu.id = m.assigned_workspace_user_id
+       JOIN workspaces w ON w.id = m.workspace_id AND w.deleted_at IS NULL
+      WHERE m.deleted_at IS NULL AND wu.profile_id = ? AND wu.status = 'active' AND wu.deleted_at IS NULL
+      ORDER BY m.updated_at DESC, m.id ASC`,
+    [profileId]
+  );
+  const runningRows = await db.all(
+    `SELECT o.id AS objective_id, o.title AS objective_title, o.display_key,
+            m.id AS mission_id, m.title AS mission_title, m.display_id AS mission_display_id,
+            p.name AS project_name, p.settings_json AS project_settings_json
+       FROM objectives o
+       JOIN missions m ON m.id = o.mission_id AND m.deleted_at IS NULL
+       JOIN projects p ON p.id = m.project_id AND p.deleted_at IS NULL
+       JOIN workspace_users wu ON wu.id = m.assigned_workspace_user_id
+       JOIN workspaces w ON w.id = m.workspace_id AND w.deleted_at IS NULL
+      WHERE o.deleted_at IS NULL AND o.state IN ('executing', 'pending_delivery')
+        AND wu.profile_id = ? AND wu.status = 'active' AND wu.deleted_at IS NULL
+      ORDER BY o.updated_at DESC, o.id ASC`,
+    [profileId]
+  );
+  const running = runningRows.slice(0, MAX_RUNNING);
+  const completion = rows.find((row) => {
+    if (asBool(row.has_executing_objective)) return false;
+    if (!asBool(row.has_completed_objective) && row.status_type !== "complete") return false;
+    const updated = Date.parse(row.updated_at);
+    return Number.isFinite(updated) && now2.getTime() - updated <= COMPLETION_HOLD_MS;
+  });
+  if (running.length === 0 && !completion) return null;
+  return {
+    running: running.map(toRunningSnapshot),
+    recentCompletion: completion ? await toCompletionSnapshot(db, completion) : null,
+    // Only an executing objective can hold a pending ask, so a state with no
+    // running rows never needs one.
+    pendingAsk: running.length > 0 ? await loadPendingAsk(db, profileId, now2) : null,
+    updatedAt: Math.floor(now2.getTime() / 1e3)
+  };
+}
+function liveActivityContentHash(state2) {
+  return (0, import_node_crypto41.createHash)("sha256").update(
+    JSON.stringify(
+      state2 && {
+        running: state2.running,
+        recentCompletion: state2.recentCompletion,
+        pendingAsk: state2.pendingAsk
+      }
+    )
+  ).digest("hex");
 }
 
 // live-activity-dispatcher.ts
@@ -197274,7 +196727,7 @@ var ALLOWED = [
   ["POST", /^\/mcp$/],
   [
     "POST",
-    /^\/api\/protocol\/(?:create|load-context|search-missions|search|discover-project|statuses|list-deliveries|objective-changes|attachment-list|attachment-download-url|auth-status)$/
+    /^\/api\/protocol\/(?:create|load-context|search|discover-project|statuses|list-deliveries|objective-changes|attachment-list|attachment-download-url|auth-status)$/
   ]
 ];
 function projectAutomationRouteGuard(req, res, next) {
@@ -198796,8 +198249,8 @@ app.get(
 app.post(
   "/api/onboarding",
   handle3(
-    async (req, res) => {
-      const result2 = await createOrganizationOnboarding(req.body);
+    async (req) => {
+      await createOrganizationOnboarding(req.body);
       realtime.refreshAll();
       return buildMeta();
     },
@@ -198844,7 +198297,7 @@ app.get(
 app.post(
   "/api/workspaces",
   handle3(
-    async (req, res) => {
+    async (req) => {
       if (getActorWorkspaceUserId())
         await requireAnyWorkspacePermission(PERMISSIONS.WORKSPACE_CREATE);
       const result2 = await createWorkspace(req.body);
@@ -198870,7 +198323,7 @@ app.patch(
 app.delete(
   "/api/workspaces/:id",
   handle3(
-    async (req, res) => {
+    async (req) => {
       const result2 = await deleteWorkspace(req.params.id);
       realtime.refreshAll();
       return result2;
@@ -198919,7 +198372,7 @@ app.delete(
 app.post(
   "/api/invitations/accept",
   handle3(
-    async (req, res) => {
+    async (req) => {
       const result2 = await acceptWorkspaceInvitation(req.body);
       realtime.refreshAll();
       return result2;
@@ -199578,10 +199031,7 @@ app.use(
   "/ext/github",
   requireAuthenticatedSession,
   projectAutomationRouteGuard,
-  createGitHubExtensionRouter(handle3, {
-    allowedBrowserOrigins: getAllowedBrowserOrigins(),
-    connections: () => connectionsModule().profiles
-  })
+  createGitHubExtensionRouter(handle3, { connections: () => connectionsModule().profiles })
 );
 app.patch(
   "/api/projects/:id/board/reorder",
