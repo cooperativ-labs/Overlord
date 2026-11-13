@@ -11,8 +11,7 @@ import {
   type EnvProfile,
   isExplicitRuntimeEnv,
   isRunningInContainer,
-  loadEnvDefaults,
-  resolveLayeredEnv
+  loadEnvDefaults
 } from './env.ts';
 import { CliError } from './errors.ts';
 
@@ -24,8 +23,6 @@ import { CliError } from './errors.ts';
  */
 const CLI_ENV_PROFILE: EnvProfile = detectCliEnvProfile();
 
-export const DEFAULT_LOCAL_BACKEND_DIR = '~/.ovld';
-export const DEFAULT_LOCAL_BACKEND_DATABASE_PATH = '~/.ovld/Overlord.sqlite';
 export const DEFAULT_LOCAL_BACKEND_URL = 'http://127.0.0.1:4310';
 
 /** Ensure backend URLs are fetch-ready; agent pods often inject host:port without a scheme. */

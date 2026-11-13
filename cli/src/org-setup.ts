@@ -41,8 +41,7 @@ const DEFAULT_WORKSPACE_NAME = 'general';
  * `ovld org-setup`: creates an organization + first workspace for an
  * authenticated user with zero workspace memberships, via the same
  * `POST /api/onboarding` endpoint the web onboarding screen uses, so the two
- * clients cannot drift (planning/feature-plans/organization-workspace-hierarchy.md,
- * Phase 5). A failed logo upload is a warning, not a rollback.
+ * clients cannot drift. A failed logo upload is a warning, not a rollback.
  */
 export async function runOrgSetupCommand({
   runtime,
