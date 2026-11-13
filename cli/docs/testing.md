@@ -120,7 +120,7 @@ shared with [Layer 3 §3.5](../../TEST_PLAN.md#35-protocol-command-surface-confo
 ### B8. Discovery / non-session commands
 - `create` → draft mission + draft objective, no session.
 - `prompt` → mission created and attached/queued for execution.
-- `loadContext`, `searchMissions`, `listOrganizations` are read-only (no writes).
+- `loadContext` and `searchMissions` are read-only (no writes).
 - `discussObjective` moves a draft objective to `submitted`.
 - `addObjectives` appends ordered draft objectives.
 - `recordWork` creates a review-status mission + completed objective + delivery

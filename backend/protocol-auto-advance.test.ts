@@ -63,6 +63,16 @@ test('protocol creates an inbox item only with explicit unassigned-project inten
   assert.deepEqual(result.inboxItem.objectives, ['Capture this deliberately outside a project']);
 });
 
+test('protocol rejects the retired --inbox alias', async () => {
+  await assert.rejects(
+    runProtocolSubcommand('create', {
+      flags: { '--inbox': true, '--objective': 'The alias is retired' }
+    }),
+    (error: unknown) =>
+      error instanceof ApiError && error.status === 400 && error.code === 'invalid_input'
+  );
+});
+
 test('protocol rejects conflicting project and unassigned-project intent', async () => {
   const project = await createProject({ name: `Creation intent conflict ${Date.now()}` });
   await assert.rejects(

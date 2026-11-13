@@ -6,8 +6,6 @@ import { hashSessionKey } from '../packages/core/service/util.ts';
 
 import { artifactSubcommands } from './protocol/artifacts.ts';
 import {
-  hasFlag,
-  intFlag,
   objectiveRefFlag,
   type ProtocolRequestBody,
   strFlag,
@@ -237,13 +235,12 @@ export async function runProtocolSubcommand(
   subcommand: string,
   body: ProtocolRequestBody
 ): Promise<unknown> {
-  const canonicalSubcommand = subcommand === 'search' ? 'search-missions' : subcommand;
   if (
     getActiveTokenProjectIds() !== null &&
     !new Set([
       'create',
       'load-context',
-      'search-missions',
+      'search',
       'discover-project',
       'statuses',
       'list-deliveries',
@@ -251,20 +248,18 @@ export async function runProtocolSubcommand(
       'attachment-list',
       'attachment-download-url',
       'auth-status'
-    ]).has(canonicalSubcommand)
+    ]).has(subcommand)
   ) {
     throw new ApiError(404, 'Not found');
   }
   if (
     getActiveTokenProjectIds() !== null &&
-    canonicalSubcommand === 'discover-project' &&
+    subcommand === 'discover-project' &&
     !strFlag(body, '--project-id')
   ) {
     throw new ApiError(404, 'Not found');
   }
-  const entry = Object.hasOwn(SUBCOMMANDS, canonicalSubcommand)
-    ? SUBCOMMANDS[canonicalSubcommand]
-    : undefined;
+  const entry = Object.hasOwn(SUBCOMMANDS, subcommand) ? SUBCOMMANDS[subcommand] : undefined;
   if (!entry) {
     throw new ApiError(
       404,
@@ -272,19 +267,14 @@ export async function runProtocolSubcommand(
       `Supported subcommands: ${Object.keys(SUBCOMMANDS).sort().join(', ')}`
     );
   }
-  // V2 search authorizes mission:read per workspace inside the repository
-  // fan-out. A single ambient workspace check would deny valid secondary
-  // workspaces and reintroduce the pre-v95 scoping bug.
-  // An exact --reference lookup authorizes its one project the same way (v155).
-  const isAggregateSearch =
-    canonicalSubcommand === 'search-missions' &&
-    (intFlag(body, '--response-version') === 2 ||
-      intFlag(body, '--response-version') === 3 ||
-      hasFlag(body, '--reference'));
-  const requiredPermission = isAggregateSearch ? null : entry.permission;
+  // Search (v2, v3 and an exact --reference lookup; v1 is retired, ADR 0054)
+  // authorizes mission:read per workspace inside the repository fan-out, or per
+  // project for --reference (v155). A single ambient workspace check would deny
+  // valid secondary workspaces and reintroduce the pre-v95 scoping bug.
+  const requiredPermission = subcommand === 'search' ? null : entry.permission;
   try {
     const ctx = await buildProtocolContext(body, requiredPermission);
-    await validateObjectiveAddressing({ ctx, body, subcommand: canonicalSubcommand });
+    await validateObjectiveAddressing({ ctx, body, subcommand });
     return await entry.handler(ctx, body);
   } catch (error) {
     // A project name that matches in two workspaces is a question for the user,

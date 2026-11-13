@@ -5,6 +5,102 @@ is the current version and must equal [VERSION](VERSION); `yarn version:contract
 writes its skeleton. Dates use ISO 8601 and describe the contract change, not
 merely the files edited.
 
+## [170.0.0] - 2026-11-13
+
+Legacy compatibility surfaces are retired: the personal-connection alias routes, the protocol
+`search-missions`, `list-organizations` and `--inbox` names, protocol search's v1 response, two
+human agent-session routes that only answered 410, and stale web app consumer claims
+([ADR 0054](decisions/0054-retire-legacy-aliases.md)). The owner approved the major increment.
+
+### Version
+
+- Major contract version 170.0.0, from 169.2.1. Contract impact: major. Routes, a protocol
+  subcommand alias, a protocol command, a protocol flag and a protocol response version are
+  removed, and protocol search's default response changes shape (v1 array to v3 envelope);
+  section 5 classifies removals and incompatible wire changes as major. No stored data,
+  migration, authorization rule or vocabulary changes. Every conformance manifest is restamped.
+  OpenAPI `info.version` 3.0.0 (from 2.2.0): operations and schemas are removed.
+
+### Removed
+
+- [api/openapi.yaml](api/openapi.yaml): `getExtEverhourUserConnection`,
+  `putExtEverhourUserConnection`, `deleteExtEverhourUserConnection`,
+  `getExtEverhourIntegration`, `putExtEverhourIntegration`, `deleteExtEverhourIntegration`,
+  `getExtGithubUserConnection`, `deleteExtGithubUserConnection`,
+  `postExtGithubUserConnectionAuthorize`, `postAgentRequestsByIdRelease` and
+  `postAgentSessionInputsByIdCancel`, and the schemas `EverhourUserConnectionDto`,
+  `UpdateEverhourIntegrationBody`, `GitHubUserConnectionDto`, `GitHubUserAccountDto`,
+  `GitHubUserAuthorizationDto` and `BeginGitHubUserAuthorizationBody` (and their generated
+  types and re-exports in `@overlord/contract/ext/everhour` and `/ext/github`).
+  `EverhourIntegrationDto` is removed from `@overlord/contract/ext/everhour`.
+- Backend: the alias routes in `backend/ext/everhour/routes.ts` and `backend/ext/github/routes.ts`,
+  the alias-only service functions (`getEverhourIntegration`, `setEverhourApiKey`,
+  `clearEverhourApiKey`; `getGitHubUserConnection`, `beginGitHubUserAuthorization`,
+  `completeGitHubUserAuthorization`, `disconnectGitHubUser`),
+  `backend/connections/alias-telemetry.ts`, and the human `POST /api/agent-requests/:id/release`
+  and `POST /api/agent-session-inputs/:id/cancel` routes.
+- [protocol-commands.yaml](protocol-commands.yaml): the `search-missions` alias of `search`,
+  the `listOrganizations` command (`list-organizations`) and `create --inbox`. Backend dispatch,
+  `ovld protocol help` and `packages/core` `listOrganizations` drop them.
+- Protocol `search --response-version 1` (the legacy array).
+- `cli/src/agent-session/sentinel.ts` (`startChannelSentinel`, `registerChannelExitHandlers`),
+  which nothing called.
+
+### Changed
+
+- Protocol `search` defaults to `--response-version 3`; values other than 2 and 3 answer 400
+  `invalid_input`. `create --inbox` answers 400 `invalid_input`; `search-missions` and
+  `list-organizations` answer 404 as unknown subcommands. Every search form is authorized per
+  workspace or project inside the handler, as v2, v3 and `--reference` already were.
+- [api/openapi.yaml](api/openapi.yaml) `x-overlord-consumers`: `webapp` is removed from
+  `getAgentSessionInputs`, `postAgentSessionInputs`, `putProfileDefaultProject`,
+  `getMissionsSearch` and `getProjects` (each keeps its other consumers), and from
+  `deleteProfileDefaultProject`, `postMissionsByIdArtifacts` and `getExtGithubRepos`, which
+  have no known caller left and become `[unverified]` (ADR 0048). The GitHub repository
+  callback and `postProtocolBySubcommand` descriptions drop the retired names.
+- [architecture.md](architecture.md): the personal Everhour and GitHub bullets describe
+  `/api/connections` as the only connection surface; the compatibility-alias bullet becomes a
+  retirement note; mission search versioning states the protocol v1 retirement and the v3
+  default. [protocol.md](protocol.md), [authorization.md](authorization.md) (the
+  project-automation protocol allowlist names `search`), [data/README.md](data/README.md) and
+  [components.yaml](components.yaml) follow.
+- [api/schema-disagreements.md](api/schema-disagreements.md): B1 resolved by retirement; B3, D3,
+  F2 and G17 note the retirement.
+- `ovld inbox create` sends `--unassigned-to-project`.
+- [CONTRACT.md](CONTRACT.md) status line names the production baseline `169.2.1` explicitly, since
+  the current version is no longer the baseline. `scripts/release-gate.test.mjs` checks that the
+  recorded baseline is not newer than `VERSION` instead of requiring the same major.
+
+### Added
+
+- [ADR 0054](decisions/0054-retire-legacy-aliases.md); ADRs 0029 and 0035 gain `Amended by:`.
+
+### Migration and compatibility
+
+- Clients of the Everhour or GitHub alias routes move to `/api/connections`
+  (`POST /api/connections/api-keys`, `POST /api/connections` with `provider: 'github'`,
+  `GET /api/connections`, `DELETE /api/connections/:id`). No first-party client called them.
+- Protocol callers use `search` instead of `search-missions`, `auth-status` instead of
+  `list-organizations`, and `--unassigned-to-project` instead of `--inbox`. Callers of protocol
+  search that passed no `--response-version` now get `SearchResponseV3`; those that need the
+  older grouping pass `--response-version 2`. The hosted MCP tool and the connector skills
+  already asked for version 3.
+- Not retired: `GET /api/missions/search` (REST v1) stays because `ovld missions list` calls
+  it; `POST /api/agent-session-inputs` keeps answering 410 because the CLI calls it; the
+  virtual execution target surface stays because runtime code still reads virtual targets.
+
+### Impact on modules
+
+- Backend: routes, dispatch and tests as above.
+- CLI: protocol help and `ovld inbox create`; the sentinel is deleted. Users of the removed
+  protocol names must update scripts.
+- MCP and connectors: no tool change (they already used `search` with version 3); connector
+  skill docs drop the aliases and the connector release is 0.3.60.
+- Web app: none (it already used `/api/connections` and none of the removed routes).
+- Desktop: none.
+- Mobile (OverlordMobile): no call to any removed route or name; its conformance manifest
+  must be restamped to 170.0.0 by its owner.
+
 ## [169.2.1] - 2026-11-12
 
 Phase 5 of the contract migration: the release gate around the manual release

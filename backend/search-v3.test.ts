@@ -41,7 +41,7 @@ test('GET /api/search/v3 repository surface returns grouped objective matches', 
   assert.equal('matches' in v2.results[0]!, false);
 });
 
-test('protocol search-missions --response-version 3 returns SearchResponseV3', async () => {
+test('protocol search --response-version 3 returns SearchResponseV3', async () => {
   const project = await createProject({ name: 'V3 Protocol Board' });
   await createMission({
     projectId: project.id,
@@ -49,7 +49,7 @@ test('protocol search-missions --response-version 3 returns SearchResponseV3', a
     firstObjective: 'Wire protocolneedle into the envelope'
   });
 
-  const v3 = (await runProtocolSubcommand('search-missions', {
+  const v3 = (await runProtocolSubcommand('search', {
     flags: {
       '--query': 'protocolneedle',
       '--response-version': '3'
@@ -117,10 +117,10 @@ test('v1/v2 repository search still ignores delivery-only documents', async () =
   assert.ok(v3.results.some(result => result.id === mission.id));
 });
 
-test('protocol search-missions rejects an invalid --date-field with the REST 400 on every version', async () => {
-  for (const version of ['1', '2', '3']) {
+test('protocol search rejects an invalid --date-field with the REST 400 on every version', async () => {
+  for (const version of ['2', '3']) {
     await assert.rejects(
-      runProtocolSubcommand('search-missions', {
+      runProtocolSubcommand('search', {
         flags: { '--query': 'anything', '--date-field': 'startedAt', '--response-version': version }
       }),
       (error: unknown) => {
@@ -133,7 +133,7 @@ test('protocol search-missions rejects an invalid --date-field with the REST 400
   }
 });
 
-test('protocol search-missions keeps resolving human project references on v2/v3', async () => {
+test('protocol search keeps resolving human project references on v2/v3', async () => {
   const project = await createProject({ name: 'V3 Named Ref Board' });
   const mission = await createMission({
     projectId: project.id,
@@ -142,7 +142,7 @@ test('protocol search-missions keeps resolving human project references on v2/v3
   });
 
   for (const version of ['2', '3']) {
-    const result = (await runProtocolSubcommand('search-missions', {
+    const result = (await runProtocolSubcommand('search', {
       flags: {
         '--query': 'namedrefneedle',
         '--project-id': 'V3 Named Ref Board',
@@ -154,5 +154,38 @@ test('protocol search-missions keeps resolving human project references on v2/v3
       `version ${version}`
     );
     assert.deepEqual(result.appliedFilters.projectIds, [project.id]);
+  }
+});
+
+test('protocol search defaults to v3 and rejects the retired v1 response and alias', async () => {
+  const project = await createProject({ name: 'Default Version Board' });
+  await createMission({
+    projectId: project.id,
+    title: 'Default version search',
+    firstObjective: 'Find defaultversionneedle'
+  });
+  const result = (await runProtocolSubcommand('search', {
+    flags: { '--query': 'defaultversionneedle' }
+  })) as { version: number };
+  assert.equal(result.version, 3);
+
+  for (const version of ['1', '4']) {
+    await assert.rejects(
+      runProtocolSubcommand('search', {
+        flags: { '--query': 'defaultversionneedle', '--response-version': version }
+      }),
+      (error: unknown) => {
+        const { status, code } = error as { status?: number; code?: string };
+        assert.equal(status, 400, `version ${version}`);
+        assert.equal(code, 'invalid_input');
+        return true;
+      }
+    );
+  }
+  for (const retired of ['search-missions', 'list-organizations']) {
+    await assert.rejects(
+      runProtocolSubcommand(retired, { flags: {} }),
+      (error: unknown) => (error as { status?: number }).status === 404
+    );
   }
 });

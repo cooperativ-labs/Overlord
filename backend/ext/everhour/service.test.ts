@@ -27,16 +27,37 @@ const everhourServiceStore = new ProfileConnections(
 const everhourService = createEverhourService(() => everhourServiceStore);
 const {
   addMissionTime,
-  clearEverhourApiKey,
-  getEverhourIntegration,
   getMissionEverhourState,
   getProjectEverhourLink,
   getProjectEverhourState,
   linkProjectEverhour,
-  setEverhourApiKey,
   startMissionTimer,
   startProjectTimer
 } = everhourService;
+
+// The key is set and erased through the account-connections module, the only
+// connection surface since the `/ext/everhour` aliases were retired (ADR 0054).
+async function actorProfileId(): Promise<string> {
+  const { resolveActiveProfileId } = await import('../../db.ts');
+  const profileId = await resolveActiveProfileId();
+  assert.ok(profileId);
+  return profileId;
+}
+
+async function setEverhourApiKey(apiKey: string) {
+  return everhourServiceStore.setApiKey(await actorProfileId(), { provider: 'everhour', apiKey });
+}
+
+async function clearEverhourApiKey(): Promise<void> {
+  await everhourServiceStore.disconnectProvider(await actorProfileId(), 'everhour');
+}
+
+/** Whether the service reads a usable key for the actor (adopting legacy keys as it does). */
+async function everhourConnected(): Promise<boolean> {
+  const project = await createProject({ name: `Everhour Probe ${newId()}` });
+  const mission = await createMission({ projectId: project.id, firstObjective: 'Probe' });
+  return (await getMissionEverhourState(mission.id)).connected;
+}
 
 const originalFetch = globalThis.fetch;
 
@@ -71,11 +92,11 @@ function installEverhourFetchMock(
   }) as typeof fetch;
 }
 
-test('getEverhourIntegration reports disconnected when no user connection exists', async () => {
-  assert.deepEqual(await getEverhourIntegration(), { connected: false, accountName: null });
+test('the service reports disconnected when no user connection exists', async () => {
+  assert.equal(await everhourConnected(), false);
 });
 
-test('setEverhourApiKey validates against Everhour and persists the encrypted user connection', async () => {
+test('an API key validated against Everhour is persisted as an encrypted user connection', async () => {
   installEverhourFetchMock([
     {
       match: url => url.endsWith('/users/me'),
@@ -83,8 +104,9 @@ test('setEverhourApiKey validates against Everhour and persists the encrypted us
     }
   ]);
 
-  const integration = await setEverhourApiKey('  test-api-key  ');
-  assert.deepEqual(integration, { connected: true, accountName: 'Everhour Operator' });
+  const connection = await setEverhourApiKey('  test-api-key  ');
+  assert.equal(connection.account?.label, 'Everhour Operator');
+  assert.equal(await everhourConnected(), true);
 
   // Stored by the shared account-connections module (contract v153), never in the legacy table.
   const row = db
@@ -125,14 +147,15 @@ test('setEverhourApiKey validates against Everhour and persists the encrypted us
   assert.equal(legacy.count, 0);
 });
 
-test('setEverhourApiKey rejects blank keys before calling Everhour', async () => {
+test('blank keys are rejected before calling Everhour', async () => {
+  globalThis.fetch = (async () => assert.fail('Everhour must not be called')) as typeof fetch;
   await assert.rejects(
     () => setEverhourApiKey('   '),
-    (err: unknown) => err instanceof ApiError && err.status === 400
+    (err: unknown) => (err as { code?: string }).code === 'invalid_request'
   );
 });
 
-test('clearEverhourApiKey disconnects and erases the user connection', async () => {
+test('disconnecting erases the user connection', async () => {
   installEverhourFetchMock([
     {
       match: url => url.endsWith('/users/me'),
@@ -141,8 +164,8 @@ test('clearEverhourApiKey disconnects and erases the user connection', async () 
   ]);
   await setEverhourApiKey('temp-key');
 
-  const cleared = await clearEverhourApiKey();
-  assert.deepEqual(cleared, { connected: false, accountName: null });
+  await clearEverhourApiKey();
+  assert.equal(await everhourConnected(), false);
 
   const active = db
     .prepare(
@@ -154,7 +177,7 @@ test('clearEverhourApiKey disconnects and erases the user connection', async () 
   assert.equal(active.count, 0);
 });
 
-test('getEverhourIntegration adopts an unambiguously attributed workspace key onto the actor profile', async () => {
+test('the service adopts an unambiguously attributed workspace key onto the actor profile', async () => {
   await clearEverhourApiKey();
   const connectionId = newId();
   const now = nowIso();
@@ -181,8 +204,7 @@ test('getEverhourIntegration adopts an unambiguously attributed workspace key on
     }
   ]);
 
-  const integration = await getEverhourIntegration();
-  assert.deepEqual(integration, { connected: true, accountName: 'Legacy Owner' });
+  assert.equal(await everhourConnected(), true);
 
   const userRow = db
     .prepare(
@@ -204,7 +226,7 @@ test('getEverhourIntegration adopts an unambiguously attributed workspace key on
   assert.equal(leftover.count, 0);
 });
 
-test('getEverhourIntegration does not adopt a workspace key without unique actor attribution', async () => {
+test('the service does not adopt a workspace key without unique actor attribution', async () => {
   await clearEverhourApiKey();
   const connectionId = newId();
   const now = nowIso();
@@ -214,7 +236,7 @@ test('getEverhourIntegration does not adopt a workspace key without unique actor
      VALUES (?, ?, ?, ?, ?, ?, ?, 1)`
   ).run(connectionId, WORKSPACE.id, 'unattributed-key', '8', 'Unknown', now, now);
 
-  assert.deepEqual(await getEverhourIntegration(), { connected: false, accountName: null });
+  assert.equal(await everhourConnected(), false);
   db.prepare(`UPDATE ext_everhour_workspace_connections SET deleted_at = ? WHERE id = ?`).run(
     nowIso(),
     connectionId
@@ -594,7 +616,7 @@ test('a key stored by the pre-v153 code stays connected and drives the timer unc
     }
   ]);
 
-  assert.deepEqual(await getEverhourIntegration(), { connected: true, accountName: 'Legacy User' });
+  assert.equal(await everhourConnected(), true);
   await linkProjectEverhour(project.id, 'Legacy Board');
   const state = await startMissionTimer(mission.id);
   assert.equal(state.connected, true);
@@ -605,8 +627,8 @@ test('a key stored by the pre-v153 code stays connected and drives the timer unc
   const changes = JSON.stringify(db.prepare(`SELECT * FROM entity_changes`).all());
   assert.ok(!changes.includes(legacyKey));
 
-  // Disconnecting through the alias erases the module row and tombstones the legacy one.
-  assert.deepEqual(await clearEverhourApiKey(), { connected: false, accountName: null });
+  // Disconnecting through the module erases its row and tombstones the legacy one.
+  await clearEverhourApiKey();
   const legacy = db
     .prepare(
       `SELECT api_key_ciphertext, deleted_at FROM ext_everhour_user_connections WHERE profile_id = ?`
@@ -614,7 +636,7 @@ test('a key stored by the pre-v153 code stays connected and drives the timer unc
     .get(profileId) as { api_key_ciphertext: string; deleted_at: string | null };
   assert.equal(legacy.api_key_ciphertext, 'revoked:v1');
   assert.ok(legacy.deleted_at);
-  assert.deepEqual(await getEverhourIntegration(), { connected: false, accountName: null });
+  assert.equal(await everhourConnected(), false);
 });
 
 test('service uses the injected profile store instead of environment-configured connections', async () => {
@@ -626,8 +648,13 @@ test('service uses the injected profile store instead of environment-configured 
   installEverhourFetchMock([
     { match: url => url.endsWith('/users/me'), respond: () => Response.json({ id: 7 }) }
   ]);
+  // Sealed under the environment key, which the injected store does not hold.
+  await setEverhourApiKey('valid-key');
+  const project = await createProject({ name: 'Injected Store Project' });
+  const mission = await createMission({ projectId: project.id, firstObjective: 'Injected' });
   await assert.rejects(
-    service.setEverhourApiKey('valid-key'),
+    service.getMissionEverhourState(mission.id),
     (error: unknown) => error instanceof ApiError && error.status === 503
   );
+  await clearEverhourApiKey();
 });

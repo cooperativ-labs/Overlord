@@ -199,7 +199,10 @@ describe('working tree and range start', () => {
     assert.ok(baseline, `${BASELINE_PATH} exists`);
     assert.match(baseline.rangeStart, /^[0-9a-f]{40}$/);
     const version = readFileSync(path.join(REPO_ROOT, 'contract', 'VERSION'), 'utf8').trim();
-    assert.equal(baseline.baselineContractVersion.split('.')[0], version.split('.')[0]);
+    // The baseline record never moves; later major increments only grow past it.
+    const [baselineMajor] = baseline.baselineContractVersion.split('.').map(Number);
+    const [currentMajor] = version.split('.').map(Number);
+    assert.ok(baselineMajor <= currentMajor, `${baseline.baselineContractVersion} <= ${version}`);
   });
 });
 

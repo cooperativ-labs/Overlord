@@ -2796,7 +2796,7 @@ Mission search should support:
   explicit date field (`createdAt` or `updatedAt`) with inclusive `from` and
   exclusive `to`. `updatedAt` is the default field only when either range bound
   is supplied; there is no implicit date eligibility window.
-- A bounded result limit suitable for protocol `search-missions`.
+- A bounded result limit suitable for protocol `search`.
 
 V2 search fans out only inside one selected organization over the request's
 pre-resolved `authorizedWorkspaces`. It performs per-workspace RBAC, derives

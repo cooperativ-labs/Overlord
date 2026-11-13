@@ -1,26 +1,21 @@
 import type {
-  BeginGitHubUserAuthorizationBody,
   CreatedGitHubRepositoryDto,
-  GitHubRepositoryOwnerDto,
-  GitHubUserAuthorizationDto,
-  GitHubUserConnectionDto
+  GitHubRepositoryOwnerDto
 } from '@overlord/contract/ext/github';
 import type { DatabaseClient } from '@overlord/database';
 
-import { ChatError } from '../../../packages/core/service/chat/store.ts';
 import type { ProfileConnections } from '../../connections/profile.ts';
-import { ConnectionAccessError, type ConnectionRow } from '../../connections/service.ts';
+import { ConnectionAccessError } from '../../connections/service.ts';
 import { requireDatabaseClient, resolveActiveProfileId } from '../../db.ts';
 import { ApiError } from '../../errors.ts';
-
-import { parseGitHubScopes } from './connection-provider.ts';
 
 // The personal repository authorization lives in the shared account-connections
 // module (contract v153): it owns the OAuth state, PKCE verifier, token storage and
 // encryption, the refresh lease, and disconnect, and serves the callback at
-// `/api/auth/callback/github/repository`. These functions are the `/ext/github`
-// compatibility aliases over it plus the repository-owner and repository-creation
-// features, which obtain the token only through `oauthAccessToken()`.
+// `/api/auth/callback/github/repository`. These functions are the repository-owner
+// and repository-creation features, which obtain the token only through
+// `oauthAccessToken()`. The `/ext/github/user-connection` aliases are retired
+// (ADR 0054); `/api/connections` is the only connection surface.
 
 const GITHUB_API = 'https://api.github.com';
 const NOT_CONFIGURED = 'GitHub repository authorization is not configured on this Overlord server.';
@@ -41,7 +36,7 @@ type GitHubOrganizationMembership = {
   };
 };
 
-/** Bind the compatibility and repository operations to the runtime's credential store. */
+/** Bind the repository operations to the runtime's credential store. */
 export function createGitHubUserOAuth(connections: () => ProfileConnections) {
   function githubUserOAuthConfigured(): boolean {
     return connections().available('github');
@@ -53,113 +48,6 @@ export function createGitHubUserOAuth(connections: () => ProfileConnections) {
     const profileId = await resolveActiveProfileId(client);
     if (!profileId) throw new ApiError(401, 'Authentication required.');
     return profileId;
-  }
-
-  function connectionDto(row: ConnectionRow | null): GitHubUserConnectionDto {
-    const connected = row?.state === 'connected';
-    return {
-      configured: githubUserOAuthConfigured(),
-      connected,
-      account:
-        connected && row.external_account_id && row.external_account_label
-          ? {
-              id: row.external_account_id,
-              login: row.external_account_label,
-              avatarUrl: row.external_account_avatar_url
-            }
-          : null,
-      scopes: connected ? parseGitHubScopes(row.granted_scopes_json) : []
-    };
-  }
-
-  async function getGitHubUserConnection(): Promise<GitHubUserConnectionDto> {
-    const client = requireDatabaseClient();
-    const profileId = await activeProfileId(client);
-    return connectionDto(await connections().find(profileId, 'github'));
-  }
-
-  function validatedReturnUrl(
-    value: unknown,
-    allowedBrowserOrigins: readonly string[]
-  ): string | null {
-    if (value === undefined || value === null || value === '') return null;
-    if (typeof value !== 'string') throw new ApiError(400, 'GitHub return URL is invalid.');
-    let url: URL;
-    try {
-      url = new URL(value);
-    } catch {
-      throw new ApiError(400, 'GitHub return URL is invalid.');
-    }
-    if (
-      url.protocol === 'overlord:' &&
-      url.hostname === 'github' &&
-      url.pathname === '/callback' &&
-      !url.username &&
-      !url.password
-    ) {
-      return url.toString();
-    }
-    if (
-      (url.protocol === 'https:' || url.protocol === 'http:') &&
-      allowedBrowserOrigins.includes(url.origin)
-    ) {
-      return url.toString();
-    }
-    throw new ApiError(400, 'GitHub return URL is not an allowed Overlord destination.');
-  }
-
-  /** `POST /ext/github/user-connection/authorize` (alias): legacy `returnTo` URL semantics. */
-  async function beginGitHubUserAuthorization(
-    body: BeginGitHubUserAuthorizationBody,
-    allowedBrowserOrigins: readonly string[]
-  ): Promise<GitHubUserAuthorizationDto> {
-    const client = requireDatabaseClient();
-    const store = connections();
-    if (!store.available('github')) throw new ApiError(503, NOT_CONFIGURED);
-    const profileId = await activeProfileId(client);
-    const returnUrl = validatedReturnUrl(body.returnTo, allowedBrowserOrigins);
-    try {
-      const started = await store.beginOAuth(profileId, 'github', {
-        returnTo: returnUrl?.startsWith('overlord:') ? 'mobile' : 'web',
-        returnUrl
-      });
-      return { authorizationUrl: started.authorizeUrl };
-    } catch (error) {
-      if (error instanceof ChatError && error.code === 'provider_not_ready')
-        throw new ApiError(503, NOT_CONFIGURED);
-      if (error instanceof ChatError && error.code === 'limit_exceeded')
-        throw new ApiError(429, 'Too many GitHub sign-ins are open; try again in a few minutes.');
-      throw error;
-    }
-  }
-
-  /**
-   * Complete a sign-in through the module, as the callback does, with the pre-v153
-   * error text. The callback route itself is the module's handler; this remains for
-   * in-process callers.
-   */
-  async function completeGitHubUserAuthorization(input: {
-    code: string;
-    state: string;
-  }): Promise<{ connection: GitHubUserConnectionDto; returnUrl: string | null }> {
-    const client = requireDatabaseClient();
-    const outcome = await connections().completeOAuth('github', input);
-    if (outcome.status === 'expired')
-      throw new ApiError(400, 'GitHub authorization state has expired or was already used.');
-    if (outcome.status !== 'connected') {
-      if (outcome.errorCode === 'insufficient_scope')
-        throw new ApiError(
-          403,
-          'GitHub authorization did not grant private-repository and organization access.'
-        );
-      if (outcome.errorCode === 'account_in_use')
-        throw new ApiError(409, 'This GitHub account is already connected to another user.');
-      throw new ApiError(502, 'GitHub did not complete repository authorization.');
-    }
-    const row = await client.get<ConnectionRow>('SELECT * FROM account_connections WHERE id = ?', [
-      outcome.connectionId
-    ]);
-    return { connection: connectionDto(row ?? null), returnUrl: outcome.returnUrl };
   }
 
   function accessError(error: unknown, notConnected: string): unknown {
@@ -384,21 +272,8 @@ export function createGitHubUserOAuth(connections: () => ProfileConnections) {
     };
   }
 
-  /** `DELETE /ext/github/user-connection` (alias): erase, revoke upstream, tombstone legacy. */
-  async function disconnectGitHubUser(): Promise<GitHubUserConnectionDto> {
-    const client = requireDatabaseClient();
-    const profileId = await activeProfileId(client);
-    await connections().disconnectProvider(profileId, 'github');
-    return connectionDto(null);
-  }
-
   return {
-    githubUserOAuthConfigured,
-    getGitHubUserConnection,
-    beginGitHubUserAuthorization,
-    completeGitHubUserAuthorization,
     listGitHubRepositoryOwners,
-    createPrivateGitHubRepository,
-    disconnectGitHubUser
+    createPrivateGitHubRepository
   };
 }

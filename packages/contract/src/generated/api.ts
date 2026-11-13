@@ -5,10 +5,10 @@
 import { z } from 'zod';
 
 /** The contract version (contract/VERSION) this API description belongs to. */
-export const contractVersion = "169.2.1";
+export const contractVersion = "170.0.0";
 
 /** The API description's own version (OpenAPI `info.version`). */
-export const apiVersion = "2.2.0";
+export const apiVersion = "3.0.0";
 
 /** A non-JSON request or response body: raw bytes (G3). */
 export type BinaryBody = Uint8Array | ArrayBuffer | Blob;
@@ -5498,26 +5498,6 @@ export interface ChatDiagnosticPageDto {
 }
 export const chatDiagnosticPageDtoSchema: z.ZodType<ChatDiagnosticPageDto> = z.object({ "entries": z.array(chatDiagnosticDtoSchema).max(100), "nextCursor": z.int().min(0), "hasMore": z.boolean() });
 
-/**
- * The caller's Everhour connection state (never includes the key).
- */
-export interface EverhourUserConnectionDto {
-  connected: boolean;
-  /**
-   * The Everhour user's name when known; null when not connected.
-   */
-  accountName: string | null;
-}
-export const everhourUserConnectionDtoSchema: z.ZodType<EverhourUserConnectionDto> = z.object({ "connected": z.boolean(), "accountName": z.string().nullable() });
-
-export interface UpdateEverhourIntegrationBody {
-  /**
-   * The caller's personal Everhour API key; coerced to a string and trimmed, never echoed.
-   */
-  apiKey: string;
-}
-export const updateEverhourIntegrationBodySchema: z.ZodType<UpdateEverhourIntegrationBody> = z.object({ "apiKey": z.string() });
-
 export interface ProjectEverhourLinkDto {
   projectId: string;
   /**
@@ -5633,40 +5613,6 @@ export interface UpdateEverhourTimeBody {
   comment?: string | null;
 }
 export const updateEverhourTimeBodySchema: z.ZodType<UpdateEverhourTimeBody> = z.object({ "timeSeconds": z.number(), "comment": z.exactOptional(z.string().nullable()) });
-
-export interface GitHubUserAccountDto {
-  id: string;
-  login: string;
-  avatarUrl: string | null;
-}
-export const gitHubUserAccountDtoSchema: z.ZodType<GitHubUserAccountDto> = z.object({ "id": z.string(), "login": z.string(), "avatarUrl": z.string().nullable() });
-
-export interface GitHubUserConnectionDto {
-  configured: boolean;
-  connected: boolean;
-  /**
-   * Set while connected and the account's id and login are known.
-   */
-  account: GitHubUserAccountDto | null;
-  /**
-   * Granted OAuth scopes; empty unless connected.
-   */
-  scopes: string[];
-}
-export const gitHubUserConnectionDtoSchema: z.ZodType<GitHubUserConnectionDto> = z.object({ "configured": z.boolean(), "connected": z.boolean(), "account": gitHubUserAccountDtoSchema.nullable(), "scopes": z.array(z.string()) });
-
-export interface GitHubUserAuthorizationDto {
-  authorizationUrl: string;
-}
-export const gitHubUserAuthorizationDtoSchema: z.ZodType<GitHubUserAuthorizationDto> = z.object({ "authorizationUrl": z.string() });
-
-export interface BeginGitHubUserAuthorizationBody {
-  /**
-   * `overlord://github/callback` or an `http(s)` URL on an allowed browser origin.
-   */
-  returnTo?: string;
-}
-export const beginGitHubUserAuthorizationBodySchema: z.ZodType<BeginGitHubUserAuthorizationBody> = z.object({ "returnTo": z.exactOptional(z.string()) });
 
 export interface GitHubRepositoryOwnerDto {
   login: string;
@@ -7398,14 +7344,6 @@ export interface PostAgentRequestsByIdResolvePathParams {
 }
 export const postAgentRequestsByIdResolvePathParamsSchema: z.ZodType<PostAgentRequestsByIdResolvePathParams> = z.object({ "id": z.string() });
 
-export interface PostAgentRequestsByIdReleasePathParams {
-  /**
-   * Agent request id; not read (the route always answers 410).
-   */
-  id: string;
-}
-export const postAgentRequestsByIdReleasePathParamsSchema: z.ZodType<PostAgentRequestsByIdReleasePathParams> = z.object({ "id": z.string() });
-
 export interface GetAgentSessionInputsQueryParams {
   /**
    * Mission UUID or display id; required unless `objectiveId` is a display id.
@@ -7417,14 +7355,6 @@ export interface GetAgentSessionInputsQueryParams {
   objectiveId?: string;
 }
 export const getAgentSessionInputsQueryParamsSchema: z.ZodType<GetAgentSessionInputsQueryParams> = z.object({ "missionId": z.exactOptional(z.string()), "objectiveId": z.exactOptional(z.string()) });
-
-export interface PostAgentSessionInputsByIdCancelPathParams {
-  /**
-   * Session input id; not read (the route always answers 410).
-   */
-  id: string;
-}
-export const postAgentSessionInputsByIdCancelPathParamsSchema: z.ZodType<PostAgentSessionInputsByIdCancelPathParams> = z.object({ "id": z.string() });
 
 export interface GetMissionsByIdEventsPathParams {
   /**
@@ -7969,7 +7899,7 @@ export const postExecutionTargetsByIdMissionBranchObservationsHeaderParamsSchema
 
 export interface PostProtocolBySubcommandPathParams {
   /**
-   * A backend protocol subcommand listed in contract/protocol-commands.yaml (`search` is an alias of `search-missions`). An unknown name answers 404 `Unknown protocol subcommand: <name>` with the supported names in `detail`.
+   * A backend protocol subcommand listed in contract/protocol-commands.yaml. An unknown name, including the retired `search-missions` alias and `list-organizations` (ADR 0054), answers 404 `Unknown protocol subcommand: <name>` with the supported names in `detail`.
    */
   subcommand: string;
 }
@@ -9760,7 +9690,7 @@ export const apiOperations = {
     permission: "unknown",
     permissionCandidates: ["profile:self:update","project:read"],
     edition: "both",
-    consumers: ["mobile","webapp"],
+    consumers: ["mobile"],
     extension: null,
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: null, query: null, header: null },
@@ -9779,7 +9709,7 @@ export const apiOperations = {
     permission: "profile:self:update",
     permissionCandidates: [],
     edition: "both",
-    consumers: ["webapp"],
+    consumers: ["unverified"],
     extension: null,
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: null, query: null, header: null },
@@ -10140,7 +10070,7 @@ export const apiOperations = {
     permission: "project:read",
     permissionCandidates: [],
     edition: "both",
-    consumers: ["cli","mobile","webapp"],
+    consumers: ["cli","mobile"],
     extension: null,
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: null, query: getProjectsQueryParamsSchema, header: null },
@@ -11098,123 +11028,6 @@ export const apiOperations = {
     responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: missionListSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
   },
   /**
-   * GET /ext/everhour/user-connection: The caller's Everhour connection (compatibility alias)
-   */
-  getExtEverhourUserConnection: {
-    operationId: "getExtEverhourUserConnection",
-    method: "GET",
-    path: "/ext/everhour/user-connection",
-    tags: ["everhour"],
-    deprecated: false,
-    permission: "owner",
-    permissionCandidates: [],
-    edition: "both",
-    consumers: ["unverified"],
-    extension: "everhour",
-    security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
-    parameters: { path: null, query: null, header: null },
-    requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: everhourUserConnectionDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
-  },
-  /**
-   * PUT /ext/everhour/user-connection: Connect or rotate the caller's Everhour API key (compatibility alias)
-   */
-  putExtEverhourUserConnection: {
-    operationId: "putExtEverhourUserConnection",
-    method: "PUT",
-    path: "/ext/everhour/user-connection",
-    tags: ["everhour"],
-    deprecated: false,
-    permission: "owner",
-    permissionCandidates: [],
-    edition: "both",
-    consumers: ["unverified"],
-    extension: "everhour",
-    security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
-    parameters: { path: null, query: null, header: null },
-    requestBody: { required: true, content: { "application/json": { kind: "json", schema: updateEverhourIntegrationBodySchema } } },
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: everhourUserConnectionDtoSchema } } }, "400": apiResponses.BadRequest, "401": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "403": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "404": apiResponses.NotFound, "413": apiResponses.PayloadTooLarge, "429": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "500": apiResponses.InternalError, "502": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "503": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } } }
-  },
-  /**
-   * DELETE /ext/everhour/user-connection: Disconnect the caller's Everhour key (compatibility alias)
-   */
-  deleteExtEverhourUserConnection: {
-    operationId: "deleteExtEverhourUserConnection",
-    method: "DELETE",
-    path: "/ext/everhour/user-connection",
-    tags: ["everhour"],
-    deprecated: false,
-    permission: "owner",
-    permissionCandidates: [],
-    edition: "both",
-    consumers: ["unverified"],
-    extension: "everhour",
-    security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
-    parameters: { path: null, query: null, header: null },
-    requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: everhourUserConnectionDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
-  },
-  /**
-   * GET /ext/everhour/integration: The caller's Everhour connection (deprecated alias of /user-connection)
-   * @deprecated
-   */
-  getExtEverhourIntegration: {
-    operationId: "getExtEverhourIntegration",
-    method: "GET",
-    path: "/ext/everhour/integration",
-    tags: ["everhour"],
-    deprecated: true,
-    permission: "owner",
-    permissionCandidates: [],
-    edition: "both",
-    consumers: ["unverified"],
-    extension: "everhour",
-    security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
-    parameters: { path: null, query: null, header: null },
-    requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: everhourUserConnectionDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
-  },
-  /**
-   * PUT /ext/everhour/integration: Connect or rotate the caller's Everhour API key (deprecated alias of /user-connection)
-   * @deprecated
-   */
-  putExtEverhourIntegration: {
-    operationId: "putExtEverhourIntegration",
-    method: "PUT",
-    path: "/ext/everhour/integration",
-    tags: ["everhour"],
-    deprecated: true,
-    permission: "owner",
-    permissionCandidates: [],
-    edition: "both",
-    consumers: ["unverified"],
-    extension: "everhour",
-    security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
-    parameters: { path: null, query: null, header: null },
-    requestBody: { required: true, content: { "application/json": { kind: "json", schema: updateEverhourIntegrationBodySchema } } },
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: everhourUserConnectionDtoSchema } } }, "400": apiResponses.BadRequest, "401": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "403": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "404": apiResponses.NotFound, "413": apiResponses.PayloadTooLarge, "429": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "500": apiResponses.InternalError, "502": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "503": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } } }
-  },
-  /**
-   * DELETE /ext/everhour/integration: Disconnect the caller's Everhour key (deprecated alias of /user-connection)
-   * @deprecated
-   */
-  deleteExtEverhourIntegration: {
-    operationId: "deleteExtEverhourIntegration",
-    method: "DELETE",
-    path: "/ext/everhour/integration",
-    tags: ["everhour"],
-    deprecated: true,
-    permission: "owner",
-    permissionCandidates: [],
-    edition: "both",
-    consumers: ["unverified"],
-    extension: "everhour",
-    security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
-    parameters: { path: null, query: null, header: null },
-    requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: everhourUserConnectionDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
-  },
-  /**
    * GET /ext/everhour/projects/{projectId}/link: Read a project's Everhour link
    */
   getExtEverhourProjectsByProjectIdLink: {
@@ -11481,63 +11294,6 @@ export const apiOperations = {
     responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: missionEverhourStateDtoSchema } } }, "400": apiResponses.BadRequest, "401": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "403": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "404": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "409": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "413": apiResponses.PayloadTooLarge, "429": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "500": apiResponses.InternalError, "502": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "503": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } } }
   },
   /**
-   * GET /ext/github/user-connection: The caller's GitHub repository authorization (compatibility alias)
-   */
-  getExtGithubUserConnection: {
-    operationId: "getExtGithubUserConnection",
-    method: "GET",
-    path: "/ext/github/user-connection",
-    tags: ["github"],
-    deprecated: false,
-    permission: "owner",
-    permissionCandidates: [],
-    edition: "both",
-    consumers: ["unverified"],
-    extension: "github",
-    security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
-    parameters: { path: null, query: null, header: null },
-    requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: gitHubUserConnectionDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
-  },
-  /**
-   * DELETE /ext/github/user-connection: Disconnect the caller's GitHub repository authorization (compatibility alias)
-   */
-  deleteExtGithubUserConnection: {
-    operationId: "deleteExtGithubUserConnection",
-    method: "DELETE",
-    path: "/ext/github/user-connection",
-    tags: ["github"],
-    deprecated: false,
-    permission: "owner",
-    permissionCandidates: [],
-    edition: "both",
-    consumers: ["unverified"],
-    extension: "github",
-    security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
-    parameters: { path: null, query: null, header: null },
-    requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: gitHubUserConnectionDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
-  },
-  /**
-   * POST /ext/github/user-connection/authorize: Start GitHub repository authorization (compatibility alias)
-   */
-  postExtGithubUserConnectionAuthorize: {
-    operationId: "postExtGithubUserConnectionAuthorize",
-    method: "POST",
-    path: "/ext/github/user-connection/authorize",
-    tags: ["github"],
-    deprecated: false,
-    permission: "owner",
-    permissionCandidates: [],
-    edition: "both",
-    consumers: ["unverified"],
-    extension: "github",
-    security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
-    parameters: { path: null, query: null, header: null },
-    requestBody: { required: false, content: { "application/json": { kind: "json", schema: beginGitHubUserAuthorizationBodySchema } } },
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: gitHubUserAuthorizationDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "413": apiResponses.PayloadTooLarge, "429": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "500": apiResponses.InternalError, "503": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } } }
-  },
-  /**
    * GET /ext/github/repository-owners: List the GitHub owners the caller can create private repositories under
    */
   getExtGithubRepositoryOwners: {
@@ -11644,7 +11400,7 @@ export const apiOperations = {
     permission: "project:read",
     permissionCandidates: [],
     edition: "both",
-    consumers: ["webapp"],
+    consumers: ["unverified"],
     extension: "github",
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: null, query: getExtGithubReposQueryParamsSchema, header: null },
@@ -11872,7 +11628,7 @@ export const apiOperations = {
     permission: "mission:read",
     permissionCandidates: [],
     edition: "both",
-    consumers: ["cli","webapp"],
+    consumers: ["cli"],
     extension: null,
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: null, query: getMissionsSearchQueryParamsSchema, header: null },
@@ -12146,25 +11902,6 @@ export const apiOperations = {
     responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: resolveAgentRequestResultDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "410": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
   },
   /**
-   * POST /api/agent-requests/{id}/release: Release an agent request to the terminal (retired)
-   */
-  postAgentRequestsByIdRelease: {
-    operationId: "postAgentRequestsByIdRelease",
-    method: "POST",
-    path: "/api/agent-requests/{id}/release",
-    tags: ["agent-requests"],
-    deprecated: false,
-    permission: "authenticated",
-    permissionCandidates: [],
-    edition: "both",
-    consumers: ["webapp"],
-    extension: null,
-    security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
-    parameters: { path: postAgentRequestsByIdReleasePathParamsSchema, query: null, header: null },
-    requestBody: null,
-    responses: { "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "410": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
-  },
-  /**
    * GET /api/agent-session-inputs: List a mission's session inputs and its latest channel
    */
   getAgentSessionInputs: {
@@ -12176,7 +11913,7 @@ export const apiOperations = {
     permission: "session:read",
     permissionCandidates: [],
     edition: "both",
-    consumers: ["cli","webapp"],
+    consumers: ["cli"],
     extension: null,
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: null, query: getAgentSessionInputsQueryParamsSchema, header: null },
@@ -12195,29 +11932,10 @@ export const apiOperations = {
     permission: "authenticated",
     permissionCandidates: [],
     edition: "both",
-    consumers: ["cli","webapp"],
+    consumers: ["cli"],
     extension: null,
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: null, query: null, header: null },
-    requestBody: null,
-    responses: { "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "410": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
-  },
-  /**
-   * POST /api/agent-session-inputs/{id}/cancel: Cancel a session input (retired)
-   */
-  postAgentSessionInputsByIdCancel: {
-    operationId: "postAgentSessionInputsByIdCancel",
-    method: "POST",
-    path: "/api/agent-session-inputs/{id}/cancel",
-    tags: ["agent-session-inputs"],
-    deprecated: false,
-    permission: "authenticated",
-    permissionCandidates: [],
-    edition: "both",
-    consumers: ["webapp"],
-    extension: null,
-    security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
-    parameters: { path: postAgentSessionInputsByIdCancelPathParamsSchema, query: null, header: null },
     requestBody: null,
     responses: { "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "410": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
   },
@@ -12328,7 +12046,7 @@ export const apiOperations = {
     permission: "artifact:create",
     permissionCandidates: [],
     edition: "both",
-    consumers: ["webapp"],
+    consumers: ["unverified"],
     extension: null,
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: postMissionsByIdArtifactsPathParamsSchema, query: null, header: null },

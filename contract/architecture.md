@@ -372,46 +372,37 @@ Owns:
   `putMissionsByIdContext` with `mission:update`) mirrors Protocol `read-context` /
   `write-context`; a write upserts one entry and emits a `shared_context_entry` entity change in
   the same transaction.
-- **Personal Everhour identity** (`getExtEverhourUserConnection`, `putExtEverhourUserConnection`,
-  `deleteExtEverhourUserConnection`, and the deprecated `/ext/everhour/integration` alias): a
-  personal API key is validated against Everhour, then stored only as AES-256-GCM ciphertext;
-  delete revokes and soft-deletes only the caller's credential. These account-wide routes use no
-  ambient workspace and no `workspace:*` permission. Timer, time-entry and project-link writes
-  use the acting user's key. DTOs, logs, browser and mobile storage, realtime, entity changes and
-  errors never contain an Everhour API key or a server encryption key. Workspace-scoped GitHub
-  App installation and Everhour/GitHub resource links are unchanged.
-- **Personal GitHub repository authorization** (`getExtGithubUserConnection`,
-  `postExtGithubUserConnectionAuthorize`, `getAuthCallbackGithubRepository`,
-  `deleteExtGithubUserConnection`, `getExtGithubRepositoryOwners`): authorization creates a
-  profile-bound, hashed, short-lived OAuth state; the public callback consumes that state once,
-  exchanges the code server-to-server, encrypts the access and optional refresh credentials with
-  AES-256-GCM, and stores one active connection for the profile; delete revokes and soft-deletes
-  only the caller's credential; repository owners are the personal owner plus only active
-  organizations whose policy permits the caller to create private repositories. Repository
-  authorization reuses the Better Auth GitHub OAuth App client registration (`GITHUB_CLIENT_ID`
-  / `GITHUB_CLIENT_SECRET`) but remains a distinct, explicit grant and token lifecycle
-  requesting `repo read:org`; the callback is a subpath of the registered
+- **Personal Everhour identity**: the personal API key is set, read and erased only through the
+  account-connections module (`postConnectionsApiKeys`, `getConnections`, `deleteConnectionsById`):
+  it is validated against Everhour, then stored only as AES-256-GCM ciphertext in
+  `account_connections`; delete revokes and soft-deletes only the caller's credential. These
+  account-wide routes use no ambient workspace and no `workspace:*` permission. Timer, time-entry
+  and project-link writes use the acting user's key, read through the module (adopting an
+  unambiguous legacy workspace key onto the profile as they read). DTOs, logs, browser and mobile
+  storage, realtime, entity changes and errors never contain an Everhour API key or a server
+  encryption key. Workspace-scoped GitHub App installation and Everhour/GitHub resource links are
+  unchanged.
+- **Personal GitHub repository authorization** (`postConnections` with `provider: 'github'`,
+  `getAuthCallbackGithubRepository`, `deleteConnectionsById`, `getExtGithubRepositoryOwners`):
+  authorization creates a profile-bound, hashed, short-lived OAuth state; the public callback
+  consumes that state once, exchanges the code server-to-server, encrypts the access and optional
+  refresh credentials with AES-256-GCM, and stores one active connection for the profile; delete
+  revokes and soft-deletes only the caller's credential; repository owners are the personal owner
+  plus only active organizations whose policy permits the caller to create private repositories.
+  Repository authorization reuses the Better Auth GitHub OAuth App client registration
+  (`GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET`) but remains a distinct, explicit grant and token
+  lifecycle requesting `repo read:org`; the callback is a subpath of the registered
   `/api/auth/callback/github` login callback and runs before the Better Auth wildcard. These
   account-wide routes use no ambient workspace and do not alter the workspace GitHub App
   installation. DTOs, logs, browser and mobile storage, realtime, entity changes, redirects and
   errors never contain a GitHub credential, raw OAuth state or server encryption key.
-  `postConnections` with `provider: 'github'` is the canonical start route.
-- **Personal-connection compatibility aliases**: the Everhour and GitHub user-connection routes
-  above are thin aliases over the shared account-connections module (`ProfileConnections`,
-  profile scope): the credential is stored in `account_connections` under the module's key ring,
-  never in an extension-held key, the module serves the GitHub callback and serialises refresh,
-  and the response shapes and error text are unchanged. The GitHub aliases keep their `returnTo`
-  validation (an allowed browser origin URL or `overlord://github/callback`, stored in
-  `account_connection_authorizations.return_url`; without `returnTo` they return to the web
-  connected-accounts page when a web origin is configured, otherwise to the status page). On
-  every alias `connected` means a live `connected` row and a `reauthorization_required` row
-  reports `connected: false`; the GitHub `configured` means the OAuth client and a write key are
-  both present. Each alias records an in-process hit counter logged hourly with route and client
-  family only. Retirement is a later contract change: `/ext/everhour/integration` goes first,
-  after the web app uses `/api/connections` and the counter reads zero; the GitHub aliases stay
-  until an OverlordMobile release on `/api/connections` has shipped and they record 90 days
-  without hits. `getExtGithubRepositoryOwners` is a feature route, not an alias, and reads its
-  token through the module.
+  `getExtGithubRepositoryOwners` is a feature route that reads its token through the module.
+- **Retired personal-connection aliases** (ADR 0054): `/ext/everhour/user-connection`,
+  `/ext/everhour/integration`, `/ext/github/user-connection` and
+  `/ext/github/user-connection/authorize` are no longer served (404); the account-connections
+  surface (`/api/connections`) is the only way to set, read or erase a personal Everhour or GitHub
+  connection. A GitHub sign-in such an alias started before the retirement still completes at the
+  callback and returns to the absolute target it validated.
 - **Composite project initialization** (`postProjectsInitialize`) names its target workspace and
   requires `project:create` there. The caller-provided idempotency key creates the project,
   first mission and initial draft objective atomically; optional private GitHub provisioning
@@ -911,7 +902,9 @@ Specified in [protocol.md](protocol.md).
 - **Account-owned inbox**: Inbox CRUD resolves the authenticated `profiles.id` rather than an ambient workspace. Reads and mutations are scoped to that profile; promotion derives authorization and tenancy solely from its destination project. Inbox CRUD writes do not append workspace `entity_changes`, because those records have no workspace; promotion appends the ordinary mission change in the destination workspace.
 - **Workspace resolution taxonomy**: Entity-addressed reads and writes derive a workspace from their operand and require it in the immutable request `authorizedWorkspaces` set. Single-workspace UI reads require an explicit `workspaceId` and return `400` when omitted. Aggregate parentless reads fan out only across the selected organization's authorized set; when a session holder belongs to multiple organizations, selection is explicit. Parentless writes use `resolveParentlessWorkspace` only for `create-project` and `register-target`; mission writes derive tenancy from their named project and inbox operations are profile-owned. No route may select the oldest membership.
 - **Authorized workspace shape**: Auth resolves once per request `{ organizationId, workspaces: [{ workspaceId, workspaceUserId, roleKeys }] }`, where workspaces are active live memberships intersected with token consent (when present). Services may retain one operation-local `resolvedWorkspaceId`, but must not reinterpret the set from request headers or persistence.
-- **Mission search versioning**: `getMissionsSearch` is frozen as its v1 response.
+- **Mission search versioning**: `getMissionsSearch` is frozen as its v1 response (REST only;
+  the CLI's `ovld missions list` calls it; Protocol search no longer offers a v1 response,
+  ADR 0054).
   `getMissionsSearchV2` ranks portably across adapters: display-id short-circuit,
   meaningful-term coverage floor `min(3, max(1, ceil(termCount / 2)))`, `max(documentScore)` plus
   bounded corroboration, and recency as rank fusion rather than an eligibility gate; exact
@@ -931,7 +924,9 @@ Specified in [protocol.md](protocol.md).
   lower bounds. `matchesPerResult` is not divided across workspaces. The mission row always
   anchors the group, including when `anchorOnly` is true. An objective display-id query returns
   that objective as the group's single match. REST v3 accepts only stable `projectIds`. Protocol
-  `search-missions --response-version 3` returns the same envelope with v3 defaults. Artifacts
+  `search` (v3 by default, or `--response-version 3`) returns the same envelope with v3 defaults;
+  `--response-version 2` returns the v2 envelope, and any other version, including the retired
+  v1, is refused with 400 `invalid_input` (ADR 0054). Artifacts
   are not indexed. Ranked search (any version) remains candidate discovery and never proves
   absence.
 - **Exact reference lookup**: Protocol `search --reference` is a separate exhaustive exact-token

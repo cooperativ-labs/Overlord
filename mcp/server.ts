@@ -279,8 +279,7 @@ export function runQueueMcpProtocolCall(
 function jsonText(value: unknown): ToolCallResult {
   // Every tool declares an object outputSchema, and MCP clients validate the
   // result's `structuredContent` against it. A bare array or primitive (e.g. the
-  // add-objectives / search-missions handlers return `ObjectiveSummary[]` /
-  // `MissionSummary[]`) fails client-side with
+  // add-objectives handler returns `ObjectiveSummary[]`) fails client-side with
   // "structuredContent: Input should be a valid dictionary" even though the write
   // succeeded server-side. Wrap non-dictionary results so structuredContent is
   // always a dictionary; the text content mirrors it.

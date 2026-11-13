@@ -88,3 +88,4 @@ record and the index disagree.
 - [0051 — The OpenAPI description is enforced at the route boundary and in the backend tests](0051-rest-boundary-validation.md)
 - [0052 — A release gate around the manual release checks the contract range](0052-manual-release-gate.md)
 - [0053 — The production baseline is the version in force when phase 5 finished](0053-baseline-is-the-version-in-force.md)
+- [0054 — Retire legacy alias routes and protocol aliases](0054-retire-legacy-aliases.md)

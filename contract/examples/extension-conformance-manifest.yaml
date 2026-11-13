@@ -1,7 +1,7 @@
 # Example: Database extension conformance manifest
 # This shows how a third-party extension that adds its own tables would declare conformance.
 
-contractVersion: "169.2.1"
+contractVersion: "170.0.0"
 componentType: extension
 componentKey: my-analytics
 label: "My Analytics Extension"

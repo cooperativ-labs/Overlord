@@ -1,8 +1,8 @@
 # Overlord contract
 
-> Contract version: **169.2.1**
+> Contract version: **170.0.0**
 >
-> Status: **production baseline**; approvals are recorded under [releases/](releases/README.md) (section 7)
+> Status: the production baseline is `169.2.1`; approvals are recorded under [releases/](releases/README.md) (section 7)
 
 This directory is the normative, versioned specification of how Overlord's
 components interact. It defines what each component owns, the only sanctioned

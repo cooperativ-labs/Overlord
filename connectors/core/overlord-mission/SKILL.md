@@ -13,7 +13,7 @@ Connector adapters may add harness-specific commands, hooks, MCP tools, or launc
 
 Use this mode when the prompt already contains a mission ID or explicitly says the session was launched by Overlord.
 
-**`<mission_id>` is always the short display id** — `coo:695`, `1:899`: a workspace prefix, a colon, and a number. Pass it as `--mission-id`. **`<objective_id>`** is the objective display id (`coo:695.k7xm`) or UUID; pass it as `--objective-id` when you know which objective to execute. Never pass an objective id as `--mission-id`. If the prompt includes `OVERLORD_OBJECTIVE_ID` or an Objective ID line, include `--objective-id` on attach. If the only id you can find is a bare UUID with no mission display id, re-read the prompt or run `ovld protocol search-missions` rather than guessing.
+**`<mission_id>` is always the short display id** — `coo:695`, `1:899`: a workspace prefix, a colon, and a number. Pass it as `--mission-id`. **`<objective_id>`** is the objective display id (`coo:695.k7xm`) or UUID; pass it as `--objective-id` when you know which objective to execute. Never pass an objective id as `--mission-id`. If the prompt includes `OVERLORD_OBJECTIVE_ID` or an Objective ID line, include `--objective-id` on attach. If the only id you can find is a bare UUID with no mission display id, re-read the prompt or run `ovld protocol search` rather than guessing.
 
 **An objective display id is a complete address.** `coo:695.k7xm` already spells its mission, so `--mission-id` is optional on every command whenever you pass a full objective display id as `--objective-id`; Overlord derives `coo:695` from it. This is the identifier to reach for when reconnecting to a mission that is running more than one objective, where "the active objective" is ambiguous and a mission id alone is not enough. An objective **UUID** names no mission, so it still needs `--mission-id` alongside it.
 
@@ -97,7 +97,7 @@ Use this mode when the conversation starts normally and the user asks the agent 
    When you open or discuss an existing mission that has a draft objective, submit it with `ovld protocol discuss-objective --mission-id <mission_id>`.
 4. If the user wants to route the current session onto an existing mission by ID, run `ovld protocol connect --mission-id <mission_id>` (add `--objective-id <objective_id>` to pin the session to a specific objective).
 5. If the user wants to establish a persistent session with a mission by ID, run `ovld protocol attach --mission-id <mission_id>`.
-6. If the user wants to find a mission but does not know the ID, run `ovld protocol search-missions --query "..." --status execute,review` and ask the user to confirm.
+6. If the user wants to find a mission but does not know the ID, run `ovld protocol search --query "..." --status execute,review` and ask the user to confirm.
 7. If you need to understand project routing before prompting, use `ovld protocol discover-project`.
 8. If the user wants to **record work that is already finished** in this chat (for example, something you just built in a chat app) as a completed mission, run `ovld protocol record-work --project-id <project-id>` (or the hosted `overlord_record_work` MCP tool). This creates a mission with one completed objective, records any paths you declare as Declared evidence, lands it in the review column, and runs the standard Gemini delivery summary — all in one call, with no `attach`/`deliver`. Do **not** use it for in-progress work. The exact submission format is in [reference/record-work.md](reference/record-work.md).
 9. If you need other lifecycle commands or flags, run `ovld protocol help` and use the real subcommand list instead of guessing.
@@ -384,7 +384,7 @@ When creating missions from within a repository:
 - Prefer `create` by default for draft mission creation.
 - Use `prompt` only when the user explicitly asks to start execution immediately.
 - `create`, `prompt`, and `record-work` require an explicit `--project-id`; use `discover-project` first when the project is known only from the checkout. They never infer a destination project.
-- Use `create --unassigned-to-project` only when the user deliberately requests an account-owned inbox capture. `--inbox` is a compatibility alias.
+- Use `create --unassigned-to-project` only when the user deliberately requests an account-owned inbox capture.
 - Create multiple missions when each prompt represents a different feature or goal.
 - Add objectives to the same mission when each prompt is a sequential step toward the same feature or goal; use `ovld protocol add-objectives --mission-id <mission_id> --objectives-json '[{"objective":"..."}]'`.
 - `create` and `prompt` require `--objectives-json` or `--objectives-file` with an ordered array of `{ "objective": "...", "title": "...", "autoAdvance": true }` objects. A single objective is just an array with one item. `--auto-advance` / `--no-auto-advance` set the default when an item omits `autoAdvance` (default off).

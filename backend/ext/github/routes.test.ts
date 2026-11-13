@@ -89,24 +89,26 @@ test.after(() => {
   rmSync(tempDir, { recursive: true, force: true });
 });
 
-test('user connection routes expose metadata without requiring workspace mutation authority', async () => {
+test('repository owners do not require workspace mutation authority', async () => {
   setActiveWorkspaceUser(workspaceAActorId);
   await setActiveWorkspace(workspaceAId);
 
   await withGitHubServer(async baseUrl => {
-    const connectionResponse = await fetch(`${baseUrl}/ext/github/user-connection`);
-    assert.equal(connectionResponse.status, 200);
-    const connection = (await connectionResponse.json()) as Record<string, unknown>;
-    assert.deepEqual(Object.keys(connection).sort(), [
-      'account',
-      'configured',
-      'connected',
-      'scopes'
-    ]);
-    assert.equal(JSON.stringify(connection).includes('token'), false);
-
     const ownersResponse = await fetch(`${baseUrl}/ext/github/repository-owners`);
     assert.equal(ownersResponse.status, 409);
+  });
+});
+
+test('retired user-connection aliases are not served', async () => {
+  setActiveWorkspaceUser(workspaceAActorId);
+  await setActiveWorkspace(workspaceAId);
+
+  await withGitHubServer(async baseUrl => {
+    assert.equal((await fetch(`${baseUrl}/ext/github/user-connection`)).status, 404);
+    assert.equal(
+      (await fetch(`${baseUrl}/ext/github/user-connection/authorize`, { method: 'POST' })).status,
+      404
+    );
   });
 });
 

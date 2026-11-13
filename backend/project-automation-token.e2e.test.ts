@@ -650,15 +650,15 @@ describe('reads inside the selected project', () => {
     assert.equal(scopedToR.status, 404, scopedToR.text);
 
     const protocolSearch = await expectOk(
-      protocol(automationSecret, 'search-missions', {
+      protocol(automationSecret, 'search', {
         '--query': 'feedback',
         '--response-version': '3'
       }),
       'protocol search v3'
     );
     assertNoLeak(JSON.stringify(protocolSearch), 'protocol search');
-    for (const version of ['1', '2']) {
-      const legacy = await protocol(automationSecret, 'search-missions', {
+    for (const version of ['2']) {
+      const legacy = await protocol(automationSecret, 'search', {
         '--query': 'feedback',
         '--response-version': version
       });
@@ -668,8 +668,10 @@ describe('reads inside the selected project', () => {
       );
       assertNoLeak(legacy.text, `protocol search v${version}`);
     }
-    const searchAlias = await protocol(automationSecret, 'search', { '--query': 'feedback' });
-    assertNoLeak(searchAlias.text, 'protocol search alias');
+    const searchDefault = await protocol(automationSecret, 'search', { '--query': 'feedback' });
+    assertNoLeak(searchDefault.text, 'protocol search default version');
+    const retired = await protocol(automationSecret, 'search-missions', { '--query': 'feedback' });
+    assert.equal(retired.status, 404, 'search-missions alias is retired');
 
     const sync = await expectOk(auto('GET', '/sync/changes?after=0'), 'sync changes');
     assert.ok(sync.changes.length > 0, 'P changes are visible');
@@ -1045,7 +1047,6 @@ describe('denied surfaces', () => {
         `/api/protocol/create`,
         { flags: { '--unassigned-to-project': true, '--objective': 'Denied' } }
       ],
-      ['POST', `/api/protocol/create`, { flags: { '--inbox': true, '--objective': 'Denied' } }],
       [
         'POST',
         `/api/protocol/create`,
@@ -1057,7 +1058,6 @@ describe('denied surfaces', () => {
         { flags: { '--project-id': R.projectId, '--objective': 'Denied' } }
       ],
       ['POST', `/api/protocol/discover-project`, { flags: {} }],
-      ['POST', `/api/protocol/list-organizations`, { flags: {} }],
       ['POST', `/api/objectives`, { missionId: P.missionId, objective: 'Denied' }],
       ['POST', `/api/objectives/${P.objectiveId}/launch`, {}],
       ['POST', `/api/objectives/${P.objectiveId}/attachments`, new TextEncoder().encode('denied')],

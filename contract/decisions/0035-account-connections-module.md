@@ -4,6 +4,7 @@
 - Status: accepted
 - Contract version: 153
 - Supersedes: none
+- Amended by: [ADR 0054](0054-retire-legacy-aliases.md) (the compatibility aliases are retired)
 - Origin: contract v153 (coo:1110), backfilled 2026-11
 
 ## Context

@@ -42,13 +42,13 @@ Requirements:
 
 - `ovld create "<objective>"`: create a draft mission/objective from a prompt-like string.
 - `ovld create --objectives-json '[{"objective":"...","autoAdvance":true}]'`: create one mission with ordered objectives. `--auto-advance` / `--no-auto-advance` set the default when an item omits `autoAdvance`.
-- `ovld inbox create --title "<title>" --objective "<objective>": create a private, account-owned unassigned capture; `ovld protocol create --inbox` is the protocol equivalent.
+- `ovld inbox create --title "<title>" --objective "<objective>": create a private, account-owned unassigned capture; `ovld protocol create --unassigned-to-project` is the protocol equivalent.
 - `ovld prompt "<objective>"`: create a mission and immediately queue or launch execution.
 - `ovld attach [missionId] [agent]`: search/select a mission and queue an agent. Optional `--objective-id` pins the queued objective; without it, the CLI picks a launchable objective (`submitted`, then `launching`, then `draft`) rather than always using position 0.
 - `ovld missions list [--status <csv>] [--project-id <id-or-name>] [--limit <n>]`: list missions. `--status` filters status TYPES, not the project-defined names on a board.
 - `ovld statuses list --project-id <id-or-name> [--json]`: list one project's board columns. Statuses are defined per project, so this is the only way to discover a specific board's names and order.
 - `ovld mission context <missionId>`: print the assembled context for a mission without starting a session.
-- `ovld protocol search-missions --response-version 2 --query "<text>" --status execute,review`: organization-bounded search with result metadata. `--status` is a CSV of status TYPES (`draft`, `next`, `execute`, `review`, `complete`, `blocked`, `cancelled`), never project-defined status names. V2 supports `--project-id`, `--resource-key`, `--date-field`, `--from`, and `--to`; date bounds are `[from, to)` and a field defaults to `updatedAt` only when a bound is provided.
+- `ovld protocol search --response-version 2 --query "<text>" --status execute,review`: organization-bounded search with result metadata. `--status` is a CSV of status TYPES (`draft`, `next`, `execute`, `review`, `complete`, `blocked`, `cancelled`), never project-defined status names. V2 supports `--project-id`, `--resource-key`, `--date-field`, `--from`, and `--to`; date bounds are `[from, to)` and a field defaults to `updatedAt` only when a bound is provided.
 - `ovld protocol add-objectives --mission-id <id> --objectives-json '[...]'`: append objectives to an existing mission. Each item may set `autoAdvance`.
 - `ovld protocol update-objective --objective-id <id> --auto-advance|--no-auto-advance`: turn auto-advance on or off for an existing objective.
 - `ovld protocol update-objective --objective-id <id> --instruction-text <text>|--instruction-text-file <path|->`: edit instruction text on a draft or future objective.

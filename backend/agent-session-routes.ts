@@ -863,19 +863,6 @@ export function createAgentRequestHumanRouter(): Router {
     })
   );
 
-  /**
-   * "Respond in terminal" — hand the decision back to the native prompt.
-   *
-   * This is a *release*, not an answer: it never records a resolution and never names an
-   * option, so a human who does not want to decide remotely cannot accidentally decide
-   * remotely. Losing the race is a normal outcome rather than an error — a request that was
-   * already resolved or already released comes back `released: false` with its real terminal
-   * state, so the card can stop claiming it owns a decision it does not own.
-   */
-  router.post(
-    '/:id/release',
-    handle(async () => sessionControlsGone())
-  );
   return router;
 }
 
@@ -1012,11 +999,6 @@ export function createAgentSessionInputHumanRouter(): Router {
 
   router.post(
     '/',
-    handle(async () => sessionControlsGone())
-  );
-
-  router.post(
-    '/:id/cancel',
     handle(async () => sessionControlsGone())
   );
 

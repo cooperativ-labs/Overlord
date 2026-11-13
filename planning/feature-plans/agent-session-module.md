@@ -103,7 +103,6 @@ event.ts         Push path: gate -> reduce -> post -> exit
 request.ts       Call path: gate -> create -> wait -> resolve, with fallback
 inbox.ts         Pull pending injections for adapters that poll
 descriptor.ts    Load, validate, and expose the harness descriptor (§4)
-sentinel.ts      Lightweight channel heartbeat/process-exit reporter
 codec-registry.generated.ts  Build output from connector-owned codecs
 ```
 
@@ -197,8 +196,11 @@ tables or duplicate state machines.
 Both database dialects add the four Exchange tables and constraints specified in
 the parent architecture. Generated database types are refreshed through the
 repo's normal codegen path. Runner/manual/virtual launch preparation creates the
-channel and passes only its bootstrap; the lightweight sentinel reports process
-liveness and exit but never becomes a message broker or addressable runner.
+channel and passes only its bootstrap.
+
+Note (contract ADR 0054): the planned lightweight channel sentinel
+(`cli/src/agent-session/sentinel.ts`) was never wired into a launch path and has been
+removed; anything it would have reported is covered server-side by channel lease expiry.
 
 ---
 

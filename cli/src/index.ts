@@ -167,7 +167,7 @@ async function dispatchCommand({
         await runProtocolCommand({
           runtime,
           subcommand: 'create',
-          args: ['--inbox', ...rest],
+          args: ['--unassigned-to-project', ...rest],
           stdin,
           primaryCommand
         });

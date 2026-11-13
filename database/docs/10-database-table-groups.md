@@ -257,7 +257,7 @@ Each group is independent from the others unless noted. Install them in any orde
 **When to add:**
 
 - Exact-match filters on workspace/project/status are not enough; users need ranked text search over mission titles and objective text.
-- The CLI `search-missions` command or web app search bar needs sub-second full-text results.
+- The CLI `search` protocol command or web app search bar needs sub-second full-text results.
 
 **Dependency notes:**
 

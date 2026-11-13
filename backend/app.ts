@@ -1732,10 +1732,7 @@ app.use(
   '/ext/github',
   requireAuthenticatedSession,
   projectAutomationRouteGuard,
-  createGitHubExtensionRouter(handle, {
-    allowedBrowserOrigins: getAllowedBrowserOrigins(),
-    connections: () => connectionsModule().profiles
-  })
+  createGitHubExtensionRouter(handle, { connections: () => connectionsModule().profiles })
 );
 app.patch(
   '/api/projects/:id/board/reorder',
