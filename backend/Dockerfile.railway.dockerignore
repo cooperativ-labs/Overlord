@@ -67,8 +67,6 @@
 !webapp/
 !webapp/package.json
 !webapp/tsconfig.json
-!webapp/shared/
-!webapp/shared/**
 
 !cli/
 !cli/package.json
