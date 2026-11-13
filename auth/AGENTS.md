@@ -73,19 +73,9 @@ Permissions are domain-capability strings (e.g. `project:create`, `mission:read`
 
 ## Changing Token Behavior
 
-Token lifecycle (create, rotate, revoke, expiration, scoping) is documented in [`auth/docs/07-user-token-authentication.md`](docs/07-user-token-authentication.md). The schema foundation is in `database/sqlite/migrations/002_rbac.sql`.
+Token lifecycle (create, rotate, revoke, expiration, scoping) is documented in [`auth/docs/07-user-token-authentication.md`](docs/07-user-token-authentication.md). The schema foundation is in `database/sqlite/migrations/003_rbac.sql`.
 
-**Steps for adding token expiration:**
-
-1. Add the column to `user_tokens` via a new numbered migration in `database/sqlite/migrations/`.  
-2. Update the token-create service function to accept and persist the expiration.  
-3. Update the token-validate path to reject expired tokens.  
-4. Add CLI surface in the CLI module (`cli/`) to expose `--expires-in` on `ovld user-token create`.  
-5. Update `auth/docs/07-user-token-authentication.md` to document the new field.
-
-**Steps for adding token scopes:**
-
-`user_token_scopes` is already reserved by `002_rbac.sql`. Populate it when implementing scope-restricted tokens, and update the permission-check path in the RBAC authorizer to intersect token scopes with user permissions.
+Expiration (`DEFAULT_USER_TOKEN_TTL_DAYS`) and scope presets (`full`, `mission_lifecycle`, `project_automation`; `user_token_scopes` rows) are already implemented in `auth/src/auth/token.ts` and `auth/src/rbac/permissions.ts`. A change to token columns, scope presets, or validation rules is a contract change: update [`contract/authorization.md`](../contract/authorization.md) and [`contract/data/README.md`](../contract/data/README.md) in the same change, add a forward-only migration under `database/sqlite/migrations/` and `database/postgres/migrations/`, and keep `auth/docs/07-user-token-authentication.md` in step.
 
 ---
 
@@ -97,7 +87,7 @@ auth/
   AGENTS.md      ← this file
   README.md      ← architectural overview
   src/
-    auth/        ← Better Auth config, session bridge, token lifecycle
+    auth/        ← Better Auth config, identity bridge, token lifecycle
     rbac/        ← RBAC authorization logic (colocated with tests)
       authorizer.ts
       authorizer.test.ts

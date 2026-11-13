@@ -15,10 +15,8 @@ export {
   createPostgresSessionClient,
   createSqliteClient,
   type DatabaseClient,
-  groupConcat,
   openDatabaseClient,
   type RunResult,
-  sqlBoolLiteral,
   type SqlDialect,
   toPostgresPlaceholders,
   TransactionClosedError
@@ -37,10 +35,6 @@ export {
   OBJECTIVE_STATES,
   type ObjectiveState,
   SCHEMA_CONTRACT_VERSION,
-  SEED_USER_ID,
-  SEED_WORKSPACE_ID,
-  SEED_WORKSPACE_SLUG,
-  SEED_WORKSPACE_USER_ID,
   UPDATE_EVENT_TYPES,
   UPDATE_PHASES
 } from './constants.js';
@@ -48,7 +42,6 @@ export {
   GLOBAL_DATA_DIR_NAME,
   GLOBAL_DATABASE_FILENAME,
   LOCAL_DATA_DIR,
-  LOCAL_STORAGE_BUCKET_PATHS,
   LOCAL_STORAGE_DIR,
   resolveGlobalDatabasePath,
   resolveGlobalDataDir

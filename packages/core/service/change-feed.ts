@@ -1,12 +1,8 @@
+import type { ChangeOperation } from '@overlord/contract';
 import type { DatabaseClient } from '@overlord/database';
 
 import type { ServiceContext } from './context.js';
 import { newId, nowIso } from './util.js';
-
-// Mirrors the canonical `ChangeOperation` in `@overlord/contract`. Kept as a
-// local definition because `@overlord/core` does not depend on the contract
-// package; it must stay a superset of every operation either data layer records.
-export type ChangeOperation = 'insert' | 'update' | 'delete' | 'restore';
 
 /**
  * The fully-resolved column values for one `entity_changes` row. Every caller

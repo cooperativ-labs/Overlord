@@ -45,12 +45,6 @@ export type { AgentRequestKind, AgentRequestOption, AgentRequestStatus } from '@
 /** How long a waiter holds its lease before the server assumes the process is gone. */
 export const WAITER_LEASE_SECONDS = 20;
 
-/** §9: 30 seconds when recently active. Any different maximum is a PM decision, not a constant. */
-export const REMOTE_WINDOW_ACTIVE_SECONDS = 30;
-
-/** §9: 30 minutes when away or unknown. */
-export const REMOTE_WINDOW_AWAY_SECONDS = 30 * 60;
-
 export const MAX_REQUEST_SUMMARY_LENGTH = 2000;
 export const MAX_REQUEST_OPTIONS = 12;
 

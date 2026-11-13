@@ -1,4 +1,5 @@
-import type { MissionSearchMatchKind } from './mission-search.js';
+import type { ObjectiveState } from './generated/api.js';
+import { vocabulary } from './vocabulary.js';
 
 // REST DTOs generated from contract/api/openapi.yaml (ADR 0006).
 export type {
@@ -8,17 +9,12 @@ export type {
   SearchResultV3
 } from './generated/api.js';
 
-/** Document kinds that can be returned as a child match. `event` is never returnable. */
-export const SEARCH_MATCH_ENTITY_TYPES = ['objective', 'delivery'] as const;
-
-export type SearchMatchEntityType = (typeof SEARCH_MATCH_ENTITY_TYPES)[number];
-
 /** Document kinds that may produce a returnable match. `event` always corroborates. */
 export const SEARCH_RESULT_ENTITY_TYPES = ['mission', 'objective', 'delivery'] as const;
 
 export type SearchResultEntityType = (typeof SEARCH_RESULT_ENTITY_TYPES)[number];
 
-export const SEARCH_OBJECTIVE_STATES = [
+export const SEARCH_OBJECTIVE_STATES = vocabulary<ObjectiveState>()([
   'future',
   'draft',
   'submitted',
@@ -26,12 +22,9 @@ export const SEARCH_OBJECTIVE_STATES = [
   'executing',
   'pending_delivery',
   'complete'
-] as const;
+]);
 
 export type SearchObjectiveState = (typeof SEARCH_OBJECTIVE_STATES)[number];
-
-/** Widened from MissionSearchMatchKind. */
-export type SearchMatchKind = MissionSearchMatchKind;
 
 export const DEFAULT_SEARCH_ENTITY_TYPES: SearchResultEntityType[] = [
   'mission',
@@ -136,8 +129,4 @@ export function parseMatchesPerResult(
     return { ok: false, error: 'matchesPerResult must be an integer between 1 and 10' };
   }
   return { ok: true, value: parsed };
-}
-
-export function isSearchMatchEntityType(value: string): value is SearchMatchEntityType {
-  return value === 'objective' || value === 'delivery';
 }

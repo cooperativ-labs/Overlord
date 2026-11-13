@@ -93,46 +93,6 @@ async function projectRow(db: DatabaseClient, projectId: string) {
   return row;
 }
 
-export async function ensureDefaultRunQueue(
-  db: DatabaseClient,
-  projectId: string,
-  actorId: string | null = null
-): Promise<QueueRow> {
-  const existing = await db.get<QueueRow>(
-    'SELECT id, project_id, workspace_id, name, position, paused, is_default, mission_id FROM run_queues WHERE project_id = ? AND is_default = ? AND deleted_at IS NULL',
-    [projectId, db.dialect === 'postgres' ? true : 1]
-  );
-  if (existing) return existing;
-  const project = await projectRow(db, projectId);
-  const now = nowIso();
-  const id = newId();
-  await db.run(
-    'INSERT INTO run_queues (id, project_id, workspace_id, name, position, paused, is_default, created_by_workspace_user_id, created_at, updated_at, revision) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)',
-    [
-      id,
-      projectId,
-      project.workspace_id,
-      'Run Queue',
-      STEP,
-      db.dialect === 'postgres' ? true : 1,
-      db.dialect === 'postgres' ? true : 1,
-      actorId,
-      now,
-      now
-    ]
-  );
-  return {
-    id,
-    project_id: projectId,
-    workspace_id: project.workspace_id,
-    name: 'Run Queue',
-    position: STEP,
-    paused: true,
-    is_default: true,
-    mission_id: null
-  };
-}
-
 /**
  * Resolve the queue that belongs to `missionId`, creating it on first use.
  *

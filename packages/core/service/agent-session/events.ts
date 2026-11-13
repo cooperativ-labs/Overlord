@@ -192,39 +192,3 @@ export async function appendSessionEvent({
 
   return { id, channelSequence: inserted, duplicate: false };
 }
-
-/**
- * Producer-sequence gaps, for diagnostics only.
- *
- * A gap is recorded and surfaced; it never blocks a later event. Arrival order across producers
- * is not treated as a causal order, so "we are missing #7" is information about one producer's
- * delivery, not a reason to stall the feed.
- */
-export async function producerSequenceGaps({
-  ctx,
-  channelId
-}: {
-  ctx: ServiceContext;
-  channelId: string;
-}): Promise<{ adapterKey: string; expected: number; observed: number }[]> {
-  const rows = await ctx.db.all<{ adapter_key: string; producer_sequence: number }>(
-    `SELECT adapter_key, producer_sequence FROM agent_session_events
-       WHERE channel_id = ? AND producer_sequence IS NOT NULL
-       ORDER BY adapter_key ASC, producer_sequence ASC`,
-    [channelId]
-  );
-  const gaps: { adapterKey: string; expected: number; observed: number }[] = [];
-  const previous = new Map<string, number>();
-  for (const row of rows) {
-    const last = previous.get(row.adapter_key);
-    if (last !== undefined && row.producer_sequence > last + 1) {
-      gaps.push({
-        adapterKey: row.adapter_key,
-        expected: last + 1,
-        observed: row.producer_sequence
-      });
-    }
-    previous.set(row.adapter_key, row.producer_sequence);
-  }
-  return gaps;
-}

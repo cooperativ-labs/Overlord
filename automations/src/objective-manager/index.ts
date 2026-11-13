@@ -8,14 +8,7 @@ import {
   type ObjectiveLifecycleObjective,
   type ObjectiveLifecycleOptions,
   type ObjectiveLifecycleViolation,
-  planEnsureDraftSlot,
-  planRunQueueDispatch,
-  type RunQueueBlockedReason,
-  type RunQueueDispatchAction,
-  type RunQueuePlannerEntry,
-  type RunQueuePlannerMission,
-  type RunQueuePlannerObjective,
-  type RunQueueWaitingReason
+  planEnsureDraftSlot
 } from './rules.js';
 
 export type {
@@ -35,10 +28,7 @@ export type {
 } from './rules.js';
 export {
   ACTIVE_OBJECTIVE_STATES,
-  AUTO_ADVANCE_TOGGLE_OBJECTIVE_STATES,
-  canEditObjectiveInstruction,
   canonicalObjectiveResourceKey,
-  canToggleObjectiveAutoAdvance,
   decideAutoAdvanceAfterDelivery,
   DEFAULT_PRIMARY_RESOURCE_KEY,
   deriveObjectiveLifecycleView,
@@ -47,9 +37,7 @@ export {
   isActiveObjective,
   isEditableNextUpObjective,
   isFutureObjective,
-  isLaunchableObjective,
   LAUNCHABLE_OBJECTIVE_STATES,
-  OBJECTIVE_LIFECYCLE_STATES,
   objectiveHasInstructionText,
   objectiveInstructionText,
   objectiveResourcesConflict,

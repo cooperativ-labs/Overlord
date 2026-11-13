@@ -70,11 +70,7 @@ import {
   formatProjectResourcesInstructions,
   type ProjectResourceManifestEntry
 } from './project-resource-manifest.js';
-import {
-  discoverProject,
-  findPrimaryProjectResource,
-  findProjectResourceByKey
-} from './projects.js';
+import { findPrimaryProjectResource, findProjectResourceByKey } from './projects.js';
 import { enqueueRunQueueDispatch, retireEmptyRunQueues } from './run-queue.js';
 import { generateSessionKey, hashSessionKey, newId, nowIso } from './util.js';
 import { enqueueWebhookEvent } from './webhook-events.js';

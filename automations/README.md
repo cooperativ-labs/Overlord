@@ -44,7 +44,6 @@ behavior.
 ### Documentation
 
 - [01 — Automations Overview](docs/01-automations-overview.md): automation model, Gemini setup, and extension guide
-- [Worktree & Branch Automation](../planning/feature-plans/branching/worktree-branch-automation.md): proposed plan for per-mission branch + worktree automation (one branch/worktree per mission under `~/.ovld/worktrees`, reuse across objectives, merged-branch suffix, and a mission-panel branch section)
 - [Test Plan](docs/testing.md): unit coverage for title derivation, fallbacks, and registry behavior
 
 ### Code & Tests

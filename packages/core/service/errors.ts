@@ -10,10 +10,3 @@ export class ServiceError extends Error {
     this.name = 'ServiceError';
   }
 }
-
-export function assertFound<T>(value: T | null | undefined, message: string): T {
-  if (value === null || value === undefined) {
-    throw new ServiceError(message, 'not_found', 404);
-  }
-  return value;
-}

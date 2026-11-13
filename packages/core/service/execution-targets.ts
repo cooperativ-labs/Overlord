@@ -278,25 +278,6 @@ export async function findActingDeviceTarget({
 }
 
 /**
- * Read-only lookup of the local execution target for the process host fingerprint.
- * Does not provision devices, targets, or preferences — safe for list/read API paths.
- *
- * @deprecated On hosted backends this returns the backend host target, which must
- * never be used for client execution. Prefer {@link findActingDeviceExecutionTargetId}.
- */
-export async function findCallerDeviceExecutionTargetId({
-  ctx
-}: {
-  ctx: ServiceContext;
-}): Promise<string | null> {
-  if (!isCoLocatedBackend(ctx.db)) return null;
-  return findDeviceExecutionTargetIdForFingerprint({
-    ctx,
-    fingerprint: callerDeviceFingerprint()
-  });
-}
-
-/**
  * Provision (and return) the execution target for **the device running this
  * service-layer call** — the calling process's own machine.
  *

@@ -19,11 +19,6 @@
 // ---------------------------------------------------------------------------
 import type {
   AccountConnectionAssistantWriteScope,
-  AccountConnectionCredentialKind,
-  AccountConnectionProvider,
-  AccountConnectionScope,
-  AccountConnectionState,
-  AccountConnectionUnavailableReason,
   RepositoryReadOperation
 } from './generated/api.js';
 import { vocabulary } from './vocabulary.js';
@@ -96,26 +91,6 @@ export type {
   UpdateChatThreadBody
 } from './generated/api.js';
 
-export const CHAT_RUN_STATES = [
-  'queued',
-  'running',
-  'waiting_user',
-  'completed',
-  'failed',
-  'cancelled'
-] as const;
-export type ChatRunState = (typeof CHAT_RUN_STATES)[number];
-
-/** A thread has at most one run in one of these states. */
-export const CHAT_UNFINISHED_RUN_STATES = ['queued', 'running', 'waiting_user'] as const;
-
-/**
- * Terminal outcome of a run. `answered` is a normal completion; `allowance_exhausted`
- * completes with a partial summary and makes Continue available.
- */
-export const CHAT_RUN_OUTCOMES = ['answered', 'allowance_exhausted'] as const;
-export type ChatRunOutcome = (typeof CHAT_RUN_OUTCOMES)[number];
-
 /** Typed run failures. Tool failures are reported per tool call, never here. */
 export const CHAT_RUN_FAILURE_CODES = [
   'provider_unavailable',
@@ -128,38 +103,8 @@ export const CHAT_RUN_FAILURE_CODES = [
 ] as const;
 export type ChatRunFailureCode = (typeof CHAT_RUN_FAILURE_CODES)[number];
 
-export const CHAT_ATTEMPT_STATES = [
-  'leased',
-  'released',
-  'succeeded',
-  'failed',
-  'fenced',
-  'cancelled'
-] as const;
-export type ChatAttemptState = (typeof CHAT_ATTEMPT_STATES)[number];
-
-/** How an attempt began: first try, provider-checkpoint resume, or explicit fresh generation. */
-export const CHAT_RECOVERY_MODES = ['initial', 'checkpoint', 'fresh_generation'] as const;
-export type ChatRecoveryMode = (typeof CHAT_RECOVERY_MODES)[number];
-
-export const CHAT_MESSAGE_ROLES = ['user', 'assistant'] as const;
-export type ChatMessageRole = (typeof CHAT_MESSAGE_ROLES)[number];
-
-export const CHAT_MESSAGE_STATES = ['streaming', 'complete', 'interrupted'] as const;
-export type ChatMessageState = (typeof CHAT_MESSAGE_STATES)[number];
-
-export const CHAT_QUESTION_STATES = ['open', 'answered', 'superseded', 'cancelled'] as const;
-export type ChatQuestionState = (typeof CHAT_QUESTION_STATES)[number];
-
-export const CHAT_PROPOSAL_STATES = ['open', 'created', 'cancelled'] as const;
-export type ChatProposalState = (typeof CHAT_PROPOSAL_STATES)[number];
-
 export const CHAT_SOURCE_KINDS = ['knowledgebase', 'overlord', 'repository'] as const;
 export type ChatSourceKind = (typeof CHAT_SOURCE_KINDS)[number];
-
-/** Result of the most recent live access check for one source. Anything but `authorized` fails closed. */
-export const CHAT_SOURCE_ACCESS_STATES = ['authorized', 'revoked', 'unknown'] as const;
-export type ChatSourceAccessState = (typeof CHAT_SOURCE_ACCESS_STATES)[number];
 
 export const CHAT_TOOL_CALL_STATES = [
   'requested',
@@ -218,11 +163,6 @@ export const CHAT_ERROR_CODES = [
   'provider_unavailable'
 ] as const;
 export type ChatErrorCode = (typeof CHAT_ERROR_CODES)[number];
-
-export interface ChatErrorDto {
-  error: string;
-  code: ChatErrorCode;
-}
 
 // ---------------------------------------------------------------------------
 // Limits (configurable; these are the contracted defaults)
@@ -313,16 +253,6 @@ export const CHAT_NOTIFICATION_CATALOG = {
   }
 } as const;
 
-export const CHAT_NOTIFICATION_STATES = [
-  'pending',
-  'suppressed',
-  'dispatching',
-  'dispatched',
-  'cancelled',
-  'failed'
-] as const;
-export type ChatNotificationState = (typeof CHAT_NOTIFICATION_STATES)[number];
-
 /** Deep link carried by a conversation push; opens the thread, including on cold start. */
 export const CHAT_NOTIFICATION_DEEP_LINK = 'overlord://chat/threads/:threadId' as const;
 
@@ -330,23 +260,6 @@ export const CHAT_NOTIFICATION_DEEP_LINK = 'overlord://chat/threads/:threadId' a
 // Account connections
 // ---------------------------------------------------------------------------
 
-export const ACCOUNT_CONNECTION_PROVIDERS = vocabulary<AccountConnectionProvider>()([
-  'knowledgebase',
-  'everhour',
-  'github'
-]);
-/**
- * `organization`: owned by a profile inside one organization (Knowledgebase).
- * `profile`: owned by the profile across every organization (Everhour, GitHub).
- */
-export const ACCOUNT_CONNECTION_SCOPES = vocabulary<AccountConnectionScope>()([
-  'organization',
-  'profile'
-]);
-export const ACCOUNT_CONNECTION_CREDENTIAL_KINDS = vocabulary<AccountConnectionCredentialKind>()([
-  'oauth',
-  'api_key'
-]);
 /** Server-side envelope formats (never projected); listed for the closed vocabulary. */
 export const ACCOUNT_CONNECTION_CREDENTIAL_FORMATS = [
   'connection-v1',
@@ -356,12 +269,6 @@ export const ACCOUNT_CONNECTION_CREDENTIAL_FORMATS = [
 export type AccountConnectionCredentialFormat =
   (typeof ACCOUNT_CONNECTION_CREDENTIAL_FORMATS)[number];
 
-export const ACCOUNT_CONNECTION_STATES = vocabulary<AccountConnectionState>()([
-  'pending',
-  'connected',
-  'reauthorization_required',
-  'disconnected'
-]);
 /**
  * How far the assistant may write through a Knowledgebase connection (v158).
  * `per_request` (default): only the one workspace a user allows on a single message
@@ -371,12 +278,6 @@ export const ACCOUNT_CONNECTION_STATES = vocabulary<AccountConnectionState>()([
  */
 export const ACCOUNT_CONNECTION_ASSISTANT_WRITE_SCOPES =
   vocabulary<AccountConnectionAssistantWriteScope>()(['per_request', 'all_workspaces']);
-export const ACCOUNT_CONNECTION_UNAVAILABLE_REASONS =
-  vocabulary<AccountConnectionUnavailableReason>()([
-    'not_offered_on_edition',
-    'not_configured',
-    'encryption_not_configured'
-  ]);
 
 // ---------------------------------------------------------------------------
 // Repository reads (local-target interface seam; executed by the runner)

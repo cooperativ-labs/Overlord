@@ -39,10 +39,7 @@ export type {
 } from './objective-manager/index.js';
 export {
   ACTIVE_OBJECTIVE_STATES,
-  AUTO_ADVANCE_TOGGLE_OBJECTIVE_STATES,
-  canEditObjectiveInstruction,
   canonicalObjectiveResourceKey,
-  canToggleObjectiveAutoAdvance,
   decideAutoAdvanceAfterDelivery,
   DEFAULT_PRIMARY_RESOURCE_KEY,
   deriveObjectiveLifecycleView,
@@ -51,11 +48,9 @@ export {
   isActiveObjective,
   isEditableNextUpObjective,
   isFutureObjective,
-  isLaunchableObjective,
   LAUNCHABLE_OBJECTIVE_STATES,
   manageObjectiveLifecycle,
   manageObjectiveLifecycleTool,
-  OBJECTIVE_LIFECYCLE_STATES,
   objectiveHasInstructionText,
   objectiveInstructionText,
   objectiveResourcesConflict,

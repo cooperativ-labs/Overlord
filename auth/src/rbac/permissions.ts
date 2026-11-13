@@ -114,8 +114,6 @@ export const PERMISSIONS = {
   WEBHOOK_DELETE: 'webhook:delete'
 } as const;
 
-export type KnownPermission = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
-
 /**
  * Token scope presets surfaced to the CLI (`--scope`) and the webapp token form.
  *

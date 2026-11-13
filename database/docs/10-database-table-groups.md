@@ -21,8 +21,9 @@ Every Overlord installation needs these. They cover the fundamental workflow: cr
 | Table             | Purpose                                                                    |
 | ----------------- | -------------------------------------------------------------------------- |
 | `workspaces`      | The local instance (one workspace for CLI-first installs).                 |
-| `users`           | Global human and service-user identities.                                  |
-| `workspace_users` | Workspace membership; domain records reference this, not `users` directly. |
+| `organizations`   | Grouping and identity layer above workspaces.                              |
+| `profiles`        | Global human and service-user identities.                                  |
+| `workspace_users` | Workspace membership; domain records reference this, not `profiles`.       |
 
 ### Projects and Execution
 

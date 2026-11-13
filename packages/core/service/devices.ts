@@ -175,27 +175,3 @@ export async function getDevice({ ctx }: { ctx: ServiceContext }): Promise<{
 
   return { id, label, fingerprint, platform: platform() };
 }
-
-export async function updateDevice({
-  ctx,
-  deviceId,
-  label
-}: {
-  ctx: ServiceContext;
-  deviceId: string;
-  label: string;
-}): Promise<{ id: string; label: string }> {
-  const trimmed = label.trim();
-  if (!trimmed) {
-    throw new Error('Device label is required');
-  }
-
-  const now = nowIso();
-  await ctx.db.run(
-    `UPDATE devices SET label = ?, updated_at = ?, revision = revision + 1
-       WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
-    [trimmed, now, deviceId, ctx.workspace.id]
-  );
-
-  return { id: deviceId, label: trimmed };
-}

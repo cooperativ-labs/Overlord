@@ -9,8 +9,7 @@ import { newId, nowIso } from '../util.js';
 import {
   generateSessionChannelToken,
   hashSessionChannelToken,
-  renewedExpiry,
-  SESSION_CHANNEL_LEASE_SECONDS
+  renewedExpiry
 } from './credential.js';
 import { triggerMissionSummaryForRequest } from './requests.js';
 
@@ -641,5 +640,3 @@ export async function expireLostChannels({
   }
   return rows.length;
 }
-
-export const AGENT_SESSION_LEASE_SECONDS = SESSION_CHANNEL_LEASE_SECONDS;
