@@ -1,7 +1,7 @@
+import type { MissionDto } from '@overlord/contract';
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import type { MissionDto } from '../../shared/contract.ts';
 import {
   MISSION_STATUS_INDICATORS,
   type MissionStatusIndicator

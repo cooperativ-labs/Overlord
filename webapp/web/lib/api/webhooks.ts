@@ -4,8 +4,9 @@ import type {
   RotateWebhookSecretResultDto,
   UpdateWebhookSubscriptionBody,
   WebhookDeliveryAttemptsPageDto,
-  WebhookSubscriptionDto
-} from '../../../shared/contract.ts';
+  WebhookSubscriptionDto,
+  WebhookTestResultDto
+} from '@overlord/contract';
 
 import { request } from './request.ts';
 
@@ -23,7 +24,7 @@ export const webhooksApi = {
   rotateWebhookSecret: (id: string) =>
     request<RotateWebhookSecretResultDto>('POST', `/api/webhooks/${id}/rotate-secret`),
   testWebhookSubscription: (id: string) =>
-    request<{ ok: true; responseStatus: number | null }>('POST', `/api/webhooks/${id}/test`),
+    request<WebhookTestResultDto>('POST', `/api/webhooks/${id}/test`),
   listWebhookDeliveries: (id: string, before?: string | null) =>
     request<WebhookDeliveryAttemptsPageDto>(
       'GET',

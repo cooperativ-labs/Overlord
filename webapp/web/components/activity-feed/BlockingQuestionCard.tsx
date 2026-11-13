@@ -1,6 +1,6 @@
+import type { ActivityFeedQuestionItemDto } from '@overlord/contract';
 import { CircleHelp } from 'lucide-react';
 
-import type { ActivityFeedQuestionItemDto } from '../../../shared/contract.ts';
 import { useMissionAgentRequests } from '../../lib/queries.ts';
 import { QuestionAnswerForm } from '../agent-session/QuestionAnswerForm.tsx';
 import { Button } from '../ui.tsx';

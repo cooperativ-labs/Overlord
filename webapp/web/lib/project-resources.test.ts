@@ -1,7 +1,6 @@
+import type { EligibleExecutionTargetDto } from '@overlord/contract';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-
-import type { EligibleExecutionTargetDto } from '../../shared/contract.ts';
 
 import { executionTargetAvailability } from './project-resources.ts';
 

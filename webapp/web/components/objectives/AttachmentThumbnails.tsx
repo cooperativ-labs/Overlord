@@ -1,9 +1,9 @@
+import type { ObjectiveAttachmentDto } from '@overlord/contract';
 import { Loader2, X } from 'lucide-react';
 import { type ReactNode, useEffect, useState } from 'react';
 
 import { useAuthenticatedMediaUrl } from '@/lib/use-authenticated-media-url.ts';
 
-import type { ObjectiveAttachmentDto } from '../../../shared/contract.ts';
 import { cn } from '../../lib/utils.ts';
 
 import {

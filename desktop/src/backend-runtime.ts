@@ -206,10 +206,6 @@ export function clearSessionTokenForProfile(profileId: string): void {
   clearSessionToken(profileId);
 }
 
-export function activeProfilePartition(): string {
-  return sessionPartitionForProfile(getActiveBackendProfileId());
-}
-
 export async function clearDesktopAuthForProfile(profileId: string): Promise<void> {
   clearSessionToken(profileId);
   await session.fromPartition(sessionPartitionForProfile(profileId)).clearStorageData({

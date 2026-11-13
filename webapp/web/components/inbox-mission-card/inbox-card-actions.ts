@@ -1,16 +1,16 @@
-import type { AgentModelSelection } from '@/components/objectives/AgentModelSelector.tsx';
-import type {
-  executionTargetAvailability,
-  objectiveResourceConnection
-} from '@/lib/project-resources.ts';
-
 import type {
   AgentLaunchConfigDto,
   LaunchObjectiveBody,
   MissionDetailDto,
   UpdateInboxItemBody,
   UpdateObjectiveBody
-} from '../../../shared/contract.ts';
+} from '@overlord/contract';
+
+import type { AgentModelSelection } from '@/components/objectives/AgentModelSelector.tsx';
+import type {
+  executionTargetAvailability,
+  objectiveResourceConnection
+} from '@/lib/project-resources.ts';
 
 export type InboxCardPendingAction = 'save' | 'run' | 'delete';
 

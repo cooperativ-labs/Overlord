@@ -39,19 +39,6 @@ export function getOrdinalLabel(week: number): string {
   return ORDINAL_LABELS[week - 1] ?? `${week}th`;
 }
 
-export function formatPeriodType(periodType: PeriodType): string {
-  switch (periodType) {
-    case 'd':
-      return 'Daily';
-    case 'w':
-      return 'Weekly';
-    case 'm':
-      return 'Monthly';
-    default:
-      return 'Schedule';
-  }
-}
-
 export function formatTime(time: string): string {
   const [hours, minutes] = time.split(':').map(Number);
   if (hours === undefined || minutes === undefined) return time;

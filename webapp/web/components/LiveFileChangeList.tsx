@@ -1,11 +1,11 @@
+import type { FileChangeDto } from '@overlord/contract';
+
 import {
   groupMissionFileChanges,
   UNRESOLVED_RESOURCE_KEY
 } from '@/lib/group-mission-file-changes.ts';
 import { resolveResourceForKey } from '@/lib/project-resources.ts';
 import { useProfile, useProjectExecutionTarget, useProjectResources } from '@/lib/queries';
-
-import type { FileChangeDto } from '../../shared/contract.ts';
 
 import { FileChangeResourceGroupHeader } from './FileChangeResourceGroupHeader.tsx';
 import { FileChangeRow } from './FileChangeRow.tsx';

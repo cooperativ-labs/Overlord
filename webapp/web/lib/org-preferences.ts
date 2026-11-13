@@ -5,17 +5,6 @@ function storageKey(prefix: string, backendKey: string): string {
   return `${prefix}:${backendKey}`;
 }
 
-function readBackendScopedKey(prefix: string): string | null {
-  if (typeof window === 'undefined') return null;
-  const backendKey = window.localStorage.getItem('overlord:active-backend-key');
-  if (!backendKey) return null;
-  try {
-    return window.localStorage.getItem(storageKey(prefix, backendKey));
-  } catch {
-    return null;
-  }
-}
-
 function writeBackendScopedKey(prefix: string, value: string): void {
   if (typeof window === 'undefined') return;
   const backendKey = window.localStorage.getItem('overlord:active-backend-key');
@@ -27,28 +16,9 @@ function writeBackendScopedKey(prefix: string, value: string): void {
   }
 }
 
-function removeBackendScopedKey(prefix: string): void {
-  if (typeof window === 'undefined') return;
-  const backendKey = window.localStorage.getItem('overlord:active-backend-key');
-  if (!backendKey) return;
-  try {
-    window.localStorage.removeItem(storageKey(prefix, backendKey));
-  } catch {
-    /* localStorage may be unavailable */
-  }
-}
-
 /** Persist the UI's selected organization id (preference echo; server scope follows active workspace). */
 export function persistActiveOrganizationId(organizationId: string): void {
   writeBackendScopedKey(ACTIVE_ORGANIZATION_STORAGE_PREFIX, organizationId);
-}
-
-export function readActiveOrganizationId(): string | null {
-  return readBackendScopedKey(ACTIVE_ORGANIZATION_STORAGE_PREFIX);
-}
-
-export function clearActiveOrganizationId(): void {
-  removeBackendScopedKey(ACTIVE_ORGANIZATION_STORAGE_PREFIX);
 }
 
 function collapseStorageKey(organizationId: string): string {

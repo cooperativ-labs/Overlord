@@ -1,3 +1,4 @@
+import type { MissionDetailDto } from '@overlord/contract';
 import { Link } from '@tanstack/react-router';
 import { ArrowRightToLine, EllipsisVertical } from 'lucide-react';
 
@@ -16,8 +17,6 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { agentDisplayName } from '@/lib/helpers/agent-icons.ts';
 import { useUpdateMission, useWorkspaceMembers } from '@/lib/queries.ts';
-
-import type { MissionDetailDto } from '../../shared/contract.ts';
 
 type MissionPanelHeaderProps = {
   mission: MissionDetailDto;

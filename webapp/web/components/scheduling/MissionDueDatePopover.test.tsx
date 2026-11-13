@@ -1,9 +1,8 @@
+import type { MissionDetailDto, ScheduleDto } from '@overlord/contract';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import assert from 'node:assert/strict';
 import { afterEach, beforeEach, describe, it } from 'node:test';
-
-import type { MissionDetailDto, ScheduleDto } from '../../../shared/contract.ts';
 
 import { MissionDueDatePopover } from './MissionDueDatePopover.tsx';
 

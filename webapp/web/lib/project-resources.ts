@@ -1,4 +1,4 @@
-import type { EligibleExecutionTargetDto, ProjectResourceDto } from '../../shared/contract.ts';
+import type { EligibleExecutionTargetDto, ProjectResourceDto } from '@overlord/contract';
 
 export const PRIMARY_RESOURCE_REPAIR_HINT =
   'Run `ovld add-cwd` from your project checkout or link a directory in project settings.';

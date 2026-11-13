@@ -1,12 +1,11 @@
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import type { MissionDto, WorkspaceMemberDto } from '@overlord/contract';
 import { useNavigate } from '@tanstack/react-router';
 import { GripVertical } from 'lucide-react';
 
 import { MissionTimerCircleButton } from '@/components/everhour/MissionTimerButtons';
 import { cn } from '@/lib/utils';
-
-import type { MissionDto, WorkspaceMemberDto } from '../../shared/contract.ts';
 
 import {
   MissionAssigneeAvatar,

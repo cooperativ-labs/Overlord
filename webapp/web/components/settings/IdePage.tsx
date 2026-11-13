@@ -1,3 +1,9 @@
+import {
+  type AgentLaunchConfigDto,
+  agentLaunchFlagKey,
+  type TerminalProfileDto,
+  type UpdateTerminalProfileBody
+} from '@overlord/contract';
 import { useEffect, useRef, useState } from 'react';
 
 import { AgentLaunchFooter } from '@/components/objectives/AgentLaunchFooter';
@@ -42,13 +48,6 @@ import {
   useUpdateProfile,
   useUpdateTerminalProfile
 } from '@/lib/queries';
-
-import {
-  type AgentLaunchConfigDto,
-  agentLaunchFlagKey,
-  type TerminalProfileDto,
-  type UpdateTerminalProfileBody
-} from '../../../shared/contract.ts';
 
 /** The placements the terminal-profile update accepts; a launch-settings read answers one. */
 type TerminalPlacement = NonNullable<UpdateTerminalProfileBody['placement']>;

@@ -1,3 +1,4 @@
+import type { ObjectiveAttachmentDto } from '@overlord/contract';
 import { type QueryClient, useQueryClient } from '@tanstack/react-query';
 import { FileText, ImageIcon, Loader2, Plus, Trash2, X } from 'lucide-react';
 import {
@@ -10,7 +11,6 @@ import {
   useState
 } from 'react';
 
-import type { ObjectiveAttachmentDto } from '../../../shared/contract.ts';
 import { api } from '../../lib/api.ts';
 import {
   invalidateInboxItemAttachments,
@@ -166,7 +166,6 @@ function useAttachmentUploadState({
 
 /** Upload/remove state for one owner's stored files — an objective or an Inbox capture. */
 export type AttachmentUploadState = ReturnType<typeof useAttachmentUploadState>;
-export type ObjectiveAttachmentState = AttachmentUploadState;
 export type { FileDropZoneDragState };
 
 /**
@@ -290,8 +289,6 @@ export function usePendingAttachments({ dropDisabled = false }: { dropDisabled?:
     dragState
   };
 }
-
-export type PendingAttachmentState = ReturnType<typeof usePendingAttachments>;
 
 type PendingAttachmentListProps = {
   files: File[];

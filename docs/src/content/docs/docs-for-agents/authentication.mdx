@@ -123,7 +123,7 @@ return a `WWW-Authenticate: Bearer` challenge pointing at the protected-resource
 metadata. OAuth-aware clients register dynamically, then run an
 authorization-code + PKCE flow; approval happens in the web app at
 `/oauth/approve` and mints a scoped `USER_TOKEN` with the `mission_lifecycle`
-preset. Refresh tokens are not issued in contract version `0`.
+preset. Refresh tokens are not issued.
 
 A mismatched OAuth `resource` parameter returns `invalid_target`; missing,
 denied, expired, revoked, or malformed credentials receive an OAuth-compatible

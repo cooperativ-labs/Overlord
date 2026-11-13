@@ -1,4 +1,4 @@
-import type { TerminalSessionDto } from '../../shared/contract.ts';
+import type { TerminalSessionDto } from '@overlord/contract';
 
 export type LatchSessionDisplay = {
   /** The one session the mission panel draws as a full card. */

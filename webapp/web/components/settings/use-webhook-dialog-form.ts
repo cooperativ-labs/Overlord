@@ -1,3 +1,9 @@
+import type {
+  CreateWebhookSubscriptionBody,
+  UpdateWebhookSubscriptionBody,
+  WebhookEventType,
+  WebhookSubscriptionDto
+} from '@overlord/contract';
 import { useState } from 'react';
 
 import type { ButtonLoadingState } from '@/components/ui/loading-button';
@@ -6,13 +12,6 @@ import {
   useRotateWebhookSecret,
   useUpdateWebhookSubscription
 } from '@/lib/queries';
-
-import type {
-  CreateWebhookSubscriptionBody,
-  UpdateWebhookSubscriptionBody,
-  WebhookEventType,
-  WebhookSubscriptionDto
-} from '../../../shared/contract.ts';
 
 /** `'auto'` omits `payloadMode` from the request so the server applies its internal-host-aware default. */
 export type PayloadModeSelection = 'auto' | 'thin' | 'full';

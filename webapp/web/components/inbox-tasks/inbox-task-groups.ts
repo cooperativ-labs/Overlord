@@ -1,4 +1,4 @@
-import type { InboxItemDto, InboxMissionDto } from '../../../shared/contract.ts';
+import type { InboxItemDto, InboxMissionDto } from '@overlord/contract';
 
 /**
  * The Inbox task list flattens two sources into one list of rows: private

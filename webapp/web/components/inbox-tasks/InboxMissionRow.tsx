@@ -1,3 +1,4 @@
+import type { InboxMissionDto, MissionDetailDto } from '@overlord/contract';
 import { useNavigate } from '@tanstack/react-router';
 import { ChevronDown, ChevronRight, ExternalLink } from 'lucide-react';
 import { type ReactNode } from 'react';
@@ -6,7 +7,6 @@ import { DueDatePickerButton } from '@/components/scheduling/DueDatePickerButton
 import { useMission, useUpdateMission } from '@/lib/queries.ts';
 import { cn } from '@/lib/utils';
 
-import type { InboxMissionDto, MissionDetailDto } from '../../../shared/contract.ts';
 import {
   MissionCompleteCheckbox,
   MissionDueDateBadge,

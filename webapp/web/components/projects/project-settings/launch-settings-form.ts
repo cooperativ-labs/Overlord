@@ -39,23 +39,6 @@ export function parsePreLaunchLines(value: string): string[] {
     .filter(line => line.length > 0);
 }
 
-/** Lines in `value` that have non-whitespace content but no valid `KEY=`. */
-export function invalidEnvVarLines(value: string): string[] {
-  const invalid: string[] = [];
-  for (const line of value.split('\n')) {
-    const trimmed = line.trim();
-    if (!trimmed) continue;
-    const eq = trimmed.indexOf('=');
-    if (eq === -1) {
-      invalid.push(trimmed);
-      continue;
-    }
-    const key = trimmed.slice(0, eq).trim();
-    if (!key) invalid.push(trimmed);
-  }
-  return invalid;
-}
-
 export function createEnvVarRow({
   key = '',
   value = ''
@@ -146,17 +129,3 @@ export function mergeEnvVarPasteIntoRows({
 }
 
 export const DEFAULT_ENV_VAR_KEY = 'AGENT_POD_EXTRA_ALLOWED_PATHS';
-
-export function appendTokenToEnvVarValue({
-  key,
-  value,
-  token
-}: {
-  key: string;
-  value: string;
-  token: string;
-}): { key: string; value: string } {
-  const nextKey = key.trim() || DEFAULT_ENV_VAR_KEY;
-  const nextValue = value.trim() ? `${value}${token}` : token;
-  return { key: nextKey, value: nextValue };
-}

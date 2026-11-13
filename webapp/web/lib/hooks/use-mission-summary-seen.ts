@@ -1,6 +1,6 @@
+import type { MissionSummaryResponse } from '@overlord/contract';
 import { type RefObject, useEffect, useRef, useState } from 'react';
 
-import type { MissionSummaryResponse } from '../../../shared/contract.ts';
 import { watermarkNeedsAck } from '../mission-summary-derive.ts';
 import { useMarkMissionSummarySeen } from '../queries.ts';
 

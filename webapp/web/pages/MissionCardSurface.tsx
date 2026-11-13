@@ -1,9 +1,8 @@
+import type { MissionDto, WorkspaceMemberDto } from '@overlord/contract';
 import { useNavigate } from '@tanstack/react-router';
 
 import { Card } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
-
-import type { MissionDto, WorkspaceMemberDto } from '../../shared/contract.ts';
 
 import { MissionCardBody } from './MissionCardBody.tsx';
 import { getMissionCardState } from './missionCardState.ts';

@@ -1,16 +1,17 @@
 import type {
   AddOrganizationAdminBody,
   CreateOrganizationOnboardingBody,
+  MetaDto,
   OrganizationAdminDto,
   OrganizationDto,
   UpdateOrganizationBody
-} from '../../../shared/contract.ts';
+} from '@overlord/contract';
 
-import { type Meta, request } from './request.ts';
+import { request } from './request.ts';
 
 export const organizationsApi = {
   createOrganizationOnboarding: (body: CreateOrganizationOnboardingBody) =>
-    request<Meta>('POST', '/api/onboarding', body),
+    request<MetaDto>('POST', '/api/onboarding', body),
 
   listOrganizations: () => request<OrganizationDto[]>('GET', '/api/organizations'),
   updateOrganization: (id: string, body: UpdateOrganizationBody) =>

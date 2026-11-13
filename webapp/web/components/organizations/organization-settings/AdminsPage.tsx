@@ -1,3 +1,4 @@
+import type { OrganizationDto, WorkspaceDto, WorkspaceMemberDto } from '@overlord/contract';
 import { useQueries } from '@tanstack/react-query';
 import { Loader2, UserMinus, UserPlus } from 'lucide-react';
 import { useMemo, useState } from 'react';
@@ -26,12 +27,6 @@ import {
   useOrganizationAdmins,
   useRemoveOrganizationAdmin
 } from '@/lib/queries';
-
-import type {
-  OrganizationDto,
-  WorkspaceDto,
-  WorkspaceMemberDto
-} from '../../../../shared/contract.ts';
 
 type AdminsPageProps = {
   organization: OrganizationDto;

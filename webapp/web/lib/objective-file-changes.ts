@@ -3,7 +3,7 @@ import {
   type CaptureSessionDto,
   type FileChangeSource,
   type ObjectiveFileChangesDto
-} from '../../shared/contract.ts';
+} from '@overlord/contract';
 
 export type FileChangeSourceLabel = 'Native' | 'Declared' | 'Unknown';
 

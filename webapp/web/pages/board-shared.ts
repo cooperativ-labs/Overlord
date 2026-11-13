@@ -6,10 +6,7 @@ import type {
   MeasuringConfiguration,
   useSensors
 } from '@dnd-kit/core';
-
-import type { MissionDto, StatusType, WorkspaceMemberDto } from '../../shared/contract.ts';
-
-export const PRIORITIES = ['low', 'normal', 'high', 'urgent'] as const;
+import type { MissionDto, StatusType, WorkspaceMemberDto } from '@overlord/contract';
 
 /**
  * Status types whose columns hold finished work. The server bounds these to a

@@ -1,4 +1,4 @@
-import type { ProjectResourceDto } from '../../shared/contract.ts';
+import type { ProjectResourceDto } from '@overlord/contract';
 
 import { getDesktopBridge } from './desktop-chrome.ts';
 

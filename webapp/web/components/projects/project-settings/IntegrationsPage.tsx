@@ -1,3 +1,4 @@
+import type { ProjectDto } from '@overlord/contract';
 import { Link } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 
@@ -13,8 +14,6 @@ import {
   useProjectEverhourLink,
   useProjectGitHubLink
 } from '@/lib/queries';
-
-import type { ProjectDto } from '../../../../shared/contract.ts';
 
 type IntegrationsPageProps = {
   open: boolean;

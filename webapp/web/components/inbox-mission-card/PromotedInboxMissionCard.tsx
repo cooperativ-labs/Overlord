@@ -1,6 +1,5 @@
+import type { MissionDetailDto } from '@overlord/contract';
 import { Link } from '@tanstack/react-router';
-
-import type { MissionDetailDto } from '../../../shared/contract.ts';
 
 import { InboxCardShell } from './InboxCardShell.tsx';
 import { usePromotedInboxCard } from './use-promoted-inbox-card.ts';

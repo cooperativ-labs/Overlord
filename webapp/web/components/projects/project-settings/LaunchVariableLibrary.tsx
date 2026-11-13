@@ -1,3 +1,9 @@
+import {
+  ATTACH_CONTEXT_FIELDS,
+  LAUNCH_VARIABLES,
+  type LaunchVariableAvailability,
+  type LaunchVariableDefinition
+} from '@overlord/contract';
 import { Check, Copy } from 'lucide-react';
 
 import {
@@ -9,13 +15,6 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useCopyToClipboard } from '@/lib/hooks/use-copy-to-clipboard';
-
-import {
-  ATTACH_CONTEXT_FIELDS,
-  LAUNCH_VARIABLES,
-  type LaunchVariableAvailability,
-  type LaunchVariableDefinition
-} from '../../../../shared/contract.ts';
 
 const AVAILABILITY_LABEL: Record<LaunchVariableAvailability, string> = {
   plan_build: 'Launch prep',

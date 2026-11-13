@@ -1,3 +1,4 @@
+import type { StatusType } from '@overlord/contract';
 import { Filter } from 'lucide-react';
 
 import { STATUS_CONFIG, statusClasses } from '@/components/ui.tsx';
@@ -11,8 +12,6 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu.tsx';
 import { cn } from '@/lib/utils';
-
-import type { StatusType } from '../../shared/contract.ts';
 
 import { getStatusFilterLabel } from './board-shared.ts';
 

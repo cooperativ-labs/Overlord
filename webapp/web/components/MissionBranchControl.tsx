@@ -1,3 +1,4 @@
+import type { MissionBranchDto, MissionBranchStatus, MissionDetailDto } from '@overlord/contract';
 import type { LucideIcon } from 'lucide-react';
 import {
   AlertTriangle,
@@ -17,11 +18,6 @@ import {
 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
-import type {
-  MissionBranchDto,
-  MissionBranchStatus,
-  MissionDetailDto
-} from '../../shared/contract.ts';
 import { useCopyToClipboard } from '../lib/hooks/use-copy-to-clipboard.ts';
 import {
   resolvePrimaryResourceForTarget,

@@ -1,3 +1,4 @@
+import type { ProjectDto } from '@overlord/contract';
 import { Check, Copy } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
@@ -13,8 +14,6 @@ import { LoadingButton } from '@/components/ui/loading-button';
 import { Textarea } from '@/components/ui/textarea';
 import { useCopyToClipboard } from '@/lib/hooks/use-copy-to-clipboard';
 import { useUpdateProject } from '@/lib/queries';
-
-import type { ProjectDto } from '../../../../shared/contract.ts';
 
 type GeneralPageProps = {
   open: boolean;

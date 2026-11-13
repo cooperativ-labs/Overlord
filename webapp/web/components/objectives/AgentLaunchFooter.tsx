@@ -1,3 +1,9 @@
+import {
+  type AgentLaunchConfigDto,
+  type AgentLaunchFlagDto,
+  agentLaunchFlagKey,
+  formatAgentLaunchFlagText
+} from '@overlord/contract';
 import { Plus, X } from 'lucide-react';
 import {
   type KeyboardEvent,
@@ -9,12 +15,6 @@ import {
   useState
 } from 'react';
 
-import {
-  type AgentLaunchConfigDto,
-  type AgentLaunchFlagDto,
-  agentLaunchFlagKey,
-  formatAgentLaunchFlagText
-} from '../../../shared/contract.ts';
 import { detectLatchInvocation, latchInvocationWarning } from '../../lib/local-target-types.ts';
 import {
   filterRecentAgentLaunchFlags,

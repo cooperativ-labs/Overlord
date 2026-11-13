@@ -9,7 +9,7 @@
  *    clears back to the user default, a value sets it.
  */
 
-import type { LaunchSessionDefaultsDto, TerminalProfileDto } from '../../shared/contract.ts';
+import type { LaunchSessionDefaultsDto, TerminalProfileDto } from '@overlord/contract';
 
 import type { LatchDiscoveryView } from './latch-discovery-client.ts';
 

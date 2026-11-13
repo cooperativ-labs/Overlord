@@ -1,12 +1,3 @@
-import {
-  keepPreviousData,
-  type QueryClient,
-  useInfiniteQuery,
-  useMutation,
-  useQuery,
-  useQueryClient
-} from '@tanstack/react-query';
-
 import type {
   ActivityFeedDto,
   BranchActionBody,
@@ -25,7 +16,16 @@ import type {
   UpdateArtifactBody,
   UpdateInboxItemBody,
   UpdateMissionBody
-} from '../../../shared/contract.ts';
+} from '@overlord/contract';
+import {
+  keepPreviousData,
+  type QueryClient,
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient
+} from '@tanstack/react-query';
+
 import { api, ApiRequestError } from '../api.ts';
 import {
   fetchMissionBranchesFromLocalTarget,
@@ -204,13 +204,6 @@ export const useMissionAgentRequests = (id: string, objectiveId?: string | null,
     refetchInterval: 5_000
   });
 
-export const useMissionAgentSessionInputs = (id: string) =>
-  useQuery({
-    queryKey: keys.missionAgentSessionInputs(id),
-    queryFn: () => api.listAgentSessionInputs(id),
-    refetchInterval: 5_000
-  });
-
 /**
  * Answer a request under revision CAS. A `resolved: false` response is not an error — it means
  * the decision was already made elsewhere, and the caller must show that instead of success.
@@ -238,24 +231,6 @@ export function useResolveAgentRequest(missionId: string) {
   });
 }
 
-/** Hand a request back to the native terminal prompt without answering it. */
-export function useReleaseAgentRequest(missionId: string) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (requestId: string) => api.releaseAgentRequest(requestId),
-    onSettled: () => qc.invalidateQueries({ queryKey: keys.missionAgentRequests(missionId) })
-  });
-}
-
-/** Cancel a queued instruction. Only meaningful while it has not been emitted. */
-export function useCancelAgentSessionInput(missionId: string) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (inputId: string) => api.cancelAgentSessionInput(inputId),
-    onSettled: () => qc.invalidateQueries({ queryKey: keys.missionAgentSessionInputs(missionId) })
-  });
-}
-
 export const useMissionArtifacts = (id: string) =>
   useQuery({ queryKey: keys.missionArtifacts(id), queryFn: () => api.listMissionArtifacts(id) });
 
@@ -265,7 +240,7 @@ export function useUpdateMissionArtifact(missionId: string) {
     mutationFn: ({ artifactId, body }: { artifactId: string; body: UpdateArtifactBody }) =>
       api.updateMissionArtifact(missionId, artifactId, body),
     onSuccess: artifact => {
-      qc.setQueryData<import('../../../shared/contract.ts').ArtifactDto[]>(
+      qc.setQueryData<import('@overlord/contract').ArtifactDto[]>(
         keys.missionArtifacts(missionId),
         current => current?.map(item => (item.id === artifact.id ? artifact : item))
       );
@@ -282,10 +257,10 @@ export const useMissionSharedContext = (id: string) =>
 export function useUpsertMissionSharedContext(missionId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: import('../../../shared/contract.ts').UpsertSharedContextBody) =>
+    mutationFn: (body: import('@overlord/contract').UpsertSharedContextBody) =>
       api.upsertMissionSharedContext(missionId, body),
     onSuccess: entry => {
-      qc.setQueryData<import('../../../shared/contract.ts').SharedContextEntryDto[]>(
+      qc.setQueryData<import('@overlord/contract').SharedContextEntryDto[]>(
         keys.missionSharedContext(missionId),
         current => {
           if (!current) return [entry];

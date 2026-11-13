@@ -1,11 +1,7 @@
 import { siblingBlocksParallelLaunch } from '@overlord/automations/objective-manager';
+import type { ExecutionRequestDto, ObjectiveDto, ObjectiveState } from '@overlord/contract';
 import { ArrowUpToLine, Loader2 } from 'lucide-react';
 
-import type {
-  ExecutionRequestDto,
-  ObjectiveDto,
-  ObjectiveState
-} from '../../../shared/contract.ts';
 import { useProjectResources, useUpdateObjective } from '../../lib/queries.ts';
 import { Button } from '../ui.tsx';
 

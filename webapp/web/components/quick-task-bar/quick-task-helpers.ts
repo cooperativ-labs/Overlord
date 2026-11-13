@@ -22,19 +22,6 @@ export type QuickTaskWindowApi = {
   setHotkey: (accelerator: string) => Promise<{ ok: boolean; accelerator: string; error?: string }>;
 };
 
-export type IdleCallbackHandle = number;
-export type IdleDeadline = {
-  didTimeout: boolean;
-  timeRemaining: () => number;
-};
-export type IdleScheduler = {
-  requestIdleCallback?: (
-    callback: (deadline: IdleDeadline) => void,
-    options?: { timeout: number }
-  ) => IdleCallbackHandle;
-  cancelIdleCallback?: (handle: IdleCallbackHandle) => void;
-};
-
 export function getQuickTaskApi(): QuickTaskWindowApi | null {
   return getDesktopBridge()?.quickTask ?? null;
 }

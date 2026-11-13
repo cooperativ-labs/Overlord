@@ -1,6 +1,6 @@
+import type { MissionBranchDto, MissionDetailDto } from '@overlord/contract';
 import { useMemo } from 'react';
 
-import type { MissionBranchDto, MissionDetailDto } from '../../shared/contract.ts';
 import { useLocalTargetUnavailable } from '../lib/local-target-client.ts';
 import {
   hasPendingLocalTargetMutation,

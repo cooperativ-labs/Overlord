@@ -1,6 +1,6 @@
+import type { MissionDetailDto } from '@overlord/contract';
 import { useState } from 'react';
 
-import type { MissionDetailDto } from '../../shared/contract.ts';
 import { ApiRequestError } from '../lib/api.ts';
 import { useBranchAction, useGenerateCommitMessage } from '../lib/queries.ts';
 

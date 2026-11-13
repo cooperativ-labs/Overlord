@@ -1,10 +1,10 @@
-import { executionTargetOptionLabel } from '@/lib/execution-target-selection';
-
 import type {
   EligibleExecutionTargetDto,
   ProjectResourceAccessMode,
   ProjectResourceSourceDto
-} from '../../../../../shared/contract.ts';
+} from '@overlord/contract';
+
+import { executionTargetOptionLabel } from '@/lib/execution-target-selection';
 
 export const ACCESS_MODE_OPTIONS: { value: ProjectResourceAccessMode; label: string }[] = [
   { value: 'read', label: 'Read' },

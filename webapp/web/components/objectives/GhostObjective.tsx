@@ -1,8 +1,8 @@
+import type { AgentLaunchConfigDto, ObjectiveDto } from '@overlord/contract';
 import { useQueryClient } from '@tanstack/react-query';
 import { Play } from 'lucide-react';
 import { type ChangeEvent, useCallback, useEffect, useRef, useState } from 'react';
 
-import type { AgentLaunchConfigDto, ObjectiveDto } from '../../../shared/contract.ts';
 import { api } from '../../lib/api.ts';
 import { keys, useCreateObjective, useProjectResources } from '../../lib/queries.ts';
 import { useRepositoryMentionOptions } from '../../lib/useRepositoryMentionOptions.ts';

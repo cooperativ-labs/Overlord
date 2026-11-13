@@ -11,7 +11,7 @@ Read [`contract/CONTRACT.md`](../contract/CONTRACT.md) and the [component-contra
 | Extension type | Example user request | Where it lives |
 | --- | --- | --- |
 | SPA UI / client behavior | "Add a Shared State footer on the mission page" | `webapp/web/` |
-| Shared DTO import for the SPA | "Consume a new field on `MissionDto`" | `@overlord/contract` via `webapp/shared/contract.ts` |
+| Shared DTO import for the SPA | "Consume a new field on `MissionDto`" | `@overlord/contract` (generated from `contract/api/openapi.yaml`) |
 | New REST endpoint / realtime event / `/ext/` module | "Add `GET /api/missions/:id/artifacts`" | **[`backend/AGENTS.md`](../backend/AGENTS.md)** |
 
 If the change touches URL paths, HTTP methods, DTO response shapes, SSE events, or auth at the API boundary, stop here and follow the backend guide instead.
@@ -30,7 +30,7 @@ If the change touches URL paths, HTTP methods, DTO response shapes, SSE events, 
 ## SPA conventions
 
 1. **Consume the REST surface only** — call `webapp/web/lib/` query/mutation hooks (or `api` helpers) that hit `/api` and `/realtime`. Do not open the database from the SPA.
-2. **DTO types** — import from `@overlord/contract` or the shim `webapp/shared/contract.ts` (`export * from '@overlord/contract'`). Do not redefine response shapes locally.
+2. **DTO types** — import from `@overlord/contract`, whose REST DTOs are generated from `contract/api/openapi.yaml` (`yarn api:generate`). Do not redefine request or response shapes locally.
 3. **Cache keys** — use the shared `keys` factory in `webapp/web/lib/query-keys.ts` for TanStack Query keys that participate in realtime invalidation.
 4. **Desktop parity** — confine `window.overlord` / Electron bridge detection to `webapp/web/lib/desktop-chrome.ts` (and callers of its helpers), not inline in components.
 
@@ -50,8 +50,6 @@ put JSX rendering tests beside their component as `.test.tsx`.
 ```
 webapp/
   docs/                   ← spec docs (web-app.md, ui/, implementation-plan.md)
-  shared/
-    contract.ts           ← re-exports @overlord/contract for SPA imports
   web/                    ← the React SPA (pure consumer of the rest surface)
     main.tsx router.tsx lib/ components/ pages/
     lib/hooks/            ← shared React hooks
@@ -69,7 +67,7 @@ packages/contract/        ← canonical typed DTOs (@overlord/contract)
 ## Cross-Module Checklist
 
 - [ ] REST / realtime / `/ext/` work → follow [`backend/AGENTS.md`](../backend/AGENTS.md), not this file
-- [ ] SPA changes stay in `webapp/web/` (plus `shared/contract.ts` re-export only)
+- [ ] SPA changes stay in `webapp/web/`
 - [ ] New DTO fields come from `@overlord/contract`, not hand-rolled local types
 - [ ] Query keys used for invalidation come from `webapp/web/lib/query-keys.ts`
 - [ ] Desktop bridge detection goes through `webapp/web/lib/desktop-chrome.ts`

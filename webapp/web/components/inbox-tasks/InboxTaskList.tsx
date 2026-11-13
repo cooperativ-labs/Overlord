@@ -1,3 +1,4 @@
+import type { MissionDetailDto, ProjectStatusDto } from '@overlord/contract';
 import { useQueries } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
@@ -12,8 +13,6 @@ import {
   useSetMissionStatus
 } from '@/lib/queries.ts';
 import { keys } from '@/lib/query-keys.ts';
-
-import type { MissionDetailDto, ProjectStatusDto } from '../../../shared/contract.ts';
 
 import { INBOX_TASK_GROUP_STYLES } from './inbox-task-group-styles.ts';
 import {

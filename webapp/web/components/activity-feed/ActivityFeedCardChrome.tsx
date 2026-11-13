@@ -1,6 +1,6 @@
+import type { ActivityFeedItemDto, CreatedByKind } from '@overlord/contract';
 import type { MouseEvent, ReactNode } from 'react';
 
-import type { ActivityFeedItemDto, CreatedByKind } from '../../../shared/contract.ts';
 import { normalizeAgentKey } from '../../lib/helpers/agent-icons.ts';
 import { cn } from '../../lib/utils.ts';
 import { ObjectiveOriginMark } from '../../pages/MissionCardPrimitives.tsx';

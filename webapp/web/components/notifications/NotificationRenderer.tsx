@@ -1,8 +1,8 @@
+import type { NotificationDto } from '@overlord/contract';
 import { NOTIFICATION_CATALOG } from '@overlord/contract';
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef } from 'react';
 
-import type { NotificationDto } from '../../../shared/contract.ts';
 import { api } from '../../lib/api.ts';
 import { getDesktopBridge } from '../../lib/desktop-chrome.ts';
 import { isNativeNotificationsEnabled } from '../../lib/native-notification-preferences.ts';

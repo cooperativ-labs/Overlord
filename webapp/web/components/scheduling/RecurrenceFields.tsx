@@ -1,6 +1,6 @@
 import type { PeriodType, WeekDayType } from '@overlord/automations/scheduling-engine';
+import type { ProjectStatusDto } from '@overlord/contract';
 
-import type { ProjectStatusDto } from '../../../shared/contract.ts';
 import { Badge } from '../ui/badge.tsx';
 import { Input } from '../ui/input.tsx';
 import { Label } from '../ui/label.tsx';

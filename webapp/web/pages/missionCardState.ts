@@ -1,4 +1,5 @@
-import type { MissionDto } from '../../shared/contract.ts';
+import type { MissionDto } from '@overlord/contract';
+
 import {
   MISSION_STATUS_INDICATORS,
   type MissionStatusIndicator

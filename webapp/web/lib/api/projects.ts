@@ -20,13 +20,11 @@ import type {
   UpdateProjectResourceSourceBody,
   UpdateProjectStatusBody,
   UpdateProjectTagBody
-} from '../../../shared/contract.ts';
+} from '@overlord/contract';
 
 import { request } from './request.ts';
 
 export const projectsApi = {
-  listProjects: (lifecycle: ProjectListLifecycle = 'active') =>
-    request<ProjectDto[]>('GET', `/api/projects?lifecycle=${lifecycle}`),
   listProjectsForWorkspace: (workspaceId: string, lifecycle: ProjectListLifecycle = 'active') =>
     request<ProjectDto[]>('GET', `/api/workspaces/${workspaceId}/projects?lifecycle=${lifecycle}`),
   listWorkspaceProjectStatuses: (workspaceId: string) =>

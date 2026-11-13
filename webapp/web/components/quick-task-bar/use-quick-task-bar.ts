@@ -1,3 +1,4 @@
+import type { AgentLaunchConfigDto } from '@overlord/contract';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
@@ -29,8 +30,6 @@ import {
   useUpdateLaunchPreference,
   useUpdateObjective
 } from '@/lib/queries.ts';
-
-import type { AgentLaunchConfigDto } from '../../../shared/contract.ts';
 
 import {
   getQuickTaskApi,

@@ -23,7 +23,7 @@ import type {
   MissionSummaryResponse,
   ObjectiveState,
   StatusType
-} from '../../shared/contract.ts';
+} from '@overlord/contract';
 
 /** The objective fields the derivations read. Only live (non-deleted) objectives are passed. */
 export interface SummaryObjective {

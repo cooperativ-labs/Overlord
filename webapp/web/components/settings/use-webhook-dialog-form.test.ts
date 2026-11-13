@@ -1,7 +1,6 @@
+import type { WebhookSubscriptionDto } from '@overlord/contract';
 import assert from 'node:assert/strict';
 import test from 'node:test';
-
-import type { WebhookSubscriptionDto } from '../../../shared/contract.ts';
 
 import type { WebhookFormFields } from './use-webhook-dialog-form.ts';
 import {

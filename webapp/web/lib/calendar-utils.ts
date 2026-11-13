@@ -1,4 +1,4 @@
-import type { MissionDto } from '../../shared/contract.ts';
+import type { MissionDto } from '@overlord/contract';
 
 export type DayKey = string;
 
@@ -59,10 +59,6 @@ export function isWeekend(date: Date): boolean {
 
 export function formatMonthLabel(date: Date): string {
   return new Intl.DateTimeFormat(undefined, { month: 'long', year: 'numeric' }).format(date);
-}
-
-export function formatWeekdayShort(date: Date): string {
-  return new Intl.DateTimeFormat(undefined, { weekday: 'short' }).format(date);
 }
 
 export function weekdayLabels(): readonly string[] {

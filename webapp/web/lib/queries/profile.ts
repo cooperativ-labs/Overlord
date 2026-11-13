@@ -1,6 +1,6 @@
+import type { NotificationDto, UpdateProfileBody } from '@overlord/contract';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
-import type { NotificationDto, UpdateProfileBody } from '../../../shared/contract.ts';
 import { api } from '../api.ts';
 import { clearAuthTokens } from '../api-base.ts';
 import { authClient, normalizeEmail } from '../auth-client.ts';
@@ -36,28 +36,6 @@ export function useDismissNotification() {
 
 export const useDefaultProject = () =>
   useQuery({ queryKey: keys.defaultProject, queryFn: api.getDefaultProject });
-
-export function useSetDefaultProject() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (projectId: string) => api.setDefaultProject(projectId),
-    onSuccess: preference => {
-      qc.setQueryData(keys.defaultProject, preference);
-      void qc.invalidateQueries({ queryKey: keys.meta });
-    }
-  });
-}
-
-export function useClearDefaultProject() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: api.clearDefaultProject,
-    onSuccess: preference => {
-      qc.setQueryData(keys.defaultProject, preference);
-      void qc.invalidateQueries({ queryKey: keys.meta });
-    }
-  });
-}
 
 /**
  * Live runner queue status for the sidebar runner box. Polls on a light

@@ -1,6 +1,5 @@
+import type { TerminalSessionDto } from '@overlord/contract';
 import { type QueryClient, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-
-import type { TerminalSessionDto } from '../../shared/contract.ts';
 
 import { api } from './api.ts';
 import { invokeLocalTarget, useLocalTargetCapabilityAvailable } from './local-target-client.ts';

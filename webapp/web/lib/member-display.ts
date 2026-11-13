@@ -1,4 +1,4 @@
-import type { WorkspaceMemberDto } from '../../shared/contract.ts';
+import type { WorkspaceMemberDto } from '@overlord/contract';
 
 /**
  * Returns the consistent display label for a workspace member across webapp

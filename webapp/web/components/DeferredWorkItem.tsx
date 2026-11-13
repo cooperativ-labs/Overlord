@@ -1,12 +1,12 @@
-import { useQueryClient } from '@tanstack/react-query';
-import { Check, FolderPlus, ListPlus, RotateCcw, X } from 'lucide-react';
-import { type ReactNode, useEffect, useState } from 'react';
-
 import type {
   HumanActionResolutionDto,
   MissionDetailDto,
   ResolveHumanActionBody
-} from '../../shared/contract.ts';
+} from '@overlord/contract';
+import { useQueryClient } from '@tanstack/react-query';
+import { Check, FolderPlus, ListPlus, RotateCcw, X } from 'lucide-react';
+import { type ReactNode, useEffect, useState } from 'react';
+
 import { api } from '../lib/api.ts';
 import {
   keys,

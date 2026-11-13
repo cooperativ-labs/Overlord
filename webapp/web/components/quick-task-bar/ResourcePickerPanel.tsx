@@ -1,9 +1,8 @@
+import type { ProjectResourceDto } from '@overlord/contract';
 import { Check } from 'lucide-react';
 
 import { distinctProjectResourceKeys, primaryResourceConnection } from '@/lib/project-resources.ts';
 import { cn } from '@/lib/utils';
-
-import type { ProjectResourceDto } from '../../../shared/contract.ts';
 
 type ResourcePickerPanelProps = {
   resources: ProjectResourceDto[];

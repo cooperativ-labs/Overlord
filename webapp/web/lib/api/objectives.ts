@@ -5,7 +5,7 @@ import type {
   ObjectivePromptDto,
   ReorderFutureObjectivesBody,
   UpdateObjectiveBody
-} from '../../../shared/contract.ts';
+} from '@overlord/contract';
 
 import { request } from './request.ts';
 

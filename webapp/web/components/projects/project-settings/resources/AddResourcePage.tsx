@@ -1,3 +1,4 @@
+import type { ProjectResourceAccessMode, ProjectResourceDto } from '@overlord/contract';
 import { FolderOpen, Plus } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
@@ -37,11 +38,6 @@ import {
   useProjectResources
 } from '@/lib/queries';
 import { cn } from '@/lib/utils';
-
-import type {
-  ProjectResourceAccessMode,
-  ProjectResourceDto
-} from '../../../../../shared/contract.ts';
 
 /**
  * Full-page form for creating a project resource and linking its first source.

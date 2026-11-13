@@ -1,5 +1,3 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-
 import type {
   BranchActionBody,
   MissionBranchDto,
@@ -11,11 +9,11 @@ import type {
   PurgeWorktreesResultDto,
   RemoveWorktreeBody,
   WorktreeDto
-} from '../../shared/contract.ts';
+} from '@overlord/contract';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { ApiRequestError } from './api.ts';
 import {
-  hasDesktopLocalTargetBridge,
   invokeLocalTarget,
   isLocalTargetCapabilityAvailable,
   useLocalTargetCapabilityAvailable
@@ -24,11 +22,6 @@ import type { BranchListResult, BranchObservationResult } from './local-target-t
 import { reportMissionBranchObservation } from './mission-branch-observations.ts';
 import { resolveResourceForKey } from './project-resources.ts';
 import { keys } from './query-keys.ts';
-
-export {
-  useLocalTargetCapabilityAvailable,
-  useLocalTargetUnavailable
-} from './local-target-client.ts';
 
 type CapabilityFailureDetails = {
   branchActionCode?: string;

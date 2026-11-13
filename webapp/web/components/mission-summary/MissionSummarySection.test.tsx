@@ -1,3 +1,4 @@
+import type { MissionDetailDto, MissionSummaryResponse } from '@overlord/contract';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
   createMemoryHistory,
@@ -10,7 +11,6 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { afterEach, it } from 'node:test';
 
-import type { MissionDetailDto, MissionSummaryResponse } from '../../../shared/contract.ts';
 import { keys } from '../../lib/query-keys.ts';
 
 import { MissionSummarySection } from './MissionSummarySection.tsx';

@@ -1,4 +1,5 @@
-import type { HumanAgentRequestDto } from '../../../shared/contract.ts';
+import type { HumanAgentRequestDto } from '@overlord/contract';
+
 import { ApiRequestError } from '../../lib/api.ts';
 
 const READ_ONLY_REASON_TEXT: Record<

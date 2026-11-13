@@ -13,6 +13,7 @@ import {
   sortableKeyboardCoordinates,
   verticalListSortingStrategy
 } from '@dnd-kit/sortable';
+import type { ProjectDto, WorkspaceDto } from '@overlord/contract';
 import { useParams } from '@tanstack/react-router';
 import { ChevronDown, Plus, Settings } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
@@ -32,8 +33,6 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { isWorkspaceSectionExpanded, setWorkspaceSectionExpanded } from '@/lib/org-preferences';
 import { useProjects, useReorderProjects } from '@/lib/queries';
-
-import type { ProjectDto, WorkspaceDto } from '../../shared/contract.ts';
 
 type WorkspaceSidebarSectionProps = {
   workspace: WorkspaceDto;

@@ -1,19 +1,10 @@
-import {
-  Ban,
-  CheckCheck,
-  Circle,
-  CircleSlash,
-  Eye,
-  type LucideIcon,
-  Pen,
-  Play
-} from 'lucide-react';
+import type { ObjectiveState, StatusType } from '@overlord/contract';
+import { Ban, CheckCheck, Circle, CircleSlash, Eye, type LucideIcon, Play } from 'lucide-react';
 import {
   type ButtonHTMLAttributes,
   type ComponentProps,
   type InputHTMLAttributes,
   type ReactNode,
-  type SelectHTMLAttributes,
   type TextareaHTMLAttributes
 } from 'react';
 
@@ -21,11 +12,8 @@ import { Badge as ShadcnBadge } from '@/components/ui/badge';
 import { Button as ShadcnButton } from '@/components/ui/button';
 import { Card as ShadcnCard } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
-
-import type { MissionPriority, ObjectiveState, StatusType } from '../../shared/contract.ts';
 
 // ---- Status / priority vocab → presentation ------------------------------
 
@@ -133,42 +121,6 @@ export const OBJECTIVE_STATE_LABEL: Record<ObjectiveState, string> = {
   complete: 'Complete'
 };
 
-export function objectiveStateClasses(state: ObjectiveState): string {
-  switch (state) {
-    case 'future':
-      return 'bg-zinc-500/15 text-zinc-600 ring-zinc-400/30 dark:text-zinc-400';
-    case 'draft':
-      return 'bg-slate-500/15 text-slate-600 ring-slate-400/30 dark:text-slate-300';
-    case 'submitted':
-      return 'bg-indigo-500/15 text-indigo-700 ring-indigo-400/30 dark:text-indigo-300';
-    case 'launching':
-      return 'bg-cyan-500/15 text-cyan-700 ring-cyan-400/30 dark:text-cyan-300';
-    case 'executing':
-      return 'bg-blue-500/15 text-blue-700 ring-blue-400/30 dark:text-blue-300';
-    case 'pending_delivery':
-      // Reads as live work, not as a warning: the agent has re-attached to the
-      // objective and is executing again until it delivers.
-      return 'bg-teal-500/15 text-teal-700 ring-teal-400/30 dark:text-teal-300';
-    case 'complete':
-      return 'bg-emerald-500/15 text-emerald-700 ring-emerald-400/30 dark:text-emerald-300';
-  }
-}
-
-export function priorityClasses(priority: MissionPriority | null): string {
-  switch (priority) {
-    case 'urgent':
-      return 'bg-red-500/15 text-red-700 ring-red-400/30 dark:text-red-300';
-    case 'high':
-      return 'bg-orange-500/15 text-orange-700 ring-orange-400/30 dark:text-orange-300';
-    case 'normal':
-      return 'bg-slate-500/15 text-slate-600 ring-slate-400/30 dark:text-slate-300';
-    case 'low':
-      return 'bg-zinc-500/15 text-zinc-600 ring-zinc-400/30 dark:text-zinc-400';
-    default:
-      return 'bg-zinc-500/15 text-zinc-600 ring-zinc-400/30 dark:text-zinc-400';
-  }
-}
-
 // ---- Primitives (shadcn-backed app wrappers) ------------------------------
 
 export function Badge({ children, className = '' }: { children: ReactNode; className?: string }) {
@@ -223,30 +175,6 @@ export function TextInput(props: InputHTMLAttributes<HTMLInputElement>) {
 export function TextArea(props: TextareaHTMLAttributes<HTMLTextAreaElement>) {
   const { className = '', ...rest } = props;
   return <Textarea className={className} {...rest} />;
-}
-
-export function Select(props: SelectHTMLAttributes<HTMLSelectElement>) {
-  const { className = '', ...rest } = props;
-  return (
-    <select
-      className={cn(
-        'h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30',
-        className
-      )}
-      {...rest}
-    />
-  );
-}
-
-export function Field({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="space-y-1.5">
-      <Label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-        {label}
-      </Label>
-      {children}
-    </div>
-  );
 }
 
 export function EmptyState({

@@ -4,7 +4,7 @@ import type {
   ActivityFeedMissionItemDto,
   ActivityFeedQuestionItemDto,
   ObjectiveState
-} from '../../../shared/contract.ts';
+} from '@overlord/contract';
 
 /** The kinds the feed renders, in the order their chips appear. */
 export const FEED_KINDS: ActivityFeedItemKind[] = [

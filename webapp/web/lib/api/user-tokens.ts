@@ -3,7 +3,7 @@ import type {
   CreateUserTokenResultDto,
   UpdateUserTokenBody,
   UserTokenDto
-} from '../../../shared/contract.ts';
+} from '@overlord/contract';
 
 import { request } from './request.ts';
 

@@ -1,3 +1,4 @@
+import type { ArtifactDto, ArtifactType, ObjectiveDto } from '@overlord/contract';
 import {
   CheckCircle2,
   ChevronDown,
@@ -13,7 +14,6 @@ import {
 } from 'lucide-react';
 import { type FormEvent, useState } from 'react';
 
-import type { ArtifactDto, ArtifactType, ObjectiveDto } from '../../shared/contract.ts';
 import { formatTimestamp } from '../lib/format-date.ts';
 import { useMissionArtifacts, useUpdateMissionArtifact } from '../lib/queries.ts';
 

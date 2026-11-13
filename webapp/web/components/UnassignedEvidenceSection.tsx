@@ -1,4 +1,5 @@
-import type { FileChangeDto } from '../../shared/contract.ts';
+import type { FileChangeDto } from '@overlord/contract';
+
 import type { ObjectiveEvidence, ObjectiveEvidenceTruncation } from '../lib/objective-evidence.ts';
 
 import {

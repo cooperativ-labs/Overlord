@@ -1,10 +1,9 @@
 import { useDroppable } from '@dnd-kit/core';
+import type { MissionDto } from '@overlord/contract';
 import { type RefObject, useCallback } from 'react';
 
 import { calendarDayDroppableId, dayKeyFromDate, isWeekend } from '@/lib/calendar-utils.ts';
 import { cn } from '@/lib/utils';
-
-import type { MissionDto } from '../../shared/contract.ts';
 
 import { MissionCalendarCard } from './MissionCalendarCard.tsx';
 

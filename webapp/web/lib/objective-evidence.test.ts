@@ -1,7 +1,6 @@
+import type { DeliveryDto, FileChangeDto, TerminalSessionDto } from '@overlord/contract';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-
-import type { DeliveryDto, FileChangeDto, TerminalSessionDto } from '../../shared/contract.ts';
 
 import {
   evidenceForObjective,

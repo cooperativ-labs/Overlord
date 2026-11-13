@@ -3,7 +3,7 @@ import type {
   FileChangeDto,
   ObjectiveDto,
   TerminalSessionDto
-} from '../../shared/contract.ts';
+} from '@overlord/contract';
 
 /**
  * The per-run evidence one objective produced, grouped so the mission panel can

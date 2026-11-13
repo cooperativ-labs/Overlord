@@ -1,3 +1,4 @@
+import type { MissionEventDto, MissionEventType } from '@overlord/contract';
 import {
   Activity,
   AlertCircle,
@@ -16,7 +17,6 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 import { AuthenticatedAvatarImage, Avatar, AvatarFallback } from '@/components/ui/avatar';
 
-import type { MissionEventDto, MissionEventType } from '../../shared/contract.ts';
 import { formatAgentHarnessText } from '../lib/agent-harness-text.ts';
 import { formatTimestamp } from '../lib/format-date.ts';
 import type { MissionFeedItem } from '../lib/mission-feed.ts';

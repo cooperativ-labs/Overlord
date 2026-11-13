@@ -5,9 +5,6 @@ import type {
   AccountConnectionProviderStatusDto
 } from '@overlord/contract';
 
-/** The web return path of every account-connection callback (contract v152/v153). */
-export const CONNECTED_ACCOUNTS_PATH = '/settings/connections';
-
 export const CONNECTION_CALLBACK_STATUSES = ['connected', 'denied', 'expired', 'failed'] as const;
 export type ConnectionCallbackStatus = (typeof CONNECTION_CALLBACK_STATUSES)[number];
 

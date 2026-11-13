@@ -1,11 +1,10 @@
-import assert from 'node:assert/strict';
-import { test } from 'node:test';
-
 import type {
   ActivityFeedItemDto,
   ActivityFeedMissionItemDto,
   ActivityFeedQuestionItemDto
-} from '../../../shared/contract.ts';
+} from '@overlord/contract';
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
 
 import {
   elapsedLabel,

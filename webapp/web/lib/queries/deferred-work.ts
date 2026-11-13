@@ -1,6 +1,6 @@
+import type { ResolveHumanActionBody } from '@overlord/contract';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
-import type { ResolveHumanActionBody } from '../../../shared/contract.ts';
 import { api } from '../api.ts';
 import { keys } from '../query-keys.ts';
 

@@ -1,7 +1,6 @@
+import type { TerminalSessionDto } from '@overlord/contract';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-
-import type { TerminalSessionDto } from '../../shared/contract.ts';
 
 import { selectLatchSessionDisplay } from './latch-session-display.ts';
 

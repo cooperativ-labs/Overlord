@@ -1,3 +1,4 @@
+import type { MissionDetailDto } from '@overlord/contract';
 import { useEffect, useState } from 'react';
 
 import { useObjectiveAttachmentState } from '@/components/objectives/ObjectiveAttachments.tsx';
@@ -7,8 +8,6 @@ import {
   useUpdateMission,
   useUpdateObjective
 } from '@/lib/queries.ts';
-
-import type { MissionDetailDto } from '../../../shared/contract.ts';
 
 import { submitPromotedInboxObjective } from './inbox-card-actions.ts';
 import { inboxCardShellStateProps, useInboxCardState } from './use-inbox-card-state.ts';

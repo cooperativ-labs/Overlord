@@ -5,10 +5,6 @@ export * from './queries/everhour.ts';
 export * from './queries/github.ts';
 export * from './queries/missions.ts';
 export * from './queries/objectives.ts';
-export type {
-  ReorderBoardColumnVars,
-  ReorderFutureObjectivesVars
-} from './queries/optimistic-updates.ts';
 export * from './queries/organizations.ts';
 export * from './queries/profile.ts';
 export * from './queries/projects.ts';

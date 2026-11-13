@@ -1,11 +1,6 @@
+import type { CaptureSessionDto, FileChangeDto, ObjectiveFileChangesDto } from '@overlord/contract';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-
-import type {
-  CaptureSessionDto,
-  FileChangeDto,
-  ObjectiveFileChangesDto
-} from '../../shared/contract.ts';
 
 import {
   describeCaptureSession,

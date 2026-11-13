@@ -1,3 +1,4 @@
+import type { WorktreeDto } from '@overlord/contract';
 import { useState } from 'react';
 
 import { LocalTargetRequiredNotice } from '@/components/LocalTargetRequiredNotice.tsx';
@@ -15,8 +16,6 @@ import {
   useUpdateLaunchSessionDefaults,
   useWorktrees
 } from '@/lib/queries';
-
-import type { WorktreeDto } from '../../../shared/contract.ts';
 
 function formatBytes(bytes: number | null): string {
   if (bytes === null) return '—';

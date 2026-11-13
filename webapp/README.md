@@ -3,8 +3,7 @@
 The web control center: a **Vite-powered React SPA** in `webapp/web/` over the
 Express REST + realtime server in [`backend/`](../backend/AGENTS.md). Local
 editions open SQLite under `OVLD_HOME`; hosted editions use Postgres. Typed DTOs
-come from `@overlord/contract` (re-exported for the SPA via
-`webapp/shared/contract.ts`).
+come from `@overlord/contract`, generated from `contract/api/openapi.yaml`.
 
 A first slice has landed: a realtime console for **projects, missions, and
 objectives** — list/create/edit each, with the UI reflecting database changes
@@ -98,7 +97,6 @@ Initialise that database first with `yarn start:local` from the repo root.
 ```
 webapp/
   web/                 ← the React SPA (pure consumer of the REST surface)
-  shared/contract.ts   ← re-exports @overlord/contract for SPA imports
   docs/                ← design + planning specs (below)
 
 backend/               ← the `rest` contract component (see backend/AGENTS.md)
@@ -202,7 +200,6 @@ users/roles/tokens — are still deferred and remain CLI-only.
   `realtime.ts`, `index.ts`, plus domain modules and `ext/`). Agent extension
   guide: [`backend/AGENTS.md`](../backend/AGENTS.md).
 - `web/` — the React SPA (`main.tsx`, `router.tsx`, `lib/`, `components/`, `pages/`).
-- `shared/contract.ts` — re-exports `@overlord/contract` for SPA imports.
 
 `yarn typecheck` and `yarn build:prod` both pass. The realtime path is verified
 end-to-end (a write from a separate process is reflected in the UI without a

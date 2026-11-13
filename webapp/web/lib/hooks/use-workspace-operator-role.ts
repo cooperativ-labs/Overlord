@@ -1,6 +1,6 @@
-import { useWorkspaceMembers } from '@/lib/queries';
+import type { WorkspaceMemberDto } from '@overlord/contract';
 
-import type { WorkspaceMemberDto } from '../../../shared/contract.ts';
+import { useWorkspaceMembers } from '@/lib/queries';
 
 /** Finds the signed-in operator's membership row and whether it holds workspace ADMIN. */
 export function resolveWorkspaceOperatorRole(members: readonly WorkspaceMemberDto[] | undefined) {

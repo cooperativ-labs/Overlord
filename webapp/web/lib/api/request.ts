@@ -1,34 +1,8 @@
-import type { MetaDto } from '../../../shared/contract.ts';
+import type { ServerMetaDto } from '@overlord/contract';
+
 import { fetchApi } from '../api-transport.ts';
 
-export type LocalTargetServerCapability = 'in_process_server' | 'unavailable';
-
-export interface MetaCapabilities {
-  projects: boolean;
-  missions: boolean;
-  objectives: boolean;
-  realtime: boolean;
-  sqlStudio: boolean;
-  launchAgents: boolean;
-  executionTargets: boolean;
-  localTarget: LocalTargetServerCapability;
-  mcp: boolean;
-}
-
-/** Interactive login providers this backend offers (drives the auth UI). */
-export interface AuthProviders {
-  email: boolean;
-  github: boolean;
-}
-
-export interface Meta extends MetaDto {
-  databasePath: string;
-  backendMode: 'local' | 'cloud';
-  web: { host: string; port: number; url: string };
-  sqlStudio: { enabled: boolean; url: string | null };
-  authProviders: AuthProviders;
-  capabilities: MetaCapabilities;
-}
+export type LocalTargetServerCapability = ServerMetaDto['capabilities']['localTarget'];
 
 /** Error thrown for a non-2xx REST response; carries the server's typed `code`. */
 export class ApiRequestError extends Error {

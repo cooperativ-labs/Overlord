@@ -1,11 +1,3 @@
-import {
-  type QueryClient,
-  useMutation,
-  useQueries,
-  useQuery,
-  useQueryClient
-} from '@tanstack/react-query';
-
 import type {
   CreateProjectBody,
   CreateProjectResourceBody,
@@ -22,7 +14,15 @@ import type {
   UpdateProjectResourceSourceBody,
   UpdateProjectStatusBody,
   UpdateProjectTagBody
-} from '../../../shared/contract.ts';
+} from '@overlord/contract';
+import {
+  type QueryClient,
+  useMutation,
+  useQueries,
+  useQuery,
+  useQueryClient
+} from '@tanstack/react-query';
+
 import { api } from '../api.ts';
 import { invalidateNonEverhourQueries as invalidateAll } from '../query-invalidation.ts';
 import { keys } from '../query-keys.ts';
@@ -79,13 +79,6 @@ export const useProjectStatuses = (projectId: string) =>
     queryKey: keys.projectStatuses(projectId),
     queryFn: () => api.listProjectStatuses(projectId),
     enabled: Boolean(projectId)
-  });
-
-export const useWorkspaceProjectStatuses = (workspaceId: string) =>
-  useQuery({
-    queryKey: keys.workspaceProjectStatuses(workspaceId),
-    queryFn: () => api.listWorkspaceProjectStatuses(workspaceId),
-    enabled: Boolean(workspaceId)
   });
 
 // Project-scoped queries are routinely mounted before a project is chosen (the

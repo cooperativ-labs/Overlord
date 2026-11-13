@@ -16,7 +16,6 @@
   },
   "include": [
     ".",
-    "../webapp/shared",
     "../packages/core/repository"
   ]
 }

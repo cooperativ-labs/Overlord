@@ -1,8 +1,7 @@
+import type { ObjectiveAttachmentDto } from '@overlord/contract';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import assert from 'node:assert/strict';
 import { afterEach, describe, it } from 'node:test';
-
-import type { ObjectiveAttachmentDto } from '../../../shared/contract.ts';
 
 import { AttachmentThumbnails } from './AttachmentThumbnails.tsx';
 

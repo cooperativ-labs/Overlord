@@ -1,4 +1,4 @@
-import type { ProjectListLifecycle } from '../../shared/contract.ts';
+import type { ProjectListLifecycle } from '@overlord/contract';
 
 /**
  * How much of a board's terminal (`complete` / `cancelled`) history is loaded.

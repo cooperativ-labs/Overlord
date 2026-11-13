@@ -1,33 +1,10 @@
+import type { OAuthApproveResultDto, OAuthAuthorizationRequestInfoDto } from '@overlord/contract';
 import { AlertTriangle, Check, Loader2, ShieldCheck, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { fetchApi } from '@/lib/api-transport';
-
-type OAuthRequestInfo = {
-  clientName: string;
-  redirectUri: string;
-  redirectHost: string;
-  resource: string;
-  scopes: string[];
-  organizations: Array<{
-    id: string;
-    name: string;
-    workspaces: Array<{
-      workspaceId: string;
-      workspaceUserId: string;
-      slug: string;
-      name: string;
-      kind: string;
-      roleKeys: string[];
-    }>;
-  }>;
-};
-
-type OAuthDecisionResponse = {
-  redirectTo: string;
-};
 
 function oauthParams(): Record<string, string> {
   return Object.fromEntries(new URLSearchParams(window.location.search).entries());
@@ -76,7 +53,7 @@ function scopeLabel(scope: string): string {
 
 export function OAuthApprovePage() {
   const params = useMemo(oauthParams, []);
-  const [requestInfo, setRequestInfo] = useState<OAuthRequestInfo | null>(null);
+  const [requestInfo, setRequestInfo] = useState<OAuthAuthorizationRequestInfoDto | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busyDecision, setBusyDecision] = useState<'approve' | 'deny' | null>(null);
   const [organizationId, setOrganizationId] = useState<string | null>(null);
@@ -86,7 +63,7 @@ export function OAuthApprovePage() {
   useEffect(() => {
     let alive = true;
     setError(null);
-    void postOAuth<OAuthRequestInfo>('/oauth/authorize/request', params)
+    void postOAuth<OAuthAuthorizationRequestInfoDto>('/oauth/authorize/request', params)
       .then(info => {
         if (alive) {
           setRequestInfo(info);
@@ -130,7 +107,7 @@ export function OAuthApprovePage() {
     setBusyDecision(decision);
     setError(null);
     try {
-      const result = await postOAuth<OAuthDecisionResponse>('/oauth/authorize/approve', {
+      const result = await postOAuth<OAuthApproveResultDto>('/oauth/authorize/approve', {
         ...params,
         decision,
         ...(decision === 'approve' ? { organizationId, workspaceIds, allWorkspaces } : {})

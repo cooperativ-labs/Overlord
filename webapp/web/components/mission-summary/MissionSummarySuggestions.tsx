@@ -1,7 +1,7 @@
+import type { HumanActionResolutionDto } from '@overlord/contract';
 import { Check, ChevronDown, ChevronRight } from 'lucide-react';
 import { useId, useState } from 'react';
 
-import type { HumanActionResolutionDto } from '../../../shared/contract.ts';
 import { relativeTime } from '../../lib/format-date.ts';
 import type { SummarySuggestionRow } from '../../lib/mission-summary-derive.ts';
 import { cn } from '../../lib/utils.ts';

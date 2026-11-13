@@ -55,10 +55,6 @@ export function getApiBaseUrl(): string {
   return trimTrailingSlash(activeBackend.apiBaseUrl);
 }
 
-export function getActiveBackendInfo(): DesktopBackendInfo | null {
-  return activeBackend;
-}
-
 function hasDesktopBridge(): boolean {
   return Boolean(getDesktopBridge());
 }

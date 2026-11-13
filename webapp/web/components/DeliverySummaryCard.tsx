@@ -1,5 +1,6 @@
+import type { DeliveryDto } from '@overlord/contract';
 import { AlertTriangle, Clock3, Lightbulb, ListChecks, Package, Scale } from 'lucide-react';
-import { createContext, type ReactNode, useContext, useEffect, useRef, useState } from 'react';
+import { createContext, type ReactNode, useContext, useState } from 'react';
 
 import {
   Accordion,
@@ -7,8 +8,6 @@ import {
   AccordionItem,
   AccordionTrigger
 } from '@/components/ui/accordion';
-
-import type { DeliveryDto } from '../../shared/contract.ts';
 
 import { DeferredWorkItem } from './DeferredWorkItem.tsx';
 import { HumanActionDetails } from './HumanActionDetails.tsx';
@@ -265,42 +264,6 @@ export function DeliveryPresentation({
  * Delivery card for the Artifacts section: objective title, one-sentence preview,
  * and click-to-expand full structured delivery summary.
  */
-/**
- * Collapse-on-outside-click/Escape for an expanded delivery card. Shared so the
- * mission panel and the Feed activity feed dismiss the same way; a divergence
- * here reads to the operator as two different components.
- */
-export function useCollapseOnDismiss(
-  expanded: boolean,
-  collapse: () => void
-): React.RefObject<HTMLDivElement | null> {
-  const cardRef = useRef<HTMLDivElement>(null);
-  // Held in a ref so an inline `() => setExpanded(false)` at the call site does not
-  // rebind the document listeners on every render while the card is open.
-  const collapseRef = useRef(collapse);
-  collapseRef.current = collapse;
-
-  useEffect(() => {
-    if (!expanded) return;
-    const onPointerDown = (e: MouseEvent | TouchEvent) => {
-      if (cardRef.current && !cardRef.current.contains(e.target as Node)) collapseRef.current();
-    };
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') collapseRef.current();
-    };
-    document.addEventListener('mousedown', onPointerDown);
-    document.addEventListener('touchstart', onPointerDown);
-    document.addEventListener('keydown', onKeyDown);
-    return () => {
-      document.removeEventListener('mousedown', onPointerDown);
-      document.removeEventListener('touchstart', onPointerDown);
-      document.removeEventListener('keydown', onKeyDown);
-    };
-  }, [expanded]);
-
-  return cardRef;
-}
-
 export function MissionDeliveryCard({
   delivery,
   objectiveTitle,

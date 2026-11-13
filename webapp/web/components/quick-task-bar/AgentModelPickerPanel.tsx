@@ -1,9 +1,9 @@
+import type { AgentCatalogDto, AgentLaunchConfigDto } from '@overlord/contract';
+
 import {
   type AgentModelSelection,
   AgentModelSelector
 } from '@/components/objectives/AgentModelSelector.tsx';
-
-import type { AgentCatalogDto, AgentLaunchConfigDto } from '../../../shared/contract.ts';
 
 type AgentModelPickerPanelProps = {
   catalog: AgentCatalogDto;

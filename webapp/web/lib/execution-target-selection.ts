@@ -1,4 +1,4 @@
-import type { EligibleExecutionTargetDto } from '../../shared/contract.ts';
+import type { EligibleExecutionTargetDto } from '@overlord/contract';
 
 export const ANY_ELIGIBLE_EXECUTION_TARGET_VALUE = '__any_eligible_target__';
 

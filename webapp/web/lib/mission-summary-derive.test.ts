@@ -1,7 +1,3 @@
-import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
-import { test } from 'node:test';
-
 import type {
   FileChangeDto,
   HumanAgentRequestDto,
@@ -9,7 +5,10 @@ import type {
   MissionSummaryEvidenceDto,
   MissionSummaryResponse,
   StatusType
-} from '../../shared/contract.ts';
+} from '@overlord/contract';
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { test } from 'node:test';
 
 import {
   laterWatermark,

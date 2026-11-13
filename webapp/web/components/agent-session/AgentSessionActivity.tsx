@@ -1,4 +1,5 @@
-import type { HumanAgentRequestDto } from '../../../shared/contract.ts';
+import type { HumanAgentRequestDto } from '@overlord/contract';
+
 import { useMissionAgentRequests } from '../../lib/queries.ts';
 
 import { BlockingQuestionCard } from './BlockingQuestionCard.tsx';

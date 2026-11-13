@@ -1,6 +1,6 @@
+import type { MissionDetailDto, MissionDto, StatusType } from '@overlord/contract';
 import type { QueryClient } from '@tanstack/react-query';
 
-import type { MissionDetailDto, MissionDto, StatusType } from '../../../shared/contract.ts';
 import { api } from '../api.ts';
 import { keys } from '../query-keys.ts';
 

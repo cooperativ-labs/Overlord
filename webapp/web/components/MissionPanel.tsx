@@ -1,8 +1,8 @@
+import type { MissionDetailDto } from '@overlord/contract';
 import { useNavigate, useRouterState } from '@tanstack/react-router';
 import { ArrowRightToLine, Loader2, Sparkles, Unplug } from 'lucide-react';
 import { useMemo, useRef, useState } from 'react';
 
-import type { MissionDetailDto } from '../../shared/contract.ts';
 import { objectiveSearchFromLocation } from '../lib/mission-panel-search.ts';
 import {
   evidenceTruncationFromPages,

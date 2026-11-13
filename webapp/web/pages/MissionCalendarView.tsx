@@ -1,4 +1,5 @@
 import { DndContext, DragOverlay } from '@dnd-kit/core';
+import type { MissionDto } from '@overlord/contract';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 import {
@@ -11,8 +12,6 @@ import {
   weekdayLabels
 } from '@/lib/calendar-utils.ts';
 import { cn } from '@/lib/utils';
-
-import type { MissionDto } from '../../shared/contract.ts';
 
 import { CalendarDayCell } from './CalendarDayCell.tsx';
 import { MissionCalendarCard } from './MissionCalendarCard.tsx';

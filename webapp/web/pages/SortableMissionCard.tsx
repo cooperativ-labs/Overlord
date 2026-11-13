@@ -1,9 +1,8 @@
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import type { MissionDto, WorkspaceMemberDto } from '@overlord/contract';
 
 import { cn } from '@/lib/utils';
-
-import type { MissionDto, WorkspaceMemberDto } from '../../shared/contract.ts';
 
 import { KANBAN_TOUCH_DRAGGABLE_CLASS } from './kanban-dnd.ts';
 import { MissionCardBody } from './MissionCardBody.tsx';

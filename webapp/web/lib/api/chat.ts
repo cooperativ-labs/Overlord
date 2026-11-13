@@ -1,4 +1,5 @@
 import type {
+  AckChatEventsBody,
   AnswerChatQuestionBody,
   ChatAckDto,
   ChatDiagnosticPageDto,
@@ -9,7 +10,9 @@ import type {
   ChatThreadDto,
   ChatThreadListResponse,
   ChatThreadSnapshotDto,
+  ContinueChatRunResponse,
   CreateChatThreadResponse,
+  CreateFromChatProposalBody,
   CreateFromChatProposalResponse,
   SubmitChatMessageBody,
   SubmitChatMessageResponse,
@@ -53,7 +56,7 @@ export const chatApi = {
   chatEventStreamPath: (id: string, after: number) => `${thread(id)}/events?after=${after}`,
   updateChatPresence: (id: string, body: UpdateChatPresenceBody) =>
     request<ChatPresenceDto>('PUT', `${thread(id)}/presence`, body),
-  ackChatEvents: (id: string, body: { clientId: string; seq: number }) =>
+  ackChatEvents: (id: string, body: AckChatEventsBody) =>
     request<ChatAckDto>('POST', `${thread(id)}/ack`, body),
   answerChatQuestion: (id: string, body: AnswerChatQuestionBody) =>
     request<SubmitChatMessageResponse>(
@@ -66,17 +69,10 @@ export const chatApi = {
       clientRequestId
     }),
   continueChatRun: (id: string, clientRequestId: string) =>
-    request<{ run: ChatRunDto; replayed: boolean }>(
-      'POST',
-      `/api/chat/runs/${encodeURIComponent(id)}/continue`,
-      {
-        clientRequestId
-      }
-    ),
-  createFromChatProposal: (
-    id: string,
-    body: { clientRequestId: string; expectedRevision: number }
-  ) =>
+    request<ContinueChatRunResponse>('POST', `/api/chat/runs/${encodeURIComponent(id)}/continue`, {
+      clientRequestId
+    }),
+  createFromChatProposal: (id: string, body: CreateFromChatProposalBody) =>
     request<CreateFromChatProposalResponse>(
       'POST',
       `/api/chat/proposals/${encodeURIComponent(id)}/create`,

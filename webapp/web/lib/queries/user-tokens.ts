@@ -1,6 +1,6 @@
+import type { CreateUserTokenBody, UpdateUserTokenBody } from '@overlord/contract';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
-import type { CreateUserTokenBody, UpdateUserTokenBody } from '../../../shared/contract.ts';
 import { api } from '../api.ts';
 import { keys } from '../query-keys.ts';
 

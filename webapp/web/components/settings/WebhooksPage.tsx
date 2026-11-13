@@ -1,3 +1,8 @@
+import type {
+  WebhookDeliveryAttemptDto,
+  WebhookEventType,
+  WebhookSubscriptionDto
+} from '@overlord/contract';
 import { AlertTriangle, Check, Copy, RotateCw, Trash2, Webhook } from 'lucide-react';
 import { useState } from 'react';
 
@@ -43,12 +48,6 @@ import {
   useWebhookSubscriptions,
   useWorkspaces
 } from '@/lib/queries';
-
-import type {
-  WebhookDeliveryAttemptDto,
-  WebhookEventType,
-  WebhookSubscriptionDto
-} from '../../../shared/contract.ts';
 
 import type { WebhookDialogTarget } from './use-webhook-dialog-form.ts';
 import { useWebhookDialogForm, webhookDialogTargetKey } from './use-webhook-dialog-form.ts';
