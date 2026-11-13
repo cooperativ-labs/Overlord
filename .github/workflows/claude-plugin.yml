@@ -49,8 +49,6 @@ jobs:
     needs: validate
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    env:
-      CLAUDE_PLUGIN_REPORT_DIR: ${{ runner.temp }}/claude-plugin-report
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -61,6 +59,7 @@ jobs:
       - run: npm install --global @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}
       - name: Evaluate trusted default-branch plugin
         env:
+          CLAUDE_PLUGIN_REPORT_DIR: ${{ runner.temp }}/claude-plugin-report
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
           test -n "$ANTHROPIC_API_KEY" || { echo 'Configure the ANTHROPIC_API_KEY repository secret to run evals.'; exit 1; }
