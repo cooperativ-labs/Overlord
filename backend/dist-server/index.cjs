@@ -11329,7 +11329,7 @@ function isRecursive(inst, stack, resolve) {
     return PROVEN;
   stack.add(inst);
   let result2 = NONE;
-  const check3 = (child) => {
+  const check4 = (child) => {
     if (result2 !== PROVEN && child?._zod) {
       const answer = isRecursive(child, stack, resolve);
       if (answer > result2)
@@ -11358,32 +11358,32 @@ function isRecursive(inst, stack, resolve) {
     case "object": {
       const raw = rawShape(def);
       merge3(raw ? shape(raw, true) : ASSUMED);
-      check3(def.catchall);
+      check4(def.catchall);
       break;
     }
     case "array":
-      check3(def.element);
+      check4(def.element);
       break;
     case "tuple":
       for (const el of def.items)
-        check3(el);
-      check3(def.rest);
+        check4(el);
+      check4(def.rest);
       break;
     case "record":
     case "map":
-      check3(def.keyType);
-      check3(def.valueType);
+      check4(def.keyType);
+      check4(def.valueType);
       break;
     case "set":
-      check3(def.valueType);
+      check4(def.valueType);
       break;
     case "union":
       for (const el of def.options)
-        check3(el);
+        check4(el);
       break;
     case "intersection":
-      check3(def.left);
-      check3(def.right);
+      check4(def.left);
+      check4(def.right);
       break;
     case "optional":
     case "nullable":
@@ -11394,15 +11394,15 @@ function isRecursive(inst, stack, resolve) {
     case "nonoptional":
     case "promise":
     case "success":
-      check3(def.innerType);
+      check4(def.innerType);
       break;
     case "pipe":
-      check3(def.in);
-      check3(def.out);
+      check4(def.in);
+      check4(def.out);
       break;
     case "function":
-      check3(def.input);
-      check3(def.output);
+      check4(def.input);
+      check4(def.output);
       break;
     // `$ZodLazy` caches its inner on the def, so a resolved edge is followed exactly
     case "lazy": {
@@ -11443,10 +11443,10 @@ function isRecursive(inst, stack, resolve) {
         if (!value2 || typeof value2 !== "object")
           continue;
         if (value2._zod)
-          check3(value2);
+          check4(value2);
         else if (Array.isArray(value2))
           for (const el of value2)
-            check3(el);
+            check4(el);
       }
     }
   }
@@ -19833,8 +19833,8 @@ function generateChecks(doc, ctx, schema2, accessor) {
   if (!schemaChecks2 || schemaChecks2.length === 0)
     return accessor;
   let currentAccessor = accessor;
-  for (const check3 of schemaChecks2) {
-    const def = check3._zod.def;
+  for (const check4 of schemaChecks2) {
+    const def = check4._zod.def;
     if (def.when && !WHEN_DEFAULTED_CHECKS.has(def.check)) {
       throw new ZodCompileUnsupportedError(`check with a custom "when" condition`);
     }
@@ -19882,7 +19882,7 @@ function generateChecks(doc, ctx, schema2, accessor) {
         currentAccessor = generateStringFormatCheck(doc, ctx, def, currentAccessor);
         break;
       case "custom":
-        currentAccessor = generateCustomRefineCheck(doc, ctx, check3, currentAccessor);
+        currentAccessor = generateCustomRefineCheck(doc, ctx, check4, currentAccessor);
         break;
       case "bigint_format":
         generateBigIntFormatCheck(doc, def, currentAccessor);
@@ -19898,7 +19898,7 @@ function generateChecks(doc, ctx, schema2, accessor) {
         break;
       case "overwrite": {
         const newAccessor = newVar(ctx);
-        generateOverwriteCheck(doc, ctx, check3, currentAccessor, newAccessor);
+        generateOverwriteCheck(doc, ctx, check4, currentAccessor, newAccessor);
         currentAccessor = newAccessor;
         break;
       }
@@ -20021,8 +20021,8 @@ function generatePropertyCheck(doc, ctx, def, accessor) {
   const propAccessor = `${accessor}[${JSON.stringify(def.property)}]`;
   generateCheck(doc, ctx, def.schema, propAccessor);
 }
-function generateOverwriteCheck(doc, ctx, check3, currentAccessor, newAccessor) {
-  const tx = check3._zod.def.tx;
+function generateOverwriteCheck(doc, ctx, check4, currentAccessor, newAccessor) {
+  const tx = check4._zod.def.tx;
   if (!tx) {
     throw new ZodCompileUnsupportedError("overwrite check without a transform function");
   }
@@ -20038,8 +20038,8 @@ function throwAsync() {
 function pushIssue(issue2) {
   this.issues.push(issue2);
 }
-function generateCustomRefineCheck(doc, ctx, check3, accessor) {
-  const def = check3._zod.def;
+function generateCustomRefineCheck(doc, ctx, check4, accessor) {
+  const def = check4._zod.def;
   if (def.fn) {
     if (isAsyncFunction(def.fn)) {
       throw new ZodCompileAsyncError("z.compile: async .refine() predicates are not supported");
@@ -20052,11 +20052,11 @@ function generateCustomRefineCheck(doc, ctx, check3, accessor) {
     doc.write(`if (!${resVar}) return INVALID;`);
     return accessor;
   }
-  if (check3._zod.check) {
-    if (isAsyncFunction(check3._zod.check)) {
+  if (check4._zod.check) {
+    if (isAsyncFunction(check4._zod.check)) {
       throw new ZodCompileAsyncError("z.compile: async .superRefine() / check functions are not supported");
     }
-    const checkFn = check3._zod.check;
+    const checkFn = check4._zod.check;
     const helperFn = (value2) => {
       const fakePayload = { value: value2, issues: [], addIssue: pushIssue };
       const result2 = checkFn(fakePayload);
@@ -20652,8 +20652,8 @@ function generateNullableCheck(doc, ctx, schema2, accessor, buildsValue = true) 
   return outputVar;
 }
 function generateSizeGate(doc, schema2, size) {
-  for (const [max, check3] of sizeCaps(schema2._zod.def.checks)) {
-    doc.write(`if (${size} > ${numericOperand(max, check3._zod.def.check)}) return INVALID;`);
+  for (const [max, check4] of sizeCaps(schema2._zod.def.checks)) {
+    doc.write(`if (${size} > ${numericOperand(max, check4._zod.def.check)}) return INVALID;`);
   }
 }
 function generateArrayCheck(doc, ctx, schema2, accessor, buildsValue = true) {
@@ -24903,8 +24903,8 @@ var init_schemas2 = __esm({
         reg.add(this, meta3);
         return this;
       },
-      refine(check3, params) {
-        return this.check(refine(check3, params));
+      refine(check4, params) {
+        return this.check(refine(check4, params));
       },
       superRefine(refinement, params) {
         return this.check(superRefine(refinement, params));
@@ -27396,10 +27396,10 @@ function invalidateSchemaChecks(database) {
   const revision3 = schemaRevisions.get(database);
   if (revision3) revision3.value++;
 }
-function registerSchemaCheck(adapter2, check3, options = {}) {
+function registerSchemaCheck(adapter2, check4, options = {}) {
   const runtimeEnabled = options.runtimeEnabled ?? true;
   schemaChecks.set(adapter2, {
-    check: check3,
+    check: check4,
     runtimeEnabled
   });
 }
@@ -77993,8 +77993,8 @@ var init_checkRegion = __esm({
   "../node_modules/@smithy/core/dist-es/submodules/config/config-resolver/regionConfig/checkRegion.js"() {
     init_transport();
     validRegions = /* @__PURE__ */ new Set();
-    checkRegion = (region, check3 = isValidHostLabel) => {
-      if (!validRegions.has(region) && !check3(region)) {
+    checkRegion = (region, check4 = isValidHostLabel) => {
+      if (!validRegions.has(region) && !check4(region)) {
         if (region === "*") {
           console.warn(`@smithy/config-resolver WARN - Please use the caller region instead of "*". See "sigv4a" in https://github.com/aws/aws-sdk-js-v3/blob/main/supplemental-docs/CLIENTS.md.`);
         } else {
@@ -88865,7 +88865,7 @@ var require_dist_cjs7 = __commonJS({
             tsBytes.set(Int642.fromNumber(header.value.valueOf()).bytes, 1);
             return tsBytes;
           case "uuid":
-            if (!UUID_PATTERN2.test(header.value)) {
+            if (!UUID_PATTERN3.test(header.value)) {
               throw new Error(`Invalid UUID received: ${header.value}`);
             }
             const uuidBytes = new Uint8Array(17);
@@ -88888,7 +88888,7 @@ var require_dist_cjs7 = __commonJS({
       HEADER_VALUE_TYPE3[HEADER_VALUE_TYPE3["timestamp"] = 8] = "timestamp";
       HEADER_VALUE_TYPE3[HEADER_VALUE_TYPE3["uuid"] = 9] = "uuid";
     })(HEADER_VALUE_TYPE2 || (HEADER_VALUE_TYPE2 = {}));
-    var UUID_PATTERN2 = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
+    var UUID_PATTERN3 = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
     var Int642 = class _Int64 {
       bytes;
       constructor(bytes) {
@@ -111648,7 +111648,7 @@ function loadBetterSqlite3() {
 }
 
 // ../database/dist/constants.js
-var CONTRACT_VERSION = "1";
+var SCHEMA_CONTRACT_VERSION = "1";
 var DEFAULT_STATUSES = [
   {
     key: "backlog",
@@ -112045,6 +112045,11 @@ function formatOvldLaunchCommand({ agent, missionDisplayId, objectiveId = null, 
   return parts.join(" ");
 }
 
+// ../packages/contract/dist/vocabulary.js
+function vocabulary() {
+  return (values) => values;
+}
+
 // ../packages/contract/dist/chat.js
 var CHAT_DEFAULT_LIMITS = {
   /** Fixed invariant, not configurable. */
@@ -112089,8 +112094,32 @@ var CHAT_NOTIFICATION_CATALOG = {
   }
 };
 var CHAT_NOTIFICATION_DEEP_LINK = "overlord://chat/threads/:threadId";
-var ACCOUNT_CONNECTION_ASSISTANT_WRITE_SCOPES = ["per_request", "all_workspaces"];
-var REPOSITORY_READ_OPERATIONS = [
+var ACCOUNT_CONNECTION_PROVIDERS = vocabulary()([
+  "knowledgebase",
+  "everhour",
+  "github"
+]);
+var ACCOUNT_CONNECTION_SCOPES = vocabulary()([
+  "organization",
+  "profile"
+]);
+var ACCOUNT_CONNECTION_CREDENTIAL_KINDS = vocabulary()([
+  "oauth",
+  "api_key"
+]);
+var ACCOUNT_CONNECTION_STATES = vocabulary()([
+  "pending",
+  "connected",
+  "reauthorization_required",
+  "disconnected"
+]);
+var ACCOUNT_CONNECTION_ASSISTANT_WRITE_SCOPES = vocabulary()(["per_request", "all_workspaces"]);
+var ACCOUNT_CONNECTION_UNAVAILABLE_REASONS = vocabulary()([
+  "not_offered_on_edition",
+  "not_configured",
+  "encryption_not_configured"
+]);
+var REPOSITORY_READ_OPERATIONS = vocabulary()([
   "observe",
   "tree",
   "branches",
@@ -112099,7 +112128,7 @@ var REPOSITORY_READ_OPERATIONS = [
   "diff",
   "read_file",
   "search_text"
-];
+]);
 var REPOSITORY_READ_DEFAULT_BOUNDS = {
   readFileBytes: 64 * 1024,
   diffBytes: 128 * 1024,
@@ -112294,19 +112323,27 @@ function parseKnowledgebaseFeatureReference(reference) {
 }
 
 // ../packages/contract/dist/mission-search.js
-var MISSION_SEARCH_DATE_FIELDS = ["createdAt", "updatedAt", "dueDatetime"];
+var MISSION_SEARCH_DATE_FIELDS = vocabulary()([
+  "createdAt",
+  "updatedAt",
+  "dueDatetime"
+]);
 
 // ../packages/contract/dist/notifications.js
-var NOTIFICATION_TYPES = [
+var NOTIFICATION_TYPES = vocabulary()([
   "mission_awaiting_review",
   "agent_question",
   "mission_complete",
   "mission_failed",
   "agent_started",
   "returned_to_execute"
-];
-var NOTIFICATION_MODES = ["alert", "silent", "off"];
-var NOTIFICATION_TRANSPORTS = ["apns", "realtime", "in_app"];
+]);
+var NOTIFICATION_MODES = vocabulary()(["alert", "silent", "off"]);
+var NOTIFICATION_TRANSPORTS = vocabulary()([
+  "apns",
+  "realtime",
+  "in_app"
+]);
 var NOTIFICATION_CATALOG = {
   agent_question: {
     id: "agent_question",
@@ -112994,7 +113031,7 @@ function applyMigration(db, migration) {
     finalizeNextStatusTypeSqlite(db);
   }
   db.prepare(`INSERT INTO schema_migrations (version, adapter, component, contract_version, checksum, applied_at)
-     VALUES (?, 'sqlite', ?, ?, ?, ?)`).run(migration.version, migration.component, CONTRACT_VERSION, migration.checksum, (/* @__PURE__ */ new Date()).toISOString());
+     VALUES (?, 'sqlite', ?, ?, ?, ?)`).run(migration.version, migration.component, SCHEMA_CONTRACT_VERSION, migration.checksum, (/* @__PURE__ */ new Date()).toISOString());
 }
 function openDatabase({ databasePath: databasePath2 }) {
   (0, import_node_fs2.mkdirSync)(import_node_path6.default.dirname(databasePath2), { recursive: true });
@@ -113029,7 +113066,7 @@ function migrateDatabase(db) {
       }
       for (const pending of [...pendingMigrationRecords, migration]) {
         db.prepare(`INSERT INTO schema_migrations (version, adapter, component, contract_version, checksum, applied_at)
-           VALUES (?, 'sqlite', ?, ?, ?, ?)`).run(pending.version, pending.component, CONTRACT_VERSION, pending.checksum, (/* @__PURE__ */ new Date()).toISOString());
+           VALUES (?, 'sqlite', ?, ?, ?, ?)`).run(pending.version, pending.component, SCHEMA_CONTRACT_VERSION, pending.checksum, (/* @__PURE__ */ new Date()).toISOString());
       }
       pendingMigrationRecords.length = 0;
       continue;
@@ -113450,7 +113487,7 @@ async function recordMigration(client, migration) {
      VALUES (?, 'postgres', ?, ?, ?, ?)`, [
     migration.version,
     migration.component,
-    CONTRACT_VERSION,
+    SCHEMA_CONTRACT_VERSION,
     migration.checksum,
     (/* @__PURE__ */ new Date()).toISOString()
   ]);
@@ -134548,10 +134585,10 @@ function fromNodeHeaders(nodeHeaders) {
   return webHeaders;
 }
 
-// index.ts
+// app.ts
 var import_cors = __toESM(require_lib3(), 1);
 var import_express7 = __toESM(require_express2(), 1);
-var import_node_fs21 = require("node:fs");
+var import_node_fs22 = require("node:fs");
 var import_node_path34 = __toESM(require("node:path"), 1);
 var import_node_url6 = require("node:url");
 
@@ -139408,33 +139445,33 @@ function parseLatchCapabilitiesReport(raw) {
   };
 }
 function evaluateLatchCapabilities({
-  report,
+  report: report2,
   executable,
   resolvedPath: resolvedPath2,
   checkedAt = (/* @__PURE__ */ new Date()).toISOString()
 }) {
-  if (report.protocolVersion !== SUPPORTED_LATCH_PROTOCOL_VERSION) {
+  if (report2.protocolVersion !== SUPPORTED_LATCH_PROTOCOL_VERSION) {
     return {
       state: "incompatible",
       executable,
       resolvedPath: resolvedPath2,
-      protocolVersion: report.protocolVersion,
-      productVersion: report.productVersion,
+      protocolVersion: report2.protocolVersion,
+      productVersion: report2.productVersion,
       missingCapability: "protocolVersion",
-      detail: `Latch protocolVersion ${report.protocolVersion} is not supported (need ${SUPPORTED_LATCH_PROTOCOL_VERSION}).`,
+      detail: `Latch protocolVersion ${report2.protocolVersion} is not supported (need ${SUPPORTED_LATCH_PROTOCOL_VERSION}).`,
       checkedAt,
       latchSelectable: false,
       directSelectable: true
     };
   }
   for (const required2 of REQUIRED_LATCH_CAPABILITIES) {
-    if (!report.capabilities[required2]) {
+    if (!report2.capabilities[required2]) {
       return {
         state: "incompatible",
         executable,
         resolvedPath: resolvedPath2,
-        protocolVersion: report.protocolVersion,
-        productVersion: report.productVersion,
+        protocolVersion: report2.protocolVersion,
+        productVersion: report2.productVersion,
         missingCapability: required2,
         detail: `Latch is missing required capability \`${required2}\`.`,
         checkedAt,
@@ -139447,9 +139484,9 @@ function evaluateLatchCapabilities({
     state: "found",
     executable,
     resolvedPath: resolvedPath2,
-    protocolVersion: report.protocolVersion,
-    productVersion: report.productVersion,
-    capabilities: report.capabilities,
+    protocolVersion: report2.protocolVersion,
+    productVersion: report2.productVersion,
+    capabilities: report2.capabilities,
     checkedAt,
     latchSelectable: true,
     directSelectable: true
@@ -139539,8 +139576,8 @@ function probeLatchCapabilities({
   if (ran.status === null && ran.stderr === "ENOENT") {
     return notInstalledResult({ executable: exe, checkedAt });
   }
-  const report = parseLatchCapabilitiesReport(ran.stdout);
-  if (!report) {
+  const report2 = parseLatchCapabilitiesReport(ran.stdout);
+  if (!report2) {
     return {
       state: "incompatible",
       executable: exe,
@@ -139554,7 +139591,7 @@ function probeLatchCapabilities({
       directSelectable: true
     };
   }
-  return evaluateLatchCapabilities({ report, executable: exe, resolvedPath: resolvedPath2, checkedAt });
+  return evaluateLatchCapabilities({ report: report2, executable: exe, resolvedPath: resolvedPath2, checkedAt });
 }
 function latchDiscoveryCacheKey({
   executionTargetId,
@@ -140018,16 +140055,16 @@ async function inspectLatchSession({
 }) {
   const sessionId = trimmed6(providerSessionId);
   if (!sessionId) throw new LatchSessionCommandError("A Latch session id is required.");
-  const report = await runLatchJson({
+  const report2 = await runLatchJson({
     executable: trimmed6(executable) ?? "latch",
     args: ["inspect", sessionId, "--json"]
   });
-  const state2 = parseState2(report.state);
+  const state2 = parseState2(report2.state);
   if (!state2) throw new LatchSessionCommandError("Latch returned an unsupported session state.");
-  const exit = report.exit && typeof report.exit === "object" && !Array.isArray(report.exit) ? report.exit : null;
+  const exit = report2.exit && typeof report2.exit === "object" && !Array.isArray(report2.exit) ? report2.exit : null;
   return {
-    providerSessionId: trimmed6(report.id) ?? sessionId,
-    name: trimmed6(report.name) ?? sessionId,
+    providerSessionId: trimmed6(report2.id) ?? sessionId,
+    name: trimmed6(report2.name) ?? sessionId,
     state: state2,
     exitCode: typeof exit?.code === "number" && Number.isFinite(exit.code) ? exit.code : null,
     inspectedAt: (/* @__PURE__ */ new Date()).toISOString()
@@ -140055,7 +140092,7 @@ async function openLatchSession({
     throw new LatchSessionCommandError(`Latch cannot open the configured viewer "${viewerKind}".`);
   }
   const exe = trimmed6(executable) ?? "latch";
-  const report = await runLatchJson({
+  const report2 = await runLatchJson({
     executable: exe,
     args: buildLatchOpenArgs({
       providerSessionId: sessionId,
@@ -140064,14 +140101,14 @@ async function openLatchSession({
       productVersion: openAs ? await readLatchProductVersion(exe) : null
     })
   });
-  if (report.opened !== true) {
+  if (report2.opened !== true) {
     throw new LatchSessionCommandError(`Latch did not open the ${viewer} viewer.`);
   }
   return {
-    providerSessionId: trimmed6(report.id) ?? sessionId,
-    viewer: trimmed6(report.viewer) ?? viewer,
+    providerSessionId: trimmed6(report2.id) ?? sessionId,
+    viewer: trimmed6(report2.viewer) ?? viewer,
     opened: true,
-    behavior: trimmed6(report.behavior) ? parseViewerOpenAs(report.behavior) : null
+    behavior: trimmed6(report2.behavior) ? parseViewerOpenAs(report2.behavior) : null
   };
 }
 async function stopLatchSession({
@@ -140080,14 +140117,14 @@ async function stopLatchSession({
 }) {
   const sessionId = trimmed6(providerSessionId);
   if (!sessionId) throw new LatchSessionCommandError("A Latch session id is required.");
-  const report = await runLatchJson({
+  const report2 = await runLatchJson({
     executable: trimmed6(executable) ?? "latch",
     args: ["stop", sessionId, "--json"]
   });
-  const state2 = parseState2(report.state);
+  const state2 = parseState2(report2.state);
   if (!state2) throw new LatchSessionCommandError("Latch returned an unsupported session state.");
   return {
-    providerSessionId: trimmed6(report.id) ?? sessionId,
+    providerSessionId: trimmed6(report2.id) ?? sessionId,
     state: state2
   };
 }
@@ -141609,38 +141646,38 @@ function salvageWireAgentReport(deliveryReport) {
     reportWarning(warnings, "Ignored deliveryReport.agentReport: expected an object.");
     return { input: {}, warnings };
   }
-  const report = candidate;
-  if (Object.keys(report).some((key) => !AGENT_REPORT_INPUT_KEYS.has(key))) {
+  const report2 = candidate;
+  if (Object.keys(report2).some((key) => !AGENT_REPORT_INPUT_KEYS.has(key))) {
     reportWarning(warnings, "Ignored unsupported deliveryReport.agentReport fields.");
   }
   return {
     input: {
       humanActions: salvageArray(
-        report.humanActions,
+        report2.humanActions,
         humanActionSchema,
         "agentReport.humanActions",
         warnings
       ),
       tradeoffsMade: salvageArray(
-        report.tradeoffsMade,
+        report2.tradeoffsMade,
         tradeoffSchema,
         "agentReport.tradeoffsMade",
         warnings
       ),
       knownRisks: salvageArray(
-        report.knownRisks,
+        report2.knownRisks,
         conciseTextSchema,
         "agentReport.knownRisks",
         warnings
       ),
       deferredWork: salvageArray(
-        report.deferredWork,
+        report2.deferredWork,
         deferredWorkInputSchema,
         "agentReport.deferredWork",
         warnings
       ),
       assumptions: salvageArray(
-        report.assumptions,
+        report2.assumptions,
         conciseTextSchema,
         "agentReport.assumptions",
         warnings
@@ -141725,11 +141762,11 @@ function readDeliveryReport({
   if (parsed.success) return parsed.data;
   return buildDeliveryReport({ summary, deliveryReport: void 0 });
 }
-function markDeliveryPresentationPending(report) {
+function markDeliveryPresentationPending(report2) {
   return {
-    ...report,
+    ...report2,
     presentation: {
-      ...report.presentation,
+      ...report2.presentation,
       status: "pending"
     }
   };
@@ -141744,13 +141781,13 @@ var DELIVERY_REPORT_LIMITS = {
 };
 
 // ../packages/core/service/webhook-events.ts
-var WEBHOOK_EVENT_TYPES = [
+var WEBHOOK_EVENT_TYPES = vocabulary()([
   "mission.delivered",
   "mission.status_changed",
   "objective.completed",
   "mission.blocked",
   "mission.unblocked"
-];
+]);
 function isWebhookEventType(value2) {
   return WEBHOOK_EVENT_TYPES.includes(value2);
 }
@@ -141987,7 +142024,12 @@ var WAITER_LEASE_SECONDS = 20;
 var REMOTE_WINDOW_AWAY_SECONDS = 30 * 60;
 var MAX_REQUEST_SUMMARY_LENGTH = 2e3;
 var MAX_REQUEST_OPTIONS = 12;
-var AGENT_REQUEST_KINDS = ["question", "permission", "choice", "retry"];
+var AGENT_REQUEST_KINDS = vocabulary()([
+  "question",
+  "permission",
+  "choice",
+  "retry"
+]);
 var RELEASE_REASONS = [
   "timeout",
   "local_activity",
@@ -146942,28 +146984,28 @@ function filterDeferredWork({
   });
 }
 function applyDeferredWorkEligibility({
-  report,
+  report: report2,
   currentObjective,
   plannedObjectives,
   candidateActions
 }) {
   const deferredWork = filterDeferredWork({
-    items: report.agentReport.deferredWork,
+    items: report2.agentReport.deferredWork,
     currentObjective,
     plannedObjectives,
-    humanActions: report.agentReport.humanActions,
+    humanActions: report2.agentReport.humanActions,
     candidateActions
   });
   return {
-    ...report,
+    ...report2,
     presentation: {
-      ...report.presentation,
+      ...report2.presentation,
       deferredWork
     }
   };
 }
 function composeEligibility({
-  report,
+  report: report2,
   candidates,
   currentObjective,
   plannedObjectives
@@ -146971,7 +147013,7 @@ function composeEligibility({
   return {
     currentObjective,
     plannedObjectives,
-    humanActions: report.agentReport.humanActions,
+    humanActions: report2.agentReport.humanActions,
     candidateActions: candidates
   };
 }
@@ -147019,7 +147061,7 @@ function composedActionDetails(item, source) {
   };
 }
 function reconcileDeliveryComposeDraft({
-  report,
+  report: report2,
   draft,
   candidates = [],
   model,
@@ -147028,20 +147070,20 @@ function reconcileDeliveryComposeDraft({
   plannedObjectives
 }) {
   const eligibility = composeEligibility({
-    report,
+    report: report2,
     candidates,
     currentObjective,
     plannedObjectives
   });
   const eligibleAgentItems = filterDeferredWork({
-    items: report.agentReport.deferredWork,
+    items: report2.agentReport.deferredWork,
     ...eligibility
   });
   const fallback2 = {
-    ...report.presentation,
+    ...report2.presentation,
     status: "fallback",
     humanActions: mergeDeterministicActionCandidates({
-      actions: report.presentation.humanActions,
+      actions: report2.presentation.humanActions,
       candidates
     }),
     deferredWork: eligibleAgentItems,
@@ -147052,12 +147094,12 @@ function reconcileDeliveryComposeDraft({
   if (!draft || typeof draft !== "object") {
     return fallback2;
   }
-  const markdown = clampText(draft.markdown, 12e3) ?? report.presentation.markdown;
+  const markdown = clampText(draft.markdown, 12e3) ?? report2.presentation.markdown;
   const actionsById = evidenceActions({
-    agentReport: report.agentReport,
+    agentReport: report2.agentReport,
     candidates
   });
-  const tradeoffsById = evidenceTradeoffs(report.agentReport);
+  const tradeoffsById = evidenceTradeoffs(report2.agentReport);
   const humanActions = [];
   if (Array.isArray(draft.humanActions)) {
     for (const raw of draft.humanActions) {
@@ -147099,30 +147141,30 @@ function reconcileDeliveryComposeDraft({
     }
   }
   const resolvedActions = mergeDeterministicActionCandidates({
-    actions: humanActions.length > 0 ? humanActions : report.presentation.humanActions,
+    actions: humanActions.length > 0 ? humanActions : report2.presentation.humanActions,
     candidates
   });
-  const resolvedTradeoffs = tradeoffsMade.length > 0 ? tradeoffsMade : report.presentation.tradeoffsMade;
+  const resolvedTradeoffs = tradeoffsMade.length > 0 ? tradeoffsMade : report2.presentation.tradeoffsMade;
   return {
     status: "composed",
-    markdown: markdown || report.presentation.markdown,
+    markdown: markdown || report2.presentation.markdown,
     humanActions: resolvedActions,
     tradeoffsMade: resolvedTradeoffs,
-    knownRisks: clampStringList(draft.knownRisks).length > 0 ? clampStringList(draft.knownRisks) : report.presentation.knownRisks,
+    knownRisks: clampStringList(draft.knownRisks).length > 0 ? clampStringList(draft.knownRisks) : report2.presentation.knownRisks,
     // Deferred work is the agent's own objects, never sent to or rewritten by the model.
     deferredWork: eligibleAgentItems,
-    assumptions: clampStringList(draft.assumptions).length > 0 ? clampStringList(draft.assumptions) : report.presentation.assumptions,
+    assumptions: clampStringList(draft.assumptions).length > 0 ? clampStringList(draft.assumptions) : report2.presentation.assumptions,
     generatedBy: "gemini",
     generatedAt,
     ...model ? { model } : {}
   };
 }
 function applyDeliveryPresentation({
-  report,
+  report: report2,
   presentation
 }) {
   return {
-    ...report,
+    ...report2,
     presentation
   };
 }
@@ -149549,20 +149591,20 @@ function buildProjectResourceManifestEntries({
   currentResourceKey,
   observationStatesByResourceId = /* @__PURE__ */ new Map()
 }) {
-  const byKey = /* @__PURE__ */ new Map();
+  const byKey2 = /* @__PURE__ */ new Map();
   for (const resource of resources) {
     const key = resource.resourceKey.trim();
     if (!key) continue;
-    const bucket = byKey.get(key) ?? [];
+    const bucket = byKey2.get(key) ?? [];
     bucket.push(resource);
-    byKey.set(key, bucket);
+    byKey2.set(key, bucket);
   }
   const primaryKey = pickResourceForTarget(
     resources.filter((resource) => resource.isPrimary),
     executionTargetId
   )?.resourceKey ?? null;
   const resolvedCurrent = currentResourceKey?.trim() || primaryKey || pickResourceForTarget(resources, executionTargetId)?.resourceKey || null;
-  return [...byKey.entries()].map(([resourceKey, bucket]) => {
+  return [...byKey2.entries()].map(([resourceKey, bucket]) => {
     const row = pickResourceForTarget(bucket, executionTargetId);
     if (!row) return null;
     const hasTargetRow = executionTargetId !== null && (row.executionTargetId === executionTargetId || row.executionTargetId === null);
@@ -151560,11 +151602,11 @@ function assertDeferredWorkInput(deliveryReport) {
   const problem = deferredWorkInputProblem(deliveryReport);
   if (problem) throw new ServiceError(problem, "invalid_input", 400);
 }
-function appendDeliveryWarnings(report, warnings) {
-  if (warnings.length === 0) return report;
+function appendDeliveryWarnings(report2, warnings) {
+  if (warnings.length === 0) return report2;
   return {
-    ...report,
-    warnings: [...report.warnings ?? [], ...warnings].slice(0, MAX_PROTOCOL_EVIDENCE_WARNINGS)
+    ...report2,
+    warnings: [...report2.warnings ?? [], ...warnings].slice(0, MAX_PROTOCOL_EVIDENCE_WARNINGS)
   };
 }
 async function deliverSession({
@@ -152073,8 +152115,13 @@ function requiredString(value2, field, max) {
 function apiErrorFromBodyParser(error64) {
   if (!error64 || typeof error64 !== "object") return null;
   const { type } = error64;
-  if (type !== "entity.too.large") return null;
-  return new ApiError(413, "Request body is too large.", void 0, "body_too_large");
+  if (type === "entity.too.large") {
+    return new ApiError(413, "Request body is too large.", void 0, "body_too_large");
+  }
+  if (type === "entity.parse.failed") {
+    return new ApiError(400, "Request body is not valid JSON.", void 0, "invalid_json");
+  }
+  return null;
 }
 function apiErrorFromDatabaseError(error64) {
   if (!error64 || typeof error64 !== "object") return null;
@@ -153599,6 +153646,51 @@ async function requireAnyWorkspacePermission(permission) {
   }
   return { workspaceId: workspaceId2, workspaceUserId };
 }
+function requireTokenWorkspaceGrant({
+  workspaceId: workspaceId2,
+  permission,
+  notFoundMessage
+}) {
+  if (getActiveTokenId() === null) return;
+  if (getAuthorizedWorkspacesContext() && !getAuthorizedWorkspace(workspaceId2)) {
+    throw new ApiError(404, notFoundMessage);
+  }
+  if (!tokenScopeAllows(getActiveTokenScopes(), permission)) {
+    throw new ApiError(403, `Permission denied: ${permission}`);
+  }
+}
+async function requireTokenOrganizationGrant({
+  organizationId,
+  permission,
+  everyWorkspace,
+  client = requireDatabaseClient()
+}) {
+  if (getActiveTokenId() === null) return;
+  const snapshot = getAuthorizedWorkspacesContext();
+  if (snapshot && snapshot.organizationId !== organizationId) {
+    throw new ApiError(404, "Organization not found");
+  }
+  if (!tokenScopeAllows(getActiveTokenScopes(), permission)) {
+    throw new ApiError(403, `Permission denied: ${permission}`);
+  }
+  if (everyWorkspace && snapshot) {
+    for (const workspaceId2 of await liveOrganizationWorkspaceIds(organizationId, client)) {
+      if (!getAuthorizedWorkspace(workspaceId2)) {
+        throw new ApiError(403, "Organization admin required");
+      }
+    }
+  }
+}
+function tokenSnapshotAdmitsWorkspace(workspaceId2) {
+  if (getActiveTokenId() === null) return true;
+  const snapshot = getAuthorizedWorkspacesContext();
+  return !snapshot || getAuthorizedWorkspace(workspaceId2) !== null;
+}
+function tokenSnapshotAdmitsOrganization(organizationId) {
+  if (getActiveTokenId() === null) return true;
+  const snapshot = getAuthorizedWorkspacesContext();
+  return !snapshot || snapshot.organizationId === organizationId;
+}
 async function requireWorkspaceScope(args) {
   const workspaceUserId = await requireWorkspacePermission(args);
   return { workspaceId: args.workspaceId, workspaceUserId };
@@ -154008,7 +154100,7 @@ async function updateMissionTitle({
 }
 function notifyAfterTitleAutomation(task) {
   void task.then(() => {
-    realtime.pollNow();
+    void realtime.pollNow();
   }).catch((err) => {
     const message2 = err instanceof Error ? err.message : String(err);
     console.warn("[webapp] title automation failed:", message2);
@@ -154210,7 +154302,7 @@ async function listMissionTerminalSessions(missionId) {
 async function forgetMissionLatchSession(missionRef, body) {
   const scope2 = await requireMissionPermission({
     missionRef,
-    permission: PERMISSIONS.SESSION_READ
+    permission: PERMISSIONS.SESSION_ATTACH
   });
   const ctx = await buildWebappServiceContextForWorkspace(
     scope2.workspaceId,
@@ -155622,8 +155714,8 @@ var RESOLUTION_OUTCOMES = /* @__PURE__ */ new Set([
   "mission_created",
   "objective_added"
 ]);
-function deferredWorkEntries(report) {
-  return report.presentation.deferredWork;
+function deferredWorkEntries(report2) {
+  return report2.presentation.deferredWork;
 }
 async function loadResolutions(deliveryIds) {
   if (deliveryIds.length === 0) return /* @__PURE__ */ new Map();
@@ -155726,7 +155818,9 @@ async function listOrganizationsForUser(profileId, client = requireDatabaseClien
       ORDER BY o.created_at ASC`,
     [profileId]
   );
-  return Promise.all(rows.map((row) => toOrganizationDto(row, { activeOrganizationId, client })));
+  return Promise.all(
+    rows.filter((row) => tokenSnapshotAdmitsOrganization(row.id)).map((row) => toOrganizationDto(row, { activeOrganizationId, client }))
+  );
 }
 async function getOrganizationRow(id2, client) {
   const row = await client.get(
@@ -155742,8 +155836,9 @@ async function requireCurrentProfileId(client = requireDatabaseClient()) {
   if (!profileId) throw new ApiError(401, "Authentication required");
   return profileId;
 }
-async function requireOrganizationAdmin(organizationId, client) {
+async function requireOrganizationAdmin(organizationId, client, permission) {
   const profileId = await requireCurrentProfileId(client);
+  await requireTokenOrganizationGrant({ organizationId, permission, everyWorkspace: true, client });
   await getOrganizationRow(organizationId, client);
   if (!await isOrganizationAdmin(profileId, organizationId, client)) {
     throw new ApiError(403, "Organization admin required");
@@ -155811,7 +155906,7 @@ async function recordOrganizationChange({
 }
 async function updateOrganization(id2, body) {
   const client = requireDatabaseClient();
-  await requireOrganizationAdmin(id2, client);
+  await requireOrganizationAdmin(id2, client, PERMISSIONS.ORGANIZATION_UPDATE);
   await client.transaction(async (tx) => {
     const existing = await getOrganizationRow(id2, tx);
     const settings = parseSettings2(existing.settings_json);
@@ -155888,12 +155983,16 @@ async function loadOrganizationAdmins(organizationId, client) {
 }
 async function listOrganizationAdmins(organizationId) {
   const client = requireDatabaseClient();
-  await requireOrganizationAdmin(organizationId, client);
+  await requireOrganizationAdmin(organizationId, client, PERMISSIONS.ORGANIZATION_READ);
   return loadOrganizationAdmins(organizationId, client);
 }
 async function addOrganizationAdmin(organizationId, body) {
   const client = requireDatabaseClient();
-  const actingProfileId = await requireOrganizationAdmin(organizationId, client);
+  const actingProfileId = await requireOrganizationAdmin(
+    organizationId,
+    client,
+    PERMISSIONS.ORGANIZATION_ADMIN_MANAGE
+  );
   const targetProfileId = (body.userId ?? "").trim();
   if (!targetProfileId) throw new ApiError(400, "userId is required");
   await client.transaction(async (tx) => {
@@ -155964,7 +156063,7 @@ async function addOrganizationAdmin(organizationId, body) {
 }
 async function removeOrganizationAdmin(organizationId, body) {
   const client = requireDatabaseClient();
-  await requireOrganizationAdmin(organizationId, client);
+  await requireOrganizationAdmin(organizationId, client, PERMISSIONS.ORGANIZATION_ADMIN_MANAGE);
   const targetProfileId = (body.userId ?? "").trim();
   if (!targetProfileId) throw new ApiError(400, "userId is required");
   const currentAdminIds = await listOrganizationAdminProfileIds(organizationId, client);
@@ -156000,6 +156099,13 @@ async function purgeOrganizationLogoObject(organizationId, settingsJson, client)
   if (!logoUrl) return;
   const match = logoUrl.match(/^\/api\/storage\/organization-images\/(.+)$/);
   if (!match) return;
+  let storageKey;
+  try {
+    storageKey = decodeURIComponent(match[1]);
+  } catch {
+    return;
+  }
+  if (!isOrganizationImageKey(organizationId, storageKey)) return;
   const bucket = await client.get(
     `SELECT id, bucket_key, storage_backend, local_path, settings_json
        FROM storage_buckets
@@ -156008,7 +156114,7 @@ async function purgeOrganizationLogoObject(organizationId, settingsJson, client)
   );
   if (!bucket) return;
   try {
-    await removeStoredObjects([{ key: decodeURIComponent(match[1]), bucket }]);
+    await removeStoredObjects([{ key: storageKey, bucket }]);
   } catch {
   }
 }
@@ -156073,10 +156179,32 @@ function readStorageReadSettings(settingsJson) {
   }
   return { presignReads, presignTtlSeconds };
 }
+function isWellFormedStorageKey(key) {
+  if (typeof key !== "string" || key.length === 0 || key.length > 1024) return false;
+  for (const char of key) {
+    const code = char.charCodeAt(0);
+    if (code < 32 || code === 127 || char === "\\") return false;
+  }
+  return key.split("/").every((segment) => segment !== "" && segment !== "." && segment !== "..");
+}
+function requireWellFormedStorageKey(key) {
+  if (!isWellFormedStorageKey(key)) throw new ApiError(404, "File not found");
+  return key;
+}
+function resolveLocalObjectPath(root5, key) {
+  requireWellFormedStorageKey(key);
+  const resolvedRoot = import_node_path28.default.resolve(root5);
+  const absolutePath = import_node_path28.default.resolve(resolvedRoot, key);
+  if (!absolutePath.startsWith(`${resolvedRoot}${import_node_path28.default.sep}`)) {
+    throw new ApiError(404, "File not found");
+  }
+  return absolutePath;
+}
 function objectKeyFor({
   storageKey,
   pathPrefix
 }) {
+  requireWellFormedStorageKey(storageKey);
   if (!pathPrefix || pathPrefix.trim() === "") return storageKey;
   const normalizedPrefix = pathPrefix.replace(/^\/+|\/+$/g, "");
   return normalizedPrefix ? `${normalizedPrefix}/${storageKey}` : storageKey;
@@ -156094,13 +156222,13 @@ function createLocalFsBackend({
   const root5 = import_node_path28.default.isAbsolute(bucket.local_path) ? bucket.local_path : import_node_path28.default.resolve(repoRoot2, bucket.local_path);
   return {
     async put({ key, bytes }) {
+      const absolutePath = resolveLocalObjectPath(root5, key);
       if (!(0, import_node_fs18.existsSync)(root5)) (0, import_node_fs18.mkdirSync)(root5, { recursive: true });
-      const absolutePath = import_node_path28.default.join(root5, key);
       (0, import_node_fs18.mkdirSync)(import_node_path28.default.dirname(absolutePath), { recursive: true });
       (0, import_node_fs18.writeFileSync)(absolutePath, bytes);
     },
     async getStream({ key }) {
-      const absolutePath = import_node_path28.default.join(root5, key);
+      const absolutePath = resolveLocalObjectPath(root5, key);
       if (!(0, import_node_fs18.existsSync)(absolutePath)) throw new ApiError(404, "File not found");
       return (0, import_node_fs18.createReadStream)(absolutePath);
     }
@@ -156293,6 +156421,15 @@ function workspaceImageObjectKey(workspaceId2, imageId, ext) {
 function organizationImageObjectKey(organizationId, imageId, ext) {
   return `organization-files/${organizationId}/images/${imageId}${ext}`;
 }
+var UUID_PATTERN2 = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+function isOrganizationImageKey(organizationId, storageKey) {
+  const prefix = `organization-files/${organizationId}/images/`;
+  if (!storageKey.startsWith(prefix)) return false;
+  const name2 = storageKey.slice(prefix.length);
+  const ext = import_node_path29.default.extname(name2);
+  if (!Object.hasOwn(CONTENT_TYPE_BY_EXTENSION, ext)) return false;
+  return UUID_PATTERN2.test(name2.slice(0, name2.length - ext.length));
+}
 function attachmentObjectKey(workspaceId2, attachmentId, ext) {
   return `workspace-files/${workspaceId2}/attachments/${attachmentId}${ext}`;
 }
@@ -156316,20 +156453,17 @@ async function writeImageObject(bucket, input2, storageKeyFor) {
     id: id2,
     storageKey,
     sizeBytes: input2.bytes.length,
+    // extensionForImage refused every other content type.
     contentType,
     checksum: (0, import_node_crypto20.createHash)("sha256").update(input2.bytes).digest("hex"),
     publicUrl: publicUrlFor(bucket.bucket_key, storageKey)
   };
 }
-async function operatorUserId() {
+async function uploaderProfileId() {
   const client = requireDatabaseClient();
-  if (getActorWorkspaceUserId()) {
-    const row = await client.get(
-      `SELECT profile_id FROM workspace_users WHERE id = ?`,
-      [getActorWorkspaceUserId()]
-    );
-    if (row) return row.profile_id;
-  }
+  const profileId = await resolveActiveProfileId(client);
+  if (profileId) return profileId;
+  if (getAuthorizedWorkspacesContext()) throw new ApiError(401, "Authentication required");
   const fallback2 = await client.get(
     `SELECT id FROM profiles
       WHERE kind = 'human' AND status = 'active' AND deleted_at IS NULL
@@ -156346,7 +156480,7 @@ function uploadWorkspaceId(explicitWorkspaceId) {
 async function uploadUserImage(input2, explicitWorkspaceId) {
   const workspaceId2 = uploadWorkspaceId(explicitWorkspaceId);
   const bucket = await resolveBucket("user-images", workspaceId2);
-  const userId = await operatorUserId();
+  const userId = await uploaderProfileId();
   const written = await writeImageObject(
     bucket,
     input2,
@@ -156464,6 +156598,11 @@ async function uploadWorkspaceImage(input2, explicitWorkspaceId) {
 async function uploadOrganizationImage(input2) {
   const organizationId = await requireActiveOrganizationId();
   const profileId = await resolveActiveProfileId();
+  await requireTokenOrganizationGrant({
+    organizationId,
+    permission: PERMISSIONS.ORGANIZATION_IMAGE_CREATE,
+    everyWorkspace: true
+  });
   if (!profileId || !await isOrganizationAdmin(profileId, organizationId)) {
     throw new ApiError(403, "Organization admin required");
   }
@@ -156808,7 +156947,7 @@ async function finalizeStoredObject({
       throw new ApiError(500, `Bucket '${bucket.bucket_key}' is missing a local_path`);
     }
     const root5 = import_node_path29.default.isAbsolute(bucket.local_path) ? bucket.local_path : import_node_path29.default.resolve(repoRoot, bucket.local_path);
-    const absolutePath = import_node_path29.default.join(root5, storageKey);
+    const absolutePath = resolveLocalObjectPath(root5, storageKey);
     if (!(0, import_node_fs19.existsSync)(absolutePath)) throw new ApiError(404, "File not found");
     return { absolutePath, contentType, filename, forceDownload };
   }
@@ -156824,6 +156963,9 @@ async function resolveStoredObject(bucketKey, storageKey, permission) {
   if (descriptor.scope === "organization") {
     const organizationId = await requireActiveOrganizationId();
     await requireAnyWorkspacePermission(permission);
+    if (!isOrganizationImageKey(organizationId, storageKey)) {
+      throw new ApiError(404, "File not found");
+    }
     const bucket2 = await resolveOrganizationBucket(organizationId, bucketKey);
     const ext = import_node_path29.default.extname(storageKey).toLowerCase();
     return finalizeStoredObject({
@@ -160252,7 +160394,7 @@ async function listMissionDeliveries(missionRef, limit2 = MISSION_EVIDENCE_LIST_
   const resolutions = await loadResolutions(rows.map((row) => row.id));
   return {
     items: rows.map((row) => {
-      const report = deliveryReportFromPayload(row.payload_json, row.summary);
+      const report2 = deliveryReportFromPayload(row.payload_json, row.summary);
       return {
         id: row.id,
         missionId: row.mission_id,
@@ -160261,11 +160403,11 @@ async function listMissionDeliveries(missionRef, limit2 = MISSION_EVIDENCE_LIST_
         summary: row.summary,
         verificationSummary: row.verification_summary,
         followUpNotes: row.follow_up_notes,
-        report,
+        report: report2,
         deliveredAt: row.delivered_at,
         agentIdentifier: row.agent_identifier,
         modelIdentifier: row.model_identifier,
-        deferredWorkItems: deferredWorkEntries(report).map(
+        deferredWorkItems: deferredWorkEntries(report2).map(
           (entry) => deferredWorkItemDto(entry, findResolution(resolutions, row.id, entry))
         )
       };
@@ -160944,7 +161086,11 @@ async function promoteInboxItem(id2, projectId) {
   return getMissionDetail(missionId);
 }
 async function generateMissionTitle(missionRef) {
-  const detail = await getMissionDetail(missionRef);
+  const scope2 = await requireMissionPermission({
+    missionRef,
+    permission: PERMISSIONS.MISSION_UPDATE
+  });
+  const detail = await getMissionDetail(scope2.missionId);
   const instructionText = detail.objectives.find((objective) => objective.instructionText.trim().length > 0)?.instructionText.trim();
   if (!instructionText) {
     throw new ApiError(400, "Add an objective before generating a title.");
@@ -160957,7 +161103,7 @@ async function generateMissionTitle(missionRef) {
   if (!title) {
     throw new ApiError(502, "Failed to generate a title.");
   }
-  return getMissionDetail(missionRef);
+  return getMissionDetail(scope2.missionId);
 }
 async function resolveAssignedWorkspaceUserId(db, workspaceId2, value2) {
   if (value2 === null || value2 === void 0) return null;
@@ -162418,8 +162564,10 @@ async function loadOperatorUserRow(db = requireDatabaseClient()) {
           WHERE p.id = ? AND p.deleted_at IS NULL`,
       [profileId]
     );
-    if (row) return row;
+    if (!row) throw new ApiError(404, "Profile not found");
+    return row;
   }
+  if (getAuthorizedWorkspacesContext()) throw new ApiError(401, "Authentication required");
   const fallback2 = await db.get(
     `SELECT id, kind, display_name, handle, email,
               metadata_json, created_at, revision
@@ -169835,22 +169983,27 @@ async function resolveCurrentProfileId(client = requireDatabaseClient()) {
   if (!fallback2) throw new ApiError(409, "No local user profile exists");
   return fallback2.id;
 }
-async function requireWorkspaceMember(workspaceId2) {
+async function requireWorkspaceMember(workspaceId2, permission) {
+  requireTokenWorkspaceGrant({
+    workspaceId: workspaceId2,
+    permission,
+    notFoundMessage: "Workspace not found or no active membership"
+  });
   const membershipId = await findActiveMembershipId(workspaceId2, await resolveCurrentProfileId());
   if (!membershipId) {
     throw new ApiError(404, "Workspace not found or no active membership");
   }
   return membershipId;
 }
-async function requireWorkspaceAdmin(workspaceId2) {
-  const workspaceUserId = await requireWorkspaceMember(workspaceId2);
+async function requireWorkspaceAdmin(workspaceId2, permission) {
+  const workspaceUserId = await requireWorkspaceMember(workspaceId2, permission);
   if (!await actorIsAdmin({ workspaceId: workspaceId2, workspaceUserId })) {
     throw new ApiError(403, "Admin role required");
   }
   return workspaceUserId;
 }
-async function requireWorkspaceManager(workspaceId2) {
-  const workspaceUserId = await requireWorkspaceMember(workspaceId2);
+async function requireWorkspaceManager(workspaceId2, permission) {
+  const workspaceUserId = await requireWorkspaceMember(workspaceId2, permission);
   const roleKeys = await listMemberRoleKeys({ workspaceId: workspaceId2, workspaceUserId });
   const isAdmin = roleKeys.includes("ADMIN");
   if (!isAdmin && !roleKeys.includes("MANAGER")) {
@@ -169894,6 +170047,11 @@ var WORKSPACE_LIST_COLUMNS = `
        AND m.deleted_at IS NULL) AS member_count
 `;
 async function listWorkspaces() {
+  return (await listMemberWorkspaces()).filter(
+    (workspace2) => tokenSnapshotAdmitsWorkspace(workspace2.id)
+  );
+}
+async function listMemberWorkspaces() {
   const localUserId = await resolveCurrentProfileId();
   const rows = await requireDatabaseClient().all(
     `SELECT ${WORKSPACE_LIST_COLUMNS}
@@ -169919,7 +170077,7 @@ async function listWorkspacesForOrganization(organizationId) {
       ORDER BY w.created_at ASC`,
     [localUserId, organizationId]
   );
-  return rows.map(toWorkspaceDto);
+  return rows.map(toWorkspaceDto).filter((workspace2) => tokenSnapshotAdmitsWorkspace(workspace2.id));
 }
 async function seedWorkspaceStorageBuckets({
   workspaceId: workspaceId2,
@@ -169955,6 +170113,14 @@ async function createWorkspace(body) {
   const creatorProfileId = await resolveCurrentProfileId();
   const organizationId = (body.organizationId ?? "").trim();
   if (!organizationId) throw new ApiError(400, "organizationId is required");
+  if (getActiveTokenId() !== null) {
+    await requireTokenOrganizationGrant({
+      organizationId,
+      permission: PERMISSIONS.WORKSPACE_CREATE,
+      everyWorkspace: false
+    });
+    await requireAnyWorkspacePermission(PERMISSIONS.WORKSPACE_CREATE);
+  }
   if (!await canViewOrganizationSettings(creatorProfileId, organizationId)) {
     throw new ApiError(403, "Workspace admin access to the organization required");
   }
@@ -170047,7 +170213,7 @@ async function createWorkspace(body) {
     return nextWorkspaceId;
   });
   if (!getAuthorizedWorkspacesContext()) await setActiveWorkspace(workspaceId2);
-  const created = (await listWorkspaces()).find((w) => w.id === workspaceId2);
+  const created = (await listMemberWorkspaces()).find((w) => w.id === workspaceId2);
   if (!created) throw new ApiError(500, "Workspace was created but could not be loaded");
   return created;
 }
@@ -170146,12 +170312,12 @@ async function createOrganizationOnboarding(body) {
     return nextWorkspaceId;
   });
   if (!getAuthorizedWorkspacesContext()) await setActiveWorkspace(workspaceId2);
-  const created = (await listWorkspaces()).find((w) => w.id === workspaceId2);
+  const created = (await listMemberWorkspaces()).find((w) => w.id === workspaceId2);
   if (!created) throw new ApiError(500, "Workspace was created but could not be loaded");
   return created;
 }
 async function updateWorkspace(id2, body) {
-  const { workspaceUserId } = await requireWorkspaceManager(id2);
+  const { workspaceUserId } = await requireWorkspaceManager(id2, PERMISSIONS.WORKSPACE_UPDATE);
   await requireDatabaseClient().transaction(async (tx) => {
     const existing = await tx.get(
       `SELECT id, name, revision FROM workspaces WHERE id = ? AND deleted_at IS NULL`,
@@ -170205,12 +170371,12 @@ async function updateWorkspace(id2, body) {
   if (id2 === getImplicitWorkspaceIdOrNull()) {
     await reloadActiveWorkspace();
   }
-  const updated = (await listWorkspaces()).find((w) => w.id === id2);
+  const updated = (await listMemberWorkspaces()).find((w) => w.id === id2);
   if (!updated) throw new ApiError(404, "Workspace not found or no active membership");
   return updated;
 }
 async function deleteWorkspace(id2) {
-  const workspaceUserId = await requireWorkspaceAdmin(id2);
+  const workspaceUserId = await requireWorkspaceAdmin(id2, PERMISSIONS.WORKSPACE_DELETE);
   await requireDatabaseClient().transaction(async (tx) => {
     const existing = await tx.get(
       `SELECT id, name, organization_id, revision FROM workspaces WHERE id = ? AND deleted_at IS NULL`,
@@ -170261,7 +170427,7 @@ async function listMemberRoleKeys({
   return rows.map((row) => row.role_key);
 }
 async function listWorkspaceMembers(workspaceId2) {
-  await requireWorkspaceMember(workspaceId2);
+  await requireWorkspaceMember(workspaceId2, PERMISSIONS.WORKSPACE_READ);
   const currentProfileId = await resolveCurrentProfileId();
   const rows = await requireDatabaseClient().all(
     `SELECT wu.id AS workspace_user_id, wu.profile_id,
@@ -170309,7 +170475,7 @@ async function exportWorkspaceObjectivesCsv(workspaceId2) {
     [workspaceId2]
   );
   if (!workspace2) throw new ApiError(404, "Workspace not found");
-  await requireWorkspaceAdmin(workspaceId2);
+  await requireWorkspaceAdmin(workspaceId2, PERMISSIONS.WORKSPACE_READ);
   const projectOrder = requireDatabaseClient().dialect === "sqlite" ? "p.name COLLATE NOCASE ASC" : "LOWER(p.name) ASC";
   const missionOrder = requireDatabaseClient().dialect === "sqlite" ? "m.title COLLATE NOCASE ASC" : "LOWER(m.title) ASC";
   const rows = await requireDatabaseClient().all(
@@ -170373,7 +170539,10 @@ function toWorkspaceInvitationDto(row) {
   };
 }
 async function inviteWorkspaceMember(workspaceId2, body) {
-  const { isAdmin, workspaceUserId: invitedByWorkspaceUserId } = await requireWorkspaceManager(workspaceId2);
+  const { isAdmin, workspaceUserId: invitedByWorkspaceUserId } = await requireWorkspaceManager(
+    workspaceId2,
+    PERMISSIONS.MEMBER_INVITE
+  );
   const email3 = (body.email ?? "").trim().toLowerCase();
   if (!email3 || !email3.includes("@")) throw new ApiError(400, "A valid email is required");
   const roleKey = (body.roleKey ?? "MEMBER").trim().toUpperCase();
@@ -170475,7 +170644,7 @@ async function inviteWorkspaceMember(workspaceId2, body) {
   return { invitation, acceptUrl };
 }
 async function listWorkspaceInvitations(workspaceId2) {
-  await requireWorkspaceManager(workspaceId2);
+  await requireWorkspaceManager(workspaceId2, PERMISSIONS.INVITATION_READ);
   const rows = await requireDatabaseClient().all(
     `SELECT ${INVITATION_COLUMNS} FROM workspace_invitations
        WHERE workspace_id = ? AND deleted_at IS NULL
@@ -170485,7 +170654,10 @@ async function listWorkspaceInvitations(workspaceId2) {
   return rows.map(toWorkspaceInvitationDto);
 }
 async function revokeWorkspaceInvitation(workspaceId2, invitationId) {
-  const { workspaceUserId: actorWorkspaceUserId2 } = await requireWorkspaceManager(workspaceId2);
+  const { workspaceUserId: actorWorkspaceUserId2 } = await requireWorkspaceManager(
+    workspaceId2,
+    PERMISSIONS.INVITATION_REVOKE
+  );
   await requireDatabaseClient().transaction(async (tx) => {
     const invitation = await tx.get(
       `SELECT id, status, revision FROM workspace_invitations
@@ -170532,6 +170704,7 @@ async function acceptWorkspaceInvitation(body) {
     if (invitation.status !== "pending") {
       throw new ApiError(409, `Invitation has already been ${invitation.status}`);
     }
+    await requireTokenMayAcceptInvitation(invitation.workspace_id, tx);
     const now2 = nowIso2();
     if (invitation.expires_at <= now2) {
       const revision4 = invitation.revision + 1;
@@ -170646,9 +170819,25 @@ async function acceptWorkspaceInvitation(body) {
   }
   const workspaceId2 = outcome.workspaceId;
   if (!getAuthorizedWorkspacesContext()) await setActiveWorkspace(workspaceId2);
-  const workspace2 = (await listWorkspaces()).find((w) => w.id === workspaceId2);
+  const workspace2 = (await listMemberWorkspaces()).find((w) => w.id === workspaceId2);
   if (!workspace2) throw new ApiError(500, "Joined workspace could not be loaded");
   return workspace2;
+}
+async function requireTokenMayAcceptInvitation(workspaceId2, client) {
+  const tokenId = getActiveTokenId();
+  if (tokenId === null) return;
+  const workspace2 = await client.get(
+    `SELECT organization_id FROM workspaces WHERE id = ? AND deleted_at IS NULL`,
+    [workspaceId2]
+  );
+  const token = await client.get(
+    `SELECT organization_id, all_workspaces FROM user_tokens WHERE id = ?`,
+    [tokenId]
+  );
+  const allWorkspaces = token?.all_workspaces === true || token?.all_workspaces === 1;
+  if (!workspace2 || getActiveTokenScopes() !== null || !allWorkspaces || token?.organization_id !== workspace2.organization_id) {
+    throw new ApiError(403, "This token cannot accept invitations");
+  }
 }
 async function countActiveWorkspaceAdmins({
   workspaceId: workspaceId2,
@@ -170681,7 +170870,10 @@ async function assertNotLastWorkspaceAdmin({
   }
 }
 async function updateWorkspaceMemberRole(workspaceId2, workspaceUserId, body) {
-  const { isAdmin, workspaceUserId: actorWorkspaceUserId2 } = await requireWorkspaceManager(workspaceId2);
+  const { isAdmin, workspaceUserId: actorWorkspaceUserId2 } = await requireWorkspaceManager(
+    workspaceId2,
+    PERMISSIONS.ROLE_ASSIGN
+  );
   const roleKey = (body.roleKey ?? "").trim().toUpperCase();
   if (!WORKSPACE_ROLE_KEYS.has(roleKey)) throw new ApiError(400, `Unknown role: ${roleKey}`);
   if (roleKey === "ADMIN" && !isAdmin) {
@@ -170735,7 +170927,10 @@ async function updateWorkspaceMemberRole(workspaceId2, workspaceUserId, body) {
   return updated;
 }
 async function removeWorkspaceMember(workspaceId2, workspaceUserId) {
-  const { isAdmin, workspaceUserId: actorWorkspaceUserId2 } = await requireWorkspaceManager(workspaceId2);
+  const { isAdmin, workspaceUserId: actorWorkspaceUserId2 } = await requireWorkspaceManager(
+    workspaceId2,
+    PERMISSIONS.MEMBER_REMOVE
+  );
   await requireDatabaseClient().transaction(async (tx) => {
     const membership = await tx.get(
       `SELECT id, revision FROM workspace_users
@@ -173079,11 +173274,12 @@ function overlordSourceChecker(db) {
   const access = new ChatAccess(db);
   return async (owner, source) => {
     if (source.kind !== "overlord") return "unknown";
-    const sql2 = ENTITY_PROJECT_SQL[source.entityType];
+    const entityType = source.entityType;
+    const sql2 = ENTITY_PROJECT_SQL[entityType];
     if (!sql2) return "unknown";
     const row = await db.get(sql2, [source.entityId]);
     if (!row || source.projectId && row.project_id !== source.projectId) return "revoked";
-    const permission = source.entityType === "project" || source.entityType === "resource" ? PERMISSIONS.PROJECT_READ : PERMISSIONS.MISSION_READ;
+    const permission = entityType === "project" || entityType === "resource" ? PERMISSIONS.PROJECT_READ : PERMISSIONS.MISSION_READ;
     return await access.projectGrant(owner, row.project_id, permission) ? "authorized" : "revoked";
   };
 }
@@ -177287,7 +177483,7 @@ var RunMetrics = class extends ChatPerformance {
     this.schemaBytes.requestTotal += sizes.request;
     return { elapsedMs: this.elapsed(), sizes };
   }
-  async measure(run, report) {
+  async measure(run, report2) {
     let failed = false;
     let failure4;
     try {
@@ -177297,7 +177493,7 @@ var RunMetrics = class extends ChatPerformance {
       failure4 = error64;
     }
     try {
-      await report(failed);
+      await report2(failed);
     } catch (error64) {
       if (!failed) throw error64;
     }
@@ -181668,6 +181864,7 @@ function toTerminalProfileDto(profile) {
 function fromTerminalProfileDto(dto) {
   return {
     launcher: dto.launcher ?? null,
+    // A stored placement is read back as written (schema-disagreements.md L4).
     placement: dto.placement ?? "window",
     chord: dto.chord ?? null,
     background: dto.background ?? false,
@@ -182538,19 +182735,17 @@ async function recordBranchPrepared({
   requestId,
   payload
 }) {
-  const scopes = await callerWorkspaceMemberships();
-  if (scopes.length === 0) throw new ApiError(404, "Mission not found");
-  const placeholders = scopes.map(() => "?").join(", ");
-  const mission = await requireDatabaseClient().get(
-    `SELECT workspace_id FROM missions
-      WHERE (id = ? OR display_id = ?)
-        AND deleted_at IS NULL
-        AND workspace_id IN (${placeholders})`,
-    [missionId, missionId, ...scopes.map((scope2) => scope2.workspaceId)]
-  );
-  if (!mission) throw new ApiError(404, "Mission not found");
+  const scope2 = await requireMissionPermission({
+    missionRef: missionId,
+    permission: PERMISSIONS.EXECUTION_REQUEST_CLAIM
+  });
   return requireDatabaseClient().transaction(
-    async (tx) => recordBranchPreparedTx(tx, { workspaceId: mission.workspace_id, missionId, requestId, payload })
+    async (tx) => recordBranchPreparedTx(tx, {
+      workspaceId: scope2.workspaceId,
+      missionId: scope2.missionId,
+      requestId,
+      payload
+    })
   );
 }
 async function clearRunnerRequests({
@@ -184457,6 +184652,6489 @@ function readRawUpload(req, defaultFilename) {
     bytes: Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0),
     filename: headerName ? decodeURIComponent(headerName) : defaultFilename,
     contentType: req.header("content-type") ?? ""
+  };
+}
+
+// ../packages/contract/dist/generated/api.js
+init_zod();
+function isBinaryBody(value2) {
+  return value2 instanceof Uint8Array || value2 instanceof ArrayBuffer || typeof Blob !== "undefined" && value2 instanceof Blob;
+}
+function hasUniqueItems(items) {
+  return new Set(items.map((item) => JSON.stringify(item))).size === items.length;
+}
+var binaryBodySchema = external_exports.custom(isBinaryBody, {
+  error: "Expected a binary body"
+});
+var jsonValueSchema = external_exports.unknown();
+var errorEnvelopeSchema = external_exports.object({ "error": external_exports.string(), "code": external_exports.exactOptional(external_exports.string()), "detail": external_exports.exactOptional(external_exports.string()), "details": external_exports.exactOptional(jsonValueSchema) });
+var okResponseSchema = external_exports.object({ "ok": external_exports.literal(true) });
+var dateTimeSchema = external_exports.string();
+var statusTypeSchema = external_exports.enum(["draft", "next", "execute", "review", "complete", "blocked", "cancelled"]);
+var missionPrioritySchema = external_exports.enum(["low", "normal", "high", "urgent"]);
+var objectiveStateSchema = external_exports.enum(["future", "draft", "submitted", "launching", "executing", "pending_delivery", "complete"]);
+var createdByKindSchema = external_exports.enum(["human", "agent", "automation"]);
+var projectLifecycleSchema = external_exports.enum(["active", "archived"]);
+var projectListLifecycleSchema = external_exports.enum(["active", "archived", "all"]);
+var agentLaunchFlagDtoSchema = external_exports.object({ "name": external_exports.string(), "value": external_exports.exactOptional(external_exports.string().nullable()) });
+var agentLaunchFlagInputSchema = external_exports.union([external_exports.string(), external_exports.object({ "name": external_exports.string(), "value": external_exports.exactOptional(external_exports.string().nullable()) })]);
+var agentLaunchConfigDtoSchema = external_exports.object({ "preCommand": external_exports.string(), "flags": external_exports.array(agentLaunchFlagDtoSchema) });
+var agentLaunchConfigInputSchema = external_exports.object({ "preCommand": external_exports.exactOptional(external_exports.string()), "flags": external_exports.exactOptional(external_exports.array(agentLaunchFlagInputSchema)) });
+var projectDtoSchema = external_exports.object({ "id": external_exports.string(), "workspaceId": external_exports.string(), "slug": external_exports.string(), "name": external_exports.string(), "description": external_exports.string().nullable(), "color": external_exports.string().nullable(), "defaultBranch": external_exports.string().nullable(), "status": projectLifecycleSchema, "createdAt": dateTimeSchema, "updatedAt": dateTimeSchema, "revision": external_exports.int().min(1), "missionCount": external_exports.int().min(0), "position": external_exports.int().min(0), "preLaunchCommands": external_exports.array(external_exports.string()), "launchEnvVars": external_exports.record(external_exports.string(), external_exports.string()) });
+var projectStatusDtoSchema = external_exports.object({ "id": external_exports.string(), "workspaceId": external_exports.string(), "projectId": external_exports.string(), "key": external_exports.string(), "name": external_exports.string(), "type": statusTypeSchema, "position": external_exports.int().min(0), "isDefault": external_exports.boolean(), "isTerminal": external_exports.boolean() });
+var projectTagDtoSchema = external_exports.object({ "id": external_exports.string(), "projectId": external_exports.string(), "label": external_exports.string(), "color": external_exports.string().nullable(), "active": external_exports.boolean() });
+var projectResourceAccessModeSchema = external_exports.enum(["read", "read_write"]);
+var projectResourceSourceDtoSchema = external_exports.object({ "id": external_exports.string(), "executionTargetId": external_exports.string().nullable(), "sourceKind": external_exports.string(), "descriptor": external_exports.record(external_exports.string(), external_exports.unknown()), "launchDefaults": external_exports.record(external_exports.string(), agentLaunchConfigDtoSchema), "observedRevision": external_exports.string().nullable(), "observedContentDigest": external_exports.string().nullable() });
+var projectResourceDtoSchema = external_exports.object({ "id": external_exports.string(), "workspaceId": external_exports.string(), "projectId": external_exports.string(), "executionTargetId": external_exports.string().nullable(), "resourceKey": external_exports.string(), "type": external_exports.string(), "label": external_exports.string().nullable(), "path": external_exports.string(), "isPrimary": external_exports.boolean(), "accessMode": projectResourceAccessModeSchema, "status": external_exports.enum(["active", "missing", "archived"]), "observedAt": dateTimeSchema.nullable(), "observationSource": external_exports.literal("client").nullable(), "createdAt": dateTimeSchema, "updatedAt": dateTimeSchema, "revision": external_exports.int().min(1), "sources": external_exports.array(projectResourceSourceDtoSchema) });
+var missionCreatorTokenDtoSchema = external_exports.object({ "tokenId": external_exports.string(), "label": external_exports.string() });
+var objectiveRunQueueEntryDtoSchema = external_exports.object({ "id": external_exports.string(), "queueId": external_exports.string(), "queueName": external_exports.string(), "position": external_exports.int().min(1), "state": external_exports.enum(["waiting", "blocked", "dispatched", "running"]), "blockedReason": external_exports.string().nullable(), "waitingReason": external_exports.enum(["mission_busy", "resource_disconnected", "retry_pending"]).nullable(), "waitingOnObjectiveId": external_exports.string().nullable(), "waitingOnObjectiveDisplayId": external_exports.string().nullable(), "attemptCount": external_exports.int().min(0), "precededBy": external_exports.null() });
+var objectiveDtoSchema = external_exports.object({ "id": external_exports.string(), "workspaceId": external_exports.string(), "projectId": external_exports.string(), "missionId": external_exports.string(), "position": external_exports.int().min(0), "title": external_exports.string().nullable(), "instructionText": external_exports.string(), "state": objectiveStateSchema, "autoAdvance": external_exports.boolean(), "queueEntry": objectiveRunQueueEntryDtoSchema.nullable(), "assignedAgent": external_exports.string().nullable(), "model": external_exports.string().nullable(), "reasoningEffort": external_exports.string().nullable(), "createdAt": dateTimeSchema, "updatedAt": dateTimeSchema, "launchedAt": dateTimeSchema.nullable(), "startedAt": dateTimeSchema.nullable(), "completedAt": dateTimeSchema.nullable(), "reopenedAt": dateTimeSchema.nullable(), "revision": external_exports.int().min(1), "externalSessionId": external_exports.string().nullable(), "branch": external_exports.string().nullable(), "resourceKey": external_exports.string().nullable(), "displayKey": external_exports.string(), "displayId": external_exports.string(), "createdByKind": createdByKindSchema, "createdByAgent": external_exports.string().nullable(), "createdByWorkspaceUserId": external_exports.string().nullable(), "launchConfigOverrides": external_exports.record(external_exports.string(), external_exports.record(external_exports.string(), agentLaunchConfigDtoSchema)) });
+var missionDtoShape = { "id": external_exports.string(), "workspaceId": external_exports.string(), "projectId": external_exports.string(), "displayId": external_exports.string(), "sequenceNumber": external_exports.int().min(1), "title": external_exports.string(), "statusId": external_exports.string(), "statusType": statusTypeSchema, "boardPosition": external_exports.int(), "priority": missionPrioritySchema.nullable(), "assignedWorkspaceUserId": external_exports.string().nullable(), "notes": external_exports.string().nullable(), "scheduleId": external_exports.string().nullable(), "dueDatetime": dateTimeSchema.nullable(), "createdAt": dateTimeSchema, "updatedAt": dateTimeSchema, "revision": external_exports.int().min(1), "objectiveCount": external_exports.int().min(0), "completedObjectiveCount": external_exports.int().min(0), "hasExecutingObjective": external_exports.boolean(), "hasCompletedObjective": external_exports.boolean(), "hasPendingObjectiveWithInstructions": external_exports.boolean(), "hasUnseenBlockingQuestion": external_exports.boolean(), "hasUnseenReturnedToExecute": external_exports.boolean(), "allowParallelObjectives": external_exports.boolean(), "draftObjectiveResourceKey": external_exports.string().nullable(), "tags": external_exports.array(projectTagDtoSchema), "createdByKind": createdByKindSchema, "createdByAgent": external_exports.string().nullable(), "createdByWorkspaceUserId": external_exports.string().nullable(), "createdByToken": missionCreatorTokenDtoSchema.nullable(), "objectives": external_exports.exactOptional(external_exports.array(objectiveDtoSchema)) };
+var missionDtoSchema = external_exports.object(missionDtoShape);
+var executionRequestDtoSchema = external_exports.object({ "id": external_exports.string(), "workspaceId": external_exports.string(), "projectId": external_exports.string(), "missionId": external_exports.string().nullable(), "objectiveId": external_exports.string().nullable(), "executionTargetId": external_exports.string().nullable(), "requestedAgent": external_exports.string().nullable(), "requestedModel": external_exports.string().nullable(), "requestedReasoningEffort": external_exports.string().nullable(), "launchConfig": agentLaunchConfigDtoSchema, "status": external_exports.enum(["queued", "claimed", "launching", "launched", "failed", "cleared", "cancelled", "expired"]), "requestedSource": external_exports.string(), "localTargetMutationKind": external_exports.enum(["branch_action", "worktree_purge", "capability_call"]).nullable(), "lastError": external_exports.string().nullable(), "createdAt": dateTimeSchema, "updatedAt": dateTimeSchema });
+var terminalSessionDtoSchema = external_exports.object({ "executionRequestId": external_exports.string(), "objectiveId": external_exports.string(), "provider": external_exports.literal("latch"), "providerSessionId": external_exports.string(), "sessionName": external_exports.string(), "executionTargetId": external_exports.string().nullable(), "deviceLabel": external_exports.string().nullable(), "agentSessionId": external_exports.string().nullable(), "executable": external_exports.string(), "viewerKind": external_exports.string(), "viewerOpenAs": external_exports.enum(["window", "tab"]), "createdAt": dateTimeSchema, "lastObservedState": external_exports.enum(["running", "exited", "stopping", "lost"]) });
+var missionBranchStatusSchema = external_exports.enum(["pending", "created", "published", "merged_unpushed", "merged"]);
+var missionWorktreePreferenceSchema = external_exports.enum(["worktree", "branch"]);
+var missionBranchDtoSchema = external_exports.object({ "name": external_exports.string(), "baseBranch": external_exports.string().nullable(), "worktreePath": external_exports.string().nullable(), "status": missionBranchStatusSchema, "dirty": external_exports.boolean(), "hasUnpushedCommits": external_exports.exactOptional(external_exports.boolean()), "overrideBranch": external_exports.string().nullable(), "worktreeAutomationEnabled": external_exports.boolean(), "worktreePreference": missionWorktreePreferenceSchema.nullable(), "willPrepareBranch": external_exports.boolean(), "willUseWorktree": external_exports.boolean(), "observedAt": external_exports.exactOptional(dateTimeSchema), "observationSource": external_exports.exactOptional(external_exports.literal("client")) });
+var missionCreatedFromDtoSchema = external_exports.object({ "sessionId": external_exports.string(), "missionId": external_exports.string(), "missionDisplayId": external_exports.string(), "agentIdentifier": external_exports.string() });
+var missionDetailDtoSchema = external_exports.object({ ...missionDtoShape, "objectives": external_exports.array(objectiveDtoSchema), "statuses": external_exports.array(projectStatusDtoSchema), "executionRequests": external_exports.array(executionRequestDtoSchema), "terminalSessions": external_exports.array(terminalSessionDtoSchema), "branch": missionBranchDtoSchema.nullable(), "createdFrom": missionCreatedFromDtoSchema.nullable() });
+var objectiveAttachmentDtoSchema = external_exports.object({ "id": external_exports.string(), "workspaceId": external_exports.string(), "projectId": external_exports.string().nullable(), "missionId": external_exports.string().nullable(), "objectiveId": external_exports.string().nullable(), "inboxItemId": external_exports.string().nullable(), "bucketKey": external_exports.literal("attachments"), "storageKey": external_exports.string(), "filename": external_exports.string(), "contentType": external_exports.string().nullable(), "sizeBytes": external_exports.int().min(1).nullable(), "uploadStatus": external_exports.enum(["prepared", "uploaded", "available", "failed", "deleted"]), "url": external_exports.string(), "createdAt": dateTimeSchema });
+var objectiveAttachmentListSchema = external_exports.array(objectiveAttachmentDtoSchema);
+var rawUploadBodySchema = binaryBodySchema;
+var createProjectBodySchema = external_exports.object({ "name": external_exports.string(), "workspaceId": external_exports.exactOptional(external_exports.string()), "slug": external_exports.exactOptional(external_exports.string()), "description": external_exports.exactOptional(external_exports.string().nullable()), "color": external_exports.exactOptional(external_exports.string()), "primaryResource": external_exports.exactOptional(external_exports.object({ "directoryPath": external_exports.string(), "executionTargetId": external_exports.exactOptional(external_exports.string().nullable()) }).nullable()) });
+var initializeProjectBodySchema = external_exports.object({ "workspaceId": external_exports.string(), "idempotencyKey": external_exports.string().max(200), "name": external_exports.string(), "description": external_exports.string(), "createGitHubRepository": external_exports.exactOptional(external_exports.boolean()), "githubOwnerLogin": external_exports.exactOptional(external_exports.string()) });
+var initializeProjectResultDtoSchema = external_exports.object({ "project": projectDtoSchema, "mission": missionDetailDtoSchema, "repositoryProvisioning": external_exports.object({ "status": external_exports.enum(["not_requested", "pending", "failed", "succeeded"]), "retryable": external_exports.boolean(), "ownerLogin": external_exports.string().nullable(), "repository": external_exports.object({ "id": external_exports.string(), "fullName": external_exports.string(), "defaultBranch": external_exports.string(), "private": external_exports.literal(true), "cloneUrl": external_exports.string() }).nullable(), "resource": projectResourceDtoSchema.nullable(), "error": external_exports.string().nullable() }) });
+var reorderProjectsBodySchema = external_exports.object({ "orderedProjectIds": external_exports.array(external_exports.string()).min(1).refine(hasUniqueItems, { error: "Expected unique items" }) });
+var updateProjectBodySchema = external_exports.object({ "name": external_exports.exactOptional(external_exports.string()), "description": external_exports.exactOptional(external_exports.string().nullable()), "status": external_exports.exactOptional(projectLifecycleSchema), "color": external_exports.exactOptional(external_exports.string().nullable()), "defaultBranch": external_exports.exactOptional(external_exports.string().nullable()), "preLaunchCommands": external_exports.exactOptional(external_exports.array(external_exports.string())), "launchEnvVars": external_exports.exactOptional(external_exports.record(external_exports.string(), external_exports.string())) });
+var repositoryEntryDtoSchema = external_exports.object({ "path": external_exports.string(), "name": external_exports.string(), "type": external_exports.enum(["file", "directory"]), "parentPath": external_exports.string().nullable(), "depth": external_exports.int().min(0) });
+var projectRepositoryDtoSchema = external_exports.object({ "projectId": external_exports.string(), "executionTargetId": external_exports.string().nullable(), "resource": projectResourceDtoSchema.nullable(), "status": external_exports.enum(["ready", "no_resource", "not_git_repository", "unsupported_resource", "unreadable"]), "rootPath": external_exports.string().nullable(), "gitRoot": external_exports.string().nullable(), "branch": external_exports.string().nullable(), "commit": external_exports.string().nullable(), "entries": external_exports.array(repositoryEntryDtoSchema), "truncated": external_exports.boolean(), "scannedAt": dateTimeSchema, "message": external_exports.string().nullable() });
+var createProjectTagBodySchema = external_exports.object({ "label": external_exports.string(), "color": external_exports.exactOptional(external_exports.string().nullable()) });
+var updateProjectTagBodySchema = external_exports.object({ "label": external_exports.exactOptional(external_exports.string()), "color": external_exports.exactOptional(external_exports.string().nullable()), "active": external_exports.exactOptional(external_exports.boolean()) });
+var reorderBoardColumnBodySchema = external_exports.object({ "statusId": external_exports.string(), "orderedMissionIds": external_exports.array(external_exports.string()).refine(hasUniqueItems, { error: "Expected unique items" }) });
+var repositoryReadOperationSchema = external_exports.enum(["observe", "tree", "branches", "worktrees", "git_status", "diff", "read_file", "search_text"]);
+var repositoryReadRequestSchema = external_exports.union([external_exports.object({ "operation": external_exports.enum(["observe", "branches", "worktrees", "git_status"]), "operationId": external_exports.string().min(8).max(128), "executionTargetId": external_exports.string(), "projectId": external_exports.string(), "resourceKey": external_exports.string() }), external_exports.object({ "operation": external_exports.literal("tree"), "operationId": external_exports.string().min(8).max(128), "executionTargetId": external_exports.string(), "projectId": external_exports.string(), "resourceKey": external_exports.string(), "relativePath": external_exports.exactOptional(external_exports.string().nullable()), "maxEntries": external_exports.exactOptional(external_exports.int().min(1).nullable()) }), external_exports.object({ "operation": external_exports.literal("diff"), "operationId": external_exports.string().min(8).max(128), "executionTargetId": external_exports.string(), "projectId": external_exports.string(), "resourceKey": external_exports.string(), "scope": external_exports.enum(["unstaged", "staged", "all"]), "relativePaths": external_exports.exactOptional(external_exports.array(external_exports.string()).max(50).nullable()) }), external_exports.object({ "operation": external_exports.literal("read_file"), "operationId": external_exports.string().min(8).max(128), "executionTargetId": external_exports.string(), "projectId": external_exports.string(), "resourceKey": external_exports.string(), "relativePath": external_exports.string(), "startLine": external_exports.exactOptional(external_exports.int().min(1).nullable()), "endLine": external_exports.exactOptional(external_exports.int().min(1).nullable()) }), external_exports.object({ "operation": external_exports.literal("search_text"), "operationId": external_exports.string().min(8).max(128), "executionTargetId": external_exports.string(), "projectId": external_exports.string(), "resourceKey": external_exports.string(), "query": external_exports.string().min(1).max(256), "relativePath": external_exports.exactOptional(external_exports.string().nullable()), "caseSensitive": external_exports.exactOptional(external_exports.boolean()) })]);
+var repositoryReadResultSchema = external_exports.object({ "operationId": external_exports.string(), "operation": repositoryReadOperationSchema, "binding": external_exports.object({ "executionTargetId": external_exports.string(), "projectId": external_exports.string(), "resourceKey": external_exports.string() }), "outcome": external_exports.enum(["ok", "unavailable", "target_offline", "timeout", "denied", "binary", "oversized", "not_found"]), "head": external_exports.string().nullable(), "branch": external_exports.string().nullable(), "observedAt": dateTimeSchema, "bytes": external_exports.int().min(0), "truncated": external_exports.boolean(), "data": jsonValueSchema });
+var createProjectStatusBodySchema = external_exports.object({ "name": external_exports.string(), "type": statusTypeSchema, "isDefault": external_exports.exactOptional(external_exports.boolean()) });
+var updateProjectStatusBodySchema = external_exports.object({ "name": external_exports.exactOptional(external_exports.string()), "isDefault": external_exports.exactOptional(external_exports.boolean()) });
+var reorderProjectStatusesBodySchema = external_exports.object({ "orderedStatusIds": external_exports.array(external_exports.string()).min(1) });
+var projectStatusListSchema = external_exports.array(projectStatusDtoSchema);
+var projectListSchema = external_exports.array(projectDtoSchema);
+var projectTagListSchema = external_exports.array(projectTagDtoSchema);
+var missionListSchema = external_exports.array(missionDtoSchema);
+var projectResourceListSchema = external_exports.array(projectResourceDtoSchema);
+var createProjectResourceBodySchema = external_exports.object({ "directoryPath": external_exports.exactOptional(external_exports.string()), "path": external_exports.exactOptional(external_exports.string()), "sourceUrl": external_exports.exactOptional(external_exports.string()), "resourceKey": external_exports.exactOptional(external_exports.string().nullable()), "label": external_exports.exactOptional(external_exports.string().nullable()), "isPrimary": external_exports.exactOptional(external_exports.boolean()), "executionTargetId": external_exports.exactOptional(external_exports.string().nullable()), "accessMode": external_exports.exactOptional(projectResourceAccessModeSchema) });
+var updateProjectResourceBodySchema = external_exports.object({ "resourceKey": external_exports.exactOptional(external_exports.string().nullable()), "isPrimary": external_exports.exactOptional(external_exports.boolean()), "accessMode": external_exports.exactOptional(projectResourceAccessModeSchema) });
+var updateProjectResourceSourceBodySchema = external_exports.object({ "launchDefaults": external_exports.record(external_exports.string(), agentLaunchConfigInputSchema) });
+var missionSearchDateFieldSchema = external_exports.enum(["createdAt", "updatedAt", "dueDatetime"]);
+var missionSearchMatchKindSchema = external_exports.enum(["title", "displayId", "objective", "event", "delivery", "constraints", "notes"]);
+var missionSearchAppliedFiltersShape = { "query": external_exports.string().nullable(), "mode": external_exports.enum(["display_id", "any", "all", "phrase", "fallback"]), "projectIds": external_exports.array(external_exports.string()), "resourceKeys": external_exports.array(external_exports.string()), "statusTypes": external_exports.array(external_exports.string()), "dateField": missionSearchDateFieldSchema.nullable(), "from": external_exports.string().nullable(), "to": external_exports.string().nullable(), "coverageFloor": external_exports.int().min(1).nullable() };
+var missionSearchAppliedFiltersSchema = external_exports.object(missionSearchAppliedFiltersShape);
+var missionSearchWorkspaceCountSchema = external_exports.object({ "workspaceId": external_exports.string(), "matched": external_exports.int().min(0), "returned": external_exports.int().min(0) });
+var missionSearchResultV2Shape = { "id": external_exports.string(), "displayId": external_exports.string(), "title": external_exports.string(), "statusType": external_exports.string(), "statusId": external_exports.string(), "priority": external_exports.string().nullable(), "projectId": external_exports.string(), "projectName": external_exports.string(), "workspaceId": external_exports.string(), "workspaceName": external_exports.string(), "workspaceSlug": external_exports.string(), "createdAt": dateTimeSchema, "updatedAt": dateTimeSchema, "dueDatetime": dateTimeSchema.nullable(), "objectiveCount": external_exports.int().min(0), "relevance": external_exports.number(), "snippet": external_exports.string().nullable(), "matchedTerms": external_exports.array(external_exports.string()), "matchedIn": external_exports.array(missionSearchMatchKindSchema) };
+var missionSearchResultV2Schema = external_exports.object(missionSearchResultV2Shape);
+var searchMissionsResponseV2Schema = external_exports.object({ "version": external_exports.literal(2), "results": external_exports.array(missionSearchResultV2Schema), "appliedFilters": missionSearchAppliedFiltersSchema, "totalMatchedBeforeLimit": external_exports.int().min(0), "workspaceCounts": external_exports.array(missionSearchWorkspaceCountSchema) });
+var missionSearchV1ResponseSchema = external_exports.object({ "missions": external_exports.array(missionDtoSchema) });
+var searchMatchSchema = external_exports.object({ "entityType": external_exports.enum(["objective", "delivery"]), "id": external_exports.string(), "displayId": external_exports.string().nullable(), "title": external_exports.string(), "objectiveId": external_exports.string().nullable(), "objectiveState": objectiveStateSchema.nullable(), "relevance": external_exports.number(), "snippet": external_exports.string().nullable(), "matchedTerms": external_exports.array(external_exports.string()), "createdAt": dateTimeSchema, "updatedAt": dateTimeSchema });
+var searchResultV3Schema = external_exports.object({ ...missionSearchResultV2Shape, "anchorOnly": external_exports.boolean(), "matches": external_exports.array(searchMatchSchema).max(10), "matchCounts": external_exports.object({ "objective": external_exports.int().min(0), "delivery": external_exports.int().min(0), "event": external_exports.int().min(0) }) });
+var searchAppliedFiltersV3Schema = external_exports.object({ ...missionSearchAppliedFiltersShape, "entityTypes": external_exports.array(external_exports.enum(["mission", "objective", "delivery"])), "objectiveStates": external_exports.array(objectiveStateSchema), "matchesPerResult": external_exports.int().min(1).max(10) });
+var searchResponseV3Schema = external_exports.object({ "version": external_exports.literal(3), "results": external_exports.array(searchResultV3Schema), "appliedFilters": searchAppliedFiltersV3Schema, "totalMatchedBeforeLimit": external_exports.int().min(0), "entityCounts": external_exports.object({ "mission": external_exports.int().min(0), "objective": external_exports.int().min(0), "delivery": external_exports.int().min(0), "event": external_exports.int().min(0) }), "workspaceCounts": external_exports.array(missionSearchWorkspaceCountSchema), "truncatedCandidates": external_exports.boolean() });
+var createMissionBodySchema = external_exports.object({ "projectId": external_exports.string(), "title": external_exports.exactOptional(external_exports.string()), "priority": external_exports.exactOptional(missionPrioritySchema), "dueDatetime": external_exports.exactOptional(external_exports.string().nullable()), "statusId": external_exports.exactOptional(external_exports.string()), "assignedWorkspaceUserId": external_exports.exactOptional(external_exports.string().nullable()), "firstObjective": external_exports.exactOptional(external_exports.string()), "objectives": external_exports.exactOptional(external_exports.array(external_exports.object({ "objective": external_exports.string(), "title": external_exports.exactOptional(external_exports.string().nullable()), "autoAdvance": external_exports.exactOptional(external_exports.boolean()), "agent": external_exports.exactOptional(external_exports.string().nullable()), "model": external_exports.exactOptional(external_exports.string().nullable()), "resourceKey": external_exports.exactOptional(external_exports.string().nullable()) }))), "tagIds": external_exports.exactOptional(external_exports.array(external_exports.string())) });
+var updateMissionBodySchema = external_exports.object({ "title": external_exports.exactOptional(external_exports.string()), "priority": external_exports.exactOptional(missionPrioritySchema.nullable()), "projectId": external_exports.exactOptional(external_exports.string()), "statusId": external_exports.exactOptional(external_exports.string()), "assignedWorkspaceUserId": external_exports.exactOptional(external_exports.string().nullable()), "notes": external_exports.exactOptional(external_exports.string().nullable()), "branchOverride": external_exports.exactOptional(external_exports.string().nullable()), "worktreePreference": external_exports.exactOptional(missionWorktreePreferenceSchema.nullable()), "allowParallelObjectives": external_exports.exactOptional(external_exports.boolean()), "resetActiveBranch": external_exports.exactOptional(external_exports.boolean()), "tagIds": external_exports.exactOptional(external_exports.array(external_exports.string())), "dueDatetime": external_exports.exactOptional(external_exports.string().nullable()) });
+var objectiveListSchema = external_exports.array(objectiveDtoSchema);
+var reorderFutureObjectivesBodySchema = external_exports.object({ "orderedObjectiveIds": external_exports.array(external_exports.string()).refine(hasUniqueItems, { error: "Expected unique items" }) });
+var missionEventActorDtoSchema = external_exports.object({ "workspaceUserId": external_exports.string(), "displayName": external_exports.string(), "handle": external_exports.string().nullable(), "avatarUrl": external_exports.string().nullable() });
+var missionEventDtoSchema = external_exports.object({ "id": external_exports.string(), "missionId": external_exports.string(), "objectiveId": external_exports.string().nullable(), "type": external_exports.string(), "phase": external_exports.string().nullable(), "summary": external_exports.string(), "source": external_exports.string(), "actorWorkspaceUserId": external_exports.string().nullable(), "actor": missionEventActorDtoSchema.nullable(), "externalUrl": external_exports.string().nullable(), "deliveryId": external_exports.exactOptional(external_exports.string().nullable()), "createdAt": dateTimeSchema });
+var missionEventListSchema = external_exports.array(missionEventDtoSchema);
+var humanActionCategorySchema2 = external_exports.enum(["environment", "database", "deployment", "codegen", "packaging", "external_service", "other"]);
+var humanActionV1Schema = external_exports.strictObject({ "id": external_exports.string(), "action": external_exports.string(), "reason": external_exports.exactOptional(external_exports.string()), "category": humanActionCategorySchema2, "blocking": external_exports.exactOptional(external_exports.boolean()), "command": external_exports.exactOptional(external_exports.string()), "verify": external_exports.exactOptional(external_exports.string()), "link": external_exports.exactOptional(external_exports.string()), "source": external_exports.enum(["agent", "deterministic_rule"]), "sourceRef": external_exports.exactOptional(external_exports.string()) });
+var tradeoffMadeV1Schema = external_exports.strictObject({ "id": external_exports.string(), "decision": external_exports.string(), "alternativesConsidered": external_exports.array(external_exports.string()).max(6), "rationale": external_exports.string(), "impact": external_exports.exactOptional(external_exports.string()), "source": external_exports.literal("agent"), "sourceRef": external_exports.exactOptional(external_exports.string()) });
+var deferredWorkV1Schema = external_exports.strictObject({ "id": external_exports.string(), "title": external_exports.string().max(80), "change": external_exports.string().max(400), "location": external_exports.string().max(200), "doneWhen": external_exports.string().max(200) });
+var deliveryAgentReportV1Schema = external_exports.strictObject({ "humanActions": external_exports.array(humanActionV1Schema).max(12), "tradeoffsMade": external_exports.array(tradeoffMadeV1Schema).max(12), "knownRisks": external_exports.array(external_exports.string()).max(12), "deferredWork": external_exports.array(deferredWorkV1Schema).max(12), "assumptions": external_exports.array(external_exports.string()).max(12) });
+var deliveryPresentationV1Schema = external_exports.strictObject({ "status": external_exports.enum(["deterministic", "pending", "composed", "fallback"]), "markdown": external_exports.string(), "humanActions": external_exports.array(humanActionV1Schema).max(12), "tradeoffsMade": external_exports.array(tradeoffMadeV1Schema).max(12), "knownRisks": external_exports.array(external_exports.string()).max(12), "deferredWork": external_exports.array(deferredWorkV1Schema).max(12), "assumptions": external_exports.array(external_exports.string()).max(12), "generatedBy": external_exports.enum(["deterministic", "gemini"]), "generatedAt": external_exports.exactOptional(external_exports.string()), "model": external_exports.exactOptional(external_exports.string()) });
+var deliveryReportPayloadV1Schema = external_exports.strictObject({ "schemaVersion": external_exports.literal(1), "agentReport": deliveryAgentReportV1Schema, "warnings": external_exports.exactOptional(external_exports.array(external_exports.string()).max(12)), "presentation": deliveryPresentationV1Schema });
+var humanActionResolutionDtoSchema = external_exports.object({ "status": external_exports.enum(["done", "dismissed"]), "resolvedAt": dateTimeSchema, "resolvedByWorkspaceUserId": external_exports.string().nullable(), "outcome": external_exports.enum(["mission_created", "objective_added"]).nullable(), "outcomeRef": external_exports.string().nullable() });
+var deliveryDeferredWorkItemDtoSchema = external_exports.object({ "actionId": external_exports.string(), "title": external_exports.string(), "change": external_exports.string(), "location": external_exports.string(), "doneWhen": external_exports.string(), "resolution": humanActionResolutionDtoSchema.nullable() });
+var deliveryDtoSchema = external_exports.object({ "id": external_exports.string(), "missionId": external_exports.string(), "objectiveId": external_exports.string(), "sessionId": external_exports.string().nullable(), "summary": external_exports.string(), "verificationSummary": external_exports.string().nullable(), "followUpNotes": external_exports.string().nullable(), "report": deliveryReportPayloadV1Schema, "deliveredAt": dateTimeSchema, "agentIdentifier": external_exports.string().nullable(), "modelIdentifier": external_exports.string().nullable(), "deferredWorkItems": external_exports.array(deliveryDeferredWorkItemDtoSchema) });
+var missionDeliveriesDtoSchema = external_exports.object({ "items": external_exports.array(deliveryDtoSchema).max(200), "total": external_exports.int().min(0), "limit": external_exports.int() });
+var missionSummaryStatusSchema = external_exports.enum(["pending", "composed", "fallback"]);
+var missionSummaryRiskDtoSchema = external_exports.object({ "deliveryId": external_exports.string(), "objectiveId": external_exports.string(), "deliveredAt": dateTimeSchema, "text": external_exports.string() });
+var missionSummarySuggestionDtoSchema = external_exports.union([external_exports.object({ "deliveryId": external_exports.string(), "objectiveId": external_exports.string(), "deliveredAt": dateTimeSchema, "actionId": external_exports.string(), "title": external_exports.string(), "state": external_exports.literal("open"), "change": external_exports.string(), "location": external_exports.string(), "doneWhen": external_exports.string(), "resolution": external_exports.null() }), external_exports.object({ "deliveryId": external_exports.string(), "objectiveId": external_exports.string(), "deliveredAt": dateTimeSchema, "actionId": external_exports.string(), "title": external_exports.string(), "state": external_exports.literal("resolved"), "resolution": humanActionResolutionDtoSchema })]);
+var missionSummaryDtoSchema = external_exports.object({ "missionId": external_exports.string(), "revision": external_exports.int().min(1), "status": missionSummaryStatusSchema, "headline": external_exports.string(), "summary": external_exports.string(), "risks": external_exports.array(missionSummaryRiskDtoSchema), "suggestions": external_exports.array(missionSummarySuggestionDtoSchema), "sourceDeliveryId": external_exports.string().nullable(), "generatedBy": external_exports.enum(["deterministic", "gemini"]), "generatedAt": dateTimeSchema.nullable(), "model": external_exports.string().nullable() });
+var missionSummaryActionDtoSchema = external_exports.object({ "deliveryId": external_exports.string(), "objectiveId": external_exports.string(), "actionId": external_exports.string(), "deliveredAt": dateTimeSchema, "action": external_exports.string(), "reason": external_exports.exactOptional(external_exports.string()), "category": humanActionCategorySchema2, "blocking": external_exports.exactOptional(external_exports.boolean()), "command": external_exports.exactOptional(external_exports.string()), "verify": external_exports.exactOptional(external_exports.string()), "link": external_exports.exactOptional(external_exports.string()), "source": external_exports.enum(["agent", "deterministic_rule"]), "sourceRef": external_exports.exactOptional(external_exports.string()) });
+var missionSummarySourceDtoSchema = external_exports.object({ "objectiveId": external_exports.string(), "deliveryId": external_exports.string(), "deliveredAt": dateTimeSchema });
+var missionSummaryEvidenceDtoSchema = external_exports.object({ "actions": external_exports.array(missionSummaryActionDtoSchema).max(100), "sources": external_exports.array(missionSummarySourceDtoSchema).max(100), "totals": external_exports.object({ "actions": external_exports.int().min(0), "sources": external_exports.int().min(0), "currentRunDeliveries": external_exports.int().min(0) }), "truncated": external_exports.object({ "actions": external_exports.boolean(), "sources": external_exports.boolean() }) });
+var missionSummaryResponseSchema = external_exports.union([external_exports.object({ "eligible": external_exports.literal(false), "summary": external_exports.null(), "evidence": external_exports.null(), "watermark": external_exports.null(), "seenAt": external_exports.null() }), external_exports.object({ "eligible": external_exports.literal(true), "summary": missionSummaryDtoSchema.nullable(), "evidence": missionSummaryEvidenceDtoSchema, "watermark": dateTimeSchema.nullable(), "seenAt": dateTimeSchema.nullable() })]);
+var markMissionSummarySeenBodySchema = external_exports.object({ "watermark": external_exports.string() });
+var missionSummarySeenResponseSchema = external_exports.object({ "seenAt": dateTimeSchema });
+var artifactDtoSchema = external_exports.object({ "id": external_exports.string(), "workspaceId": external_exports.string(), "projectId": external_exports.string(), "missionId": external_exports.string(), "objectiveId": external_exports.string().nullable(), "sessionId": external_exports.string().nullable(), "deliveryId": external_exports.string().nullable(), "type": external_exports.string(), "label": external_exports.string(), "contentText": external_exports.string().nullable(), "contentJson": jsonValueSchema, "externalUrl": external_exports.string().nullable(), "createdAt": dateTimeSchema, "updatedAt": dateTimeSchema, "revision": external_exports.int().min(1) });
+var artifactListSchema = external_exports.array(artifactDtoSchema);
+var createArtifactBodySchema = external_exports.object({ "type": external_exports.string(), "label": external_exports.string(), "contentText": external_exports.exactOptional(external_exports.string().nullable()), "externalUrl": external_exports.exactOptional(external_exports.string().nullable()), "objectiveId": external_exports.exactOptional(external_exports.string().nullable()), "sessionId": external_exports.exactOptional(external_exports.string().nullable()), "sessionKey": external_exports.exactOptional(external_exports.string().nullable()) });
+var updateArtifactBodySchema = external_exports.object({ "expectedRevision": external_exports.int().min(1), "label": external_exports.exactOptional(external_exports.string()), "contentText": external_exports.exactOptional(external_exports.string().nullable()), "externalUrl": external_exports.exactOptional(external_exports.string().nullable()) });
+var sharedContextEntryDtoSchema = external_exports.object({ "id": external_exports.string(), "missionId": external_exports.string(), "key": external_exports.string(), "value": jsonValueSchema, "valueKind": external_exports.enum(["string", "json"]), "tags": external_exports.array(external_exports.string()), "updatedAt": dateTimeSchema, "revision": external_exports.int().min(1) });
+var sharedContextEntryListSchema = external_exports.array(sharedContextEntryDtoSchema);
+var upsertSharedContextBodySchema = external_exports.object({ "key": external_exports.string(), "value": jsonValueSchema });
+var fileChangeDtoSchema = external_exports.object({ "id": external_exports.string(), "missionId": external_exports.string(), "objectiveId": external_exports.string(), "resourceKey": external_exports.string().nullable(), "filePath": external_exports.string(), "source": external_exports.enum(["declared_edit", "agent_declared"]).nullable(), "observedAt": dateTimeSchema, "hookHealth": external_exports.string().nullable() });
+var missionFileChangesDtoSchema = external_exports.strictObject({ "items": external_exports.array(fileChangeDtoSchema).max(200), "total": external_exports.int().min(0), "limit": external_exports.int() });
+var captureHealthEntryDtoSchema = external_exports.object({ "code": external_exports.string(), "firstAt": dateTimeSchema, "lastAt": dateTimeSchema });
+var captureSessionDtoSchema = external_exports.object({ "sessionId": external_exports.string(), "startedAt": dateTimeSchema, "bindingState": external_exports.enum(["bound", "unbound", "unknown"]), "callbackObservedAt": dateTimeSchema.nullable(), "health": external_exports.array(captureHealthEntryDtoSchema).max(16) });
+var objectiveFileChangesDtoSchema = external_exports.object({ "scope": external_exports.literal("server_objective"), "missionId": external_exports.string(), "objectiveId": external_exports.string(), "items": external_exports.array(fileChangeDtoSchema).max(200), "total": external_exports.int().min(0), "limit": external_exports.int(), "truncated": external_exports.boolean(), "capture": external_exports.object({ "sessions": external_exports.array(captureSessionDtoSchema), "warnings": external_exports.array(external_exports.enum(["unbound", "bound_no_callback", "unknown_binding", "tool_activity_uncaptured"])) }) });
+var scheduleWeekDayDtoSchema = external_exports.object({ "dayNum": external_exports.int().min(0).max(6), "times": external_exports.array(external_exports.string()) });
+var scheduleDtoSchema = external_exports.object({ "id": external_exports.string(), "workspaceId": external_exports.string(), "name": external_exports.string().nullable(), "periodType": external_exports.enum(["d", "w", "m"]), "periodInterval": external_exports.int().min(1), "weeksOfMonth": external_exports.array(external_exports.int().min(1).max(5)), "daysOfMonth": external_exports.array(external_exports.int().min(1).max(32)), "daysOfWeek": external_exports.array(scheduleWeekDayDtoSchema), "timezone": external_exports.string(), "startDate": external_exports.string().nullable(), "nextStatusKey": external_exports.string().nullable(), "createdAt": dateTimeSchema, "updatedAt": dateTimeSchema, "revision": external_exports.int().min(1) });
+var scheduleInputSchema2 = external_exports.object({ "name": external_exports.exactOptional(external_exports.string().nullable()), "periodType": external_exports.enum(["d", "w", "m"]), "periodInterval": external_exports.int().min(1), "weeksOfMonth": external_exports.exactOptional(external_exports.array(external_exports.int())), "daysOfMonth": external_exports.exactOptional(external_exports.array(external_exports.int())), "daysOfWeek": external_exports.exactOptional(external_exports.array(scheduleWeekDayDtoSchema)), "timezone": external_exports.string(), "startDate": external_exports.exactOptional(external_exports.string().nullable()), "nextStatusKey": external_exports.exactOptional(external_exports.string().nullable()) });
+var missionScheduleDtoSchema = external_exports.object({ "dueDatetime": dateTimeSchema.nullable(), "schedule": scheduleDtoSchema.nullable() });
+var previewScheduleBodySchema = external_exports.object({ "schedule": scheduleInputSchema2, "itemDueDatetime": external_exports.exactOptional(external_exports.string().nullable()) });
+var schedulePreviewDtoSchema = external_exports.object({ "dueDatetime": dateTimeSchema });
+var missionBranchListDtoSchema = external_exports.object({ "branches": external_exports.array(external_exports.string()).max(1), "current": external_exports.string().nullable() });
+var branchActionBodySchema = external_exports.object({ "action": external_exports.enum(["integrate", "commit", "push_parent", "publish"]), "message": external_exports.exactOptional(external_exports.string()), "resourceKey": external_exports.exactOptional(external_exports.string()), "confirmBusy": external_exports.exactOptional(external_exports.boolean()), "clientExecuted": external_exports.exactOptional(external_exports.boolean()), "summary": external_exports.exactOptional(external_exports.string()) });
+var generateCommitMessageBodySchema = external_exports.object({ "diff": external_exports.exactOptional(external_exports.string()) });
+var generateCommitMessageResultDtoSchema = external_exports.object({ "message": external_exports.string() });
+var branchPreparedBodySchema = external_exports.object({ "requestId": external_exports.exactOptional(external_exports.string().nullable()), "branchAutomation": external_exports.object({ "branchName": external_exports.string(), "baseBranch": external_exports.string(), "worktreePath": external_exports.string(), "resourceKey": external_exports.string(), "action": external_exports.enum(["create", "reuse", "new_cycle"]), "cycle": external_exports.exactOptional(external_exports.number()), "isolated": external_exports.exactOptional(external_exports.boolean()) }) });
+var forgetTerminalSessionBodySchema = external_exports.object({ "providerSessionId": external_exports.string(), "executionRequestId": external_exports.exactOptional(external_exports.string().nullable()) });
+var forgetTerminalSessionResultDtoSchema = external_exports.object({ "forgotten": external_exports.boolean(), "executionRequestId": external_exports.string().nullable() });
+var createObjectiveBodySchema = external_exports.object({ "missionId": external_exports.string(), "instructionText": external_exports.string(), "title": external_exports.exactOptional(external_exports.string().nullable()), "state": external_exports.exactOptional(objectiveStateSchema), "autoAdvance": external_exports.exactOptional(external_exports.boolean()), "resourceKey": external_exports.exactOptional(external_exports.string().nullable()) });
+var updateObjectiveBodySchema = external_exports.object({ "instructionText": external_exports.exactOptional(external_exports.string()), "title": external_exports.exactOptional(external_exports.string().nullable()), "state": external_exports.exactOptional(objectiveStateSchema), "autoAdvance": external_exports.exactOptional(external_exports.boolean()), "position": external_exports.exactOptional(external_exports.int().min(0)), "assignedAgent": external_exports.exactOptional(external_exports.string().nullable()), "model": external_exports.exactOptional(external_exports.string().nullable()), "reasoningEffort": external_exports.exactOptional(external_exports.string().nullable()), "resourceKey": external_exports.exactOptional(external_exports.string().nullable()), "launchConfigOverride": external_exports.exactOptional(agentLaunchConfigInputSchema.nullable()), "launchConfigAgent": external_exports.exactOptional(external_exports.string()) });
+var launchObjectiveBodySchema = external_exports.object({ "agent": external_exports.string(), "model": external_exports.exactOptional(external_exports.string().nullable()), "reasoningEffort": external_exports.exactOptional(external_exports.string().nullable()), "executionTargetId": external_exports.exactOptional(external_exports.string().nullable()), "launchConfigOverride": external_exports.exactOptional(agentLaunchConfigInputSchema.nullable()) });
+var objectivePromptDtoSchema = external_exports.object({ "objectiveId": external_exports.string(), "missionId": external_exports.string(), "prompt": external_exports.string() });
+var objectiveLaunchCommandDtoSchema = external_exports.object({ "objectiveId": external_exports.string(), "missionId": external_exports.string(), "command": external_exports.string() });
+var objectiveEffectiveLaunchConfigDtoSchema = external_exports.object({ "objectiveId": external_exports.string(), "missionId": external_exports.string(), "executionTargetId": external_exports.string().nullable(), "launchConfig": agentLaunchConfigDtoSchema, "source": external_exports.enum(["objective", "resource_source", "user_target", "workspace", "none"]) });
+var resolveHumanActionBodySchema = external_exports.object({ "status": external_exports.enum(["done", "dismissed"]), "outcome": external_exports.exactOptional(external_exports.enum(["mission_created", "objective_added"])), "outcomeRef": external_exports.exactOptional(external_exports.string().max(64)) });
+var activityFeedMissionObjectiveDtoSchema = external_exports.object({ "objectiveId": external_exports.string(), "displayId": external_exports.string(), "title": external_exports.string().nullable(), "state": objectiveStateSchema, "position": external_exports.int().min(0), "assignedAgent": external_exports.string().nullable(), "autoAdvance": external_exports.boolean(), "blocked": external_exports.boolean() });
+var activityFeedMissionItemDtoSchema = external_exports.object({ "id": external_exports.string(), "kind": external_exports.enum(["mission_run", "mission_delivered"]), "occurredAt": dateTimeSchema, "workspaceId": external_exports.string(), "workspaceName": external_exports.string(), "projectId": external_exports.string(), "projectName": external_exports.string(), "projectColor": external_exports.string().nullable(), "missionId": external_exports.string(), "missionDisplayId": external_exports.string(), "missionTitle": external_exports.string(), "objectiveId": external_exports.string().nullable(), "objectiveDisplayId": external_exports.string().nullable(), "createdByKind": createdByKindSchema, "createdByAgent": external_exports.string().nullable(), "runState": external_exports.enum(["launching", "executing", "delivered"]), "objectives": external_exports.array(activityFeedMissionObjectiveDtoSchema), "activeObjectiveIds": external_exports.array(external_exports.string()), "objectiveTitle": external_exports.string().nullable(), "instructionPreview": external_exports.string(), "agentIdentifier": external_exports.string().nullable(), "modelIdentifier": external_exports.string().nullable(), "branch": external_exports.string().nullable(), "resourceKey": external_exports.string().nullable(), "startedAt": dateTimeSchema.nullable(), "latestEventSummary": external_exports.string().nullable(), "latestEventAt": dateTimeSchema.nullable() });
+var activityFeedQuestionItemDtoSchema = external_exports.object({ "id": external_exports.string(), "kind": external_exports.literal("blocking_question"), "occurredAt": dateTimeSchema, "workspaceId": external_exports.string(), "workspaceName": external_exports.string(), "projectId": external_exports.string(), "projectName": external_exports.string(), "projectColor": external_exports.string().nullable(), "missionId": external_exports.string(), "missionDisplayId": external_exports.string(), "missionTitle": external_exports.string(), "objectiveId": external_exports.string().nullable(), "objectiveDisplayId": external_exports.string().nullable(), "createdByKind": createdByKindSchema, "createdByAgent": external_exports.string().nullable(), "eventId": external_exports.string(), "agentRequestId": external_exports.string().nullable(), "delivery": external_exports.object({ "mode": external_exports.enum(["latch", "read_only"]) }), "question": external_exports.string(), "agentIdentifier": external_exports.string().nullable(), "askedAt": dateTimeSchema });
+var activityFeedDtoSchema = external_exports.object({ "items": external_exports.array(external_exports.union([activityFeedMissionItemDtoSchema, activityFeedQuestionItemDtoSchema])), "generatedAt": dateTimeSchema, "counts": external_exports.object({ "mission_run": external_exports.int().min(0), "blocking_question": external_exports.int().min(0), "mission_delivered": external_exports.int().min(0) }), "nextBefore": dateTimeSchema.nullable() });
+var objectiveTranscriptItemDtoSchema = external_exports.object({ "id": external_exports.string(), "workspaceId": external_exports.string(), "projectId": external_exports.string(), "missionId": external_exports.string(), "missionDisplayId": external_exports.string(), "missionTitle": external_exports.string(), "missionRevision": external_exports.int().min(1), "statusType": statusTypeSchema, "projectName": external_exports.string(), "projectColor": external_exports.string().nullable(), "projectRevision": external_exports.int().min(1), "title": external_exports.string().nullable(), "instructionText": external_exports.string(), "state": objectiveStateSchema, "assignedAgent": external_exports.string().nullable(), "resourceKey": external_exports.string().nullable(), "createdByKind": createdByKindSchema, "createdByAgent": external_exports.string().nullable(), "createdByWorkspaceUserId": external_exports.string().nullable(), "createdAt": dateTimeSchema, "updatedAt": dateTimeSchema, "revision": external_exports.int().min(1) });
+var objectiveTranscriptPageDtoSchema = external_exports.object({ "items": external_exports.array(objectiveTranscriptItemDtoSchema).max(100), "nextBefore": external_exports.string().nullable(), "nextAfter": external_exports.string().nullable(), "newestCursor": external_exports.string().nullable(), "hasMore": external_exports.boolean() });
+var inboxItemDtoSchema = external_exports.object({ "id": external_exports.string(), "title": external_exports.string(), "objectives": external_exports.array(external_exports.string()).min(1).max(1), "dueDatetime": external_exports.string().nullable(), "priority": missionPrioritySchema.nullable(), "attachmentCount": external_exports.int().min(0), "createdAt": dateTimeSchema, "updatedAt": dateTimeSchema });
+var inboxItemListSchema = external_exports.array(inboxItemDtoSchema);
+var createInboxItemBodySchema = external_exports.object({ "title": external_exports.string(), "objectives": external_exports.array(external_exports.string()).min(1).max(1), "dueDatetime": external_exports.exactOptional(external_exports.string().nullable()), "priority": external_exports.exactOptional(missionPrioritySchema.nullable()) });
+var updateInboxItemBodySchema = external_exports.object({ "title": external_exports.exactOptional(external_exports.string()), "objectives": external_exports.exactOptional(external_exports.array(external_exports.string()).min(1).max(1)), "dueDatetime": external_exports.exactOptional(external_exports.string().nullable()), "priority": external_exports.exactOptional(missionPrioritySchema.nullable()) });
+var promoteInboxItemBodySchema = external_exports.object({ "projectId": external_exports.string() });
+var inboxMissionDtoSchema = external_exports.object({ ...missionDtoShape, "projectName": external_exports.string(), "projectColor": external_exports.string().nullable(), "reasons": external_exports.array(external_exports.enum(["overdue", "due_soon", "agent_next", "recent"])) });
+var inboxMissionsResponseSchema = external_exports.object({ "generatedAt": dateTimeSchema, "missions": external_exports.array(inboxMissionDtoSchema) });
+var profileDtoSchema = external_exports.object({ "userId": external_exports.string(), "displayName": external_exports.string(), "handle": external_exports.string().nullable(), "email": external_exports.string().nullable(), "avatarUrl": external_exports.string().nullable(), "agentInstructions": external_exports.string().nullable(), "editorScheme": external_exports.string().nullable(), "kind": external_exports.string(), "authProvider": external_exports.string().nullable(), "roles": external_exports.array(external_exports.string()), "createdAt": dateTimeSchema });
+var updateProfileBodySchema = external_exports.object({ "displayName": external_exports.exactOptional(external_exports.string()), "avatarUrl": external_exports.exactOptional(external_exports.string().nullable()), "agentInstructions": external_exports.exactOptional(external_exports.string().nullable()), "editorScheme": external_exports.exactOptional(external_exports.string().nullable()) });
+var defaultProjectPreferenceDtoSchema = external_exports.object({ "projectId": external_exports.string().nullable() });
+var setDefaultProjectBodySchema = external_exports.object({ "projectId": external_exports.string() });
+var userTokenStatusSchema = external_exports.enum(["active", "revoked", "expired", "rotated"]);
+var tokenScopeSchema = external_exports.enum(["full", "mission_lifecycle", "project_automation"]);
+var userTokenProjectDtoSchema = external_exports.object({ "id": external_exports.string(), "name": external_exports.string() });
+var userTokenDtoSchema = external_exports.object({ "id": external_exports.string(), "label": external_exports.string(), "tokenPrefix": external_exports.string(), "status": userTokenStatusSchema, "scope": tokenScopeSchema, "scopeGrants": external_exports.array(external_exports.string()), "projects": external_exports.array(userTokenProjectDtoSchema), "expiresAt": dateTimeSchema.nullable(), "lastUsedAt": dateTimeSchema.nullable(), "revokedAt": dateTimeSchema.nullable(), "createdAt": dateTimeSchema });
+var userTokenListSchema = external_exports.array(userTokenDtoSchema);
+var createUserTokenBodySchema = external_exports.object({ "label": external_exports.string(), "expiresAt": external_exports.exactOptional(external_exports.string().nullable()), "scope": external_exports.exactOptional(tokenScopeSchema.nullable()), "projectIds": external_exports.exactOptional(external_exports.array(external_exports.string()).min(1).refine(hasUniqueItems, { error: "Expected unique items" })) });
+var createUserTokenResultDtoSchema = external_exports.object({ "token": userTokenDtoSchema, "secret": external_exports.string() });
+var updateUserTokenBodySchema = external_exports.object({ "label": external_exports.string() });
+var organizationDtoSchema = external_exports.object({ "id": external_exports.string(), "name": external_exports.string(), "logoUrl": external_exports.string().nullable(), "workspaceCount": external_exports.int().min(0), "isActive": external_exports.boolean(), "createdAt": dateTimeSchema });
+var organizationListSchema = external_exports.array(organizationDtoSchema);
+var workspaceDtoSchema = external_exports.object({ "id": external_exports.string(), "organizationId": external_exports.string(), "slug": external_exports.string(), "name": external_exports.string(), "kind": external_exports.string(), "isActive": external_exports.boolean(), "projectCount": external_exports.int().min(0), "memberCount": external_exports.int().min(0), "sqlStudioEnabled": external_exports.boolean(), "createdAt": dateTimeSchema });
+var workspaceListSchema = external_exports.array(workspaceDtoSchema);
+var metaDtoShape = { "organization": organizationDtoSchema.nullable(), "organizations": external_exports.array(organizationDtoSchema), "workspaces": external_exports.array(workspaceDtoSchema), "workspace": workspaceDtoSchema.nullable(), "defaultProjectId": external_exports.string().nullable() };
+var metaDtoSchema = external_exports.object(metaDtoShape);
+var createOrganizationOnboardingBodySchema = external_exports.object({ "organizationName": external_exports.string(), "workspaceName": external_exports.exactOptional(external_exports.string()), "workspaceSlug": external_exports.exactOptional(external_exports.string()) });
+var updateOrganizationBodySchema = external_exports.object({ "name": external_exports.exactOptional(external_exports.string()), "logoUrl": external_exports.exactOptional(external_exports.string().nullable()) });
+var organizationAdminDtoSchema = external_exports.object({ "userId": external_exports.string(), "displayName": external_exports.string(), "handle": external_exports.string().nullable(), "email": external_exports.string().nullable(), "avatarUrl": external_exports.string().nullable() });
+var organizationAdminListSchema = external_exports.array(organizationAdminDtoSchema);
+var addOrganizationAdminBodySchema = external_exports.object({ "userId": external_exports.string() });
+var createWorkspaceBodySchema = external_exports.object({ "organizationId": external_exports.string(), "name": external_exports.string(), "slug": external_exports.exactOptional(external_exports.string()) });
+var updateWorkspaceBodySchema = external_exports.object({ "name": external_exports.exactOptional(external_exports.string()), "sqlStudioEnabled": external_exports.exactOptional(external_exports.boolean()) });
+var workspaceRoleKeySchema = external_exports.enum(["ADMIN", "MANAGER", "MEMBER"]);
+var workspaceMemberDtoSchema = external_exports.object({ "workspaceUserId": external_exports.string(), "userId": external_exports.string(), "displayName": external_exports.string(), "handle": external_exports.string().nullable(), "email": external_exports.string().nullable(), "kind": external_exports.string(), "roleKeys": external_exports.array(external_exports.string()), "isAdmin": external_exports.boolean(), "isOperator": external_exports.boolean(), "joinedAt": dateTimeSchema, "avatarUrl": external_exports.string().nullable() });
+var workspaceMemberListSchema = external_exports.array(workspaceMemberDtoSchema);
+var updateWorkspaceMemberRoleBodySchema = external_exports.object({ "roleKey": external_exports.string() });
+var workspaceInvitationStatusSchema = external_exports.enum(["pending", "accepted", "revoked", "expired"]);
+var workspaceInvitationDtoSchema = external_exports.object({ "id": external_exports.string(), "workspaceId": external_exports.string(), "email": external_exports.string(), "roleKey": workspaceRoleKeySchema, "status": workspaceInvitationStatusSchema, "tokenPrefix": external_exports.string(), "expiresAt": dateTimeSchema, "createdAt": dateTimeSchema });
+var workspaceInvitationListSchema = external_exports.array(workspaceInvitationDtoSchema);
+var inviteWorkspaceMemberBodySchema = external_exports.object({ "email": external_exports.string(), "roleKey": external_exports.exactOptional(external_exports.string()) });
+var inviteWorkspaceMemberResultDtoSchema = external_exports.object({ "invitation": workspaceInvitationDtoSchema, "acceptUrl": external_exports.exactOptional(external_exports.string()) });
+var acceptWorkspaceInvitationBodySchema = external_exports.object({ "token": external_exports.string() });
+var authProvidersDtoSchema = external_exports.object({ "email": external_exports.literal(true), "github": external_exports.boolean() });
+var serverMetaDtoSchema = external_exports.object({ ...metaDtoShape, "databasePath": external_exports.string(), "backendMode": external_exports.enum(["local", "cloud"]), "web": external_exports.object({ "host": external_exports.string(), "port": external_exports.int().min(0).max(65535), "url": external_exports.string() }), "sqlStudio": external_exports.object({ "enabled": external_exports.boolean(), "url": external_exports.string().nullable() }), "authProviders": authProvidersDtoSchema, "capabilities": external_exports.object({ "projects": external_exports.literal(true), "missions": external_exports.literal(true), "objectives": external_exports.literal(true), "realtime": external_exports.literal(true), "sqlStudio": external_exports.boolean(), "launchAgents": external_exports.literal(true), "executionTargets": external_exports.literal(false), "localTarget": external_exports.enum(["in_process_server", "unavailable"]), "mcp": external_exports.boolean() }) });
+var authorizedWorkspaceDtoSchema = external_exports.object({ "workspaceId": external_exports.string(), "workspaceUserId": external_exports.string(), "organizationId": external_exports.string(), "slug": external_exports.string(), "name": external_exports.string(), "kind": external_exports.string(), "roleKeys": external_exports.array(external_exports.string()) });
+var authorizedWorkspaceDiscoveryDtoSchema = external_exports.object({ "organizationId": external_exports.string().nullable(), "organizations": external_exports.array(organizationDtoSchema), "workspaces": external_exports.array(authorizedWorkspaceDtoSchema), "selectionRequired": external_exports.boolean() });
+var staleBackendHostExecutionTargetDtoSchema = external_exports.object({ "executionTargetId": external_exports.string(), "label": external_exports.string(), "deviceLabel": external_exports.string().nullable(), "deviceFingerprint": external_exports.string() });
+var executionTargetMigrationDiagnosticsDtoSchema = external_exports.object({ "hostedBackend": external_exports.boolean(), "backendHostFingerprint": external_exports.string(), "staleBackendHostTargets": external_exports.array(staleBackendHostExecutionTargetDtoSchema), "staleQueuedExecutionRequestCount": external_exports.int().min(0) });
+var messageErrorBodySchema = external_exports.object({ "message": external_exports.string(), "code": external_exports.exactOptional(external_exports.string()) });
+var oAuthHandoffExchangeBodySchema = external_exports.object({ "ticket": external_exports.string() });
+var oAuthHandoffExchangeResultDtoSchema = external_exports.object({ "token": external_exports.string() });
+var notificationTypeSchema = external_exports.enum(["mission_awaiting_review", "agent_question", "mission_complete", "mission_failed", "agent_started", "returned_to_execute"]);
+var notificationPreferenceTypeSchema = external_exports.enum(["mission_awaiting_review", "agent_question", "mission_complete", "mission_failed", "agent_started", "returned_to_execute", "chat_needs_answer", "chat_finished"]);
+var notificationTransportSchema = external_exports.enum(["apns", "realtime", "in_app"]);
+var notificationModeSchema = external_exports.enum(["alert", "silent", "off"]);
+var pushNotificationCategorySchema = external_exports.enum(["mission_awaiting_review", "agent_question", "mission_complete", "mission_failed"]);
+var notificationDtoSchema = external_exports.object({ "id": external_exports.string(), "workspaceId": external_exports.string(), "type": notificationTypeSchema, "missionId": external_exports.string(), "objectiveId": external_exports.string().nullable(), "createdAt": dateTimeSchema, "readAt": dateTimeSchema.nullable(), "revision": external_exports.int().min(1), "presentation": external_exports.object({ "body": external_exports.string() }) });
+var notificationListSchema = external_exports.array(notificationDtoSchema);
+var notificationRevisionBodySchema = external_exports.object({ "expectedRevision": external_exports.int().min(1) });
+var notificationPreferenceDtoSchema = external_exports.object({ "type": notificationPreferenceTypeSchema, "transport": notificationTransportSchema, "mode": notificationModeSchema });
+var notificationPreferencesDtoSchema = external_exports.object({ "enabled": external_exports.boolean(), "preferences": external_exports.array(notificationPreferenceDtoSchema), "categories": external_exports.array(external_exports.object({ "category": pushNotificationCategorySchema, "mode": notificationModeSchema })) });
+var updateNotificationPreferencesBodySchema = external_exports.object({ "enabled": external_exports.exactOptional(external_exports.boolean()), "preferences": external_exports.exactOptional(external_exports.array(notificationPreferenceDtoSchema)), "categories": external_exports.exactOptional(external_exports.array(external_exports.object({ "category": pushNotificationCategorySchema, "mode": notificationModeSchema }))) });
+var apnsEnvironmentSchema = external_exports.enum(["sandbox", "production"]);
+var registerLiveActivityPushTokenBodySchema = external_exports.object({ "pushToken": external_exports.string(), "environment": apnsEnvironmentSchema, "bundleId": external_exports.string(), "startedByPush": external_exports.exactOptional(external_exports.boolean()) });
+var registerLiveActivityStartTokenBodySchema = external_exports.object({ "startToken": external_exports.string(), "environment": apnsEnvironmentSchema, "bundleId": external_exports.string(), "activityType": external_exports.exactOptional(external_exports.string()), "appVersion": external_exports.exactOptional(external_exports.string()) });
+var revokeLiveActivityStartTokenBodySchema = external_exports.object({ "startToken": external_exports.string() });
+var registerDevicePushTokenBodySchema = external_exports.object({ "deviceToken": external_exports.string(), "environment": apnsEnvironmentSchema, "bundleId": external_exports.string(), "appVersion": external_exports.exactOptional(external_exports.string()) });
+var revokeDevicePushTokenBodySchema = external_exports.object({ "deviceToken": external_exports.string() });
+var webhookEventTypeSchema = external_exports.enum(["mission.delivered", "mission.status_changed", "objective.completed", "mission.blocked", "mission.unblocked"]);
+var webhookPayloadModeSchema = external_exports.enum(["thin", "full"]);
+var webhookDisabledReasonSchema = external_exports.enum(["manual", "failures", "owner_revoked"]);
+var webhookSubscriptionDtoSchema = external_exports.object({ "id": external_exports.string(), "projectId": external_exports.string().nullable(), "name": external_exports.string(), "endpointUrl": external_exports.string(), "isInternal": external_exports.boolean(), "eventTypes": external_exports.array(webhookEventTypeSchema), "payloadMode": webhookPayloadModeSchema, "enabled": external_exports.boolean(), "disabledReason": webhookDisabledReasonSchema.nullable(), "consecutiveFailures": external_exports.int().min(0), "lastSuccessAt": dateTimeSchema.nullable(), "lastFailureAt": dateTimeSchema.nullable(), "createdByWorkspaceUserId": external_exports.string(), "createdAt": dateTimeSchema, "updatedAt": dateTimeSchema, "revision": external_exports.int().min(1) });
+var webhookSubscriptionListSchema = external_exports.array(webhookSubscriptionDtoSchema);
+var createWebhookSubscriptionBodySchema = external_exports.object({ "workspaceId": external_exports.exactOptional(external_exports.string()), "projectId": external_exports.exactOptional(external_exports.string().nullable()), "name": external_exports.string(), "endpointUrl": external_exports.string(), "eventTypes": external_exports.array(webhookEventTypeSchema).min(1), "payloadMode": external_exports.exactOptional(webhookPayloadModeSchema.nullable()) });
+var updateWebhookSubscriptionBodySchema = external_exports.object({ "name": external_exports.exactOptional(external_exports.string()), "endpointUrl": external_exports.exactOptional(external_exports.string()), "projectId": external_exports.exactOptional(external_exports.string().nullable()), "eventTypes": external_exports.exactOptional(external_exports.array(webhookEventTypeSchema).min(1)), "payloadMode": external_exports.exactOptional(webhookPayloadModeSchema), "enabled": external_exports.exactOptional(external_exports.boolean()) });
+var createWebhookSubscriptionResultDtoSchema = external_exports.object({ "subscription": webhookSubscriptionDtoSchema, "secret": external_exports.string() });
+var webhookTestResultDtoSchema = external_exports.object({ "ok": external_exports.literal(true), "responseStatus": external_exports.int() });
+var webhookDeliveryAttemptDtoSchema = external_exports.object({ "id": external_exports.string(), "outboxMessageId": external_exports.string(), "eventType": external_exports.string(), "attemptNumber": external_exports.int().min(1), "responseStatus": external_exports.int().nullable(), "responseSnippet": external_exports.string().nullable(), "error": external_exports.string().nullable(), "durationMs": external_exports.int().min(0).nullable(), "attemptedAt": dateTimeSchema });
+var webhookDeliveryAttemptsPageDtoSchema = external_exports.object({ "attempts": external_exports.array(webhookDeliveryAttemptDtoSchema), "hasMore": external_exports.boolean() });
+var storageBucketKeySchema = external_exports.enum(["user-images", "workspace-images", "organization-images", "attachments"]);
+var rawImageUploadBodySchema = binaryBodySchema;
+var binaryDownloadSchema = binaryBodySchema;
+var storedImageDtoSchema = external_exports.object({ "id": external_exports.string(), "bucketKey": storageBucketKeySchema, "storageKey": external_exports.string(), "filename": external_exports.string(), "contentType": external_exports.enum(["image/png", "image/jpeg", "image/gif", "image/webp"]), "sizeBytes": external_exports.int().min(1).max(8388608), "url": external_exports.string(), "createdAt": dateTimeSchema });
+var entityChangeOperationSchema = external_exports.enum(["insert", "update", "delete", "restore"]);
+var entityChangeDtoSchema = external_exports.object({ "seq": external_exports.int().min(1), "workspaceId": external_exports.string(), "entityType": external_exports.string(), "entityId": external_exports.string(), "operation": entityChangeOperationSchema, "projectId": external_exports.string().nullable(), "missionId": external_exports.string().nullable(), "objectiveId": external_exports.string().nullable(), "changedFields": external_exports.array(external_exports.string()), "occurredAt": dateTimeSchema });
+var syncChangesDtoSchema = external_exports.object({ "changes": external_exports.array(entityChangeDtoSchema), "cursor": external_exports.int().min(0), "hasMore": external_exports.boolean() });
+var realtimeChangeEventDtoSchema = external_exports.object({ "type": external_exports.literal("change"), "changes": external_exports.array(entityChangeDtoSchema), "cursor": external_exports.int().min(0) });
+var realtimeStreamEventSchema = external_exports.union([external_exports.object({ "type": external_exports.literal("hello"), "cursor": external_exports.int().min(0) }), realtimeChangeEventDtoSchema, external_exports.object({ "type": external_exports.literal("refresh") })]);
+var oAuthScopeSchema = external_exports.enum(["overlord.workspace.read", "overlord.mission.read", "overlord.mission.write", "overlord.session.write"]);
+var oAuthProtectedResourceMetadataSchema = external_exports.object({ "resource": external_exports.string(), "authorization_servers": external_exports.array(external_exports.string()), "bearer_methods_supported": external_exports.array(external_exports.literal("header")), "resource_documentation": external_exports.string(), "scopes_supported": external_exports.array(oAuthScopeSchema) });
+var oAuthAuthorizationServerMetadataSchema = external_exports.object({ "issuer": external_exports.string(), "authorization_endpoint": external_exports.string(), "token_endpoint": external_exports.string(), "registration_endpoint": external_exports.string(), "revocation_endpoint": external_exports.string(), "response_types_supported": external_exports.array(external_exports.literal("code")), "grant_types_supported": external_exports.array(external_exports.literal("authorization_code")), "code_challenge_methods_supported": external_exports.array(external_exports.literal("S256")), "token_endpoint_auth_methods_supported": external_exports.array(external_exports.literal("none")), "scopes_supported": external_exports.array(oAuthScopeSchema) });
+var oAuthErrorBodySchema = external_exports.object({ "error": external_exports.string(), "error_description": external_exports.string() });
+var oAuthClientRegistrationBodySchema = external_exports.object({ "redirect_uris": external_exports.array(external_exports.string()), "client_name": external_exports.exactOptional(external_exports.string()) });
+var oAuthClientRegistrationDtoSchema = external_exports.object({ "client_id": external_exports.string(), "client_name": external_exports.string(), "redirect_uris": external_exports.array(external_exports.string()), "grant_types": external_exports.array(external_exports.literal("authorization_code")), "response_types": external_exports.array(external_exports.literal("code")), "token_endpoint_auth_method": external_exports.literal("none"), "client_id_issued_at": external_exports.int() });
+var oAuthTokenRequestBodySchema = external_exports.object({ "grant_type": external_exports.literal("authorization_code"), "code": external_exports.string(), "client_id": external_exports.string(), "redirect_uri": external_exports.string(), "code_verifier": external_exports.string(), "resource": external_exports.string() });
+var oAuthTokenResponseDtoSchema = external_exports.object({ "access_token": external_exports.string(), "token_type": external_exports.literal("Bearer"), "expires_in": external_exports.literal(7776e3), "scope": external_exports.string() });
+var oAuthRevokeBodySchema = external_exports.object({ "token": external_exports.exactOptional(external_exports.string()) });
+var oAuthAuthorizationRequestBodyShape = { "response_type": external_exports.exactOptional(external_exports.literal("code")), "client_id": external_exports.exactOptional(external_exports.string()), "redirect_uri": external_exports.exactOptional(external_exports.string()), "code_challenge_method": external_exports.exactOptional(external_exports.literal("S256")), "code_challenge": external_exports.exactOptional(external_exports.string()), "resource": external_exports.exactOptional(external_exports.string()), "scope": external_exports.exactOptional(external_exports.string()), "state": external_exports.exactOptional(external_exports.string()) };
+var oAuthAuthorizationRequestBodySchema = external_exports.object(oAuthAuthorizationRequestBodyShape);
+var oAuthConsentWorkspaceDtoSchema = external_exports.object({ "workspaceId": external_exports.string(), "workspaceUserId": external_exports.string(), "slug": external_exports.string(), "name": external_exports.string(), "kind": external_exports.string(), "roleKeys": external_exports.array(external_exports.string()) });
+var oAuthConsentOrganizationDtoSchema = external_exports.object({ "id": external_exports.string(), "name": external_exports.string(), "workspaces": external_exports.array(oAuthConsentWorkspaceDtoSchema) });
+var oAuthAuthorizationRequestInfoDtoSchema = external_exports.object({ "clientName": external_exports.string(), "redirectUri": external_exports.string(), "redirectHost": external_exports.string(), "resource": external_exports.string(), "scopes": external_exports.array(oAuthScopeSchema), "state": external_exports.string(), "organizations": external_exports.array(oAuthConsentOrganizationDtoSchema) });
+var oAuthApproveBodySchema = external_exports.object({ ...oAuthAuthorizationRequestBodyShape, "decision": external_exports.enum(["approve", "deny"]), "organizationId": external_exports.exactOptional(external_exports.string()), "allWorkspaces": external_exports.exactOptional(external_exports.boolean()), "workspaceIds": external_exports.exactOptional(external_exports.array(external_exports.string())) });
+var oAuthApproveResultDtoSchema = external_exports.object({ "redirectTo": external_exports.string() });
+var mcpServerInfoDtoSchema = external_exports.object({ "name": external_exports.literal("overlord"), "protocolVersion": external_exports.string(), "endpoint": external_exports.string(), "capabilities": external_exports.object({ "tools": external_exports.array(jsonValueSchema), "resources": external_exports.array(jsonValueSchema) }), "instructions": external_exports.string() });
+var jsonRpcIdSchema = external_exports.union([external_exports.string(), external_exports.number(), external_exports.null()]);
+var jsonRpcRequestSchema = external_exports.object({ "jsonrpc": external_exports.literal("2.0"), "id": external_exports.exactOptional(jsonRpcIdSchema), "method": external_exports.string(), "params": external_exports.exactOptional(jsonValueSchema) });
+var jsonRpcResponseSchema = external_exports.union([external_exports.strictObject({ "jsonrpc": external_exports.literal("2.0"), "id": external_exports.exactOptional(jsonRpcIdSchema), "result": jsonValueSchema }), external_exports.strictObject({ "jsonrpc": external_exports.literal("2.0"), "id": jsonRpcIdSchema, "error": external_exports.object({ "code": external_exports.literal([-32600, -32601, -32e3]), "message": external_exports.string() }) })]);
+var accountConnectionProviderSchema = external_exports.enum(["knowledgebase", "everhour", "github"]);
+var accountConnectionScopeSchema = external_exports.enum(["organization", "profile"]);
+var accountConnectionCredentialKindSchema = external_exports.enum(["oauth", "api_key"]);
+var accountConnectionStateSchema = external_exports.enum(["pending", "connected", "reauthorization_required", "disconnected"]);
+var accountConnectionAssistantWriteScopeSchema = external_exports.enum(["per_request", "all_workspaces"]);
+var accountConnectionUnavailableReasonSchema = external_exports.enum(["not_offered_on_edition", "not_configured", "encryption_not_configured"]);
+var accountConnectionDtoSchema = external_exports.object({ "id": external_exports.string(), "provider": accountConnectionProviderSchema, "organizationId": external_exports.string().nullable(), "scope": accountConnectionScopeSchema, "credentialKind": accountConnectionCredentialKindSchema, "account": external_exports.object({ "id": external_exports.string().nullable(), "label": external_exports.string().nullable(), "avatarUrl": external_exports.string().nullable() }).nullable(), "scopes": external_exports.array(external_exports.string()), "lastValidatedAt": dateTimeSchema.nullable(), "serverUrl": external_exports.string(), "state": accountConnectionStateSchema, "authorizedWorkspaces": external_exports.array(external_exports.string()), "assistantWriteScope": accountConnectionAssistantWriteScopeSchema, "toolPolicyVersion": external_exports.int(), "lastErrorCode": external_exports.string().nullable(), "connectedAt": dateTimeSchema.nullable(), "updatedAt": dateTimeSchema, "revision": external_exports.int().min(1) });
+var accountConnectionProviderStatusDtoSchema = external_exports.object({ "provider": accountConnectionProviderSchema, "scope": accountConnectionScopeSchema, "credentialKind": accountConnectionCredentialKindSchema, "available": external_exports.boolean(), "reason": accountConnectionUnavailableReasonSchema.nullable() });
+var accountConnectionListResponseSchema = external_exports.object({ "items": external_exports.array(accountConnectionDtoSchema), "providers": external_exports.exactOptional(external_exports.array(accountConnectionProviderStatusDtoSchema)) });
+var startAccountConnectionBodySchema = external_exports.object({ "provider": accountConnectionProviderSchema, "returnTo": external_exports.enum(["mobile", "web"]), "returnPath": external_exports.exactOptional(external_exports.string().max(512).nullable()) });
+var startAccountConnectionResponseSchema = external_exports.object({ "connectionId": external_exports.string(), "authorizeUrl": external_exports.string(), "expiresAt": dateTimeSchema });
+var setAccountConnectionApiKeyBodySchema = external_exports.object({ "provider": accountConnectionProviderSchema, "apiKey": external_exports.string().max(512) });
+var updateAccountConnectionBodySchema = external_exports.strictObject({ "expectedRevision": external_exports.int().min(1), "assistantWriteScope": accountConnectionAssistantWriteScopeSchema });
+var knowledgebaseClientMetadataDtoSchema = external_exports.object({ "client_id": external_exports.string(), "client_name": external_exports.literal("Overlord"), "client_uri": external_exports.string(), "redirect_uris": external_exports.array(external_exports.string()), "grant_types": external_exports.array(external_exports.enum(["authorization_code", "refresh_token"])), "response_types": external_exports.array(external_exports.literal("code")), "token_endpoint_auth_method": external_exports.literal("none"), "scope": external_exports.string() });
+var runQueueEntryStateSchema = external_exports.enum(["waiting", "blocked", "dispatched", "running"]);
+var runQueueWaitingReasonSchema = external_exports.enum(["mission_busy", "resource_disconnected", "retry_pending"]);
+var executionRequestStatusSchema = external_exports.enum(["queued", "claimed", "launching", "launched", "failed", "cleared", "cancelled", "expired"]);
+var runQueueEntryDtoSchema = external_exports.object({ "id": external_exports.string(), "queueId": external_exports.string(), "position": external_exports.int().min(1), "state": runQueueEntryStateSchema, "blockedReason": external_exports.string().nullable(), "waitingReason": runQueueWaitingReasonSchema.nullable(), "waitingOnObjectiveId": external_exports.string().nullable(), "waitingOnObjectiveDisplayId": external_exports.string().nullable(), "attemptCount": external_exports.int().min(0), "objectiveId": external_exports.string(), "objectiveDisplayId": external_exports.string(), "objectiveTitle": external_exports.string().nullable(), "missionId": external_exports.string(), "missionDisplayId": external_exports.string(), "missionTitle": external_exports.string(), "assignedAgent": external_exports.string().nullable(), "resourceKey": external_exports.string().nullable(), "enqueuedAt": dateTimeSchema, "executionRequestId": external_exports.string().nullable(), "executionRequest": external_exports.object({ "status": executionRequestStatusSchema, "lastError": external_exports.string().nullable(), "claimedByDeviceId": external_exports.string().nullable(), "claimedByExecutionTargetId": external_exports.string().nullable(), "executionTargetId": external_exports.string().nullable(), "createdAt": dateTimeSchema, "claimedAt": dateTimeSchema.nullable(), "launchStartedAt": dateTimeSchema.nullable(), "launchCompletedAt": dateTimeSchema.nullable(), "updatedAt": dateTimeSchema }).nullable(), "diagnosticCode": external_exports.enum(["terminal_request_dispatched", "running_without_live_request"]).nullable() });
+var runQueueDtoSchema = external_exports.object({ "id": external_exports.string(), "projectId": external_exports.string(), "name": external_exports.string(), "isDefault": external_exports.boolean(), "missionId": external_exports.string().nullable(), "missionDisplayId": external_exports.string().nullable(), "paused": external_exports.boolean(), "position": external_exports.number(), "entries": external_exports.array(runQueueEntryDtoSchema), "running": runQueueEntryDtoSchema.nullable() });
+var projectRunQueuesDtoSchema = external_exports.object({ "projectId": external_exports.string(), "queues": external_exports.array(runQueueDtoSchema) });
+var createRunQueueBodySchema = external_exports.object({ "name": external_exports.string(), "missionId": external_exports.exactOptional(external_exports.string().nullable()) });
+var reorderProjectRunQueuesBodySchema = external_exports.object({ "orderedQueueIds": external_exports.array(external_exports.string()) });
+var enqueueRunQueueEntryBodySchema = external_exports.object({ "objectiveId": external_exports.string(), "queueId": external_exports.exactOptional(external_exports.string()), "afterEntryId": external_exports.exactOptional(external_exports.string()), "position": external_exports.exactOptional(external_exports.number()), "cascade": external_exports.exactOptional(external_exports.boolean()) });
+var updateRunQueueBodySchema = external_exports.object({ "name": external_exports.exactOptional(external_exports.string()), "paused": external_exports.exactOptional(external_exports.boolean()) });
+var deleteRunQueueBodySchema = external_exports.object({ "moveEntriesTo": external_exports.exactOptional(external_exports.string()) });
+var reorderRunQueueBodySchema = external_exports.object({ "orderedEntryIds": external_exports.array(external_exports.string()) });
+var updateRunQueueEntryBodySchema = external_exports.object({ "retry": external_exports.exactOptional(external_exports.boolean()), "queueId": external_exports.exactOptional(external_exports.string()), "afterEntryId": external_exports.exactOptional(external_exports.string()), "position": external_exports.exactOptional(external_exports.number()) });
+var deleteRunQueueEntryBodySchema = external_exports.object({ "force": external_exports.exactOptional(external_exports.boolean()) });
+var runQueueRemovalDtoSchema = external_exports.object({ "removed": external_exports.literal(true), "projectId": external_exports.string() });
+var runQueueEntryRemovalDtoSchema = external_exports.object({ "removed": external_exports.literal(true), "forced": external_exports.boolean(), "objectiveId": external_exports.string(), "previousState": runQueueEntryStateSchema, "objectiveReset": external_exports.boolean(), "clearedExecutionRequests": external_exports.int().min(0), "removedEmptyQueueId": external_exports.string().nullable() });
+var executionTargetRunnerRegistrationDtoSchema = external_exports.object({ "id": external_exports.string(), "executionTargetId": external_exports.string(), "runnerInstanceId": external_exports.string(), "relation": external_exports.enum(["native", "adopted"]), "label": external_exports.string().nullable(), "runnerVersion": external_exports.string().nullable(), "supportedAgents": external_exports.array(external_exports.string()), "health": external_exports.string(), "lastHeartbeatAt": dateTimeSchema.nullable(), "lastErrorCode": external_exports.string().nullable() });
+var workspaceExecutionTargetDtoSchema = external_exports.object({ "id": external_exports.string(), "type": external_exports.string(), "label": external_exports.string(), "status": external_exports.enum(["active", "disabled", "unavailable"]), "ownerDisplayName": external_exports.string().nullable(), "reachable": external_exports.boolean(), "lastSeenAt": dateTimeSchema.nullable(), "activeMemberAccessCount": external_exports.int().min(0), "hasCurrentUserAccess": external_exports.boolean(), "unavailableReason": external_exports.string().nullable(), "runnerRegistrations": external_exports.array(executionTargetRunnerRegistrationDtoSchema) });
+var workspaceExecutionTargetListSchema = external_exports.array(workspaceExecutionTargetDtoSchema);
+var registerExecutionTargetBodySchema = external_exports.object({ "label": external_exports.exactOptional(external_exports.string()) });
+var updateWorkspaceExecutionTargetBodySchema = external_exports.object({ "label": external_exports.exactOptional(external_exports.string()), "status": external_exports.exactOptional(external_exports.enum(["active", "disabled"])) });
+var eligibleExecutionTargetDtoSchema = external_exports.object({ "executionTargetId": external_exports.string(), "type": external_exports.string(), "label": external_exports.string(), "deviceLabel": external_exports.string().nullable(), "reachable": external_exports.boolean(), "primaryResourceConnected": external_exports.boolean() });
+var projectExecutionTargetDtoSchema = external_exports.object({ "selectedExecutionTargetId": external_exports.string().nullable(), "eligibleTargets": external_exports.array(eligibleExecutionTargetDtoSchema) });
+var updateProjectExecutionTargetBodySchema = external_exports.object({ "executionTargetId": external_exports.exactOptional(external_exports.string().nullable()) });
+var targetObservationStateSchema = external_exports.enum(["available", "missing", "unreachable", "permission_denied", "not_git_repository", "unknown"]);
+var reportResourceObservationsBodySchema = external_exports.object({ "observations": external_exports.array(external_exports.object({ "resourceId": external_exports.string(), "state": targetObservationStateSchema, "gitRoot": external_exports.exactOptional(external_exports.string().nullable()), "branch": external_exports.exactOptional(external_exports.string().nullable()), "commit": external_exports.exactOptional(external_exports.string().nullable()), "observedAt": external_exports.string() })).min(1) });
+var reportMissionBranchObservationsBodySchema = external_exports.object({ "observations": external_exports.array(external_exports.object({ "missionId": external_exports.string(), "resourceKey": external_exports.string(), "status": external_exports.enum(["created", "published", "merged_unpushed", "merged"]), "dirty": external_exports.boolean(), "worktreePath": external_exports.exactOptional(external_exports.string().nullable()), "observedAt": external_exports.string() })).min(1) });
+var recordedObservationsDtoSchema = external_exports.object({ "recorded": external_exports.int().min(1) });
+var agentCatalogModelDtoSchema = external_exports.object({ "id": external_exports.string(), "displayName": external_exports.string(), "reasoningOptions": external_exports.array(external_exports.string()), "enabled": external_exports.boolean() });
+var agentCatalogAgentDtoSchema = external_exports.object({ "key": external_exports.string(), "label": external_exports.string(), "availableByDefault": external_exports.boolean(), "models": external_exports.array(agentCatalogModelDtoSchema), "defaultModel": external_exports.string().nullable(), "defaultReasoningEffort": external_exports.string().nullable(), "reasoningLabel": external_exports.string() });
+var agentCatalogDtoSchema = external_exports.object({ "agents": external_exports.array(agentCatalogAgentDtoSchema), "defaultAgent": external_exports.string(), "defaultModel": external_exports.string().nullable() });
+var updateAgentCatalogBodySchema = external_exports.object({ "agents": external_exports.array(external_exports.object({ "key": external_exports.string(), "label": external_exports.string(), "availableByDefault": external_exports.exactOptional(external_exports.boolean()), "models": external_exports.array(external_exports.object({ "id": external_exports.string(), "displayName": external_exports.exactOptional(external_exports.string()), "reasoningOptions": external_exports.exactOptional(external_exports.array(external_exports.string())), "enabled": external_exports.exactOptional(external_exports.boolean()) })).min(1), "defaultModel": external_exports.exactOptional(external_exports.string().nullable()), "defaultReasoningEffort": external_exports.exactOptional(external_exports.string().nullable()), "reasoningLabel": external_exports.exactOptional(external_exports.string()) })) });
+var executionProviderDtoSchema = external_exports.object({ "kind": external_exports.enum(["direct", "latch"]), "executable": external_exports.string() });
+var terminalProfileDtoSchema = external_exports.object({ "launcher": external_exports.string().nullable(), "placement": external_exports.string(), "chord": external_exports.string().nullable(), "background": external_exports.boolean(), "executionProvider": executionProviderDtoSchema.nullable(), "openViewerOnLaunch": external_exports.boolean().nullable() });
+var launchSessionDefaultsDtoSchema = external_exports.object({ "executionProvider": executionProviderDtoSchema, "openViewerOnLaunch": external_exports.boolean(), "worktreeBranchAutomationEnabled": external_exports.boolean() });
+var launchSessionSourceSchema = external_exports.enum(["target", "user_default"]);
+var resolvedLaunchSessionDtoSchema = external_exports.object({ "version": external_exports.literal(1), "executionProvider": executionProviderDtoSchema, "viewer": external_exports.object({ "kind": external_exports.enum(["iterm", "terminal", "inline", "custom"]), "launcher": external_exports.string().nullable(), "openOnLaunch": external_exports.boolean(), "openAs": external_exports.enum(["window", "tab"]), "background": external_exports.boolean() }), "executionProviderSource": launchSessionSourceSchema, "viewerOpenSource": launchSessionSourceSchema });
+var launchSettingsDtoSchema = external_exports.object({ "executionTargetId": external_exports.string().nullable(), "deviceLabel": external_exports.string().nullable(), "agentConfigs": external_exports.record(external_exports.string(), agentLaunchConfigDtoSchema), "terminalProfile": terminalProfileDtoSchema, "launchSessionDefaults": launchSessionDefaultsDtoSchema, "resolvedLaunchSession": resolvedLaunchSessionDtoSchema.nullable(), "worktreeBranchAutomationEnabled": external_exports.boolean() });
+var updateAgentLaunchConfigBodySchema = external_exports.object({ "preCommand": external_exports.exactOptional(external_exports.string()), "flags": external_exports.exactOptional(external_exports.array(agentLaunchFlagInputSchema)) });
+var updateTerminalProfileBodySchema = external_exports.object({ "launcher": external_exports.exactOptional(external_exports.string().nullable()), "placement": external_exports.exactOptional(external_exports.enum(["window", "tab", "chord"])), "chord": external_exports.exactOptional(external_exports.string().nullable()), "background": external_exports.exactOptional(external_exports.boolean()), "executionProvider": external_exports.exactOptional(executionProviderDtoSchema.nullable()), "openViewerOnLaunch": external_exports.exactOptional(external_exports.boolean().nullable()) });
+var updateLaunchSessionDefaultsBodySchema = external_exports.object({ "executionProvider": external_exports.exactOptional(executionProviderDtoSchema.nullable()), "openViewerOnLaunch": external_exports.exactOptional(external_exports.boolean().nullable()), "worktreeBranchAutomationEnabled": external_exports.exactOptional(external_exports.boolean().nullable()) });
+var updateWorktreeBranchAutomationBodySchema = external_exports.object({ "enabled": external_exports.exactOptional(external_exports.boolean()) });
+var launchPreferenceDtoSchema = external_exports.object({ "selectedAgent": external_exports.string().nullable(), "selectedModel": external_exports.string().nullable(), "selectedReasoningEffort": external_exports.string().nullable() });
+var updateLaunchPreferenceBodySchema = external_exports.object({ "selectedAgent": external_exports.exactOptional(external_exports.string().nullable()), "selectedModel": external_exports.exactOptional(external_exports.string().nullable()), "selectedReasoningEffort": external_exports.exactOptional(external_exports.string().nullable()) });
+var localTargetBridgeCallBodySchema = external_exports.object({ "capability": external_exports.string(), "input": jsonValueSchema });
+var capabilityTargetMetadataDtoSchema = external_exports.object({ "executionTargetId": external_exports.string().nullable(), "deviceLabel": external_exports.string().nullable(), "transport": external_exports.enum(["in_process", "desktop_bridge", "runner_queue", "fake"]) });
+var localTargetErrorCodeSchema = external_exports.enum(["LOCAL_TARGET_REQUIRED", "LOCAL_TARGET_UNREACHABLE", "RESOURCE_MISSING", "NOT_GIT_REPOSITORY", "PERMISSION_DENIED", "GIT_COMMAND_FAILED", "CAPABILITY_NOT_IMPLEMENTED", "LOCAL_TARGET_TIMEOUT", "LOCAL_TARGET_UNSUPPORTED", "TARGET_OPERATION_FAILED", "LATCH_SESSION_ABSENT", "UNKNOWN"]);
+var capabilityResultDtoSchema = external_exports.union([external_exports.object({ "ok": external_exports.literal(true), "value": jsonValueSchema, "target": capabilityTargetMetadataDtoSchema }), external_exports.object({ "ok": external_exports.literal(false), "code": localTargetErrorCodeSchema, "message": external_exports.string(), "details": external_exports.exactOptional(jsonValueSchema), "target": capabilityTargetMetadataDtoSchema })]);
+var worktreeDtoSchema = external_exports.object({ "path": external_exports.string(), "branch": external_exports.string().nullable(), "projectId": external_exports.string(), "projectName": external_exports.string(), "missionId": external_exports.string().nullable(), "missionDisplayId": external_exports.string().nullable(), "status": missionBranchStatusSchema.nullable(), "merged": external_exports.boolean(), "dirty": external_exports.boolean(), "sizeBytes": external_exports.int().min(0).nullable(), "lastModifiedAt": dateTimeSchema.nullable() });
+var worktreeListSchema = external_exports.array(worktreeDtoSchema).max(0);
+var removeWorktreeBodySchema = external_exports.object({ "path": external_exports.string(), "force": external_exports.exactOptional(external_exports.boolean()), "primaryRepoPath": external_exports.exactOptional(external_exports.string()), "clientExecuted": external_exports.exactOptional(external_exports.boolean()), "projectId": external_exports.exactOptional(external_exports.string()), "executionTargetId": external_exports.exactOptional(external_exports.string().nullable()) });
+var purgeMergedWorktreesBodySchema = external_exports.object({ "projectId": external_exports.exactOptional(external_exports.string()), "executionTargetId": external_exports.exactOptional(external_exports.string().nullable()), "primaryRepoPath": external_exports.exactOptional(external_exports.string()), "worktreeRoot": external_exports.exactOptional(external_exports.string()) });
+var purgeWorktreesResultDtoSchema = external_exports.object({ "removed": external_exports.array(external_exports.string()), "skipped": external_exports.array(external_exports.object({ "path": external_exports.string(), "reason": external_exports.string() })), "worktrees": external_exports.array(worktreeDtoSchema).max(0) });
+var runnerExecutionRequestDtoShape = { "id": external_exports.string(), "workspaceId": external_exports.string(), "projectId": external_exports.string(), "missionId": external_exports.string().nullable(), "objectiveId": external_exports.string().nullable(), "executionTargetId": external_exports.string().nullable(), "requestedAgent": external_exports.string().nullable(), "requestedModel": external_exports.string().nullable(), "requestedReasoningEffort": external_exports.string().nullable(), "launchConfig": agentLaunchConfigDtoSchema, "metadata": external_exports.record(external_exports.string(), jsonValueSchema), "status": executionRequestStatusSchema, "requestedSource": external_exports.string(), "workingDirectory": external_exports.string().nullable(), "lastError": external_exports.string().nullable(), "createdAt": dateTimeSchema, "updatedAt": dateTimeSchema };
+var runnerExecutionRequestDtoSchema = external_exports.object(runnerExecutionRequestDtoShape);
+var runnerStatusDtoSchema = external_exports.object({ "queue": external_exports.array(runnerExecutionRequestDtoSchema), "activeCount": external_exports.int().min(0) });
+var runnerClaimedRequestDtoSchema = external_exports.object({ ...runnerExecutionRequestDtoShape, "preLaunchCommands": external_exports.array(external_exports.string()), "launchEnvVars": external_exports.record(external_exports.string(), external_exports.string()) });
+var runnerClaimResponseSchema = external_exports.object({ "request": runnerClaimedRequestDtoSchema.nullable(), "longPoll": external_exports.boolean() });
+var runnerClaimBodySchema = external_exports.object({ "projectId": external_exports.exactOptional(external_exports.string()), "deviceFingerprint": external_exports.exactOptional(external_exports.string()), "deviceLabel": external_exports.exactOptional(external_exports.string()), "devicePlatform": external_exports.exactOptional(external_exports.string()), "executionTargetId": external_exports.exactOptional(external_exports.string()), "runnerInstanceId": external_exports.exactOptional(external_exports.string()), "runnerRelation": external_exports.exactOptional(external_exports.enum(["native", "adopted"])), "runnerLabel": external_exports.exactOptional(external_exports.string()), "runnerVersion": external_exports.exactOptional(external_exports.string()), "capabilities": external_exports.exactOptional(external_exports.record(external_exports.string(), jsonValueSchema)), "supportedAgents": external_exports.exactOptional(external_exports.array(external_exports.string())) });
+var runnerClearBodySchema = external_exports.object({ "objectiveId": external_exports.exactOptional(external_exports.string()), "projectId": external_exports.exactOptional(external_exports.string()) });
+var runnerClearResultDtoSchema = external_exports.object({ "cleared": external_exports.int().min(0) });
+var runnerLaunchedBodySchema = external_exports.object({ "providerSession": external_exports.exactOptional(external_exports.object({ "provider": external_exports.literal("latch"), "providerSessionId": external_exports.string(), "sessionName": external_exports.exactOptional(external_exports.string()), "executionTargetId": external_exports.exactOptional(external_exports.string()), "agentSessionId": external_exports.exactOptional(external_exports.string()), "createdAt": external_exports.exactOptional(external_exports.string()), "lastObservedState": external_exports.exactOptional(external_exports.string()) })) });
+var runnerFailedBodySchema = external_exports.object({ "error": external_exports.exactOptional(external_exports.string()) });
+var runnerCompletedBodySchema = external_exports.object({ "mutationResult": capabilityResultDtoSchema });
+var protocolRequestBodySchema = external_exports.object({ "args": external_exports.exactOptional(external_exports.array(external_exports.string())), "positional": external_exports.exactOptional(external_exports.array(external_exports.string())), "flags": external_exports.exactOptional(external_exports.record(external_exports.string(), external_exports.union([external_exports.string(), external_exports.boolean()]))), "fileInputs": external_exports.exactOptional(external_exports.record(external_exports.string(), external_exports.string())), "externalSessionId": external_exports.exactOptional(external_exports.string().nullable()) });
+var agentSessionChannelStateSchema = external_exports.enum(["preparing", "online", "degraded", "ended", "lost"]);
+var agentRequestKindSchema = external_exports.enum(["question", "permission", "choice", "retry"]);
+var agentRequestStatusSchema = external_exports.enum(["open", "resolved", "released_to_terminal", "expired", "cancelled"]);
+var agentSessionChannelSelfDtoSchema = external_exports.object({ "channelId": external_exports.string(), "state": agentSessionChannelStateSchema, "bound": external_exports.boolean(), "missionId": external_exports.string(), "adapterKey": external_exports.string().nullable(), "capabilities": jsonValueSchema, "leaseExpiresAt": dateTimeSchema.nullable() });
+var agentSessionHeartbeatBodySchema = external_exports.object({ "state": external_exports.exactOptional(external_exports.enum(["online", "degraded"])), "capabilities": external_exports.exactOptional(external_exports.record(external_exports.string(), jsonValueSchema)), "nativeSessionId": external_exports.exactOptional(external_exports.string()), "adapterVersion": external_exports.exactOptional(external_exports.string()) });
+var agentSessionHeartbeatDtoSchema = external_exports.object({ "ok": external_exports.literal(true), "leaseExpiresAt": dateTimeSchema, "credentialExpiresAt": dateTimeSchema });
+var agentSessionEventInputSchema = external_exports.object({ "eventId": external_exports.string(), "kind": external_exports.string(), "producerSequence": external_exports.exactOptional(external_exports.number()), "occurredAt": external_exports.exactOptional(external_exports.string()), "severity": external_exports.exactOptional(external_exports.string()), "actionability": external_exports.exactOptional(external_exports.string()), "nativeEvent": external_exports.exactOptional(external_exports.string()), "nativeTurnId": external_exports.exactOptional(external_exports.string()), "nativeCallId": external_exports.exactOptional(external_exports.string()), "subagentId": external_exports.exactOptional(external_exports.string()), "correlationId": external_exports.exactOptional(external_exports.string()), "origin": external_exports.exactOptional(external_exports.string()), "summary": external_exports.exactOptional(external_exports.string()), "payload": external_exports.exactOptional(external_exports.record(external_exports.string(), jsonValueSchema)) });
+var appendAgentSessionEventsBodySchema = external_exports.union([external_exports.object({ "events": external_exports.array(agentSessionEventInputSchema).max(100) }), agentSessionEventInputSchema]);
+var appendAgentSessionEventsDtoSchema = external_exports.object({ "accepted": external_exports.array(external_exports.object({ "id": external_exports.string(), "channelSequence": external_exports.int().min(1), "duplicate": external_exports.boolean() })) });
+var agentRequestOptionSchema = external_exports.object({ "optionId": external_exports.string(), "label": external_exports.string(), "kind": external_exports.string() });
+var createAgentRequestBodySchema = external_exports.object({ "kind": external_exports.exactOptional(agentRequestKindSchema), "summary": external_exports.exactOptional(external_exports.string()), "details": external_exports.exactOptional(external_exports.record(external_exports.string(), jsonValueSchema)), "options": external_exports.exactOptional(external_exports.array(agentRequestOptionSchema)), "allowsFreeText": external_exports.exactOptional(external_exports.boolean()), "nativeRequestId": external_exports.exactOptional(external_exports.string()), "nativeCallId": external_exports.exactOptional(external_exports.string()), "windowExpiresAt": external_exports.exactOptional(external_exports.string()), "windowBasis": external_exports.exactOptional(external_exports.string()) });
+var createdAgentRequestDtoSchema = external_exports.object({ "requestId": external_exports.string(), "status": agentRequestStatusSchema, "revision": external_exports.int().min(1), "windowExpiresAt": external_exports.string().nullable() });
+var agentRequestDtoShape = { "id": external_exports.string(), "channelId": external_exports.string(), "missionId": external_exports.string().nullable(), "objectiveId": external_exports.string().nullable(), "kind": agentRequestKindSchema, "summary": external_exports.string(), "options": external_exports.array(agentRequestOptionSchema), "allowsFreeText": external_exports.boolean(), "status": agentRequestStatusSchema, "resolution": jsonValueSchema, "revision": external_exports.int().min(1), "windowExpiresAt": external_exports.string().nullable(), "releasedReason": external_exports.string().nullable(), "applicationState": external_exports.string(), "resolvedAt": dateTimeSchema.nullable(), "createdAt": dateTimeSchema };
+var agentRequestDtoSchema = external_exports.object(agentRequestDtoShape);
+var agentRequestDeliveryDtoSchema = external_exports.object({ "mode": external_exports.enum(["latch", "read_only"]), "reason": external_exports.enum(["no_latch_session", "latch_session_exited", "target_offline", "request_closed"]).nullable(), "state": external_exports.enum(["emitted", "applied", "not_applied", "unknown"]).nullable(), "observedAt": dateTimeSchema.nullable() });
+var humanAgentRequestDtoSchema = external_exports.object({ ...agentRequestDtoShape, "delivery": agentRequestDeliveryDtoSchema });
+var agentRequestListResponseSchema = external_exports.object({ "requests": external_exports.array(humanAgentRequestDtoSchema) });
+var agentRequestLeaseBodySchema = external_exports.object({ "leaseId": external_exports.exactOptional(external_exports.string()) });
+var agentRequestLeaseDtoSchema = external_exports.object({ "leaseId": external_exports.string(), "leaseExpiresAt": dateTimeSchema, "status": agentRequestStatusSchema, "revision": external_exports.int().min(1), "resolution": jsonValueSchema });
+var releaseAgentRequestBodySchema = external_exports.object({ "reason": external_exports.exactOptional(external_exports.string()) });
+var releasedAgentRequestDtoSchema = external_exports.object({ "released": external_exports.boolean(), "status": agentRequestStatusSchema, "resolution": jsonValueSchema });
+var recordAgentRequestApplicationBodySchema = external_exports.object({ "applicationState": external_exports.exactOptional(external_exports.string()) });
+var agentRequestResolvedElsewhereDtoSchema = external_exports.object({ "changed": external_exports.boolean(), "status": agentRequestStatusSchema, "releasedReason": external_exports.string().nullable() });
+var agentSessionInputKindSchema = external_exports.enum(["instruction", "retry", "continue"]);
+var agentSessionInputStatusSchema = external_exports.enum(["queued", "leased", "emitted", "acknowledged", "failed", "expired", "cancelled"]);
+var claimedAgentSessionInputDtoSchema = external_exports.object({ "input": external_exports.object({ "id": external_exports.string(), "kind": agentSessionInputKindSchema, "body": external_exports.string(), "leaseId": external_exports.string(), "leaseExpiresAt": dateTimeSchema }).nullable() });
+var markAgentSessionInputEmittedBodySchema = external_exports.object({ "leaseId": external_exports.string(), "deliveryOutcome": external_exports.exactOptional(external_exports.string()) });
+var markAgentSessionInputFailedBodySchema = external_exports.object({ "errorCode": external_exports.exactOptional(external_exports.string()) });
+var endAgentSessionChannelBodySchema = external_exports.object({ "reason": external_exports.exactOptional(external_exports.string()), "exitCode": external_exports.exactOptional(external_exports.number().nullable()) });
+var resolveAgentRequestBodySchema = external_exports.object({ "expectedRevision": external_exports.int(), "resolution": external_exports.object({ "text": external_exports.exactOptional(external_exports.string()), "optionId": external_exports.exactOptional(external_exports.string()) }).catchall(jsonValueSchema) });
+var resolveAgentRequestResultDtoSchema = external_exports.object({ "resolved": external_exports.boolean(), "request": humanAgentRequestDtoSchema });
+var agentSessionInputDtoSchema = external_exports.object({ "id": external_exports.string(), "channelId": external_exports.string(), "missionId": external_exports.string().nullable(), "objectiveId": external_exports.string().nullable(), "sessionId": external_exports.string().nullable(), "kind": agentSessionInputKindSchema, "body": external_exports.string(), "status": agentSessionInputStatusSchema, "deliveryOutcome": external_exports.enum(["delivered", "queued_turn_boundary", "queued_next_turn", "unsupported"]).nullable(), "deliveryLabel": external_exports.string(), "attemptCount": external_exports.int().min(0), "lastErrorCode": external_exports.string().nullable(), "emittedAt": dateTimeSchema.nullable(), "acknowledgedAt": dateTimeSchema.nullable(), "createdAt": dateTimeSchema, "revision": external_exports.int().min(1) });
+var agentSessionChannelSnapshotDtoSchema = external_exports.object({ "id": external_exports.string(), "state": agentSessionChannelStateSchema, "agentIdentifier": external_exports.string().nullable(), "adapterKey": external_exports.string().nullable(), "capabilities": jsonValueSchema, "lastHeartbeatAt": dateTimeSchema.nullable(), "endedAt": dateTimeSchema.nullable(), "endReason": external_exports.string().nullable() });
+var agentSessionInputListResponseSchema = external_exports.object({ "liveChannelId": external_exports.exactOptional(external_exports.string().nullable()), "liveChannel": external_exports.exactOptional(agentSessionChannelSnapshotDtoSchema.nullable()), "inputs": external_exports.array(agentSessionInputDtoSchema) });
+var chatThreadDtoSchema = external_exports.object({ "id": external_exports.string(), "organizationId": external_exports.string(), "title": external_exports.string(), "titleSource": external_exports.enum(["pending", "generated", "user"]), "archivedAt": dateTimeSchema.nullable(), "lastActivityAt": dateTimeSchema, "activeRunState": external_exports.enum(["queued", "running", "waiting_user"]).nullable(), "createdAt": dateTimeSchema, "updatedAt": dateTimeSchema, "revision": external_exports.int().min(1) });
+var chatThreadListResponseSchema = external_exports.object({ "items": external_exports.array(chatThreadDtoSchema).max(50), "nextCursor": external_exports.string().nullable() });
+var chatTextBlockDtoSchema = external_exports.object({ "id": external_exports.string(), "kind": external_exports.literal("text"), "text": external_exports.string(), "fallbackText": external_exports.string(), "evidenceIds": external_exports.array(external_exports.string()) });
+var chatSourceLocatorDtoSchema = external_exports.union([external_exports.object({ "kind": external_exports.literal("knowledgebase"), "connectionId": external_exports.string(), "workspace": external_exports.string(), "nodeId": external_exports.string(), "path": external_exports.string().nullable() }), external_exports.object({ "kind": external_exports.literal("overlord"), "entityType": external_exports.enum(["project", "mission", "delivery"]), "entityId": external_exports.string(), "projectId": external_exports.string() }), external_exports.object({ "kind": external_exports.literal("repository"), "executionTargetId": external_exports.string(), "projectId": external_exports.string(), "resourceKey": external_exports.string(), "relativePath": external_exports.string().nullable(), "head": external_exports.string().nullable() })]);
+var chatEvidenceDtoSchema = external_exports.object({ "id": external_exports.string(), "source": chatSourceLocatorDtoSchema, "sourceRevision": external_exports.string().nullable(), "observedAt": dateTimeSchema, "label": external_exports.string(), "excerpt": external_exports.string().nullable(), "truncated": external_exports.boolean(), "stale": external_exports.boolean() });
+var chatEvidenceBlockDtoSchema = external_exports.object({ "id": external_exports.string(), "kind": external_exports.literal("evidence"), "evidence": external_exports.array(chatEvidenceDtoSchema), "fallbackText": external_exports.string() });
+var chatProposalBlockDtoSchema = external_exports.object({ "id": external_exports.string(), "kind": external_exports.literal("proposal"), "proposalId": external_exports.string(), "revision": external_exports.int().min(1), "fallbackText": external_exports.string() });
+var chatUnavailableBlockDtoSchema = external_exports.object({ "id": external_exports.literal("unavailable"), "kind": external_exports.literal("unavailable"), "reason": external_exports.literal("source_access_lost"), "regenerable": external_exports.literal(true), "fallbackText": external_exports.string() });
+var chatBlockDtoSchema = external_exports.union([chatTextBlockDtoSchema, chatEvidenceBlockDtoSchema, chatProposalBlockDtoSchema, chatUnavailableBlockDtoSchema]);
+var chatMessageDtoSchema = external_exports.object({ "id": external_exports.string(), "threadId": external_exports.string(), "role": external_exports.enum(["user", "assistant"]), "state": external_exports.enum(["streaming", "complete", "interrupted"]), "blocks": external_exports.array(chatBlockDtoSchema), "runId": external_exports.string().nullable(), "answersQuestionId": external_exports.string().nullable(), "clientRequestId": external_exports.string().nullable(), "createdAt": dateTimeSchema, "updatedAt": dateTimeSchema, "revision": external_exports.int().min(1) });
+var chatRunUsageDtoSchema = external_exports.object({ "toolCalls": external_exports.int().min(0), "activeProcessingMs": external_exports.int().min(0), "gatheredContentBytes": external_exports.int().min(0) });
+var chatKnowledgebaseWriteDtoSchema = external_exports.strictObject({ "connectionId": external_exports.string(), "workspace": external_exports.string() });
+var chatRunDtoSchema = external_exports.object({ "id": external_exports.string(), "threadId": external_exports.string(), "triggerMessageId": external_exports.string(), "state": external_exports.enum(["queued", "running", "waiting_user", "completed", "failed", "cancelled"]), "outcome": external_exports.enum(["answered", "allowance_exhausted"]).nullable(), "failureCode": external_exports.enum(["provider_unavailable", "rate_limited", "context_limit", "unsupported_capability", "interrupted", "provider_error", "source_access_lost"]).nullable(), "continueAvailable": external_exports.boolean(), "continuedFromRunId": external_exports.string().nullable(), "knowledgebaseWrite": chatKnowledgebaseWriteDtoSchema.nullable(), "usage": chatRunUsageDtoSchema, "cancelRequestedAt": dateTimeSchema.nullable(), "createdAt": dateTimeSchema, "updatedAt": dateTimeSchema, "completedAt": dateTimeSchema.nullable(), "revision": external_exports.int().min(1) });
+var chatQuestionOptionDtoSchema = external_exports.object({ "id": external_exports.string(), "label": external_exports.string() });
+var chatQuestionDtoSchema = external_exports.object({ "id": external_exports.string(), "threadId": external_exports.string(), "runId": external_exports.string(), "ordinal": external_exports.int().min(1), "state": external_exports.enum(["open", "answered", "superseded", "cancelled"]), "prompt": external_exports.string(), "options": external_exports.array(chatQuestionOptionDtoSchema).max(20), "allowFreeText": external_exports.boolean(), "answerMessageId": external_exports.string().nullable(), "createdAt": dateTimeSchema, "answeredAt": dateTimeSchema.nullable(), "revision": external_exports.int().min(1) });
+var chatAssignmentDtoSchema = external_exports.object({ "agent": external_exports.string(), "model": external_exports.string(), "reasoningEffort": external_exports.string().nullable(), "source": external_exports.enum(["project_default", "assistant_selection"]) });
+var chatProposalObjectiveDtoSchema = external_exports.object({ "title": external_exports.string(), "objective": external_exports.string(), "acceptanceCriteria": external_exports.array(external_exports.string()).max(50), "resourceKey": external_exports.string(), "assignment": chatAssignmentDtoSchema, "evidenceIds": external_exports.array(external_exports.string()).max(100) });
+var chatProposalMissionDtoSchema = external_exports.object({ "key": external_exports.string(), "projectId": external_exports.string(), "projectName": external_exports.string(), "workspaceId": external_exports.string(), "title": external_exports.string(), "objectives": external_exports.array(chatProposalObjectiveDtoSchema).min(1).max(20), "dependencies": external_exports.array(external_exports.string()).max(10), "audienceWarning": external_exports.string().nullable() });
+var chatProposalRevisionDtoSchema = external_exports.object({ "revision": external_exports.int().min(1), "missions": external_exports.array(chatProposalMissionDtoSchema).max(10), "responsibleProfileId": external_exports.string(), "invalidated": external_exports.boolean(), "createdAt": dateTimeSchema });
+var chatCreatedMissionDtoSchema = external_exports.object({ "missionId": external_exports.string(), "missionDisplayId": external_exports.string(), "projectId": external_exports.string(), "objectiveIds": external_exports.array(external_exports.string()) });
+var chatCreationReceiptDtoSchema = external_exports.object({ "id": external_exports.string(), "proposalId": external_exports.string(), "revision": external_exports.int().min(1), "missions": external_exports.array(chatCreatedMissionDtoSchema), "createdAt": dateTimeSchema });
+var chatProposalDtoSchema = external_exports.object({ "id": external_exports.string(), "threadId": external_exports.string(), "state": external_exports.enum(["open", "created", "cancelled"]), "currentRevision": external_exports.int().min(1), "current": chatProposalRevisionDtoSchema, "receipt": chatCreationReceiptDtoSchema.nullable(), "createdAt": dateTimeSchema, "updatedAt": dateTimeSchema });
+var chatThreadSnapshotDtoSchema = external_exports.object({ "thread": chatThreadDtoSchema, "messages": external_exports.array(chatMessageDtoSchema).max(100), "hasEarlierMessages": external_exports.boolean(), "activeRun": chatRunDtoSchema.nullable(), "latestRun": chatRunDtoSchema.nullable(), "openQuestion": chatQuestionDtoSchema.nullable(), "openProposals": external_exports.array(chatProposalDtoSchema), "referencedProposals": external_exports.array(chatProposalDtoSchema), "eventCursor": external_exports.int().min(0), "retainedFromSeq": external_exports.int().min(1) });
+var chatEventDtoSchema = external_exports.union([external_exports.object({ "kind": external_exports.literal("thread.updated"), "thread": chatThreadDtoSchema, "threadId": external_exports.string(), "seq": external_exports.int().min(1), "createdAt": dateTimeSchema }), external_exports.object({ "kind": external_exports.literal("message.created"), "message": chatMessageDtoSchema, "threadId": external_exports.string(), "seq": external_exports.int().min(1), "createdAt": dateTimeSchema }), external_exports.object({ "kind": external_exports.literal("message.delta"), "messageId": external_exports.string(), "blockId": external_exports.string(), "text": external_exports.string(), "threadId": external_exports.string(), "seq": external_exports.int().min(1), "createdAt": dateTimeSchema }), external_exports.object({ "kind": external_exports.literal("message.completed"), "message": chatMessageDtoSchema, "threadId": external_exports.string(), "seq": external_exports.int().min(1), "createdAt": dateTimeSchema }), external_exports.object({ "kind": external_exports.literal("run.updated"), "run": chatRunDtoSchema, "threadId": external_exports.string(), "seq": external_exports.int().min(1), "createdAt": dateTimeSchema }), external_exports.object({ "kind": external_exports.literal("tool.updated"), "runId": external_exports.string(), "toolCallId": external_exports.string(), "label": external_exports.string(), "state": external_exports.enum(["requested", "executing", "completed", "failed", "cancelled"]), "threadId": external_exports.string(), "seq": external_exports.int().min(1), "createdAt": dateTimeSchema }), external_exports.object({ "kind": external_exports.literal("question.opened"), "question": chatQuestionDtoSchema, "threadId": external_exports.string(), "seq": external_exports.int().min(1), "createdAt": dateTimeSchema }), external_exports.object({ "kind": external_exports.literal("question.closed"), "question": chatQuestionDtoSchema, "threadId": external_exports.string(), "seq": external_exports.int().min(1), "createdAt": dateTimeSchema }), external_exports.object({ "kind": external_exports.literal("proposal.revised"), "proposal": chatProposalDtoSchema, "threadId": external_exports.string(), "seq": external_exports.int().min(1), "createdAt": dateTimeSchema }), external_exports.object({ "kind": external_exports.literal("proposal.created"), "proposal": chatProposalDtoSchema, "threadId": external_exports.string(), "seq": external_exports.int().min(1), "createdAt": dateTimeSchema }), external_exports.object({ "kind": external_exports.literal("content.invalidated"), "messageIds": external_exports.array(external_exports.string()), "proposalIds": external_exports.array(external_exports.string()), "threadId": external_exports.string(), "seq": external_exports.int().min(1), "createdAt": dateTimeSchema })]);
+var chatStreamFrameDtoSchema = external_exports.union([external_exports.object({ "type": external_exports.literal("event"), "event": chatEventDtoSchema }), external_exports.object({ "type": external_exports.literal("snapshot_required"), "retainedFromSeq": external_exports.int().min(1) }), external_exports.object({ "type": external_exports.literal("heartbeat"), "at": dateTimeSchema })]);
+var chatEventPageDtoSchema = external_exports.object({ "events": external_exports.array(chatEventDtoSchema).max(200), "cursor": external_exports.int().min(0), "hasMore": external_exports.boolean() });
+var submitChatMessageBodySchema = external_exports.object({ "clientRequestId": external_exports.string().max(200), "text": external_exports.string().max(16e3), "optionId": external_exports.exactOptional(external_exports.string()), "knowledgebaseWrite": external_exports.exactOptional(chatKnowledgebaseWriteDtoSchema.nullable()) });
+var createChatThreadBodySchema = external_exports.object({ "message": external_exports.exactOptional(submitChatMessageBodySchema) });
+var createChatThreadResponseSchema = external_exports.object({ "thread": chatThreadDtoSchema, "message": chatMessageDtoSchema.nullable(), "run": chatRunDtoSchema.nullable() });
+var updateChatThreadBodySchema = external_exports.object({ "expectedRevision": external_exports.int().min(1), "title": external_exports.exactOptional(external_exports.string().max(80)), "archived": external_exports.exactOptional(external_exports.boolean()) });
+var submitChatMessageResponseSchema = external_exports.object({ "message": chatMessageDtoSchema, "run": chatRunDtoSchema, "replayed": external_exports.boolean() });
+var answerChatQuestionBodySchema = external_exports.object({ "clientRequestId": external_exports.string().max(200), "expectedRevision": external_exports.int().min(1), "optionId": external_exports.exactOptional(external_exports.string()), "text": external_exports.exactOptional(external_exports.string().max(16e3)) });
+var cancelChatRunBodySchema = external_exports.object({ "clientRequestId": external_exports.string().max(200) });
+var continueChatRunBodySchema = external_exports.object({ "clientRequestId": external_exports.string().max(200) });
+var continueChatRunResponseSchema = external_exports.object({ "run": chatRunDtoSchema, "replayed": external_exports.boolean() });
+var createFromChatProposalBodySchema = external_exports.object({ "clientRequestId": external_exports.string().max(200), "expectedRevision": external_exports.int().min(1) });
+var createFromChatProposalResponseSchema = external_exports.object({ "proposal": chatProposalDtoSchema, "receipt": chatCreationReceiptDtoSchema, "replayed": external_exports.boolean() });
+var updateChatPresenceBodySchema = external_exports.object({ "clientId": external_exports.string().max(200), "platform": external_exports.enum(["ios", "web", "desktop"]), "state": external_exports.enum(["foreground", "released"]) });
+var chatPresenceDtoSchema = external_exports.object({ "clientId": external_exports.string(), "expiresAt": dateTimeSchema.nullable() });
+var ackChatEventsBodySchema = external_exports.object({ "clientId": external_exports.string().max(200), "seq": external_exports.int().min(0) });
+var chatAckDtoSchema = external_exports.object({ "clientId": external_exports.string(), "ackedSeq": external_exports.int().min(0), "suppressedNotificationIds": external_exports.array(external_exports.string()) });
+var chatProviderReadinessDtoSchema = external_exports.object({ "provider": external_exports.literal("gemini"), "model": external_exports.string(), "state": external_exports.enum(["ready", "not_configured", "unavailable", "rate_limited"]), "checkedAt": dateTimeSchema });
+var chatProvidersResponseSchema = external_exports.object({ "providers": external_exports.array(chatProviderReadinessDtoSchema).min(1).max(1), "connections": external_exports.array(accountConnectionDtoSchema) });
+var chatNotificationDtoSchema = external_exports.object({ "id": external_exports.string(), "type": external_exports.enum(["chat_needs_answer", "chat_finished"]), "organizationId": external_exports.string(), "threadId": external_exports.string(), "runId": external_exports.string(), "questionId": external_exports.string().nullable(), "threadTitle": external_exports.string(), "createdAt": dateTimeSchema, "dispatchedAt": dateTimeSchema, "readAt": dateTimeSchema.nullable(), "revision": external_exports.int().min(1) });
+var chatNotificationListResponseSchema = external_exports.object({ "items": external_exports.array(chatNotificationDtoSchema).max(100), "unreadCount": external_exports.int().min(0) });
+var markChatNotificationReadBodySchema = external_exports.object({ "expectedRevision": external_exports.int().min(1) });
+var chatDiagnosticDtoSchema = external_exports.object({ "seq": external_exports.int().min(1), "threadId": external_exports.string(), "runId": external_exports.string().nullable(), "attemptId": external_exports.string().nullable(), "kind": external_exports.string(), "createdAt": dateTimeSchema, "payload": jsonValueSchema });
+var chatDiagnosticPageDtoSchema = external_exports.object({ "entries": external_exports.array(chatDiagnosticDtoSchema).max(100), "nextCursor": external_exports.int().min(0), "hasMore": external_exports.boolean() });
+var everhourUserConnectionDtoSchema = external_exports.object({ "connected": external_exports.boolean(), "accountName": external_exports.string().nullable() });
+var updateEverhourIntegrationBodySchema = external_exports.object({ "apiKey": external_exports.string() });
+var projectEverhourLinkDtoSchema = external_exports.object({ "projectId": external_exports.string(), "everhourProjectName": external_exports.string().nullable(), "everhourProjectId": external_exports.string().nullable() });
+var linkProjectEverhourBodySchema = external_exports.object({ "everhourProjectName": external_exports.exactOptional(external_exports.string().nullable()) });
+var everhourTimeRecordDtoSchema = external_exports.object({ "id": external_exports.string(), "timeSeconds": external_exports.number(), "date": external_exports.string(), "comment": external_exports.string().nullable() });
+var everhourTimerDtoSchema = external_exports.object({ "taskId": external_exports.string(), "startedAt": external_exports.string().nullable(), "durationSeconds": external_exports.number(), "comment": external_exports.string().nullable() });
+var missionEverhourStateDtoSchema = external_exports.object({ "connected": external_exports.boolean(), "projectLinked": external_exports.boolean(), "taskId": external_exports.string().nullable(), "records": external_exports.array(everhourTimeRecordDtoSchema), "totalSeconds": external_exports.number(), "runningTimer": everhourTimerDtoSchema.nullable() });
+var projectEverhourStateDtoSchema = external_exports.object({ "connected": external_exports.boolean(), "projectLinked": external_exports.boolean(), "taskId": external_exports.string().nullable(), "records": external_exports.array(everhourTimeRecordDtoSchema), "totalSeconds": external_exports.number(), "runningTimer": everhourTimerDtoSchema.nullable(), "hasRunningTimerInProject": external_exports.boolean() });
+var createEverhourTimeBodySchema = external_exports.object({ "timeSeconds": external_exports.number(), "date": external_exports.exactOptional(external_exports.string()), "comment": external_exports.exactOptional(external_exports.string().nullable()) });
+var updateEverhourTimeBodySchema = external_exports.object({ "timeSeconds": external_exports.number(), "comment": external_exports.exactOptional(external_exports.string().nullable()) });
+var gitHubUserAccountDtoSchema = external_exports.object({ "id": external_exports.string(), "login": external_exports.string(), "avatarUrl": external_exports.string().nullable() });
+var gitHubUserConnectionDtoSchema = external_exports.object({ "configured": external_exports.boolean(), "connected": external_exports.boolean(), "account": gitHubUserAccountDtoSchema.nullable(), "scopes": external_exports.array(external_exports.string()) });
+var gitHubUserAuthorizationDtoSchema = external_exports.object({ "authorizationUrl": external_exports.string() });
+var beginGitHubUserAuthorizationBodySchema = external_exports.object({ "returnTo": external_exports.exactOptional(external_exports.string()) });
+var gitHubRepositoryOwnerDtoSchema = external_exports.object({ "login": external_exports.string(), "type": external_exports.enum(["personal", "organization"]), "avatarUrl": external_exports.string().nullable(), "canCreateRepositories": external_exports.literal(true) });
+var gitHubRepositoryOwnerListSchema = external_exports.array(gitHubRepositoryOwnerDtoSchema).min(1);
+var gitHubIntegrationDtoSchema = external_exports.object({ "configured": external_exports.boolean(), "connected": external_exports.boolean(), "accountLogin": external_exports.string().nullable(), "accountType": external_exports.string().nullable(), "workspaceName": external_exports.string() });
+var gitHubInstallUrlDtoSchema = external_exports.object({ "installUrl": external_exports.string() });
+var gitHubRepoSummaryDtoSchema = external_exports.object({ "id": external_exports.string(), "fullName": external_exports.string(), "defaultBranch": external_exports.string(), "private": external_exports.boolean() });
+var gitHubRepoSummaryListSchema = external_exports.array(gitHubRepoSummaryDtoSchema).max(100);
+var projectGitHubLinkDtoSchema = external_exports.object({ "projectId": external_exports.string(), "repo": gitHubRepoSummaryDtoSchema.nullable() });
+var linkProjectGitHubBodySchema = external_exports.object({ "repoFullName": external_exports.exactOptional(external_exports.string().nullable()) });
+var gitHubPullRequestDtoSchema = external_exports.object({ "number": external_exports.int().min(1), "url": external_exports.string(), "state": external_exports.enum(["open", "closed"]), "headBranch": external_exports.string(), "baseBranch": external_exports.string() });
+var createGitHubPullRequestBodySchema = external_exports.object({ "title": external_exports.exactOptional(external_exports.string()), "body": external_exports.exactOptional(external_exports.string()), "draft": external_exports.exactOptional(external_exports.boolean()) });
+var getAuthDesktopGithubResponse503TextSchema = external_exports.string();
+var getAuthDesktopCallbackQueryParamsSchema = external_exports.object({ "error": external_exports.exactOptional(external_exports.string()) });
+var getAuthDesktopCallbackResponse400TextSchema = external_exports.string();
+var getAuthBrowserCallbackQueryParamsSchema = external_exports.object({ "returnTo": external_exports.string() });
+var getAuthBrowserCallbackResponse400TextSchema = external_exports.string();
+var getAuthBrowserCallbackResponse401TextSchema = external_exports.string();
+var getAuthCallbackGithubRepositoryQueryParamsSchema = external_exports.object({ "code": external_exports.exactOptional(external_exports.string()), "state": external_exports.exactOptional(external_exports.string()), "error": external_exports.exactOptional(external_exports.string()) });
+var getAuthCallbackGithubRepositoryResponse200TextSchema = external_exports.string();
+var getAuthCallbackGithubRepositoryResponse400TextSchema = external_exports.string();
+var postOauthRegisterResponse400Schema = external_exports.union([oAuthErrorBodySchema, errorEnvelopeSchema]);
+var postOauthTokenResponse400Schema = external_exports.union([oAuthErrorBodySchema, errorEnvelopeSchema]);
+var postMcpRequestBodySchema = external_exports.union([jsonRpcRequestSchema, external_exports.array(jsonRpcRequestSchema)]);
+var postMcpResponse200Schema = external_exports.union([jsonRpcResponseSchema, external_exports.array(jsonRpcResponseSchema)]);
+var getAgentSessionChannelsV1RequestsByIdPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var postAgentSessionChannelsV1RequestsByIdLeasePathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var postAgentSessionChannelsV1RequestsByIdReleasePathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var postAgentSessionChannelsV1RequestsByIdApplicationPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var postAgentSessionChannelsV1RequestsByIdResolvedElsewherePathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var postAgentSessionChannelsV1InputsByIdEmittedPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var postAgentSessionChannelsV1InputsByIdEmittedResponse200Schema = external_exports.object({ "emitted": external_exports.boolean() });
+var postAgentSessionChannelsV1InputsByIdAcknowledgedPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var postAgentSessionChannelsV1InputsByIdAcknowledgedResponse200Schema = external_exports.object({ "acknowledged": external_exports.boolean() });
+var postAgentSessionChannelsV1InputsByIdFailedPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var postAgentSessionChannelsV1InputsByIdFailedResponse200Schema = external_exports.object({ "failed": external_exports.boolean() });
+var getConnectionsKnowledgebaseCallbackQueryParamsSchema = external_exports.object({ "code": external_exports.exactOptional(external_exports.string()), "state": external_exports.exactOptional(external_exports.string()), "error": external_exports.exactOptional(external_exports.string()) });
+var getConnectionsKnowledgebaseCallbackResponse200TextSchema = external_exports.string();
+var getConnectionsKnowledgebaseCallbackResponse400TextSchema = external_exports.string();
+var getChatThreadsQueryParamsSchema = external_exports.object({ "archived": external_exports.exactOptional(external_exports.string()), "cursor": external_exports.exactOptional(external_exports.string()) });
+var getChatThreadsByIdPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var getChatThreadsByIdQueryParamsSchema = external_exports.object({ "before": external_exports.exactOptional(external_exports.string()) });
+var patchChatThreadsByIdPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var getChatThreadsByIdDiagnosticsPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var getChatThreadsByIdDiagnosticsQueryParamsSchema = external_exports.object({ "after": external_exports.exactOptional(external_exports.string()) });
+var postChatThreadsByIdMessagesPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var putChatThreadsByIdPresencePathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var postChatThreadsByIdAckPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var postChatNotificationsByIdReadPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var postChatProposalsByIdCreatePathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var postChatQuestionsByIdAnswerPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var postChatRunsByIdCancelPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var postChatRunsByIdContinuePathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var getChatThreadsByIdEventsPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var getChatThreadsByIdEventsQueryParamsSchema = external_exports.object({ "after": external_exports.string(), "poll": external_exports.exactOptional(external_exports.string()) });
+var getConnectionsQueryParamsSchema = external_exports.object({ "scope": external_exports.exactOptional(external_exports.string()) });
+var deleteConnectionsByIdPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var patchConnectionsByIdPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var getDiagnosticsExecutionTargetMigrationQueryParamsSchema = external_exports.object({ "workspaceId": external_exports.string() });
+var patchOrganizationsByIdPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var getOrganizationsByIdAdminsPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var postOrganizationsByIdAdminsPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var deleteOrganizationsByIdAdminsByUserIdPathParamsSchema = external_exports.object({ "id": external_exports.string(), "userId": external_exports.string() });
+var deleteWorkspacesByIdPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var patchWorkspacesByIdPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var getWorkspacesByIdMembersPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var deleteWorkspacesByIdMembersByWorkspaceUserIdPathParamsSchema = external_exports.object({ "id": external_exports.string(), "workspaceUserId": external_exports.string() });
+var patchWorkspacesByIdMembersByWorkspaceUserIdRolePathParamsSchema = external_exports.object({ "id": external_exports.string(), "workspaceUserId": external_exports.string() });
+var getWorkspacesByIdInvitationsPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var postWorkspacesByIdInvitationsPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var deleteWorkspacesByIdInvitationsByInvitationIdPathParamsSchema = external_exports.object({ "id": external_exports.string(), "invitationId": external_exports.string() });
+var getWorkspacesByIdObjectivesCsvPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var getWorkspacesByIdObjectivesCsvResponse200TextSchema = external_exports.string();
+var getWorkspacesByIdProjectsPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var getWorkspacesByIdProjectsQueryParamsSchema = external_exports.object({ "lifecycle": external_exports.exactOptional(projectListLifecycleSchema) });
+var getWorkspacesByIdProjectStatusesPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var getWorkspacesByIdExecutionTargetsPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var postWorkspacesByIdExecutionTargetsPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var postWorkspacesByIdExecutionTargetsHeaderParamsSchema = external_exports.object({ "x-overlord-device-fingerprint": external_exports.exactOptional(external_exports.string()), "x-overlord-device-label": external_exports.exactOptional(external_exports.string()), "x-overlord-device-platform": external_exports.exactOptional(external_exports.string()) });
+var deleteWorkspacesByIdExecutionTargetsByTargetIdPathParamsSchema = external_exports.object({ "id": external_exports.string(), "targetId": external_exports.string() });
+var patchWorkspacesByIdExecutionTargetsByTargetIdPathParamsSchema = external_exports.object({ "id": external_exports.string(), "targetId": external_exports.string() });
+var getWorkspacesByIdAgentCatalogPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var putWorkspacesByIdAgentCatalogPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var postWorkspacesByIdAgentCatalogRefreshPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var deleteUserTokensByIdPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var patchUserTokensByIdPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var postUserTokensByIdRevokePathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var getWebhooksQueryParamsSchema = external_exports.object({ "workspaceId": external_exports.string() });
+var deleteWebhooksByIdPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var patchWebhooksByIdPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var postWebhooksByIdRotateSecretPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var postWebhooksByIdTestPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var getWebhooksByIdDeliveriesPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var getWebhooksByIdDeliveriesQueryParamsSchema = external_exports.object({ "before": external_exports.exactOptional(external_exports.string()), "limit": external_exports.exactOptional(external_exports.string()) });
+var postWebhooksByIdDeliveriesByOutboxIdRedeliverPathParamsSchema = external_exports.object({ "id": external_exports.string(), "outboxId": external_exports.string() });
+var postUploadsByBucketKeyPathParamsSchema = external_exports.object({ "bucketKey": external_exports.string() });
+var postUploadsByBucketKeyQueryParamsSchema = external_exports.object({ "workspaceId": external_exports.exactOptional(external_exports.string()) });
+var postUploadsByBucketKeyHeaderParamsSchema = external_exports.object({ "x-upload-filename": external_exports.exactOptional(external_exports.string()) });
+var getStorageByBucketKeyByStorageKeyPathParamsSchema = external_exports.object({ "bucketKey": external_exports.string(), "storageKey": external_exports.string() });
+var getStreamQueryParamsSchema = external_exports.object({ "after": external_exports.exactOptional(external_exports.string()) });
+var getStreamHeaderParamsSchema = external_exports.object({ "last-event-id": external_exports.exactOptional(external_exports.string()) });
+var getRealtimeQueryParamsSchema = external_exports.object({ "after": external_exports.exactOptional(external_exports.string()) });
+var getRealtimeHeaderParamsSchema = external_exports.object({ "last-event-id": external_exports.exactOptional(external_exports.string()) });
+var getSyncChangesQueryParamsSchema = external_exports.object({ "after": external_exports.string() });
+var getProjectsQueryParamsSchema = external_exports.object({ "lifecycle": external_exports.exactOptional(projectListLifecycleSchema) });
+var getProjectsByIdPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var deleteProjectsByIdPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var patchProjectsByIdPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var getProjectsByIdRunQueuesPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var postProjectsByIdRunQueuesPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var patchProjectsByIdRunQueuesOrderPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var postProjectsByIdRunQueuesEntriesPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var deleteRunQueuesByQueueIdPathParamsSchema = external_exports.object({ "queueId": external_exports.string() });
+var patchRunQueuesByQueueIdPathParamsSchema = external_exports.object({ "queueId": external_exports.string() });
+var patchRunQueuesByQueueIdOrderPathParamsSchema = external_exports.object({ "queueId": external_exports.string() });
+var deleteRunQueuesEntriesByEntryIdPathParamsSchema = external_exports.object({ "entryId": external_exports.string() });
+var patchRunQueuesEntriesByEntryIdPathParamsSchema = external_exports.object({ "entryId": external_exports.string() });
+var getProjectsByIdStatusesPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var postProjectsByIdStatusesPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var patchProjectsByIdStatusesReorderPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var deleteProjectsByIdStatusesByStatusIdPathParamsSchema = external_exports.object({ "id": external_exports.string(), "statusId": external_exports.string() });
+var patchProjectsByIdStatusesByStatusIdPathParamsSchema = external_exports.object({ "id": external_exports.string(), "statusId": external_exports.string() });
+var getActivityFeedQueryParamsSchema = external_exports.object({ "before": external_exports.exactOptional(external_exports.string()) });
+var getObjectiveTranscriptQueryParamsSchema = external_exports.object({ "limit": external_exports.exactOptional(external_exports.string()), "before": external_exports.exactOptional(external_exports.string()), "after": external_exports.exactOptional(external_exports.string()), "ids": external_exports.exactOptional(external_exports.string()) });
+var putDeliveriesByDeliveryIdDeferredWorkByActionIdResolutionPathParamsSchema = external_exports.object({ "deliveryId": external_exports.string(), "actionId": external_exports.string() });
+var deleteDeliveriesByDeliveryIdDeferredWorkByActionIdResolutionPathParamsSchema = external_exports.object({ "deliveryId": external_exports.string(), "actionId": external_exports.string() });
+var putMobileLiveActivitiesByActivityIdPushTokenPathParamsSchema = external_exports.object({ "activityId": external_exports.string() });
+var deleteMobileLiveActivitiesByActivityIdPushTokenPathParamsSchema = external_exports.object({ "activityId": external_exports.string() });
+var patchNotificationsByIdReadPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var deleteNotificationsByIdPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var getProjectsByIdTagsPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var postProjectsByIdTagsPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var deleteProjectsByIdTagsByTagIdPathParamsSchema = external_exports.object({ "id": external_exports.string(), "tagId": external_exports.string() });
+var patchProjectsByIdTagsByTagIdPathParamsSchema = external_exports.object({ "id": external_exports.string(), "tagId": external_exports.string() });
+var getProjectsByIdResourcesPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var postProjectsByIdResourcesPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var deleteProjectsByIdResourcesByResourceIdPathParamsSchema = external_exports.object({ "id": external_exports.string(), "resourceId": external_exports.string() });
+var patchProjectsByIdResourcesByResourceIdPathParamsSchema = external_exports.object({ "id": external_exports.string(), "resourceId": external_exports.string() });
+var deleteProjectsByIdResourcesByResourceIdSourcesBySourceIdPathParamsSchema = external_exports.object({ "id": external_exports.string(), "resourceId": external_exports.string(), "sourceId": external_exports.string() });
+var patchProjectsByIdResourcesByResourceIdSourcesBySourceIdPathParamsSchema = external_exports.object({ "id": external_exports.string(), "resourceId": external_exports.string(), "sourceId": external_exports.string() });
+var postProjectsByIdRepositoryReadsPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var getProjectsByIdRepositoryPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var getProjectsByIdRepositoryQueryParamsSchema = external_exports.object({ "executionTargetId": external_exports.exactOptional(external_exports.string()), "resourceKey": external_exports.exactOptional(external_exports.string()) });
+var getProjectsByIdMissionsPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var getProjectsByIdMissionsQueryParamsSchema = external_exports.object({ "includeObjectives": external_exports.exactOptional(external_exports.string()), "includeAllCompleted": external_exports.exactOptional(external_exports.string()) });
+var getExtEverhourProjectsByProjectIdLinkPathParamsSchema = external_exports.object({ "projectId": external_exports.string() });
+var putExtEverhourProjectsByProjectIdLinkPathParamsSchema = external_exports.object({ "projectId": external_exports.string() });
+var getExtEverhourProjectsByProjectIdPathParamsSchema = external_exports.object({ "projectId": external_exports.string() });
+var postExtEverhourProjectsByProjectIdTimerStartPathParamsSchema = external_exports.object({ "projectId": external_exports.string() });
+var postExtEverhourProjectsByProjectIdTimerStopPathParamsSchema = external_exports.object({ "projectId": external_exports.string() });
+var postExtEverhourProjectsByProjectIdTimePathParamsSchema = external_exports.object({ "projectId": external_exports.string() });
+var deleteExtEverhourProjectsByProjectIdTimeByRecordIdPathParamsSchema = external_exports.object({ "projectId": external_exports.string(), "recordId": external_exports.string() });
+var patchExtEverhourProjectsByProjectIdTimeByRecordIdPathParamsSchema = external_exports.object({ "projectId": external_exports.string(), "recordId": external_exports.string() });
+var getExtEverhourMissionsByMissionIdPathParamsSchema = external_exports.object({ "missionId": external_exports.string() });
+var postExtEverhourMissionsByMissionIdTimerStartPathParamsSchema = external_exports.object({ "missionId": external_exports.string() });
+var postExtEverhourMissionsByMissionIdTimerStopPathParamsSchema = external_exports.object({ "missionId": external_exports.string() });
+var postExtEverhourMissionsByMissionIdTimePathParamsSchema = external_exports.object({ "missionId": external_exports.string() });
+var deleteExtEverhourMissionsByMissionIdTimeByRecordIdPathParamsSchema = external_exports.object({ "missionId": external_exports.string(), "recordId": external_exports.string() });
+var patchExtEverhourMissionsByMissionIdTimeByRecordIdPathParamsSchema = external_exports.object({ "missionId": external_exports.string(), "recordId": external_exports.string() });
+var getExtGithubIntegrationQueryParamsSchema = external_exports.object({ "workspaceId": external_exports.string() });
+var deleteExtGithubIntegrationQueryParamsSchema = external_exports.object({ "workspaceId": external_exports.string() });
+var postExtGithubInstallQueryParamsSchema = external_exports.object({ "workspaceId": external_exports.string() });
+var getExtGithubCallbackQueryParamsSchema = external_exports.object({ "installation_id": external_exports.string(), "state": external_exports.string() });
+var getExtGithubCallbackResponse200Schema = external_exports.object({ "connected": external_exports.literal(true) });
+var getExtGithubReposQueryParamsSchema = external_exports.object({ "workspaceId": external_exports.string(), "q": external_exports.exactOptional(external_exports.string()) });
+var getExtGithubProjectsByProjectIdLinkPathParamsSchema = external_exports.object({ "projectId": external_exports.string() });
+var putExtGithubProjectsByProjectIdLinkPathParamsSchema = external_exports.object({ "projectId": external_exports.string() });
+var getExtGithubMissionsByMissionIdPullRequestPathParamsSchema = external_exports.object({ "missionId": external_exports.string() });
+var getExtGithubMissionsByMissionIdPullRequestResponse200Schema = external_exports.union([gitHubPullRequestDtoSchema, external_exports.strictObject({ "ok": external_exports.literal(true) })]);
+var postExtGithubMissionsByMissionIdPullRequestPathParamsSchema = external_exports.object({ "missionId": external_exports.string() });
+var patchProjectsByIdBoardReorderPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var getInboxByIdPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var deleteInboxByIdPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var patchInboxByIdPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var postInboxByIdPromotePathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var getMissionsSearchQueryParamsSchema = external_exports.object({ "q": external_exports.exactOptional(external_exports.string()), "projectId": external_exports.exactOptional(external_exports.string()), "statusTypes": external_exports.exactOptional(external_exports.string()), "limit": external_exports.exactOptional(external_exports.string()) });
+var getMissionsSearchV2QueryParamsSchema = external_exports.object({ "q": external_exports.exactOptional(external_exports.string()), "projectIds": external_exports.exactOptional(external_exports.string()), "projectId": external_exports.exactOptional(external_exports.string()), "statusTypes": external_exports.exactOptional(external_exports.string()), "resourceKeys": external_exports.exactOptional(external_exports.string()), "resourceKey": external_exports.exactOptional(external_exports.string()), "dateField": external_exports.exactOptional(missionSearchDateFieldSchema), "from": external_exports.exactOptional(external_exports.string()), "to": external_exports.exactOptional(external_exports.string()), "limit": external_exports.exactOptional(external_exports.string()) });
+var getSearchV3QueryParamsSchema = external_exports.object({ "q": external_exports.exactOptional(external_exports.string()), "projectIds": external_exports.exactOptional(external_exports.string()), "projectId": external_exports.exactOptional(external_exports.string()), "statusTypes": external_exports.exactOptional(external_exports.string()), "resourceKeys": external_exports.exactOptional(external_exports.string()), "resourceKey": external_exports.exactOptional(external_exports.string()), "dateField": external_exports.exactOptional(missionSearchDateFieldSchema), "from": external_exports.exactOptional(external_exports.string()), "to": external_exports.exactOptional(external_exports.string()), "limit": external_exports.exactOptional(external_exports.string()), "entityTypes": external_exports.exactOptional(external_exports.string()), "objectiveStates": external_exports.exactOptional(external_exports.string()), "matchesPerResult": external_exports.exactOptional(external_exports.string()) });
+var getMissionsByIdPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var deleteMissionsByIdPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var patchMissionsByIdPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var postMissionsByIdGenerateTitlePathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var postMissionsByIdGenerateCommitMessagePathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var getMissionsByIdObjectivesPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var patchMissionsByIdObjectivesReorderPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var postMissionsByIdSessionChannelPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var postMissionsByIdTerminalSessionsForgetPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var getAgentRequestsQueryParamsSchema = external_exports.object({ "missionId": external_exports.exactOptional(external_exports.string()), "objectiveId": external_exports.exactOptional(external_exports.string()) });
+var postAgentRequestsByIdResolvePathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var postAgentRequestsByIdReleasePathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var getAgentSessionInputsQueryParamsSchema = external_exports.object({ "missionId": external_exports.exactOptional(external_exports.string()), "objectiveId": external_exports.exactOptional(external_exports.string()) });
+var postAgentSessionInputsByIdCancelPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var getMissionsByIdEventsPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var getMissionsByIdDeliveriesPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var getMissionsByIdSummaryPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var putMissionsByIdSummarySeenPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var getMissionsByIdArtifactsPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var postMissionsByIdArtifactsPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var getMissionsByIdContextPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var putMissionsByIdContextPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var patchMissionsByIdArtifactsByArtifactIdPathParamsSchema = external_exports.object({ "id": external_exports.string(), "artifactId": external_exports.string() });
+var getMissionsByIdFileChangesPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var getMissionsByIdFileChangesQueryParamsSchema = external_exports.object({ "objectiveId": external_exports.exactOptional(external_exports.string()) });
+var getMissionsByIdFileChangesResponse200Schema = external_exports.union([missionFileChangesDtoSchema, objectiveFileChangesDtoSchema]);
+var getMissionsByIdSchedulePathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var putMissionsByIdSchedulePathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var deleteMissionsByIdSchedulePathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var deleteObjectivesByIdPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var patchObjectivesByIdPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var postObjectivesByIdLaunchPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var getObjectivesByIdPromptPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var getObjectivesByIdLaunchCommandPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var getObjectivesByIdLaunchCommandQueryParamsSchema = external_exports.object({ "agent": external_exports.string(), "model": external_exports.exactOptional(external_exports.string()), "reasoningEffort": external_exports.exactOptional(external_exports.string()), "executionTargetId": external_exports.exactOptional(external_exports.string()) });
+var getObjectivesByIdEffectiveLaunchConfigPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var getObjectivesByIdEffectiveLaunchConfigQueryParamsSchema = external_exports.object({ "agent": external_exports.string(), "executionTargetId": external_exports.exactOptional(external_exports.string()) });
+var getObjectivesByIdAttachmentsPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var postObjectivesByIdAttachmentsPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var postObjectivesByIdAttachmentsHeaderParamsSchema = external_exports.object({ "x-upload-filename": external_exports.exactOptional(external_exports.string()) });
+var deleteObjectivesByIdAttachmentsByAttachmentIdPathParamsSchema = external_exports.object({ "id": external_exports.string(), "attachmentId": external_exports.string() });
+var getInboxByIdAttachmentsPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var postInboxByIdAttachmentsPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var postInboxByIdAttachmentsHeaderParamsSchema = external_exports.object({ "x-upload-filename": external_exports.exactOptional(external_exports.string()) });
+var deleteInboxByIdAttachmentsByAttachmentIdPathParamsSchema = external_exports.object({ "id": external_exports.string(), "attachmentId": external_exports.string() });
+var getAgentCatalogQueryParamsSchema = external_exports.object({ "workspaceId": external_exports.exactOptional(external_exports.string()) });
+var putAgentCatalogQueryParamsSchema = external_exports.object({ "workspaceId": external_exports.exactOptional(external_exports.string()) });
+var postAgentCatalogRefreshQueryParamsSchema = external_exports.object({ "workspaceId": external_exports.exactOptional(external_exports.string()) });
+var getLaunchSettingsQueryParamsSchema = external_exports.object({ "workspaceId": external_exports.exactOptional(external_exports.string()) });
+var getLaunchSettingsHeaderParamsSchema = external_exports.object({ "x-overlord-device-fingerprint": external_exports.exactOptional(external_exports.string()) });
+var patchLaunchSettingsAgentsByAgentKeyPathParamsSchema = external_exports.object({ "agentKey": external_exports.string() });
+var patchLaunchSettingsAgentsByAgentKeyQueryParamsSchema = external_exports.object({ "workspaceId": external_exports.exactOptional(external_exports.string()) });
+var patchLaunchSettingsAgentsByAgentKeyHeaderParamsSchema = external_exports.object({ "x-overlord-device-fingerprint": external_exports.exactOptional(external_exports.string()) });
+var patchLaunchSettingsTerminalProfileQueryParamsSchema = external_exports.object({ "workspaceId": external_exports.exactOptional(external_exports.string()) });
+var patchLaunchSettingsTerminalProfileHeaderParamsSchema = external_exports.object({ "x-overlord-device-fingerprint": external_exports.exactOptional(external_exports.string()) });
+var patchLaunchSettingsSessionDefaultsQueryParamsSchema = external_exports.object({ "workspaceId": external_exports.exactOptional(external_exports.string()) });
+var patchLaunchSettingsSessionDefaultsHeaderParamsSchema = external_exports.object({ "x-overlord-device-fingerprint": external_exports.exactOptional(external_exports.string()) });
+var patchLaunchSettingsWorktreeBranchAutomationQueryParamsSchema = external_exports.object({ "workspaceId": external_exports.exactOptional(external_exports.string()) });
+var patchLaunchSettingsWorktreeBranchAutomationHeaderParamsSchema = external_exports.object({ "x-overlord-device-fingerprint": external_exports.exactOptional(external_exports.string()) });
+var getWorkspacesByIdLaunchSettingsPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var getWorkspacesByIdLaunchSettingsHeaderParamsSchema = external_exports.object({ "x-overlord-device-fingerprint": external_exports.exactOptional(external_exports.string()) });
+var patchWorkspacesByIdLaunchSettingsAgentsByAgentKeyPathParamsSchema = external_exports.object({ "id": external_exports.string(), "agentKey": external_exports.string() });
+var patchWorkspacesByIdLaunchSettingsAgentsByAgentKeyHeaderParamsSchema = external_exports.object({ "x-overlord-device-fingerprint": external_exports.exactOptional(external_exports.string()) });
+var patchWorkspacesByIdLaunchSettingsTerminalProfilePathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var patchWorkspacesByIdLaunchSettingsTerminalProfileHeaderParamsSchema = external_exports.object({ "x-overlord-device-fingerprint": external_exports.exactOptional(external_exports.string()) });
+var patchWorkspacesByIdLaunchSettingsSessionDefaultsPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var patchWorkspacesByIdLaunchSettingsSessionDefaultsHeaderParamsSchema = external_exports.object({ "x-overlord-device-fingerprint": external_exports.exactOptional(external_exports.string()) });
+var patchWorkspacesByIdLaunchSettingsWorktreeBranchAutomationPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var patchWorkspacesByIdLaunchSettingsWorktreeBranchAutomationHeaderParamsSchema = external_exports.object({ "x-overlord-device-fingerprint": external_exports.exactOptional(external_exports.string()) });
+var getProjectsByIdLaunchPreferencePathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var putProjectsByIdLaunchPreferencePathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var getProjectsByIdExecutionTargetPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var putProjectsByIdExecutionTargetPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var postExecutionTargetsByIdObservationsPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var postExecutionTargetsByIdObservationsHeaderParamsSchema = external_exports.object({ "x-overlord-device-fingerprint": external_exports.exactOptional(external_exports.string()), "x-overlord-device-label": external_exports.exactOptional(external_exports.string()), "x-overlord-device-platform": external_exports.exactOptional(external_exports.string()) });
+var postExecutionTargetsByIdMissionBranchObservationsPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var postExecutionTargetsByIdMissionBranchObservationsHeaderParamsSchema = external_exports.object({ "x-overlord-device-fingerprint": external_exports.exactOptional(external_exports.string()), "x-overlord-device-label": external_exports.exactOptional(external_exports.string()), "x-overlord-device-platform": external_exports.exactOptional(external_exports.string()) });
+var postProtocolBySubcommandPathParamsSchema = external_exports.object({ "subcommand": external_exports.string() });
+var getRunnerStatusQueryParamsSchema = external_exports.object({ "projectId": external_exports.exactOptional(external_exports.string()) });
+var postRunnerRequestsByIdLaunchingPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var postRunnerRequestsByIdLaunchedPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var postRunnerRequestsByIdFailedPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var postRunnerRequestsByIdCompletedPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var postMissionsByIdBranchPreparedPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var postMissionsByIdBranchActionPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var getMissionsByIdBranchesPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var apiResponses = {
+  BadRequest: { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } },
+  Unauthorized: { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } },
+  Forbidden: { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } },
+  NotFound: { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } },
+  Conflict: { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } },
+  PayloadTooLarge: { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } },
+  TooManyRequests: { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } },
+  BadGateway: { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } },
+  InternalError: { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } },
+  UnsupportedMediaType: { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } },
+  ServiceUnavailable: { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } },
+  UnprocessableContent: { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }
+};
+var apiOperations = {
+  /**
+   * GET /api/auth/desktop/github: Start native GitHub sign-in in the system browser
+   */
+  getAuthDesktopGithub: {
+    operationId: "getAuthDesktopGithub",
+    method: "GET",
+    path: "/api/auth/desktop/github",
+    tags: ["auth"],
+    deprecated: false,
+    permission: "public",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["mobile", "webapp"],
+    extension: null,
+    security: [],
+    parameters: { path: null, query: null, header: null },
+    requestBody: null,
+    responses: { "302": { headers: ["Location", "Set-Cookie"], content: {} }, "404": { headers: [], content: { "application/json": { kind: "json", schema: messageErrorBodySchema } } }, "500": apiResponses.InternalError, "503": { headers: [], content: { "text/plain": { kind: "text", schema: getAuthDesktopGithubResponse503TextSchema } } } }
+  },
+  /**
+   * GET /api/auth/desktop/callback: Finish native GitHub sign-in and hand off to the app
+   */
+  getAuthDesktopCallback: {
+    operationId: "getAuthDesktopCallback",
+    method: "GET",
+    path: "/api/auth/desktop/callback",
+    tags: ["auth"],
+    deprecated: false,
+    permission: "authenticated",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["external"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, {}],
+    parameters: { path: null, query: getAuthDesktopCallbackQueryParamsSchema, header: null },
+    requestBody: null,
+    responses: { "302": { headers: ["Location"], content: {} }, "400": { headers: [], content: { "text/plain": { kind: "text", schema: getAuthDesktopCallbackResponse400TextSchema } } }, "500": apiResponses.InternalError }
+  },
+  /**
+   * GET /api/auth/browser/callback: Finish hosted-web sign-in and hand off to the web client
+   */
+  getAuthBrowserCallback: {
+    operationId: "getAuthBrowserCallback",
+    method: "GET",
+    path: "/api/auth/browser/callback",
+    tags: ["auth"],
+    deprecated: false,
+    permission: "authenticated",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, {}],
+    parameters: { path: null, query: getAuthBrowserCallbackQueryParamsSchema, header: null },
+    requestBody: null,
+    responses: { "302": { headers: ["Location"], content: {} }, "400": { headers: [], content: { "text/html": { kind: "text", schema: getAuthBrowserCallbackResponse400TextSchema } } }, "401": { headers: [], content: { "text/html": { kind: "text", schema: getAuthBrowserCallbackResponse401TextSchema } } }, "500": apiResponses.InternalError }
+  },
+  /**
+   * POST /api/auth/desktop/exchange: Exchange a native sign-in ticket for a session token
+   */
+  postAuthDesktopExchange: {
+    operationId: "postAuthDesktopExchange",
+    method: "POST",
+    path: "/api/auth/desktop/exchange",
+    tags: ["auth"],
+    deprecated: false,
+    permission: "public",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["desktop", "mobile"],
+    extension: null,
+    security: [],
+    parameters: { path: null, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: oAuthHandoffExchangeBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: oAuthHandoffExchangeResultDtoSchema } } }, "400": apiResponses.BadRequest, "401": { headers: [], content: { "application/json": { kind: "json", schema: messageErrorBodySchema } } }, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * POST /api/auth/browser/exchange: Exchange a hosted-web sign-in ticket for a session token
+   */
+  postAuthBrowserExchange: {
+    operationId: "postAuthBrowserExchange",
+    method: "POST",
+    path: "/api/auth/browser/exchange",
+    tags: ["auth"],
+    deprecated: false,
+    permission: "public",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["webapp"],
+    extension: null,
+    security: [],
+    parameters: { path: null, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: oAuthHandoffExchangeBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: oAuthHandoffExchangeResultDtoSchema } } }, "400": apiResponses.BadRequest, "401": { headers: [], content: { "application/json": { kind: "json", schema: messageErrorBodySchema } } }, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * GET /api/auth/callback/github/repository: GitHub repository-access OAuth callback
+   */
+  getAuthCallbackGithubRepository: {
+    operationId: "getAuthCallbackGithubRepository",
+    method: "GET",
+    path: "/api/auth/callback/github/repository",
+    tags: ["auth"],
+    deprecated: false,
+    permission: "public",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["external"],
+    extension: null,
+    security: [],
+    parameters: { path: null, query: getAuthCallbackGithubRepositoryQueryParamsSchema, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "text/html": { kind: "text", schema: getAuthCallbackGithubRepositoryResponse200TextSchema } } }, "302": { headers: ["Location"], content: {} }, "400": { headers: [], content: { "text/html": { kind: "text", schema: getAuthCallbackGithubRepositoryResponse400TextSchema } } }, "500": apiResponses.InternalError }
+  },
+  /**
+   * GET /api/auth-providers: Login providers this server offers
+   */
+  getAuthProviders: {
+    operationId: "getAuthProviders",
+    method: "GET",
+    path: "/api/auth-providers",
+    tags: ["auth"],
+    deprecated: false,
+    permission: "public",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["mobile", "webapp"],
+    extension: null,
+    security: [],
+    parameters: { path: null, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: authProvidersDtoSchema } } }, "400": apiResponses.BadRequest, "500": apiResponses.InternalError }
+  },
+  /**
+   * GET /api/health: Liveness probe
+   */
+  getHealth: {
+    operationId: "getHealth",
+    method: "GET",
+    path: "/api/health",
+    tags: ["meta"],
+    deprecated: false,
+    permission: "public",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["cli", "desktop"],
+    extension: null,
+    security: [],
+    parameters: { path: null, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: okResponseSchema } } }, "400": apiResponses.BadRequest, "500": apiResponses.InternalError }
+  },
+  /**
+   * GET /.well-known/oauth-protected-resource: OAuth protected-resource metadata (RFC 9728)
+   */
+  getWellKnownOauthProtectedResource: {
+    operationId: "getWellKnownOauthProtectedResource",
+    method: "GET",
+    path: "/.well-known/oauth-protected-resource",
+    tags: ["oauth"],
+    deprecated: false,
+    permission: "public",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["external"],
+    extension: null,
+    security: [],
+    parameters: { path: null, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: oAuthProtectedResourceMetadataSchema } } }, "400": apiResponses.BadRequest, "500": apiResponses.InternalError }
+  },
+  /**
+   * GET /.well-known/oauth-protected-resource/mcp: OAuth protected-resource metadata for /mcp (path-inserted form)
+   */
+  getWellKnownOauthProtectedResourceMcp: {
+    operationId: "getWellKnownOauthProtectedResourceMcp",
+    method: "GET",
+    path: "/.well-known/oauth-protected-resource/mcp",
+    tags: ["oauth"],
+    deprecated: false,
+    permission: "public",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["external"],
+    extension: null,
+    security: [],
+    parameters: { path: null, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: oAuthProtectedResourceMetadataSchema } } }, "400": apiResponses.BadRequest, "500": apiResponses.InternalError }
+  },
+  /**
+   * GET /.well-known/oauth-authorization-server: OAuth authorization-server metadata (RFC 8414)
+   */
+  getWellKnownOauthAuthorizationServer: {
+    operationId: "getWellKnownOauthAuthorizationServer",
+    method: "GET",
+    path: "/.well-known/oauth-authorization-server",
+    tags: ["oauth"],
+    deprecated: false,
+    permission: "public",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["external"],
+    extension: null,
+    security: [],
+    parameters: { path: null, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: oAuthAuthorizationServerMetadataSchema } } }, "400": apiResponses.BadRequest, "500": apiResponses.InternalError }
+  },
+  /**
+   * GET /oauth/authorize: Redirect an authorization request to the web approval page
+   */
+  getOauthAuthorize: {
+    operationId: "getOauthAuthorize",
+    method: "GET",
+    path: "/oauth/authorize",
+    tags: ["oauth"],
+    deprecated: false,
+    permission: "public",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["external"],
+    extension: null,
+    security: [],
+    parameters: { path: null, query: null, header: null },
+    requestBody: null,
+    responses: { "302": { headers: ["Location"], content: {} }, "400": apiResponses.BadRequest, "500": apiResponses.InternalError }
+  },
+  /**
+   * POST /oauth/register: Dynamic client registration (RFC 7591)
+   */
+  postOauthRegister: {
+    operationId: "postOauthRegister",
+    method: "POST",
+    path: "/oauth/register",
+    tags: ["oauth"],
+    deprecated: false,
+    permission: "public",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["external"],
+    extension: null,
+    security: [],
+    parameters: { path: null, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: oAuthClientRegistrationBodySchema }, "application/x-www-form-urlencoded": { kind: "form", schema: oAuthClientRegistrationBodySchema } } },
+    responses: { "201": { headers: [], content: { "application/json": { kind: "json", schema: oAuthClientRegistrationDtoSchema } } }, "400": { headers: [], content: { "application/json": { kind: "json", schema: postOauthRegisterResponse400Schema } } }, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * POST /oauth/token: Exchange an authorization code for an access token
+   */
+  postOauthToken: {
+    operationId: "postOauthToken",
+    method: "POST",
+    path: "/oauth/token",
+    tags: ["oauth"],
+    deprecated: false,
+    permission: "public",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["external"],
+    extension: null,
+    security: [],
+    parameters: { path: null, query: null, header: null },
+    requestBody: { required: true, content: { "application/x-www-form-urlencoded": { kind: "form", schema: oAuthTokenRequestBodySchema }, "application/json": { kind: "json", schema: oAuthTokenRequestBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: oAuthTokenResponseDtoSchema } } }, "400": { headers: [], content: { "application/json": { kind: "json", schema: postOauthTokenResponse400Schema } } }, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * POST /oauth/revoke: Revoke an access token (RFC 7009)
+   */
+  postOauthRevoke: {
+    operationId: "postOauthRevoke",
+    method: "POST",
+    path: "/oauth/revoke",
+    tags: ["oauth"],
+    deprecated: false,
+    permission: "public",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["external"],
+    extension: null,
+    security: [],
+    parameters: { path: null, query: null, header: null },
+    requestBody: { required: false, content: { "application/x-www-form-urlencoded": { kind: "form", schema: oAuthRevokeBodySchema }, "application/json": { kind: "json", schema: oAuthRevokeBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: okResponseSchema } } }, "400": apiResponses.BadRequest, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * POST /oauth/authorize/request: Validate an authorization request for the approval page
+   */
+  postOauthAuthorizeRequest: {
+    operationId: "postOauthAuthorizeRequest",
+    method: "POST",
+    path: "/oauth/authorize/request",
+    tags: ["oauth"],
+    deprecated: false,
+    permission: "authenticated",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: null, query: null, header: null },
+    requestBody: { required: false, content: { "application/json": { kind: "json", schema: oAuthAuthorizationRequestBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: oAuthAuthorizationRequestInfoDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * POST /oauth/authorize/approve: Approve or deny an authorization request
+   */
+  postOauthAuthorizeApprove: {
+    operationId: "postOauthAuthorizeApprove",
+    method: "POST",
+    path: "/oauth/authorize/approve",
+    tags: ["oauth"],
+    deprecated: false,
+    permission: "user_token:self:create",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: null, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: oAuthApproveBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: oAuthApproveResultDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "409": apiResponses.Conflict, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * GET /mcp: MCP server description
+   */
+  getMcp: {
+    operationId: "getMcp",
+    method: "GET",
+    path: "/mcp",
+    tags: ["mcp"],
+    deprecated: false,
+    permission: "authenticated",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["external"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: null, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: mcpServerInfoDtoSchema } } }, "400": apiResponses.BadRequest, "401": { headers: ["WWW-Authenticate"], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+  },
+  /**
+   * POST /mcp: MCP JSON-RPC transport
+   */
+  postMcp: {
+    operationId: "postMcp",
+    method: "POST",
+    path: "/mcp",
+    tags: ["mcp"],
+    deprecated: false,
+    permission: "authenticated",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["external", "mobile"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: null, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: postMcpRequestBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: postMcpResponse200Schema } } }, "400": apiResponses.BadRequest, "401": { headers: ["WWW-Authenticate"], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "404": apiResponses.NotFound, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * GET /api/agent-session-channels/v1/self: Read the calling channel
+   */
+  getAgentSessionChannelsV1Self: {
+    operationId: "getAgentSessionChannelsV1Self",
+    method: "GET",
+    path: "/api/agent-session-channels/v1/self",
+    tags: ["agent-session-channels"],
+    deprecated: false,
+    permission: "channel-credential",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["unverified"],
+    extension: null,
+    security: [{ "channelCredential": [] }],
+    parameters: { path: null, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: agentSessionChannelSelfDtoSchema } } }, "400": apiResponses.BadRequest, "401": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "500": apiResponses.InternalError }
+  },
+  /**
+   * POST /api/agent-session-channels/v1/heartbeat: Renew the channel lease
+   */
+  postAgentSessionChannelsV1Heartbeat: {
+    operationId: "postAgentSessionChannelsV1Heartbeat",
+    method: "POST",
+    path: "/api/agent-session-channels/v1/heartbeat",
+    tags: ["agent-session-channels"],
+    deprecated: false,
+    permission: "channel-credential",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["cli"],
+    extension: null,
+    security: [{ "channelCredential": [] }],
+    parameters: { path: null, query: null, header: null },
+    requestBody: { required: false, content: { "application/json": { kind: "json", schema: agentSessionHeartbeatBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: agentSessionHeartbeatDtoSchema } } }, "400": apiResponses.BadRequest, "401": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "409": apiResponses.Conflict, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * POST /api/agent-session-channels/v1/events: Append normalized session events
+   */
+  postAgentSessionChannelsV1Events: {
+    operationId: "postAgentSessionChannelsV1Events",
+    method: "POST",
+    path: "/api/agent-session-channels/v1/events",
+    tags: ["agent-session-channels"],
+    deprecated: false,
+    permission: "channel-credential",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["cli"],
+    extension: null,
+    security: [{ "channelCredential": [] }],
+    parameters: { path: null, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: appendAgentSessionEventsBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: appendAgentSessionEventsDtoSchema } } }, "400": apiResponses.BadRequest, "401": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * POST /api/agent-session-channels/v1/requests: Open an agent request on the channel
+   */
+  postAgentSessionChannelsV1Requests: {
+    operationId: "postAgentSessionChannelsV1Requests",
+    method: "POST",
+    path: "/api/agent-session-channels/v1/requests",
+    tags: ["agent-session-channels"],
+    deprecated: false,
+    permission: "channel-credential",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["cli"],
+    extension: null,
+    security: [{ "channelCredential": [] }],
+    parameters: { path: null, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: createAgentRequestBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: createdAgentRequestDtoSchema } } }, "400": apiResponses.BadRequest, "401": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * GET /api/agent-session-channels/v1/requests/{id}: Read one of the channel's requests
+   */
+  getAgentSessionChannelsV1RequestsById: {
+    operationId: "getAgentSessionChannelsV1RequestsById",
+    method: "GET",
+    path: "/api/agent-session-channels/v1/requests/{id}",
+    tags: ["agent-session-channels"],
+    deprecated: false,
+    permission: "channel-credential",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["cli"],
+    extension: null,
+    security: [{ "channelCredential": [] }],
+    parameters: { path: getAgentSessionChannelsV1RequestsByIdPathParamsSchema, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: agentRequestDtoSchema } } }, "400": apiResponses.BadRequest, "401": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+  },
+  /**
+   * POST /api/agent-session-channels/v1/requests/{id}/lease: Acquire or renew the waiter lease on a request
+   */
+  postAgentSessionChannelsV1RequestsByIdLease: {
+    operationId: "postAgentSessionChannelsV1RequestsByIdLease",
+    method: "POST",
+    path: "/api/agent-session-channels/v1/requests/{id}/lease",
+    tags: ["agent-session-channels"],
+    deprecated: false,
+    permission: "channel-credential",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["cli"],
+    extension: null,
+    security: [{ "channelCredential": [] }],
+    parameters: { path: postAgentSessionChannelsV1RequestsByIdLeasePathParamsSchema, query: null, header: null },
+    requestBody: { required: false, content: { "application/json": { kind: "json", schema: agentRequestLeaseBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: agentRequestLeaseDtoSchema } } }, "400": apiResponses.BadRequest, "401": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * POST /api/agent-session-channels/v1/requests/{id}/release: Release a request to the terminal
+   */
+  postAgentSessionChannelsV1RequestsByIdRelease: {
+    operationId: "postAgentSessionChannelsV1RequestsByIdRelease",
+    method: "POST",
+    path: "/api/agent-session-channels/v1/requests/{id}/release",
+    tags: ["agent-session-channels"],
+    deprecated: false,
+    permission: "channel-credential",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["cli"],
+    extension: null,
+    security: [{ "channelCredential": [] }],
+    parameters: { path: postAgentSessionChannelsV1RequestsByIdReleasePathParamsSchema, query: null, header: null },
+    requestBody: { required: false, content: { "application/json": { kind: "json", schema: releaseAgentRequestBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: releasedAgentRequestDtoSchema } } }, "400": apiResponses.BadRequest, "401": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "404": apiResponses.NotFound, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * POST /api/agent-session-channels/v1/requests/{id}/application: Record whether a resolution was applied
+   */
+  postAgentSessionChannelsV1RequestsByIdApplication: {
+    operationId: "postAgentSessionChannelsV1RequestsByIdApplication",
+    method: "POST",
+    path: "/api/agent-session-channels/v1/requests/{id}/application",
+    tags: ["agent-session-channels"],
+    deprecated: false,
+    permission: "channel-credential",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["cli"],
+    extension: null,
+    security: [{ "channelCredential": [] }],
+    parameters: { path: postAgentSessionChannelsV1RequestsByIdApplicationPathParamsSchema, query: null, header: null },
+    requestBody: { required: false, content: { "application/json": { kind: "json", schema: recordAgentRequestApplicationBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: okResponseSchema } } }, "400": apiResponses.BadRequest, "401": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "404": apiResponses.NotFound, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * POST /api/agent-session-channels/v1/requests/{id}/resolved-elsewhere: Report that a request was answered in the terminal
+   */
+  postAgentSessionChannelsV1RequestsByIdResolvedElsewhere: {
+    operationId: "postAgentSessionChannelsV1RequestsByIdResolvedElsewhere",
+    method: "POST",
+    path: "/api/agent-session-channels/v1/requests/{id}/resolved-elsewhere",
+    tags: ["agent-session-channels"],
+    deprecated: false,
+    permission: "channel-credential",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["cli"],
+    extension: null,
+    security: [{ "channelCredential": [] }],
+    parameters: { path: postAgentSessionChannelsV1RequestsByIdResolvedElsewherePathParamsSchema, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: agentRequestResolvedElsewhereDtoSchema } } }, "400": apiResponses.BadRequest, "401": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+  },
+  /**
+   * POST /api/agent-session-channels/v1/inputs/claim: Lease the channel's next queued input
+   */
+  postAgentSessionChannelsV1InputsClaim: {
+    operationId: "postAgentSessionChannelsV1InputsClaim",
+    method: "POST",
+    path: "/api/agent-session-channels/v1/inputs/claim",
+    tags: ["agent-session-channels"],
+    deprecated: false,
+    permission: "channel-credential",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["cli"],
+    extension: null,
+    security: [{ "channelCredential": [] }],
+    parameters: { path: null, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: claimedAgentSessionInputDtoSchema } } }, "400": apiResponses.BadRequest, "401": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "500": apiResponses.InternalError }
+  },
+  /**
+   * POST /api/agent-session-channels/v1/inputs/{id}/emitted: Mark a leased input emitted
+   */
+  postAgentSessionChannelsV1InputsByIdEmitted: {
+    operationId: "postAgentSessionChannelsV1InputsByIdEmitted",
+    method: "POST",
+    path: "/api/agent-session-channels/v1/inputs/{id}/emitted",
+    tags: ["agent-session-channels"],
+    deprecated: false,
+    permission: "channel-credential",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["cli"],
+    extension: null,
+    security: [{ "channelCredential": [] }],
+    parameters: { path: postAgentSessionChannelsV1InputsByIdEmittedPathParamsSchema, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: markAgentSessionInputEmittedBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: postAgentSessionChannelsV1InputsByIdEmittedResponse200Schema } } }, "400": apiResponses.BadRequest, "401": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "404": apiResponses.NotFound, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * POST /api/agent-session-channels/v1/inputs/{id}/acknowledged: Mark an emitted input acknowledged
+   */
+  postAgentSessionChannelsV1InputsByIdAcknowledged: {
+    operationId: "postAgentSessionChannelsV1InputsByIdAcknowledged",
+    method: "POST",
+    path: "/api/agent-session-channels/v1/inputs/{id}/acknowledged",
+    tags: ["agent-session-channels"],
+    deprecated: false,
+    permission: "channel-credential",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["cli"],
+    extension: null,
+    security: [{ "channelCredential": [] }],
+    parameters: { path: postAgentSessionChannelsV1InputsByIdAcknowledgedPathParamsSchema, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: postAgentSessionChannelsV1InputsByIdAcknowledgedResponse200Schema } } }, "400": apiResponses.BadRequest, "401": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+  },
+  /**
+   * POST /api/agent-session-channels/v1/inputs/{id}/failed: Mark a queued or leased input failed
+   */
+  postAgentSessionChannelsV1InputsByIdFailed: {
+    operationId: "postAgentSessionChannelsV1InputsByIdFailed",
+    method: "POST",
+    path: "/api/agent-session-channels/v1/inputs/{id}/failed",
+    tags: ["agent-session-channels"],
+    deprecated: false,
+    permission: "channel-credential",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["cli"],
+    extension: null,
+    security: [{ "channelCredential": [] }],
+    parameters: { path: postAgentSessionChannelsV1InputsByIdFailedPathParamsSchema, query: null, header: null },
+    requestBody: { required: false, content: { "application/json": { kind: "json", schema: markAgentSessionInputFailedBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: postAgentSessionChannelsV1InputsByIdFailedResponse200Schema } } }, "400": apiResponses.BadRequest, "401": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "404": apiResponses.NotFound, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * POST /api/agent-session-channels/v1/end: End the channel
+   */
+  postAgentSessionChannelsV1End: {
+    operationId: "postAgentSessionChannelsV1End",
+    method: "POST",
+    path: "/api/agent-session-channels/v1/end",
+    tags: ["agent-session-channels"],
+    deprecated: false,
+    permission: "channel-credential",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["cli"],
+    extension: null,
+    security: [{ "channelCredential": [] }],
+    parameters: { path: null, query: null, header: null },
+    requestBody: { required: false, content: { "application/json": { kind: "json", schema: endAgentSessionChannelBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: okResponseSchema } } }, "400": apiResponses.BadRequest, "401": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * GET /oauth/clients/knowledgebase.json: Knowledgebase OAuth client metadata document
+   */
+  getOauthClientsKnowledgebaseJson: {
+    operationId: "getOauthClientsKnowledgebaseJson",
+    method: "GET",
+    path: "/oauth/clients/knowledgebase.json",
+    tags: ["connections"],
+    deprecated: false,
+    permission: "public",
+    permissionCandidates: [],
+    edition: "cloud",
+    consumers: ["external"],
+    extension: null,
+    security: [],
+    parameters: { path: null, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: knowledgebaseClientMetadataDtoSchema } } }, "400": apiResponses.BadRequest, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+  },
+  /**
+   * GET /api/connections/knowledgebase/callback: Knowledgebase OAuth callback
+   */
+  getConnectionsKnowledgebaseCallback: {
+    operationId: "getConnectionsKnowledgebaseCallback",
+    method: "GET",
+    path: "/api/connections/knowledgebase/callback",
+    tags: ["connections"],
+    deprecated: false,
+    permission: "public",
+    permissionCandidates: [],
+    edition: "cloud",
+    consumers: ["external"],
+    extension: null,
+    security: [],
+    parameters: { path: null, query: getConnectionsKnowledgebaseCallbackQueryParamsSchema, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "text/html": { kind: "text", schema: getConnectionsKnowledgebaseCallbackResponse200TextSchema } } }, "302": { headers: ["Location"], content: {} }, "400": { headers: [], content: { "text/html": { kind: "text", schema: getConnectionsKnowledgebaseCallbackResponse400TextSchema }, "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "500": apiResponses.InternalError }
+  },
+  /**
+   * GET /api/chat/providers: Assistant engine readiness and the caller's organization connections
+   */
+  getChatProviders: {
+    operationId: "getChatProviders",
+    method: "GET",
+    path: "/api/chat/providers",
+    tags: ["chat"],
+    deprecated: false,
+    permission: "owner",
+    permissionCandidates: [],
+    edition: "cloud",
+    consumers: ["mobile", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: null, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: chatProvidersResponseSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "500": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } } }
+  },
+  /**
+   * GET /api/chat/threads: List the caller's chat threads
+   */
+  getChatThreads: {
+    operationId: "getChatThreads",
+    method: "GET",
+    path: "/api/chat/threads",
+    tags: ["chat"],
+    deprecated: false,
+    permission: "owner",
+    permissionCandidates: [],
+    edition: "cloud",
+    consumers: ["mobile", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: null, query: getChatThreadsQueryParamsSchema, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: chatThreadListResponseSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "500": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } } }
+  },
+  /**
+   * POST /api/chat/threads: Create a chat thread, optionally with its first message
+   */
+  postChatThreads: {
+    operationId: "postChatThreads",
+    method: "POST",
+    path: "/api/chat/threads",
+    tags: ["chat"],
+    deprecated: false,
+    permission: "owner",
+    permissionCandidates: [],
+    edition: "cloud",
+    consumers: ["mobile", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: null, query: null, header: null },
+    requestBody: { required: false, content: { "application/json": { kind: "json", schema: createChatThreadBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: createChatThreadResponseSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "409": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "413": apiResponses.PayloadTooLarge, "429": apiResponses.TooManyRequests, "500": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } } }
+  },
+  /**
+   * GET /api/chat/threads/{id}: Read a thread snapshot
+   */
+  getChatThreadsById: {
+    operationId: "getChatThreadsById",
+    method: "GET",
+    path: "/api/chat/threads/{id}",
+    tags: ["chat"],
+    deprecated: false,
+    permission: "owner",
+    permissionCandidates: [],
+    edition: "cloud",
+    consumers: ["mobile", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: getChatThreadsByIdPathParamsSchema, query: getChatThreadsByIdQueryParamsSchema, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: chatThreadSnapshotDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "500": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } } }
+  },
+  /**
+   * PATCH /api/chat/threads/{id}: Rename or archive a chat thread
+   */
+  patchChatThreadsById: {
+    operationId: "patchChatThreadsById",
+    method: "PATCH",
+    path: "/api/chat/threads/{id}",
+    tags: ["chat"],
+    deprecated: false,
+    permission: "owner",
+    permissionCandidates: [],
+    edition: "cloud",
+    consumers: ["mobile", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: patchChatThreadsByIdPathParamsSchema, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: updateChatThreadBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: chatThreadDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "409": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "413": apiResponses.PayloadTooLarge, "500": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } } }
+  },
+  /**
+   * GET /api/chat/threads/{id}/diagnostics: Read a thread's diagnostic observations
+   */
+  getChatThreadsByIdDiagnostics: {
+    operationId: "getChatThreadsByIdDiagnostics",
+    method: "GET",
+    path: "/api/chat/threads/{id}/diagnostics",
+    tags: ["chat"],
+    deprecated: false,
+    permission: "owner",
+    permissionCandidates: [],
+    edition: "cloud",
+    consumers: ["webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: getChatThreadsByIdDiagnosticsPathParamsSchema, query: getChatThreadsByIdDiagnosticsQueryParamsSchema, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: chatDiagnosticPageDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "500": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } } }
+  },
+  /**
+   * POST /api/chat/threads/{id}/messages: Submit a message
+   */
+  postChatThreadsByIdMessages: {
+    operationId: "postChatThreadsByIdMessages",
+    method: "POST",
+    path: "/api/chat/threads/{id}/messages",
+    tags: ["chat"],
+    deprecated: false,
+    permission: "owner",
+    permissionCandidates: [],
+    edition: "cloud",
+    consumers: ["mobile", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: postChatThreadsByIdMessagesPathParamsSchema, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: submitChatMessageBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: submitChatMessageResponseSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "409": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "413": apiResponses.PayloadTooLarge, "429": apiResponses.TooManyRequests, "500": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } } }
+  },
+  /**
+   * PUT /api/chat/threads/{id}/presence: Renew or release a client's foreground presence
+   */
+  putChatThreadsByIdPresence: {
+    operationId: "putChatThreadsByIdPresence",
+    method: "PUT",
+    path: "/api/chat/threads/{id}/presence",
+    tags: ["chat"],
+    deprecated: false,
+    permission: "owner",
+    permissionCandidates: [],
+    edition: "cloud",
+    consumers: ["mobile", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: putChatThreadsByIdPresencePathParamsSchema, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: updateChatPresenceBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: chatPresenceDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "413": apiResponses.PayloadTooLarge, "500": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } } }
+  },
+  /**
+   * POST /api/chat/threads/{id}/ack: Acknowledge rendered events
+   */
+  postChatThreadsByIdAck: {
+    operationId: "postChatThreadsByIdAck",
+    method: "POST",
+    path: "/api/chat/threads/{id}/ack",
+    tags: ["chat"],
+    deprecated: false,
+    permission: "owner",
+    permissionCandidates: [],
+    edition: "cloud",
+    consumers: ["mobile", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: postChatThreadsByIdAckPathParamsSchema, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: ackChatEventsBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: chatAckDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "413": apiResponses.PayloadTooLarge, "500": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } } }
+  },
+  /**
+   * GET /api/chat/notifications: List dispatched conversation notifications
+   */
+  getChatNotifications: {
+    operationId: "getChatNotifications",
+    method: "GET",
+    path: "/api/chat/notifications",
+    tags: ["chat"],
+    deprecated: false,
+    permission: "owner",
+    permissionCandidates: [],
+    edition: "cloud",
+    consumers: ["mobile"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: null, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: chatNotificationListResponseSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "500": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } } }
+  },
+  /**
+   * POST /api/chat/notifications/{id}/read: Mark a conversation notification read
+   */
+  postChatNotificationsByIdRead: {
+    operationId: "postChatNotificationsByIdRead",
+    method: "POST",
+    path: "/api/chat/notifications/{id}/read",
+    tags: ["chat"],
+    deprecated: false,
+    permission: "owner",
+    permissionCandidates: [],
+    edition: "cloud",
+    consumers: ["mobile"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: postChatNotificationsByIdReadPathParamsSchema, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: markChatNotificationReadBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: chatNotificationDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "409": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "413": apiResponses.PayloadTooLarge, "500": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } } }
+  },
+  /**
+   * POST /api/chat/proposals/{id}/create: Create draft missions from a work proposal
+   */
+  postChatProposalsByIdCreate: {
+    operationId: "postChatProposalsByIdCreate",
+    method: "POST",
+    path: "/api/chat/proposals/{id}/create",
+    tags: ["chat"],
+    deprecated: false,
+    permission: "owner",
+    permissionCandidates: [],
+    edition: "cloud",
+    consumers: ["mobile", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: postChatProposalsByIdCreatePathParamsSchema, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: createFromChatProposalBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: createFromChatProposalResponseSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "409": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "413": apiResponses.PayloadTooLarge, "500": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } } }
+  },
+  /**
+   * POST /api/chat/questions/{id}/answer: Answer an open question from its card
+   */
+  postChatQuestionsByIdAnswer: {
+    operationId: "postChatQuestionsByIdAnswer",
+    method: "POST",
+    path: "/api/chat/questions/{id}/answer",
+    tags: ["chat"],
+    deprecated: false,
+    permission: "owner",
+    permissionCandidates: [],
+    edition: "cloud",
+    consumers: ["mobile", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: postChatQuestionsByIdAnswerPathParamsSchema, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: answerChatQuestionBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: submitChatMessageResponseSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "409": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "413": apiResponses.PayloadTooLarge, "500": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } } }
+  },
+  /**
+   * POST /api/chat/runs/{id}/cancel: Cancel a run
+   */
+  postChatRunsByIdCancel: {
+    operationId: "postChatRunsByIdCancel",
+    method: "POST",
+    path: "/api/chat/runs/{id}/cancel",
+    tags: ["chat"],
+    deprecated: false,
+    permission: "owner",
+    permissionCandidates: [],
+    edition: "cloud",
+    consumers: ["mobile", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: postChatRunsByIdCancelPathParamsSchema, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: cancelChatRunBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: chatRunDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "413": apiResponses.PayloadTooLarge, "500": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } } }
+  },
+  /**
+   * POST /api/chat/runs/{id}/continue: Continue a run whose allowance ran out
+   */
+  postChatRunsByIdContinue: {
+    operationId: "postChatRunsByIdContinue",
+    method: "POST",
+    path: "/api/chat/runs/{id}/continue",
+    tags: ["chat"],
+    deprecated: false,
+    permission: "owner",
+    permissionCandidates: [],
+    edition: "cloud",
+    consumers: ["mobile", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: postChatRunsByIdContinuePathParamsSchema, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: continueChatRunBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: continueChatRunResponseSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "409": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "413": apiResponses.PayloadTooLarge, "429": apiResponses.TooManyRequests, "500": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } } }
+  },
+  /**
+   * GET /api/chat/threads/{id}/events: Replay and stream thread events
+   */
+  getChatThreadsByIdEvents: {
+    operationId: "getChatThreadsByIdEvents",
+    method: "GET",
+    path: "/api/chat/threads/{id}/events",
+    tags: ["chat"],
+    deprecated: false,
+    permission: "owner",
+    permissionCandidates: [],
+    edition: "cloud",
+    consumers: ["mobile", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: getChatThreadsByIdEventsPathParamsSchema, query: getChatThreadsByIdEventsQueryParamsSchema, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: chatEventPageDtoSchema }, "text/event-stream": { kind: "event-stream", event: chatStreamFrameDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "409": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "500": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } } }
+  },
+  /**
+   * GET /api/connections: List the caller's account connections
+   */
+  getConnections: {
+    operationId: "getConnections",
+    method: "GET",
+    path: "/api/connections",
+    tags: ["connections"],
+    deprecated: false,
+    permission: "owner",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["mobile", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: null, query: getConnectionsQueryParamsSchema, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: accountConnectionListResponseSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+  },
+  /**
+   * POST /api/connections: Start an OAuth account connection
+   */
+  postConnections: {
+    operationId: "postConnections",
+    method: "POST",
+    path: "/api/connections",
+    tags: ["connections"],
+    deprecated: false,
+    permission: "owner",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["mobile", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: null, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: startAccountConnectionBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: startAccountConnectionResponseSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError, "503": apiResponses.ServiceUnavailable }
+  },
+  /**
+   * POST /api/connections/api-keys: Connect or rotate an API-key account connection
+   */
+  postConnectionsApiKeys: {
+    operationId: "postConnectionsApiKeys",
+    method: "POST",
+    path: "/api/connections/api-keys",
+    tags: ["connections"],
+    deprecated: false,
+    permission: "owner",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["mobile", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: null, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: setAccountConnectionApiKeyBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: accountConnectionDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "413": apiResponses.PayloadTooLarge, "422": apiResponses.UnprocessableContent, "500": apiResponses.InternalError, "502": apiResponses.BadGateway, "503": apiResponses.ServiceUnavailable }
+  },
+  /**
+   * DELETE /api/connections/{id}: Disconnect an account connection
+   */
+  deleteConnectionsById: {
+    operationId: "deleteConnectionsById",
+    method: "DELETE",
+    path: "/api/connections/{id}",
+    tags: ["connections"],
+    deprecated: false,
+    permission: "owner",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["mobile", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: deleteConnectionsByIdPathParamsSchema, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: accountConnectionDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+  },
+  /**
+   * PATCH /api/connections/{id}: Change a Knowledgebase connection's settings
+   */
+  patchConnectionsById: {
+    operationId: "patchConnectionsById",
+    method: "PATCH",
+    path: "/api/connections/{id}",
+    tags: ["connections"],
+    deprecated: false,
+    permission: "owner",
+    permissionCandidates: [],
+    edition: "cloud",
+    consumers: ["webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: patchConnectionsByIdPathParamsSchema, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: updateAccountConnectionBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: accountConnectionDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * GET /api/meta: Caller and server metadata
+   */
+  getMeta: {
+    operationId: "getMeta",
+    method: "GET",
+    path: "/api/meta",
+    tags: ["meta"],
+    deprecated: false,
+    permission: "authenticated",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["cli", "mobile", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: null, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: serverMetaDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+  },
+  /**
+   * GET /api/authorized-workspaces: The caller's authorization snapshot
+   */
+  getAuthorizedWorkspaces: {
+    operationId: "getAuthorizedWorkspaces",
+    method: "GET",
+    path: "/api/authorized-workspaces",
+    tags: ["meta"],
+    deprecated: false,
+    permission: "authenticated",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["mobile"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: null, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: authorizedWorkspaceDiscoveryDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+  },
+  /**
+   * GET /api/diagnostics/execution-target-migration: Execution targets stamped with the backend host
+   */
+  getDiagnosticsExecutionTargetMigration: {
+    operationId: "getDiagnosticsExecutionTargetMigration",
+    method: "GET",
+    path: "/api/diagnostics/execution-target-migration",
+    tags: ["meta"],
+    deprecated: false,
+    permission: "workspace:read",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["cli"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: null, query: getDiagnosticsExecutionTargetMigrationQueryParamsSchema, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: executionTargetMigrationDiagnosticsDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+  },
+  /**
+   * POST /api/onboarding: Create the caller's first organization and workspace
+   */
+  postOnboarding: {
+    operationId: "postOnboarding",
+    method: "POST",
+    path: "/api/onboarding",
+    tags: ["organizations"],
+    deprecated: false,
+    permission: "authenticated",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["cli", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: null, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: createOrganizationOnboardingBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: metaDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * GET /api/organizations: List the caller's organizations
+   */
+  getOrganizations: {
+    operationId: "getOrganizations",
+    method: "GET",
+    path: "/api/organizations",
+    tags: ["organizations"],
+    deprecated: false,
+    permission: "authenticated",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: null, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: organizationListSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+  },
+  /**
+   * PATCH /api/organizations/{id}: Rename an organization or set its logo
+   */
+  patchOrganizationsById: {
+    operationId: "patchOrganizationsById",
+    method: "PATCH",
+    path: "/api/organizations/{id}",
+    tags: ["organizations"],
+    deprecated: false,
+    permission: "organization-admin",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["cli", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: patchOrganizationsByIdPathParamsSchema, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: updateOrganizationBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: organizationDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * GET /api/organizations/{id}/admins: List an organization's admins
+   */
+  getOrganizationsByIdAdmins: {
+    operationId: "getOrganizationsByIdAdmins",
+    method: "GET",
+    path: "/api/organizations/{id}/admins",
+    tags: ["organizations"],
+    deprecated: false,
+    permission: "organization-admin",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: getOrganizationsByIdAdminsPathParamsSchema, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: organizationAdminListSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+  },
+  /**
+   * POST /api/organizations/{id}/admins: Make a member an organization admin
+   */
+  postOrganizationsByIdAdmins: {
+    operationId: "postOrganizationsByIdAdmins",
+    method: "POST",
+    path: "/api/organizations/{id}/admins",
+    tags: ["organizations"],
+    deprecated: false,
+    permission: "organization-admin",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: postOrganizationsByIdAdminsPathParamsSchema, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: addOrganizationAdminBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: organizationAdminListSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * DELETE /api/organizations/{id}/admins/{userId}: Remove an organization admin
+   */
+  deleteOrganizationsByIdAdminsByUserId: {
+    operationId: "deleteOrganizationsByIdAdminsByUserId",
+    method: "DELETE",
+    path: "/api/organizations/{id}/admins/{userId}",
+    tags: ["organizations"],
+    deprecated: false,
+    permission: "organization-admin",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: deleteOrganizationsByIdAdminsByUserIdPathParamsSchema, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: organizationAdminListSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "500": apiResponses.InternalError }
+  },
+  /**
+   * GET /api/workspaces: List the caller's workspaces
+   */
+  getWorkspaces: {
+    operationId: "getWorkspaces",
+    method: "GET",
+    path: "/api/workspaces",
+    tags: ["workspaces"],
+    deprecated: false,
+    permission: "authenticated",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["cli", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: null, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: workspaceListSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+  },
+  /**
+   * POST /api/workspaces: Create a workspace in an organization
+   */
+  postWorkspaces: {
+    operationId: "postWorkspaces",
+    method: "POST",
+    path: "/api/workspaces",
+    tags: ["workspaces"],
+    deprecated: false,
+    permission: "workspace-admin",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: null, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: createWorkspaceBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: workspaceDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * DELETE /api/workspaces/{id}: Delete a workspace
+   */
+  deleteWorkspacesById: {
+    operationId: "deleteWorkspacesById",
+    method: "DELETE",
+    path: "/api/workspaces/{id}",
+    tags: ["workspaces"],
+    deprecated: false,
+    permission: "workspace-admin",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: deleteWorkspacesByIdPathParamsSchema, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: workspaceListSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+  },
+  /**
+   * PATCH /api/workspaces/{id}: Rename a workspace or toggle SQL Studio
+   */
+  patchWorkspacesById: {
+    operationId: "patchWorkspacesById",
+    method: "PATCH",
+    path: "/api/workspaces/{id}",
+    tags: ["workspaces"],
+    deprecated: false,
+    permission: "workspace-manager",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["mobile", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: patchWorkspacesByIdPathParamsSchema, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: updateWorkspaceBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: workspaceDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * GET /api/workspaces/{id}/members: List a workspace's members
+   */
+  getWorkspacesByIdMembers: {
+    operationId: "getWorkspacesByIdMembers",
+    method: "GET",
+    path: "/api/workspaces/{id}/members",
+    tags: ["workspaces"],
+    deprecated: false,
+    permission: "workspace-member",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["mobile", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: getWorkspacesByIdMembersPathParamsSchema, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: workspaceMemberListSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+  },
+  /**
+   * DELETE /api/workspaces/{id}/members/{workspaceUserId}: Remove a member from a workspace
+   */
+  deleteWorkspacesByIdMembersByWorkspaceUserId: {
+    operationId: "deleteWorkspacesByIdMembersByWorkspaceUserId",
+    method: "DELETE",
+    path: "/api/workspaces/{id}/members/{workspaceUserId}",
+    tags: ["workspaces"],
+    deprecated: false,
+    permission: "workspace-manager",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: deleteWorkspacesByIdMembersByWorkspaceUserIdPathParamsSchema, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: okResponseSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "500": apiResponses.InternalError }
+  },
+  /**
+   * PATCH /api/workspaces/{id}/members/{workspaceUserId}/role: Set a member's workspace role
+   */
+  patchWorkspacesByIdMembersByWorkspaceUserIdRole: {
+    operationId: "patchWorkspacesByIdMembersByWorkspaceUserIdRole",
+    method: "PATCH",
+    path: "/api/workspaces/{id}/members/{workspaceUserId}/role",
+    tags: ["workspaces"],
+    deprecated: false,
+    permission: "workspace-manager",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: patchWorkspacesByIdMembersByWorkspaceUserIdRolePathParamsSchema, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: updateWorkspaceMemberRoleBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: workspaceMemberDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * GET /api/workspaces/{id}/invitations: List a workspace's invitations
+   */
+  getWorkspacesByIdInvitations: {
+    operationId: "getWorkspacesByIdInvitations",
+    method: "GET",
+    path: "/api/workspaces/{id}/invitations",
+    tags: ["workspaces"],
+    deprecated: false,
+    permission: "workspace-manager",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: getWorkspacesByIdInvitationsPathParamsSchema, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: workspaceInvitationListSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+  },
+  /**
+   * POST /api/workspaces/{id}/invitations: Invite an email address to a workspace
+   */
+  postWorkspacesByIdInvitations: {
+    operationId: "postWorkspacesByIdInvitations",
+    method: "POST",
+    path: "/api/workspaces/{id}/invitations",
+    tags: ["workspaces"],
+    deprecated: false,
+    permission: "workspace-manager",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: postWorkspacesByIdInvitationsPathParamsSchema, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: inviteWorkspaceMemberBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: inviteWorkspaceMemberResultDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * DELETE /api/workspaces/{id}/invitations/{invitationId}: Revoke an invitation
+   */
+  deleteWorkspacesByIdInvitationsByInvitationId: {
+    operationId: "deleteWorkspacesByIdInvitationsByInvitationId",
+    method: "DELETE",
+    path: "/api/workspaces/{id}/invitations/{invitationId}",
+    tags: ["workspaces"],
+    deprecated: false,
+    permission: "workspace-manager",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: deleteWorkspacesByIdInvitationsByInvitationIdPathParamsSchema, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: okResponseSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+  },
+  /**
+   * POST /api/invitations/accept: Accept a workspace invitation
+   */
+  postInvitationsAccept: {
+    operationId: "postInvitationsAccept",
+    method: "POST",
+    path: "/api/invitations/accept",
+    tags: ["workspaces"],
+    deprecated: false,
+    permission: "authenticated",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: null, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: acceptWorkspaceInvitationBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: workspaceDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "410": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * GET /api/workspaces/{id}/objectives.csv: Export a workspace's objectives as CSV
+   */
+  getWorkspacesByIdObjectivesCsv: {
+    operationId: "getWorkspacesByIdObjectivesCsv",
+    method: "GET",
+    path: "/api/workspaces/{id}/objectives.csv",
+    tags: ["workspaces"],
+    deprecated: false,
+    permission: "workspace:read",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: getWorkspacesByIdObjectivesCsvPathParamsSchema, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: ["Content-Disposition"], content: { "text/csv": { kind: "text", schema: getWorkspacesByIdObjectivesCsvResponse200TextSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+  },
+  /**
+   * GET /api/workspaces/{id}/projects: List one workspace's projects
+   */
+  getWorkspacesByIdProjects: {
+    operationId: "getWorkspacesByIdProjects",
+    method: "GET",
+    path: "/api/workspaces/{id}/projects",
+    tags: ["projects"],
+    deprecated: false,
+    permission: "project:read",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["cli", "mobile", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: getWorkspacesByIdProjectsPathParamsSchema, query: getWorkspacesByIdProjectsQueryParamsSchema, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: projectListSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+  },
+  /**
+   * GET /api/workspaces/{id}/project-statuses: List every project status of a workspace
+   */
+  getWorkspacesByIdProjectStatuses: {
+    operationId: "getWorkspacesByIdProjectStatuses",
+    method: "GET",
+    path: "/api/workspaces/{id}/project-statuses",
+    tags: ["project-statuses"],
+    deprecated: false,
+    permission: "workspace:read",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["mobile", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: getWorkspacesByIdProjectStatusesPathParamsSchema, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: projectStatusListSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+  },
+  /**
+   * GET /api/workspaces/{id}/execution-targets: List a workspace's execution targets
+   */
+  getWorkspacesByIdExecutionTargets: {
+    operationId: "getWorkspacesByIdExecutionTargets",
+    method: "GET",
+    path: "/api/workspaces/{id}/execution-targets",
+    tags: ["execution-targets"],
+    deprecated: false,
+    permission: "workspace:read",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: getWorkspacesByIdExecutionTargetsPathParamsSchema, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: workspaceExecutionTargetListSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+  },
+  /**
+   * POST /api/workspaces/{id}/execution-targets: Register the calling machine as an execution target
+   */
+  postWorkspacesByIdExecutionTargets: {
+    operationId: "postWorkspacesByIdExecutionTargets",
+    method: "POST",
+    path: "/api/workspaces/{id}/execution-targets",
+    tags: ["execution-targets"],
+    deprecated: false,
+    permission: "execution_request:claim",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: postWorkspacesByIdExecutionTargetsPathParamsSchema, query: null, header: postWorkspacesByIdExecutionTargetsHeaderParamsSchema },
+    requestBody: { required: false, content: { "application/json": { kind: "json", schema: registerExecutionTargetBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: workspaceExecutionTargetDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * DELETE /api/workspaces/{id}/execution-targets/{targetId}: Delete an execution target
+   */
+  deleteWorkspacesByIdExecutionTargetsByTargetId: {
+    operationId: "deleteWorkspacesByIdExecutionTargetsByTargetId",
+    method: "DELETE",
+    path: "/api/workspaces/{id}/execution-targets/{targetId}",
+    tags: ["execution-targets"],
+    deprecated: false,
+    permission: "workspace:update",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: deleteWorkspacesByIdExecutionTargetsByTargetIdPathParamsSchema, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: okResponseSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "500": apiResponses.InternalError }
+  },
+  /**
+   * PATCH /api/workspaces/{id}/execution-targets/{targetId}: Rename, disable or enable an execution target
+   */
+  patchWorkspacesByIdExecutionTargetsByTargetId: {
+    operationId: "patchWorkspacesByIdExecutionTargetsByTargetId",
+    method: "PATCH",
+    path: "/api/workspaces/{id}/execution-targets/{targetId}",
+    tags: ["execution-targets"],
+    deprecated: false,
+    permission: "workspace:update",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: patchWorkspacesByIdExecutionTargetsByTargetIdPathParamsSchema, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: updateWorkspaceExecutionTargetBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: workspaceExecutionTargetDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * GET /api/workspaces/{id}/agent-catalog: Read a workspace's agent catalog
+   */
+  getWorkspacesByIdAgentCatalog: {
+    operationId: "getWorkspacesByIdAgentCatalog",
+    method: "GET",
+    path: "/api/workspaces/{id}/agent-catalog",
+    tags: ["agent-catalog"],
+    deprecated: false,
+    permission: "launch:read",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["mobile", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: getWorkspacesByIdAgentCatalogPathParamsSchema, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: agentCatalogDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+  },
+  /**
+   * PUT /api/workspaces/{id}/agent-catalog: Replace a workspace's agent catalog
+   */
+  putWorkspacesByIdAgentCatalog: {
+    operationId: "putWorkspacesByIdAgentCatalog",
+    method: "PUT",
+    path: "/api/workspaces/{id}/agent-catalog",
+    tags: ["agent-catalog"],
+    deprecated: false,
+    permission: "launch:configure",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["mobile", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: putWorkspacesByIdAgentCatalogPathParamsSchema, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: updateAgentCatalogBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: agentCatalogDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * POST /api/workspaces/{id}/agent-catalog/refresh: Merge newly shipped agents and models into a workspace's catalog
+   */
+  postWorkspacesByIdAgentCatalogRefresh: {
+    operationId: "postWorkspacesByIdAgentCatalogRefresh",
+    method: "POST",
+    path: "/api/workspaces/{id}/agent-catalog/refresh",
+    tags: ["agent-catalog"],
+    deprecated: false,
+    permission: "launch:configure",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["mobile", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: postWorkspacesByIdAgentCatalogRefreshPathParamsSchema, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: agentCatalogDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+  },
+  /**
+   * GET /api/profile: Read the caller's own profile
+   */
+  getProfile: {
+    operationId: "getProfile",
+    method: "GET",
+    path: "/api/profile",
+    tags: ["profile"],
+    deprecated: false,
+    permission: "profile:self:read",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: null, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: profileDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+  },
+  /**
+   * PATCH /api/profile: Edit the caller's own profile
+   */
+  patchProfile: {
+    operationId: "patchProfile",
+    method: "PATCH",
+    path: "/api/profile",
+    tags: ["profile"],
+    deprecated: false,
+    permission: "profile:self:update",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: null, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: updateProfileBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: profileDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * GET /api/profile/default-project: Read the caller's default project preference
+   */
+  getProfileDefaultProject: {
+    operationId: "getProfileDefaultProject",
+    method: "GET",
+    path: "/api/profile/default-project",
+    tags: ["profile"],
+    deprecated: false,
+    permission: "profile:self:read",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: null, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: defaultProjectPreferenceDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+  },
+  /**
+   * PUT /api/profile/default-project: Set the caller's default project
+   */
+  putProfileDefaultProject: {
+    operationId: "putProfileDefaultProject",
+    method: "PUT",
+    path: "/api/profile/default-project",
+    tags: ["profile"],
+    deprecated: false,
+    permission: "unknown",
+    permissionCandidates: ["profile:self:update", "project:read"],
+    edition: "both",
+    consumers: ["mobile", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: null, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: setDefaultProjectBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: defaultProjectPreferenceDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * DELETE /api/profile/default-project: Clear the caller's default project
+   */
+  deleteProfileDefaultProject: {
+    operationId: "deleteProfileDefaultProject",
+    method: "DELETE",
+    path: "/api/profile/default-project",
+    tags: ["profile"],
+    deprecated: false,
+    permission: "profile:self:update",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: null, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: defaultProjectPreferenceDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+  },
+  /**
+   * GET /api/user-tokens: List the caller's personal tokens
+   */
+  getUserTokens: {
+    operationId: "getUserTokens",
+    method: "GET",
+    path: "/api/user-tokens",
+    tags: ["user-tokens"],
+    deprecated: false,
+    permission: "user_token:self:list",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["cli", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: null, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: userTokenListSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+  },
+  /**
+   * POST /api/user-tokens: Mint a personal token
+   */
+  postUserTokens: {
+    operationId: "postUserTokens",
+    method: "POST",
+    path: "/api/user-tokens",
+    tags: ["user-tokens"],
+    deprecated: false,
+    permission: "user_token:self:create",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["cli", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: null, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: createUserTokenBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: createUserTokenResultDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * DELETE /api/user-tokens/{id}: Delete a revoked personal token
+   */
+  deleteUserTokensById: {
+    operationId: "deleteUserTokensById",
+    method: "DELETE",
+    path: "/api/user-tokens/{id}",
+    tags: ["user-tokens"],
+    deprecated: false,
+    permission: "user_token:self:revoke",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: deleteUserTokensByIdPathParamsSchema, query: null, header: null },
+    requestBody: null,
+    responses: { "204": { headers: [], content: {} }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "500": apiResponses.InternalError }
+  },
+  /**
+   * PATCH /api/user-tokens/{id}: Rename a personal token
+   */
+  patchUserTokensById: {
+    operationId: "patchUserTokensById",
+    method: "PATCH",
+    path: "/api/user-tokens/{id}",
+    tags: ["user-tokens"],
+    deprecated: false,
+    permission: "user_token:self:rotate",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["cli", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: patchUserTokensByIdPathParamsSchema, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: updateUserTokenBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: userTokenDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * POST /api/user-tokens/{id}/revoke: Revoke a personal token
+   */
+  postUserTokensByIdRevoke: {
+    operationId: "postUserTokensByIdRevoke",
+    method: "POST",
+    path: "/api/user-tokens/{id}/revoke",
+    tags: ["user-tokens"],
+    deprecated: false,
+    permission: "user_token:self:revoke",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["cli", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: postUserTokensByIdRevokePathParamsSchema, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: userTokenDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "500": apiResponses.InternalError }
+  },
+  /**
+   * GET /api/webhooks: List a workspace's webhook subscriptions
+   */
+  getWebhooks: {
+    operationId: "getWebhooks",
+    method: "GET",
+    path: "/api/webhooks",
+    tags: ["webhooks"],
+    deprecated: false,
+    permission: "webhook:read",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: null, query: getWebhooksQueryParamsSchema, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: webhookSubscriptionListSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+  },
+  /**
+   * POST /api/webhooks: Create a webhook subscription
+   */
+  postWebhooks: {
+    operationId: "postWebhooks",
+    method: "POST",
+    path: "/api/webhooks",
+    tags: ["webhooks"],
+    deprecated: false,
+    permission: "webhook:create",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: null, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: createWebhookSubscriptionBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: createWebhookSubscriptionResultDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * DELETE /api/webhooks/{id}: Delete a webhook subscription
+   */
+  deleteWebhooksById: {
+    operationId: "deleteWebhooksById",
+    method: "DELETE",
+    path: "/api/webhooks/{id}",
+    tags: ["webhooks"],
+    deprecated: false,
+    permission: "webhook:delete",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: deleteWebhooksByIdPathParamsSchema, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: okResponseSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+  },
+  /**
+   * PATCH /api/webhooks/{id}: Update a webhook subscription
+   */
+  patchWebhooksById: {
+    operationId: "patchWebhooksById",
+    method: "PATCH",
+    path: "/api/webhooks/{id}",
+    tags: ["webhooks"],
+    deprecated: false,
+    permission: "webhook:update",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: patchWebhooksByIdPathParamsSchema, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: updateWebhookSubscriptionBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: webhookSubscriptionDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * POST /api/webhooks/{id}/rotate-secret: Rotate a webhook signing secret
+   */
+  postWebhooksByIdRotateSecret: {
+    operationId: "postWebhooksByIdRotateSecret",
+    method: "POST",
+    path: "/api/webhooks/{id}/rotate-secret",
+    tags: ["webhooks"],
+    deprecated: false,
+    permission: "webhook:update",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: postWebhooksByIdRotateSecretPathParamsSchema, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: createWebhookSubscriptionResultDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+  },
+  /**
+   * POST /api/webhooks/{id}/test: Send a test delivery
+   */
+  postWebhooksByIdTest: {
+    operationId: "postWebhooksByIdTest",
+    method: "POST",
+    path: "/api/webhooks/{id}/test",
+    tags: ["webhooks"],
+    deprecated: false,
+    permission: "webhook:update",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: postWebhooksByIdTestPathParamsSchema, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: webhookTestResultDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError, "502": apiResponses.BadGateway }
+  },
+  /**
+   * GET /api/webhooks/{id}/deliveries: A subscription's delivery attempt log
+   */
+  getWebhooksByIdDeliveries: {
+    operationId: "getWebhooksByIdDeliveries",
+    method: "GET",
+    path: "/api/webhooks/{id}/deliveries",
+    tags: ["webhooks"],
+    deprecated: false,
+    permission: "webhook:read",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: getWebhooksByIdDeliveriesPathParamsSchema, query: getWebhooksByIdDeliveriesQueryParamsSchema, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: webhookDeliveryAttemptsPageDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+  },
+  /**
+   * POST /api/webhooks/{id}/deliveries/{outboxId}/redeliver: Re-queue a delivery
+   */
+  postWebhooksByIdDeliveriesByOutboxIdRedeliver: {
+    operationId: "postWebhooksByIdDeliveriesByOutboxIdRedeliver",
+    method: "POST",
+    path: "/api/webhooks/{id}/deliveries/{outboxId}/redeliver",
+    tags: ["webhooks"],
+    deprecated: false,
+    permission: "webhook:update",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: postWebhooksByIdDeliveriesByOutboxIdRedeliverPathParamsSchema, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: okResponseSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+  },
+  /**
+   * POST /api/uploads/{bucketKey}: Upload an image
+   */
+  postUploadsByBucketKey: {
+    operationId: "postUploadsByBucketKey",
+    method: "POST",
+    path: "/api/uploads/{bucketKey}",
+    tags: ["storage"],
+    deprecated: false,
+    permission: "unknown",
+    permissionCandidates: ["user_image:self:create", "workspace_image:create", "organization_image:create"],
+    edition: "both",
+    consumers: ["cli", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: postUploadsByBucketKeyPathParamsSchema, query: postUploadsByBucketKeyQueryParamsSchema, header: postUploadsByBucketKeyHeaderParamsSchema },
+    requestBody: { required: true, content: { "*/*": { kind: "binary", schema: rawImageUploadBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: storedImageDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "413": apiResponses.PayloadTooLarge, "415": apiResponses.UnsupportedMediaType, "500": apiResponses.InternalError }
+  },
+  /**
+   * GET /api/storage/{bucketKey}/{storageKey}: Download a stored object
+   */
+  getStorageByBucketKeyByStorageKey: {
+    operationId: "getStorageByBucketKeyByStorageKey",
+    method: "GET",
+    path: "/api/storage/{bucketKey}/{storageKey}",
+    tags: ["storage"],
+    deprecated: false,
+    permission: "unknown",
+    permissionCandidates: ["user_image:read", "workspace_image:read", "organization_image:read", "attachment:read"],
+    edition: "both",
+    consumers: ["cli", "mobile", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: getStorageByBucketKeyByStorageKeyPathParamsSchema, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: ["Cache-Control", "Content-Disposition", "X-Content-Type-Options"], content: { "*/*": { kind: "binary", schema: binaryDownloadSchema } } }, "302": { headers: ["Location"], content: {} }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+  },
+  /**
+   * GET /api/stream: Realtime change stream (compatibility alias of /realtime)
+   */
+  getStream: {
+    operationId: "getStream",
+    method: "GET",
+    path: "/api/stream",
+    tags: ["realtime"],
+    deprecated: false,
+    permission: "project:read",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["unverified"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: null, query: getStreamQueryParamsSchema, header: getStreamHeaderParamsSchema },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "text/event-stream": { kind: "event-stream", event: realtimeStreamEventSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+  },
+  /**
+   * GET /realtime: Realtime change stream (Server-Sent Events)
+   */
+  getRealtime: {
+    operationId: "getRealtime",
+    method: "GET",
+    path: "/realtime",
+    tags: ["realtime"],
+    deprecated: false,
+    permission: "project:read",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["mobile", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: null, query: getRealtimeQueryParamsSchema, header: getRealtimeHeaderParamsSchema },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "text/event-stream": { kind: "event-stream", event: realtimeStreamEventSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+  },
+  /**
+   * GET /sync/changes: Change feed catch-up
+   */
+  getSyncChanges: {
+    operationId: "getSyncChanges",
+    method: "GET",
+    path: "/sync/changes",
+    tags: ["realtime"],
+    deprecated: false,
+    permission: "project:read",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["mobile", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: null, query: getSyncChangesQueryParamsSchema, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: syncChangesDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+  },
+  /**
+   * GET /api/projects: List readable projects across the caller's workspaces
+   */
+  getProjects: {
+    operationId: "getProjects",
+    method: "GET",
+    path: "/api/projects",
+    tags: ["projects"],
+    deprecated: false,
+    permission: "project:read",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["cli", "mobile", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: null, query: getProjectsQueryParamsSchema, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: projectListSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+  },
+  /**
+   * POST /api/projects: Create a project
+   */
+  postProjects: {
+    operationId: "postProjects",
+    method: "POST",
+    path: "/api/projects",
+    tags: ["projects"],
+    deprecated: false,
+    permission: "project:create",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["cli", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: null, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: createProjectBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: projectDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * POST /api/projects/initialize: Create a project, its first mission and optionally a private GitHub repository
+   */
+  postProjectsInitialize: {
+    operationId: "postProjectsInitialize",
+    method: "POST",
+    path: "/api/projects/initialize",
+    tags: ["projects"],
+    deprecated: false,
+    permission: "project:create",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["mobile"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: null, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: initializeProjectBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: initializeProjectResultDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * PATCH /api/projects/reorder: Reorder a workspace's projects
+   */
+  patchProjectsReorder: {
+    operationId: "patchProjectsReorder",
+    method: "PATCH",
+    path: "/api/projects/reorder",
+    tags: ["projects"],
+    deprecated: false,
+    permission: "project:update",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: null, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: reorderProjectsBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: projectListSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * GET /api/projects/{id}: Read a project
+   */
+  getProjectsById: {
+    operationId: "getProjectsById",
+    method: "GET",
+    path: "/api/projects/{id}",
+    tags: ["projects"],
+    deprecated: false,
+    permission: "project:read",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["cli", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: getProjectsByIdPathParamsSchema, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: projectDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+  },
+  /**
+   * DELETE /api/projects/{id}: Soft-delete a project
+   */
+  deleteProjectsById: {
+    operationId: "deleteProjectsById",
+    method: "DELETE",
+    path: "/api/projects/{id}",
+    tags: ["projects"],
+    deprecated: false,
+    permission: "project:delete",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: deleteProjectsByIdPathParamsSchema, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: okResponseSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+  },
+  /**
+   * PATCH /api/projects/{id}: Update a project
+   */
+  patchProjectsById: {
+    operationId: "patchProjectsById",
+    method: "PATCH",
+    path: "/api/projects/{id}",
+    tags: ["projects"],
+    deprecated: false,
+    permission: "project:update",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["mobile", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: patchProjectsByIdPathParamsSchema, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: updateProjectBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: projectDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * GET /api/projects/{id}/run-queues: List a project's Run Queues
+   */
+  getProjectsByIdRunQueues: {
+    operationId: "getProjectsByIdRunQueues",
+    method: "GET",
+    path: "/api/projects/{id}/run-queues",
+    tags: ["run-queues"],
+    deprecated: false,
+    permission: "objective:read",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["mobile", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: getProjectsByIdRunQueuesPathParamsSchema, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: projectRunQueuesDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+  },
+  /**
+   * POST /api/projects/{id}/run-queues: Create a Run Queue
+   */
+  postProjectsByIdRunQueues: {
+    operationId: "postProjectsByIdRunQueues",
+    method: "POST",
+    path: "/api/projects/{id}/run-queues",
+    tags: ["run-queues"],
+    deprecated: false,
+    permission: "project:update",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["mobile", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: postProjectsByIdRunQueuesPathParamsSchema, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: createRunQueueBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: runQueueDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * PATCH /api/projects/{id}/run-queues/order: Reorder a project's Run Queues
+   */
+  patchProjectsByIdRunQueuesOrder: {
+    operationId: "patchProjectsByIdRunQueuesOrder",
+    method: "PATCH",
+    path: "/api/projects/{id}/run-queues/order",
+    tags: ["run-queues"],
+    deprecated: false,
+    permission: "project:update",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["mobile", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: patchProjectsByIdRunQueuesOrderPathParamsSchema, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: reorderProjectRunQueuesBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: projectRunQueuesDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * POST /api/projects/{id}/run-queues/entries: Queue an objective
+   */
+  postProjectsByIdRunQueuesEntries: {
+    operationId: "postProjectsByIdRunQueuesEntries",
+    method: "POST",
+    path: "/api/projects/{id}/run-queues/entries",
+    tags: ["run-queues"],
+    deprecated: false,
+    permission: "execution_request:create",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["mobile", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: postProjectsByIdRunQueuesEntriesPathParamsSchema, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: enqueueRunQueueEntryBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: runQueueEntryDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * DELETE /api/run-queues/{queueId}: Delete a Run Queue
+   */
+  deleteRunQueuesByQueueId: {
+    operationId: "deleteRunQueuesByQueueId",
+    method: "DELETE",
+    path: "/api/run-queues/{queueId}",
+    tags: ["run-queues"],
+    deprecated: false,
+    permission: "project:update",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["mobile", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: deleteRunQueuesByQueueIdPathParamsSchema, query: null, header: null },
+    requestBody: { required: false, content: { "application/json": { kind: "json", schema: deleteRunQueueBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: runQueueRemovalDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * PATCH /api/run-queues/{queueId}: Rename, pause or resume a Run Queue
+   */
+  patchRunQueuesByQueueId: {
+    operationId: "patchRunQueuesByQueueId",
+    method: "PATCH",
+    path: "/api/run-queues/{queueId}",
+    tags: ["run-queues"],
+    deprecated: false,
+    permission: "project:update",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["mobile", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: patchRunQueuesByQueueIdPathParamsSchema, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: updateRunQueueBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: runQueueDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * PATCH /api/run-queues/{queueId}/order: Reorder a Run Queue's entries
+   */
+  patchRunQueuesByQueueIdOrder: {
+    operationId: "patchRunQueuesByQueueIdOrder",
+    method: "PATCH",
+    path: "/api/run-queues/{queueId}/order",
+    tags: ["run-queues"],
+    deprecated: false,
+    permission: "execution_request:create",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["mobile", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: patchRunQueuesByQueueIdOrderPathParamsSchema, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: reorderRunQueueBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: runQueueDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * DELETE /api/run-queues/entries/{entryId}: Remove a Run Queue entry
+   */
+  deleteRunQueuesEntriesByEntryId: {
+    operationId: "deleteRunQueuesEntriesByEntryId",
+    method: "DELETE",
+    path: "/api/run-queues/entries/{entryId}",
+    tags: ["run-queues"],
+    deprecated: false,
+    permission: "execution_request:create",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["mobile", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: deleteRunQueuesEntriesByEntryIdPathParamsSchema, query: null, header: null },
+    requestBody: { required: false, content: { "application/json": { kind: "json", schema: deleteRunQueueEntryBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: runQueueEntryRemovalDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * PATCH /api/run-queues/entries/{entryId}: Move or retry a Run Queue entry
+   */
+  patchRunQueuesEntriesByEntryId: {
+    operationId: "patchRunQueuesEntriesByEntryId",
+    method: "PATCH",
+    path: "/api/run-queues/entries/{entryId}",
+    tags: ["run-queues"],
+    deprecated: false,
+    permission: "execution_request:create",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["mobile", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: patchRunQueuesEntriesByEntryIdPathParamsSchema, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: updateRunQueueEntryBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: runQueueEntryDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * GET /api/projects/{id}/statuses: List a project's statuses
+   */
+  getProjectsByIdStatuses: {
+    operationId: "getProjectsByIdStatuses",
+    method: "GET",
+    path: "/api/projects/{id}/statuses",
+    tags: ["project-statuses"],
+    deprecated: false,
+    permission: "project:read",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["cli", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: getProjectsByIdStatusesPathParamsSchema, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: projectStatusListSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+  },
+  /**
+   * POST /api/projects/{id}/statuses: Create a project status
+   */
+  postProjectsByIdStatuses: {
+    operationId: "postProjectsByIdStatuses",
+    method: "POST",
+    path: "/api/projects/{id}/statuses",
+    tags: ["project-statuses"],
+    deprecated: false,
+    permission: "project:update",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["mobile", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: postProjectsByIdStatusesPathParamsSchema, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: createProjectStatusBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: projectStatusDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * PATCH /api/projects/{id}/statuses/reorder: Reorder a project's statuses
+   */
+  patchProjectsByIdStatusesReorder: {
+    operationId: "patchProjectsByIdStatusesReorder",
+    method: "PATCH",
+    path: "/api/projects/{id}/statuses/reorder",
+    tags: ["project-statuses"],
+    deprecated: false,
+    permission: "project:update",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["mobile", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: patchProjectsByIdStatusesReorderPathParamsSchema, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: reorderProjectStatusesBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: projectStatusListSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * DELETE /api/projects/{id}/statuses/{statusId}: Delete a project status
+   */
+  deleteProjectsByIdStatusesByStatusId: {
+    operationId: "deleteProjectsByIdStatusesByStatusId",
+    method: "DELETE",
+    path: "/api/projects/{id}/statuses/{statusId}",
+    tags: ["project-statuses"],
+    deprecated: false,
+    permission: "project:update",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["mobile", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: deleteProjectsByIdStatusesByStatusIdPathParamsSchema, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: okResponseSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "500": apiResponses.InternalError }
+  },
+  /**
+   * PATCH /api/projects/{id}/statuses/{statusId}: Rename a status or make it the default
+   */
+  patchProjectsByIdStatusesByStatusId: {
+    operationId: "patchProjectsByIdStatusesByStatusId",
+    method: "PATCH",
+    path: "/api/projects/{id}/statuses/{statusId}",
+    tags: ["project-statuses"],
+    deprecated: false,
+    permission: "project:update",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["mobile", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: patchProjectsByIdStatusesByStatusIdPathParamsSchema, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: updateProjectStatusBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: projectStatusDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * GET /api/activity-feed: Cross-workspace, mission-anchored activity feed
+   */
+  getActivityFeed: {
+    operationId: "getActivityFeed",
+    method: "GET",
+    path: "/api/activity-feed",
+    tags: ["activity"],
+    deprecated: false,
+    permission: "mission:read",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["mobile", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: null, query: getActivityFeedQueryParamsSchema, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: activityFeedDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+  },
+  /**
+   * GET /api/objective-transcript: Full-text objective history across workspaces
+   */
+  getObjectiveTranscript: {
+    operationId: "getObjectiveTranscript",
+    method: "GET",
+    path: "/api/objective-transcript",
+    tags: ["activity"],
+    deprecated: false,
+    permission: "unknown",
+    permissionCandidates: ["mission:read", "objective:read"],
+    edition: "both",
+    consumers: ["mobile"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: null, query: getObjectiveTranscriptQueryParamsSchema, header: null },
+    requestBody: null,
+    responses: { "200": { headers: ["Cache-Control"], content: { "application/json": { kind: "json", schema: objectiveTranscriptPageDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+  },
+  /**
+   * PUT /api/deliveries/{deliveryId}/deferred-work/{actionId}/resolution: Record the operator's decision on a deferred-work item
+   */
+  putDeliveriesByDeliveryIdDeferredWorkByActionIdResolution: {
+    operationId: "putDeliveriesByDeliveryIdDeferredWorkByActionIdResolution",
+    method: "PUT",
+    path: "/api/deliveries/{deliveryId}/deferred-work/{actionId}/resolution",
+    tags: ["deliveries"],
+    deprecated: false,
+    permission: "mission:update",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["mobile", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: putDeliveriesByDeliveryIdDeferredWorkByActionIdResolutionPathParamsSchema, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: resolveHumanActionBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: deliveryDeferredWorkItemDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * DELETE /api/deliveries/{deliveryId}/deferred-work/{actionId}/resolution: Reopen a deferred-work item
+   */
+  deleteDeliveriesByDeliveryIdDeferredWorkByActionIdResolution: {
+    operationId: "deleteDeliveriesByDeliveryIdDeferredWorkByActionIdResolution",
+    method: "DELETE",
+    path: "/api/deliveries/{deliveryId}/deferred-work/{actionId}/resolution",
+    tags: ["deliveries"],
+    deprecated: false,
+    permission: "mission:update",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["mobile", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: deleteDeliveriesByDeliveryIdDeferredWorkByActionIdResolutionPathParamsSchema, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: deliveryDeferredWorkItemDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+  },
+  /**
+   * GET /api/inbox/missions: Cross-workspace Inbox triage missions
+   */
+  getInboxMissions: {
+    operationId: "getInboxMissions",
+    method: "GET",
+    path: "/api/inbox/missions",
+    tags: ["inbox"],
+    deprecated: false,
+    permission: "mission:read",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["mobile", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: null, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: inboxMissionsResponseSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+  },
+  /**
+   * PUT /api/mobile/live-activities/{activityId}/push-token: Register a Live Activity update token
+   */
+  putMobileLiveActivitiesByActivityIdPushToken: {
+    operationId: "putMobileLiveActivitiesByActivityIdPushToken",
+    method: "PUT",
+    path: "/api/mobile/live-activities/{activityId}/push-token",
+    tags: ["mobile"],
+    deprecated: false,
+    permission: "owner",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["mobile"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: putMobileLiveActivitiesByActivityIdPushTokenPathParamsSchema, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: registerLiveActivityPushTokenBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: okResponseSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * DELETE /api/mobile/live-activities/{activityId}/push-token: Remove a Live Activity update token
+   */
+  deleteMobileLiveActivitiesByActivityIdPushToken: {
+    operationId: "deleteMobileLiveActivitiesByActivityIdPushToken",
+    method: "DELETE",
+    path: "/api/mobile/live-activities/{activityId}/push-token",
+    tags: ["mobile"],
+    deprecated: false,
+    permission: "owner",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["mobile"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: deleteMobileLiveActivitiesByActivityIdPushTokenPathParamsSchema, query: null, header: null },
+    requestBody: null,
+    responses: { "204": { headers: [], content: {} }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "500": apiResponses.InternalError }
+  },
+  /**
+   * PUT /api/mobile/live-activities/start-token: Register a Live Activity push-to-start token
+   */
+  putMobileLiveActivitiesStartToken: {
+    operationId: "putMobileLiveActivitiesStartToken",
+    method: "PUT",
+    path: "/api/mobile/live-activities/start-token",
+    tags: ["mobile"],
+    deprecated: false,
+    permission: "owner",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["mobile"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: null, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: registerLiveActivityStartTokenBodySchema } } },
+    responses: { "204": { headers: [], content: {} }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * POST /api/mobile/live-activities/start-token/revoke: Withdraw a Live Activity push-to-start token
+   */
+  postMobileLiveActivitiesStartTokenRevoke: {
+    operationId: "postMobileLiveActivitiesStartTokenRevoke",
+    method: "POST",
+    path: "/api/mobile/live-activities/start-token/revoke",
+    tags: ["mobile"],
+    deprecated: false,
+    permission: "owner",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["mobile"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: null, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: revokeLiveActivityStartTokenBodySchema } } },
+    responses: { "204": { headers: [], content: {} }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * PUT /api/mobile/push/device-token: Register an APNs device token
+   */
+  putMobilePushDeviceToken: {
+    operationId: "putMobilePushDeviceToken",
+    method: "PUT",
+    path: "/api/mobile/push/device-token",
+    tags: ["mobile"],
+    deprecated: false,
+    permission: "owner",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["mobile"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: null, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: registerDevicePushTokenBodySchema } } },
+    responses: { "204": { headers: [], content: {} }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * POST /api/mobile/push/device-token/revoke: Remove an APNs device token
+   */
+  postMobilePushDeviceTokenRevoke: {
+    operationId: "postMobilePushDeviceTokenRevoke",
+    method: "POST",
+    path: "/api/mobile/push/device-token/revoke",
+    tags: ["mobile"],
+    deprecated: false,
+    permission: "owner",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["mobile"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: null, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: revokeDevicePushTokenBodySchema } } },
+    responses: { "204": { headers: [], content: {} }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * GET /api/profile/notification-preferences: Read the caller's notification preferences
+   */
+  getProfileNotificationPreferences: {
+    operationId: "getProfileNotificationPreferences",
+    method: "GET",
+    path: "/api/profile/notification-preferences",
+    tags: ["notifications"],
+    deprecated: false,
+    permission: "owner",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["mobile", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: null, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: notificationPreferencesDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+  },
+  /**
+   * PUT /api/profile/notification-preferences: Update the caller's notification preferences
+   */
+  putProfileNotificationPreferences: {
+    operationId: "putProfileNotificationPreferences",
+    method: "PUT",
+    path: "/api/profile/notification-preferences",
+    tags: ["notifications"],
+    deprecated: false,
+    permission: "owner",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["mobile", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: null, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: updateNotificationPreferencesBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: notificationPreferencesDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * GET /api/notifications: List the caller's notifications
+   */
+  getNotifications: {
+    operationId: "getNotifications",
+    method: "GET",
+    path: "/api/notifications",
+    tags: ["notifications"],
+    deprecated: false,
+    permission: "owner",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["mobile", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: null, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: notificationListSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+  },
+  /**
+   * PATCH /api/notifications/{id}/read: Mark a notification read
+   */
+  patchNotificationsByIdRead: {
+    operationId: "patchNotificationsByIdRead",
+    method: "PATCH",
+    path: "/api/notifications/{id}/read",
+    tags: ["notifications"],
+    deprecated: false,
+    permission: "owner",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["mobile", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: patchNotificationsByIdReadPathParamsSchema, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: notificationRevisionBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: notificationDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * DELETE /api/notifications/{id}: Dismiss a notification
+   */
+  deleteNotificationsById: {
+    operationId: "deleteNotificationsById",
+    method: "DELETE",
+    path: "/api/notifications/{id}",
+    tags: ["notifications"],
+    deprecated: false,
+    permission: "owner",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["mobile", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: deleteNotificationsByIdPathParamsSchema, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: notificationRevisionBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: okResponseSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * GET /api/projects/{id}/tags: List a project's tags
+   */
+  getProjectsByIdTags: {
+    operationId: "getProjectsByIdTags",
+    method: "GET",
+    path: "/api/projects/{id}/tags",
+    tags: ["projects"],
+    deprecated: false,
+    permission: "project:read",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["mobile", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: getProjectsByIdTagsPathParamsSchema, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: projectTagListSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+  },
+  /**
+   * POST /api/projects/{id}/tags: Create a project tag
+   */
+  postProjectsByIdTags: {
+    operationId: "postProjectsByIdTags",
+    method: "POST",
+    path: "/api/projects/{id}/tags",
+    tags: ["projects"],
+    deprecated: false,
+    permission: "project:update",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["mobile", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: postProjectsByIdTagsPathParamsSchema, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: createProjectTagBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: projectTagDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * DELETE /api/projects/{id}/tags/{tagId}: Delete a project tag
+   */
+  deleteProjectsByIdTagsByTagId: {
+    operationId: "deleteProjectsByIdTagsByTagId",
+    method: "DELETE",
+    path: "/api/projects/{id}/tags/{tagId}",
+    tags: ["projects"],
+    deprecated: false,
+    permission: "project:update",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: deleteProjectsByIdTagsByTagIdPathParamsSchema, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: okResponseSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+  },
+  /**
+   * PATCH /api/projects/{id}/tags/{tagId}: Update a project tag
+   */
+  patchProjectsByIdTagsByTagId: {
+    operationId: "patchProjectsByIdTagsByTagId",
+    method: "PATCH",
+    path: "/api/projects/{id}/tags/{tagId}",
+    tags: ["projects"],
+    deprecated: false,
+    permission: "project:update",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["mobile", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: patchProjectsByIdTagsByTagIdPathParamsSchema, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: updateProjectTagBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: projectTagDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * GET /api/projects/{id}/resources: List a project's resources
+   */
+  getProjectsByIdResources: {
+    operationId: "getProjectsByIdResources",
+    method: "GET",
+    path: "/api/projects/{id}/resources",
+    tags: ["project-resources"],
+    deprecated: false,
+    permission: "project:read",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["cli", "mobile", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: getProjectsByIdResourcesPathParamsSchema, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: projectResourceListSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+  },
+  /**
+   * POST /api/projects/{id}/resources: Link a project resource or add a source to one
+   */
+  postProjectsByIdResources: {
+    operationId: "postProjectsByIdResources",
+    method: "POST",
+    path: "/api/projects/{id}/resources",
+    tags: ["project-resources"],
+    deprecated: false,
+    permission: "project:update",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["cli", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: postProjectsByIdResourcesPathParamsSchema, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: createProjectResourceBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: projectResourceDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * DELETE /api/projects/{id}/resources/{resourceId}: Delete a project resource
+   */
+  deleteProjectsByIdResourcesByResourceId: {
+    operationId: "deleteProjectsByIdResourcesByResourceId",
+    method: "DELETE",
+    path: "/api/projects/{id}/resources/{resourceId}",
+    tags: ["project-resources"],
+    deprecated: false,
+    permission: "project:update",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: deleteProjectsByIdResourcesByResourceIdPathParamsSchema, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: okResponseSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+  },
+  /**
+   * PATCH /api/projects/{id}/resources/{resourceId}: Update a project resource
+   */
+  patchProjectsByIdResourcesByResourceId: {
+    operationId: "patchProjectsByIdResourcesByResourceId",
+    method: "PATCH",
+    path: "/api/projects/{id}/resources/{resourceId}",
+    tags: ["project-resources"],
+    deprecated: false,
+    permission: "project:update",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: patchProjectsByIdResourcesByResourceIdPathParamsSchema, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: updateProjectResourceBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: projectResourceDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * DELETE /api/projects/{id}/resources/{resourceId}/sources/{sourceId}: Disconnect one source from a project resource
+   */
+  deleteProjectsByIdResourcesByResourceIdSourcesBySourceId: {
+    operationId: "deleteProjectsByIdResourcesByResourceIdSourcesBySourceId",
+    method: "DELETE",
+    path: "/api/projects/{id}/resources/{resourceId}/sources/{sourceId}",
+    tags: ["project-resources"],
+    deprecated: false,
+    permission: "project:update",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: deleteProjectsByIdResourcesByResourceIdSourcesBySourceIdPathParamsSchema, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: okResponseSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+  },
+  /**
+   * PATCH /api/projects/{id}/resources/{resourceId}/sources/{sourceId}: Replace a resource source's launch defaults
+   */
+  patchProjectsByIdResourcesByResourceIdSourcesBySourceId: {
+    operationId: "patchProjectsByIdResourcesByResourceIdSourcesBySourceId",
+    method: "PATCH",
+    path: "/api/projects/{id}/resources/{resourceId}/sources/{sourceId}",
+    tags: ["project-resources"],
+    deprecated: false,
+    permission: "project:update",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: patchProjectsByIdResourcesByResourceIdSourcesBySourceIdPathParamsSchema, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: updateProjectResourceSourceBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: projectResourceDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * POST /api/projects/{id}/repository-reads: Run a bounded read-only repository read on an execution target
+   */
+  postProjectsByIdRepositoryReads: {
+    operationId: "postProjectsByIdRepositoryReads",
+    method: "POST",
+    path: "/api/projects/{id}/repository-reads",
+    tags: ["projects"],
+    deprecated: false,
+    permission: "project:read",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["unverified"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: postProjectsByIdRepositoryReadsPathParamsSchema, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: repositoryReadRequestSchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: repositoryReadResultSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * GET /api/projects/{id}/repository: Describe the project's repository resource
+   */
+  getProjectsByIdRepository: {
+    operationId: "getProjectsByIdRepository",
+    method: "GET",
+    path: "/api/projects/{id}/repository",
+    tags: ["projects"],
+    deprecated: false,
+    permission: "project:read",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: getProjectsByIdRepositoryPathParamsSchema, query: getProjectsByIdRepositoryQueryParamsSchema, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: projectRepositoryDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+  },
+  /**
+   * POST /api/local-target/invoke: Run a checkout-local capability on the backend host (development proxy)
+   */
+  postLocalTargetInvoke: {
+    operationId: "postLocalTargetInvoke",
+    method: "POST",
+    path: "/api/local-target/invoke",
+    tags: ["local-target"],
+    deprecated: false,
+    permission: "project:read",
+    permissionCandidates: [],
+    edition: "local",
+    consumers: ["webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: null, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: localTargetBridgeCallBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: capabilityResultDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * GET /api/projects/{id}/missions: List a project's board missions
+   */
+  getProjectsByIdMissions: {
+    operationId: "getProjectsByIdMissions",
+    method: "GET",
+    path: "/api/projects/{id}/missions",
+    tags: ["missions"],
+    deprecated: false,
+    permission: "unknown",
+    permissionCandidates: ["mission:read", "objective:read"],
+    edition: "both",
+    consumers: ["mobile", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: getProjectsByIdMissionsPathParamsSchema, query: getProjectsByIdMissionsQueryParamsSchema, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: missionListSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+  },
+  /**
+   * GET /ext/everhour/user-connection: The caller's Everhour connection (compatibility alias)
+   */
+  getExtEverhourUserConnection: {
+    operationId: "getExtEverhourUserConnection",
+    method: "GET",
+    path: "/ext/everhour/user-connection",
+    tags: ["everhour"],
+    deprecated: false,
+    permission: "owner",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["unverified"],
+    extension: "everhour",
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: null, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: everhourUserConnectionDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+  },
+  /**
+   * PUT /ext/everhour/user-connection: Connect or rotate the caller's Everhour API key (compatibility alias)
+   */
+  putExtEverhourUserConnection: {
+    operationId: "putExtEverhourUserConnection",
+    method: "PUT",
+    path: "/ext/everhour/user-connection",
+    tags: ["everhour"],
+    deprecated: false,
+    permission: "owner",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["unverified"],
+    extension: "everhour",
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: null, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: updateEverhourIntegrationBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: everhourUserConnectionDtoSchema } } }, "400": apiResponses.BadRequest, "401": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "403": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "404": apiResponses.NotFound, "413": apiResponses.PayloadTooLarge, "429": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "500": apiResponses.InternalError, "502": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "503": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } } }
+  },
+  /**
+   * DELETE /ext/everhour/user-connection: Disconnect the caller's Everhour key (compatibility alias)
+   */
+  deleteExtEverhourUserConnection: {
+    operationId: "deleteExtEverhourUserConnection",
+    method: "DELETE",
+    path: "/ext/everhour/user-connection",
+    tags: ["everhour"],
+    deprecated: false,
+    permission: "owner",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["unverified"],
+    extension: "everhour",
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: null, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: everhourUserConnectionDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+  },
+  /**
+   * GET /ext/everhour/integration: The caller's Everhour connection (deprecated alias of /user-connection)
+   * @deprecated
+   */
+  getExtEverhourIntegration: {
+    operationId: "getExtEverhourIntegration",
+    method: "GET",
+    path: "/ext/everhour/integration",
+    tags: ["everhour"],
+    deprecated: true,
+    permission: "owner",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["unverified"],
+    extension: "everhour",
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: null, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: everhourUserConnectionDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+  },
+  /**
+   * PUT /ext/everhour/integration: Connect or rotate the caller's Everhour API key (deprecated alias of /user-connection)
+   * @deprecated
+   */
+  putExtEverhourIntegration: {
+    operationId: "putExtEverhourIntegration",
+    method: "PUT",
+    path: "/ext/everhour/integration",
+    tags: ["everhour"],
+    deprecated: true,
+    permission: "owner",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["unverified"],
+    extension: "everhour",
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: null, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: updateEverhourIntegrationBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: everhourUserConnectionDtoSchema } } }, "400": apiResponses.BadRequest, "401": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "403": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "404": apiResponses.NotFound, "413": apiResponses.PayloadTooLarge, "429": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "500": apiResponses.InternalError, "502": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "503": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } } }
+  },
+  /**
+   * DELETE /ext/everhour/integration: Disconnect the caller's Everhour key (deprecated alias of /user-connection)
+   * @deprecated
+   */
+  deleteExtEverhourIntegration: {
+    operationId: "deleteExtEverhourIntegration",
+    method: "DELETE",
+    path: "/ext/everhour/integration",
+    tags: ["everhour"],
+    deprecated: true,
+    permission: "owner",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["unverified"],
+    extension: "everhour",
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: null, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: everhourUserConnectionDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+  },
+  /**
+   * GET /ext/everhour/projects/{projectId}/link: Read a project's Everhour link
+   */
+  getExtEverhourProjectsByProjectIdLink: {
+    operationId: "getExtEverhourProjectsByProjectIdLink",
+    method: "GET",
+    path: "/ext/everhour/projects/{projectId}/link",
+    tags: ["everhour"],
+    deprecated: false,
+    permission: "project:read",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["webapp"],
+    extension: "everhour",
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: getExtEverhourProjectsByProjectIdLinkPathParamsSchema, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: projectEverhourLinkDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "500": apiResponses.InternalError }
+  },
+  /**
+   * PUT /ext/everhour/projects/{projectId}/link: Link a project to an Everhour project by name, or unlink it
+   */
+  putExtEverhourProjectsByProjectIdLink: {
+    operationId: "putExtEverhourProjectsByProjectIdLink",
+    method: "PUT",
+    path: "/ext/everhour/projects/{projectId}/link",
+    tags: ["everhour"],
+    deprecated: false,
+    permission: "project:update",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["webapp"],
+    extension: "everhour",
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: putExtEverhourProjectsByProjectIdLinkPathParamsSchema, query: null, header: null },
+    requestBody: { required: false, content: { "application/json": { kind: "json", schema: linkProjectEverhourBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: projectEverhourLinkDtoSchema } } }, "400": apiResponses.BadRequest, "401": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "403": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "404": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "413": apiResponses.PayloadTooLarge, "429": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "500": apiResponses.InternalError, "502": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "503": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } } }
+  },
+  /**
+   * GET /ext/everhour/projects/{projectId}: Read a project's Everhour time state
+   */
+  getExtEverhourProjectsByProjectId: {
+    operationId: "getExtEverhourProjectsByProjectId",
+    method: "GET",
+    path: "/ext/everhour/projects/{projectId}",
+    tags: ["everhour"],
+    deprecated: false,
+    permission: "project:read",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["webapp"],
+    extension: "everhour",
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: getExtEverhourProjectsByProjectIdPathParamsSchema, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: projectEverhourStateDtoSchema } } }, "400": apiResponses.BadRequest, "401": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "403": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "404": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "429": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "500": apiResponses.InternalError, "502": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "503": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } } }
+  },
+  /**
+   * POST /ext/everhour/projects/{projectId}/timer/start: Start the project's Everhour timer
+   */
+  postExtEverhourProjectsByProjectIdTimerStart: {
+    operationId: "postExtEverhourProjectsByProjectIdTimerStart",
+    method: "POST",
+    path: "/ext/everhour/projects/{projectId}/timer/start",
+    tags: ["everhour"],
+    deprecated: false,
+    permission: "project:update",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["webapp"],
+    extension: "everhour",
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: postExtEverhourProjectsByProjectIdTimerStartPathParamsSchema, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: projectEverhourStateDtoSchema } } }, "400": apiResponses.BadRequest, "401": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "403": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "404": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "429": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "500": apiResponses.InternalError, "502": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "503": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } } }
+  },
+  /**
+   * POST /ext/everhour/projects/{projectId}/timer/stop: Stop the caller's running Everhour timer
+   */
+  postExtEverhourProjectsByProjectIdTimerStop: {
+    operationId: "postExtEverhourProjectsByProjectIdTimerStop",
+    method: "POST",
+    path: "/ext/everhour/projects/{projectId}/timer/stop",
+    tags: ["everhour"],
+    deprecated: false,
+    permission: "project:update",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["webapp"],
+    extension: "everhour",
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: postExtEverhourProjectsByProjectIdTimerStopPathParamsSchema, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: projectEverhourStateDtoSchema } } }, "400": apiResponses.BadRequest, "401": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "403": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "404": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "429": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "500": apiResponses.InternalError, "502": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "503": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } } }
+  },
+  /**
+   * POST /ext/everhour/projects/{projectId}/time: Add time to the project's general task
+   */
+  postExtEverhourProjectsByProjectIdTime: {
+    operationId: "postExtEverhourProjectsByProjectIdTime",
+    method: "POST",
+    path: "/ext/everhour/projects/{projectId}/time",
+    tags: ["everhour"],
+    deprecated: false,
+    permission: "project:update",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["webapp"],
+    extension: "everhour",
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: postExtEverhourProjectsByProjectIdTimePathParamsSchema, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: createEverhourTimeBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: projectEverhourStateDtoSchema } } }, "400": apiResponses.BadRequest, "401": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "403": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "404": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "413": apiResponses.PayloadTooLarge, "429": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "500": apiResponses.InternalError, "502": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "503": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } } }
+  },
+  /**
+   * DELETE /ext/everhour/projects/{projectId}/time/{recordId}: Delete an Everhour time record
+   */
+  deleteExtEverhourProjectsByProjectIdTimeByRecordId: {
+    operationId: "deleteExtEverhourProjectsByProjectIdTimeByRecordId",
+    method: "DELETE",
+    path: "/ext/everhour/projects/{projectId}/time/{recordId}",
+    tags: ["everhour"],
+    deprecated: false,
+    permission: "project:update",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["webapp"],
+    extension: "everhour",
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: deleteExtEverhourProjectsByProjectIdTimeByRecordIdPathParamsSchema, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: projectEverhourStateDtoSchema } } }, "400": apiResponses.BadRequest, "401": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "403": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "404": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "429": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "500": apiResponses.InternalError, "502": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "503": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } } }
+  },
+  /**
+   * PATCH /ext/everhour/projects/{projectId}/time/{recordId}: Change an Everhour time record
+   */
+  patchExtEverhourProjectsByProjectIdTimeByRecordId: {
+    operationId: "patchExtEverhourProjectsByProjectIdTimeByRecordId",
+    method: "PATCH",
+    path: "/ext/everhour/projects/{projectId}/time/{recordId}",
+    tags: ["everhour"],
+    deprecated: false,
+    permission: "project:update",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["webapp"],
+    extension: "everhour",
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: patchExtEverhourProjectsByProjectIdTimeByRecordIdPathParamsSchema, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: updateEverhourTimeBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: projectEverhourStateDtoSchema } } }, "400": apiResponses.BadRequest, "401": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "403": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "404": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "413": apiResponses.PayloadTooLarge, "429": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "500": apiResponses.InternalError, "502": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "503": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } } }
+  },
+  /**
+   * GET /ext/everhour/missions/{missionId}: Read a mission's Everhour time state
+   */
+  getExtEverhourMissionsByMissionId: {
+    operationId: "getExtEverhourMissionsByMissionId",
+    method: "GET",
+    path: "/ext/everhour/missions/{missionId}",
+    tags: ["everhour"],
+    deprecated: false,
+    permission: "mission:read",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["webapp"],
+    extension: "everhour",
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: getExtEverhourMissionsByMissionIdPathParamsSchema, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: missionEverhourStateDtoSchema } } }, "400": apiResponses.BadRequest, "401": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "403": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "404": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "409": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "429": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "500": apiResponses.InternalError, "502": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "503": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } } }
+  },
+  /**
+   * POST /ext/everhour/missions/{missionId}/timer/start: Start the mission's Everhour timer
+   */
+  postExtEverhourMissionsByMissionIdTimerStart: {
+    operationId: "postExtEverhourMissionsByMissionIdTimerStart",
+    method: "POST",
+    path: "/ext/everhour/missions/{missionId}/timer/start",
+    tags: ["everhour"],
+    deprecated: false,
+    permission: "mission:update",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["webapp"],
+    extension: "everhour",
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: postExtEverhourMissionsByMissionIdTimerStartPathParamsSchema, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: missionEverhourStateDtoSchema } } }, "400": apiResponses.BadRequest, "401": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "403": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "404": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "409": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "429": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "500": apiResponses.InternalError, "502": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "503": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } } }
+  },
+  /**
+   * POST /ext/everhour/missions/{missionId}/timer/stop: Stop the caller's running Everhour timer
+   */
+  postExtEverhourMissionsByMissionIdTimerStop: {
+    operationId: "postExtEverhourMissionsByMissionIdTimerStop",
+    method: "POST",
+    path: "/ext/everhour/missions/{missionId}/timer/stop",
+    tags: ["everhour"],
+    deprecated: false,
+    permission: "mission:update",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["webapp"],
+    extension: "everhour",
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: postExtEverhourMissionsByMissionIdTimerStopPathParamsSchema, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: missionEverhourStateDtoSchema } } }, "400": apiResponses.BadRequest, "401": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "403": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "404": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "409": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "429": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "500": apiResponses.InternalError, "502": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "503": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } } }
+  },
+  /**
+   * POST /ext/everhour/missions/{missionId}/time: Add time to the mission's Everhour task
+   */
+  postExtEverhourMissionsByMissionIdTime: {
+    operationId: "postExtEverhourMissionsByMissionIdTime",
+    method: "POST",
+    path: "/ext/everhour/missions/{missionId}/time",
+    tags: ["everhour"],
+    deprecated: false,
+    permission: "mission:update",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["webapp"],
+    extension: "everhour",
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: postExtEverhourMissionsByMissionIdTimePathParamsSchema, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: createEverhourTimeBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: missionEverhourStateDtoSchema } } }, "400": apiResponses.BadRequest, "401": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "403": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "404": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "409": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "413": apiResponses.PayloadTooLarge, "429": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "500": apiResponses.InternalError, "502": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "503": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } } }
+  },
+  /**
+   * DELETE /ext/everhour/missions/{missionId}/time/{recordId}: Delete an Everhour time record
+   */
+  deleteExtEverhourMissionsByMissionIdTimeByRecordId: {
+    operationId: "deleteExtEverhourMissionsByMissionIdTimeByRecordId",
+    method: "DELETE",
+    path: "/ext/everhour/missions/{missionId}/time/{recordId}",
+    tags: ["everhour"],
+    deprecated: false,
+    permission: "mission:update",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["webapp"],
+    extension: "everhour",
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: deleteExtEverhourMissionsByMissionIdTimeByRecordIdPathParamsSchema, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: missionEverhourStateDtoSchema } } }, "400": apiResponses.BadRequest, "401": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "403": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "404": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "409": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "429": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "500": apiResponses.InternalError, "502": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "503": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } } }
+  },
+  /**
+   * PATCH /ext/everhour/missions/{missionId}/time/{recordId}: Change an Everhour time record
+   */
+  patchExtEverhourMissionsByMissionIdTimeByRecordId: {
+    operationId: "patchExtEverhourMissionsByMissionIdTimeByRecordId",
+    method: "PATCH",
+    path: "/ext/everhour/missions/{missionId}/time/{recordId}",
+    tags: ["everhour"],
+    deprecated: false,
+    permission: "mission:update",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["webapp"],
+    extension: "everhour",
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: patchExtEverhourMissionsByMissionIdTimeByRecordIdPathParamsSchema, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: updateEverhourTimeBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: missionEverhourStateDtoSchema } } }, "400": apiResponses.BadRequest, "401": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "403": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "404": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "409": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "413": apiResponses.PayloadTooLarge, "429": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "500": apiResponses.InternalError, "502": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "503": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } } }
+  },
+  /**
+   * GET /ext/github/user-connection: The caller's GitHub repository authorization (compatibility alias)
+   */
+  getExtGithubUserConnection: {
+    operationId: "getExtGithubUserConnection",
+    method: "GET",
+    path: "/ext/github/user-connection",
+    tags: ["github"],
+    deprecated: false,
+    permission: "owner",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["unverified"],
+    extension: "github",
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: null, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: gitHubUserConnectionDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+  },
+  /**
+   * DELETE /ext/github/user-connection: Disconnect the caller's GitHub repository authorization (compatibility alias)
+   */
+  deleteExtGithubUserConnection: {
+    operationId: "deleteExtGithubUserConnection",
+    method: "DELETE",
+    path: "/ext/github/user-connection",
+    tags: ["github"],
+    deprecated: false,
+    permission: "owner",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["unverified"],
+    extension: "github",
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: null, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: gitHubUserConnectionDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+  },
+  /**
+   * POST /ext/github/user-connection/authorize: Start GitHub repository authorization (compatibility alias)
+   */
+  postExtGithubUserConnectionAuthorize: {
+    operationId: "postExtGithubUserConnectionAuthorize",
+    method: "POST",
+    path: "/ext/github/user-connection/authorize",
+    tags: ["github"],
+    deprecated: false,
+    permission: "owner",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["unverified"],
+    extension: "github",
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: null, query: null, header: null },
+    requestBody: { required: false, content: { "application/json": { kind: "json", schema: beginGitHubUserAuthorizationBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: gitHubUserAuthorizationDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "413": apiResponses.PayloadTooLarge, "429": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "500": apiResponses.InternalError, "503": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } } }
+  },
+  /**
+   * GET /ext/github/repository-owners: List the GitHub owners the caller can create private repositories under
+   */
+  getExtGithubRepositoryOwners: {
+    operationId: "getExtGithubRepositoryOwners",
+    method: "GET",
+    path: "/ext/github/repository-owners",
+    tags: ["github"],
+    deprecated: false,
+    permission: "owner",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["mobile"],
+    extension: "github",
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: null, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: gitHubRepositoryOwnerListSchema } } }, "400": apiResponses.BadRequest, "401": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "403": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "404": apiResponses.NotFound, "409": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "500": apiResponses.InternalError, "502": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "503": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } } }
+  },
+  /**
+   * GET /ext/github/integration: Read a workspace's GitHub App installation
+   */
+  getExtGithubIntegration: {
+    operationId: "getExtGithubIntegration",
+    method: "GET",
+    path: "/ext/github/integration",
+    tags: ["github"],
+    deprecated: false,
+    permission: "workspace:read",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["webapp"],
+    extension: "github",
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: null, query: getExtGithubIntegrationQueryParamsSchema, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: gitHubIntegrationDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "500": apiResponses.InternalError }
+  },
+  /**
+   * DELETE /ext/github/integration: Disconnect a workspace's GitHub App installation
+   */
+  deleteExtGithubIntegration: {
+    operationId: "deleteExtGithubIntegration",
+    method: "DELETE",
+    path: "/ext/github/integration",
+    tags: ["github"],
+    deprecated: false,
+    permission: "workspace:update",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["webapp"],
+    extension: "github",
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: null, query: deleteExtGithubIntegrationQueryParamsSchema, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: gitHubIntegrationDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "500": apiResponses.InternalError }
+  },
+  /**
+   * POST /ext/github/install: Start a GitHub App installation for a workspace
+   */
+  postExtGithubInstall: {
+    operationId: "postExtGithubInstall",
+    method: "POST",
+    path: "/ext/github/install",
+    tags: ["github"],
+    deprecated: false,
+    permission: "workspace:update",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["webapp"],
+    extension: "github",
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: null, query: postExtGithubInstallQueryParamsSchema, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: gitHubInstallUrlDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "500": apiResponses.InternalError }
+  },
+  /**
+   * GET /ext/github/callback: Complete a GitHub App installation
+   */
+  getExtGithubCallback: {
+    operationId: "getExtGithubCallback",
+    method: "GET",
+    path: "/ext/github/callback",
+    tags: ["github"],
+    deprecated: false,
+    permission: "workspace:update",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["external"],
+    extension: "github",
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: null, query: getExtGithubCallbackQueryParamsSchema, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: getExtGithubCallbackResponse200Schema } } }, "400": apiResponses.BadRequest, "401": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "403": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "404": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "429": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "500": apiResponses.InternalError, "502": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } } }
+  },
+  /**
+   * GET /ext/github/repos: List repositories the workspace's GitHub App can access
+   */
+  getExtGithubRepos: {
+    operationId: "getExtGithubRepos",
+    method: "GET",
+    path: "/ext/github/repos",
+    tags: ["github"],
+    deprecated: false,
+    permission: "project:read",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["webapp"],
+    extension: "github",
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: null, query: getExtGithubReposQueryParamsSchema, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: gitHubRepoSummaryListSchema } } }, "400": apiResponses.BadRequest, "401": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "403": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "404": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "429": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "500": apiResponses.InternalError, "502": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } } }
+  },
+  /**
+   * GET /ext/github/projects/{projectId}/link: Read a project's GitHub repository link
+   */
+  getExtGithubProjectsByProjectIdLink: {
+    operationId: "getExtGithubProjectsByProjectIdLink",
+    method: "GET",
+    path: "/ext/github/projects/{projectId}/link",
+    tags: ["github"],
+    deprecated: false,
+    permission: "project:read",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["webapp"],
+    extension: "github",
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: getExtGithubProjectsByProjectIdLinkPathParamsSchema, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: projectGitHubLinkDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "500": apiResponses.InternalError }
+  },
+  /**
+   * PUT /ext/github/projects/{projectId}/link: Link a project to a GitHub repository, or unlink it
+   */
+  putExtGithubProjectsByProjectIdLink: {
+    operationId: "putExtGithubProjectsByProjectIdLink",
+    method: "PUT",
+    path: "/ext/github/projects/{projectId}/link",
+    tags: ["github"],
+    deprecated: false,
+    permission: "project:update",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["webapp"],
+    extension: "github",
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: putExtGithubProjectsByProjectIdLinkPathParamsSchema, query: null, header: null },
+    requestBody: { required: false, content: { "application/json": { kind: "json", schema: linkProjectGitHubBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: projectGitHubLinkDtoSchema } } }, "400": apiResponses.BadRequest, "401": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "403": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "404": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "413": apiResponses.PayloadTooLarge, "429": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "500": apiResponses.InternalError, "502": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } } }
+  },
+  /**
+   * GET /ext/github/missions/{missionId}/pull-request: Read the pull request recorded for a mission
+   */
+  getExtGithubMissionsByMissionIdPullRequest: {
+    operationId: "getExtGithubMissionsByMissionIdPullRequest",
+    method: "GET",
+    path: "/ext/github/missions/{missionId}/pull-request",
+    tags: ["github"],
+    deprecated: false,
+    permission: "mission:read",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["webapp"],
+    extension: "github",
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: getExtGithubMissionsByMissionIdPullRequestPathParamsSchema, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: getExtGithubMissionsByMissionIdPullRequestResponse200Schema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "409": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "500": apiResponses.InternalError }
+  },
+  /**
+   * POST /ext/github/missions/{missionId}/pull-request: Open a pull request for a mission's branch
+   */
+  postExtGithubMissionsByMissionIdPullRequest: {
+    operationId: "postExtGithubMissionsByMissionIdPullRequest",
+    method: "POST",
+    path: "/ext/github/missions/{missionId}/pull-request",
+    tags: ["github"],
+    deprecated: false,
+    permission: "mission:update",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["webapp"],
+    extension: "github",
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: postExtGithubMissionsByMissionIdPullRequestPathParamsSchema, query: null, header: null },
+    requestBody: { required: false, content: { "application/json": { kind: "json", schema: createGitHubPullRequestBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: gitHubPullRequestDtoSchema } } }, "400": apiResponses.BadRequest, "401": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "403": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "404": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "409": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "413": apiResponses.PayloadTooLarge, "429": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "500": apiResponses.InternalError, "502": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } } }
+  },
+  /**
+   * PATCH /api/projects/{id}/board/reorder: Reorder (and move missions into) one board column
+   */
+  patchProjectsByIdBoardReorder: {
+    operationId: "patchProjectsByIdBoardReorder",
+    method: "PATCH",
+    path: "/api/projects/{id}/board/reorder",
+    tags: ["projects"],
+    deprecated: false,
+    permission: "mission:update",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["mobile", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: patchProjectsByIdBoardReorderPathParamsSchema, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: reorderBoardColumnBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: missionListSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * GET /api/inbox: List the caller's Inbox captures
+   */
+  getInbox: {
+    operationId: "getInbox",
+    method: "GET",
+    path: "/api/inbox",
+    tags: ["inbox"],
+    deprecated: false,
+    permission: "owner",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["mobile", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: null, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: inboxItemListSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+  },
+  /**
+   * POST /api/inbox: Capture an Inbox item
+   */
+  postInbox: {
+    operationId: "postInbox",
+    method: "POST",
+    path: "/api/inbox",
+    tags: ["inbox"],
+    deprecated: false,
+    permission: "owner",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["mobile", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: null, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: createInboxItemBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: inboxItemDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * GET /api/inbox/{id}: Read an owned Inbox item
+   */
+  getInboxById: {
+    operationId: "getInboxById",
+    method: "GET",
+    path: "/api/inbox/{id}",
+    tags: ["inbox"],
+    deprecated: false,
+    permission: "owner",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["mobile"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: getInboxByIdPathParamsSchema, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: inboxItemDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+  },
+  /**
+   * DELETE /api/inbox/{id}: Delete an owned Inbox item
+   */
+  deleteInboxById: {
+    operationId: "deleteInboxById",
+    method: "DELETE",
+    path: "/api/inbox/{id}",
+    tags: ["inbox"],
+    deprecated: false,
+    permission: "owner",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["mobile", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: deleteInboxByIdPathParamsSchema, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: okResponseSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+  },
+  /**
+   * PATCH /api/inbox/{id}: Edit an owned Inbox item
+   */
+  patchInboxById: {
+    operationId: "patchInboxById",
+    method: "PATCH",
+    path: "/api/inbox/{id}",
+    tags: ["inbox"],
+    deprecated: false,
+    permission: "owner",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["mobile", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: patchInboxByIdPathParamsSchema, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: updateInboxItemBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: inboxItemDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * POST /api/inbox/{id}/promote: Promote an Inbox item into a mission
+   */
+  postInboxByIdPromote: {
+    operationId: "postInboxByIdPromote",
+    method: "POST",
+    path: "/api/inbox/{id}/promote",
+    tags: ["inbox"],
+    deprecated: false,
+    permission: "mission:create",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["mobile", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: postInboxByIdPromotePathParamsSchema, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: promoteInboxItemBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: missionDetailDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * GET /api/missions/search: Mission search, version 1 (frozen)
+   */
+  getMissionsSearch: {
+    operationId: "getMissionsSearch",
+    method: "GET",
+    path: "/api/missions/search",
+    tags: ["missions"],
+    deprecated: false,
+    permission: "mission:read",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["cli", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: null, query: getMissionsSearchQueryParamsSchema, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: missionSearchV1ResponseSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+  },
+  /**
+   * GET /api/missions/search/v2: Mission search, version 2
+   */
+  getMissionsSearchV2: {
+    operationId: "getMissionsSearchV2",
+    method: "GET",
+    path: "/api/missions/search/v2",
+    tags: ["missions"],
+    deprecated: false,
+    permission: "mission:read",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: null, query: getMissionsSearchV2QueryParamsSchema, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: searchMissionsResponseV2Schema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+  },
+  /**
+   * GET /api/search/v3: Mission-anchored search over missions, objectives and deliveries (version 3)
+   */
+  getSearchV3: {
+    operationId: "getSearchV3",
+    method: "GET",
+    path: "/api/search/v3",
+    tags: ["missions"],
+    deprecated: false,
+    permission: "mission:read",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["mobile", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: null, query: getSearchV3QueryParamsSchema, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: searchResponseV3Schema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+  },
+  /**
+   * POST /api/missions: Create a mission
+   */
+  postMissions: {
+    operationId: "postMissions",
+    method: "POST",
+    path: "/api/missions",
+    tags: ["missions"],
+    deprecated: false,
+    permission: "mission:create",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["cli", "mobile", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: null, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: createMissionBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: missionDetailDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * GET /api/missions/{id}: Read a mission's detail
+   */
+  getMissionsById: {
+    operationId: "getMissionsById",
+    method: "GET",
+    path: "/api/missions/{id}",
+    tags: ["missions"],
+    deprecated: false,
+    permission: "unknown",
+    permissionCandidates: ["mission:read", "objective:read"],
+    edition: "both",
+    consumers: ["cli", "mobile", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: getMissionsByIdPathParamsSchema, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: missionDetailDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "500": apiResponses.InternalError }
+  },
+  /**
+   * DELETE /api/missions/{id}: Soft-delete a mission
+   */
+  deleteMissionsById: {
+    operationId: "deleteMissionsById",
+    method: "DELETE",
+    path: "/api/missions/{id}",
+    tags: ["missions"],
+    deprecated: false,
+    permission: "mission:delete",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["mobile", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: deleteMissionsByIdPathParamsSchema, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: okResponseSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "500": apiResponses.InternalError }
+  },
+  /**
+   * PATCH /api/missions/{id}: Update or move a mission
+   */
+  patchMissionsById: {
+    operationId: "patchMissionsById",
+    method: "PATCH",
+    path: "/api/missions/{id}",
+    tags: ["missions"],
+    deprecated: false,
+    permission: "mission:update",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["mobile", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: patchMissionsByIdPathParamsSchema, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: updateMissionBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: missionDetailDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * POST /api/missions/{id}/generate-title: Regenerate a mission title
+   */
+  postMissionsByIdGenerateTitle: {
+    operationId: "postMissionsByIdGenerateTitle",
+    method: "POST",
+    path: "/api/missions/{id}/generate-title",
+    tags: ["missions"],
+    deprecated: false,
+    permission: "unknown",
+    permissionCandidates: ["mission:update", "mission:read", "objective:read"],
+    edition: "both",
+    consumers: ["webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: postMissionsByIdGenerateTitlePathParamsSchema, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: missionDetailDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "500": apiResponses.InternalError, "502": apiResponses.BadGateway }
+  },
+  /**
+   * POST /api/missions/{id}/generate-commit-message: Draft a commit message from a client-supplied diff
+   */
+  postMissionsByIdGenerateCommitMessage: {
+    operationId: "postMissionsByIdGenerateCommitMessage",
+    method: "POST",
+    path: "/api/missions/{id}/generate-commit-message",
+    tags: ["missions"],
+    deprecated: false,
+    permission: "mission:update",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: postMissionsByIdGenerateCommitMessagePathParamsSchema, query: null, header: null },
+    requestBody: { required: false, content: { "application/json": { kind: "json", schema: generateCommitMessageBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: generateCommitMessageResultDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError, "502": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } } }
+  },
+  /**
+   * GET /api/missions/{id}/objectives: List a mission's objectives
+   */
+  getMissionsByIdObjectives: {
+    operationId: "getMissionsByIdObjectives",
+    method: "GET",
+    path: "/api/missions/{id}/objectives",
+    tags: ["missions"],
+    deprecated: false,
+    permission: "objective:read",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["unverified"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: getMissionsByIdObjectivesPathParamsSchema, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: objectiveListSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "500": apiResponses.InternalError }
+  },
+  /**
+   * PATCH /api/missions/{id}/objectives/reorder: Reorder a mission's future objectives
+   */
+  patchMissionsByIdObjectivesReorder: {
+    operationId: "patchMissionsByIdObjectivesReorder",
+    method: "PATCH",
+    path: "/api/missions/{id}/objectives/reorder",
+    tags: ["missions"],
+    deprecated: false,
+    permission: "objective:update",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["mobile", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: patchMissionsByIdObjectivesReorderPathParamsSchema, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: reorderFutureObjectivesBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: objectiveListSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * POST /api/missions/{id}/session-channel: Prepare a session channel (retired)
+   */
+  postMissionsByIdSessionChannel: {
+    operationId: "postMissionsByIdSessionChannel",
+    method: "POST",
+    path: "/api/missions/{id}/session-channel",
+    tags: ["agent-session-channels"],
+    deprecated: false,
+    permission: "authenticated",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["unverified"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: postMissionsByIdSessionChannelPathParamsSchema, query: null, header: null },
+    requestBody: null,
+    responses: { "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "410": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * POST /api/missions/{id}/terminal-sessions/forget: Forget a mission's mapped Latch terminal session
+   */
+  postMissionsByIdTerminalSessionsForget: {
+    operationId: "postMissionsByIdTerminalSessionsForget",
+    method: "POST",
+    path: "/api/missions/{id}/terminal-sessions/forget",
+    tags: ["missions"],
+    deprecated: false,
+    permission: "session:attach",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: postMissionsByIdTerminalSessionsForgetPathParamsSchema, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: forgetTerminalSessionBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: forgetTerminalSessionResultDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * GET /api/agent-requests: List agent requests
+   */
+  getAgentRequests: {
+    operationId: "getAgentRequests",
+    method: "GET",
+    path: "/api/agent-requests",
+    tags: ["agent-requests"],
+    deprecated: false,
+    permission: "session:read",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["cli", "mobile", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: null, query: getAgentRequestsQueryParamsSchema, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: agentRequestListResponseSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+  },
+  /**
+   * POST /api/agent-requests/{id}/resolve: Answer an agent question
+   */
+  postAgentRequestsByIdResolve: {
+    operationId: "postAgentRequestsByIdResolve",
+    method: "POST",
+    path: "/api/agent-requests/{id}/resolve",
+    tags: ["agent-requests"],
+    deprecated: false,
+    permission: "session:attach",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["cli", "mobile", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: postAgentRequestsByIdResolvePathParamsSchema, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: resolveAgentRequestBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: resolveAgentRequestResultDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "410": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * POST /api/agent-requests/{id}/release: Release an agent request to the terminal (retired)
+   */
+  postAgentRequestsByIdRelease: {
+    operationId: "postAgentRequestsByIdRelease",
+    method: "POST",
+    path: "/api/agent-requests/{id}/release",
+    tags: ["agent-requests"],
+    deprecated: false,
+    permission: "authenticated",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: postAgentRequestsByIdReleasePathParamsSchema, query: null, header: null },
+    requestBody: null,
+    responses: { "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "410": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * GET /api/agent-session-inputs: List a mission's session inputs and its latest channel
+   */
+  getAgentSessionInputs: {
+    operationId: "getAgentSessionInputs",
+    method: "GET",
+    path: "/api/agent-session-inputs",
+    tags: ["agent-session-inputs"],
+    deprecated: false,
+    permission: "session:read",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["cli", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: null, query: getAgentSessionInputsQueryParamsSchema, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: agentSessionInputListResponseSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "500": apiResponses.InternalError }
+  },
+  /**
+   * POST /api/agent-session-inputs: Queue a session input (retired)
+   */
+  postAgentSessionInputs: {
+    operationId: "postAgentSessionInputs",
+    method: "POST",
+    path: "/api/agent-session-inputs",
+    tags: ["agent-session-inputs"],
+    deprecated: false,
+    permission: "authenticated",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["cli", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: null, query: null, header: null },
+    requestBody: null,
+    responses: { "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "410": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * POST /api/agent-session-inputs/{id}/cancel: Cancel a session input (retired)
+   */
+  postAgentSessionInputsByIdCancel: {
+    operationId: "postAgentSessionInputsByIdCancel",
+    method: "POST",
+    path: "/api/agent-session-inputs/{id}/cancel",
+    tags: ["agent-session-inputs"],
+    deprecated: false,
+    permission: "authenticated",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: postAgentSessionInputsByIdCancelPathParamsSchema, query: null, header: null },
+    requestBody: null,
+    responses: { "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "410": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * GET /api/missions/{id}/events: List a mission's workflow events
+   */
+  getMissionsByIdEvents: {
+    operationId: "getMissionsByIdEvents",
+    method: "GET",
+    path: "/api/missions/{id}/events",
+    tags: ["missions"],
+    deprecated: false,
+    permission: "event:read",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["cli", "mobile", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: getMissionsByIdEventsPathParamsSchema, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: missionEventListSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "500": apiResponses.InternalError }
+  },
+  /**
+   * GET /api/missions/{id}/deliveries: List a mission's deliveries
+   */
+  getMissionsByIdDeliveries: {
+    operationId: "getMissionsByIdDeliveries",
+    method: "GET",
+    path: "/api/missions/{id}/deliveries",
+    tags: ["missions"],
+    deprecated: false,
+    permission: "mission:read",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["cli", "mobile", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: getMissionsByIdDeliveriesPathParamsSchema, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: missionDeliveriesDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "500": apiResponses.InternalError }
+  },
+  /**
+   * GET /api/missions/{id}/summary: Read the operator mission summary
+   */
+  getMissionsByIdSummary: {
+    operationId: "getMissionsByIdSummary",
+    method: "GET",
+    path: "/api/missions/{id}/summary",
+    tags: ["missions"],
+    deprecated: false,
+    permission: "mission:read",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["mobile", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: getMissionsByIdSummaryPathParamsSchema, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: missionSummaryResponseSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "500": apiResponses.InternalError }
+  },
+  /**
+   * PUT /api/missions/{id}/summary/seen: Acknowledge displayed summary evidence
+   */
+  putMissionsByIdSummarySeen: {
+    operationId: "putMissionsByIdSummarySeen",
+    method: "PUT",
+    path: "/api/missions/{id}/summary/seen",
+    tags: ["missions"],
+    deprecated: false,
+    permission: "mission:read",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["mobile", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: putMissionsByIdSummarySeenPathParamsSchema, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: markMissionSummarySeenBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: missionSummarySeenResponseSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * GET /api/missions/{id}/artifacts: List a mission's artifacts
+   */
+  getMissionsByIdArtifacts: {
+    operationId: "getMissionsByIdArtifacts",
+    method: "GET",
+    path: "/api/missions/{id}/artifacts",
+    tags: ["missions"],
+    deprecated: false,
+    permission: "artifact:read",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["cli", "mobile", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: getMissionsByIdArtifactsPathParamsSchema, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: artifactListSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "500": apiResponses.InternalError }
+  },
+  /**
+   * POST /api/missions/{id}/artifacts: Create a mission artifact without a delivery
+   */
+  postMissionsByIdArtifacts: {
+    operationId: "postMissionsByIdArtifacts",
+    method: "POST",
+    path: "/api/missions/{id}/artifacts",
+    tags: ["missions"],
+    deprecated: false,
+    permission: "artifact:create",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: postMissionsByIdArtifactsPathParamsSchema, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: createArtifactBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: artifactDtoSchema } } }, "400": apiResponses.BadRequest, "401": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * GET /api/missions/{id}/context: List a mission's shared context
+   */
+  getMissionsByIdContext: {
+    operationId: "getMissionsByIdContext",
+    method: "GET",
+    path: "/api/missions/{id}/context",
+    tags: ["missions"],
+    deprecated: false,
+    permission: "mission:read",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: getMissionsByIdContextPathParamsSchema, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: sharedContextEntryListSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "500": apiResponses.InternalError }
+  },
+  /**
+   * PUT /api/missions/{id}/context: Upsert one shared-context entry
+   */
+  putMissionsByIdContext: {
+    operationId: "putMissionsByIdContext",
+    method: "PUT",
+    path: "/api/missions/{id}/context",
+    tags: ["missions"],
+    deprecated: false,
+    permission: "mission:update",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: putMissionsByIdContextPathParamsSchema, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: upsertSharedContextBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: sharedContextEntryDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * PATCH /api/missions/{id}/artifacts/{artifactId}: Edit an artifact's human-facing fields
+   */
+  patchMissionsByIdArtifactsByArtifactId: {
+    operationId: "patchMissionsByIdArtifactsByArtifactId",
+    method: "PATCH",
+    path: "/api/missions/{id}/artifacts/{artifactId}",
+    tags: ["missions"],
+    deprecated: false,
+    permission: "mission:update",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["mobile", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: patchMissionsByIdArtifactsByArtifactIdPathParamsSchema, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: updateArtifactBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: artifactDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * GET /api/missions/{id}/file-changes: List a mission's or one objective's changed files
+   */
+  getMissionsByIdFileChanges: {
+    operationId: "getMissionsByIdFileChanges",
+    method: "GET",
+    path: "/api/missions/{id}/file-changes",
+    tags: ["missions"],
+    deprecated: false,
+    permission: "mission:read",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["cli", "mobile", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: getMissionsByIdFileChangesPathParamsSchema, query: getMissionsByIdFileChangesQueryParamsSchema, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: getMissionsByIdFileChangesResponse200Schema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "500": apiResponses.InternalError }
+  },
+  /**
+   * POST /api/missions/schedule/preview: Preview a schedule's next due date
+   */
+  postMissionsSchedulePreview: {
+    operationId: "postMissionsSchedulePreview",
+    method: "POST",
+    path: "/api/missions/schedule/preview",
+    tags: ["missions"],
+    deprecated: false,
+    permission: "mission:read",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: null, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: previewScheduleBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: schedulePreviewDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * GET /api/missions/{id}/schedule: Read a mission's schedule
+   */
+  getMissionsByIdSchedule: {
+    operationId: "getMissionsByIdSchedule",
+    method: "GET",
+    path: "/api/missions/{id}/schedule",
+    tags: ["missions"],
+    deprecated: false,
+    permission: "mission:read",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: getMissionsByIdSchedulePathParamsSchema, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: missionScheduleDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "500": apiResponses.InternalError }
+  },
+  /**
+   * PUT /api/missions/{id}/schedule: Create or replace a mission's schedule
+   */
+  putMissionsByIdSchedule: {
+    operationId: "putMissionsByIdSchedule",
+    method: "PUT",
+    path: "/api/missions/{id}/schedule",
+    tags: ["missions"],
+    deprecated: false,
+    permission: "mission:update",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: putMissionsByIdSchedulePathParamsSchema, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: scheduleInputSchema2 } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: missionScheduleDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * DELETE /api/missions/{id}/schedule: Unlink a mission's schedule
+   */
+  deleteMissionsByIdSchedule: {
+    operationId: "deleteMissionsByIdSchedule",
+    method: "DELETE",
+    path: "/api/missions/{id}/schedule",
+    tags: ["missions"],
+    deprecated: false,
+    permission: "mission:update",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: deleteMissionsByIdSchedulePathParamsSchema, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: okResponseSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "500": apiResponses.InternalError }
+  },
+  /**
+   * POST /api/objectives: Add an objective to a mission
+   */
+  postObjectives: {
+    operationId: "postObjectives",
+    method: "POST",
+    path: "/api/objectives",
+    tags: ["objectives"],
+    deprecated: false,
+    permission: "objective:update",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["mobile", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: null, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: createObjectiveBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: objectiveDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * DELETE /api/objectives/{id}: Soft-delete an objective
+   */
+  deleteObjectivesById: {
+    operationId: "deleteObjectivesById",
+    method: "DELETE",
+    path: "/api/objectives/{id}",
+    tags: ["objectives"],
+    deprecated: false,
+    permission: "objective:update",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["mobile", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: deleteObjectivesByIdPathParamsSchema, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: okResponseSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "500": apiResponses.InternalError }
+  },
+  /**
+   * PATCH /api/objectives/{id}: Update an objective
+   */
+  patchObjectivesById: {
+    operationId: "patchObjectivesById",
+    method: "PATCH",
+    path: "/api/objectives/{id}",
+    tags: ["objectives"],
+    deprecated: false,
+    permission: "objective:update",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["mobile", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: patchObjectivesByIdPathParamsSchema, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: updateObjectiveBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: objectiveDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * POST /api/objectives/{id}/launch: Queue an execution request for an objective
+   */
+  postObjectivesByIdLaunch: {
+    operationId: "postObjectivesByIdLaunch",
+    method: "POST",
+    path: "/api/objectives/{id}/launch",
+    tags: ["objectives"],
+    deprecated: false,
+    permission: "execution_request:create",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["cli", "mobile", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: postObjectivesByIdLaunchPathParamsSchema, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: launchObjectiveBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: executionRequestDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * GET /api/objectives/{id}/prompt: Copyable prompt for running an objective manually
+   */
+  getObjectivesByIdPrompt: {
+    operationId: "getObjectivesByIdPrompt",
+    method: "GET",
+    path: "/api/objectives/{id}/prompt",
+    tags: ["objectives"],
+    deprecated: false,
+    permission: "objective:read",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: getObjectivesByIdPromptPathParamsSchema, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: objectivePromptDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "500": apiResponses.InternalError }
+  },
+  /**
+   * GET /api/objectives/{id}/launch-command: Paste-ready ovld launch command
+   */
+  getObjectivesByIdLaunchCommand: {
+    operationId: "getObjectivesByIdLaunchCommand",
+    method: "GET",
+    path: "/api/objectives/{id}/launch-command",
+    tags: ["objectives"],
+    deprecated: false,
+    permission: "objective:read",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: getObjectivesByIdLaunchCommandPathParamsSchema, query: getObjectivesByIdLaunchCommandQueryParamsSchema, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: objectiveLaunchCommandDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "500": apiResponses.InternalError }
+  },
+  /**
+   * GET /api/objectives/{id}/effective-launch-config: Resolved launch mechanics for an objective
+   */
+  getObjectivesByIdEffectiveLaunchConfig: {
+    operationId: "getObjectivesByIdEffectiveLaunchConfig",
+    method: "GET",
+    path: "/api/objectives/{id}/effective-launch-config",
+    tags: ["objectives"],
+    deprecated: false,
+    permission: "objective:read",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: getObjectivesByIdEffectiveLaunchConfigPathParamsSchema, query: getObjectivesByIdEffectiveLaunchConfigQueryParamsSchema, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: objectiveEffectiveLaunchConfigDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "500": apiResponses.InternalError }
+  },
+  /**
+   * GET /api/objectives/{id}/attachments: List an objective's attachments
+   */
+  getObjectivesByIdAttachments: {
+    operationId: "getObjectivesByIdAttachments",
+    method: "GET",
+    path: "/api/objectives/{id}/attachments",
+    tags: ["objectives"],
+    deprecated: false,
+    permission: "attachment:read",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["cli", "mobile", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: getObjectivesByIdAttachmentsPathParamsSchema, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: objectiveAttachmentListSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "500": apiResponses.InternalError }
+  },
+  /**
+   * POST /api/objectives/{id}/attachments: Upload a file to an objective
+   */
+  postObjectivesByIdAttachments: {
+    operationId: "postObjectivesByIdAttachments",
+    method: "POST",
+    path: "/api/objectives/{id}/attachments",
+    tags: ["objectives"],
+    deprecated: false,
+    permission: "attachment:create",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: postObjectivesByIdAttachmentsPathParamsSchema, query: null, header: postObjectivesByIdAttachmentsHeaderParamsSchema },
+    requestBody: { required: true, content: { "*/*": { kind: "binary", schema: rawUploadBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: objectiveAttachmentDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * DELETE /api/objectives/{id}/attachments/{attachmentId}: Delete an objective attachment
+   */
+  deleteObjectivesByIdAttachmentsByAttachmentId: {
+    operationId: "deleteObjectivesByIdAttachmentsByAttachmentId",
+    method: "DELETE",
+    path: "/api/objectives/{id}/attachments/{attachmentId}",
+    tags: ["objectives"],
+    deprecated: false,
+    permission: "attachment:delete",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: deleteObjectivesByIdAttachmentsByAttachmentIdPathParamsSchema, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: objectiveAttachmentListSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "500": apiResponses.InternalError }
+  },
+  /**
+   * GET /api/inbox/{id}/attachments: List an owned Inbox item's attachments
+   */
+  getInboxByIdAttachments: {
+    operationId: "getInboxByIdAttachments",
+    method: "GET",
+    path: "/api/inbox/{id}/attachments",
+    tags: ["inbox"],
+    deprecated: false,
+    permission: "owner",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["mobile", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: getInboxByIdAttachmentsPathParamsSchema, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: objectiveAttachmentListSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+  },
+  /**
+   * POST /api/inbox/{id}/attachments: Upload a file to an owned Inbox item
+   */
+  postInboxByIdAttachments: {
+    operationId: "postInboxByIdAttachments",
+    method: "POST",
+    path: "/api/inbox/{id}/attachments",
+    tags: ["inbox"],
+    deprecated: false,
+    permission: "owner",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: postInboxByIdAttachmentsPathParamsSchema, query: null, header: postInboxByIdAttachmentsHeaderParamsSchema },
+    requestBody: { required: true, content: { "*/*": { kind: "binary", schema: rawUploadBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: objectiveAttachmentDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * DELETE /api/inbox/{id}/attachments/{attachmentId}: Delete an owned Inbox item's attachment
+   */
+  deleteInboxByIdAttachmentsByAttachmentId: {
+    operationId: "deleteInboxByIdAttachmentsByAttachmentId",
+    method: "DELETE",
+    path: "/api/inbox/{id}/attachments/{attachmentId}",
+    tags: ["inbox"],
+    deprecated: false,
+    permission: "owner",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["mobile", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: deleteInboxByIdAttachmentsByAttachmentIdPathParamsSchema, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: objectiveAttachmentListSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+  },
+  /**
+   * GET /api/agent-catalog: Read an agent catalog (workspace in the query)
+   */
+  getAgentCatalog: {
+    operationId: "getAgentCatalog",
+    method: "GET",
+    path: "/api/agent-catalog",
+    tags: ["agent-catalog"],
+    deprecated: false,
+    permission: "launch:read",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: null, query: getAgentCatalogQueryParamsSchema, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: agentCatalogDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+  },
+  /**
+   * PUT /api/agent-catalog: Replace an agent catalog (workspace in the query)
+   */
+  putAgentCatalog: {
+    operationId: "putAgentCatalog",
+    method: "PUT",
+    path: "/api/agent-catalog",
+    tags: ["agent-catalog"],
+    deprecated: false,
+    permission: "launch:configure",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: null, query: putAgentCatalogQueryParamsSchema, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: updateAgentCatalogBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: agentCatalogDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * POST /api/agent-catalog/refresh: Merge newly shipped agents and models (workspace in the query)
+   */
+  postAgentCatalogRefresh: {
+    operationId: "postAgentCatalogRefresh",
+    method: "POST",
+    path: "/api/agent-catalog/refresh",
+    tags: ["agent-catalog"],
+    deprecated: false,
+    permission: "launch:configure",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: null, query: postAgentCatalogRefreshQueryParamsSchema, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: agentCatalogDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+  },
+  /**
+   * GET /api/launch-settings: Read the caller's launch settings (workspace in the query)
+   */
+  getLaunchSettings: {
+    operationId: "getLaunchSettings",
+    method: "GET",
+    path: "/api/launch-settings",
+    tags: ["launch-settings"],
+    deprecated: false,
+    permission: "launch:read",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["cli", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: null, query: getLaunchSettingsQueryParamsSchema, header: getLaunchSettingsHeaderParamsSchema },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: launchSettingsDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+  },
+  /**
+   * PATCH /api/launch-settings/agents/{agentKey}: Set the caller's launch mechanics for one agent (workspace in the query)
+   */
+  patchLaunchSettingsAgentsByAgentKey: {
+    operationId: "patchLaunchSettingsAgentsByAgentKey",
+    method: "PATCH",
+    path: "/api/launch-settings/agents/{agentKey}",
+    tags: ["launch-settings"],
+    deprecated: false,
+    permission: "launch:configure",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: patchLaunchSettingsAgentsByAgentKeyPathParamsSchema, query: patchLaunchSettingsAgentsByAgentKeyQueryParamsSchema, header: patchLaunchSettingsAgentsByAgentKeyHeaderParamsSchema },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: updateAgentLaunchConfigBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: launchSettingsDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * PATCH /api/launch-settings/terminal-profile: Set the caller's terminal profile (workspace in the query)
+   */
+  patchLaunchSettingsTerminalProfile: {
+    operationId: "patchLaunchSettingsTerminalProfile",
+    method: "PATCH",
+    path: "/api/launch-settings/terminal-profile",
+    tags: ["launch-settings"],
+    deprecated: false,
+    permission: "launch:configure",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["cli", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: null, query: patchLaunchSettingsTerminalProfileQueryParamsSchema, header: patchLaunchSettingsTerminalProfileHeaderParamsSchema },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: updateTerminalProfileBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: launchSettingsDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * PATCH /api/launch-settings/session-defaults: Set the caller's launch-session defaults (workspace in the query)
+   */
+  patchLaunchSettingsSessionDefaults: {
+    operationId: "patchLaunchSettingsSessionDefaults",
+    method: "PATCH",
+    path: "/api/launch-settings/session-defaults",
+    tags: ["launch-settings"],
+    deprecated: false,
+    permission: "launch:configure",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: null, query: patchLaunchSettingsSessionDefaultsQueryParamsSchema, header: patchLaunchSettingsSessionDefaultsHeaderParamsSchema },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: updateLaunchSessionDefaultsBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: launchSettingsDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * PATCH /api/launch-settings/worktree-branch-automation: Turn worktree and branch automation on or off (workspace in the query)
+   */
+  patchLaunchSettingsWorktreeBranchAutomation: {
+    operationId: "patchLaunchSettingsWorktreeBranchAutomation",
+    method: "PATCH",
+    path: "/api/launch-settings/worktree-branch-automation",
+    tags: ["launch-settings"],
+    deprecated: false,
+    permission: "launch:configure",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["unverified"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: null, query: patchLaunchSettingsWorktreeBranchAutomationQueryParamsSchema, header: patchLaunchSettingsWorktreeBranchAutomationHeaderParamsSchema },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: updateWorktreeBranchAutomationBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: launchSettingsDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * GET /api/workspaces/{id}/launch-settings: Read the caller's launch settings
+   */
+  getWorkspacesByIdLaunchSettings: {
+    operationId: "getWorkspacesByIdLaunchSettings",
+    method: "GET",
+    path: "/api/workspaces/{id}/launch-settings",
+    tags: ["launch-settings"],
+    deprecated: false,
+    permission: "launch:read",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["cli", "mobile", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: getWorkspacesByIdLaunchSettingsPathParamsSchema, query: null, header: getWorkspacesByIdLaunchSettingsHeaderParamsSchema },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: launchSettingsDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+  },
+  /**
+   * PATCH /api/workspaces/{id}/launch-settings/agents/{agentKey}: Set the caller's launch mechanics for one agent
+   */
+  patchWorkspacesByIdLaunchSettingsAgentsByAgentKey: {
+    operationId: "patchWorkspacesByIdLaunchSettingsAgentsByAgentKey",
+    method: "PATCH",
+    path: "/api/workspaces/{id}/launch-settings/agents/{agentKey}",
+    tags: ["launch-settings"],
+    deprecated: false,
+    permission: "launch:configure",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: patchWorkspacesByIdLaunchSettingsAgentsByAgentKeyPathParamsSchema, query: null, header: patchWorkspacesByIdLaunchSettingsAgentsByAgentKeyHeaderParamsSchema },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: updateAgentLaunchConfigBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: launchSettingsDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * PATCH /api/workspaces/{id}/launch-settings/terminal-profile: Set the caller's terminal profile for the acting machine
+   */
+  patchWorkspacesByIdLaunchSettingsTerminalProfile: {
+    operationId: "patchWorkspacesByIdLaunchSettingsTerminalProfile",
+    method: "PATCH",
+    path: "/api/workspaces/{id}/launch-settings/terminal-profile",
+    tags: ["launch-settings"],
+    deprecated: false,
+    permission: "launch:configure",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["cli", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: patchWorkspacesByIdLaunchSettingsTerminalProfilePathParamsSchema, query: null, header: patchWorkspacesByIdLaunchSettingsTerminalProfileHeaderParamsSchema },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: updateTerminalProfileBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: launchSettingsDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * PATCH /api/workspaces/{id}/launch-settings/session-defaults: Set the caller's launch-session defaults
+   */
+  patchWorkspacesByIdLaunchSettingsSessionDefaults: {
+    operationId: "patchWorkspacesByIdLaunchSettingsSessionDefaults",
+    method: "PATCH",
+    path: "/api/workspaces/{id}/launch-settings/session-defaults",
+    tags: ["launch-settings"],
+    deprecated: false,
+    permission: "launch:configure",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: patchWorkspacesByIdLaunchSettingsSessionDefaultsPathParamsSchema, query: null, header: patchWorkspacesByIdLaunchSettingsSessionDefaultsHeaderParamsSchema },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: updateLaunchSessionDefaultsBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: launchSettingsDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * PATCH /api/workspaces/{id}/launch-settings/worktree-branch-automation: Turn the caller's worktree and branch automation on or off
+   */
+  patchWorkspacesByIdLaunchSettingsWorktreeBranchAutomation: {
+    operationId: "patchWorkspacesByIdLaunchSettingsWorktreeBranchAutomation",
+    method: "PATCH",
+    path: "/api/workspaces/{id}/launch-settings/worktree-branch-automation",
+    tags: ["launch-settings"],
+    deprecated: false,
+    permission: "launch:configure",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["unverified"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: patchWorkspacesByIdLaunchSettingsWorktreeBranchAutomationPathParamsSchema, query: null, header: patchWorkspacesByIdLaunchSettingsWorktreeBranchAutomationHeaderParamsSchema },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: updateWorktreeBranchAutomationBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: launchSettingsDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * GET /api/projects/{id}/launch-preference: Read the caller's launch preference for a project
+   */
+  getProjectsByIdLaunchPreference: {
+    operationId: "getProjectsByIdLaunchPreference",
+    method: "GET",
+    path: "/api/projects/{id}/launch-preference",
+    tags: ["launch-settings"],
+    deprecated: false,
+    permission: "launch:read",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: getProjectsByIdLaunchPreferencePathParamsSchema, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: launchPreferenceDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+  },
+  /**
+   * PUT /api/projects/{id}/launch-preference: Update the caller's launch preference for a project
+   */
+  putProjectsByIdLaunchPreference: {
+    operationId: "putProjectsByIdLaunchPreference",
+    method: "PUT",
+    path: "/api/projects/{id}/launch-preference",
+    tags: ["launch-settings"],
+    deprecated: false,
+    permission: "launch:configure",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: putProjectsByIdLaunchPreferencePathParamsSchema, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: updateLaunchPreferenceBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: launchPreferenceDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * GET /api/projects/{id}/execution-target: Read the caller's execution target selection for a project
+   */
+  getProjectsByIdExecutionTarget: {
+    operationId: "getProjectsByIdExecutionTarget",
+    method: "GET",
+    path: "/api/projects/{id}/execution-target",
+    tags: ["execution-targets"],
+    deprecated: false,
+    permission: "launch:read",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["mobile", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: getProjectsByIdExecutionTargetPathParamsSchema, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: projectExecutionTargetDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+  },
+  /**
+   * PUT /api/projects/{id}/execution-target: Set the caller's execution target for a project
+   */
+  putProjectsByIdExecutionTarget: {
+    operationId: "putProjectsByIdExecutionTarget",
+    method: "PUT",
+    path: "/api/projects/{id}/execution-target",
+    tags: ["execution-targets"],
+    deprecated: false,
+    permission: "launch:configure",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["mobile", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: putProjectsByIdExecutionTargetPathParamsSchema, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: updateProjectExecutionTargetBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: projectExecutionTargetDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * POST /api/execution-targets/{id}/observations: Report resource observations from an execution target
+   */
+  postExecutionTargetsByIdObservations: {
+    operationId: "postExecutionTargetsByIdObservations",
+    method: "POST",
+    path: "/api/execution-targets/{id}/observations",
+    tags: ["execution-targets"],
+    deprecated: false,
+    permission: "unknown",
+    permissionCandidates: ["launch:configure", "execution_request:claim"],
+    edition: "both",
+    consumers: ["runner", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: postExecutionTargetsByIdObservationsPathParamsSchema, query: null, header: postExecutionTargetsByIdObservationsHeaderParamsSchema },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: reportResourceObservationsBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: recordedObservationsDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * POST /api/execution-targets/{id}/mission-branch-observations: Report mission branch observations from an execution target
+   */
+  postExecutionTargetsByIdMissionBranchObservations: {
+    operationId: "postExecutionTargetsByIdMissionBranchObservations",
+    method: "POST",
+    path: "/api/execution-targets/{id}/mission-branch-observations",
+    tags: ["execution-targets"],
+    deprecated: false,
+    permission: "unknown",
+    permissionCandidates: ["launch:configure", "execution_request:claim"],
+    edition: "both",
+    consumers: ["webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: postExecutionTargetsByIdMissionBranchObservationsPathParamsSchema, query: null, header: postExecutionTargetsByIdMissionBranchObservationsHeaderParamsSchema },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: reportMissionBranchObservationsBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: recordedObservationsDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * POST /api/protocol/{subcommand}: Run an agent protocol subcommand
+   */
+  postProtocolBySubcommand: {
+    operationId: "postProtocolBySubcommand",
+    method: "POST",
+    path: "/api/protocol/{subcommand}",
+    tags: ["protocol"],
+    deprecated: false,
+    permission: "unknown",
+    permissionCandidates: ["artifact:create", "artifact:read", "event:create", "execution_request:claim", "execution_request:create", "mission:create", "mission:read", "mission:update", "objective:read", "objective:submit", "objective:update", "project:create", "project:read", "project:update", "session:attach"],
+    edition: "both",
+    consumers: ["cli"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: postProtocolBySubcommandPathParamsSchema, query: null, header: null },
+    requestBody: { required: false, content: { "application/json": { kind: "json", schema: protocolRequestBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: jsonValueSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * GET /api/runner/status: List active execution requests
+   */
+  getRunnerStatus: {
+    operationId: "getRunnerStatus",
+    method: "GET",
+    path: "/api/runner/status",
+    tags: ["runner"],
+    deprecated: false,
+    permission: "authenticated",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["runner", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: null, query: getRunnerStatusQueryParamsSchema, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: runnerStatusDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+  },
+  /**
+   * POST /api/runner/claim: Claim the next queued execution request
+   */
+  postRunnerClaim: {
+    operationId: "postRunnerClaim",
+    method: "POST",
+    path: "/api/runner/claim",
+    tags: ["runner"],
+    deprecated: false,
+    permission: "authenticated",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["runner"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: null, query: null, header: null },
+    requestBody: { required: false, content: { "application/json": { kind: "json", schema: runnerClaimBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: runnerClaimResponseSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * POST /api/runner/clear: Clear active execution requests
+   */
+  postRunnerClear: {
+    operationId: "postRunnerClear",
+    method: "POST",
+    path: "/api/runner/clear",
+    tags: ["runner"],
+    deprecated: false,
+    permission: "authenticated",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["runner", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: null, query: null, header: null },
+    requestBody: { required: false, content: { "application/json": { kind: "json", schema: runnerClearBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: runnerClearResultDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * POST /api/runner/requests/{id}/launching: Mark an execution request launching
+   */
+  postRunnerRequestsByIdLaunching: {
+    operationId: "postRunnerRequestsByIdLaunching",
+    method: "POST",
+    path: "/api/runner/requests/{id}/launching",
+    tags: ["runner"],
+    deprecated: false,
+    permission: "execution_request:claim",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["runner"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: postRunnerRequestsByIdLaunchingPathParamsSchema, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: runnerExecutionRequestDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "500": apiResponses.InternalError }
+  },
+  /**
+   * POST /api/runner/requests/{id}/launched: Mark an execution request launched
+   */
+  postRunnerRequestsByIdLaunched: {
+    operationId: "postRunnerRequestsByIdLaunched",
+    method: "POST",
+    path: "/api/runner/requests/{id}/launched",
+    tags: ["runner"],
+    deprecated: false,
+    permission: "execution_request:claim",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["runner"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: postRunnerRequestsByIdLaunchedPathParamsSchema, query: null, header: null },
+    requestBody: { required: false, content: { "application/json": { kind: "json", schema: runnerLaunchedBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: runnerExecutionRequestDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * POST /api/runner/requests/{id}/failed: Mark an execution request failed
+   */
+  postRunnerRequestsByIdFailed: {
+    operationId: "postRunnerRequestsByIdFailed",
+    method: "POST",
+    path: "/api/runner/requests/{id}/failed",
+    tags: ["runner"],
+    deprecated: false,
+    permission: "execution_request:claim",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["runner"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: postRunnerRequestsByIdFailedPathParamsSchema, query: null, header: null },
+    requestBody: { required: false, content: { "application/json": { kind: "json", schema: runnerFailedBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: runnerExecutionRequestDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * POST /api/runner/requests/{id}/completed: Report the result of a local-target mutation
+   */
+  postRunnerRequestsByIdCompleted: {
+    operationId: "postRunnerRequestsByIdCompleted",
+    method: "POST",
+    path: "/api/runner/requests/{id}/completed",
+    tags: ["runner"],
+    deprecated: false,
+    permission: "execution_request:claim",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["runner"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: postRunnerRequestsByIdCompletedPathParamsSchema, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: runnerCompletedBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: runnerExecutionRequestDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * POST /api/missions/{id}/branch-prepared: Record a runner-prepared branch
+   */
+  postMissionsByIdBranchPrepared: {
+    operationId: "postMissionsByIdBranchPrepared",
+    method: "POST",
+    path: "/api/missions/{id}/branch-prepared",
+    tags: ["missions"],
+    deprecated: false,
+    permission: "execution_request:claim",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["runner"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: postMissionsByIdBranchPreparedPathParamsSchema, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: branchPreparedBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: okResponseSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * POST /api/missions/{id}/branch/action: Run an on-demand branch action
+   */
+  postMissionsByIdBranchAction: {
+    operationId: "postMissionsByIdBranchAction",
+    method: "POST",
+    path: "/api/missions/{id}/branch/action",
+    tags: ["missions"],
+    deprecated: false,
+    permission: "mission:update",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: postMissionsByIdBranchActionPathParamsSchema, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: branchActionBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: missionDetailDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * GET /api/missions/{id}/branches: The mission's selectable branches
+   */
+  getMissionsByIdBranches: {
+    operationId: "getMissionsByIdBranches",
+    method: "GET",
+    path: "/api/missions/{id}/branches",
+    tags: ["missions"],
+    deprecated: false,
+    permission: "mission:read",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: getMissionsByIdBranchesPathParamsSchema, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: missionBranchListDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "500": apiResponses.InternalError }
+  },
+  /**
+   * GET /api/worktrees: List Overlord-managed worktrees
+   */
+  getWorktrees: {
+    operationId: "getWorktrees",
+    method: "GET",
+    path: "/api/worktrees",
+    tags: ["worktrees"],
+    deprecated: false,
+    permission: "project:read",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: null, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: worktreeListSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+  },
+  /**
+   * POST /api/worktrees/remove: Remove one managed worktree
+   */
+  postWorktreesRemove: {
+    operationId: "postWorktreesRemove",
+    method: "POST",
+    path: "/api/worktrees/remove",
+    tags: ["worktrees"],
+    deprecated: false,
+    permission: "project:update",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: null, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: removeWorktreeBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: purgeWorktreesResultDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * POST /api/worktrees/purge-merged: Remove every clean, merged managed worktree of a project
+   */
+  postWorktreesPurgeMerged: {
+    operationId: "postWorktreesPurgeMerged",
+    method: "POST",
+    path: "/api/worktrees/purge-merged",
+    tags: ["worktrees"],
+    deprecated: false,
+    permission: "project:update",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: null, query: null, header: null },
+    requestBody: { required: false, content: { "application/json": { kind: "json", schema: purgeMergedWorktreesBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: purgeWorktreesResultDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  }
+};
+
+// http/api-operations.ts
+var operations = Object.values(apiOperations);
+var byKey = new Map(
+  operations.map((operation2) => [`${operation2.method} ${operation2.path}`, operation2])
+);
+function operationFor(method, openapiPath) {
+  return byKey.get(`${method.toUpperCase()} ${openapiPath}`) ?? null;
+}
+function templateSegments(path29) {
+  return path29.split("/").slice(1);
+}
+var templates = operations.map((operation2) => {
+  const segments = templateSegments(operation2.path);
+  return {
+    operation: operation2,
+    segments,
+    literals: segments.filter((segment) => !segment.startsWith("{")).length
+  };
+}).sort((left, right) => right.literals - left.literals);
+function matchOperation(method, requestPath) {
+  const upper = method.toUpperCase();
+  const segments = templateSegments(requestPath.length > 1 ? requestPath.replace(/\/$/, "") : "/");
+  for (const template of templates) {
+    if (template.operation.method !== upper) continue;
+    if (template.segments.length !== segments.length) continue;
+    if (template.segments.every(
+      (segment, index) => segment.startsWith("{") || segment === segments[index]
+    )) {
+      return template.operation;
+    }
+  }
+  return null;
+}
+
+// http/conformance-report.ts
+var import_node_fs21 = require("node:fs");
+var CONFORMANCE_REPORT_ENV = "OVERLORD_API_CONFORMANCE_REPORT";
+function conformanceReportPath(env3 = process.env) {
+  const value2 = env3[CONFORMANCE_REPORT_ENV]?.trim();
+  return value2 ? value2 : null;
+}
+function recordConformance(record2) {
+  const file2 = conformanceReportPath();
+  if (!file2) return;
+  (0, import_node_fs21.appendFileSync)(file2, `${JSON.stringify(record2)}
+`);
+}
+
+// http/express-routes.ts
+function toOpenapiPath(expressPath) {
+  return expressPath.replace(/:([A-Za-z0-9_]+)/g, "{$1}");
+}
+function normalizePath3(value2) {
+  const collapsed = value2.replace(/\/{2,}/g, "/");
+  return collapsed.length > 1 && collapsed.endsWith("/") ? collapsed.slice(0, -1) : collapsed;
+}
+function layerPrefix(layer) {
+  if (layer.regexp.fast_slash) return "";
+  let source = layer.regexp.source;
+  if (source === "^\\/?(?=\\/|$)") return "";
+  source = source.replace(/^\^/, "").replace(/\\\/\?\(\?=\\\/\|\$\)$/, "");
+  let index = 0;
+  source = source.replace(/\(\?:\\\/\(\[\^\\\/\]\+\?\)\)/g, () => `/:${layer.keys[index++]?.name}`);
+  if (/[()[\]*+?|^$]/.test(source.replace(/\\./g, ""))) {
+    throw new Error(`Unsupported mount pattern ${layer.regexp.source}`);
+  }
+  return source.replace(/\\(.)/g, "$1");
+}
+function registeredRoutes(stack, prefix = "") {
+  const routes = [];
+  for (const layer of stack) {
+    if (layer.route) {
+      const paths2 = Array.isArray(layer.route.path) ? layer.route.path : [layer.route.path];
+      const methods2 = layer.route.methods._all ? ["ALL"] : Object.keys(layer.route.methods).filter((method) => layer.route.methods[method]).map((method) => method.toUpperCase());
+      for (const routePath of paths2) {
+        routes.push({
+          path: normalizePath3(`${prefix}${routePath}`),
+          methods: methods2,
+          stack: layer.route.stack
+        });
+      }
+    } else if (layer.name === "router" && layer.handle.stack) {
+      routes.push(...registeredRoutes(layer.handle.stack, `${prefix}${layerPrefix(layer)}`));
+    }
+  }
+  return routes;
+}
+
+// http/request-validation.ts
+var REQUEST_VALIDATION_ENV = "OVERLORD_API_REQUEST_VALIDATION";
+var warnedAboutMode = false;
+function requestValidationMode(env3 = process.env) {
+  const value2 = env3[REQUEST_VALIDATION_ENV]?.trim().toLowerCase() ?? "";
+  if (value2 === "" || value2 === "enforce") return "enforce";
+  if (value2 === "warn" || value2 === "off") return value2;
+  if (!warnedAboutMode) {
+    warnedAboutMode = true;
+    console.warn(`[api] ${REQUEST_VALIDATION_ENV} must be enforce, warn or off; using enforce`);
+  }
+  return "enforce";
+}
+var MALFORMED_BODY = /* @__PURE__ */ Symbol("overlord.malformedBody");
+var MAX_ISSUES = 20;
+function isMalformedJson(error64) {
+  return typeof error64 === "object" && error64 !== null && error64.type === "entity.parse.failed";
+}
+function deferMalformedBody(parser) {
+  return function deferredJsonBody(req, res, next) {
+    parser(req, res, (error64) => {
+      if (error64 && isMalformedJson(error64) && requestValidationMode() !== "off") {
+        res.locals[MALFORMED_BODY] = true;
+        req.body = {};
+        next();
+        return;
+      }
+      next(error64);
+    });
+  };
+}
+function memberPath(path29) {
+  let out = "";
+  for (const segment of path29) {
+    if (typeof segment === "number") out += `[${segment}]`;
+    else out += out ? `.${String(segment)}` : String(segment);
+  }
+  return out;
+}
+function check3(schema2, value2, location, issues) {
+  if (!schema2) return;
+  const result2 = schema2.safeParse(value2);
+  if (result2.success) return;
+  for (const issue2 of result2.error.issues) {
+    issues.push({
+      in: location,
+      path: memberPath(issue2.path),
+      code: issue2.code,
+      message: issue2.message
+    });
+  }
+}
+function pathParameters(operation2, requestPath) {
+  const template = operation2.path.split("/");
+  const actual = requestPath.split("/");
+  const params = {};
+  template.forEach((segment, index) => {
+    const match = /^\{(.+)\}$/.exec(segment);
+    if (!match || actual[index] === void 0) return;
+    try {
+      params[match[1]] = decodeURIComponent(actual[index]);
+    } catch {
+      params[match[1]] = actual[index];
+    }
+  });
+  return params;
+}
+function requestPathname(req) {
+  return (req.originalUrl.split("?")[0] ?? "").replace(/\/+$/, "") || "/";
+}
+function validateRequest(operation2, req) {
+  const issues = [];
+  check3(operation2.parameters.path, pathParameters(operation2, requestPathname(req)), "path", issues);
+  check3(operation2.parameters.query, req.query, "query", issues);
+  check3(operation2.parameters.header, req.headers, "header", issues);
+  const body = operation2.requestBody;
+  if (body) {
+    const content = body.content;
+    if (Buffer.isBuffer(req.body)) {
+      const descriptor = content["*/*"] ?? content["application/octet-stream"];
+      if (!descriptor) {
+        issues.push({
+          in: "body",
+          path: "",
+          code: "unsupported_media_type",
+          message: "Unexpected raw body"
+        });
+      } else if (descriptor.kind !== "event-stream") {
+        check3(descriptor.schema, req.body, "body", issues);
+      }
+    } else if (req.is("application/x-www-form-urlencoded") && content["application/x-www-form-urlencoded"]) {
+      const descriptor = content["application/x-www-form-urlencoded"];
+      if (descriptor.kind !== "event-stream") check3(descriptor.schema, req.body, "body", issues);
+    } else if (content["application/json"]) {
+      const descriptor = content["application/json"];
+      if (descriptor.kind !== "event-stream")
+        check3(descriptor.schema, req.body ?? {}, "body", issues);
+    } else if (body.required && (content["*/*"] || content["application/octet-stream"])) {
+      issues.push({
+        in: "body",
+        path: "",
+        code: "invalid_type",
+        message: "A request body is required"
+      });
+    }
+  }
+  return issues.slice(0, MAX_ISSUES);
+}
+function located(issue2) {
+  return issue2.path ? `${issue2.in}.${issue2.path}` : issue2.in;
+}
+function validationErrorBody(issues) {
+  const first = issues[0];
+  return {
+    error: first ? `Invalid request: ${located(first)}: ${first.message}` : "Invalid request",
+    code: "invalid_request",
+    detail: issues.slice(0, 5).map((issue2) => `${located(issue2)}: ${issue2.message}`).join("; "),
+    details: { issues }
+  };
+}
+var MALFORMED_JSON_ERROR = {
+  error: "Request body is not valid JSON.",
+  code: "invalid_json"
+};
+function report(mode, outcome, operation2, req, status, issues) {
+  const summary = issues.map((issue2) => ({ in: issue2.in, path: issue2.path, code: issue2.code }));
+  recordConformance({
+    kind: "request",
+    operationId: operation2.operationId,
+    method: req.method,
+    outcome,
+    status,
+    issues: summary
+  });
+  if (outcome === "answered_by_handler") return;
+  console.warn(
+    JSON.stringify({
+      event: "api_request_validation",
+      mode,
+      outcome,
+      operationId: operation2.operationId,
+      method: req.method,
+      status,
+      issues: summary
+    })
+  );
+}
+function watch(mode, operation2, issues, req, res) {
+  let rejected = false;
+  if (mode === "enforce") {
+    const send = res.send;
+    res.send = function sendValidated(body) {
+      if (!rejected && this.statusCode === 500 && !this.headersSent) {
+        rejected = true;
+        this.status(400);
+        this.set("Content-Type", "application/json; charset=utf-8");
+        return send.call(this, JSON.stringify(validationErrorBody(issues)));
+      }
+      return send.call(this, body);
+    };
+  }
+  res.once("finish", () => {
+    const status = res.statusCode;
+    if (rejected) report(mode, "rejected", operation2, req, status, issues);
+    else if (status === 500) report(mode, "would_reject", operation2, req, status, issues);
+    else if (status < 400) report(mode, "accepted", operation2, req, status, issues);
+    else report(mode, "answered_by_handler", operation2, req, status, issues);
+  });
+}
+var OPERATION_ID_LOCAL = "apiOperationId";
+function validationLayer(byMethod) {
+  return function apiRequestValidation(req, res, next) {
+    const operation2 = byMethod.get(req.method);
+    if (!operation2) return next();
+    res.locals[OPERATION_ID_LOCAL] = operation2.operationId;
+    if (res.locals[MALFORMED_BODY]) {
+      res.status(400).json(MALFORMED_JSON_ERROR);
+      return;
+    }
+    const mode = requestValidationMode();
+    if (mode === "off") return next();
+    const issues = validateRequest(operation2, req);
+    if (issues.length > 0) watch(mode, operation2, issues, req, res);
+    next();
+  };
+}
+function installRequestValidation(app2) {
+  const stack = app2._router?.stack;
+  if (!stack) return 0;
+  let installed = 0;
+  for (const route of registeredRoutes(stack)) {
+    if (route.stack.some((layer2) => layer2.name === "apiRequestValidation")) continue;
+    const template = toOpenapiPath(route.path);
+    const byMethod = /* @__PURE__ */ new Map();
+    for (const method of route.methods) {
+      const operation2 = operationFor(method, template);
+      if (operation2) byMethod.set(method, operation2);
+    }
+    if (byMethod.size === 0) continue;
+    if (byMethod.has("GET") && !byMethod.has("HEAD")) byMethod.set("HEAD", byMethod.get("GET"));
+    const handler = route.stack[route.stack.length - 1];
+    if (!handler) continue;
+    const Layer = handler.constructor;
+    const layer = new Layer("/", {}, validationLayer(byMethod));
+    layer.method = void 0;
+    route.stack.splice(route.stack.length - 1, 0, layer);
+    installed += 1;
+  }
+  return installed;
+}
+
+// http/response-conformance.ts
+init_zod();
+var closedCache = /* @__PURE__ */ new WeakMap();
+function defOf(schema2) {
+  return schema2._zod.def;
+}
+function cloneWith(schema2, def) {
+  return schema2.clone(def);
+}
+function closedSchema(schema2) {
+  const cached3 = closedCache.get(schema2);
+  if (cached3) return cached3;
+  const def = defOf(schema2);
+  let result2;
+  switch (def.type) {
+    case "object": {
+      const shape = def.shape;
+      const closedShape = Object.fromEntries(
+        Object.entries(shape).map(([key, value2]) => [key, closedSchema(value2)])
+      );
+      const catchall = def.catchall;
+      result2 = cloneWith(schema2, {
+        ...def,
+        shape: closedShape,
+        catchall: catchall === void 0 ? external_exports.never() : closedSchema(catchall)
+      });
+      break;
+    }
+    case "array":
+      result2 = cloneWith(schema2, { ...def, element: closedSchema(def.element) });
+      break;
+    case "union":
+      result2 = cloneWith(schema2, {
+        ...def,
+        options: def.options.map((option) => closedSchema(option))
+      });
+      break;
+    case "optional":
+    case "nullable":
+      result2 = cloneWith(schema2, { ...def, innerType: closedSchema(def.innerType) });
+      break;
+    case "record":
+      result2 = cloneWith(schema2, { ...def, valueType: closedSchema(def.valueType) });
+      break;
+    case "lazy": {
+      const getter = def.getter;
+      let resolved = null;
+      result2 = external_exports.lazy(() => resolved ??= closedSchema(getter()));
+      break;
+    }
+    default:
+      result2 = schema2;
+  }
+  closedCache.set(schema2, result2);
+  return result2;
+}
+function memberPath2(path29) {
+  let out = "body";
+  for (const segment of path29) {
+    out += typeof segment === "number" ? `[${segment}]` : `.${String(segment)}`;
+  }
+  return out;
+}
+function mediaTypeOf(header) {
+  const value2 = Array.isArray(header) ? header[0] : header;
+  if (typeof value2 !== "string" || value2.trim() === "") return null;
+  return value2.split(";")[0].trim().toLowerCase();
+}
+function checkResponse(operation2, status, contentType, body) {
+  const response = operation2.responses[String(status)];
+  if (!response) return [`status ${status} is not declared`];
+  const declared = Object.keys(response.content);
+  if (declared.length === 0) return [];
+  if (!contentType) {
+    return body === null ? [] : [`status ${status} is missing a declared Content-Type`];
+  }
+  const descriptor = response.content[contentType] ?? response.content["*/*"];
+  if (!descriptor) {
+    return [
+      `media type ${contentType} is not declared for status ${status} (${declared.join(", ")})`
+    ];
+  }
+  if (body === null || descriptor.kind === "binary" || descriptor.kind === "event-stream") {
+    return [];
+  }
+  let value2 = body;
+  if (descriptor.kind === "json") {
+    try {
+      value2 = JSON.parse(body);
+    } catch {
+      return [`status ${status} body is not JSON`];
+    }
+  }
+  const result2 = closedSchema(descriptor.schema).safeParse(value2);
+  if (result2.success) return [];
+  return result2.error.issues.slice(0, 20).map((issue2) => `${memberPath2(issue2.path)}: ${issue2.message}`);
+}
+var MAX_CAPTURE_BYTES = 8 * 1024 * 1024;
+function chunkBuffer(chunk, encoding) {
+  if (chunk === void 0 || chunk === null || typeof chunk === "function") return null;
+  if (Buffer.isBuffer(chunk)) return chunk;
+  if (chunk instanceof Uint8Array) return Buffer.from(chunk);
+  if (typeof chunk === "string") {
+    return Buffer.from(chunk, typeof encoding === "string" ? encoding : "utf8");
+  }
+  return null;
+}
+function operationOf(req, res) {
+  const operationId = res.locals[OPERATION_ID_LOCAL];
+  if (typeof operationId === "string" && operationId in apiOperations) {
+    return apiOperations[operationId];
+  }
+  const pathname = req.originalUrl.split("?")[0] ?? "";
+  return matchOperation(req.method === "HEAD" ? "GET" : req.method, pathname);
+}
+function apiResponseConformance() {
+  return function apiResponseConformance2(req, res, next) {
+    if (!conformanceReportPath()) return next();
+    const chunks = [];
+    let size = 0;
+    let capture = null;
+    const capturing = () => {
+      if (capture === null) {
+        const media = mediaTypeOf(res.getHeader("content-type"));
+        capture = req.method !== "HEAD" && media !== "text/event-stream";
+      }
+      return capture;
+    };
+    const keep = (chunk, encoding) => {
+      if (!capturing()) return;
+      const buffer = chunkBuffer(chunk, encoding);
+      if (!buffer) return;
+      size += buffer.length;
+      if (size > MAX_CAPTURE_BYTES) capture = false;
+      else chunks.push(buffer);
+    };
+    const write = res.write;
+    const end = res.end;
+    res.write = function writeObserved(chunk, ...rest) {
+      keep(chunk, rest[0]);
+      return write.call(this, chunk, ...rest);
+    };
+    res.end = function endObserved(chunk, ...rest) {
+      keep(chunk, rest[0]);
+      return end.call(this, chunk, ...rest);
+    };
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      const operation2 = operationOf(req, res);
+      if (!operation2) return;
+      const contentType = mediaTypeOf(res.getHeader("content-type"));
+      const body = capturing() && res.writableFinished ? Buffer.concat(chunks).toString("utf8") : null;
+      recordConformance({
+        kind: "response",
+        operationId: operation2.operationId,
+        method: req.method,
+        status: res.statusCode,
+        mediaType: contentType,
+        problems: checkResponse(operation2, res.statusCode, contentType, body)
+      });
+    };
+    res.once("finish", finish);
+    res.once("close", finish);
+    next();
   };
 }
 
@@ -188004,9 +194682,9 @@ var ChatNotificationDispatcher = class extends PollLoop {
   }
   async process(db, store, row) {
     try {
-      const check3 = await store.recheck(row);
-      if (check3.action === "cancel") {
-        await store.markCancelled(row, this.workerId, check3.reason);
+      const check4 = await store.recheck(row);
+      if (check4.action === "cancel") {
+        await store.markCancelled(row, this.workerId, check4.reason);
         return;
       }
       const type = row.type;
@@ -188016,7 +194694,7 @@ var ChatNotificationDispatcher = class extends PollLoop {
         await store.markCancelled(row, this.workerId, "preferences_off");
         return;
       }
-      const threadTitle = chatThreadTitle(check3.threadTitle);
+      const threadTitle = chatThreadTitle(check4.threadTitle);
       if (apns !== "off") {
         const presentation = {
           type,
@@ -188061,8 +194739,8 @@ async function requireDeferredWorkEntry(deliveryId, actionId) {
     permission: PERMISSIONS.MISSION_UPDATE,
     notFoundMessage: "Delivery not found"
   });
-  const report = deliveryReportFromPayload(row.payload_json, row.delivery_summary);
-  const entry = deferredWorkEntries(report).find((candidate) => candidate.id === actionId);
+  const report2 = deliveryReportFromPayload(row.payload_json, row.delivery_summary);
+  const entry = deferredWorkEntries(report2).find((candidate) => candidate.id === actionId);
   if (!entry) throw new ApiError(404, "Deferred work item not found");
   return { row, entry, workspaceUserId };
 }
@@ -188201,16 +194879,16 @@ async function readDeliveryComposeContext(db, deliveryId) {
     [deliveryId]
   );
   if (!delivery) return null;
-  let report = null;
+  let report2 = null;
   try {
     const payload = JSON.parse(delivery.payload_json);
     if (payload.deliveryReport?.schemaVersion === 1 && payload.deliveryReport.agentReport) {
-      report = payload.deliveryReport;
+      report2 = payload.deliveryReport;
     }
   } catch {
-    report = null;
+    report2 = null;
   }
-  if (!report) return null;
+  if (!report2) return null;
   const filePathRows = await db.all(
     `SELECT file_path FROM changed_files
       WHERE objective_id = ? AND deleted_at IS NULL
@@ -188237,7 +194915,7 @@ async function readDeliveryComposeContext(db, deliveryId) {
   );
   return {
     delivery,
-    report,
+    report: report2,
     filePaths: filePathRows.map((row) => row.file_path),
     objective: {
       title: objective?.title ?? null,
@@ -188396,7 +195074,7 @@ var DeliveryComposeWorker = class extends WorkerJobPoller {
   async composeAndPersist(client, deliveryId) {
     const context = await readDeliveryComposeContext(client, deliveryId);
     if (!context) return { kind: "missing" };
-    const { delivery, report, filePaths, objective, plannedObjectives, recentEvents } = context;
+    const { delivery, report: report2, filePaths, objective, plannedObjectives, recentEvents } = context;
     const candidates = deriveDeterministicActionCandidates({ filePaths });
     const model = readGeminiConfigFromEnv()?.model ?? null;
     let draft = null;
@@ -188404,7 +195082,7 @@ var DeliveryComposeWorker = class extends WorkerJobPoller {
     if (isGeminiConfigured() || this.generateOverride) {
       const input2 = toComposeInput({
         delivery,
-        report,
+        report: report2,
         candidates,
         objective,
         plannedObjectives,
@@ -188419,7 +195097,7 @@ var DeliveryComposeWorker = class extends WorkerJobPoller {
       });
     }
     const presentation = reconcileDeliveryComposeDraft({
-      report,
+      report: report2,
       draft,
       candidates,
       model,
@@ -188430,7 +195108,7 @@ var DeliveryComposeWorker = class extends WorkerJobPoller {
       presentation.status = "fallback";
       presentation.generatedBy = "deterministic";
     }
-    const nextReport = applyDeliveryPresentation({ report, presentation });
+    const nextReport = applyDeliveryPresentation({ report: report2, presentation });
     await persistDeliveryPresentation({
       db: client,
       delivery,
@@ -188481,7 +195159,7 @@ async function deliveryChangeAttribution(db, workspaceId2) {
 }
 function toComposeInput({
   delivery,
-  report,
+  report: report2,
   candidates,
   objective,
   plannedObjectives,
@@ -188494,7 +195172,7 @@ function toComposeInput({
     plannedObjectives,
     verificationSummary: delivery.verification_summary ? boundComposeText(delivery.verification_summary, MAX_COMPOSE_AUXILIARY_CHARS) : null,
     followUpNotes: delivery.follow_up_notes ? boundComposeText(delivery.follow_up_notes, MAX_COMPOSE_AUXILIARY_CHARS) : null,
-    humanActions: report.agentReport.humanActions.map((action) => ({
+    humanActions: report2.agentReport.humanActions.map((action) => ({
       id: action.id,
       action: action.action,
       ...action.reason ? { reason: action.reason } : {},
@@ -188505,7 +195183,7 @@ function toComposeInput({
       source: action.source,
       ...action.sourceRef ? { sourceRef: action.sourceRef } : {}
     })),
-    tradeoffsMade: report.agentReport.tradeoffsMade.map((tradeoff) => ({
+    tradeoffsMade: report2.agentReport.tradeoffsMade.map((tradeoff) => ({
       id: tradeoff.id,
       decision: tradeoff.decision,
       rationale: tradeoff.rationale,
@@ -188514,8 +195192,8 @@ function toComposeInput({
       source: tradeoff.source,
       ...tradeoff.sourceRef ? { sourceRef: tradeoff.sourceRef } : {}
     })),
-    knownRisks: report.agentReport.knownRisks,
-    assumptions: report.agentReport.assumptions,
+    knownRisks: report2.agentReport.knownRisks,
+    assumptions: report2.agentReport.assumptions,
     candidateActions: candidates.map((action) => ({
       id: action.id,
       action: action.action,
@@ -189818,6 +196496,20 @@ async function activeNotificationProfileId(db) {
   if (!profileId) throw new ApiError(401, "Authentication required");
   return profileId;
 }
+async function readableNotificationWorkspaceIds(db, profileId) {
+  const readable = [];
+  const snapshot = getAuthorizedWorkspacesContext();
+  for (const workspaceId2 of await getResourceLookupWorkspaceIds(db)) {
+    const workspaceUserId = snapshot ? getAuthorizedWorkspace(workspaceId2)?.workspaceUserId : await findActiveMembershipId(workspaceId2, profileId, db);
+    if (workspaceUserId && await actorCan(PERMISSIONS.MISSION_READ, { workspaceId: workspaceId2, workspaceUserId })) {
+      readable.push(workspaceId2);
+    }
+  }
+  return readable;
+}
+function visibleToRequest(row, workspaceIds) {
+  return workspaceIds.includes(row.workspace_id) && projectInTokenScope(row.project_id);
+}
 async function ownedNotificationRow(db, profileId, id2) {
   const row = await db.get(
     `SELECT n.id, n.workspace_id, n.recipient_profile_id, n.type, n.mission_id, n.objective_id,
@@ -189829,7 +196521,9 @@ async function ownedNotificationRow(db, profileId, id2) {
       WHERE n.id = ? AND n.recipient_profile_id = ? AND n.deleted_at IS NULL`,
     [id2, profileId]
   );
-  if (!row) throw new ApiError(404, "Notification not found");
+  if (!row || !visibleToRequest(row, await readableNotificationWorkspaceIds(db, profileId))) {
+    throw new ApiError(404, "Notification not found");
+  }
   return row;
 }
 function expectedRevision(body) {
@@ -189853,7 +196547,8 @@ async function listNotifications() {
       ORDER BY n.created_at DESC, n.id DESC`,
     [profileId]
   );
-  return rows.map(toNotificationDto);
+  const workspaceIds = await readableNotificationWorkspaceIds(db, profileId);
+  return rows.filter((row) => visibleToRequest(row, workspaceIds)).map(toNotificationDto);
 }
 async function markNotificationRead(id2, body) {
   const db = requireDatabaseClient();
@@ -190927,7 +197622,7 @@ var RunQueueDispatchWorker = class extends WorkerJobPoller {
     );
     for (const project of projects)
       await enqueueRunQueueDispatch(db, project.project_id, project.workspace_id);
-    this.pollNow();
+    void this.pollNow();
   }
   databaseClient() {
     return requireDatabaseClient();
@@ -190958,7 +197653,7 @@ function internalHostPatterns() {
 }
 var LOCAL_EDITION_IMPLICIT_HOSTS = /* @__PURE__ */ new Set(["localhost", "127.0.0.1", "::1"]);
 function isInternalWebhookHost(hostname5) {
-  const host = hostname5.toLowerCase();
+  const host = hostname5.toLowerCase().replace(/^\[(.*)\]$/, "$1");
   if (DATABASE_DIALECT === "sqlite" && LOCAL_EDITION_IMPLICIT_HOSTS.has(host)) {
     return true;
   }
@@ -190985,32 +197680,50 @@ function parseWebhookEndpointUrl(rawUrl) {
       "Endpoint URL must use https:// (internal hosts matching OVERLORD_WEBHOOK_INTERNAL_HOSTS may use http://)"
     );
   }
+  if (!isInternal) assertNotPrivateAddressLiteral(url2);
   return url2;
+}
+function urlHostAddress(url2) {
+  return url2.hostname.replace(/^\[(.*)\]$/, "$1");
 }
 function isPrivateIPv4(ip) {
   const parts = ip.split(".").map(Number);
   if (parts.length !== 4 || parts.some((part) => Number.isNaN(part))) return false;
   const [a5, b5] = parts;
-  if (a5 === 10 || a5 === 127 || a5 === 169 && b5 === 254) return true;
+  if (a5 === 0 || a5 === 10 || a5 === 127 || a5 === 169 && b5 === 254) return true;
   if (a5 === 192 && b5 === 168) return true;
   if (a5 === 172 && b5 >= 16 && b5 <= 31) return true;
   return false;
 }
 function isPrivateIPv6(ip) {
   const lower = ip.toLowerCase();
-  return lower === "::1" || lower.startsWith("fc") || lower.startsWith("fd") || lower.startsWith("fe80");
+  const mapped = mappedIPv4(lower);
+  if (mapped !== null) return isPrivateIPv4(mapped);
+  return lower === "::" || lower === "::1" || lower.startsWith("fc") || lower.startsWith("fd") || lower.startsWith("fe80");
+}
+function mappedIPv4(ip) {
+  const match = /^::ffff:(.+)$/.exec(ip);
+  if (!match) return null;
+  const rest = match[1];
+  if ((0, import_node_net.isIP)(rest) === 4) return rest;
+  const hex4 = /^([0-9a-f]{1,4}):([0-9a-f]{1,4})$/.exec(rest);
+  if (!hex4) return null;
+  const high = parseInt(hex4[1], 16);
+  const low = parseInt(hex4[2], 16);
+  return `${high >> 8}.${high & 255}.${low >> 8}.${low & 255}`;
+}
+function assertNotPrivateAddressLiteral(url2) {
+  const address = urlHostAddress(url2);
+  const family = (0, import_node_net.isIP)(address);
+  if (family === 4 && isPrivateIPv4(address) || family === 6 && isPrivateIPv6(address)) {
+    throw new ApiError(400, `Endpoint resolves to a private address (${address})`);
+  }
 }
 async function assertPublicWebhookTarget(url2) {
   if (isInternalWebhookHost(url2.hostname)) return;
-  const hostname5 = url2.hostname;
-  const literalFamily = (0, import_node_net.isIP)(hostname5);
-  if (literalFamily === 4 && isPrivateIPv4(hostname5)) {
-    throw new ApiError(400, `Endpoint resolves to a private address (${hostname5})`);
-  }
-  if (literalFamily === 6 && isPrivateIPv6(hostname5)) {
-    throw new ApiError(400, `Endpoint resolves to a private address (${hostname5})`);
-  }
-  if (literalFamily) return;
+  assertNotPrivateAddressLiteral(url2);
+  const hostname5 = urlHostAddress(url2);
+  if ((0, import_node_net.isIP)(hostname5)) return;
   const records = await import_promises6.default.lookup(hostname5, { all: true });
   for (const record2 of records) {
     if (record2.family === 4 && isPrivateIPv4(record2.address)) {
@@ -191563,6 +198276,7 @@ async function testWebhookSubscription(id2) {
   const client = requireDatabaseClient();
   const subscription = await loadSubscriptionForUpdate(client, id2, PERMISSIONS.WEBHOOK_UPDATE);
   const url2 = new URL(subscription.endpoint_url);
+  await assertPublicWebhookTarget(url2);
   const envelope2 = {
     id: newId2(),
     apiVersion: "2026-07-01",
@@ -191733,7 +198447,7 @@ async function getAuthorizedWorkspaceDiscovery() {
   };
 }
 
-// index.ts
+// app.ts
 var here2 = import_node_path34.default.dirname((0, import_node_url6.fileURLToPath)(__overlord_import_meta_url));
 var distDir = process.env.OVERLORD_WEBAPP_DIST ? import_node_path34.default.resolve(process.env.OVERLORD_WEBAPP_DIST) : import_node_path34.default.resolve(here2, "..", "dist");
 var MIN_BACKEND_NODE_MAJOR = 24;
@@ -191775,6 +198489,7 @@ function parsePort(value2, name2) {
   throw new Error(`${name2} must be an integer port from 0 to 65535; got ${JSON.stringify(value2)}`);
 }
 var app = (0, import_express7.default)();
+app.use(apiResponseConformance());
 var allowedBrowserOrigins = getAllowedBrowserOrigins();
 app.use(
   (0, import_cors.default)({
@@ -191877,9 +198592,9 @@ app.get(
   createProfileConnectionCallbackHandler({ provider: "github", runtime: connectionsModule })
 );
 app.all("/api/auth/*", nativeOAuthHandler);
-var jsonBody = import_express7.default.json();
+var jsonBody = deferMalformedBody(import_express7.default.json());
 var urlEncodedBody = import_express7.default.urlencoded({ extended: false });
-var runnerCompletionJsonBody = import_express7.default.json({ limit: "1mb" });
+var runnerCompletionJsonBody = deferMalformedBody(import_express7.default.json({ limit: "1mb" }));
 function isRunnerCompletionRequest(req) {
   return req.method === "POST" && /^\/api\/runner\/requests\/[^/]+\/completed$/.test(req.path);
 }
@@ -192746,8 +199461,8 @@ app.patch(
 app.delete(
   "/api/projects/:id/tags/:tagId",
   handle3(
-    (req) => {
-      deleteProjectTag(req.params.id, req.params.tagId);
+    async (req) => {
+      await deleteProjectTag(req.params.id, req.params.tagId);
       return { ok: true };
     },
     { mutates: true }
@@ -192772,8 +199487,8 @@ app.patch(
 app.delete(
   "/api/projects/:id/resources/:resourceId",
   handle3(
-    (req) => {
-      deleteProjectResource(req.params.id, req.params.resourceId);
+    async (req) => {
+      await deleteProjectResource(req.params.id, req.params.resourceId);
       return { ok: true };
     },
     { mutates: true }
@@ -193393,13 +200108,14 @@ app.post(
     requires: PERMISSIONS.PROJECT_UPDATE
   })
 );
-if (resolveServeSpa({ dialect: DATABASE_DIALECT }) && (0, import_node_fs21.existsSync)(distDir)) {
+if (resolveServeSpa({ dialect: DATABASE_DIALECT }) && (0, import_node_fs22.existsSync)(distDir)) {
   app.use(import_express7.default.static(distDir));
   app.get("*", (req, res, next) => {
     if (req.path.startsWith("/api/")) return next();
     res.sendFile(import_node_path34.default.join(distDir, "index.html"));
   });
 }
+installRequestValidation(app);
 app.use(apiErrorHandler);
 async function start() {
   await initDatabase();
@@ -193467,6 +200183,8 @@ async function start() {
     throw error64;
   });
 }
+
+// index.ts
 void start();
 /*! Bundled license information:
 
