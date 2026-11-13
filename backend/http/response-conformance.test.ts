@@ -84,8 +84,19 @@ describe('checkResponse', () => {
     assert.match(checkResponse(operation, 200, 'application/json', '{')[0] ?? '', /not JSON/);
   });
 
-  it('does not inspect bodies of event streams or bodyless statuses', () => {
+  it('rejects missing JSON bodies and missing Content-Type on captured responses', () => {
+    for (const body of ['', JSON.stringify(tag)]) {
+      assert.match(checkResponse(operation, 200, null, body)[0] ?? '', /Content-Type/);
+    }
+    assert.match(checkResponse(operation, 200, 'application/json', '')[0] ?? '', /not JSON/);
+  });
+
+  it('does not inspect uncaptured bodies, event streams or bodyless statuses', () => {
+    assert.deepEqual(checkResponse(operation, 200, null, null), []);
+    assert.deepEqual(checkResponse(operation, 200, 'application/json', null), []);
     assert.deepEqual(checkResponse(apiOperations.getRealtime, 200, 'text/event-stream', null), []);
+    const bodyless = { ...operation, responses: { '204': { headers: [], content: {} } } };
+    assert.deepEqual(checkResponse(bodyless, 204, null, ''), []);
   });
 });
 
@@ -96,7 +107,11 @@ describe('apiResponseConformance', () => {
     const previous = process.env[CONFORMANCE_REPORT_ENV];
     const app = express();
     app.use(apiResponseConformance());
-    app.get('/api/health', (_req, res) => res.json({ ok: true, extra: 1 }));
+    app.get('/api/health', (req, res) => {
+      if (req.query.empty === 'true') return res.status(200).end();
+      if (req.query.valid === 'true') return res.json({ ok: true });
+      return res.json({ ok: true, extra: 1 });
+    });
     app.get('/not-an-operation', (_req, res) => res.json({}));
     const server = app.listen(0, '127.0.0.1');
     await once(server, 'listening');
@@ -106,16 +121,26 @@ describe('apiResponseConformance', () => {
       await (await fetch(`${base}/api/health`)).text();
       process.env[CONFORMANCE_REPORT_ENV] = file;
       await (await fetch(`${base}/api/health`)).text();
+      await (await fetch(`${base}/api/health?empty=true`)).text();
+      await (await fetch(`${base}/api/health?empty=true`, { method: 'HEAD' })).text();
+      await (await fetch(`${base}/api/health?valid=true`)).text();
       await (await fetch(`${base}/not-an-operation`)).text();
       await new Promise(resolve => setTimeout(resolve, 20));
       const records = readFileSync(file, 'utf8')
         .trim()
         .split('\n')
         .map(line => JSON.parse(line));
-      assert.equal(records.length, 1);
+      assert.equal(records.length, 4);
       assert.equal(records[0].operationId, 'getHealth');
       assert.equal(records[0].status, 200);
       assert.equal(records[0].problems.length, 1);
+      assert.equal(records[1].operationId, 'getHealth');
+      assert.equal(records[1].status, 200);
+      assert.equal(records[1].problems.length, 1);
+      assert.match(records[1].problems[0], /Content-Type/);
+      assert.equal(records[2].method, 'HEAD');
+      assert.deepEqual(records[2].problems, []);
+      assert.deepEqual(records[3].problems, []);
     } finally {
       if (previous === undefined) delete process.env[CONFORMANCE_REPORT_ENV];
       else process.env[CONFORMANCE_REPORT_ENV] = previous;

@@ -109,7 +109,9 @@ export function checkResponse(
   const declared = Object.keys(response.content);
   if (declared.length === 0) return [];
   if (!contentType) {
-    return body ? [`status ${status} has a body without a Content-Type`] : [];
+    // null means uncaptured (for example HEAD); an empty string is a completed
+    // response and must not bypass its declared representation.
+    return body === null ? [] : [`status ${status} is missing a declared Content-Type`];
   }
   const descriptor = response.content[contentType] ?? response.content['*/*'];
   if (!descriptor) {
