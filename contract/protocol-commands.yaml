@@ -305,7 +305,6 @@ missionDiscovery:
     optionalFlags:
       - --project-id
       - --unassigned-to-project
-      - --inbox
       - --agent
       - --assigned-to
       - --session-key
@@ -314,7 +313,7 @@ missionDiscovery:
       - --objective-agent
       - --objective-model
     rules:
-      - 'Supply --project-id to create a mission, or --unassigned-to-project to deliberately create an account-owned inbox item. --inbox remains a compatibility alias for the latter. Omitting both is rejected; the Protocol never discovers a project for agent-created work.'
+      - 'Supply --project-id to create a mission, or --unassigned-to-project to deliberately create an account-owned inbox item. The former --inbox alias is retired (ADR 0054) and rejected with HTTP 400 invalid_input. Omitting both is rejected; the Protocol never discovers a project for agent-created work.'
       - '--agent names the connector/agent identifier authoring the row and is recorded as creation provenance (missions.created_by_agent / objectives.created_by_agent); it does not select the agent that will run the work'
       - "Each --objectives-json / --objectives-file item may set agent and model. agent persists as the created objective's assignedAgent; model requires a non-empty agent. When both are omitted, existing project launch-preference defaults apply."
       - '--objective-agent / --objective-model supply the launch selection for items that name no agent of their own; a per-item agent wins, and --objective-model without --objective-agent is rejected. These are distinct from --agent, which is creation provenance only.'
@@ -322,7 +321,7 @@ missionDiscovery:
       - '--session-key additionally attributes the created row to the calling agent session (created_by_session_id) and lets an omitted --assigned-to inherit the session mission assignee'
       - '--auto-advance / --no-auto-advance set the default autoAdvance for created objectives; per-item autoAdvance in --objectives-json / --objectives-file wins when present; omitted defaults to false'
       - 'The create response returns the created mission and ObjectiveDto records so callers can verify each persisted assignedAgent, model, resourceKey, and queue/auto-advance setting; CLI human-readable output echoes these settings for each created objective'
-      - 'Authorization (contract v151): the project form requires mission:create in the resolved target project for every caller; the gate is no longer null. A project_automation USER_TOKEN may create only in one of its selected projects (any other project id, including one in the same workspace, is 404) and is denied the --unassigned-to-project / --inbox form before any row is written. A mission created by a direct out_ bearer records created_by_token_id and a created_by_token_label snapshot; for project_automation an omitted --assigned-to leaves the mission unassigned'
+      - 'Authorization (contract v151): the project form requires mission:create in the resolved target project for every caller; the gate is no longer null. A project_automation USER_TOKEN may create only in one of its selected projects (any other project id, including one in the same workspace, is 404) and is denied the --unassigned-to-project form before any row is written. A mission created by a direct out_ bearer records created_by_token_id and a created_by_token_label snapshot; for project_automation an omitted --assigned-to leaves the mission unassigned'
     sideEffects:
       - creates-mission-or-inbox-item
       - creates-objective-in-draft-state-when-project-resolved
@@ -553,8 +552,6 @@ missionDiscovery:
       - reorders-project-run-queues
 
   search:
-    aliases:
-      - search-missions
     description: 'Canonical search by query, status type, project, resource key, entity type, objective state, and explicit date range; response versions 2 and 3 are organization-bounded and report filter/truncation metadata'
     readOnly: true
     optionalFlags:
@@ -576,7 +573,8 @@ missionDiscovery:
     rules:
       - '--reference <token> (contract v155) is exhaustive exact-reference mode, not ranked search: it requires --project-id resolving to exactly one readable project, accepts only --workspace-id, --limit (1-100, default 50) and --cursor, and rejects every ranked flag. It returns MissionReferenceSearchResponse { kind: mission_reference_search, version: 1, reference, projectId, workspaceId, results, nextCursor, complete }: every live mission in the project whose live objective instruction text contains the token case-sensitively as a whole token, in mission-id order, each with statusType and its matching objectives. Absence is established only after following nextCursor to a page with complete true; a cursor is bound to its reference and project. Ranked search (any version) never proves absence.'
       - '--status is a CSV of status TYPES (draft, next, execute, review, complete, blocked, cancelled), which are invariant across projects and workspaces; project-defined status names are not accepted'
-      - '--response-version 1 preserves the legacy array response; --response-version 2 returns SearchMissionsResponseV2; --response-version 3 returns SearchResponseV3 with v3 defaults (entityTypes all three, matchesPerResult 3). --entity-types, --objective-states, and --matches-per-result apply only to v3.'
+      - '--response-version defaults to 3, which returns SearchResponseV3 with v3 defaults (entityTypes all three, matchesPerResult 3); --response-version 2 returns SearchMissionsResponseV2. Any other value, including the retired 1 (the legacy array), is rejected with HTTP 400 invalid_input (ADR 0054). --entity-types, --objective-states, and --matches-per-result apply only to v3.'
+      - 'The former search-missions alias is retired (ADR 0054); the name answers 404 like any unknown subcommand.'
       - 'V2 date bounds are inclusive from and exclusive to; dateField is createdAt or updatedAt and defaults to updatedAt only when a bound is supplied'
       - 'V2 fans out only across authorizedWorkspaces in one organization; its even per-workspace quota is deterministic and never redistributes unused slots'
 
@@ -820,10 +818,6 @@ authAndDiscovery:
 
   discoverProject:
     description: 'Resolve project from CWD, explicit directory, or project identifier. CWD resolution uses the isPrimary project in .overlord/project.json when the checkout is linked to more than one project; the additive linkedProjects array lists every linked project.'
-    readOnly: true
-
-  listOrganizations:
-    description: 'List workspace (MVP: returns local instance workspace)'
     readOnly: true
 
 # Stable response shape versions

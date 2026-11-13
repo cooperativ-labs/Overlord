@@ -50,7 +50,7 @@ function b64url(value: string | Buffer): string {
   return Buffer.from(value).toString('base64url');
 }
 
-export function apnsJwt(config: ApnsConfig): string {
+function apnsJwt(config: ApnsConfig): string {
   const now = Math.floor(Date.now() / 1000);
   const signingInput = `${b64url(JSON.stringify({ alg: 'ES256', kid: config.keyId }))}.${b64url(
     JSON.stringify({ iss: config.teamId, iat: now })

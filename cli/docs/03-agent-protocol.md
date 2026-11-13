@@ -23,7 +23,6 @@ Requirements:
 
 - `auth-status`: report local runtime readiness and whether an interactive local identity or `USER_TOKEN` is being used, without printing token secrets.
 - `discover-project`: resolve project from current working directory, explicit directory, or project identifier. When `.overlord/project.json` lists multiple projects, the result is the `isPrimary` project plus additive `linkedProjects`.
-- `list-organizations`: deferred until multi-user/multi-org support; can return the local instance workspace in MVP.
 
 `USER_TOKEN` authentication is a modular expansion feature. When enabled, protocol requests may authenticate with a user-owned token that initially confers all permissions of the creating user. Future token scopes should restrict that user's permissions rather than grant additional access.
 
@@ -31,10 +30,9 @@ Requirements:
 
 Requirements:
 
-- `create`: create a draft mission/objective without attaching. `--inbox`
-  explicitly creates an account-owned unassigned capture; ordinary non-executing
-  create uses that fallback only after explicit and discovered project resolution
-  fail. `prompt` and `record-work` still require a resolved project.
+- `create`: create a draft mission/objective without attaching. `--unassigned-to-project`
+  explicitly creates an account-owned unassigned capture; otherwise `--project-id`
+  is required (the retired `--inbox` alias is rejected with 400). `prompt` and `record-work` still require a resolved project.
   `--auto-advance` / `--no-auto-advance` map to authoritative Run Queue
   membership (default off). `--objectives-json` items may set per-objective
   `autoAdvance`; the deprecated compatibility projection is derived from live
@@ -91,7 +89,8 @@ Requirements:
   perform entry operations.
 - `connect`: create a lightweight session key without full context. Optional
   `--objective-id` pins the session to that objective.
-- `search` (with `search-missions` retained as an alias): v1 remains compatible. `--response-version 2` returns the
+- `search`: `--response-version 3` (the default) returns `SearchResponseV3`; version 1
+  (the legacy array) and the `search-missions` alias are retired. `--response-version 2` returns the
   versioned cross-workspace envelope and accepts stable `--project-id` values,
   `--resource-key`, `--date-field createdAt|updatedAt|dueDatetime`, inclusive `--from`, and
   exclusive `--to`. `--response-version 3` returns `SearchResponseV3` with

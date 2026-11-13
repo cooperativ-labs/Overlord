@@ -1,3 +1,4 @@
+import type { ProjectTagDto } from '@overlord/contract';
 import { ChevronDown, Tag } from 'lucide-react';
 import { useMemo } from 'react';
 
@@ -12,8 +13,6 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { useProjectTags, useUpdateMission } from '@/lib/queries.ts';
 import { cn } from '@/lib/utils.ts';
-
-import type { ProjectTagDto } from '../../shared/contract.ts';
 
 import { MissionTagPill } from './MissionTagPill.tsx';
 

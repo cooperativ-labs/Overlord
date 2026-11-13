@@ -1,7 +1,7 @@
+import type { AgentCatalogDto, AgentLaunchConfigDto } from '@overlord/contract';
 import { Bot, ChevronDown, User } from 'lucide-react';
 import { useState } from 'react';
 
-import type { AgentCatalogDto, AgentLaunchConfigDto } from '../../../shared/contract.ts';
 import { getAgentIcon } from '../../lib/helpers/agent-icons.ts';
 import { cn } from '../../lib/utils.ts';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover.tsx';

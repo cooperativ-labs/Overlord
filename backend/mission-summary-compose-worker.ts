@@ -56,7 +56,7 @@ function bound(value: string, maxChars: number): string {
  * Builds the bounded model input (plan §4.5, §11 item 5). Only unresolved
  * deferred work enters the model context, and only by title.
  */
-export function toMissionSummaryInput(
+function toMissionSummaryInput(
   evidence: MissionSummaryEvidence,
   suggestions: ReturnType<typeof selectMissionSummarySuggestions>
 ): ComposeMissionSummaryInput {

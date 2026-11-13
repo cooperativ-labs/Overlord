@@ -1,5 +1,5 @@
-// The local-target capability contract (R2 of
-// planning/feature-plans/local-execution-target-capabilities.md §4).
+// The local-target capability contract (`LocalTargetCapabilities`; see the
+// Runner Layer in contract/architecture.md).
 //
 // All checkout-local work — Git, worktrees, file/metadata writes, resource
 // observations, agent launch — flows through this single interface. Callers
@@ -11,8 +11,8 @@
 // This module is intentionally dependency-free and lives in `@overlord/core` so
 // the REST API, Runner/CLI, and Desktop layers can all share one contract.
 // Payload types are defined natively here (not as REST DTOs from
-// `webapp/shared/contract.ts`) to keep the boundary clean; the backend
-// in-process provider adapts between these payloads and its DTOs.
+// `@overlord/contract`) to keep the boundary clean; the backend in-process
+// provider adapts between these payloads and its DTOs.
 import type { LocalTargetErrorCode, TargetObservationState } from '@overlord/contract';
 
 // REST DTOs generated from contract/api/openapi.yaml (ADR 0006).
@@ -159,13 +159,6 @@ export interface PrepareBranchResult {
   baseBranch: string;
   /** Worktree path when a worktree was prepared, else null (branch-only). */
   worktreePath: string | null;
-}
-
-export interface WorktreeInfo {
-  path: string;
-  branch: string | null;
-  dirty: boolean;
-  merged: boolean;
 }
 
 /** Raw worktree row returned by the local target before REST enrichment. */
@@ -597,15 +590,6 @@ export const LOCAL_TARGET_CAPABILITY_NAMES = [
   'sendLatchMessage',
   'doctor'
 ] as const satisfies readonly CapabilityName[];
-
-/**
- * `launchAgent` keeps its dedicated launch path (`ovld runner` claims and
- * spawns it directly). Excluding it from the queued capability vocabulary is
- * what stops a queued job and a launch from racing for one execution request.
- */
-export const QUEUEABLE_LOCAL_TARGET_CAPABILITY_NAMES = LOCAL_TARGET_CAPABILITY_NAMES.filter(
-  (name): name is QueueableCapabilityName => name !== 'launchAgent'
-);
 
 /** Every capability that may be carried over the runner queue. */
 export type QueueableCapabilityName = Exclude<CapabilityName, 'launchAgent'>;

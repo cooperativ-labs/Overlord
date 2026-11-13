@@ -1,4 +1,4 @@
-import type { RunQueueEntryState, RunQueueWaitingReason } from '../../../shared/contract.ts';
+import type { RunQueueEntryState, RunQueueWaitingReason } from '@overlord/contract';
 
 /** Mirrors the planner's ceiling in `automations/src/objective-manager/rules.ts`. */
 export const MAX_DISPATCH_ATTEMPTS = 3;

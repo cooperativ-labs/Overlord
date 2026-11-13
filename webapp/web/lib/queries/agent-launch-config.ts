@@ -1,5 +1,3 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-
 import type {
   LaunchObjectiveBody,
   LaunchPreferenceDto,
@@ -10,7 +8,9 @@ import type {
   UpdateLaunchSessionDefaultsBody,
   UpdateProjectExecutionTargetBody,
   UpdateTerminalProfileBody
-} from '../../../shared/contract.ts';
+} from '@overlord/contract';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+
 import { api } from '../api.ts';
 import { invalidateNonEverhourQueries as invalidateAll } from '../query-invalidation.ts';
 import { keys } from '../query-keys.ts';

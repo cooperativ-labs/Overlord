@@ -20,7 +20,6 @@
   },
   "include": [
     "web",
-    "shared",
     "scripts/test-dom.ts",
     "vite.config.ts",
     "vercel.ts",

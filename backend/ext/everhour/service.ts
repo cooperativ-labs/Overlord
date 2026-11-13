@@ -1,6 +1,5 @@
 import type {
   CreateEverhourTimeBody,
-  EverhourIntegrationDto,
   EverhourTimerDto,
   EverhourTimeRecordDto,
   MissionEverhourStateDto,
@@ -10,7 +9,6 @@ import type {
 } from '@overlord/contract/ext/everhour';
 import type { DatabaseClient } from '@overlord/database';
 
-import { ChatError } from '../../../packages/core/service/chat/store.ts';
 import {
   type ExternalAccount,
   type ProfileConnections,
@@ -383,56 +381,6 @@ export function createEverhourService(connections: () => ProfileConnections) {
     } catch (err) {
       throw accessErrorToApiError(err);
     }
-  }
-
-  async function getEverhourIntegration(): Promise<EverhourIntegrationDto> {
-    const connection = await readActorUserConnection();
-    if (!connection || connection.state !== 'connected')
-      return { connected: false, accountName: null };
-    // Validate lazily: a stored-but-now-invalid key still reports connected so the
-    // UI shows the disconnect affordance; the name is best-effort.
-    let apiKey: string | null;
-    try {
-      const found = await connections().credential(connection.owner_profile_id, 'everhour');
-      apiKey = found?.credential.kind === 'api_key' ? found.credential.apiKey : null;
-    } catch (err) {
-      if (!(err instanceof ConnectionAccessError)) throw err;
-      // The key it was sealed with is not configured: still connected, nothing erased.
-      if (err.code === 'unavailable')
-        return { connected: true, accountName: connection.external_account_label };
-      // Unreadable: the module erased it, so the user must reconnect.
-      return { connected: false, accountName: null };
-    }
-    if (!apiKey) return { connected: false, accountName: null };
-    try {
-      const user = await everhourFetch<EverhourUser>(apiKey, '/users/me');
-      return { connected: true, accountName: user?.name ?? connection.external_account_label };
-    } catch {
-      return { connected: true, accountName: connection.external_account_label };
-    }
-  }
-
-  /** Validate + store the acting user's personal API key. Rejects keys Everhour won't accept. */
-  async function setEverhourApiKey(rawKey: string): Promise<EverhourIntegrationDto> {
-    const apiKey = rawKey.trim();
-    if (!apiKey) throw new ApiError(400, 'Enter an Everhour API key.');
-    // Validate before persisting so we never store a key that cannot authenticate.
-    const user = await everhourFetch<EverhourUser>(apiKey, '/users/me');
-    const profileId = await requireActorProfileId();
-    try {
-      await connections().storeApiKey(profileId, 'everhour', apiKey, everhourAccount(user));
-    } catch (err) {
-      if (err instanceof ChatError && err.code === 'provider_not_ready')
-        throw new ApiError(503, ENCRYPTION_NOT_CONFIGURED);
-      throw err;
-    }
-    return { connected: true, accountName: user?.name ?? null };
-  }
-
-  async function clearEverhourApiKey(): Promise<EverhourIntegrationDto> {
-    const profileId = await requireActorProfileId();
-    await connections().disconnectProvider(profileId, 'everhour');
-    return { connected: false, accountName: null };
   }
 
   // ---- project linking ------------------------------------------------------
@@ -1254,9 +1202,6 @@ export function createEverhourService(connections: () => ProfileConnections) {
   }
 
   return {
-    getEverhourIntegration,
-    setEverhourApiKey,
-    clearEverhourApiKey,
     getProjectEverhourLink,
     linkProjectEverhour,
     getMissionEverhourState,

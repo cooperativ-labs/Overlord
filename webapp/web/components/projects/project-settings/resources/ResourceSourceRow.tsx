@@ -1,3 +1,9 @@
+import type {
+  AgentCatalogAgentDto,
+  AgentLaunchConfigDto,
+  ProjectResourceDto,
+  ProjectResourceSourceDto
+} from '@overlord/contract';
 import { Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
@@ -17,13 +23,6 @@ import {
   useDeleteProjectResourceSource,
   useUpdateProjectResourceSource
 } from '@/lib/queries';
-
-import type {
-  AgentCatalogAgentDto,
-  AgentLaunchConfigDto,
-  ProjectResourceDto,
-  ProjectResourceSourceDto
-} from '../../../../../shared/contract.ts';
 
 /**
  * One source of a resource, presented as an accordion row: the collapsed

@@ -53,7 +53,3 @@ export function matchOperation(method: string, requestPath: string): ApiOperatio
   }
   return null;
 }
-
-export function allOperations(): readonly ApiOperation[] {
-  return operations;
-}

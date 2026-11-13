@@ -438,11 +438,6 @@ export function initQuickTaskWindow({
   registerQuickTaskHotkey({ preloadPath });
 }
 
-/** True once the quick-task renderer has been created for this profile. */
-export function isQuickTaskWindowCreated(): boolean {
-  return quickWindow !== null && !quickWindow.isDestroyed();
-}
-
 /**
  * Point the quick-task window at the active backend. When the backend profile
  * changes the session partition changes with it; a BrowserWindow's partition is

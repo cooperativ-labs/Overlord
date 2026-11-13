@@ -1,7 +1,7 @@
+import type { ExecutionRequestDto, ObjectiveDto } from '@overlord/contract';
 import { Check, CheckCircle2, ChevronDown, Copy, Loader2, MoreVertical, Play } from 'lucide-react';
 import { useState } from 'react';
 
-import type { ExecutionRequestDto, ObjectiveDto } from '../../../shared/contract.ts';
 import { api } from '../../lib/api.ts';
 import { useCopyToClipboard } from '../../lib/hooks/use-copy-to-clipboard.ts';
 import { objectiveResourceConnection } from '../../lib/project-resources.ts';

@@ -1,3 +1,4 @@
+import type { WorkspaceExecutionTargetDto } from '@overlord/contract';
 import { Trash2 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -28,8 +29,6 @@ import {
   useUpdateWorkspaceExecutionTargetStatus,
   useWorkspaceExecutionTargets
 } from '@/lib/queries';
-
-import type { WorkspaceExecutionTargetDto } from '../../../../shared/contract.ts';
 
 function targetStatusLabel(status: string, reachable: boolean): string {
   if (status !== 'active') return status;

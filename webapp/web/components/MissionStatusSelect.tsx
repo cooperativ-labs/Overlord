@@ -1,3 +1,5 @@
+import type { ProjectStatusDto } from '@overlord/contract';
+
 import {
   Select,
   SelectContent,
@@ -6,8 +8,6 @@ import {
   SelectValue
 } from '@/components/ui/select';
 import { useUpdateMission } from '@/lib/queries.ts';
-
-import type { ProjectStatusDto } from '../../shared/contract.ts';
 
 type MissionStatusSelectProps = {
   missionId: string;

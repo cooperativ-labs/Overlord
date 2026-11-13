@@ -29,7 +29,7 @@ export function readConfiguredPublicBackendUrls(): string[] {
   return origins;
 }
 
-export function resolveLoopbackAuthBaseUrl(): string {
+function resolveLoopbackAuthBaseUrl(): string {
   const authBaseHost =
     process.env.OVERLORD_WEB_HOST && process.env.OVERLORD_WEB_HOST !== '0.0.0.0'
       ? process.env.OVERLORD_WEB_HOST

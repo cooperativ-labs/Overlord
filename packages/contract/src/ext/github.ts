@@ -6,7 +6,6 @@ import type { GitHubRepoSummaryDto } from '../generated/api.js';
 
 // REST DTOs generated from contract/api/openapi.yaml (ADR 0006).
 export type {
-  BeginGitHubUserAuthorizationBody,
   CreateGitHubPullRequestBody,
   GitHubInstallUrlDto,
   GitHubIntegrationDto,
@@ -15,9 +14,6 @@ export type {
   GitHubRepositoryOwnerList,
   GitHubRepoSummaryDto,
   GitHubRepoSummaryList,
-  GitHubUserAccountDto,
-  GitHubUserAuthorizationDto,
-  GitHubUserConnectionDto,
   LinkProjectGitHubBody,
   ProjectGitHubLinkDto
 } from '../generated/api.js';

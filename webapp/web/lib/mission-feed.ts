@@ -3,7 +3,7 @@ import type {
   AgentSessionInputDto,
   HumanAgentRequestDto,
   MissionEventDto
-} from '../../shared/contract.ts';
+} from '@overlord/contract';
 
 import {
   type HarnessNotificationPresentation,

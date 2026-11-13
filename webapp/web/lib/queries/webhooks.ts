@@ -1,9 +1,9 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-
 import type {
   CreateWebhookSubscriptionBody,
   UpdateWebhookSubscriptionBody
-} from '../../../shared/contract.ts';
+} from '@overlord/contract';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+
 import { api } from '../api.ts';
 import { keys } from '../query-keys.ts';
 

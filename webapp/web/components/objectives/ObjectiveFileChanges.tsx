@@ -1,7 +1,7 @@
+import type { ObjectiveDto, ObjectiveFileChangesDto } from '@overlord/contract';
 import { TriangleAlert } from 'lucide-react';
 import type { ReactNode } from 'react';
 
-import type { ObjectiveDto, ObjectiveFileChangesDto } from '../../../shared/contract.ts';
 import {
   describeCaptureSession,
   summarizeObjectiveFileEvidence

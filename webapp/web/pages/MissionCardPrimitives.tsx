@@ -1,3 +1,4 @@
+import type { CreatedByKind, WorkspaceMemberDto } from '@overlord/contract';
 import { Check } from 'lucide-react';
 
 import { OriginSparklesIcon } from '@/components/OriginSparklesIcon.tsx';
@@ -8,8 +9,6 @@ import { formatOrdinalDayOfMonth } from '@/lib/due-datetime.ts';
 import { memberInitials, memberLabel } from '@/lib/member-display.ts';
 import { missionOriginLabel, objectiveOriginLabel } from '@/lib/mission-origin.ts';
 import { cn } from '@/lib/utils';
-
-import type { CreatedByKind, WorkspaceMemberDto } from '../../shared/contract.ts';
 
 export function MissionDueDateBadge({ dueDatetime }: { dueDatetime: string | null }) {
   if (!dueDatetime) return null;

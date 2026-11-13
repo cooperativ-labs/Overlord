@@ -1,5 +1,5 @@
 import { useParams } from '@tanstack/react-router';
-import { Plus, RefreshCw, TicketPlus } from 'lucide-react';
+import { RefreshCw, TicketPlus } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 import { NewMissionModal } from '@/components/NewMissionModal.tsx';

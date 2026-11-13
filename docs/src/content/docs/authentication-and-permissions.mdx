@@ -85,7 +85,7 @@ within the token's selected projects; other routes return 404:
 | Missions               | `POST /api/missions`; `GET /api/missions/:id`, `/api/missions/:id/objectives`, `/api/missions/:id/events`, `/api/missions/:id/deliveries`, `/api/missions/:id/artifacts`, `/api/missions/:id/context`, `/api/missions/:id/file-changes`                           |
 | Search and attachments | `GET /api/search/v3`, `/api/objectives/:id/attachments`, `/api/storage/attachments/:storageKey`                                                                                                                                                                   |
 | Changes and MCP        | `GET /api/stream`, `/realtime`, `/sync/changes`, `/mcp`; `POST /mcp`                                                                                                                                                                                              |
-| Protocol               | `POST /api/protocol/:subcommand` for `create` (selected project only), `load-context`, `search-missions` (`search`), `discover-project` (explicit `--project-id`), `statuses`, `list-deliveries`, `attachment-list`, `attachment-download-url`, and `auth-status` |
+| Protocol               | `POST /api/protocol/:subcommand` for `create` (selected project only), `load-context`, `search`, `discover-project` (explicit `--project-id`), `statuses`, `list-deliveries`, `attachment-list`, `attachment-download-url`, and `auth-status` |
 
 The preset cannot manage webhook subscriptions. Create subscriptions from the
 web app with an account that has the required webhook permission. It also cannot

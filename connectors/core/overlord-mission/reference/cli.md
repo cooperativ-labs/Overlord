@@ -180,7 +180,7 @@ When creating missions from within a repository:
 - Prefer `create` by default for draft mission creation.
 - Use `prompt` only when the user explicitly asks to start execution immediately.
 - `create`, `prompt`, and `record-work` require an explicit `--project-id`; use `discover-project` first when the project is known only from the checkout. They never infer a destination project.
-- Use `create --unassigned-to-project` only when the user deliberately requests an account-owned inbox capture. `--inbox` is a compatibility alias.
+- Use `create --unassigned-to-project` only when the user deliberately requests an account-owned inbox capture.
 - Create multiple missions when each prompt represents a different feature or goal.
 - Add objectives to the same mission when each prompt is a sequential step toward the same feature or goal; use `ovld protocol add-objectives --mission-id <mission_id> --objectives-json '[{"objective":"..."}]'`.
 - `create` and `prompt` require `--objectives-json` or `--objectives-file` with an ordered array of `{ "objective": "...", "title": "...", "autoAdvance": true }` objects. A single objective is just an array with one item. `--auto-advance` / `--no-auto-advance` map each opted-in item to authoritative Run Queue membership (default off).

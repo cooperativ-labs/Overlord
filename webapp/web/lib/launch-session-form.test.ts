@@ -1,7 +1,6 @@
+import type { LaunchSessionDefaultsDto, TerminalProfileDto } from '@overlord/contract';
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-
-import type { LaunchSessionDefaultsDto, TerminalProfileDto } from '../../shared/contract.ts';
 
 import {
   effectiveOpenViewer,

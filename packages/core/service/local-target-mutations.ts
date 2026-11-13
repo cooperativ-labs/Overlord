@@ -142,10 +142,6 @@ export function parseLocalTargetMutation(
   };
 }
 
-export function isLocalTargetMutationMetadata(metadataJson: string): boolean {
-  return parseLocalTargetMutation(metadataJson) !== null;
-}
-
 /** Rehydrate a stored envelope into a live {@link CapabilityResult}. */
 export function storedResultToCapabilityResult(
   target: TargetMetadata,

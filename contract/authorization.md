@@ -85,7 +85,7 @@ Does NOT own:
   `GET /api/objectives/:id/attachments`, `GET /api/storage/attachments/:storageKey` (the
   attachments bucket only), `GET /api/stream`, `GET /realtime`, `GET /sync/changes`,
   `GET /mcp`, `POST /mcp`, and `POST /api/protocol/:subcommand` for exactly `create`
-  (project form only), `load-context`, `search-missions` (alias `search`),
+  (project form only), `load-context`, `search`,
   `discover-project` (`--project-id` form only; the working-directory form and the
   `project_selection_required` choice list would name hidden projects), `statuses`,
   `list-deliveries`, `objective-changes`, `attachment-list`, `attachment-download-url`, and

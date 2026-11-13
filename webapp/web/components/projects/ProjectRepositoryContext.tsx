@@ -1,11 +1,11 @@
-import { useQuery } from '@tanstack/react-query';
-import { createContext, type ReactNode, useCallback, useContext, useMemo } from 'react';
-
 import type {
   EligibleExecutionTargetDto,
   ProjectRepositoryDto,
   ProjectResourceDto
-} from '../../../shared/contract.ts';
+} from '@overlord/contract';
+import { useQuery } from '@tanstack/react-query';
+import { createContext, type ReactNode, useCallback, useContext, useMemo } from 'react';
+
 import { hasDesktopLocalTargetBridge, invokeLocalTarget } from '../../lib/local-target-client.ts';
 import type { CapabilityResult, RepositoryTreeResult } from '../../lib/local-target-types.ts';
 import {

@@ -62,7 +62,7 @@ Both summarization automations and `compose-delivery` return `null` when `GEMINI
 Example caller wiring:
 
 ```ts
-import { generateAndSetObjectiveTitle } from '../automations/index.js';
+import { generateAndSetObjectiveTitle } from '@overlord/automations';
 
 void generateAndSetObjectiveTitle({
   store: {

@@ -1,3 +1,4 @@
+import type { ObjectiveState } from '@overlord/contract';
 import {
   Check,
   CheckCircle2,
@@ -11,7 +12,6 @@ import {
 } from 'lucide-react';
 import { useState } from 'react';
 
-import type { ObjectiveState } from '../../../shared/contract.ts';
 import { useCopyToClipboard } from '../../lib/hooks/use-copy-to-clipboard.ts';
 import { useDeleteObjective, useUpdateObjective } from '../../lib/queries.ts';
 import { Button } from '../ui/button.tsx';

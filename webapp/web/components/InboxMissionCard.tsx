@@ -1,4 +1,4 @@
-import type { InboxItemDto, MissionDetailDto } from '../../shared/contract.ts';
+import type { InboxItemDto, MissionDetailDto } from '@overlord/contract';
 
 import { PromotedInboxMissionCard } from './inbox-mission-card/PromotedInboxMissionCard.tsx';
 import { UnassignedInboxMissionCard } from './inbox-mission-card/UnassignedInboxMissionCard.tsx';

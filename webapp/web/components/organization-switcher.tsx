@@ -1,3 +1,4 @@
+import type { OrganizationDto } from '@overlord/contract';
 import { Check, ChevronsUpDown, Globe, Plus, Settings } from 'lucide-react';
 import { useState } from 'react';
 
@@ -22,8 +23,6 @@ import { WorkspaceCreatorModal } from '@/components/workspaces/WorkspaceCreatorM
 import { useOrganizationAdminStatus } from '@/lib/hooks/use-organization-admin-status';
 import { useActivateOrganization, useMeta, useOrganizations } from '@/lib/queries';
 import { useAuthenticatedMediaUrl } from '@/lib/use-authenticated-media-url.ts';
-
-import type { OrganizationDto } from '../../shared/contract.ts';
 
 function OrganizationGlyph({ organization }: { organization: OrganizationDto | null }) {
   const initial = organization?.name.trim().charAt(0).toUpperCase();

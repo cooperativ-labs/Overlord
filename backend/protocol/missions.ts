@@ -11,8 +11,7 @@ import {
   loadMissionContext,
   protocolCreate,
   protocolPrompt,
-  recordWork,
-  searchMissions
+  recordWork
 } from '../../packages/core/service/protocol.ts';
 import { hashSessionKey } from '../../packages/core/service/util.ts';
 import { getActiveTokenProjectIds, requireDatabaseClient, serviceDatabaseClient } from '../db.ts';
@@ -435,8 +434,9 @@ export const missionSubcommands: SubcommandTable = {
     handler: async (ctx, body) => {
       const objectives = objectiveInputs(body);
       const projectId = strFlag(body, '--project-id');
-      const unassignedToProject =
-        boolFlag(body, '--unassigned-to-project') || boolFlag(body, '--inbox');
+      // `--inbox` was the retired compatibility alias (ADR 0054).
+      rejectRemovedProtocolFlags(body, ['--inbox']);
+      const unassignedToProject = boolFlag(body, '--unassigned-to-project');
       if (unassignedToProject) {
         if (getActiveTokenProjectIds() !== null) throw new ApiError(404, 'Not found');
         if (projectId) {
@@ -561,9 +561,10 @@ export const missionSubcommands: SubcommandTable = {
     }
   },
 
-  'search-missions': {
+  search: {
+    // Not enforced at dispatch: v2/v3 and --reference authorize per workspace or project.
     permission: PERMISSIONS.MISSION_READ,
-    handler: async (ctx, body) => {
+    handler: async (_ctx, body) => {
       if (hasFlag(body, '--reference')) {
         const reference = strFlag(body, '--reference');
         if (!reference) throw new ApiError(400, '--reference requires a value');
@@ -572,8 +573,19 @@ export const missionSubcommands: SubcommandTable = {
       if (hasFlag(body, '--cursor')) {
         throw new ApiError(400, '--cursor applies only to an exact --reference lookup');
       }
-      const responseVersion = intFlag(body, '--response-version');
-      const version = responseVersion === 3 ? 3 : responseVersion === 2 ? 2 : 1;
+      // Version 1 (the legacy array) is retired (ADR 0054); omitted means v3.
+      const responseVersion = hasFlag(body, '--response-version')
+        ? intFlag(body, '--response-version')
+        : 3;
+      if (responseVersion !== 2 && responseVersion !== 3) {
+        throw new ApiError(
+          400,
+          '--response-version must be 2 or 3 (version 1 is retired)',
+          undefined,
+          'invalid_input'
+        );
+      }
+      const version: 2 | 3 = responseVersion;
       // Flags map onto the REST query names so every surface shares one parser
       // and its validation. `--project-id` is a human project reference resolved
       // below, so it never reaches the UUID-only `projectIds` check.
@@ -594,7 +606,6 @@ export const missionSubcommands: SubcommandTable = {
       );
       const projectRef = strFlag(body, '--project-id') ?? null;
       const limit = options.limit ?? 25;
-      if (version === 1) return searchMissions({ ctx, ...options, projectId: projectRef, limit });
 
       // V2/V3 are organization-bounded aggregate reads. They must not inherit the
       // one workspace selected for ordinary protocol entity operations.

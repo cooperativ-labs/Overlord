@@ -77,45 +77,6 @@ export function requireFlag(flags: Map<string, string | true>, name: string): st
   return value;
 }
 
-export async function readFlagOrFile({
-  flags,
-  flagName,
-  fileFlagName,
-  stdin
-}: {
-  flags: Map<string, string | true>;
-  flagName: string;
-  fileFlagName: string;
-  stdin?: string;
-}): Promise<string | undefined> {
-  const direct = flagValue(flags, flagName);
-  if (direct) return direct;
-
-  const filePath = flagValue(flags, fileFlagName);
-  if (filePath === '-') {
-    if (stdin !== undefined) {
-      return stdin;
-    }
-    const { readFileSync } = await import('node:fs');
-    return readFileSync(0, 'utf8');
-  }
-  if (filePath) {
-    const { readFileSync } = await import('node:fs');
-    return readFileSync(filePath, 'utf8');
-  }
-
-  return undefined;
-}
-
-export function parseJsonFlag(
-  flags: Map<string, string | true>,
-  flagName: string
-): Record<string, unknown> | undefined {
-  const raw = flagValue(flags, flagName);
-  if (!raw) return undefined;
-  return JSON.parse(raw) as Record<string, unknown>;
-}
-
 /** Inline `--*-json` values larger than this are rejected; use the paired `--*-file -` flag. */
 export const MAX_INLINE_JSON_CHARS = 8_192;
 
@@ -140,12 +101,4 @@ export function rejectOversizedInlineJson({ flags }: { flags: Map<string, string
         'Keep short values like --summary inline.'
     });
   }
-}
-
-export function parseCsvFlag(value: string | undefined): string[] | undefined {
-  if (!value) return undefined;
-  return value
-    .split(',')
-    .map(part => part.trim())
-    .filter(Boolean);
 }

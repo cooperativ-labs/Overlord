@@ -1,3 +1,5 @@
+import type { WorkspaceMemberDto } from '@overlord/contract';
+
 import { AuthenticatedAvatarImage, Avatar, AvatarFallback } from '@/components/ui/avatar';
 import {
   Select,
@@ -8,8 +10,6 @@ import {
 } from '@/components/ui/select';
 import { memberInitials, memberLabel } from '@/lib/member-display.ts';
 import { useUpdateMission, useWorkspaceMembers } from '@/lib/queries.ts';
-
-import type { WorkspaceMemberDto } from '../../shared/contract.ts';
 
 const UNASSIGNED_VALUE = '__unassigned__';
 

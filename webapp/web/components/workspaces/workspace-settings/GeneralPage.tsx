@@ -1,3 +1,4 @@
+import type { WorkspaceDto } from '@overlord/contract';
 import { useEffect, useState } from 'react';
 
 import { Input } from '@/components/ui/input';
@@ -8,8 +9,6 @@ import { Separator } from '@/components/ui/separator';
 import { Switch } from '@/components/ui/switch';
 import { useWorkspaceOperatorRole } from '@/lib/hooks/use-workspace-operator-role';
 import { useMeta, useUpdateWorkspace } from '@/lib/queries';
-
-import type { WorkspaceDto } from '../../../../shared/contract.ts';
 
 type GeneralPageProps = {
   open: boolean;

@@ -1,4 +1,4 @@
-import { type Permission, PERMISSIONS } from '@overlord/auth';
+import type { Permission } from '@overlord/auth';
 import express, { type NextFunction, type Request, type Response } from 'express';
 import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -84,29 +84,13 @@ test.after(() => {
   rmSync(tempDir, { recursive: true, force: true });
 });
 
-test('GET /ext/everhour/user-connection does not require a workspace permission', async () => {
-  setActiveTokenAuth({
-    workspaceUserId: operatorWorkspaceUserId,
-    tokenId: 'tok-read-test',
-    scopeGrants: ['project:read', 'mission:read']
-  });
-
-  await withEverhourServer(async baseUrl => {
-    const response = await fetch(`${baseUrl}/ext/everhour/user-connection`);
-    assert.equal(response.status, 200);
-    const body = (await response.json()) as { connected: boolean };
-    assert.equal(body.connected, false);
-  });
-});
-
-test('GET /ext/everhour/integration is a deprecated alias of user-connection', async () => {
+test('retired connection aliases are not served', async () => {
   setActiveWorkspaceUser(operatorWorkspaceUserId);
 
   await withEverhourServer(async baseUrl => {
-    const response = await fetch(`${baseUrl}/ext/everhour/integration`);
-    assert.equal(response.status, 200);
-    const body = (await response.json()) as { connected: boolean };
-    assert.equal(body.connected, false);
+    for (const path of ['/ext/everhour/user-connection', '/ext/everhour/integration']) {
+      assert.equal((await fetch(`${baseUrl}${path}`)).status, 404);
+    }
   });
 });
 

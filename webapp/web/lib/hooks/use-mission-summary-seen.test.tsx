@@ -1,10 +1,10 @@
+import type { MissionSummaryResponse } from '@overlord/contract';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, renderHook } from '@testing-library/react';
 import assert from 'node:assert/strict';
 import { afterEach, it, mock } from 'node:test';
 import type { ReactNode } from 'react';
 
-import type { MissionSummaryResponse } from '../../../shared/contract.ts';
 import { api } from '../api.ts';
 
 import {

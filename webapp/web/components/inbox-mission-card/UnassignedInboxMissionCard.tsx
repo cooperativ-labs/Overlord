@@ -1,4 +1,4 @@
-import type { InboxItemDto, MissionDetailDto } from '../../../shared/contract.ts';
+import type { InboxItemDto, MissionDetailDto } from '@overlord/contract';
 
 import { InboxCardShell } from './InboxCardShell.tsx';
 import { useUnassignedInboxCard } from './use-unassigned-inbox-card.ts';

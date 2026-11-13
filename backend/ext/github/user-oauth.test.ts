@@ -28,13 +28,17 @@ const { githubConnectionProvider } = await import('./connection-provider.ts');
 const { createGitHubUserOAuth } = await import('./user-oauth.ts');
 const githubProfiles = profileConnections(requireDatabaseClient(), [githubConnectionProvider()]);
 const githubUserOAuth = createGitHubUserOAuth(() => githubProfiles);
-const {
-  beginGitHubUserAuthorization,
-  completeGitHubUserAuthorization,
-  disconnectGitHubUser,
-  getGitHubUserConnection,
-  listGitHubRepositoryOwners
-} = githubUserOAuth;
+const { listGitHubRepositoryOwners } = githubUserOAuth;
+
+// Sign-in runs through the account-connections module, the only connection surface
+// since the `/ext/github/user-connection` aliases were retired (ADR 0054).
+async function beginAuthorization(profileId: string, returnUrl: string | null = null) {
+  const started = await githubProfiles.beginOAuth(profileId, 'github', {
+    returnTo: returnUrl?.startsWith('overlord:') ? 'mobile' : 'web',
+    returnUrl
+  });
+  return started.authorizeUrl;
+}
 
 const originalFetch = globalThis.fetch;
 
@@ -58,18 +62,10 @@ test.after(() => {
 test('stores encrypted user OAuth credentials and returns only eligible repository owners', async () => {
   const db = requireDatabaseClient();
 
-  const authorization = await withRequestContextAsync(async () => {
-    setActiveProfileId('operator-user');
-    assert.deepEqual(await getGitHubUserConnection(), {
-      configured: true,
-      connected: false,
-      account: null,
-      scopes: []
-    });
-    return beginGitHubUserAuthorization({ returnTo: 'overlord://github/callback' }, []);
-  });
-
-  const authorizationUrl = new URL(authorization.authorizationUrl);
+  assert.equal(await githubProfiles.find('operator-user', 'github'), null);
+  const authorizationUrl = new URL(
+    await beginAuthorization('operator-user', 'overlord://github/callback')
+  );
   assert.equal(authorizationUrl.origin, 'https://github.com');
   assert.equal(authorizationUrl.searchParams.get('client_id'), 'shared-oauth-client');
   assert.equal(authorizationUrl.searchParams.get('scope'), 'repo read:org');
@@ -114,21 +110,17 @@ test('stores encrypted user OAuth credentials and returns only eligible reposito
     throw new Error(`Unexpected GitHub request: ${url}`);
   };
 
-  const completed = await completeGitHubUserAuthorization({
+  const completed = await githubProfiles.completeOAuth('github', {
     code: 'one-time-code',
     state
   });
+  assert.equal(completed.status, 'connected');
   assert.equal(completed.returnUrl, 'overlord://github/callback');
-  assert.deepEqual(completed.connection, {
-    configured: true,
-    connected: true,
-    account: {
-      id: '42',
-      login: 'octocat',
-      avatarUrl: 'https://avatars.example/octocat'
-    },
-    scopes: ['repo', 'read:org']
-  });
+  const connected = await githubProfiles.find('operator-user', 'github');
+  assert.equal(connected?.state, 'connected');
+  assert.equal(connected?.external_account_id, '42');
+  assert.equal(connected?.external_account_label, 'octocat');
+  assert.equal(connected?.external_account_avatar_url, 'https://avatars.example/octocat');
   assert.doesNotMatch(JSON.stringify(completed), /github-(access|refresh)-secret/);
   assert.equal(exchangeBody.client_secret, 'shared-oauth-secret');
   assert.ok(exchangeBody.code_verifier);
@@ -150,9 +142,9 @@ test('stores encrypted user OAuth credentials and returns only eligible reposito
   assert.equal(stored?.organization_id, null);
   assert.doesNotMatch(JSON.stringify(stored), /github-(access|refresh)-secret/);
 
-  await assert.rejects(
-    completeGitHubUserAuthorization({ code: 'replayed-code', state }),
-    /expired or was already used/
+  assert.equal(
+    (await githubProfiles.completeOAuth('github', { code: 'replayed-code', state })).status,
+    'expired'
   );
 
   const observedAuthorizations: string[] = [];
@@ -233,11 +225,8 @@ test('stores encrypted user OAuth credentials and returns only eligible reposito
     revocationUrl = String(input);
     return new Response(null, { status: 204 });
   };
-  const disconnected = await withRequestContextAsync(async () => {
-    setActiveProfileId('operator-user');
-    return disconnectGitHubUser();
-  });
-  assert.equal(disconnected.connected, false);
+  await githubProfiles.disconnectProvider('operator-user', 'github');
+  assert.equal(await githubProfiles.find('operator-user', 'github'), null);
   assert.equal(revocationUrl, 'https://api.github.com/applications/shared-oauth-client/token');
   const revoked = await db.get<{
     state: string;
@@ -254,11 +243,7 @@ test('stores encrypted user OAuth credentials and returns only eligible reposito
 });
 
 async function connectAs(profileId: string, user: { id: number; login: string }) {
-  const authorization = await withRequestContextAsync(async () => {
-    setActiveProfileId(profileId);
-    return beginGitHubUserAuthorization({}, []);
-  });
-  const state = new URL(authorization.authorizationUrl).searchParams.get('state')!;
+  const state = new URL(await beginAuthorization(profileId)).searchParams.get('state')!;
   globalThis.fetch = async input => {
     const url = String(input);
     if (url === 'https://github.com/login/oauth/access_token')
@@ -266,7 +251,10 @@ async function connectAs(profileId: string, user: { id: number; login: string })
     if (url === 'https://api.github.com/user') return Response.json({ ...user, avatar_url: null });
     throw new Error(`Unexpected GitHub request: ${url}`);
   };
-  await completeGitHubUserAuthorization({ code: 'code', state });
+  assert.equal(
+    (await githubProfiles.completeOAuth('github', { code: 'code', state })).status,
+    'connected'
+  );
 }
 
 test('a token GitHub rejects twice, or a changed identity, requires reconnecting', async () => {
@@ -289,12 +277,6 @@ test('a token GitHub rejects twice, or a changed identity, requires reconnecting
     { ...rejected },
     { state: 'reauthorization_required', credential_ciphertext: null }
   );
-  const status = await withRequestContextAsync(async () => {
-    setActiveProfileId('operator-user');
-    return getGitHubUserConnection();
-  });
-  // The legacy alias shows the existing reconnect flow.
-  assert.deepEqual(status, { configured: true, connected: false, account: null, scopes: [] });
 
   // Reconnecting reuses the row; then GitHub reports another account for the token.
   await connectAs('operator-user', { id: 501, login: 'first' });
@@ -316,29 +298,5 @@ test('a token GitHub rejects twice, or a changed identity, requires reconnecting
   assert.deepEqual(
     { ...changed },
     { state: 'reauthorization_required', last_error_code: 'identity_changed' }
-  );
-});
-
-test('legacy alias sign-in errors keep their messages', async () => {
-  await assert.rejects(
-    completeGitHubUserAuthorization({ code: 'c', state: 'x'.repeat(43) }),
-    /expired or was already used/
-  );
-  const authorization = await withRequestContextAsync(async () => {
-    setActiveProfileId('operator-user');
-    return beginGitHubUserAuthorization({ returnTo: 'overlord://github/callback' }, []);
-  });
-  const state = new URL(authorization.authorizationUrl).searchParams.get('state')!;
-  globalThis.fetch = async () => Response.json({ access_token: 'scopeless', scope: 'repo' });
-  await assert.rejects(
-    completeGitHubUserAuthorization({ code: 'c', state }),
-    /did not grant private-repository and organization access/
-  );
-  await assert.rejects(
-    withRequestContextAsync(async () => {
-      setActiveProfileId('operator-user');
-      return beginGitHubUserAuthorization({ returnTo: 'https://evil.test/' }, []);
-    }),
-    /not an allowed Overlord destination/
   );
 });

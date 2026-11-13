@@ -5,9 +5,9 @@ import {
   type UniqueIdentifier
 } from '@dnd-kit/core';
 import { arrayMove } from '@dnd-kit/sortable';
+import type { ProjectStatusDto } from '@overlord/contract';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import type { ProjectStatusDto } from '../../shared/contract.ts';
 import { useReorderBoardColumn } from '../lib/queries.ts';
 
 import { type BoardDndResult, type ColumnMap, columnMapsEqual } from './board-shared.ts';

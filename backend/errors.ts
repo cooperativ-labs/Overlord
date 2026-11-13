@@ -65,7 +65,7 @@ export function apiErrorFromBodyParser(error: unknown): ApiError | null {
 }
 
 /** Map better-sqlite3 constraint failures to actionable API errors. */
-export function apiErrorFromDatabaseError(error: unknown): ApiError | null {
+function apiErrorFromDatabaseError(error: unknown): ApiError | null {
   if (!error || typeof error !== 'object') return null;
   const { code, message = '' } = error as SqliteErrorLike;
   if (!code?.startsWith('SQLITE_CONSTRAINT')) return null;

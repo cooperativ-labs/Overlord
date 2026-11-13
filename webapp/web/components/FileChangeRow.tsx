@@ -1,4 +1,5 @@
-import type { FileChangeDto } from '../../shared/contract.ts';
+import type { FileChangeDto } from '@overlord/contract';
+
 import { formatTimestamp } from '../lib/format-date.ts';
 import { buildEditorFileHref, getEditorSchemeLabel } from '../lib/helpers/editor-scheme.ts';
 import {

@@ -1,7 +1,7 @@
+import type { AgentCatalogDto, AgentLaunchConfigDto } from '@overlord/contract';
 import { Check, Loader2, User } from 'lucide-react';
 import { useCallback, useState } from 'react';
 
-import type { AgentCatalogDto, AgentLaunchConfigDto } from '../../../shared/contract.ts';
 import { cn } from '../../lib/utils.ts';
 
 import { AgentIcon } from './AgentIcon.tsx';

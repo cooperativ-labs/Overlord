@@ -1,7 +1,4 @@
-import type {
-  DeliveryDeferredWorkItemDto,
-  ResolveHumanActionBody
-} from '../../../shared/contract.ts';
+import type { DeliveryDeferredWorkItemDto, ResolveHumanActionBody } from '@overlord/contract';
 
 import { request } from './request.ts';
 

@@ -10,7 +10,6 @@ export {
   createAuth,
   DEFAULT_USER_TOKEN_TTL_DAYS,
   generateUserTokenSecret,
-  getActorForSession,
   getActorForToken,
   githubOAuthConfigFromEnv,
   hashUserTokenSecret,
@@ -24,7 +23,6 @@ export type {
   Actor,
   AuthorizationProvider,
   AuthorizationResult,
-  KnownPermission,
   Permission,
   RoleDefinition,
   TokenScope

@@ -1,6 +1,6 @@
+import type { AgentLaunchConfigDto, ObjectiveDto } from '@overlord/contract';
 import { useCallback, useMemo } from 'react';
 
-import type { AgentLaunchConfigDto, ObjectiveDto } from '../../../shared/contract.ts';
 import {
   useAgentCatalog,
   useLaunchPreference,

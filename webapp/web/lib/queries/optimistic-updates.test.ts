@@ -1,8 +1,8 @@
+import type { MissionDetailDto, MissionDto } from '@overlord/contract';
 import type { QueryClient } from '@tanstack/react-query';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import type { MissionDetailDto, MissionDto } from '../../../shared/contract.ts';
 import { keys } from '../query-keys.ts';
 
 import {

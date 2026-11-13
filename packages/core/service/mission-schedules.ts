@@ -1,4 +1,5 @@
 import { generateDateFromSchedule, type ScheduleLike } from '@overlord/automations';
+import type { ScheduleWeekDayDto } from '@overlord/contract';
 import type { DatabaseClient } from '@overlord/database';
 
 import { recordChange } from './change-feed.js';
@@ -7,10 +8,7 @@ import { resolveMissionId } from './context.js';
 import { ServiceError } from './errors.js';
 import { newId, nowIso } from './util.js';
 
-export type ScheduleWeekDay = {
-  dayNum: number;
-  times: string[];
-};
+export type ScheduleWeekDay = ScheduleWeekDayDto;
 
 export type ScheduleInput = {
   name?: string | null;
@@ -357,35 +355,6 @@ export async function clearMissionSchedule({
       ]);
     }
   });
-}
-
-/** Compute-only: the next due datetime for a mission's linked schedule, without persisting it. */
-export async function getNextScheduledDueDatetime({
-  ctx,
-  missionId
-}: {
-  ctx: ServiceContext;
-  missionId: string;
-}): Promise<string> {
-  const resolved = await resolveMissionId(ctx, missionId);
-  const mission = await ctx.db.get<{ schedule_id: string | null; due_datetime: string | null }>(
-    `SELECT schedule_id, due_datetime FROM missions WHERE id = ? AND workspace_id = ?`,
-    [resolved.id, ctx.workspace.id]
-  );
-
-  if (!mission?.schedule_id) {
-    throw new ServiceError('Mission has no schedule', 'validation_error', 409);
-  }
-
-  const scheduleRow = await getScheduleRow(ctx.db, ctx.workspace.id, mission.schedule_id);
-  if (!scheduleRow) {
-    throw new ServiceError('Schedule not found', 'not_found', 404);
-  }
-
-  return previewScheduleDueDatetime(
-    scheduleInputFromSummary(toScheduleSummary(scheduleRow)),
-    mission.due_datetime
-  );
 }
 
 /** The editable input a stored schedule was saved from, for recomputing its next due date. */

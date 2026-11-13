@@ -3,7 +3,6 @@ import type {
   GitHubInstallUrlDto,
   GitHubIntegrationDto,
   GitHubPullRequestDto,
-  GitHubRepoSummaryDto,
   LinkProjectGitHubBody,
   ProjectGitHubLinkDto
 } from '@overlord/contract/ext/github';
@@ -25,11 +24,6 @@ export const githubApi = {
     request<GitHubIntegrationDto>(
       'DELETE',
       `/ext/github/integration?workspaceId=${encodeURIComponent(workspaceId)}`
-    ),
-  listGitHubRepos: (query: string | undefined, workspaceId: string) =>
-    request<GitHubRepoSummaryDto[]>(
-      'GET',
-      `/ext/github/repos?workspaceId=${encodeURIComponent(workspaceId)}${query ? `&q=${encodeURIComponent(query)}` : ''}`
     ),
   getProjectGitHubLink: (projectId: string) =>
     request<ProjectGitHubLinkDto>('GET', `/ext/github/projects/${projectId}/link`),

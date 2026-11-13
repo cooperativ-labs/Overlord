@@ -9,7 +9,7 @@ import type {
   WorkspaceExecutionTargetDto,
   WorkspaceInvitationDto,
   WorkspaceMemberDto
-} from '../../../shared/contract.ts';
+} from '@overlord/contract';
 
 import { request, requestDownload } from './request.ts';
 

@@ -5,7 +5,7 @@ const QUEUE_CHANNEL = 'overlord_execution_request_queue';
 
 export const RUNNER_CLAIM_LONG_POLL_MS = 25_000;
 /** Bound LISTEN `connect()` so a hung Postgres handshake cannot sit until a proxy 502. */
-export const RUNNER_QUEUE_LISTEN_CONNECT_TIMEOUT_MS = 3_000;
+const RUNNER_QUEUE_LISTEN_CONNECT_TIMEOUT_MS = 3_000;
 
 export interface RunnerQueueListener {
   wait(): Promise<void>;

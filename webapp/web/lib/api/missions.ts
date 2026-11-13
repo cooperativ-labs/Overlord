@@ -1,23 +1,14 @@
 import type {
-  MissionSearchDateField,
-  SearchMissionsResponseV2,
-  SearchObjectiveState,
-  SearchResponseV3,
-  SearchResultEntityType
-} from '@overlord/contract';
-
-import type {
   ActivityFeedDto,
-  AgentSessionInputDto,
-  AgentSessionInputsResponse,
+  AgentRequestListResponse,
   ArtifactDto,
   BranchActionBody,
-  CreateArtifactBody,
   CreateInboxItemBody,
   CreateMissionBody,
+  ForgetTerminalSessionBody,
+  ForgetTerminalSessionResultDto,
   GenerateCommitMessageBody,
   GenerateCommitMessageResultDto,
-  HumanAgentRequestDto,
   InboxItemDto,
   InboxMissionsResponse,
   MarkMissionSummarySeenBody,
@@ -28,23 +19,31 @@ import type {
   MissionEventDto,
   MissionFileChangesDto,
   MissionScheduleDto,
+  MissionSearchDateField,
   MissionSummaryResponse,
   MissionSummarySeenResponse,
   ObjectiveAttachmentDto,
   ObjectiveFileChangesDto,
+  OkResponse,
   PreviewScheduleBody,
   PurgeMergedWorktreesBody,
   PurgeWorktreesResultDto,
   RemoveWorktreeBody,
   ReorderBoardColumnBody,
+  ResolveAgentRequestResultDto,
   ScheduleInput,
+  SchedulePreviewDto,
+  SearchMissionsResponseV2,
+  SearchObjectiveState,
+  SearchResponseV3,
+  SearchResultEntityType,
   SharedContextEntryDto,
   UpdateArtifactBody,
   UpdateInboxItemBody,
   UpdateMissionBody,
   UpsertSharedContextBody,
   WorktreeDto
-} from '../../../shared/contract.ts';
+} from '@overlord/contract';
 
 import { request } from './request.ts';
 
@@ -64,12 +63,6 @@ export const missionsApi = {
   },
   reorderBoardColumn: (projectId: string, body: ReorderBoardColumnBody) =>
     request<MissionDto[]>('PATCH', `/api/projects/${projectId}/board/reorder`, body),
-  searchMissions: (query: string, options: { projectId?: string; limit?: number } = {}) => {
-    const params = new URLSearchParams({ q: query });
-    if (options.projectId) params.set('projectId', options.projectId);
-    if (options.limit !== undefined) params.set('limit', String(options.limit));
-    return request<{ missions: MissionDto[] }>('GET', `/api/missions/search?${params.toString()}`);
-  },
   searchMissionsV2: (
     query: string,
     options: {
@@ -162,10 +155,10 @@ export const missionsApi = {
   upsertMissionSchedule: (id: string, body: ScheduleInput) =>
     request<MissionScheduleDto>('PUT', `/api/missions/${id}/schedule`, body),
   clearMissionSchedule: (id: string) =>
-    request<{ ok: true }>('DELETE', `/api/missions/${id}/schedule`),
+    request<OkResponse>('DELETE', `/api/missions/${id}/schedule`),
   previewMissionSchedule: (body: PreviewScheduleBody) =>
-    request<{ dueDatetime: string }>('POST', '/api/missions/schedule/preview', body),
-  deleteMission: (id: string) => request<{ ok: true }>('DELETE', `/api/missions/${id}`),
+    request<SchedulePreviewDto>('POST', '/api/missions/schedule/preview', body),
+  deleteMission: (id: string) => request<OkResponse>('DELETE', `/api/missions/${id}`),
   generateMissionTitle: (id: string) =>
     request<MissionDetailDto>('POST', `/api/missions/${id}/generate-title`),
   generateCommitMessage: (id: string, body?: GenerateCommitMessageBody) =>
@@ -185,11 +178,8 @@ export const missionsApi = {
     request<PurgeWorktreesResultDto>('POST', '/api/worktrees/purge-merged', body),
   listMissionEvents: (id: string) =>
     request<MissionEventDto[]>('GET', `/api/missions/${id}/events`),
-  forgetMissionLatchSession: (
-    missionId: string,
-    body: { providerSessionId: string; executionRequestId?: string | null }
-  ) =>
-    request<{ forgotten: boolean; executionRequestId: string | null }>(
+  forgetMissionLatchSession: (missionId: string, body: ForgetTerminalSessionBody) =>
+    request<ForgetTerminalSessionResultDto>(
       'POST',
       `/api/missions/${missionId}/terminal-sessions/forget`,
       body
@@ -203,8 +193,6 @@ export const missionsApi = {
     request<MissionSummarySeenResponse>('PUT', `/api/missions/${id}/summary/seen`, body),
   listMissionArtifacts: (id: string) =>
     request<ArtifactDto[]>('GET', `/api/missions/${id}/artifacts`),
-  createMissionArtifact: (missionId: string, body: CreateArtifactBody) =>
-    request<ArtifactDto>('POST', `/api/missions/${missionId}/artifacts`, body),
   updateMissionArtifact: (missionId: string, artifactId: string, body: UpdateArtifactBody) =>
     request<ArtifactDto>('PATCH', `/api/missions/${missionId}/artifacts/${artifactId}`, body),
   listMissionSharedContext: (id: string) =>
@@ -219,31 +207,8 @@ export const missionsApi = {
       `/api/missions/${missionId}/file-changes?objectiveId=${encodeURIComponent(objectiveId)}`
     ),
 
-  listAgentSessionInputs: (missionId: string) =>
-    request<AgentSessionInputsResponse>(
-      'GET',
-      `/api/agent-session-inputs?missionId=${encodeURIComponent(missionId)}`
-    ),
-  cancelAgentSessionInput: (inputId: string) =>
-    request<{ cancelled: boolean; input: AgentSessionInputDto }>(
-      'POST',
-      `/api/agent-session-inputs/${encodeURIComponent(inputId)}/cancel`
-    ),
-  enqueueAgentSessionInput: (body: {
-    channelId: string;
-    body: string;
-    kind?: 'instruction' | 'retry' | 'continue';
-  }) =>
-    request<{
-      input: {
-        id: string;
-        deliveryLabel: string;
-        status: string;
-      };
-    }>('POST', '/api/agent-session-inputs', body),
-
   listAgentRequests: (missionId: string, objectiveId?: string | null) =>
-    request<{ requests: HumanAgentRequestDto[] }>(
+    request<AgentRequestListResponse>(
       'GET',
       `/api/agent-requests?missionId=${encodeURIComponent(missionId)}${
         objectiveId ? `&objectiveId=${encodeURIComponent(objectiveId)}` : ''
@@ -257,15 +222,9 @@ export const missionsApi = {
     requestId: string,
     body: { resolution: Record<string, unknown>; expectedRevision: number }
   ) =>
-    request<{ resolved: boolean; request: HumanAgentRequestDto }>(
+    request<ResolveAgentRequestResultDto>(
       'POST',
       `/api/agent-requests/${encodeURIComponent(requestId)}/resolve`,
       body
-    ),
-  /** Hand the decision back to the native terminal prompt without answering it. */
-  releaseAgentRequest: (requestId: string) =>
-    request<{ released: boolean; request: HumanAgentRequestDto }>(
-      'POST',
-      `/api/agent-requests/${encodeURIComponent(requestId)}/release`
     )
 };

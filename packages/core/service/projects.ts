@@ -1000,17 +1000,3 @@ export async function discoverProject({
     404
   );
 }
-
-export function listOrganizations({ ctx }: { ctx: ServiceContext }): Array<{
-  id: string;
-  slug: string;
-  name: string;
-}> {
-  return [
-    {
-      id: ctx.workspace.id,
-      slug: ctx.workspace.slug,
-      name: ctx.workspace.name
-    }
-  ];
-}

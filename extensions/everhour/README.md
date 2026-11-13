@@ -85,12 +85,6 @@ All endpoints live under `/ext/everhour/` (registered in `backend/app.ts`).
 
 | Method | Route | Permission |
 | --- | --- | --- |
-| `GET` | `/ext/everhour/user-connection` | authenticated (no workspace permission); alias of the account-connections module |
-| `PUT` | `/ext/everhour/user-connection` | authenticated (no workspace permission); alias of the account-connections module |
-| `DELETE` | `/ext/everhour/user-connection` | authenticated (no workspace permission); alias of the account-connections module |
-| `GET` | `/ext/everhour/integration` | deprecated alias of `user-connection` (retired first) |
-| `PUT` | `/ext/everhour/integration` | deprecated alias of `user-connection` (retired first) |
-| `DELETE` | `/ext/everhour/integration` | deprecated alias of `user-connection` (retired first) |
 | `GET` | `/ext/everhour/projects/:projectId/link` | `project:read` |
 | `PUT` | `/ext/everhour/projects/:projectId/link` | `project:update` |
 | `GET` | `/ext/everhour/missions/:missionId` | `mission:read` |
@@ -102,12 +96,17 @@ All endpoints live under `/ext/everhour/` (registered in `backend/app.ts`).
 
 `routes.ts` binds auth and permissions only; `service.ts` owns all logic.
 
+The personal API key is set, read and erased only through `/api/connections`
+(`POST /api/connections/api-keys` with `provider: "everhour"`, `GET /api/connections`,
+`DELETE /api/connections/:id`). The former `/ext/everhour/user-connection` and
+`/ext/everhour/integration` aliases are retired (contract ADR 0054).
+
 ## Auth and permissions
 
 - Every route goes through the standard Auth Layer (`handle` wrapper with
   `requires` permission when the operation is workspace/project/mission scoped).
-- Account-wide identity (`user-connection`) requires only an authenticated
-  session — the same shape as `/ext/github/user-connection`.
+- Account-wide identity lives on `/api/connections`, which requires only an
+  authenticated session.
 - Project link operations require `project:read` or `project:update`.
 - Mission timer and time-record operations require `mission:read` or
   `mission:update`.

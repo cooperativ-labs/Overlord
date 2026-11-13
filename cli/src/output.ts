@@ -17,12 +17,6 @@ export function printStepTitle(title: string): void {
   }
 }
 
-export function printLines(lines: string[]): void {
-  for (const line of lines) {
-    printLine(line);
-  }
-}
-
 export function printKeyValue(stderrPairs: Record<string, string>): void {
   for (const [key, value] of Object.entries(stderrPairs)) {
     process.stderr.write(`${key}=${value}\n`);

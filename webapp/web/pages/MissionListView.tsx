@@ -1,9 +1,8 @@
 import { DndContext, DragOverlay } from '@dnd-kit/core';
+import type { MissionDto, WorkspaceMemberDto } from '@overlord/contract';
 import { type ReactNode, useCallback, useMemo, useState } from 'react';
 
 import { STATUS_CONFIG } from '@/components/ui.tsx';
-
-import type { MissionDto, WorkspaceMemberDto } from '../../shared/contract.ts';
 
 import { type BlankMissionCreateOptions } from './BlankMissionCard.tsx';
 import { type BoardDndResult, resolveAssignee, resolveColumnMissions } from './board-shared.ts';

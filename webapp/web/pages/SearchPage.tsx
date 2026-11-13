@@ -1,6 +1,6 @@
 import type { SearchResponseV3 } from '@overlord/contract';
 import { useNavigate, useSearch } from '@tanstack/react-router';
-import { Search, X } from 'lucide-react';
+import { Search } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
 import {

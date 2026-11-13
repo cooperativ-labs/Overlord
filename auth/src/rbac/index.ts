@@ -7,7 +7,7 @@ export {
   makeActor,
   tokenScopeAllows
 } from './authorizer.js';
-export type { KnownPermission, TokenScope } from './permissions.js';
+export type { TokenScope } from './permissions.js';
 export {
   MISSION_LIFECYCLE_GRANTS,
   PERMISSIONS,

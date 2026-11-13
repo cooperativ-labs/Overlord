@@ -21,8 +21,9 @@ Every Overlord installation needs these. They cover the fundamental workflow: cr
 | Table             | Purpose                                                                    |
 | ----------------- | -------------------------------------------------------------------------- |
 | `workspaces`      | The local instance (one workspace for CLI-first installs).                 |
-| `users`           | Global human and service-user identities.                                  |
-| `workspace_users` | Workspace membership; domain records reference this, not `users` directly. |
+| `organizations`   | Grouping and identity layer above workspaces.                              |
+| `profiles`        | Global human and service-user identities.                                  |
+| `workspace_users` | Workspace membership; domain records reference this, not `profiles`.       |
 
 ### Projects and Execution
 
@@ -256,7 +257,7 @@ Each group is independent from the others unless noted. Install them in any orde
 **When to add:**
 
 - Exact-match filters on workspace/project/status are not enough; users need ranked text search over mission titles and objective text.
-- The CLI `search-missions` command or web app search bar needs sub-second full-text results.
+- The CLI `search` protocol command or web app search bar needs sub-second full-text results.
 
 **Dependency notes:**
 

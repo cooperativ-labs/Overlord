@@ -64,7 +64,7 @@ export interface ReviewedTool {
 }
 
 /** Bounds for untyped (nested) JSON values: property values, attributes, predicates. */
-export const JSON_BOUNDS = { depth: 8, nodes: 4000, stringChars: 16 * 1024, keyChars: 128 };
+const JSON_BOUNDS = { depth: 8, nodes: 4000, stringChars: 16 * 1024, keyChars: 128 };
 
 const UUID = '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$';
 const workspace: JsonSchema = {

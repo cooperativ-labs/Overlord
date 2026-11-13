@@ -1,3 +1,4 @@
+import type { AgentCatalogDto, AgentLaunchConfigDto, ProjectResourceDto } from '@overlord/contract';
 import {
   AlertTriangle,
   ArrowUp,
@@ -31,12 +32,6 @@ import type {
   executionTargetAvailability,
   objectiveResourceConnection
 } from '@/lib/project-resources.ts';
-
-import type {
-  AgentCatalogDto,
-  AgentLaunchConfigDto,
-  ProjectResourceDto
-} from '../../../shared/contract.ts';
 
 import type { InboxCardPendingAction } from './inbox-card-actions.ts';
 

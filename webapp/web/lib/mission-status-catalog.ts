@@ -88,7 +88,3 @@ export const MISSION_STATUS_INDICATORS: Record<MissionStatusIndicatorId, Mission
     }
   }
 };
-
-export function getMissionStatusIndicator(id: MissionStatusIndicatorId): MissionStatusIndicator {
-  return MISSION_STATUS_INDICATORS[id];
-}

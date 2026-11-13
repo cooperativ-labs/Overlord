@@ -1,6 +1,5 @@
+import type { HumanAgentRequestDto } from '@overlord/contract';
 import { ListChecks } from 'lucide-react';
-
-import type { HumanAgentRequestDto } from '../../../shared/contract.ts';
 
 import {
   AgentSessionCardShell,

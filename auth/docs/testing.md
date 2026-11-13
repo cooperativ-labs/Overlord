@@ -6,7 +6,7 @@ component: tokens, identity bridging, and RBAC. Normative sources:
 [08-role-based-access-control.md](08-role-based-access-control.md), and the
 `authToDatabase` surface in [`contract/components.yaml`](../../contract/components.yaml).
 
-Current code under test: `auth/src/auth/` (config, database, session, token) and
+Current code under test: `auth/src/auth/` (config, database, token) and
 `auth/src/rbac/` (authorizer, permissions, roles, types). `auth/src/rbac/authorizer.test.ts`
 already exists and is the seed of the RBAC suite — this plan extends it.
 
@@ -70,7 +70,7 @@ Extends the existing `authorizer.test.ts`.
 
 ---
 
-## C. Session Keys (`auth/src/auth/session`)
+## C. Session Keys
 
 > "Raw session keys should not be persisted. Store hashes and prefixes."
 

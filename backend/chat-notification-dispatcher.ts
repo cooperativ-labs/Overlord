@@ -31,7 +31,7 @@ export interface ChatPushPresentation {
   deepLink: string;
 }
 
-export function chatThreadTitle(title: string | null): string {
+function chatThreadTitle(title: string | null): string {
   return (title && presentationTitle(title)) || FALLBACK_TITLE;
 }
 
@@ -40,7 +40,7 @@ export function chatThreadTitle(title: string | null): string {
  * deep link are read; question, answer, transcript, Knowledgebase and repository
  * content never reach this function. `silent` omits the alert dictionary.
  */
-export function chatApnsBody(p: ChatPushPresentation, mode: ChatPushMode): string {
+function chatApnsBody(p: ChatPushPresentation, mode: ChatPushMode): string {
   const aps: Record<string, unknown> =
     mode === 'alert'
       ? {

@@ -12,7 +12,6 @@ import { ChatError } from '../../packages/core/service/chat/store.ts';
 
 import {
   eraseCredential,
-  recordError,
   refreshLeased,
   requireReauthorization,
   storeConnectionGrant,
@@ -789,9 +788,5 @@ export class ProfileConnections {
 
   private async requireReauthorization(row: ConnectionRow, code: string, lockOwner?: string) {
     await requireReauthorization(this.db, row.id!, code, this.timestamp(), lockOwner);
-  }
-
-  private async recordError(id: string, code: string) {
-    await recordError(this.db, id, code, this.timestamp());
   }
 }

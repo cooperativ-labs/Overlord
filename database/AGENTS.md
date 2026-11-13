@@ -36,8 +36,8 @@ Core schema changes modify the shared contract. They require a contract update b
 
 1. **Update `contract/data/README.md`** first — add the table/column definition, including type, nullable, default, FK references, and any CHECK constraints.
 2. **Update `contract/architecture.md`** Database Layer section if the change affects stable interfaces (e.g. a new column that protocol or REST responses must now include).
-3. **Increment the contract version** in `contract/components.yaml` if the change is breaking (removes a NOT NULL column, renames a column, changes a type).
-4. **Write the migration** as the next numbered file: `database/sqlite/migrations/<NNN>_<description>.sql`. Migration rules:
+3. **Increment the contract version** with `yarn version:contract <patch|minor|major>` (never by hand) and complete the `contract/CHANGELOG.md` entry; a migration also needs a new ADR under `contract/decisions/` (`contract/CONTRACT.md` sections 4 and 5).
+4. **Write the migration** in both `database/sqlite/migrations/` and `database/postgres/migrations/` as `<YYYYMMDDHHMMSS>_<description>.sql`. Migration rules:
    - Enable foreign-key checks: `PRAGMA foreign_keys = ON;`
    - Use `CREATE TABLE IF NOT EXISTS` for new tables.
    - Use `ALTER TABLE … ADD COLUMN` for new columns on existing tables (SQLite does not support `ADD COLUMN NOT NULL` without a default; add a default or make nullable).
@@ -46,7 +46,7 @@ Core schema changes modify the shared contract. They require a contract update b
 5. **Seed deterministic rows** only when the data is required for the system to function (e.g. default workspace, implicit user). Use fixed UUIDs so tests can rely on them.
 6. **Apply locally to verify**:
    ```sh
-   sqlite3 database/.local/Overlord.sqlite < database/sqlite/migrations/<NNN>_<description>.sql
+   sqlite3 database/.local/Overlord.sqlite < database/sqlite/migrations/<YYYYMMDDHHMMSS>_<description>.sql
    ```
 
 ---
@@ -57,21 +57,19 @@ Extensions add custom tables without modifying core tables. This is the sanction
 
 **Rules:**
 - Table names must be prefixed `ext_<name>_` (e.g. `ext_myconnector_sessions`).
-- Migration must set `schema_migrations.component = 'ext:<name>'`.
+- The migration file name carries the component: `<version>_ext_<name>_<description>.sql` is recorded with `schema_migrations.component = 'ext:<name>'` (`migrationComponent` in `database/src/migration-files.ts`).
 - No direct writes to core tables from extension code — use service APIs, `entity_changes`, and `outbox_messages` for side effects.
 - Namespaced keys only for any values stored in `metadata_json` or `settings_json` on core tables (use reverse-DNS style: `com.mycompany.mykey`).
 
 **Steps:**
 
-1. **Create the migration**: `database/sqlite/migrations/<NNN>_ext_<name>_<description>.sql`.
+1. **Create the migration** in both `database/sqlite/migrations/` and `database/postgres/migrations/`: `<YYYYMMDDHHMMSS>_ext_<name>_<description>.sql`. Do not insert a `schema_migrations` row; the migration runner records it with the checksum and the `ext:<name>` component.
    ```sql
    PRAGMA foreign_keys = ON;
    CREATE TABLE IF NOT EXISTS ext_myname_items (
      id TEXT PRIMARY KEY,
      ...
    );
-   INSERT INTO schema_migrations (version, component, checksum, applied_at)
-   VALUES ('<NNN>', 'ext:myname', '<checksum>', datetime('now'));
    ```
 2. **Create a conformance manifest** at `<your-extension-root>/conformance-manifest.yaml` declaring `componentType: database-extension` and your `componentKey`.
 3. **Validate**: `ovld contract check <your-extension-root>/conformance-manifest.yaml`.
@@ -81,13 +79,14 @@ Extensions add custom tables without modifying core tables. This is the sanction
 
 ## Adding a New Migration (indexes, constraints, data)
 
-Additive migrations that do not change the public contract (new indexes, new optional columns with defaults) do not require a contract version bump, but still require a contract doc update if they affect spec-documented fields.
+Every migration is at least a `patch` contract change: the release gate requires a new ADR under `contract/decisions/` for any added or changed migration, so the range cannot be released as `none` (`contract/CONTRACT.md` section 5).
 
 **Steps:**
 
-1. Confirm the migration number is the next in sequence (`ls database/sqlite/migrations/`).
+1. Name the file `<YYYYMMDDHHMMSS>_<description>.sql`, later than every existing version, in both `database/sqlite/migrations/` and `database/postgres/migrations/`.
 2. Write the `.sql` file following the conventions above (foreign-key pragma, `IF NOT EXISTS`, forward-only changes).
 3. If the migration adds a new index that changes query semantics, document it in `contract/data/README.md`.
+4. Add the ADR and run `yarn version:contract <patch|minor|major>`.
 
 ---
 
@@ -99,11 +98,10 @@ These are listed in `contract/conformance.md` under "Controlled Vocabularies →
 
 **Steps:**
 
-1. **Propose the new value** in a contract update: edit `contract/conformance.md` Controlled Vocabularies section.
-2. **Increment the contract version** in `contract/components.yaml`.
-3. **Increment the contract version** with `yarn version:contract major` and complete the `contract/CHANGELOG.md` entry.
-4. **Add the value** to the `CHECK` constraint in the relevant migration.
-5. **Update any application code** that switches on the closed vocabulary.
+1. **Propose the new value** in a contract update: edit `contract/conformance.md` Controlled Vocabularies section and the value list in `contract/data/README.md`.
+2. **Increment the contract version** with `yarn version:contract major` (never by hand) and complete the `contract/CHANGELOG.md` entry.
+3. **Add the value** to the `CHECK` constraint in a new migration (both adapters).
+4. **Update any application code** that switches on the closed vocabulary, and `contract/api/openapi.yaml` (then `yarn api:generate`) when the vocabulary is on the wire.
 
 ### Open vocabularies (no contract version bump needed)
 
@@ -122,11 +120,14 @@ These are listed in `contract/conformance.md` under "Controlled Vocabularies →
 ```
 database/
   docs/                         ← spec docs for this module
-  sqlite/
-    migrations/
-      001_initial_core.sql      ← core MVP tables
-      002_rbac.sql              ← RBAC + token tables
-      <NNN>_<description>.sql   ← next migration goes here
+  sqlite/migrations/            ← SQLite migrations
+  postgres/migrations/          ← Postgres migrations
+    001_better_auth.sql         ← Better Auth tables
+    002_initial_core.sql        ← core MVP tables
+    003_rbac.sql                ← RBAC + token tables
+    004_storage.sql             ← object-storage metadata
+    <YYYYMMDDHHMMSS>_<description>.sql ← next migration goes here
+  src/                          ← @overlord/database runtime
   AGENTS.md                     ← this file
   README.md                     ← architectural overview
 ```
@@ -137,7 +138,7 @@ database/
 
 - [ ] Read `contract/architecture.md` Database Layer and Extension System sections
 - [ ] Core table/column change → update `contract/data/README.md` first
-- [ ] Breaking schema change → bump contract version in `contract/components.yaml`
+- [ ] Any migration → ADR plus `yarn version:contract <patch|minor|major>` (never typed by hand)
 - [ ] Closed vocabulary value → contract version bump required
 - [ ] Extension tables → use `ext_<name>_` prefix and `ext:<name>` component key
 - [ ] Extension code → no direct writes to core tables; use service APIs / `entity_changes`

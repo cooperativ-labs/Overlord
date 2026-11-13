@@ -1,7 +1,6 @@
+import type { FileChangeDto, ProjectResourceDto } from '@overlord/contract';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-
-import type { FileChangeDto, ProjectResourceDto } from '../../shared/contract.ts';
 
 import { groupMissionFileChanges, UNRESOLVED_RESOURCE_KEY } from './group-mission-file-changes.ts';
 

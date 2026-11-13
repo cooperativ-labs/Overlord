@@ -1,4 +1,4 @@
-import type { CreatedByKind } from '../../shared/contract.ts';
+import type { CreatedByKind } from '@overlord/contract';
 
 import { agentDisplayName } from './helpers/agent-icons.ts';
 

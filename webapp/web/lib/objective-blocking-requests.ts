@@ -1,4 +1,4 @@
-import type { HumanAgentRequestDto } from '../../shared/contract.ts';
+import type { HumanAgentRequestDto } from '@overlord/contract';
 
 /**
  * Which of an objective's agent requests are still waiting on a human, and

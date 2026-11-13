@@ -371,11 +371,12 @@ not do.
 
 ### Everhour and GitHub extensions (batch 4)
 
-- **B1** (open). The Everhour compatibility aliases (`/ext/everhour/user-connection` and the older
-  `/ext/everhour/integration`, GET, PUT, DELETE) keep `x-overlord-consumers: [unverified]`: no caller
-  exists in webapp, cli, desktop, mcp or OverlordMobile, which use `/api/connections`. The
-  `/integration` operations are marked `deprecated: true`, as `backend/ext/everhour/routes.ts` and the
-  `@deprecated` `EverhourIntegrationDto` describe them. Their schema is `EverhourUserConnectionDto`.
+- **B1** (resolved by retirement, ADR 0054). The Everhour compatibility aliases
+  (`/ext/everhour/user-connection` and the older `/ext/everhour/integration`, GET, PUT, DELETE)
+  had `x-overlord-consumers: [unverified]`: no caller existed in webapp, cli, desktop, mcp or
+  OverlordMobile, which use `/api/connections`. The routes, their operations, the
+  `EverhourUserConnectionDto` and `UpdateEverhourIntegrationBody` schemas and the `@deprecated`
+  `EverhourIntegrationDto` are removed, as are the GitHub `/ext/github/user-connection` aliases.
 - **B2** (open; reproduced). The `/ext/everhour/missions/{missionId}…` and
   `/ext/github/missions/{missionId}/pull-request` routes authorize a mission display id
   (`requireMissionPermission`), but the services read the mission by UUID only (`getMissionRow` in
@@ -385,10 +386,10 @@ not do.
 - **B3** (open). `CreateEverhourTimeBody.date` says it defaults to "today (server timezone)"; the code
   uses today's UTC date (`todayIso`). `MissionEverhourStateDto.connected` and
   `ProjectEverhourStateDto.connected` ("the acting user has connected their key") are true only when
-  the key can be opened; an unopenable key answers 503 on the state routes, while `GET
-  /ext/everhour/user-connection` reports it as `connected: false` (or `true` when only the sealing
-  key is missing) (`readEverhourApiKey`, `getEverhourIntegration`). Both Everhour state reads and the
-  connection aliases adopt an unambiguous legacy workspace key onto the profile as they read.
+  the key can be opened; an unopenable key answers 503 on the state routes
+  (`readEverhourApiKey`). The Everhour state reads adopt an unambiguous legacy workspace key onto
+  the profile as they read. (The retired `/ext/everhour/user-connection` alias, ADR 0054, reported
+  such a key as `connected: false`.)
 - **D1** (open; reproduced). `GET /ext/github/missions/{missionId}/pull-request` is typed
   `GitHubPullRequestDto | null` (webapp `lib/api/github.ts`); without a recorded pull request
   `getMissionGitHubPullRequest` returns null and `handle()` answers `{ ok: true }`. The schema is a
@@ -397,9 +398,9 @@ not do.
   (`repoDto`), although linking stores and answers the repository's visibility.
   `GitHubIntegrationDto.workspaceName` is typed `string | null` but is always a string (`''` when the
   workspace is gone). `getExtGithubProjectsByProjectIdLink`, `getExtGithubIntegration`.
-- **D3** (open). The GitHub compatibility aliases (`GET` and `DELETE /ext/github/user-connection`,
-  `POST /ext/github/user-connection/authorize`) keep `x-overlord-consumers: [unverified]`: no caller
-  exists in webapp, cli, desktop, mcp or OverlordMobile, which use `/api/connections`.
+- **D3** (open; the alias half resolved by retirement, ADR 0054). The GitHub compatibility aliases
+  (`GET` and `DELETE /ext/github/user-connection`, `POST /ext/github/user-connection/authorize`) had
+  `x-overlord-consumers: [unverified]` and no caller; they are removed. Still open:
   `GET /ext/github/callback` answers JSON `{ connected: true }` to the browser GitHub redirects,
   rather than redirecting it on; its permission stays `workspace:update`, checked first in any of the
   caller's workspaces (`handle(…, { requires })`) and then in the workspace the state names.
@@ -462,8 +463,8 @@ and retired `rest-notes.md`. Decisions:
   `postAgentSessionChannelsV1RequestsByIdRelease`,
   `postAgentSessionChannelsV1RequestsByIdApplication`,
   `postAgentSessionChannelsV1InputsByIdEmitted`.
-- **F2** (phase 4d, resolved by a schema change). The CLI's session sentinel sends
-  `exitCode: null` when the exit code is unknown; `EndAgentSessionChannelBody.exitCode` said
+- **F2** (phase 4d, resolved by a schema change). The CLI's session sentinel (since removed,
+  ADR 0054) sent `exitCode: null` when the exit code is unknown; `EndAgentSessionChannelBody.exitCode` said
   `number`. The handler stores any non-number as null; the member is now a nullable number.
   `postAgentSessionChannelsV1End`.
 - **F3** (phase 4d, resolved by a schema change). A body that does not parse answers 400
@@ -628,6 +629,7 @@ construct outside its subset (contract/api/README.md "Generator subset").
   `putExtEverhourIntegration` and `deleteExtEverhourIntegration` (batch 4); generated clients
   should carry it as a deprecation marker.
   Rendered: `deprecated: true` in the operation table and `@deprecated` on its doc comment.
+  (Those operations are retired, ADR 0054; the generator keeps the construct.)
 
 ## 5. Operations left as stubs
 

@@ -2,7 +2,7 @@ import {
   type AgentLaunchFlagDto,
   agentLaunchFlagKey,
   formatAgentLaunchFlagText
-} from '../../shared/contract.ts';
+} from '@overlord/contract';
 
 const RECENT_AGENT_LAUNCH_FLAGS_STORAGE_PREFIX = 'overlord:recent-agent-launch-flags';
 const MAX_RECENT_FLAGS_PER_AGENT = 3;

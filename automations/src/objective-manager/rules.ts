@@ -301,16 +301,6 @@ export type ObjectiveLifecycleView<TObjective extends ObjectiveLifecycleObjectiv
   violations: ObjectiveLifecycleViolation[];
 };
 
-export const OBJECTIVE_LIFECYCLE_STATES = [
-  'future',
-  'draft',
-  'submitted',
-  'launching',
-  'executing',
-  'pending_delivery',
-  'complete'
-] as const satisfies readonly ObjectiveLifecycleState[];
-
 export const EDITABLE_NEXT_UP_OBJECTIVE_STATES = [
   'draft',
   'submitted',
@@ -334,13 +324,6 @@ export const PARALLEL_BLOCKING_OBJECTIVE_STATES = [
 ] as const satisfies readonly ObjectiveLifecycleState[];
 
 export const LAUNCHABLE_OBJECTIVE_STATES = [
-  'draft',
-  'submitted',
-  'launching'
-] as const satisfies readonly ObjectiveLifecycleState[];
-
-export const AUTO_ADVANCE_TOGGLE_OBJECTIVE_STATES = [
-  'future',
   'draft',
   'submitted',
   'launching'
@@ -379,23 +362,6 @@ export function isFutureObjective(objective: ObjectiveLifecycleObjective): boole
 
 export function isActiveObjective(objective: ObjectiveLifecycleObjective): boolean {
   return stateIn(objective.state, ACTIVE_OBJECTIVE_STATES);
-}
-
-export function isLaunchableObjective(objective: ObjectiveLifecycleObjective): boolean {
-  return stateIn(objective.state, LAUNCHABLE_OBJECTIVE_STATES);
-}
-
-export function canToggleObjectiveAutoAdvance(objective: ObjectiveLifecycleObjective): boolean {
-  return stateIn(objective.state, AUTO_ADVANCE_TOGGLE_OBJECTIVE_STATES);
-}
-
-export function canEditObjectiveInstruction(objective: ObjectiveLifecycleObjective): boolean {
-  return (
-    isFutureObjective(objective) ||
-    objective.state === 'draft' ||
-    objective.state === 'submitted' ||
-    objective.state === 'launching'
-  );
 }
 
 /**

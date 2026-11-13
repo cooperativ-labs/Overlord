@@ -43,10 +43,6 @@ export function hashSessionKey(rawKey: string): string {
   return createHash('sha256').update(rawKey).digest('hex');
 }
 
-export function sessionKeyPrefix(rawKey: string): string {
-  return rawKey.slice(0, 'sess_'.length + 8);
-}
-
 /**
  * Extract a scalar JSON field as text on either supported database adapter.
  * PostgreSQL stores these columns as jsonb, which cannot be compared with text

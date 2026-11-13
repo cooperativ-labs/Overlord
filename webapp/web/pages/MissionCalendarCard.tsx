@@ -1,11 +1,10 @@
 import { useDraggable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
+import type { MissionDto } from '@overlord/contract';
 import { useNavigate } from '@tanstack/react-router';
 
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
-
-import type { MissionDto } from '../../shared/contract.ts';
 
 import { KANBAN_TOUCH_DRAGGABLE_CLASS } from './kanban-dnd.ts';
 import {

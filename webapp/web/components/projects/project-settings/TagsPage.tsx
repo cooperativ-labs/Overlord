@@ -1,3 +1,4 @@
+import type { ProjectTagDto } from '@overlord/contract';
 import { Plus, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -27,8 +28,6 @@ import {
   useProjectTags,
   useUpdateProjectTag
 } from '@/lib/queries';
-
-import type { ProjectTagDto } from '../../../../shared/contract.ts';
 
 type TagsPageProps = {
   projectId: string;

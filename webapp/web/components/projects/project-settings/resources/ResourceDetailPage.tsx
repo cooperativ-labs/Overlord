@@ -1,3 +1,4 @@
+import type { ProjectResourceAccessMode } from '@overlord/contract';
 import { AlertTriangle, Check, Copy, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
@@ -38,8 +39,6 @@ import {
   useUpdateProjectResource
 } from '@/lib/queries';
 import { cn } from '@/lib/utils';
-
-import type { ProjectResourceAccessMode } from '../../../../../shared/contract.ts';
 
 /**
  * The settings page for a single project resource: name, permission, resource

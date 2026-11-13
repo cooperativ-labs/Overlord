@@ -6,7 +6,7 @@ import { describe, it } from 'node:test';
 
 const tempDir = mkdtempSync(path.join(os.tmpdir(), 'overlord-webapp-mission-scheduling-'));
 const { bootstrapIntegrationTestDb } = await import('./test-helpers.ts');
-const { WORKSPACE } = await bootstrapIntegrationTestDb({
+await bootstrapIntegrationTestDb({
   sqlitePath: path.join(tempDir, 'webapp.sqlite')
 });
 

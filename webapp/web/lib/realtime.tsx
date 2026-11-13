@@ -1,7 +1,6 @@
+import type { EntityChangeDto, SyncChangesDto } from '@overlord/contract';
 import { useQueryClient } from '@tanstack/react-query';
 import { createContext, type ReactNode, useContext, useEffect, useRef, useState } from 'react';
-
-import type { EntityChangeDto, SyncChangesDto } from '../../shared/contract.ts';
 
 import { getAuthorizationHeader } from './api-base.ts';
 import { fetchApi, resolveEventSourceUrl } from './api-transport.ts';

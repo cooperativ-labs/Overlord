@@ -1,4 +1,5 @@
 import { DndContext, DragOverlay } from '@dnd-kit/core';
+import type { MissionDto, WorkspaceMemberDto } from '@overlord/contract';
 import { useQueryClient } from '@tanstack/react-query';
 import { useMatch, useNavigate, useParams } from '@tanstack/react-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -6,7 +7,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { NewMissionModal } from '@/components/NewMissionModal.tsx';
 import { uploadPendingAttachments } from '@/components/objectives/ObjectiveAttachments.tsx';
 
-import type { MissionDto, WorkspaceMemberDto } from '../../shared/contract.ts';
 import { ProjectSettingsSection } from '../components/projects/ProjectSettingsSection.tsx';
 import { Button, EmptyState, Spinner } from '../components/ui.tsx';
 import { firstObjectiveCreatePayload } from '../lib/project-resources.ts';

@@ -1,13 +1,12 @@
 # 14 — Private-Network S3 Storage Deployment (Railway MinIO)
 
 **Status:** Runbook (Phase 2 of mission `coo:45`)
-**Companion plan:** [`planning/feature-plans/railway-s3-storage-implementation-plan.md`](../../planning/feature-plans/railway-s3-storage-implementation-plan.md)
 **Sibling:** [12 — Private-Network PostgreSQL Deployment](12-private-network-postgresql-deployment-plan.md)
 
 ## What this covers
 
-Phase 1 made `webapp/server/storage.ts` backend-aware (an `s3` backend behind a
-`StorageBackend` interface in `webapp/server/storage-backends.ts`). Phase 2 is the
+Phase 1 made `backend/storage.ts` backend-aware (an `s3` backend behind a
+`StorageBackend` interface in `backend/storage-backends.ts`). Phase 2 is the
 **operational** half: stand up a private S3-compatible object store on Railway,
 keep its buckets private, hand the Overlord service the credentials as deployment
 secrets, and let the application flip its storage buckets to the `s3` backend

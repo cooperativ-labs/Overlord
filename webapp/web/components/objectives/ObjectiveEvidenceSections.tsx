@@ -1,11 +1,7 @@
+import type { DeliveryDto, ObjectiveAttachmentDto, ObjectiveDto } from '@overlord/contract';
 import { ChevronDown, GitBranch, History } from 'lucide-react';
 import { useState } from 'react';
 
-import type {
-  DeliveryDto,
-  ObjectiveAttachmentDto,
-  ObjectiveDto
-} from '../../../shared/contract.ts';
 import {
   groupEvidenceByRun,
   NO_EVIDENCE_TRUNCATION,

@@ -4,6 +4,7 @@
 - Status: accepted
 - Contract version: 141
 - Supersedes: none
+- Amended by: [ADR 0054](0054-retire-legacy-aliases.md) (the `--inbox` alias is retired)
 - Origin: contract v141 (coo:981), backfilled 2026-11
 
 ## Context

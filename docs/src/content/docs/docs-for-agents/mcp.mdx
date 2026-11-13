@@ -50,7 +50,7 @@ OAuth-aware clients use dynamic client registration followed by an
 authorization-code + PKCE flow. Approval happens in the web app at
 `/oauth/approve`; approving creates a scoped `USER_TOKEN` with the
 `mission_lifecycle` preset and exchanges the one-time authorization code for a
-bearer access token. **Refresh tokens are not issued in contract version `0`.**
+bearer access token. **Refresh tokens are not issued.**
 
 When a client supplies an OAuth `resource` parameter, Overlord binds it to the
 canonical hosted `/mcp` URL at approval and token exchange. A mismatch returns

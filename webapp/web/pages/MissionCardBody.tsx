@@ -1,3 +1,4 @@
+import type { MissionDto, WorkspaceMemberDto } from '@overlord/contract';
 import { ListOrdered } from 'lucide-react';
 
 import { MissionTagPill } from '@/components/MissionTagPill.tsx';
@@ -6,7 +7,6 @@ import { CardContent } from '@/components/ui/card';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils.ts';
 
-import type { MissionDto, WorkspaceMemberDto } from '../../shared/contract.ts';
 import { useProjectRunQueues } from '../lib/queries.ts';
 
 import { getMissionTags } from './board-shared.ts';

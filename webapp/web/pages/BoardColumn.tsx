@@ -1,12 +1,11 @@
 import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import type { MissionDto, ProjectStatusDto, WorkspaceMemberDto } from '@overlord/contract';
 import { Plus } from 'lucide-react';
 import { type ReactNode, useCallback, useState } from 'react';
 
 import { STATUS_CONFIG, statusClasses } from '@/components/ui.tsx';
 import { cn } from '@/lib/utils';
-
-import type { MissionDto, ProjectStatusDto, WorkspaceMemberDto } from '../../shared/contract.ts';
 
 import { BlankMissionCard, type BlankMissionCreateOptions } from './BlankMissionCard.tsx';
 import { resolveAssignee } from './board-shared.ts';

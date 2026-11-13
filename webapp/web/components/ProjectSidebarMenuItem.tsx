@@ -1,5 +1,6 @@
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import type { ProjectDto } from '@overlord/contract';
 import { Link, useNavigate, useParams } from '@tanstack/react-router';
 import { Archive, Clock3, Settings } from 'lucide-react';
 import { useState } from 'react';
@@ -11,8 +12,6 @@ import {
 import { SidebarLinkMenuButton } from '@/components/sidebar-link-menu-button';
 import { DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { useEverhourIntegration, useProjectEverhour, useUpdateProject } from '@/lib/queries';
-
-import type { ProjectDto } from '../../shared/contract.ts';
 
 function ProjectColorDot({ color }: { color: string | null }) {
   if (!color) return null;

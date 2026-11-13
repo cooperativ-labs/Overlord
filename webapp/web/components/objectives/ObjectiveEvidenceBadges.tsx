@@ -1,7 +1,7 @@
+import type { TerminalSessionDto } from '@overlord/contract';
 import { FileCode2, Package, Timer } from 'lucide-react';
 import type { ReactNode } from 'react';
 
-import type { TerminalSessionDto } from '../../../shared/contract.ts';
 import { formatObjectiveElapsed, type ObjectiveEvidence } from '../../lib/objective-evidence.ts';
 import { cn } from '../../lib/utils.ts';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip.tsx';

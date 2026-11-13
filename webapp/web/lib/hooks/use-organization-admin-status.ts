@@ -1,11 +1,10 @@
+import type { WorkspaceDto } from '@overlord/contract';
 import { useQueries } from '@tanstack/react-query';
 import { useMemo } from 'react';
 
 import { api } from '@/lib/api';
 import { keys } from '@/lib/queries';
 import { useProfile } from '@/lib/queries';
-
-import type { WorkspaceDto } from '../../../shared/contract.ts';
 
 /**
  * Derives org-admin visibility from workspace membership rows (the server keeps

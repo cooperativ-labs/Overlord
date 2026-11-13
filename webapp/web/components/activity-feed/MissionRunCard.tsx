@@ -1,3 +1,7 @@
+import type {
+  ActivityFeedMissionItemDto,
+  ActivityFeedMissionObjectiveDto
+} from '@overlord/contract';
 import {
   CheckCircle2,
   Circle,
@@ -9,10 +13,6 @@ import {
   Rocket
 } from 'lucide-react';
 
-import type {
-  ActivityFeedMissionItemDto,
-  ActivityFeedMissionObjectiveDto
-} from '../../../shared/contract.ts';
 import { formatAgentHarnessText } from '../../lib/agent-harness-text.ts';
 import { cn } from '../../lib/utils.ts';
 import { AgentIcon } from '../objectives/AgentIcon.tsx';

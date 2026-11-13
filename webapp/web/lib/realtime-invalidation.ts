@@ -1,4 +1,4 @@
-import type { EntityChangeDto } from '../../shared/contract.ts';
+import type { EntityChangeDto } from '@overlord/contract';
 
 import { invalidateNonEverhourQueries } from './query-invalidation.ts';
 import { keys } from './query-keys.ts';

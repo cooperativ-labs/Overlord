@@ -1,7 +1,6 @@
+import type { EntityChangeDto } from '@overlord/contract';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-
-import type { EntityChangeDto } from '../../shared/contract.ts';
 
 import { invalidateRealtimeChanges } from './realtime-invalidation.ts';
 

@@ -1,11 +1,7 @@
 # Desktop App — Behavior Spec
 
-The behavior reference for the `desktop` contract component. The planning
-rationale lives in
-[`planning/feature-plans/desktop-app-module.md`](../../planning/feature-plans/desktop-app-module.md)
-and
-[`planning/feature-plans/desktop-app-packaging.md`](../../planning/feature-plans/desktop-app-packaging.md);
-this document records what shipped.
+The behavior reference for the `desktop` contract component: this document
+records what shipped.
 
 ## 1. What it is
 

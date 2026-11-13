@@ -1,11 +1,7 @@
+import type { DeliveryDto, MissionDetailDto, MissionSummaryEvidenceDto } from '@overlord/contract';
 import { ChevronRight, Loader2 } from 'lucide-react';
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 
-import type {
-  DeliveryDto,
-  MissionDetailDto,
-  MissionSummaryEvidenceDto
-} from '../../../shared/contract.ts';
 import {
   useAcknowledgeMissionSummary,
   useMissionSummaryVisitBaseline

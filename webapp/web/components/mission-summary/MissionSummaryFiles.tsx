@@ -1,7 +1,7 @@
+import type { ProjectResourceDto } from '@overlord/contract';
 import { Check, Copy } from 'lucide-react';
 import { useId, useState } from 'react';
 
-import type { ProjectResourceDto } from '../../../shared/contract.ts';
 import { isDesktopShell } from '../../lib/api-base.ts';
 import { buildEditorFileHref, getEditorSchemeLabel } from '../../lib/helpers/editor-scheme.ts';
 import { useCopyToClipboard } from '../../lib/hooks/use-copy-to-clipboard.ts';

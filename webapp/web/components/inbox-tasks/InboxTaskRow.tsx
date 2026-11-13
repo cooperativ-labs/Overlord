@@ -1,3 +1,4 @@
+import type { InboxItemDto, MissionDetailDto } from '@overlord/contract';
 import { ChevronDown, ChevronRight, Paperclip, Trash2, Undo2 } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
 
@@ -6,7 +7,6 @@ import { DueDatePickerButton } from '@/components/scheduling/DueDatePickerButton
 import { usePromoteInboxItem, useUpdateInboxItem } from '@/lib/queries.ts';
 import { cn } from '@/lib/utils';
 
-import type { InboxItemDto, MissionDetailDto } from '../../../shared/contract.ts';
 import { MissionCompleteCheckbox } from '../../pages/MissionCardPrimitives.tsx';
 
 import { InboxProjectAssignMenu } from './InboxProjectAssignMenu.tsx';

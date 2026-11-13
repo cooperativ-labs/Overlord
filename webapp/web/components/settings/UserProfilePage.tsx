@@ -1,3 +1,4 @@
+import type { ProfileDto, UpdateProfileBody } from '@overlord/contract';
 import { useEffect, useState } from 'react';
 
 import { AuthenticatedAvatarImage, Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -9,8 +10,6 @@ import { LoadingButton } from '@/components/ui/loading-button';
 import { Separator } from '@/components/ui/separator';
 import { useMeta, useProfile, useUpdateProfile, useUploadAvatar } from '@/lib/queries';
 import { cn } from '@/lib/utils';
-
-import type { ProfileDto, UpdateProfileBody } from '../../../shared/contract.ts';
 
 type UserProfilePageProps = {
   open: boolean;

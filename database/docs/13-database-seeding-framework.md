@@ -12,7 +12,7 @@ composes the tools already in the stack:
 
 - **Kysely** for inserts — it is already the query builder and is dialect-aware,
   so one seed module works across both the SQLite and Postgres adapters.
-- The **service layer** ([`webapp/server/repository.ts`](../../webapp/server/repository.ts))
+- The **service layer** ([`backend/repository.ts`](../../backend/repository.ts))
   for core-domain entities, so `entity_changes`, `revision`, and idempotency stay
   consistent with [`contract/CONTRACT.md`](../../contract/CONTRACT.md).
 - **`@faker-js/faker`** (one small dev dependency) only as a *data generator* for
@@ -28,7 +28,7 @@ The constraints that decide this come straight from the existing architecture:
 
 1. **Dual-adapter portability.** SQLite is the local default; PostgreSQL is
    authoritative for shared deployments (see
-   [11 — SQLite Vs PostgreSQL](11-sqlite-vs-postgresql-multi-agent.md)). Any seed
+   [12 — Private-Network PostgreSQL Deployment](12-private-network-postgresql-deployment-plan.md)). Any seed
    path must run unchanged on both. Kysely already abstracts the dialect; raw SQL
    seed files would have to be maintained twice.
 

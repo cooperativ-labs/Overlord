@@ -3,10 +3,10 @@ info:
   title: Overlord API
   # info.version is the API description's own Semantic Version; it changes when
   # this document changes and is never compared with the contract version.
-  version: 2.2.0
+  version: 3.0.0
   # The contract version (contract/VERSION) this document belongs to. Written
   # only by `yarn version:contract`.
-  x-overlord-contract-version: 169.2.1
+  x-overlord-contract-version: 170.0.0
   description: >-
     Normative description of Overlord's REST surface (ADR 0006): one operation for every
     method and path the backend registers, at the path it is served (ADR 0007), excluding
@@ -313,8 +313,8 @@ paths:
       x-overlord-consumers: [external]
       summary: GitHub repository-access OAuth callback
       description: >-
-        GitHub redirects here after the repository consent started by `POST /api/connections` (or the
-        `/ext/github/user-connection/authorize` alias). The account-connections module consumes the hashed
+        GitHub redirects here after the repository consent started by `POST /api/connections`. The
+        account-connections module consumes the hashed
         state once, exchanges the code server-to-server and stores the encrypted credential. Every failure
         becomes the status `failed`; nothing but a status leaves the server. Responses carry
         `Cache-Control: no-store` and `Referrer-Policy: no-referrer`.
@@ -340,8 +340,9 @@ paths:
           description: >-
             When the flow named a return target: `overlord://connections/callback` (mobile) or the web
             origin plus the requested path, default `/settings/connections` (web), each with
-            `provider=github&status=<connected|denied|expired|failed>`; or, for a flow a legacy alias
-            started, its validated return URL with `githubConnection=<status>`. The body is Express's
+            `provider=github&status=<connected|denied|expired|failed>`; or, for a flow the retired
+            `/ext/github` alias started before its retirement (ADR 0054), its validated return URL with
+            `githubConnection=<status>`. The body is Express's
             short redirect notice.
           headers:
             Location:
@@ -3611,7 +3612,7 @@ paths:
       x-overlord-permission: unknown
       x-overlord-permission-candidates: [profile:self:update, project:read]
       x-overlord-edition: both
-      x-overlord-consumers: [mobile, webapp]
+      x-overlord-consumers: [mobile]
       summary: Set the caller's default project
       description: >-
         Requires `profile:self:update` in some workspace of the selected organization and `project:read`
@@ -3641,7 +3642,7 @@ paths:
       tags: [profile]
       x-overlord-permission: profile:self:update
       x-overlord-edition: both
-      x-overlord-consumers: [webapp]
+      x-overlord-consumers: [unverified]
       summary: Clear the caller's default project
       description: >-
         Clears the marker from every project preference of the profile. Always answers `{ projectId: null
@@ -4340,7 +4341,7 @@ paths:
       tags: [projects]
       x-overlord-permission: project:read
       x-overlord-edition: both
-      x-overlord-consumers: [cli, mobile, webapp]
+      x-overlord-consumers: [cli, mobile]
       summary: List readable projects across the caller's workspaces
       description: >-
         Aggregates every workspace of the active organization where the caller holds `project:read` (a
@@ -5957,233 +5958,6 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '500': { $ref: '#/components/responses/InternalError' }
-  /ext/everhour/user-connection:
-    get:
-      operationId: getExtEverhourUserConnection
-      tags: [everhour]
-      x-overlord-permission: owner
-      x-overlord-edition: both
-      x-overlord-consumers: [unverified]
-      x-overlord-extension: everhour
-      summary: The caller's Everhour connection (compatibility alias)
-      description: >-
-        Compatibility alias over the shared account-connections module; `GET /api/connections?scope=all`
-        is the canonical listing. Owner-scoped, both editions, no RBAC action. Writes as it reads: a
-        legacy workspace Everhour key the caller unambiguously connected is adopted onto the profile.
-        `connected` is true only for a `connected` connection whose key can be opened (or whose sealing
-        key is not configured); the account name is refreshed from Everhour best-effort, so an unreachable
-        Everhour or a rejected key still reports `connected: true` with the stored name.
-      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
-      responses:
-        '200':
-          description: The caller's Everhour connection state; the key is never returned.
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/EverhourUserConnectionDto' }
-        '400': { $ref: '#/components/responses/BadRequest' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '404': { $ref: '#/components/responses/NotFound' }
-        '500': { $ref: '#/components/responses/InternalError' }
-    put:
-      operationId: putExtEverhourUserConnection
-      tags: [everhour]
-      x-overlord-permission: owner
-      x-overlord-edition: both
-      x-overlord-consumers: [unverified]
-      x-overlord-extension: everhour
-      summary: Connect or rotate the caller's Everhour API key (compatibility alias)
-      description: >-
-        Compatibility alias over the shared account-connections module; `POST /api/connections/api-keys`
-        is the canonical call. Owner-scoped, both editions. `apiKey` (coerced to a string, trimmed) must
-        not be blank (400 `Enter an Everhour API key.`). The key is validated against Everhour before it
-        is stored: Everhour's client errors are forwarded with their status (`Everhour API error
-        (<status>): …`; 401 for a rejected key), an unreachable Everhour or a server error answers 502.
-        With no write key to seal it the route answers 503. Stores or rotates the caller's profile-scoped
-        connection.
-      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: '#/components/schemas/UpdateEverhourIntegrationBody' }
-      responses:
-        '200':
-          description: The caller's Everhour connection state; the key is never returned.
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/EverhourUserConnectionDto' }
-        '400': { $ref: '#/components/responses/BadRequest' }
-        '401':
-          description: >-
-            No session or token (`{ error }` from the authentication middleware), or Everhour refused the
-            stored API key (`Everhour API error (401): …`, forwarded from upstream).
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
-        '403':
-          description: Everhour refused the key (forwarded).
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
-        '404': { $ref: '#/components/responses/NotFound' }
-        '413': { $ref: '#/components/responses/PayloadTooLarge' }
-        '429':
-          description: >-
-            Everhour's rate limit (`Everhour API error (429): …`, forwarded from upstream).
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
-        '500': { $ref: '#/components/responses/InternalError' }
-        '502':
-          description: >-
-            Everhour could not be reached (`Could not reach Everhour: …`) or answered a server error, or
-            returned no task id or no usable section.
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
-        '503':
-          description: '`Everhour API-key encryption is not configured on this Overlord server.`'
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
-    delete:
-      operationId: deleteExtEverhourUserConnection
-      tags: [everhour]
-      x-overlord-permission: owner
-      x-overlord-edition: both
-      x-overlord-consumers: [unverified]
-      x-overlord-extension: everhour
-      summary: Disconnect the caller's Everhour key (compatibility alias)
-      description: >-
-        Compatibility alias over the shared account-connections module; `DELETE /api/connections/{id}` is
-        the canonical call. Owner-scoped, both editions. Erases the caller's Everhour connection, if any,
-        and tombstones the legacy row. Always answers `{ connected: false, accountName: null }`.
-      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
-      responses:
-        '200':
-          description: The caller's Everhour connection state; the key is never returned.
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/EverhourUserConnectionDto' }
-        '400': { $ref: '#/components/responses/BadRequest' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '404': { $ref: '#/components/responses/NotFound' }
-        '500': { $ref: '#/components/responses/InternalError' }
-  /ext/everhour/integration:
-    get:
-      operationId: getExtEverhourIntegration
-      tags: [everhour]
-      x-overlord-permission: owner
-      x-overlord-edition: both
-      x-overlord-consumers: [unverified]
-      x-overlord-extension: everhour
-      deprecated: true
-      summary: The caller's Everhour connection (deprecated alias of /user-connection)
-      description: >-
-        Compatibility alias over the shared account-connections module; `GET /api/connections?scope=all`
-        is the canonical listing. Owner-scoped, both editions, no RBAC action. Writes as it reads: a
-        legacy workspace Everhour key the caller unambiguously connected is adopted onto the profile.
-        `connected` is true only for a `connected` connection whose key can be opened (or whose sealing
-        key is not configured); the account name is refreshed from Everhour best-effort, so an unreachable
-        Everhour or a rejected key still reports `connected: true` with the stored name.
-      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
-      responses:
-        '200':
-          description: The caller's Everhour connection state; the key is never returned.
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/EverhourUserConnectionDto' }
-        '400': { $ref: '#/components/responses/BadRequest' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '404': { $ref: '#/components/responses/NotFound' }
-        '500': { $ref: '#/components/responses/InternalError' }
-    put:
-      operationId: putExtEverhourIntegration
-      tags: [everhour]
-      x-overlord-permission: owner
-      x-overlord-edition: both
-      x-overlord-consumers: [unverified]
-      x-overlord-extension: everhour
-      deprecated: true
-      summary: Connect or rotate the caller's Everhour API key (deprecated alias of /user-connection)
-      description: >-
-        Compatibility alias over the shared account-connections module; `POST /api/connections/api-keys`
-        is the canonical call. Owner-scoped, both editions. `apiKey` (coerced to a string, trimmed) must
-        not be blank (400 `Enter an Everhour API key.`). The key is validated against Everhour before it
-        is stored: Everhour's client errors are forwarded with their status (`Everhour API error
-        (<status>): …`; 401 for a rejected key), an unreachable Everhour or a server error answers 502.
-        With no write key to seal it the route answers 503. Stores or rotates the caller's profile-scoped
-        connection.
-      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: '#/components/schemas/UpdateEverhourIntegrationBody' }
-      responses:
-        '200':
-          description: The caller's Everhour connection state; the key is never returned.
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/EverhourUserConnectionDto' }
-        '400': { $ref: '#/components/responses/BadRequest' }
-        '401':
-          description: >-
-            No session or token (`{ error }` from the authentication middleware), or Everhour refused the
-            stored API key (`Everhour API error (401): …`, forwarded from upstream).
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
-        '403':
-          description: Everhour refused the key (forwarded).
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
-        '404': { $ref: '#/components/responses/NotFound' }
-        '413': { $ref: '#/components/responses/PayloadTooLarge' }
-        '429':
-          description: >-
-            Everhour's rate limit (`Everhour API error (429): …`, forwarded from upstream).
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
-        '500': { $ref: '#/components/responses/InternalError' }
-        '502':
-          description: >-
-            Everhour could not be reached (`Could not reach Everhour: …`) or answered a server error, or
-            returned no task id or no usable section.
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
-        '503':
-          description: '`Everhour API-key encryption is not configured on this Overlord server.`'
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
-    delete:
-      operationId: deleteExtEverhourIntegration
-      tags: [everhour]
-      x-overlord-permission: owner
-      x-overlord-edition: both
-      x-overlord-consumers: [unverified]
-      x-overlord-extension: everhour
-      deprecated: true
-      summary: Disconnect the caller's Everhour key (deprecated alias of /user-connection)
-      description: >-
-        Compatibility alias over the shared account-connections module; `DELETE /api/connections/{id}` is
-        the canonical call. Owner-scoped, both editions. Erases the caller's Everhour connection, if any,
-        and tombstones the legacy row. Always answers `{ connected: false, accountName: null }`.
-      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
-      responses:
-        '200':
-          description: The caller's Everhour connection state; the key is never returned.
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/EverhourUserConnectionDto' }
-        '400': { $ref: '#/components/responses/BadRequest' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '404': { $ref: '#/components/responses/NotFound' }
-        '500': { $ref: '#/components/responses/InternalError' }
   "/ext/everhour/projects/{projectId}/link":
     parameters:
       - name: projectId
@@ -7269,101 +7043,6 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ErrorEnvelope' }
-  /ext/github/user-connection:
-    get:
-      operationId: getExtGithubUserConnection
-      tags: [github]
-      x-overlord-permission: owner
-      x-overlord-edition: both
-      x-overlord-consumers: [unverified]
-      x-overlord-extension: github
-      summary: The caller's GitHub repository authorization (compatibility alias)
-      description: >-
-        Compatibility alias over the shared account-connections module; `GET /api/connections?scope=all`
-        is the canonical listing. Owner-scoped, both editions, no RBAC action, no call to GitHub. Writes
-        as it reads: a live legacy GitHub authorization row is adopted onto the profile first.
-        `configured` says whether repository authorization can be started on this server; `account` and
-        `scopes` are set only while `connected`.
-      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
-      responses:
-        '200':
-          description: The caller's GitHub repository authorization state.
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/GitHubUserConnectionDto' }
-        '400': { $ref: '#/components/responses/BadRequest' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '404': { $ref: '#/components/responses/NotFound' }
-        '500': { $ref: '#/components/responses/InternalError' }
-    delete:
-      operationId: deleteExtGithubUserConnection
-      tags: [github]
-      x-overlord-permission: owner
-      x-overlord-edition: both
-      x-overlord-consumers: [unverified]
-      x-overlord-extension: github
-      summary: Disconnect the caller's GitHub repository authorization (compatibility alias)
-      description: >-
-        Compatibility alias over the shared account-connections module; `DELETE /api/connections/{id}` is
-        the canonical call. Owner-scoped, both editions. Erases the caller's GitHub credential, if any,
-        then revokes the token at GitHub best-effort and tombstones the legacy row. Always answers
-        `connected: false`.
-      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
-      responses:
-        '200':
-          description: The caller's GitHub repository authorization state.
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/GitHubUserConnectionDto' }
-        '400': { $ref: '#/components/responses/BadRequest' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '404': { $ref: '#/components/responses/NotFound' }
-        '500': { $ref: '#/components/responses/InternalError' }
-  /ext/github/user-connection/authorize:
-    post:
-      operationId: postExtGithubUserConnectionAuthorize
-      tags: [github]
-      x-overlord-permission: owner
-      x-overlord-edition: both
-      x-overlord-consumers: [unverified]
-      x-overlord-extension: github
-      summary: Start GitHub repository authorization (compatibility alias)
-      description: >-
-        Compatibility alias over the shared account-connections module; `POST /api/connections` with
-        `provider: github` is the canonical start. Owner-scoped, both editions. Answers 503 `GitHub
-        repository authorization is not configured on this Overlord server.` when the GitHub OAuth client
-        or a write key is missing. A string `returnTo` must be `overlord://github/callback` or an
-        `http(s)` URL on one of the server's allowed browser origins (400 otherwise); any other type is
-        ignored. At most five sign-ins may be open per connection (429 `Too many GitHub sign-ins are open;
-        try again in a few minutes.`). The client opens `authorizationUrl`; GitHub returns to `GET
-        /api/auth/callback/github/repository`.
-      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
-      requestBody:
-        required: false
-        content:
-          application/json:
-            schema: { $ref: '#/components/schemas/BeginGitHubUserAuthorizationBody' }
-      responses:
-        '200':
-          description: Where to authorize.
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/GitHubUserAuthorizationDto' }
-        '400': { $ref: '#/components/responses/BadRequest' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '404': { $ref: '#/components/responses/NotFound' }
-        '413': { $ref: '#/components/responses/PayloadTooLarge' }
-        '429':
-          description: Five sign-ins are already open for the caller's GitHub connection.
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
-        '500': { $ref: '#/components/responses/InternalError' }
-        '503':
-          description: GitHub repository authorization is not configured on this server.
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
   /ext/github/repository-owners:
     get:
       operationId: getExtGithubRepositoryOwners
@@ -7606,7 +7285,7 @@ paths:
       tags: [github]
       x-overlord-permission: project:read
       x-overlord-edition: both
-      x-overlord-consumers: [webapp]
+      x-overlord-consumers: [unverified]
       x-overlord-extension: github
       summary: List repositories the workspace's GitHub App can access
       description: >-
@@ -8097,7 +7776,7 @@ paths:
       tags: [missions]
       x-overlord-permission: mission:read
       x-overlord-edition: both
-      x-overlord-consumers: [cli, webapp]
+      x-overlord-consumers: [cli]
       summary: Mission search, version 1 (frozen)
       description: >-
         Ranked mission search across the workspaces of the active organization where the caller holds
@@ -8743,43 +8422,13 @@ paths:
               schema: { $ref: '#/components/schemas/ErrorEnvelope' }
         '413': { $ref: '#/components/responses/PayloadTooLarge' }
         '500': { $ref: '#/components/responses/InternalError' }
-  "/api/agent-requests/{id}/release":
-    parameters:
-      - name: id
-        in: path
-        required: true
-        description: Agent request id; not read (the route always answers 410).
-        schema: { type: string }
-    post:
-      operationId: postAgentRequestsByIdRelease
-      tags: [agent-requests]
-      x-overlord-permission: authenticated
-      x-overlord-edition: both
-      x-overlord-consumers: [webapp]
-      summary: Release an agent request to the terminal (retired)
-      description: >-
-        Retired "respond in terminal" control. Any authenticated caller gets 410; nothing is read or
-        written.
-      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
-      responses:
-        '400': { $ref: '#/components/responses/BadRequest' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '410':
-          description: >-
-            Always: `{ error: 'There are no active session-input controls. Permission and question prompts
-            remain with the native agent harness.', code: 'session_controls_gone' }`.
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
-        '413': { $ref: '#/components/responses/PayloadTooLarge' }
-        '500': { $ref: '#/components/responses/InternalError' }
   /api/agent-session-inputs:
     get:
       operationId: getAgentSessionInputs
       tags: [agent-session-inputs]
       x-overlord-permission: session:read
       x-overlord-edition: both
-      x-overlord-consumers: [cli, webapp]
+      x-overlord-consumers: [cli]
       summary: List a mission's session inputs and its latest channel
       description: >-
         `missionId` (or an objective display id in `objectiveId`) is required (400 `invalid_input`). The
@@ -8817,37 +8466,8 @@ paths:
       tags: [agent-session-inputs]
       x-overlord-permission: authenticated
       x-overlord-edition: both
-      x-overlord-consumers: [cli, webapp]
+      x-overlord-consumers: [cli]
       summary: Queue a session input (retired)
-      description: Retired. Any authenticated caller gets 410; nothing is read or written.
-      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
-      responses:
-        '400': { $ref: '#/components/responses/BadRequest' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '404': { $ref: '#/components/responses/NotFound' }
-        '410':
-          description: >-
-            Always: `{ error: 'There are no active session-input controls. Permission and question prompts
-            remain with the native agent harness.', code: 'session_controls_gone' }`.
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
-        '413': { $ref: '#/components/responses/PayloadTooLarge' }
-        '500': { $ref: '#/components/responses/InternalError' }
-  "/api/agent-session-inputs/{id}/cancel":
-    parameters:
-      - name: id
-        in: path
-        required: true
-        description: Session input id; not read (the route always answers 410).
-        schema: { type: string }
-    post:
-      operationId: postAgentSessionInputsByIdCancel
-      tags: [agent-session-inputs]
-      x-overlord-permission: authenticated
-      x-overlord-edition: both
-      x-overlord-consumers: [webapp]
-      summary: Cancel a session input (retired)
       description: Retired. Any authenticated caller gets 410; nothing is read or written.
       security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
       responses:
@@ -9029,7 +8649,7 @@ paths:
       tags: [missions]
       x-overlord-permission: artifact:create
       x-overlord-edition: both
-      x-overlord-consumers: [webapp]
+      x-overlord-consumers: [unverified]
       summary: Create a mission artifact without a delivery
       description: >-
         Requires `artifact:create` on the mission's workspace (and, at the route, in at least one of the
@@ -10619,9 +10239,9 @@ paths:
         in: path
         required: true
         description: >-
-          A backend protocol subcommand listed in contract/protocol-commands.yaml (`search` is an alias of
-          `search-missions`). An unknown name answers 404 `Unknown protocol subcommand: <name>` with the
-          supported names in `detail`.
+          A backend protocol subcommand listed in contract/protocol-commands.yaml. An unknown name,
+          including the retired `search-missions` alias and `list-organizations` (ADR 0054), answers
+          404 `Unknown protocol subcommand: <name>` with the supported names in `detail`.
         schema: { type: string }
     post:
       operationId: postProtocolBySubcommand
@@ -10642,7 +10262,7 @@ paths:
         authorize inside their handler. A mission display id matching in two workspaces answers 409; a
         project reference matching in two answers 200 with `status: project_selection_required` and the
         candidate projects, so the caller can retry with `--workspace-id`. A `project_automation` token
-        reaches only `create`, `load-context`, `search-missions`/`search`, `discover-project` (with
+        reaches only `create`, `load-context`, `search`, `discover-project` (with
         `--project-id`), `statuses`, `list-deliveries`, `objective-changes`, `attachment-list`,
         `attachment-download-url` and `auth-status`; any other subcommand answers 404 `Not found`. A
         handler that returns nothing answers `{ ok: true }`. Loopback local operator: a call from the
@@ -18692,22 +18312,6 @@ components:
           minimum: 0
           description: The last returned `seq`, or the request's `after` when none.
         hasMore: { type: boolean }
-    EverhourUserConnectionDto:
-      type: object
-      description: The caller's Everhour connection state (never includes the key).
-      required: [ connected, accountName ]
-      properties:
-        connected: { type: boolean }
-        accountName:
-          description: The Everhour user's name when known; null when not connected.
-          oneOf: [ { type: string }, { type: 'null' } ]
-    UpdateEverhourIntegrationBody:
-      type: object
-      required: [ apiKey ]
-      properties:
-        apiKey:
-          type: string
-          description: The caller's personal Everhour API key; coerced to a string and trimmed, never echoed.
     ProjectEverhourLinkDto:
       type: object
       required: [ projectId, everhourProjectName, everhourProjectId ]
@@ -18821,38 +18425,6 @@ components:
         comment:
           description: When present, replaces the comment (trimmed); null clears it.
           oneOf: [ { type: string }, { type: 'null' } ]
-    GitHubUserAccountDto:
-      type: object
-      required: [ id, login, avatarUrl ]
-      properties:
-        id: { type: string }
-        login: { type: string }
-        avatarUrl:
-          oneOf: [ { type: string }, { type: 'null' } ]
-    GitHubUserConnectionDto:
-      type: object
-      required: [ configured, connected, account, scopes ]
-      properties:
-        configured: { type: boolean }
-        connected: { type: boolean }
-        account:
-          description: Set while connected and the account's id and login are known.
-          oneOf: [ { $ref: '#/components/schemas/GitHubUserAccountDto' }, { type: 'null' } ]
-        scopes:
-          type: array
-          description: Granted OAuth scopes; empty unless connected.
-          items: { type: string }
-    GitHubUserAuthorizationDto:
-      type: object
-      required: [ authorizationUrl ]
-      properties:
-        authorizationUrl: { type: string }
-    BeginGitHubUserAuthorizationBody:
-      type: object
-      properties:
-        returnTo:
-          type: string
-          description: '`overlord://github/callback` or an `http(s)` URL on an allowed browser origin.'
     GitHubRepositoryOwnerDto:
       type: object
       required: [ login, type, avatarUrl, canCreateRepositories ]

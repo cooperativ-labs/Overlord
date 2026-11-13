@@ -64,12 +64,11 @@ response shapes (→ [webapp module](../webapp/README.md)).
 
 ### Documentation
 
-- [09 — Database Schema Contract](../contract/data/README.md): column/index/FK definitions, default-DB recommendation, core tables, realtime/sync, migration discipline, REST API Boundary, and Extension Points.
-- [09 — Schema Contract Review](docs/09-database-schema-contract-review.md): review notes on the schema contract.
+- [Database Schema Contract](../contract/data/README.md) (normative): column/index/FK definitions, controlled vocabularies, realtime/sync, migration discipline, REST API Boundary, and Extension Points.
 - [10 — Database Table Groups](docs/10-database-table-groups.md): which tables are core vs. à la carte, grouped optional sets, and the agent setup decision tree.
-- [11 — SQLite Vs PostgreSQL For Multi-Agent Use](docs/11-sqlite-vs-postgresql-multi-agent.md): database tradeoffs for local agents, hosted deployments, remote runners, queue claiming, and write concurrency.
 - [12 — Private-Network PostgreSQL Deployment Plan](docs/12-private-network-postgresql-deployment-plan.md): recommended architecture when shared organization state starts on a private-network database with multiple clients and distributed runners.
 - [13 — Database Seeding Framework](docs/13-database-seeding-framework.md): recommendation for how to seed development/test data — a first-party Kysely + faker seed runner over the service layer, and why a third-party seeding framework (Prisma/Drizzle/Snaplet) is the wrong fit.
+- [14 — Private-Network S3 Storage Deployment](docs/14-private-network-s3-storage-deployment.md): runbook for a private S3-compatible object store and the hosted storage-backend seed.
 - [15 — Test Database Provisioning](docs/15-test-database-provisioning.md): why tests do not get their own hosted Postgres, and how `yarn test:conformance` boots a throwaway one locally and in CI.
 - [Test Plan](docs/testing.md): adapter-parity test plan implementing the schema contract's Adapter Conformance Suite (DDL, concurrency, change feed, uniqueness, queue claiming, soft delete, extension migrations) across SQLite and Postgres. Part of the root [TEST_PLAN.md](../TEST_PLAN.md).
 
@@ -86,10 +85,12 @@ rather than cross-folder relative imports:
   backend/Desktop builds.
 - `launch-local.ts` — the `yarn db:start` local launcher.
 - `constants.ts` — database-layer constants and controlled vocabularies
-  (statuses, objective states, update phases/events, seed IDs, contract version).
+  (default statuses, objective states, update phases/events) and
+  `SCHEMA_CONTRACT_VERSION`, the `schema_migrations.contract_version` ledger value
+  (unrelated to the Overlord contract version in `contract/VERSION`).
 - `local-paths.ts` — canonical local-data paths: the per-user global database
   directory (`~/.ovld/`, overridable via `OVLD_HOME`) plus the repo-local
-  `database/.local/…` storage-bucket paths.
+  `database/.local/storage` object-storage directory.
 - `adapter.ts` — `resolveAdapter()`, the single point that decides SQLite vs.
   PostgreSQL from the `overlord.toml` `database_url` admin setting or the
   `DATABASE_URL` environment variable so auth and the service layer never disagree.
@@ -100,7 +101,7 @@ actually imports (for example objective display-id parsing). It still talks to a
 configured backend URL; local/cloud backend packages own database adapters and
 migrations.
 
-Migrations live here, numbered sequentially — see [Migrations](#migrations).
+Migrations live here — see [Migrations](#migrations).
 
 ### Applying Locally
 
@@ -119,7 +120,9 @@ in lexical version order, and records each applied migration in
 outside the default location.
 
 Do not edit a migration after it has been applied to a database you care about.
-Create a new forward-only migration such as `005_add_mission_labels.sql`; the
+Create a new forward-only migration named `<YYYYMMDDHHMMSS>_<description>.sql`
+(for example `20261113120000_add_mission_labels.sql`) in both
+`sqlite/migrations/` and `postgres/migrations/`; the
 next backend startup applies it without wiping existing rows. If the checksum of
 an already-applied migration changes, startup fails so the mismatch can be fixed
 instead of silently rewriting history.
@@ -142,9 +145,9 @@ sqlite3 database/.local/Overlord.sqlite < database/sqlite/migrations/002_initial
 sqlite3 database/.local/Overlord.sqlite < database/sqlite/migrations/003_rbac.sql
 sqlite3 database/.local/Overlord.sqlite < database/sqlite/migrations/004_storage.sql
 
-psql "$DATABASE_URL" -f database/postgres/migrations/001_initial_core.sql
-psql "$DATABASE_URL" -f database/postgres/migrations/002_rbac.sql
-psql "$DATABASE_URL" -f database/postgres/migrations/003_better_auth.sql
+psql "$DATABASE_URL" -f database/postgres/migrations/001_better_auth.sql
+psql "$DATABASE_URL" -f database/postgres/migrations/002_initial_core.sql
+psql "$DATABASE_URL" -f database/postgres/migrations/003_rbac.sql
 psql "$DATABASE_URL" -f database/postgres/migrations/004_storage.sql
 ```
 
@@ -156,7 +159,19 @@ values from these migrations.
 
 ### Migrations
 
-#### `sqlite/migrations/001_initial_core.sql` and `postgres/migrations/001_initial_core.sql`
+Migrations live in `sqlite/migrations/` and `postgres/migrations/` and apply in
+lexical version order. The four numbered baseline files are followed by
+timestamped `<YYYYMMDDHHMMSS>_<description>.sql` migrations; a file named
+`<version>_ext_<name>_<description>.sql` is recorded under the `ext:<name>`
+component. The schema they produce is specified in
+[contract/data/README.md](../contract/data/README.md).
+
+#### `001_better_auth.sql`
+Auth-owned Better Auth implementation tables (`user`, `session`, `account`,
+`verification`) in the same adapter database. No other component should read or
+write these tables directly.
+
+#### `002_initial_core.sql`
 Core MVP slice: all tables for the local mission/objective/session workflow, the
 change feed, and idempotency. Seeds deterministic rows for the default local
 workspace, implicit user, workspace membership, and workspace-scoped mission sequence.
@@ -166,17 +181,16 @@ The PostgreSQL migration uses native `jsonb`, `boolean`, `timestamptz`, and a
 queue index for `execution_requests` so service-layer runner claims can use
 `FOR UPDATE SKIP LOCKED` efficiently.
 
-#### `sqlite/migrations/002_rbac.sql` and `postgres/migrations/002_rbac.sql`
+#### `003_rbac.sql`
 Group 1 (Multi-User Access and API Tokens):
 - `role_assignments` — durable workspace-user-to-role membership. Empty-string sentinels for `resource_type`/`resource_id` represent workspace-level scope so the unique-active-assignment index works on both SQLite and Postgres.
 - `user_tokens` — USER_TOKEN metadata and hashes only; raw secrets are never stored.
-- `user_token_scopes` — reserved for future token-level permission restrictions.
+- `user_token_scopes` — token-level permission restrictions (scope presets).
 
 Seeds an `ADMIN` role assignment for the implicit local workspace user. This
 provides the schema foundation for the [Auth module](../auth/README.md); the
 authorization logic itself lives above the database layer.
 
-#### `sqlite/migrations/003_better_auth.sql` and `postgres/migrations/003_better_auth.sql`
-Auth-owned Better Auth implementation tables (`user`, `session`, `account`,
-`verification`) in the same adapter database. No other component should read or
-write these tables directly.
+#### `004_storage.sql`
+Provider-neutral object-storage metadata (`storage_buckets` and related tables);
+bytes live in `local_fs` or a managed storage backend.

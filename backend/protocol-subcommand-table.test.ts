@@ -39,7 +39,7 @@ const EXPECTED_PERMISSIONS = {
   'reorder-project-run-queues': PERMISSIONS.PROJECT_UPDATE,
   'run-queue': PERMISSIONS.OBJECTIVE_READ,
   connect: PERMISSIONS.SESSION_ATTACH,
-  'search-missions': PERMISSIONS.MISSION_READ,
+  search: PERMISSIONS.MISSION_READ,
   'discuss-objective': PERMISSIONS.OBJECTIVE_SUBMIT,
   'add-objectives': PERMISSIONS.OBJECTIVE_UPDATE,
   'update-objective': PERMISSIONS.OBJECTIVE_UPDATE,
@@ -56,8 +56,7 @@ const EXPECTED_PERMISSIONS = {
   'discover-project': PERMISSIONS.PROJECT_READ,
   statuses: PERMISSIONS.PROJECT_READ,
   'create-project': null,
-  'register-target': null,
-  'list-organizations': PERMISSIONS.PROJECT_READ
+  'register-target': null
 };
 
 test('every protocol subcommand keeps its permission across the group split', () => {

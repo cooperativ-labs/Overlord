@@ -1,3 +1,4 @@
+import type { MissionDetailDto, ObjectiveAttachmentDto } from '@overlord/contract';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import assert from 'node:assert/strict';
@@ -5,8 +6,6 @@ import { afterEach, describe, it } from 'node:test';
 
 import type { AttachmentUploadState } from '@/components/objectives/ObjectiveAttachments.tsx';
 import { useFileDropZone } from '@/components/ui/file-drop-zone.tsx';
-
-import type { MissionDetailDto, ObjectiveAttachmentDto } from '../../../shared/contract.ts';
 
 import {
   type InboxCardLaunchGate,

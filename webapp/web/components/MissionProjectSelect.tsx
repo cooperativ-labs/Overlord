@@ -1,3 +1,4 @@
+import type { ProjectDto } from '@overlord/contract';
 import { useState } from 'react';
 
 import {
@@ -9,8 +10,6 @@ import {
 } from '@/components/ui/select';
 import { useProject, useProjects, useUpdateMission } from '@/lib/queries.ts';
 import { cn } from '@/lib/utils';
-
-import type { ProjectDto } from '../../shared/contract.ts';
 
 type MissionProjectSelectProps = {
   missionId: string;

@@ -200,14 +200,5 @@ export const projectSubcommands: SubcommandTable = {
     // Enforced per-target inside the handler, as for create-project.
     permission: null,
     handler: (_ctx, body) => registerTargetFromProtocol(body)
-  },
-
-  // Predates the real `organizations` table/hierarchy (coo:135) — despite the
-  // name, this returns only the caller's current *workspace* context (never
-  // an organization row), kept as-is to avoid a breaking protocol rename.
-  // Use `GET /api/organizations` (web) for real organization data.
-  'list-organizations': {
-    permission: PERMISSIONS.PROJECT_READ,
-    handler: ctx => [{ id: ctx.workspace.id, slug: ctx.workspace.slug, name: ctx.workspace.name }]
   }
 };

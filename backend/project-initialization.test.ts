@@ -12,7 +12,7 @@ const { db } = await bootstrapIntegrationTestDb({
 const { createTestWorkspaceContext } = await import('./test-helpers.ts');
 const dbModule = await import('./db.ts');
 const { getActiveWorkspaceId } = createTestWorkspaceContext(dbModule);
-const { requireDatabaseClient } = dbModule;
+const { requireDatabaseClient, resolveActiveProfileId } = dbModule;
 const { initializeProject } = await import('./repository.ts');
 const { profileConnections } = await import('./connections/profile.ts');
 const { githubConnectionProvider } = await import('./ext/github/connection-provider.ts');
@@ -50,8 +50,13 @@ test('provisions one private repository and one read-only git resource on retry'
   process.env.BETTER_AUTH_URL = 'https://overlord.example';
   const githubProfiles = profileConnections(requireDatabaseClient(), [githubConnectionProvider()]);
   const githubUserOAuth = createGitHubUserOAuth(() => githubProfiles);
-  const authorization = await githubUserOAuth.beginGitHubUserAuthorization({}, []);
-  const state = new URL(authorization.authorizationUrl).searchParams.get('state');
+  const profileId = await resolveActiveProfileId();
+  assert.ok(profileId);
+  const authorization = await githubProfiles.beginOAuth(profileId, 'github', {
+    returnTo: 'web',
+    returnUrl: null
+  });
+  const state = new URL(authorization.authorizeUrl).searchParams.get('state');
   assert.ok(state);
   globalThis.fetch = async input => {
     const url = String(input);
@@ -63,7 +68,10 @@ test('provisions one private repository and one read-only git resource on retry'
     }
     throw new Error(`Unexpected GitHub request: ${url}`);
   };
-  await githubUserOAuth.completeGitHubUserAuthorization({ code: 'code', state });
+  assert.equal(
+    (await githubProfiles.completeOAuth('github', { code: 'code', state })).status,
+    'connected'
+  );
 
   let createCalls = 0;
   globalThis.fetch = async (input, init) => {

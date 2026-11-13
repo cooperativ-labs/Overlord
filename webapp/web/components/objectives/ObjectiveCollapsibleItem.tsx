@@ -1,3 +1,4 @@
+import type { ObjectiveDto } from '@overlord/contract';
 import {
   Check,
   CheckCircle2,
@@ -13,7 +14,6 @@ import {
 } from 'lucide-react';
 import { type MouseEvent, useEffect, useId, useRef, useState } from 'react';
 
-import type { ObjectiveDto } from '../../../shared/contract.ts';
 import { getAgentIcon } from '../../lib/helpers/agent-icons.ts';
 import { buildAgentResumeCommand } from '../../lib/helpers/agent-resume-command.ts';
 import { useCopyToClipboard } from '../../lib/hooks/use-copy-to-clipboard.ts';

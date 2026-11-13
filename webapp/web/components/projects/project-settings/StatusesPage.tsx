@@ -15,6 +15,7 @@ import {
   verticalListSortingStrategy
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import type { ProjectStatusDto, StatusType } from '@overlord/contract';
 import { GripVertical, Plus, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
@@ -45,8 +46,6 @@ import {
   useUpdateProjectStatus
 } from '@/lib/queries';
 import { cn } from '@/lib/utils';
-
-import type { ProjectStatusDto, StatusType } from '../../../../shared/contract.ts';
 
 const ADDABLE_STATUS_TYPES: StatusType[] = [
   'draft',

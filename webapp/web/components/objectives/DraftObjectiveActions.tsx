@@ -1,7 +1,7 @@
+import type { ObjectiveDto, ObjectiveState, RunQueueDto } from '@overlord/contract';
 import { Check, Copy, ListOrdered, Loader2, MoreVertical, RotateCcw, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 
-import type { ObjectiveDto, ObjectiveState, RunQueueDto } from '../../../shared/contract.ts';
 import { useCopyToClipboard } from '../../lib/hooks/use-copy-to-clipboard.ts';
 import {
   useDeleteObjective,

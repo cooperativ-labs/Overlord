@@ -1,3 +1,4 @@
+import type { TokenScope, UserTokenDto, UserTokenStatus } from '@overlord/contract';
 import { Check, Copy, KeyRound, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -25,8 +26,6 @@ import {
   useRevokeUserToken,
   useUserTokens
 } from '@/lib/queries';
-
-import type { TokenScope, UserTokenDto, UserTokenStatus } from '../../../shared/contract.ts';
 
 const SCOPE_LABELS: Record<TokenScope, string> = {
   full: 'Full user privileges',

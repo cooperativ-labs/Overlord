@@ -1,3 +1,4 @@
+import type { InboxItemDto, MissionDetailDto } from '@overlord/contract';
 import { useEffect, useState } from 'react';
 
 import { useInboxItemAttachmentState } from '@/components/objectives/ObjectiveAttachments.tsx';
@@ -8,8 +9,6 @@ import {
   useUpdateInboxItem,
   useUpdateObjective
 } from '@/lib/queries.ts';
-
-import type { InboxItemDto, MissionDetailDto } from '../../../shared/contract.ts';
 
 import { type InboxCardPendingAction, submitUnassignedInboxItem } from './inbox-card-actions.ts';
 import { inboxCardShellStateProps, useInboxCardState } from './use-inbox-card-state.ts';

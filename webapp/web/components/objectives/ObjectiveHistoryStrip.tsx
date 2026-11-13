@@ -1,7 +1,7 @@
+import type { ObjectiveDto } from '@overlord/contract';
 import { ChevronDown, History } from 'lucide-react';
 import { useState } from 'react';
 
-import type { ObjectiveDto } from '../../../shared/contract.ts';
 import {
   formatObjectiveElapsed,
   groupEvidenceByRun,

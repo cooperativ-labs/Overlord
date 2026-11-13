@@ -1,7 +1,7 @@
+import type { ProjectResourceDto } from '@overlord/contract';
 import { Check, ChevronDown, FolderOpen } from 'lucide-react';
 import { useState } from 'react';
 
-import type { ProjectResourceDto } from '../../../shared/contract.ts';
 import {
   distinctProjectResourceKeys,
   primaryResourceConnection

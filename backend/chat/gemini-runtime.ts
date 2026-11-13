@@ -52,7 +52,7 @@ import {
  * the conversation prefix is rebuilt from authorized messages on every request.
  */
 
-export const GEMINI_CHECKPOINT_VERSION = 2;
+const GEMINI_CHECKPOINT_VERSION = 2;
 export const SYSTEM_PROMPT_VERSION = 'overlord-assistant-v8';
 /**
  * Versions how the conversation prefix is selected (summary-covered messages replaced by
@@ -60,9 +60,9 @@ export const SYSTEM_PROMPT_VERSION = 'overlord-assistant-v8';
  */
 export const CONTEXT_POLICY_VERSION = 'summary-prefix-v1';
 /** Verified `models.get` input limit of gemini-3.8-flash (2026-10-07). */
-export const DEFAULT_INPUT_TOKEN_LIMIT = 1_048_576;
+const DEFAULT_INPUT_TOKEN_LIMIT = 1_048_576;
 /** Input tokens kept free below the model limit for estimation error and the closing request. */
-export const CONTEXT_HEADROOM_TOKENS = 65_536;
+const CONTEXT_HEADROOM_TOKENS = 65_536;
 /** Covered messages still sent verbatim: the latest exchanges anchor follow-up references. */
 const RECENT_VERBATIM_MESSAGES = 4;
 

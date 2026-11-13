@@ -1,8 +1,8 @@
 import type { WeekDayType } from '@overlord/automations/scheduling-engine';
+import type { MissionDetailDto, ScheduleDto } from '@overlord/contract';
 import { CalendarDays, Loader2, Repeat, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
-import type { MissionDetailDto, ScheduleDto } from '../../../shared/contract.ts';
 import {
   buildDueDatetime,
   fromDateInputValue,

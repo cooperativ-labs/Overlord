@@ -1,3 +1,4 @@
+import type { AgentLaunchConfigDto } from '@overlord/contract';
 import { AlertTriangle, ArrowUp, Check, ChevronDown, Loader2, Play, Plus, Tag } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
@@ -44,8 +45,6 @@ import {
   useUpdateLaunchPreference,
   useUpdateObjective
 } from '@/lib/queries.ts';
-
-import type { AgentLaunchConfigDto } from '../../shared/contract.ts';
 
 import { Dialog, DialogContent, DialogTitle } from './ui/dialog';
 

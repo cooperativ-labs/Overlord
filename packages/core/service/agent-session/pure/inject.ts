@@ -15,27 +15,6 @@ export const DELIVERY_OUTCOMES = [
 
 export type DeliveryOutcome = (typeof DELIVERY_OUTCOMES)[number];
 
-export type InjectReport =
-  | { status: 'Delivered' }
-  | { status: 'Queued'; boundary: 'turn-boundary' | 'next-turn' }
-  | { status: 'Unsupported'; reason: string }
-  | { status: 'Empty' };
-
-/** Map a durable delivery_outcome column onto the three-value inject report the UI may show. */
-export function reportFromDeliveryOutcome(
-  outcome: DeliveryOutcome | null | undefined
-): InjectReport {
-  if (outcome === 'delivered') return { status: 'Delivered' };
-  if (outcome === 'queued_turn_boundary') {
-    return { status: 'Queued', boundary: 'turn-boundary' };
-  }
-  if (outcome === 'queued_next_turn') return { status: 'Queued', boundary: 'next-turn' };
-  if (outcome === 'unsupported') {
-    return { status: 'Unsupported', reason: 'Harness cannot inject this instruction' };
-  }
-  return { status: 'Empty' };
-}
-
 /**
  * Human-readable delivery label. Cursor's turn-boundary path must say
  * "Queued (turn boundary)" — never "Delivered" — because followup_message schedules the

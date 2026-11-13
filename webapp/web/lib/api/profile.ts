@@ -1,28 +1,26 @@
 import type {
+  AuthProvidersDto,
   DefaultProjectPreferenceDto,
   NotificationDto,
   NotificationPreferencesDto,
   ProfileDto,
+  ServerMetaDto,
   StoredImageDto,
   UpdateNotificationPreferencesBody,
   UpdateProfileBody
-} from '../../../shared/contract.ts';
+} from '@overlord/contract';
 
-import { type AuthProviders, type Meta, request } from './request.ts';
+import { request } from './request.ts';
 
 export const profileApi = {
-  meta: () => request<Meta>('GET', '/api/meta'),
+  meta: () => request<ServerMetaDto>('GET', '/api/meta'),
   /** Public (pre-auth) login-provider advertisement for the sign-in screen. */
-  authProviders: () => request<AuthProviders>('GET', '/api/auth-providers'),
+  authProviders: () => request<AuthProvidersDto>('GET', '/api/auth-providers'),
 
   getProfile: () => request<ProfileDto>('GET', '/api/profile'),
   updateProfile: (body: UpdateProfileBody) => request<ProfileDto>('PATCH', '/api/profile', body),
   getDefaultProject: () =>
     request<DefaultProjectPreferenceDto>('GET', '/api/profile/default-project'),
-  setDefaultProject: (projectId: string) =>
-    request<DefaultProjectPreferenceDto>('PUT', '/api/profile/default-project', { projectId }),
-  clearDefaultProject: () =>
-    request<DefaultProjectPreferenceDto>('DELETE', '/api/profile/default-project'),
   getNotificationPreferences: () =>
     request<NotificationPreferencesDto>('GET', '/api/profile/notification-preferences'),
   updateNotificationPreferences: (body: UpdateNotificationPreferencesBody) =>

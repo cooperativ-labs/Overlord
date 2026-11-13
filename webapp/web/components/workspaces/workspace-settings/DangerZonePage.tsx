@@ -1,3 +1,4 @@
+import type { WorkspaceDto } from '@overlord/contract';
 import { useNavigate } from '@tanstack/react-router';
 import { Download, Trash2 } from 'lucide-react';
 import { useState } from 'react';
@@ -15,9 +16,7 @@ import type { ButtonLoadingState } from '@/components/ui/loading-button';
 import { LoadingButton } from '@/components/ui/loading-button';
 import { api } from '@/lib/api';
 import { useWorkspaceOperatorRole } from '@/lib/hooks/use-workspace-operator-role';
-import { useDeleteWorkspace, useMeta } from '@/lib/queries';
-
-import type { WorkspaceDto } from '../../../../shared/contract.ts';
+import { useDeleteWorkspace } from '@/lib/queries';
 
 type DangerZonePageProps = {
   workspace: WorkspaceDto;

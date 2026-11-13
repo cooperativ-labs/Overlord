@@ -14,7 +14,7 @@ import {
  * pre-v153 `ext_everhour_user_connections` store, which stays a read-only
  * migration source for one release.
  */
-export const EVERHOUR_SERVER_URL = 'https://api.everhour.com';
+const EVERHOUR_SERVER_URL = 'https://api.everhour.com';
 
 interface LegacyUserConnectionRow {
   id: string;

@@ -1,9 +1,9 @@
+import type { FileChangeDto, ObjectiveFileChangesDto } from '@overlord/contract';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, render, screen } from '@testing-library/react';
 import assert from 'node:assert/strict';
 import { afterEach, describe, it } from 'node:test';
 
-import type { FileChangeDto, ObjectiveFileChangesDto } from '../../../shared/contract.ts';
 import { keys } from '../../lib/query-keys.ts';
 import { FileChangeRow } from '../FileChangeRow.tsx';
 import { LiveFileChangeList } from '../LiveFileChangeList.tsx';

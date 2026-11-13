@@ -16,6 +16,7 @@ import {
   verticalListSortingStrategy
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import type { RunQueueDto, RunQueueEntryDto } from '@overlord/contract';
 import { Link } from '@tanstack/react-router';
 import {
   ArrowDown,
@@ -35,7 +36,6 @@ import {
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
-import type { RunQueueDto, RunQueueEntryDto } from '../../../shared/contract.ts';
 import {
   useCreateRunQueue,
   useDeleteRunQueue,

@@ -24,7 +24,6 @@ import type { ConnectionsConfig } from './config.ts';
 import {
   ConnectionAccessError,
   eraseCredential,
-  recordError,
   refreshLeased,
   requireReauthorization,
   storeConnectionGrant,
@@ -63,8 +62,7 @@ interface Credentials {
   refreshToken: string | null;
 }
 
-export { ConnectionAccessError, REFRESH_LEASE_MS } from './credential-rows.ts';
-export type CallbackStatus = ConnectionCallbackOutcome['status'];
+export { ConnectionAccessError } from './credential-rows.ts';
 /** The organization callback reads only the status and where to return. */
 export type CallbackOutcome = Pick<ConnectionCallbackOutcome, 'status' | 'returnTo'>;
 
@@ -481,10 +479,6 @@ export class AccountConnections {
       `UPDATE account_connections SET authorized_workspaces_json = ?, updated_at = ?, revision = revision + 1 WHERE id = ? AND state = 'connected' AND authorized_workspaces_json <> ?`,
       [JSON.stringify(workspaces), this.timestamp(), id, JSON.stringify(workspaces)]
     );
-  }
-
-  private async recordError(id: string, code: string) {
-    await recordError(this.db, id, code, this.timestamp());
   }
 
   private seal(row: ConnectionRow, credentials: Credentials): string {

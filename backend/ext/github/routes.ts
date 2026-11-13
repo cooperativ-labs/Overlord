@@ -1,7 +1,6 @@
 import { type Permission, PERMISSIONS } from '@overlord/auth';
 import { type NextFunction, type Request, type Response, Router } from 'express';
 
-import { recordConnectionAliasHit } from '../../connections/alias-telemetry.ts';
 import type { ProfileConnections } from '../../connections/profile.ts';
 import { ApiError } from '../../errors.ts';
 import { missionRoute, projectRoute } from '../resource-routes.ts';
@@ -32,50 +31,10 @@ function workspaceId(req: Request): string {
 
 export function createGitHubExtensionRouter(
   handle: RouteHandler,
-  options: { allowedBrowserOrigins?: readonly string[]; connections: () => ProfileConnections }
+  options: { connections: () => ProfileConnections }
 ): Router {
-  const {
-    beginGitHubUserAuthorization,
-    disconnectGitHubUser,
-    getGitHubUserConnection,
-    listGitHubRepositoryOwners
-  } = createGitHubUserOAuth(options.connections);
+  const { listGitHubRepositoryOwners } = createGitHubUserOAuth(options.connections);
   const router = Router();
-  // Compatibility aliases over the shared account-connections module (contract v153);
-  // `POST /api/connections` with `provider: 'github'` is the canonical start route.
-  const alias = (path: string, req: Request) => recordConnectionAliasHit(`/ext/github${path}`, req);
-  router.get(
-    '/user-connection',
-    handle(req => {
-      alias('/user-connection', req);
-      return getGitHubUserConnection();
-    })
-  );
-  router.post(
-    '/user-connection/authorize',
-    handle(
-      req => {
-        alias('/user-connection/authorize', req);
-        return beginGitHubUserAuthorization(
-          {
-            returnTo: typeof req.body?.returnTo === 'string' ? req.body.returnTo : undefined
-          },
-          options.allowedBrowserOrigins ?? []
-        );
-      },
-      { mutates: true }
-    )
-  );
-  router.delete(
-    '/user-connection',
-    handle(
-      req => {
-        alias('/user-connection', req);
-        return disconnectGitHubUser();
-      },
-      { mutates: true }
-    )
-  );
   router.get(
     '/repository-owners',
     handle(() => listGitHubRepositoryOwners())

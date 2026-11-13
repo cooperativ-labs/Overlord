@@ -1,6 +1,6 @@
+import type { ProjectRunQueuesDto } from '@overlord/contract';
 import { type QueryClient, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
-import type { ProjectRunQueuesDto } from '../../../shared/contract.ts';
 import { api } from '../api.ts';
 import { getDesktopBridge } from '../desktop-chrome.ts';
 import { invalidateNonEverhourQueries as invalidateAll } from '../query-invalidation.ts';

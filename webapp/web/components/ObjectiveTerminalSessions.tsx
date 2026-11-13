@@ -1,3 +1,4 @@
+import type { ObjectiveDto, TerminalSessionDto } from '@overlord/contract';
 import { useQueryClient } from '@tanstack/react-query';
 import { Check, Copy, ExternalLink, Loader2, Monitor, Octagon } from 'lucide-react';
 import {
@@ -10,7 +11,6 @@ import {
   useState
 } from 'react';
 
-import type { ObjectiveDto, TerminalSessionDto } from '../../shared/contract.ts';
 import { useCopyToClipboard } from '../lib/hooks/use-copy-to-clipboard.ts';
 import {
   forgetAbsentLatchSession,

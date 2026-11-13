@@ -1,8 +1,8 @@
 import { shouldDiscardEmptiedObjective } from '@overlord/automations/objective-manager';
+import type { ExecutionRequestDto, ObjectiveDto } from '@overlord/contract';
 import { ChevronUp } from 'lucide-react';
 import { useState } from 'react';
 
-import type { ExecutionRequestDto, ObjectiveDto } from '../../../shared/contract.ts';
 import {
   type ObjectiveEvidence,
   type ObjectiveEvidenceTruncation,

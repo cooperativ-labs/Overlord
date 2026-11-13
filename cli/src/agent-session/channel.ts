@@ -37,8 +37,6 @@ import { resolveGlobalDataDir } from '../config.js';
 
 export const SESSION_CHANNEL_ID_ENV = 'OVERLORD_SESSION_CHANNEL_ID';
 export const SESSION_CHANNEL_TOKEN_ENV = 'OVERLORD_SESSION_CHANNEL_TOKEN';
-export const SESSION_CHANNEL_LAUNCH_KIND_ENV = 'OVERLORD_SESSION_LAUNCH_KIND';
-export const SESSION_CHANNEL_LAUNCH_PROMPT_ENV = 'OVERLORD_SESSION_LAUNCH_PROMPT_ID';
 
 export type ChannelBootstrap = {
   channelId: string;

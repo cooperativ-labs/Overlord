@@ -1,7 +1,6 @@
+import type { WorkspaceMemberDto } from '@overlord/contract';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-
-import type { WorkspaceMemberDto } from '../../shared/contract.ts';
 
 import { memberInitials, memberLabel } from './member-display.ts';
 

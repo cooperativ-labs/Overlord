@@ -86,7 +86,7 @@ before(async () => {
 describe('human project references on the protocol surface', () => {
   it('resolves a unique project name without requiring a UUID', async () => {
     const result = (await asCaller(() =>
-      runProtocolSubcommand('search-missions', {
+      runProtocolSubcommand('search', {
         flags: { '--response-version': '2', '--project-id': 'Project Reference Project' }
       })
     )) as { version: number; appliedFilters: { projectIds: string[] } };
@@ -97,7 +97,7 @@ describe('human project references on the protocol surface', () => {
 
   it('matches a project name case-insensitively', async () => {
     const result = (await asCaller(() =>
-      runProtocolSubcommand('search-missions', {
+      runProtocolSubcommand('search', {
         flags: { '--response-version': '2', '--project-id': 'project reference project' }
       })
     )) as { appliedFilters: { projectIds: string[] } };
@@ -107,7 +107,7 @@ describe('human project references on the protocol surface', () => {
 
   it('asks which workspace when a name matches in more than one', async () => {
     const result = (await asCaller(() =>
-      runProtocolSubcommand('search-missions', {
+      runProtocolSubcommand('search', {
         flags: { '--response-version': '2', '--project-id': SHARED_NAME }
       })
     )) as {
@@ -134,7 +134,7 @@ describe('human project references on the protocol surface', () => {
       [workspaceA, projectInA]
     ] as const) {
       const result = (await asCaller(() =>
-        runProtocolSubcommand('search-missions', {
+        runProtocolSubcommand('search', {
           flags: {
             '--response-version': '2',
             '--project-id': SHARED_NAME,
@@ -167,7 +167,7 @@ describe('human project references on the protocol surface', () => {
   it('still reports a genuinely unknown project as not found', async () => {
     await assert.rejects(
       asCaller(() =>
-        runProtocolSubcommand('search-missions', {
+        runProtocolSubcommand('search', {
           flags: { '--response-version': '2', '--project-id': 'No Such Project' }
         })
       ),

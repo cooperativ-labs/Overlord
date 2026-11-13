@@ -1,17 +1,12 @@
 /**
- * Typed API contract shared between the REST server (`server/`) and the React
- * SPA (`web/`). DTO field names are the camelCase form of the logical schema
- * columns (see contract/data/README.md). Most exports are
- * types only so they can be `import type`-d without a runtime dependency; the
- * launch-variable catalog (`LAUNCH_VARIABLES` and friends) is the intentional
- * runtime exception shared by the CLI substitution engine and the Project
- * Settings UI.
- *
- * Scope note: this build covers projects, missions, and objectives — the entities
- * the web interface lets users add and modify — plus the objective launch
- * surface: the workspace agent catalog, per-user launch configs, project launch
- * preferences, and execution-request queueing. Runner claiming/launching and
- * deliveries remain CLI-only and are intentionally absent here.
+ * Typed API contract shared between the REST server (`backend/`) and its
+ * clients (`webapp/`, `cli/`, `desktop/`, `mcp/`). Every REST DTO is generated
+ * from contract/api/openapi.yaml into `./generated/api.ts` (ADR 0050) and
+ * re-exported here; this module adds only the shapes the description does not
+ * carry (protocol and MCP payloads, CLI-local reads, vocabularies narrower than
+ * a wire `string`, the virtual-target gateway surface) and shared runtime
+ * helpers such as the launch-variable catalog (`LAUNCH_VARIABLES`) and the
+ * objective-reference grammar.
  */
 
 import type {
@@ -29,20 +24,13 @@ import type {
   HumanActionCategory,
   HumanActionResolutionDto,
   InboxMissionDto,
-  InitializeProjectResultDto,
-  LaunchSessionSource,
-  ProjectRepositoryDto,
   ProjectResourceDto,
   RealtimeStreamEvent,
   RecordedObservationsDto,
   RegisterLiveActivityPushTokenBody,
   ReportMissionBranchObservationsBody,
   ReportResourceObservationsBody,
-  RepositoryEntryDto,
-  ResolvedLaunchSessionDto,
-  ScheduleDto,
-  TerminalSessionDto,
-  WorkspaceExecutionTargetDto
+  TerminalSessionDto
 } from './generated/api.js';
 
 export {
@@ -449,21 +437,17 @@ export {
 export {
   DEFAULT_MATCHES_PER_RESULT,
   DEFAULT_SEARCH_ENTITY_TYPES,
-  isSearchMatchEntityType,
   MAX_MATCHES_PER_RESULT,
   parseMatchesPerResult,
   parseSearchEntityTypes,
   parseSearchObjectiveStates,
   SEARCH_CANDIDATE_FETCH_LIMIT,
   SEARCH_CHILD_CONTEXT_WEIGHT,
-  SEARCH_MATCH_ENTITY_TYPES,
   SEARCH_OBJECTIVE_STATES,
   SEARCH_RESULT_ENTITY_TYPES,
   type SearchAppliedFiltersV3,
   type SearchEntityCounts,
   type SearchMatch,
-  type SearchMatchEntityType,
-  type SearchMatchKind,
   type SearchObjectiveState,
   type SearchParseResult,
   type SearchResponseV3,
@@ -472,10 +456,7 @@ export {
 } from './search.js';
 export { vocabulary } from './vocabulary.js';
 
-// ---- Closed status vocabularies (from the schema CHECK constraints) ----
-
-/** The wire type is wider: `EntityChangeDto.entityType` is a string (generated). */
-export type EntityType = 'project' | 'mission' | 'objective';
+// ---- Change feed ----
 
 export type ChangeOperation = EntityChangeOperation;
 
@@ -510,10 +491,6 @@ export type RecordMissionBranchObservationsBody = ReportMissionBranchObservation
 
 export type RecordMissionBranchObservationsResult = RecordTargetResourceObservationsResult;
 
-export type RepositoryEntryType = RepositoryEntryDto['type'];
-
-export type ProjectRepositoryStatus = ProjectRepositoryDto['status'];
-
 /** The wire type is wider: `ArtifactDto.type` is a string (generated). */
 export type ArtifactType =
   | 'test_results'
@@ -522,16 +499,6 @@ export type ArtifactType =
   | 'url'
   | 'decision'
   | 'migration';
-
-// ---- Mission scheduling ----------------------------------------------------
-//
-// A `schedules` row is a repeating recurrence rule computed by the
-// SchedulingEngine (`@overlord/automations`). A mission with a `scheduleId`
-// carries a computed `dueDatetime`; when the mission reaches a `complete`-type
-// status, the server spawns a duplicate mission with the next occurrence (see
-// `planning/feature-plans/mission-scheduling-engine.md`).
-
-export type SchedulePeriodType = ScheduleDto['periodType'];
 
 // ---- Mission activity feed ----
 
@@ -562,13 +529,6 @@ export type AgentRequestOptionDto = AgentRequestOption;
 export type AgentSessionInputsResponse = AgentSessionInputListResponse;
 
 // ---- Delivery reports (coo:364, contract v15) -----------------------------
-
-/**
- * Sources allowed to support a persisted delivery-report item. Contract v165
- * retired `change_rationale`: per-file prose is never evidence for an action or
- * tradeoff.
- */
-export type DeliveryEvidenceSource = 'agent' | 'deterministic_rule';
 
 /**
  * Raw agent-provided action evidence accepted in a delivery envelope.
@@ -762,99 +722,6 @@ export interface LocalObjectiveChangesDto {
 // last selection; objectives.launch_config_json holds explicit per-objective
 // overrides keyed by execution target and agent.
 
-/**
- * Normalized viewer identifier derived from the stored `launcher`. The wire type is
- * wider: `TerminalSessionDto.viewerKind` is a string (generated).
- */
-export type TerminalViewerKindDto = 'iterm' | 'terminal' | 'inline' | 'custom';
-
-/** Whether an effective value came from this target or the user-level default. */
-export type LaunchSessionSourceDto = LaunchSessionSource;
-
-/**
- * The resolved session frozen onto an execution request at claim time, so a later
- * settings change cannot retroactively change what a run did. Absent on requests
- * claimed before snapshots existed — callers resolve normally in that case.
- */
-export interface LaunchSessionSnapshotDto extends ResolvedLaunchSessionDto {
-  resolvedAt: string;
-}
-
-/**
- * Result of probing `latch capabilities --json` on the execution target
- * (coo:702). Three distinguishable states; direct remains selectable in all.
- * Never carries credentials, socket tokens, or attachment grants.
- */
-export type LatchDiscoveryStateDto = 'found' | 'not_installed' | 'incompatible';
-
-export interface LatchCapabilityFlagsDto {
-  create: boolean;
-  openViewer: boolean;
-  localAttach: boolean;
-  cloudAttach: boolean;
-  selfUpdate: boolean;
-  extensions: string[];
-}
-
-export interface LatchDiscoveryFoundDto {
-  state: 'found';
-  executable: string;
-  resolvedPath: string;
-  protocolVersion: number;
-  productVersion: string;
-  capabilities: LatchCapabilityFlagsDto;
-  checkedAt: string;
-  latchSelectable: true;
-  directSelectable: true;
-}
-
-export interface LatchDiscoveryNotInstalledDto {
-  state: 'not_installed';
-  executable: string;
-  /** Standalone CLI install command for the user to run; never auto-executed. */
-  installCommand: string;
-  checkedAt: string;
-  latchSelectable: false;
-  directSelectable: true;
-}
-
-export interface LatchDiscoveryIncompatibleDto {
-  state: 'incompatible';
-  executable: string;
-  resolvedPath: string | null;
-  protocolVersion: number | null;
-  productVersion: string | null;
-  /** Stable id of what is missing, e.g. `create` or `protocolVersion`. */
-  missingCapability: string;
-  detail: string;
-  checkedAt: string;
-  latchSelectable: false;
-  directSelectable: true;
-}
-
-export type LatchDiscoveryDto =
-  | LatchDiscoveryFoundDto
-  | LatchDiscoveryNotInstalledDto
-  | LatchDiscoveryIncompatibleDto;
-
-/**
- * External terminal-session mapping for a Latch (or future) provider (coo:702).
- * Stored on `execution_requests.metadata_json.providerSession`. The provider
- * session id is correlation only — never a credential and never overloaded onto
- * `launched_session_id` / harness-native resume ids.
- */
-export interface ExecutionProviderSessionDto {
-  provider: 'latch';
-  providerSessionId: string;
-  sessionName: string | null;
-  executionTargetId: string | null;
-  /** Filled when protocol attach binds an agent session; null at create time. */
-  agentSessionId: string | null;
-  createdAt: string;
-  /** Last observed Latch session state, e.g. running / exited / stopping / lost. */
-  lastObservedState: string;
-}
-
 export type TerminalSessionStateDto = TerminalSessionDto['lastObservedState'];
 
 export type LocalTargetMutationKindDto = NonNullable<
@@ -865,9 +732,6 @@ export type LocalTargetMutationKindDto = NonNullable<
 
 /** Named SSE events emitted by `GET /realtime` and compatibility `GET /api/stream`. */
 export type RealtimeEvent = RealtimeStreamEvent;
-
-export type GitHubRepositoryProvisioningStatus =
-  InitializeProjectResultDto['repositoryProvisioning']['status'];
 
 // ---- Mobile push registrations ----
 
@@ -936,12 +800,6 @@ export type RotateWebhookSecretResultDto = CreateWebhookSubscriptionResultDto;
 // the authenticated claiming gateway; it carries opaque handles and grant
 // *references*, never filesystem paths or raw secrets; preparation is
 // append-only observation data, never a new `execution_requests.status`.
-
-/**
- * Documented core `execution_targets.type` values. Open vocabulary — adapters
- * may add namespaced values, so a `string` is always accepted on the wire.
- */
-export type ExecutionTargetType = WorkspaceExecutionTargetDto['type'];
 
 /** Gateway health as reported through registration/heartbeat. */
 export type VirtualTargetHealth = 'healthy' | 'degraded' | 'unreachable' | 'unknown';

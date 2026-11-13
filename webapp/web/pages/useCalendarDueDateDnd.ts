@@ -5,6 +5,7 @@ import {
   type DragStartEvent,
   pointerWithin
 } from '@dnd-kit/core';
+import type { MissionDto } from '@overlord/contract';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
@@ -16,7 +17,6 @@ import {
 } from '@/lib/calendar-utils.ts';
 import { buildDueDatetime } from '@/lib/due-datetime.ts';
 
-import type { MissionDto } from '../../shared/contract.ts';
 import { api } from '../lib/api.ts';
 import { keys } from '../lib/queries.ts';
 import { invalidateNonEverhourQueries } from '../lib/query-invalidation.ts';

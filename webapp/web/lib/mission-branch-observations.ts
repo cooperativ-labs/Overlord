@@ -2,7 +2,7 @@ import type {
   MissionBranchDto,
   MissionBranchObservationInput,
   MissionBranchStatus
-} from '../../shared/contract.ts';
+} from '@overlord/contract';
 
 import { api } from './api.ts';
 

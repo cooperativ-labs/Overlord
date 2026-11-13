@@ -1,6 +1,6 @@
+import type { HumanAgentRequestDto } from '@overlord/contract';
 import { useEffect, useState } from 'react';
 
-import type { HumanAgentRequestDto } from '../../../shared/contract.ts';
 import { useResolveAgentRequest } from '../../lib/queries.ts';
 
 import {

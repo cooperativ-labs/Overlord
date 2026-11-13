@@ -19,11 +19,11 @@ import { resolveAuthBaseUrl } from '../../http/public-backend-url.ts';
  * registration) and the pre-v153 `ext_github_user_connections` store, which stays a
  * read-only migration source for one release.
  */
-export const GITHUB_SERVER_URL = 'https://github.com';
+const GITHUB_SERVER_URL = 'https://github.com';
 /** A subpath of the registered `/api/auth/callback/github` login callback. */
 export const GITHUB_REPOSITORY_CALLBACK_PATH = '/api/auth/callback/github/repository';
 /** The distinct, explicit repository grant; never the login grant. */
-export const GITHUB_REPOSITORY_SCOPES = ['repo', 'read:org'] as const;
+const GITHUB_REPOSITORY_SCOPES = ['repo', 'read:org'] as const;
 
 const GITHUB_API = 'https://api.github.com';
 const GITHUB_AUTHORIZE_URL = 'https://github.com/login/oauth/authorize';

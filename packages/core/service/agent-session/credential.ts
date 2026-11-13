@@ -46,10 +46,6 @@ export function hashSessionChannelToken(rawToken: string): string {
   return createHash(SESSION_CHANNEL_TOKEN_HASH_ALGORITHM).update(rawToken).digest('hex');
 }
 
-export function isSessionChannelToken(value: string | null | undefined): boolean {
-  return typeof value === 'string' && value.startsWith(SESSION_CHANNEL_TOKEN_PREFIX);
-}
-
 export function generateSessionChannelToken(): {
   secret: string;
   prefix: string;

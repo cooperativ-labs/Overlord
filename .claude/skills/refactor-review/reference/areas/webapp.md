@@ -8,7 +8,6 @@ webapp/web/components/  # feature components + components/ui (shadcn primitives)
 webapp/web/lib/         # api client, react-query hooks, realtime, domain helpers
 webapp/web/lib/hooks/   # shared React hooks
 webapp/web/hooks/       # legacy hook location — consolidation candidate
-webapp/shared/          # code shared with other webapp entry points
 ```
 
 Excluded from review: `webapp/dist/`, `webapp/node_modules/`, `webapp/web/components/ui/*`

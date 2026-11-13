@@ -1,8 +1,3 @@
-import { Plus, X } from 'lucide-react';
-import { useEffect, useState } from 'react';
-
-import { Input } from '@/components/ui/input';
-
 import {
   type AgentCatalogAgentDto,
   type AgentLaunchConfigDto,
@@ -10,7 +5,11 @@ import {
   agentLaunchFlagKey,
   formatAgentLaunchFlagText,
   parseAgentLaunchFlagText
-} from '../../../../../shared/contract.ts';
+} from '@overlord/contract';
+import { Plus, X } from 'lucide-react';
+import { useEffect, useState } from 'react';
+
+import { Input } from '@/components/ui/input';
 
 const EMPTY_CONFIG: AgentLaunchConfigDto = { preCommand: '', flags: [] };
 

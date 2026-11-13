@@ -1,10 +1,10 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-
 import type {
   AddOrganizationAdminBody,
   CreateOrganizationOnboardingBody,
   UpdateOrganizationBody
-} from '../../../shared/contract.ts';
+} from '@overlord/contract';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+
 import { api } from '../api.ts';
 import { persistActiveOrganizationId } from '../org-preferences.ts';
 import { invalidateNonEverhourQueries as invalidateAll } from '../query-invalidation.ts';

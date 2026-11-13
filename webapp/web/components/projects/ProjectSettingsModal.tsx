@@ -1,3 +1,4 @@
+import type { ProjectDto } from '@overlord/contract';
 import {
   FolderTree,
   GitBranch,
@@ -25,8 +26,6 @@ import {
   type SettingsNavItem
 } from '@/components/settings/SettingsDialogShell.tsx';
 import { useProjectResources } from '@/lib/queries';
-
-import type { ProjectDto } from '../../../shared/contract.ts';
 
 const navItems: SettingsNavItem[] = [
   { name: 'General', icon: Settings },

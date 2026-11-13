@@ -1,7 +1,7 @@
+import type { MissionBranchDto, MissionBranchStatus } from '@overlord/contract';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import type { MissionBranchDto, MissionBranchStatus } from '../../shared/contract.ts';
 import { ApiRequestError } from '../lib/api.ts';
 
 import { shouldRequestBusyConfirmation } from './use-branch-actions.ts';

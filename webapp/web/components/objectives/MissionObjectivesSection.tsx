@@ -10,14 +10,10 @@ import {
   deriveObjectiveLifecycleView,
   objectiveHasInstructionText
 } from '@overlord/automations/objective-manager';
+import type { ExecutionRequestDto, MissionDetailDto, ObjectiveDto } from '@overlord/contract';
 import { GripVertical } from 'lucide-react';
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 
-import type {
-  ExecutionRequestDto,
-  MissionDetailDto,
-  ObjectiveDto
-} from '../../../shared/contract.ts';
 import { objectiveMatchesFocus } from '../../lib/mission-panel-search.ts';
 import {
   evidenceForObjective,

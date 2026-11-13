@@ -2,7 +2,7 @@
 
 This file tells agents how to extend the **REST API Layer** (`rest`) — the Express REST + SSE realtime server that lives in `backend/`. Read [`contract/CONTRACT.md`](../contract/CONTRACT.md) and the [component-contract skill](../.claude/skills/component-contract/SKILL.md) before making any cross-module change.
 
-The React SPA that consumes this surface lives in [`webapp/`](../webapp/AGENTS.md). Typed DTOs live in `@overlord/contract` (`packages/contract/`); `webapp/shared/contract.ts` is a re-export shim for SPA imports.
+The React SPA that consumes this surface lives in [`webapp/`](../webapp/AGENTS.md). Typed DTOs live in `@overlord/contract` (`packages/contract/`), which the SPA imports directly.
 
 > **Temporary deviation:** some landed `backend/` paths still read/write SQLite/Postgres tables directly instead of going through the shared service layer in `packages/core/service/`. The rule below (REST handlers call the service layer, never tables directly) still holds — move direct-table writers onto the shared service layer as those areas are touched. Do not add new direct-table writers without recording the same caveat.
 >
@@ -151,7 +151,6 @@ SPA / DTO consumers:
 ```
 webapp/
   web/                    ← React SPA (pure consumer of the rest surface)
-  shared/contract.ts      ← re-exports @overlord/contract for SPA imports
 packages/contract/        ← canonical typed DTO package (@overlord/contract)
 ```
 

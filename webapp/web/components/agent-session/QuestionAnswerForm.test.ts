@@ -1,7 +1,7 @@
+import type { HumanAgentRequestDto } from '@overlord/contract';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import type { HumanAgentRequestDto } from '../../../shared/contract.ts';
 import { ApiRequestError } from '../../lib/api.ts';
 
 import {

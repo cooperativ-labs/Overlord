@@ -1,7 +1,7 @@
+import type { SharedContextEntryDto } from '@overlord/contract';
 import { ChevronDown, ChevronRight, PenLine, Plus } from 'lucide-react';
 import { type FormEvent, useState } from 'react';
 
-import type { SharedContextEntryDto } from '../../shared/contract.ts';
 import { formatTimestamp } from '../lib/format-date.ts';
 import { useMissionSharedContext, useUpsertMissionSharedContext } from '../lib/queries.ts';
 

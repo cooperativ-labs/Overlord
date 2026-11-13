@@ -107,8 +107,3 @@ export function normalizeToolName(nativeName: unknown): NormalizedTool {
   if (name.startsWith('mcp__') || name.startsWith('mcp/')) return 'mcp';
   return EXACT[name.toLowerCase()] ?? 'generic';
 }
-
-/** True when the normalized tool is one whose card may reveal a path. */
-export function isFileTool(tool: NormalizedTool): boolean {
-  return tool === 'read' || tool === 'write' || tool === 'edit';
-}

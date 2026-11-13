@@ -1,3 +1,4 @@
+import type { OrganizationDto } from '@overlord/contract';
 import { useEffect, useState } from 'react';
 
 import { AuthenticatedAvatarImage, Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -8,8 +9,6 @@ import type { ButtonLoadingState } from '@/components/ui/loading-button';
 import { LoadingButton } from '@/components/ui/loading-button';
 import { useUpdateOrganization, useUploadOrganizationLogo } from '@/lib/queries';
 import { cn } from '@/lib/utils';
-
-import type { OrganizationDto } from '../../../../shared/contract.ts';
 
 type GeneralPageProps = {
   open: boolean;

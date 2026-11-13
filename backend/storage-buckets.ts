@@ -14,8 +14,6 @@
 import { type Permission, PERMISSIONS } from '@overlord/auth';
 import type { StorageBucketKey } from '@overlord/contract';
 
-export type { StorageBucketKey } from '@overlord/contract';
-
 export interface StorageBucketDescriptor {
   /**
    * Where the bucket row lives: one per workspace (`storage_buckets.workspace_id`)

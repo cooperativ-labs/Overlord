@@ -1,10 +1,9 @@
+import type { DeliveryDto } from '@overlord/contract';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import assert from 'node:assert/strict';
 import { afterEach, describe, it } from 'node:test';
 import type { ReactNode } from 'react';
-
-import type { DeliveryDto } from '../../shared/contract.ts';
 
 import { deferredWorkPromotion } from './DeferredWorkItem.tsx';
 import {

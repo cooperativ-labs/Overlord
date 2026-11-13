@@ -16,7 +16,7 @@ function cookieValue(request: Request, name: string): string | undefined {
   return values.length === 1 ? values[0].slice(name.length + 1) : undefined;
 }
 
-export function nativeOAuthErrorCode(value: string | null): string {
+function nativeOAuthErrorCode(value: string | null): string {
   switch (value) {
     case 'access_denied':
       return 'access_denied';

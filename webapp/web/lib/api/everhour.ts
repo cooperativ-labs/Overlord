@@ -11,8 +11,7 @@ import { request } from './request.ts';
 
 /**
  * Everhour feature routes. The personal API key is managed through Connected
- * accounts (`./connections.ts`); `/ext/everhour/user-connection` remains a server
- * alias for older clients only.
+ * accounts (`./connections.ts`).
  */
 export const everhourApi = {
   getProjectEverhourLink: (projectId: string) =>

@@ -1,6 +1,5 @@
+import type { HumanAgentRequestDto } from '@overlord/contract';
 import { HelpCircle } from 'lucide-react';
-
-import type { HumanAgentRequestDto } from '../../../shared/contract.ts';
 
 import {
   AgentSessionCardShell,

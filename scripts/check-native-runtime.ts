@@ -2,8 +2,7 @@
  * Verifies the root `better-sqlite3` native addon loads under the current host's
  * platform/arch/Node ABI, and optionally rebuilds it when it doesn't.
  *
- * The repo root `node_modules` is meant to stay host-owned (see
- * planning/feature-plans/native-node-modules-isolation.md), but it gets clobbered
+ * The repo root `node_modules` is meant to stay host-owned, but it gets clobbered
  * whenever a Linux agent-pod container or a different Node version runs `yarn
  * install`/`yarn rebuild` against the same checkout. This catches that early with
  * an actionable message instead of 20 unrelated-looking test failures.
@@ -85,8 +84,7 @@ if (!result.ok) {
     console.error('  Fix: yarn rebuild better-sqlite3');
     console.error(
       '  If this keeps recurring, the root node_modules is likely shared with a Linux ' +
-        'agent-pod container or a different Node version — see ' +
-        'planning/feature-plans/native-node-modules-isolation.md.'
+        'agent-pod container or a different Node version; keep that install out of this checkout.'
     );
     process.exit(1);
   }

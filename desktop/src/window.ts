@@ -5,7 +5,6 @@ import {
   type Session,
   shell
 } from 'electron';
-import path from 'node:path';
 
 const isMac = process.platform === 'darwin';
 
@@ -218,8 +217,4 @@ export function guardNavigation(window: BrowserWindow, shellOrigin: string): voi
       void shell.openExternal(url);
     }
   });
-}
-
-export function splashPath(distElectronDir: string): string {
-  return path.join(distElectronDir, 'splash.html');
 }

@@ -1,3 +1,8 @@
+import type {
+  AgentCatalogDto,
+  AgentLaunchConfigDto,
+  LaunchPreferenceDto
+} from '@overlord/contract';
 import { useEffect, useMemo, useState } from 'react';
 
 import {
@@ -18,12 +23,6 @@ import {
   useProjectResources,
   useUpdateLaunchPreference
 } from '@/lib/queries.ts';
-
-import type {
-  AgentCatalogDto,
-  AgentLaunchConfigDto,
-  LaunchPreferenceDto
-} from '../../../shared/contract.ts';
 
 const EMPTY_LAUNCH_CONFIGS: Record<string, AgentLaunchConfigDto> = {};
 

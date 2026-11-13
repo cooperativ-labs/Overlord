@@ -1,3 +1,4 @@
+import type { EligibleExecutionTargetDto } from '@overlord/contract';
 import { Check, ChevronsUpDown, Monitor } from 'lucide-react';
 import { useState } from 'react';
 
@@ -14,8 +15,6 @@ import {
 } from '@/lib/execution-target-selection';
 import { useUpdateProjectExecutionTarget } from '@/lib/queries';
 import { cn } from '@/lib/utils';
-
-import type { EligibleExecutionTargetDto } from '../../../shared/contract.ts';
 
 function TargetTypeBadge({ type }: { type: string }) {
   return (

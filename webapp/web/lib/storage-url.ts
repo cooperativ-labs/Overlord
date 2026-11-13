@@ -26,13 +26,3 @@ export function storageUrlNeedsAuthenticatedFetch({
     return false;
   }
 }
-
-/** Prefix server-relative storage URLs with the active API base when needed. */
-export function resolveStorageUrl(url: string | null | undefined): string | null {
-  if (!url) return null;
-  if (!isOverlordStorageUrl(url)) return url;
-  const apiBaseUrl = getApiBaseUrl();
-  if (!apiBaseUrl) return url;
-  if (!storageUrlNeedsAuthenticatedFetch({ url, apiBaseUrl })) return url;
-  return `${apiBaseUrl.replace(/\/+$/, '')}${url}`;
-}

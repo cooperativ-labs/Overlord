@@ -15,14 +15,7 @@ import { userTokensApi } from './api/user-tokens.ts';
 import { webhooksApi } from './api/webhooks.ts';
 import { workspacesApi } from './api/workspaces.ts';
 
-export {
-  ApiRequestError,
-  type AuthProviders,
-  type LocalTargetServerCapability,
-  type Meta,
-  type MetaCapabilities
-} from './api/request.ts';
-export type { RunnerQueueRequest, RunnerQueueStatus } from './api/run-queues.ts';
+export { ApiRequestError, type LocalTargetServerCapability } from './api/request.ts';
 
 export const api = {
   ...profileApi,

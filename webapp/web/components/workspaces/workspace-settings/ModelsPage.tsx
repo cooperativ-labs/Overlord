@@ -15,6 +15,7 @@ import {
   verticalListSortingStrategy
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import type { AgentCatalogAgentDto, AgentCatalogDto } from '@overlord/contract';
 import { Check, GripVertical, Plus, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
@@ -36,8 +37,6 @@ import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { useAgentCatalog, useRefreshAgentCatalog, useUpdateAgentCatalog } from '@/lib/queries';
 import { cn } from '@/lib/utils';
-
-import type { AgentCatalogAgentDto, AgentCatalogDto } from '../../../../shared/contract.ts';
 
 type DraftAgent = AgentCatalogAgentDto;
 

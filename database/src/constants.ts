@@ -1,7 +1,3 @@
-export const SEED_WORKSPACE_ID = 'local-workspace';
-export const SEED_WORKSPACE_SLUG = 'local';
-export const SEED_WORKSPACE_USER_ID = 'local-workspace-user';
-export const SEED_USER_ID = 'local-user';
 /**
  * Version of the database schema contract recorded in
  * `schema_migrations.contract_version` for every applied migration

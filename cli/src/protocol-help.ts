@@ -24,7 +24,6 @@ export const SUPPORTED_PROTOCOL_SUBCOMMANDS = [
   'hook-event',
   'launch-objective',
   'list-deliveries',
-  'list-organizations',
   'load-context',
   'objective-changes',
   'prompt',
@@ -39,7 +38,6 @@ export const SUPPORTED_PROTOCOL_SUBCOMMANDS = [
   'resume-follow-up',
   'retry-queue-entry',
   'search',
-  'search-missions',
   'statuses',
   'sync-changes',
   'update',
@@ -48,10 +46,6 @@ export const SUPPORTED_PROTOCOL_SUBCOMMANDS = [
   'update-run-queue',
   'write-context'
 ] as const;
-
-const PROTOCOL_HELP_ALIASES: Readonly<Record<string, string>> = {
-  'search-missions': 'search'
-};
 
 export function hasProtocolSubcommandHelp(subcommand: string): boolean {
   return (SUPPORTED_PROTOCOL_SUBCOMMANDS as readonly string[]).includes(subcommand);
@@ -114,7 +108,6 @@ Subcommands:
   discover-project       Resolve a project from the working directory or explicit id
   create-project         Create a project in one authorized workspace
   register-target        Register this machine as an execution target
-  list-organizations     Legacy name; returns only the caller's current workspace context (not organizations)
   attach                 Start a mission session and return full working context
   connect                Start a lightweight session without full context assembly
   load-context           Read mission context without creating a session
@@ -122,8 +115,7 @@ Subcommands:
   launch-objective       Queue an objective for execution
   reorder-future-objectives
                          Reorder all future objectives in one mission
-  search                  Find grouped mission/objective/delivery matches (canonical)
-  search-missions         Compatibility alias for search
+  search                 Find grouped mission/objective/delivery matches
   statuses                List one project's ordered board columns
   discuss-objective      Mark a draft objective as submitted (does not start execution)
   add-objectives         Append ordered objectives to an existing mission
@@ -523,11 +515,10 @@ search:
     --from <ISO-8601>           Inclusive date/time lower bound
     --to <ISO-8601>             Exclusive date/time upper bound
     --limit <n>                 Max results (default: 25)
-    --response-version <1|2|3>  1 (default) returns the legacy array; 2 returns
+    --response-version <2|3>    3 (default) returns SearchResponseV3 with grouped
+                                objective and delivery matches; 2 returns
                                 SearchMissionsResponseV2 with snippets, match
-                                evidence, appliedFilters, and truncation counts;
-                                3 returns SearchResponseV3 with grouped objective
-                                and delivery matches
+                                evidence, appliedFilters, and truncation counts
     --entity-types <csv>        V3 only: mission,objective,delivery (default all)
     --objective-states <csv>    V3 only: restrict matching objective states
     --matches-per-result <n>    V3 only: child matches per mission (default 3, max 10)
@@ -538,7 +529,7 @@ search:
                                 --workspace-id, --limit (1-100, default 50) and --cursor.
     --cursor <cursor>           Exact-reference mode: nextCursor from the previous page
   Returns:
-    JSON with matching missions (v1) or the versioned search envelope (v2/v3).
+    The versioned search envelope (v3 by default, or v2).
     With --reference: { results, nextCursor, complete }. Only a page with
     complete: true ends the scan; ranked search never proves absence.
 
@@ -650,7 +641,6 @@ create:
     --title <text>
     --project-id <id>           Required for a project mission; never inferred
     --unassigned-to-project     Intentionally create an account-owned inbox item
-    --inbox                     Compatibility alias for --unassigned-to-project
     --assigned-to <id>          Workspace member to own the mission (meaningless on the inbox fallback)
     --auto-advance / --no-auto-advance
         Add matching objectives to the authoritative Run Queue. Defaults to off.
@@ -975,14 +965,6 @@ attachment-download-url:
     --objective-id <id>         Restrict the lookup to one objective
     --output <path>             Download to a new local file (never overwrites)
 
-list-organizations:
-  Purpose:
-    Legacy name predating the real organizations hierarchy (coo:135) — despite the
-    name, returns only the caller's current *workspace* context, not organization
-    data. Kept as-is to avoid a breaking protocol rename.
-  Returns:
-    JSON array with a single { id, slug, name } entry for the active workspace.
-
 Supported subcommands: ${subcommands}
 Run \`${primaryCommand} help\` for management commands and \`${primaryCommand} protocol help\` for this reference.
 `;
@@ -992,8 +974,7 @@ Run \`${primaryCommand} help\` for management commands and \`${primaryCommand} p
     return;
   }
 
-  const canonical = PROTOCOL_HELP_ALIASES[subcommand] ?? subcommand;
-  const marker = `\n${canonical}:\n`;
+  const marker = `\n${subcommand}:\n`;
   const sectionStart = fullHelp.indexOf(marker);
   if (sectionStart === -1) {
     throw new Error(`Protocol help is missing documentation for ${subcommand}.`);
@@ -1006,7 +987,6 @@ Run \`${primaryCommand} help\` for management commands and \`${primaryCommand} p
       ? remaining.indexOf('\nSupported subcommands:')
       : marker.length - 1 + nextSection;
   const section = (sectionEnd === -1 ? remaining : remaining.slice(0, sectionEnd)).trimEnd();
-  const aliasNote = canonical === subcommand ? '' : `Alias for \`${canonical}\`.\n\n`;
 
-  console.log(`${primaryCommand} protocol ${subcommand}\n\n${aliasNote}${section}`);
+  console.log(`${primaryCommand} protocol ${subcommand}\n\n${section}`);
 }

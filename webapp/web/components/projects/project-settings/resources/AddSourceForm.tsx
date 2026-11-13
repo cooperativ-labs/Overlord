@@ -1,3 +1,4 @@
+import type { EligibleExecutionTargetDto, ProjectResourceDto } from '@overlord/contract';
 import { FolderOpen, GitBranch, HardDrive, Plus } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
@@ -22,11 +23,6 @@ import {
 import { writeLocalProjectMetadata } from '@/lib/project-metadata';
 import { useCreateProjectResource } from '@/lib/queries';
 import { cn } from '@/lib/utils';
-
-import type {
-  EligibleExecutionTargetDto,
-  ProjectResourceDto
-} from '../../../../../shared/contract.ts';
 
 export type SourceKind = 'local_checkout' | 'git';
 

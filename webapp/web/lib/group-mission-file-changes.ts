@@ -1,4 +1,4 @@
-import type { FileChangeDto, ProjectResourceDto } from '../../shared/contract.ts';
+import type { FileChangeDto, ProjectResourceDto } from '@overlord/contract';
 
 import { projectResourceLabel } from './project-resources.ts';
 

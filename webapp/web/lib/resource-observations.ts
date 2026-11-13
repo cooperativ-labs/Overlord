@@ -1,10 +1,6 @@
+import type { ProjectResourceDto, RecordTargetResourceObservationsBody } from '@overlord/contract';
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef } from 'react';
-
-import type {
-  ProjectResourceDto,
-  RecordTargetResourceObservationsBody
-} from '../../shared/contract.ts';
 
 import { api } from './api.ts';
 import { invokeLocalTarget, isLocalTargetCapabilityAvailable } from './local-target-client.ts';
