@@ -111701,7 +111701,6 @@ var DEFAULT_STATUSES = [
   }
 ];
 var OBJECTIVE_STATES = [
-  "future",
   "draft",
   "submitted",
   "launching",
@@ -112453,7 +112452,6 @@ function missionDisplayIdFromObjectiveRef(ref) {
 
 // ../packages/contract/dist/search.js
 var SEARCH_OBJECTIVE_STATES = vocabulary()([
-  "future",
   "draft",
   "submitted",
   "launching",
@@ -112521,7 +112519,7 @@ function parseSearchObjectiveStates(values) {
     if (!SEARCH_OBJECTIVE_STATES.includes(value2)) {
       return {
         ok: false,
-        error: "objectiveStates must be future, draft, submitted, launching, executing, pending_delivery, and/or complete"
+        error: "objectiveStates must be draft, submitted, launching, executing, pending_delivery, and/or complete"
       };
     }
     parsed.push(value2);
@@ -112990,7 +112988,7 @@ function applyMigration(db, migration) {
     }
     return;
   }
-  db.exec(migration.sql);
+  executeMigrationSql(db, migration.sql);
   if (isExtEverhourPersistenceMigration(migration)) {
     finalizeExtEverhourMissionLinksSqlite(db);
   }
@@ -113009,6 +113007,19 @@ function applyMigration(db, migration) {
   db.prepare(`INSERT INTO schema_migrations (version, adapter, component, contract_version, checksum, applied_at)
      VALUES (?, 'sqlite', ?, ?, ?, ?)`).run(migration.version, migration.component, SCHEMA_CONTRACT_VERSION, migration.checksum, (/* @__PURE__ */ new Date()).toISOString());
 }
+function executeMigrationSql(db, sql2) {
+  const wasInTransaction = db.inTransaction;
+  const foreignKeys = db.pragma("foreign_keys", { simple: true });
+  try {
+    db.exec(sql2);
+  } catch (error64) {
+    if (!wasInTransaction && db.inTransaction)
+      db.exec("ROLLBACK");
+    if (!wasInTransaction)
+      db.pragma(`foreign_keys = ${foreignKeys ? "ON" : "OFF"}`);
+    throw error64;
+  }
+}
 function openDatabase({ databasePath: databasePath2 }) {
   (0, import_node_fs2.mkdirSync)(import_node_path6.default.dirname(databasePath2), { recursive: true });
   const Database = loadBetterSqlite3();
@@ -113022,9 +113033,10 @@ function openDatabase({ databasePath: databasePath2 }) {
   }
   return db;
 }
-function migrateDatabase(db) {
-  const migrationFiles = listSqliteMigrationFiles();
-  const knownVersions = knownMigrationVersions(migrationFiles);
+function migrateDatabase(db, options = {}) {
+  const allMigrationFiles = listSqliteMigrationFiles();
+  const knownVersions = knownMigrationVersions(allMigrationFiles);
+  const migrationFiles = allMigrationFiles.filter((fileName) => options.stopBeforeVersion === void 0 || (fileName.split("_", 1)[0] ?? fileName).localeCompare(options.stopBeforeVersion) < 0);
   const hasSchemaLedger = Boolean(db.prepare(`SELECT 1 FROM sqlite_schema WHERE type = 'table' AND name = 'schema_migrations'`).get());
   if (hasSchemaLedger) {
     pruneObsoleteMigrationLedgerSqlite({ db, knownVersions });
@@ -113034,7 +113046,7 @@ function migrateDatabase(db) {
     const migration = loadMigrationSql(fileName);
     const hasSchema = db.prepare(`SELECT 1 FROM sqlite_schema WHERE type = 'table' AND name = 'schema_migrations'`).get();
     if (!hasSchema) {
-      db.exec(migration.sql);
+      executeMigrationSql(db, migration.sql);
       const createdSchema = db.prepare(`SELECT 1 FROM sqlite_schema WHERE type = 'table' AND name = 'schema_migrations'`).get();
       if (!createdSchema) {
         pendingMigrationRecords.push(migration);
@@ -113468,12 +113480,13 @@ async function recordMigration(client, migration) {
     (/* @__PURE__ */ new Date()).toISOString()
   ]);
 }
-async function migratePostgres(client) {
+async function migratePostgres(client, options = {}) {
   if (client.dialect !== "postgres") {
     throw new Error(`migratePostgres requires a postgres client, got '${client.dialect}'`);
   }
-  const migrationFiles = listPostgresMigrationFiles();
-  const knownVersions = knownMigrationVersions(migrationFiles);
+  const allMigrationFiles = listPostgresMigrationFiles();
+  const knownVersions = knownMigrationVersions(allMigrationFiles);
+  const migrationFiles = allMigrationFiles.filter((fileName) => options.stopBeforeVersion === void 0 || (fileName.split("_", 1)[0] ?? fileName).localeCompare(options.stopBeforeVersion) < 0);
   if (await schemaMigrationsExists(client)) {
     await pruneObsoleteMigrationLedgerPostgres({ client, knownVersions });
   }
@@ -133590,7 +133603,6 @@ function planRunQueueDispatch(input2) {
         action: "dispatch",
         entryId: entry.id,
         objectiveId: entry.objectiveId,
-        promoteFutureToDraft: objective.state === "future",
         idempotencyKey: `run_queue:${entry.id}:attempt:${entry.attemptCount + 1}`
       });
       if (!allowParallel)
@@ -133600,13 +133612,9 @@ function planRunQueueDispatch(input2) {
   }
   return actions;
 }
-var EDITABLE_NEXT_UP_OBJECTIVE_STATES = [
+var QUEUED_OBJECTIVE_STATES = [
   "draft",
-  "submitted",
-  "launching"
-];
-var FUTURE_OBJECTIVE_STATES = [
-  "future"
+  "submitted"
 ];
 var ACTIVE_OBJECTIVE_STATES = [
   "executing",
@@ -133633,11 +133641,14 @@ function objectiveInstructionText(objective) {
 function objectiveHasInstructionText(objective) {
   return objectiveInstructionText(objective).trim().length > 0;
 }
-function isEditableNextUpObjective(objective) {
-  return stateIn(objective.state, EDITABLE_NEXT_UP_OBJECTIVE_STATES);
+function isQueuedObjective(objective) {
+  return stateIn(objective.state, QUEUED_OBJECTIVE_STATES);
 }
-function isFutureObjective(objective) {
-  return stateIn(objective.state, FUTURE_OBJECTIVE_STATES);
+function nextUpDraft(objectives) {
+  return sortObjectivesByLifecycleOrder(objectives).find((objective) => objective.state === "draft" && objectiveHasInstructionText(objective)) ?? null;
+}
+function firstDraft(objectives) {
+  return sortObjectivesByLifecycleOrder(objectives).find((objective) => objective.state === "draft") ?? null;
 }
 function isActiveObjective(objective) {
   return stateIn(objective.state, ACTIVE_OBJECTIVE_STATES);
@@ -133675,22 +133686,13 @@ function sortObjectivesForMissionDisplay(objectives) {
     ...sortByLifecycleMoment(ordered.filter((objective) => objective.state === "complete"), (objective) => objective.completedAt),
     ...sortByLifecycleMoment(ordered.filter(isActiveObjective), (objective) => objective.startedAt),
     ...sortByLifecycleMoment(ordered.filter((objective) => objective.state === "launching"), (objective) => objective.launchedAt),
-    ...ordered.filter((objective) => objective.state === "draft" || objective.state === "submitted"),
-    ...ordered.filter(isFutureObjective)
+    ...ordered.filter(isQueuedObjective)
   ];
 }
 function validateObjectiveLifecycle(objectives, options = {}) {
   const ordered = sortObjectivesByLifecycleOrder(objectives);
   const violations = [];
   const allowParallel = options.allowParallelObjectives === true;
-  const drafts = ordered.filter((o3) => o3.state === "draft");
-  if (drafts.length > 1) {
-    violations.push({
-      code: "multiple_drafts",
-      objectiveIds: drafts.map((o3) => o3.id),
-      message: "A mission may have at most one draft objective."
-    });
-  }
   const active = ordered.filter(isActiveObjective);
   const conflictingActive = allowParallel ? [] : active;
   const uniqueConflicting = [...new Map(conflictingActive.map((item) => [item.id, item])).values()];
@@ -133727,39 +133729,25 @@ function validateObjectiveLifecycle(objectives, options = {}) {
 function deriveObjectiveLifecycleView(objectives, options = {}) {
   const orderedObjectives = sortObjectivesForMissionDisplay(objectives);
   const executedObjectives = orderedObjectives.filter((objective) => (isActiveObjective(objective) || objective.state === "complete") && objectiveHasInstructionText(objective));
-  const editableObjectives = orderedObjectives.filter(isEditableNextUpObjective);
-  const futureObjectives = orderedObjectives.filter(isFutureObjective);
+  const launchingObjectives = orderedObjectives.filter((objective) => objective.state === "launching");
+  const queuedObjectives = orderedObjectives.filter(isQueuedObjective);
   const activeObjectives = orderedObjectives.filter(isActiveObjective);
   const activeObjective = activeObjectives[0] ?? null;
-  const nextUpObjective = orderedObjectives.find(isEditableNextUpObjective) ?? null;
+  const nextUpObjective = launchingObjectives[0] ?? queuedObjectives[0] ?? null;
   return {
     orderedObjectives,
     executedObjectives,
-    editableObjectives,
-    futureObjectives,
+    launchingObjectives,
+    queuedObjectives,
     activeObjective,
     activeObjectives,
     nextUpObjective,
-    hasNonExecuted: editableObjectives.length > 0 || futureObjectives.length > 0,
+    hasNonExecuted: launchingObjectives.length + queuedObjectives.length > 0,
     violations: validateObjectiveLifecycle(orderedObjectives, options)
   };
 }
-function planEnsureDraftSlot(objectives) {
-  const ordered = sortObjectivesByLifecycleOrder(objectives);
-  if (ordered.some((objective) => objective.state === "draft")) {
-    return { action: "none", reason: "draft_slot_filled" };
-  }
-  if (ordered.some((objective) => objective.state === "submitted" || objective.state === "launching")) {
-    return { action: "none", reason: "next_up_still_launching" };
-  }
-  const nextFuture = ordered.find((objective) => isFutureObjective(objective) && objectiveHasInstructionText(objective));
-  if (nextFuture) {
-    return { action: "promote_future", objectiveId: nextFuture.id };
-  }
-  return { action: "none", reason: "no_future_objective" };
-}
 function decideAutoAdvanceAfterDelivery(objectives, options = {}) {
-  const nextDraft = sortObjectivesByLifecycleOrder(objectives).find((objective) => objective.state === "draft" && objectiveHasInstructionText(objective));
+  const nextDraft = nextUpDraft(objectives);
   if (!nextDraft) {
     return { action: "none", reason: "no_non_empty_draft" };
   }
@@ -133801,20 +133789,19 @@ function manageObjectiveLifecycle(input2) {
   return {
     orderedObjectiveIds: view.orderedObjectives.map((objective) => objective.id),
     executedObjectiveIds: view.executedObjectives.map((objective) => objective.id),
-    editableObjectiveIds: view.editableObjectives.map((objective) => objective.id),
-    futureObjectiveIds: view.futureObjectives.map((objective) => objective.id),
+    launchingObjectiveIds: view.launchingObjectives.map((objective) => objective.id),
+    queuedObjectiveIds: view.queuedObjectives.map((objective) => objective.id),
     activeObjectiveId: view.activeObjective?.id ?? null,
     nextUpObjectiveId: view.nextUpObjective?.id ?? null,
     hasNonExecuted: view.hasNonExecuted,
     violations: view.violations,
-    ensureDraftSlotPlan: planEnsureDraftSlot(input2.objectives),
     autoAdvanceDecision: input2.planAutoAdvance ? decideAutoAdvanceAfterDelivery(input2.objectives, autoAdvanceOptions) : null
   };
 }
 var manageObjectiveLifecycleTool = {
   id: "manage-objective-lifecycle",
   label: "Manage objective lifecycle",
-  description: "Applies the objective lifecycle ruleset to classify objectives, validate invariants, and plan refill or auto-advance actions without writing persistence.",
+  description: "Applies the objective lifecycle ruleset to classify objectives, validate invariants, and plan auto-advance actions without writing persistence.",
   run: async ({ input: input2 }) => manageObjectiveLifecycle(input2)
 };
 
@@ -137930,15 +137917,76 @@ async function allocateObjectiveDisplayKey({
   );
 }
 
-// ../packages/core/service/objective-lifecycle-timestamps.ts
-var OBJECTIVE_LAUNCHED_AT_ASSIGNMENT = "launched_at = COALESCE(launched_at, ?)";
-var OBJECTIVE_STARTED_AT_ASSIGNMENT = "started_at = COALESCE(started_at, ?)";
-var OBJECTIVE_COMPLETED_AT_ASSIGNMENT = "completed_at = ?";
-var OBJECTIVE_REOPENABLE_STATES = Object.freeze([
-  "executing",
-  "pending_delivery",
-  "complete"
-]);
+// ../packages/core/service/objective-queue.ts
+var QUEUED_OBJECTIVE_STATES2 = ["draft", "submitted"];
+function isQueuedObjectiveState(state2) {
+  return QUEUED_OBJECTIVE_STATES2.includes(state2);
+}
+var ObjectiveQueueError = class extends Error {
+  constructor(code, message2) {
+    super(message2);
+    this.code = code;
+    this.name = "ObjectiveQueueError";
+  }
+  code;
+};
+async function lockMissionObjectiveQueue(db, missionId) {
+  if (db.dialect !== "postgres") return;
+  await db.get(`SELECT id FROM missions WHERE id = ? FOR UPDATE`, [missionId]);
+}
+function sortQueueRows(rows) {
+  return [...rows].sort(
+    (a5, b5) => a5.position - b5.position || (a5.created_at ?? "").localeCompare(b5.created_at ?? "") || a5.id.localeCompare(b5.id)
+  );
+}
+function planQueuedObjectiveReorder(rows, orderedIds) {
+  if (!Array.isArray(orderedIds) || orderedIds.some((id2) => typeof id2 !== "string")) {
+    throw new ObjectiveQueueError("not_array", "orderedObjectiveIds must be an array of ids");
+  }
+  const ids = orderedIds;
+  if (new Set(ids).size !== ids.length) {
+    throw new ObjectiveQueueError("duplicate_ids", "orderedObjectiveIds contains duplicates");
+  }
+  const byId = new Map(rows.map((row) => [row.id, row]));
+  for (const id2 of ids) {
+    const row = byId.get(id2);
+    if (!row) {
+      throw new ObjectiveQueueError("unknown_objective", `Objective ${id2} not found on mission`);
+    }
+    if (!isQueuedObjectiveState(row.state)) {
+      throw new ObjectiveQueueError("not_queued", `Objective ${id2} is not a queued objective`);
+    }
+  }
+  const queued = sortQueueRows(rows.filter((row) => isQueuedObjectiveState(row.state)));
+  if (queued.length !== ids.length) {
+    throw new ObjectiveQueueError(
+      "incomplete_set",
+      "orderedObjectiveIds must list every draft and submitted objective of the mission exactly once"
+    );
+  }
+  const slots = queued.map((row) => row.position);
+  const plan = /* @__PURE__ */ new Map();
+  ids.forEach((id2, index) => {
+    const slot = slots[index];
+    if (byId.get(id2).position !== slot) plan.set(id2, slot);
+  });
+  return plan;
+}
+function planReopenToQueueHead(rows, reopenedId) {
+  const reopened = rows.find((row) => row.id === reopenedId);
+  if (!reopened) return /* @__PURE__ */ new Map();
+  const queued = sortQueueRows(
+    rows.filter((row) => row.id !== reopenedId && isQueuedObjectiveState(row.state))
+  );
+  if (queued.length === 0 || reopened.position < queued[0].position) return /* @__PURE__ */ new Map();
+  const slots = [reopened.position, ...queued.map((row) => row.position)].sort((a5, b5) => a5 - b5);
+  const plan = /* @__PURE__ */ new Map();
+  [reopened, ...queued].forEach((row, index) => {
+    const slot = slots[index];
+    if (row.position !== slot) plan.set(row.id, slot);
+  });
+  return plan;
+}
 
 // ../packages/core/service/projects.ts
 var import_node_fs15 = require("node:fs");
@@ -144928,10 +144976,11 @@ async function retireEmptyRunQueues(db, projectId) {
     );
   return rows.map((row) => row.id);
 }
-var SEQUENCEABLE_OBJECTIVE_STATES = /* @__PURE__ */ new Set(["draft", "submitted", "future"]);
+var SEQUENCEABLE_OBJECTIVE_STATES = /* @__PURE__ */ new Set(["draft", "submitted"]);
 async function rewriteMissionPositions(db, missionId, options = {}) {
+  await lockMissionObjectiveQueue(db, missionId);
   const rows = await db.all(
-    `SELECT o.id, o.state, o.position, e.id queue_entry_id, e.position queue_position, q.position queue_order
+    `SELECT o.id, o.workspace_id, o.project_id, o.state, o.position, e.id queue_entry_id, e.position queue_position, q.position queue_order, e.state queue_state
        FROM objectives o
        LEFT JOIN run_queue_entries e ON e.objective_id = o.id AND e.deleted_at IS NULL
        LEFT JOIN run_queues q ON q.id = e.queue_id AND q.deleted_at IS NULL
@@ -144939,31 +144988,62 @@ async function rewriteMissionPositions(db, missionId, options = {}) {
       ORDER BY o.position, o.id`,
     [missionId]
   );
-  const historicalStates = /* @__PURE__ */ new Set(["executing", "pending_delivery", "complete"]);
-  const historical = rows.filter((row) => historicalStates.has(row.state));
-  let tail = rows.filter((row) => !historicalStates.has(row.state));
-  const movedToEnd = options.moveToEndObjectiveId ? tail.find((row) => row.id === options.moveToEndObjectiveId) : void 0;
-  if (movedToEnd) tail = [...tail.filter((row) => row !== movedToEnd), movedToEnd];
-  const queuedInQueueOrder = tail.filter((row) => row.queue_entry_id).sort(
+  const movedToEnd = options.moveToEndObjectiveId ? rows.find(
+    (row) => row.id === options.moveToEndObjectiveId && SEQUENCEABLE_OBJECTIVE_STATES.has(row.state)
+  ) : void 0;
+  const movable = rows.filter(
+    (row) => row !== movedToEnd && SEQUENCEABLE_OBJECTIVE_STATES.has(row.state) && row.queue_entry_id && (row.queue_state === "waiting" || row.queue_state === "blocked")
+  );
+  const queuedInQueueOrder = [...movable].sort(
     (left, right) => (left.queue_order ?? Number.MAX_SAFE_INTEGER) - (right.queue_order ?? Number.MAX_SAFE_INTEGER) || (left.queue_position ?? Number.MAX_SAFE_INTEGER) - (right.queue_position ?? Number.MAX_SAFE_INTEGER) || left.position - right.position || left.id.localeCompare(right.id)
   );
-  let nextQueued = 0;
-  const orderedTail = tail.map(
-    (row) => row.queue_entry_id ? queuedInQueueOrder[nextQueued++] : row
+  const positions = new Map(
+    queuedInQueueOrder.map((row, index) => [row.id, movable[index].position])
   );
-  const orderedRows = [...historical, ...orderedTail];
-  if (orderedRows.every((row, index) => row.position === index)) return;
+  const maxPosition = Math.max(-1, ...rows.map((row) => row.position));
+  if (movedToEnd && movedToEnd.position !== maxPosition) {
+    positions.set(movedToEnd.id, maxPosition + 1);
+  }
+  const changedRows = rows.filter(
+    (row) => positions.has(row.id) && positions.get(row.id) !== row.position
+  );
+  if (changedRows.length === 0) return;
   const now2 = nowIso();
-  for (let i5 = 0; i5 < orderedRows.length; i5++)
+  for (let i5 = 0; i5 < changedRows.length; i5++) {
+    const result2 = await db.run(
+      "UPDATE objectives SET position = ? WHERE id = ? AND state IN ('draft', 'submitted')",
+      [maxPosition + 2 + i5, changedRows[i5].id]
+    );
+    if (result2.changes !== 1)
+      throw new ServiceError(
+        "Objective queue changed; refetch and retry",
+        "objective_queue_conflict",
+        409
+      );
+  }
+  for (const row of changedRows) {
     await db.run(
       "UPDATE objectives SET position = ?, updated_at = ?, revision = revision + 1 WHERE id = ?",
-      [1e9 + i5, now2, orderedRows[i5].id]
+      [positions.get(row.id), now2, row.id]
     );
-  for (let i5 = 0; i5 < orderedRows.length; i5++)
-    await db.run(
-      "UPDATE objectives SET position = ?, updated_at = ?, revision = revision + 1 WHERE id = ?",
-      [i5, now2, orderedRows[i5].id]
+    const updated = await db.get(
+      "SELECT revision FROM objectives WHERE id = ?",
+      [row.id]
     );
+    await insertEntityChange(db, {
+      workspaceId: row.workspace_id,
+      projectId: row.project_id,
+      missionId,
+      objectiveId: row.id,
+      entityType: "objective",
+      entityId: row.id,
+      operation: "update",
+      entityRevision: updated.revision,
+      changedFields: ["position"],
+      actorWorkspaceUserId: null,
+      source: "system"
+    });
+  }
 }
 async function syncRunQueueOrderFromMissionPositions(db, missionId) {
   const rows = await db.all(
@@ -145108,6 +145188,7 @@ async function enqueueRunQueueEntry(db, projectId, objectiveId, options = {}) {
     );
     if (!objective || objective.project_id !== projectId)
       throw new ServiceError("Objective not found", "objective_not_found", 404);
+    await lockMissionObjectiveQueue(tx, objective.mission_id);
     const existing = await tx.get(
       "SELECT id FROM run_queue_entries WHERE objective_id = ? AND deleted_at IS NULL",
       [objectiveId]
@@ -145192,7 +145273,7 @@ async function enqueueRunQueueEntry(db, projectId, objectiveId, options = {}) {
       const followers = await tx.all(
         `SELECT o.id FROM objectives o
           WHERE o.mission_id = ? AND o.deleted_at IS NULL AND o.position > ?
-            AND o.state IN ('draft', 'submitted', 'future')
+            AND o.state IN ('draft', 'submitted')
             AND TRIM(o.instruction_text) <> ''
             AND NOT EXISTS (
               SELECT 1 FROM run_queue_entries e WHERE e.objective_id = o.id AND e.deleted_at IS NULL
@@ -145313,6 +145394,7 @@ async function removeRunQueueEntry(db, entryId, options = {}) {
       [entryId]
     );
     if (!row) throw new ServiceError("Run Queue entry not found", "run_queue_entry_not_found", 404);
+    await lockMissionObjectiveQueue(tx, row.mission_id);
     const inFlight = row.state === "dispatched" || row.state === "running";
     const now2 = nowIso();
     await tx.run(
@@ -145345,11 +145427,12 @@ async function removeRunQueueEntry(db, entryId, options = {}) {
     }
     if (queue) removedEmptyQueueId = await retireRunQueueIfEmpty(tx, queue.id);
     const resultingState = objectiveReset ? "draft" : objective?.state;
-    await rewriteMissionPositions(
-      tx,
-      row.mission_id,
-      resultingState && SEQUENCEABLE_OBJECTIVE_STATES.has(resultingState) ? { moveToEndObjectiveId: row.objective_id } : {}
-    );
+    if (!options.preserveObjectivePositions)
+      await rewriteMissionPositions(
+        tx,
+        row.mission_id,
+        resultingState && SEQUENCEABLE_OBJECTIVE_STATES.has(resultingState) ? { moveToEndObjectiveId: row.objective_id } : {}
+      );
     await enqueueRunQueueDispatch(tx, row.project_id, row.workspace_id);
     return {
       removed: true,
@@ -145409,6 +145492,9 @@ async function reorderRunQueue(db, queueId, orderedEntryIds) {
       "SELECT id, mission_id, state FROM run_queue_entries WHERE queue_id = ? AND deleted_at IS NULL ORDER BY position",
       [queueId]
     );
+    for (const missionId of [...new Set(rows.map((row) => row.mission_id))].sort()) {
+      await lockMissionObjectiveQueue(tx, missionId);
+    }
     if (rows.length !== orderedEntryIds.length || new Set(orderedEntryIds).size !== rows.length || rows.some((r5) => !orderedEntryIds.includes(r5.id)))
       throw new ServiceError(
         "orderedEntryIds must contain every live entry exactly once",
@@ -145439,6 +145525,7 @@ async function moveRunQueueEntry(db, entryId, options) {
     );
     if (!current)
       throw new ServiceError("Run Queue entry not found", "run_queue_entry_not_found", 404);
+    await lockMissionObjectiveQueue(tx, current.mission_id);
     if (current.state === "running" || current.state === "dispatched")
       throw new ServiceError("Running entries cannot be moved", "run_queue_entry_running", 409);
     const queueId = options.queueId ?? current.queue_id;
@@ -145523,6 +145610,9 @@ async function deleteRunQueue(db, queueId, moveEntriesTo) {
       "SELECT id, mission_id FROM run_queue_entries WHERE queue_id = ? AND deleted_at IS NULL",
       [queueId]
     );
+    for (const missionId of [...new Set(entries.map((entry) => entry.mission_id))].sort()) {
+      await lockMissionObjectiveQueue(tx, missionId);
+    }
     if (entries.length && !moveEntriesTo)
       throw new ServiceError(
         "moveEntriesTo is required for a non-empty queue",
@@ -145739,17 +145829,11 @@ async function insertObjective({
   if (!OBJECTIVE_STATES.includes(requestedState)) {
     throw new ServiceError(`Invalid objective state: ${requestedState}`, "validation_error");
   }
-  const draftRow = await ctx.db.get(
-    `SELECT id FROM objectives
-       WHERE mission_id = ? AND state = 'draft' AND deleted_at IS NULL
-       LIMIT 1`,
-    [mission.id]
-  );
-  const resolvedState = requestedState === "draft" && draftRow ? "future" : requestedState;
-  const allowsBlankInstruction = resolvedState === "draft" || resolvedState === "future";
-  if (!instruction && !allowsBlankInstruction) {
+  const resolvedState = requestedState;
+  if (!instruction && resolvedState !== "draft") {
     throw new ServiceError("Objective instruction is required", "validation_error");
   }
+  await lockMissionObjectiveQueue(ctx.db, mission.id);
   const maxRow = await ctx.db.get(
     `SELECT MAX(position) AS max_pos FROM objectives WHERE mission_id = ? AND deleted_at IS NULL`,
     [mission.id]
@@ -145769,7 +145853,7 @@ async function insertObjective({
       "validation_error"
     );
   }
-  const launchSelection = !explicitAgent && (resolvedState === "draft" || resolvedState === "future") ? await readProjectLaunchSelection(ctx, mission.projectId) : { agent: null, model: null, reasoningEffort: null };
+  const launchSelection = !explicitAgent && resolvedState === "draft" ? await readProjectLaunchSelection(ctx, mission.projectId) : { agent: null, model: null, reasoningEffort: null };
   const resolvedAssignedAgent = explicitAgent ?? launchSelection.agent;
   const resolvedModel = explicitAgent ? explicitModel : launchSelection.model;
   const resolvedReasoningEffort = explicitAgent ? reasoningEffort?.trim() || null : launchSelection.reasoningEffort;
@@ -145840,64 +145924,6 @@ async function insertObjective({
     display_key: displayKey,
     mission_display_id: mission.displayId
   });
-}
-async function ensureNextDraftObjective({
-  ctx,
-  missionId,
-  projectId,
-  now: now2
-}) {
-  const drafts = await ctx.db.all(
-    `SELECT id, instruction_text, revision FROM objectives
-       WHERE mission_id = ? AND state = 'draft' AND deleted_at IS NULL
-       ORDER BY position ASC, created_at ASC`,
-    [missionId]
-  );
-  if (drafts.some((draft) => draft.instruction_text.trim())) return;
-  const nextFuture = await ctx.db.get(
-    `SELECT id, revision FROM objectives
-       WHERE mission_id = ? AND state = 'future' AND deleted_at IS NULL
-         AND TRIM(instruction_text) <> ''
-       ORDER BY position ASC, created_at ASC LIMIT 1`,
-    [missionId]
-  );
-  if (nextFuture) {
-    for (const draft of drafts) {
-      const revision4 = draft.revision + 1;
-      await ctx.db.run(
-        `UPDATE objectives SET deleted_at = ?, updated_at = ?, revision = ?
-           WHERE id = ? AND mission_id = ?`,
-        [now2, now2, revision4, draft.id, missionId]
-      );
-      await recordChange({
-        ctx,
-        entityType: "objective",
-        entityId: draft.id,
-        operation: "delete",
-        entityRevision: revision4,
-        projectId,
-        missionId,
-        objectiveId: draft.id
-      });
-    }
-    const revision3 = nextFuture.revision + 1;
-    await ctx.db.run(
-      `UPDATE objectives SET state = 'draft', updated_at = ?, revision = ?
-         WHERE id = ? AND mission_id = ?`,
-      [now2, revision3, nextFuture.id, missionId]
-    );
-    await recordChange({
-      ctx,
-      entityType: "objective",
-      entityId: nextFuture.id,
-      operation: "update",
-      entityRevision: revision3,
-      projectId,
-      missionId,
-      objectiveId: nextFuture.id,
-      changedFields: ["state"]
-    });
-  }
 }
 async function createMissionWithObjectives({
   ctx,
@@ -145987,7 +146013,7 @@ async function createMissionWithObjectives({
           "validation_error"
         );
       }
-      const objectiveState = statusType === "review" ? "complete" : index === 0 ? "draft" : "future";
+      const objectiveState = statusType === "review" ? "complete" : "draft";
       createdObjectives.push(
         await insertObjective({
           ctx: txCtx,
@@ -146138,15 +146164,14 @@ async function discussObjective({
   objectiveId = null
 }) {
   const objectives = await listObjectives({ ctx, missionId });
-  const draft = objectiveId?.trim() ? await resolveDraftObjectiveToDiscuss({ ctx, missionId, objectives, objectiveId }) : objectives.find((o3) => o3.state === "draft");
+  const draft = objectiveId?.trim() ? await resolveDraftObjectiveToDiscuss({ ctx, missionId, objectives, objectiveId }) : firstDraft(objectives);
   if (!draft) {
     throw new ServiceError("No draft objective found on mission", "validation_error");
   }
-  const now2 = nowIso();
   await ctx.db.run(
-    `UPDATE objectives SET state = 'launching', ${OBJECTIVE_LAUNCHED_AT_ASSIGNMENT}, updated_at = ?, revision = revision + 1
+    `UPDATE objectives SET state = 'submitted', updated_at = ?, revision = revision + 1
        WHERE id = ? AND mission_id = ?`,
-    [now2, now2, draft.id, draft.missionId]
+    [nowIso(), draft.id, draft.missionId]
   );
   await recordChange({
     ctx,
@@ -146158,7 +146183,7 @@ async function discussObjective({
     objectiveId: draft.id,
     changedFields: ["state"]
   });
-  return { ...draft, state: "launching" };
+  return { ...draft, state: "submitted" };
 }
 async function listMissionEvents({
   ctx,
@@ -149478,6 +149503,16 @@ async function forgetLatchProviderSession({
   });
 }
 
+// ../packages/core/service/objective-lifecycle-timestamps.ts
+var OBJECTIVE_LAUNCHED_AT_ASSIGNMENT = "launched_at = COALESCE(launched_at, ?)";
+var OBJECTIVE_STARTED_AT_ASSIGNMENT = "started_at = COALESCE(started_at, ?)";
+var OBJECTIVE_COMPLETED_AT_ASSIGNMENT = "completed_at = ?";
+var OBJECTIVE_REOPENABLE_STATES = Object.freeze([
+  "executing",
+  "pending_delivery",
+  "complete"
+]);
+
 // ../packages/core/service/target-resource-observations.ts
 var OBSERVATION_STATES = /* @__PURE__ */ new Set([
   "available",
@@ -149959,7 +149994,8 @@ function resolveActiveObjective(objectives) {
     }
     if (matches.length === 1) return matches[0];
   }
-  const active = objectives.find((o3) => o3.state === "draft") ?? objectives.find((o3) => o3.state !== "complete");
+  const ordered = sortObjectivesByLifecycleOrder(objectives);
+  const active = ordered.find((o3) => o3.state === "submitted") ?? nextUpDraft(objectives) ?? firstDraft(objectives) ?? ordered.find((o3) => o3.state !== "complete");
   if (!active) {
     throw new ServiceError("No active objective found on mission", "no_active_objective", 409);
   }
@@ -150486,12 +150522,6 @@ async function attachSession({
       db: txCtx.db,
       workspaceId: ctx.workspace.id,
       missionId: context.mission.id,
-      now: now2
-    });
-    await ensureNextDraftObjective({
-      ctx: txCtx,
-      missionId: context.mission.id,
-      projectId: context.mission.projectId,
       now: now2
     });
     await moveMissionToExecute({ ctx: txCtx, missionId: context.mission.id });
@@ -151937,11 +151967,10 @@ async function deliverSession({
   const nextObjective = await ctx.db.get(
     `SELECT id, title
        FROM objectives
-       WHERE mission_id = ? AND position > (
-         SELECT position FROM objectives WHERE id = ?
-       ) AND state = 'draft' AND TRIM(COALESCE(instruction_text, '')) <> ''
-       ORDER BY position ASC LIMIT 1`,
-    [mission.id, session.objective_id]
+       WHERE mission_id = ? AND deleted_at IS NULL
+         AND state = 'draft' AND TRIM(COALESCE(instruction_text, '')) <> ''
+       ORDER BY position ASC, created_at ASC, id ASC LIMIT 1`,
+    [mission.id]
   );
   if (nextObjective) {
     const queued = await ctx.db.get(
@@ -154483,7 +154512,8 @@ async function dequeueObjective({
   tx = requireDatabaseClient()
 }) {
   await removeRunQueueEntryForObjective(tx, projectId, objectiveId, {
-    pauseQueue: reason === "disconnected"
+    pauseQueue: reason === "disconnected",
+    preserveObjectivePositions: true
   });
   const { cleared } = await clearExecutionRequests({
     ctx: {
@@ -154598,7 +154628,7 @@ async function launchObjective(objectiveRef, body) {
       throw new ApiError(
         409,
         `Objective is not launchable from state "${objective.state}"`,
-        objective.state === "future" ? "Promote the objective to draft first." : "Only draft, submitted, or launching objectives can be launched."
+        "Only draft, submitted, or launching objectives can be launched."
       );
     }
     const serviceCtx = await buildWebappServiceContextForWorkspace(
@@ -159923,12 +159953,14 @@ function selectMissionsSql(dialect) {
             AS has_completed_objective,
          (SELECT COUNT(*) > 0 FROM objectives o
             WHERE o.mission_id = t.id AND o.deleted_at IS NULL
-              AND o.state IN ('draft', 'future') AND TRIM(o.instruction_text) != '')
+              AND o.state = 'draft' AND TRIM(o.instruction_text) != '')
             AS has_pending_objective_with_instructions,
 ${missionHasUnseenBlockingQuestionSql(dialect)},
 ${missionHasUnseenReturnedToExecuteSql},
+         -- firstDraft (automations): the first live draft by position, blank allowed.
          (SELECT o.resource_key FROM objectives o
             WHERE o.mission_id = t.id AND o.deleted_at IS NULL AND o.state = 'draft'
+            ORDER BY o.position ASC, o.created_at ASC, o.id ASC
             LIMIT 1) AS draft_objective_resource_key
   FROM missions t
   WHERE t.workspace_id = ? AND t.deleted_at IS NULL
@@ -161603,6 +161635,11 @@ async function deleteObjectives(objectiveRefs) {
     if (new Set(objectives.map(({ existing }) => existing.id)).size !== objectives.length) {
       throw new ApiError(400, "objectiveIds contains duplicate objectives");
     }
+    for (const missionId of [
+      ...new Set(objectives.map(({ existing }) => existing.mission_id))
+    ].sort()) {
+      await lockMissionObjectiveQueue(tx, missionId);
+    }
     const now2 = nowIso2();
     for (const { existing, workspaceId: workspaceId2, workspaceUserId } of objectives) {
       const revision3 = existing.revision + 1;
@@ -161976,12 +162013,14 @@ function selectInboxMissionsSql(workspacePlaceholders, dialect) {
             AS has_completed_objective,
          (SELECT COUNT(*) > 0 FROM objectives o
             WHERE o.mission_id = t.id AND o.deleted_at IS NULL
-              AND o.state IN ('draft', 'future') AND TRIM(o.instruction_text) != '')
+              AND o.state = 'draft' AND TRIM(o.instruction_text) != '')
             AS has_pending_objective_with_instructions,
 ${missionHasUnseenBlockingQuestionSql(dialect)},
 ${missionHasUnseenReturnedToExecuteSql},
+         -- firstDraft (automations): the first live draft by position, blank allowed.
          (SELECT o.resource_key FROM objectives o
             WHERE o.mission_id = t.id AND o.deleted_at IS NULL AND o.state = 'draft'
+            ORDER BY o.position ASC, o.created_at ASC, o.id ASC
             LIMIT 1) AS draft_objective_resource_key
     FROM missions t
     JOIN projects p ON p.id = t.project_id AND p.workspace_id = t.workspace_id
@@ -162112,6 +162151,16 @@ var RUN_QUEUE_DISPATCH_FIELDS = [
 ];
 async function applyObjectivePositionUpdates(tx, options) {
   const { workspaceId: workspaceId2, missionId, projectId, rows, positionById, now: now2 } = options;
+  const stateGuard = options.requireQueuedState ? ` AND state IN ('draft', 'submitted')` : "";
+  const checkedRun = async (sql2, params) => {
+    const result2 = await tx.run(sql2 + stateGuard, params);
+    if (options.requireQueuedState && result2.changes !== 1) {
+      throw new ApiError(
+        409,
+        "The mission draft queue changed while reordering; reload and try again."
+      );
+    }
+  };
   const byId = new Map(rows.map((row) => [row.id, row]));
   const updates = [...positionById.entries()].map(([objectiveId, position]) => {
     const existing = byId.get(objectiveId);
@@ -162125,14 +162174,14 @@ async function applyObjectivePositionUpdates(tx, options) {
   );
   const tempBase = maxPosition + updates.length + 1;
   for (const [index, { existing }] of updates.entries()) {
-    await tx.run(
+    await checkedRun(
       `UPDATE objectives SET position = ?, updated_at = ?
          WHERE id = ? AND workspace_id = ?`,
       [tempBase + index, now2, existing.id, workspaceId2]
     );
   }
   for (const { existing, position, revision: revision3 } of updates) {
-    await tx.run(
+    await checkedRun(
       `UPDATE objectives SET position = ?, updated_at = ?, revision = ?
          WHERE id = ? AND workspace_id = ?`,
       [position, now2, revision3, existing.id, workspaceId2]
@@ -162153,7 +162202,7 @@ async function applyObjectivePositionUpdates(tx, options) {
     );
   }
 }
-async function reorderFutureObjectives(missionId, body) {
+async function reorderObjectives(missionId, body) {
   const orderedIds = body.orderedObjectiveIds;
   if (!Array.isArray(orderedIds)) {
     throw new ApiError(400, "orderedObjectiveIds must be an array");
@@ -162172,59 +162221,31 @@ async function reorderFutureObjectives(missionId, body) {
       [missionId, workspaceId2]
     );
     if (!mission) throw new ApiError(404, "Mission not found");
+    await lockMissionObjectiveQueue(tx, mission.id);
     const rows = await tx.all(
       `SELECT * FROM objectives
            WHERE mission_id = ? AND workspace_id = ? AND deleted_at IS NULL`,
-      [missionId, workspaceId2]
+      [mission.id, workspaceId2]
     );
-    const byId = new Map(rows.map((row) => [row.id, row]));
-    const targets = orderedIds.map((id2) => {
-      const row = byId.get(id2);
-      if (!row) throw new ApiError(404, `Objective ${id2} not found on mission`);
-      if (row.state !== "future") {
-        throw new ApiError(400, `Objective ${id2} is not a future objective`);
+    let positionById;
+    try {
+      positionById = planQueuedObjectiveReorder(rows, orderedIds);
+    } catch (error64) {
+      if (error64 instanceof ObjectiveQueueError) {
+        throw new ApiError(error64.code === "unknown_objective" ? 404 : 400, error64.message);
       }
-      return row;
+      throw error64;
+    }
+    if (positionById.size === 0) return;
+    await applyObjectivePositionUpdates(tx, {
+      workspaceId: workspaceId2,
+      missionId: mission.id,
+      projectId: mission.project_id,
+      rows,
+      positionById,
+      now: nowIso2(),
+      requireQueuedState: true
     });
-    if (targets.length === 0) return;
-    const basePosition = Math.min(...targets.map((row) => row.position));
-    const updates = targets.map((existing, index) => ({
-      existing,
-      position: basePosition + index,
-      revision: existing.revision + 1
-    })).filter(({ existing, position }) => existing.position !== position);
-    if (updates.length === 0) return;
-    const now2 = nowIso2();
-    const maxPosition = Math.max(...rows.map((row) => row.position), basePosition);
-    const tempBase = maxPosition + updates.length + 1;
-    for (const [index, { existing }] of updates.entries()) {
-      await tx.run(
-        `UPDATE objectives SET position = ?, updated_at = ?
-           WHERE id = ? AND workspace_id = ?`,
-        [tempBase + index, now2, existing.id, workspaceId2]
-      );
-    }
-    for (const { existing, position, revision: revision3 } of updates) {
-      await tx.run(
-        `UPDATE objectives SET position = ?, updated_at = ?, revision = ?
-           WHERE id = ? AND workspace_id = ?`,
-        [position, now2, revision3, existing.id, workspaceId2]
-      );
-      await recordChange2(
-        {
-          entityType: "objective",
-          entityId: existing.id,
-          operation: "update",
-          entityRevision: revision3,
-          projectId: mission.project_id,
-          missionId,
-          objectiveId: existing.id,
-          changedFields: ["position"],
-          workspaceId: workspaceId2
-        },
-        tx
-      );
-    }
     await syncRunQueueOrderFromMissionPositions(tx, mission.id);
   });
   return listObjectives2(missionId);
@@ -162276,72 +162297,6 @@ async function createObjective(body) {
   }
   return objective;
 }
-async function ensureDraftSlotAfterObjectiveLeavesQueue(db, {
-  workspaceId: workspaceId2,
-  missionId,
-  projectId,
-  now: now2
-}) {
-  const drafts = await db.all(
-    `SELECT id, instruction_text, revision FROM objectives
-       WHERE mission_id = ? AND workspace_id = ? AND state = 'draft' AND deleted_at IS NULL
-       ORDER BY position ASC, created_at ASC`,
-    [missionId, workspaceId2]
-  );
-  if (drafts.some((draft) => draft.instruction_text.trim())) return;
-  const nextFuture = await db.get(
-    `SELECT id, revision FROM objectives
-       WHERE mission_id = ? AND workspace_id = ? AND state = 'future' AND deleted_at IS NULL
-         AND TRIM(instruction_text) <> ''
-       ORDER BY position ASC, created_at ASC LIMIT 1`,
-    [missionId, workspaceId2]
-  );
-  if (nextFuture) {
-    for (const draft of drafts) {
-      const draftRevision = draft.revision + 1;
-      await db.run(
-        `UPDATE objectives
-         SET deleted_at = ?, updated_at = ?, revision = ?
-         WHERE id = ? AND workspace_id = ?`,
-        [now2, now2, draftRevision, draft.id, workspaceId2]
-      );
-      await recordChange2(
-        {
-          entityType: "objective",
-          entityId: draft.id,
-          operation: "delete",
-          entityRevision: draftRevision,
-          projectId,
-          missionId,
-          objectiveId: draft.id,
-          workspaceId: workspaceId2
-        },
-        db
-      );
-    }
-    const nextRevision = nextFuture.revision + 1;
-    await db.run(
-      `UPDATE objectives
-       SET state = 'draft', completed_at = NULL, updated_at = ?, revision = ?
-       WHERE id = ? AND workspace_id = ?`,
-      [now2, nextRevision, nextFuture.id, workspaceId2]
-    );
-    await recordChange2(
-      {
-        entityType: "objective",
-        entityId: nextFuture.id,
-        operation: "update",
-        entityRevision: nextRevision,
-        projectId,
-        missionId,
-        objectiveId: nextFuture.id,
-        changedFields: ["state", "completed_at"],
-        workspaceId: workspaceId2
-      },
-      db
-    );
-  }
-}
 async function updateObjectiveTx(idRef, body) {
   return requireDatabaseClient().transaction(async (tx) => {
     const {
@@ -162368,8 +162323,7 @@ async function updateObjectiveTx(idRef, body) {
     if (body.instructionText !== void 0) {
       const instruction = body.instructionText.trim();
       const resultingState = body.state ?? existing.state;
-      const allowsBlankInstruction = resultingState === "draft" || resultingState === "future";
-      if (!instruction && !allowsBlankInstruction) {
+      if (!instruction && resultingState !== "draft") {
         throw new ApiError(400, "Objective instruction is required");
       }
       const lockedStates = ["executing", "pending_delivery", "complete"];
@@ -162389,9 +162343,6 @@ async function updateObjectiveTx(idRef, body) {
     if (body.state !== void 0) {
       if (!OBJECTIVE_STATES.includes(body.state)) {
         throw new ApiError(400, "Invalid objective state");
-      }
-      if (existing.state === "complete" && body.state === "future") {
-        throw new ApiError(400, "Completed objectives cannot be moved back to the future queue.");
       }
       fields.push("state = ?");
       setParams.push(body.state);
@@ -162427,9 +162378,12 @@ async function updateObjectiveTx(idRef, body) {
       if (!Number.isInteger(body.position) || body.position < 0) {
         throw new ApiError(400, "Invalid position");
       }
-      fields.push("position = ?");
-      setParams.push(body.position);
-      changed.push("position");
+      if (body.position !== existing.position) {
+        throw new ApiError(
+          400,
+          "Objective position is changed only through PATCH /api/missions/{id}/objectives/reorder"
+        );
+      }
     }
     if (body.assignedAgent !== void 0) {
       fields.push("assigned_agent = ?");
@@ -162488,64 +162442,8 @@ async function updateObjectiveTx(idRef, body) {
     }
     const now2 = nowIso2();
     const revision3 = existing.revision + 1;
-    if (body.state === "draft") {
-      const otherDrafts = await tx.all(
-        `SELECT id, revision, position FROM objectives
-           WHERE mission_id = ? AND workspace_id = ? AND state = 'draft'
-             AND id <> ? AND deleted_at IS NULL`,
-        [existing.mission_id, workspaceId2, id2]
-      );
-      for (const draft of otherDrafts) {
-        const draftRevision = draft.revision + 1;
-        await tx.run(
-          `UPDATE objectives SET state = 'future', updated_at = ?, revision = ?
-           WHERE id = ? AND workspace_id = ?`,
-          [now2, draftRevision, draft.id, workspaceId2]
-        );
-        await recordChange2(
-          {
-            entityType: "objective",
-            entityId: draft.id,
-            operation: "update",
-            entityRevision: draftRevision,
-            projectId: existing.project_id,
-            missionId: existing.mission_id,
-            objectiveId: draft.id,
-            changedFields: ["state"],
-            workspaceId: workspaceId2
-          },
-          tx
-        );
-      }
-      if (existing.state === "future" && otherDrafts.length > 0) {
-        const draftSlotPosition = Math.min(...otherDrafts.map((draft) => draft.position));
-        if (existing.position > draftSlotPosition) {
-          const missionRows = await tx.all(
-            `SELECT * FROM objectives
-               WHERE mission_id = ? AND workspace_id = ? AND deleted_at IS NULL`,
-            [existing.mission_id, workspaceId2]
-          );
-          const positionById = /* @__PURE__ */ new Map();
-          for (const row2 of missionRows) {
-            if (row2.id === id2) {
-              positionById.set(row2.id, draftSlotPosition);
-              continue;
-            }
-            if (row2.position >= draftSlotPosition && row2.position < existing.position) {
-              positionById.set(row2.id, row2.position + 1);
-            }
-          }
-          await applyObjectivePositionUpdates(tx, {
-            workspaceId: workspaceId2,
-            missionId: existing.mission_id,
-            projectId: existing.project_id,
-            rows: missionRows,
-            positionById,
-            now: now2
-          });
-        }
-      }
-    }
+    const reopening = body.state === "draft" && body.state !== existing.state && OBJECTIVE_REOPENABLE_STATES2.includes(existing.state);
+    if (reopening) await lockMissionObjectiveQueue(tx, existing.mission_id);
     await tx.run(
       `UPDATE objectives SET ${fields.join(", ")}, updated_at = ?, revision = ?
          WHERE id = ? AND workspace_id = ?`,
@@ -162598,14 +162496,6 @@ async function updateObjectiveTx(idRef, body) {
         });
       }
     }
-    if (body.state === "executing" && body.state !== existing.state && (existing.state === "draft" || existing.state === "future" || existing.state === "submitted" || existing.state === "launching")) {
-      await ensureDraftSlotAfterObjectiveLeavesQueue(tx, {
-        workspaceId: workspaceId2,
-        missionId: existing.mission_id,
-        projectId: existing.project_id,
-        now: now2
-      });
-    }
     const disconnectingToQueue = (body.state === "draft" || body.state === "submitted") && body.state !== existing.state && DISCONNECT_FROM_STATES.includes(existing.state);
     if (body.state !== void 0 && body.state !== existing.state && (disconnectingToQueue || !LAUNCHABLE_OBJECTIVE_STATES2.includes(body.state))) {
       await dequeueObjective({
@@ -162619,6 +162509,25 @@ async function updateObjectiveTx(idRef, body) {
         now: now2,
         tx
       });
+    }
+    if (reopening) {
+      const missionRows = await tx.all(
+        `SELECT * FROM objectives
+           WHERE mission_id = ? AND workspace_id = ? AND deleted_at IS NULL`,
+        [existing.mission_id, workspaceId2]
+      );
+      const positionById = planReopenToQueueHead(missionRows, id2);
+      if (positionById.size > 0) {
+        await applyObjectivePositionUpdates(tx, {
+          workspaceId: workspaceId2,
+          missionId: existing.mission_id,
+          projectId: existing.project_id,
+          rows: missionRows,
+          positionById,
+          now: now2
+        });
+        await syncRunQueueOrderFromMissionPositions(tx, existing.mission_id);
+      }
     }
     if (body.autoAdvance !== void 0) {
       if (body.autoAdvance) {
@@ -163720,11 +163629,8 @@ async function assertInstructionEditableOnProtocolSurface(objectiveRef) {
   if (!row) {
     throw new ApiError(404, "Objective not found");
   }
-  if (row.state !== "draft" && row.state !== "future") {
-    throw new ApiError(
-      400,
-      "Objective instruction text can only be edited in draft or future state"
-    );
+  if (row.state !== "draft") {
+    throw new ApiError(400, "Objective instruction text can only be edited in draft state");
   }
 }
 function objectiveAssignmentUpdate(body) {
@@ -164031,7 +163937,7 @@ var missionSubcommands = {
       ...strFlag(body, "--execution-target-id") !== void 0 ? { executionTargetId: strFlag(body, "--execution-target-id") } : {}
     })
   },
-  "reorder-future-objectives": {
+  "reorder-objectives": {
     permission: PERMISSIONS.OBJECTIVE_UPDATE,
     handler: (_ctx, body) => {
       const orderedObjectiveIds = parseJsonInput(
@@ -164042,7 +163948,7 @@ var missionSubcommands = {
       if (orderedObjectiveIds === void 0) {
         throw new ApiError(400, "Missing required flag: --ordered-objective-ids-json");
       }
-      return reorderFutureObjectives(missionRefFlag(body), { orderedObjectiveIds });
+      return reorderObjectives(missionRefFlag(body), { orderedObjectiveIds });
     }
   },
   search: {
@@ -172119,15 +172025,15 @@ function overlordMcpToolDefinitions({ defaultAgent }) {
       annotations: writeAction
     },
     {
-      name: "overlord_reorder_future_objectives",
-      title: "Reorder future objectives",
-      description: "Use this only when the user explicitly asks to change the order of future objectives in one mission. Supply every future objective UUID in its complete desired top-to-bottom order; draft, active, and completed objectives cannot be moved by this tool.",
+      name: "overlord_reorder_objectives",
+      title: "Reorder draft objectives",
+      description: "Use this only when the user explicitly asks to change the order of one mission's unstarted objectives. Supply every draft and submitted objective UUID exactly once, in the complete desired top-to-bottom order; launching, active, and completed objectives keep their positions and cannot be listed. A stale set is rejected; reload and retry.",
       inputSchema: objectSchema({
         missionId: stringProperty("Mission UUID."),
         orderedObjectiveIds: {
           type: "array",
-          description: "Complete desired top-to-bottom UUID order of every objective currently in the future state.",
-          items: stringProperty("Future objective UUID.")
+          description: "Complete desired top-to-bottom UUID order of every objective currently in the draft or submitted state.",
+          items: stringProperty("Draft or submitted objective UUID.")
         }
       }, ["missionId", "orderedObjectiveIds"]),
       outputSchema: protocolOutputSchema("The mission's full ObjectiveDto list in its new order."),
@@ -172159,12 +172065,12 @@ function overlordMcpToolDefinitions({ defaultAgent }) {
     {
       name: "overlord_update_objective",
       title: "Update objective",
-      description: "Use this to rewrite an objective title in any state, turn auto-advance on or off, edit instruction text on a draft or future objective, and/or reassign the objective to another agent or to a person (agent manual, alias human).",
+      description: "Use this to rewrite an objective title in any state, turn auto-advance on or off, edit instruction text on a draft objective, and/or reassign the objective to another agent or to a person (agent manual, alias human).",
       inputSchema: objectSchema({
         objectiveId: stringProperty("Objective UUID or display id."),
         title: stringProperty("Replacement objective title. An empty string clears the custom title and restores instruction-derived presentation."),
         autoAdvance: booleanProperty("When true, Overlord queues the next objective after this one is delivered. When false, delivery waits for approval."),
-        instructionText: stringProperty("Replacement instruction text. Allowed only when the objective is in draft or future state; blank clears the text in those states."),
+        instructionText: stringProperty("Replacement instruction text. Allowed only when the objective is in draft state; blank clears the text."),
         agent: stringProperty("Agent to assign, such as codex or claude, or manual (alias human) so a person does the objective instead of an agent. Manual objectives are never launched and the Run Queue holds them until an agent is assigned. Changing agent clears any model or reasoning effort not passed alongside it."),
         model: stringProperty("Optional model identifier for the agent named in agent. Requires agent; rejected for manual."),
         reasoningEffort: stringProperty("Optional reasoning-effort setting for the agent named in agent. Requires agent; rejected for manual.")
@@ -172362,7 +172268,7 @@ function overlordMcpToolDefinitions({ defaultAgent }) {
         knownRisks: { type: "array", items: stringProperty("Residual risk or limitation.") },
         deferredWork: {
           type: "array",
-          description: 'Each deferredWork item is one recommended objective outside this mission. Be very concise. title names the work in an imperative phrase. change states only the specific change that is needed. location says where to find it in the code: the file, function, component, or command. doneWhen states the observable result in one sentence. Do not add instructions on how to do the work, background, or rationale. The operator turns the item into an objective or a mission as written, so it must read as a task, not as a note. Omit queued future objectives, leftover current-objective work, and human follow-up (those belong in humanActions). Vague: { title: "Fix flaky test", change: "The sync worker has a flaky test.", location: "backend", doneWhen: "It passes." }. Good: { title: "Advance the fake clock before the second retry", change: "The test asserts the retry fired but never advances the fake clock between attempts, so it passes or fails on real time.", location: "backend/sync-worker.test.ts \u203A retries after a 503", doneWhen: "The test passes 20 consecutive runs with the fake clock driving both attempts." }.',
+          description: 'Each deferredWork item is one recommended objective outside this mission. Be very concise. title names the work in an imperative phrase. change states only the specific change that is needed. location says where to find it in the code: the file, function, component, or command. doneWhen states the observable result in one sentence. Do not add instructions on how to do the work, background, or rationale. The operator turns the item into an objective or a mission as written, so it must read as a task, not as a note. Omit work already queued as later objectives of this mission, leftover current-objective work, and human follow-up (those belong in humanActions). Vague: { title: "Fix flaky test", change: "The sync worker has a flaky test.", location: "backend", doneWhen: "It passes." }. Good: { title: "Advance the fake clock before the second retry", change: "The test asserts the retry fired but never advances the fake clock between attempts, so it passes or fails on real time.", location: "backend/sync-worker.test.ts \u203A retries after a 503", doneWhen: "The test passes 20 consecutive runs with the fake clock driving both attempts." }.',
           items: objectSchema({
             title: stringProperty("Required. The work as an imperative phrase, at most 80 characters."),
             change: stringProperty("Required. The specific change that is needed, one or two sentences, at most 400 characters."),
@@ -172843,12 +172749,12 @@ var toolHandlers = {
       ...optionalString(args, "executionTargetId") ? { "--execution-target-id": requiredString2(args, "executionTargetId") } : {}
     })
   ),
-  overlord_reorder_future_objectives: (args) => {
+  overlord_reorder_objectives: (args) => {
     if (!Array.isArray(args.orderedObjectiveIds)) {
       throw new Error("orderedObjectiveIds must be an array");
     }
     return runProtocolSubcommand(
-      "reorder-future-objectives",
+      "reorder-objectives",
       protocolBody({
         "--mission-id": requiredString2(args, "missionId"),
         "--ordered-objective-ids-json": JSON.stringify(args.orderedObjectiveIds)
@@ -184391,7 +184297,7 @@ var okResponseSchema = external_exports.object({ "ok": external_exports.literal(
 var dateTimeSchema = external_exports.string();
 var statusTypeSchema = external_exports.enum(["draft", "next", "execute", "review", "complete", "blocked", "cancelled"]);
 var missionPrioritySchema = external_exports.enum(["low", "normal", "high", "urgent"]);
-var objectiveStateSchema = external_exports.enum(["future", "draft", "submitted", "launching", "executing", "pending_delivery", "complete"]);
+var objectiveStateSchema = external_exports.enum(["draft", "submitted", "launching", "executing", "pending_delivery", "complete"]);
 var createdByKindSchema = external_exports.enum(["human", "agent", "automation"]);
 var projectLifecycleSchema = external_exports.enum(["active", "archived"]);
 var projectListLifecycleSchema = external_exports.enum(["active", "archived", "all"]);
@@ -184460,7 +184366,7 @@ var searchResponseV3Schema = external_exports.object({ "version": external_expor
 var createMissionBodySchema = external_exports.object({ "projectId": external_exports.string(), "title": external_exports.exactOptional(external_exports.string()), "priority": external_exports.exactOptional(missionPrioritySchema), "dueDatetime": external_exports.exactOptional(external_exports.string().nullable()), "statusId": external_exports.exactOptional(external_exports.string()), "assignedWorkspaceUserId": external_exports.exactOptional(external_exports.string().nullable()), "firstObjective": external_exports.exactOptional(external_exports.string()), "objectives": external_exports.exactOptional(external_exports.array(external_exports.object({ "objective": external_exports.string(), "title": external_exports.exactOptional(external_exports.string().nullable()), "autoAdvance": external_exports.exactOptional(external_exports.boolean()), "agent": external_exports.exactOptional(external_exports.string().nullable()), "model": external_exports.exactOptional(external_exports.string().nullable()), "resourceKey": external_exports.exactOptional(external_exports.string().nullable()) }))), "tagIds": external_exports.exactOptional(external_exports.array(external_exports.string())) });
 var updateMissionBodySchema = external_exports.object({ "title": external_exports.exactOptional(external_exports.string()), "priority": external_exports.exactOptional(missionPrioritySchema.nullable()), "projectId": external_exports.exactOptional(external_exports.string()), "statusId": external_exports.exactOptional(external_exports.string()), "assignedWorkspaceUserId": external_exports.exactOptional(external_exports.string().nullable()), "notes": external_exports.exactOptional(external_exports.string().nullable()), "branchOverride": external_exports.exactOptional(external_exports.string().nullable()), "worktreePreference": external_exports.exactOptional(missionWorktreePreferenceSchema.nullable()), "allowParallelObjectives": external_exports.exactOptional(external_exports.boolean()), "resetActiveBranch": external_exports.exactOptional(external_exports.boolean()), "tagIds": external_exports.exactOptional(external_exports.array(external_exports.string())), "dueDatetime": external_exports.exactOptional(external_exports.string().nullable()) });
 var objectiveListSchema = external_exports.array(objectiveDtoSchema);
-var reorderFutureObjectivesBodySchema = external_exports.object({ "orderedObjectiveIds": external_exports.array(external_exports.string()).refine(hasUniqueItems, { error: "Expected unique items" }) });
+var reorderObjectivesBodySchema = external_exports.object({ "orderedObjectiveIds": external_exports.array(external_exports.string()).refine(hasUniqueItems, { error: "Expected unique items" }) });
 var missionEventActorDtoSchema = external_exports.object({ "workspaceUserId": external_exports.string(), "displayName": external_exports.string(), "handle": external_exports.string().nullable(), "avatarUrl": external_exports.string().nullable() });
 var missionEventDtoSchema = external_exports.object({ "id": external_exports.string(), "missionId": external_exports.string(), "objectiveId": external_exports.string().nullable(), "type": external_exports.string(), "phase": external_exports.string().nullable(), "summary": external_exports.string(), "source": external_exports.string(), "actorWorkspaceUserId": external_exports.string().nullable(), "actor": missionEventActorDtoSchema.nullable(), "externalUrl": external_exports.string().nullable(), "deliveryId": external_exports.exactOptional(external_exports.string().nullable()), "createdAt": dateTimeSchema });
 var missionEventListSchema = external_exports.array(missionEventDtoSchema);
@@ -188895,7 +188801,7 @@ var apiOperations = {
     responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: objectiveListSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "500": apiResponses.InternalError }
   },
   /**
-   * PATCH /api/missions/{id}/objectives/reorder: Reorder a mission's future objectives
+   * PATCH /api/missions/{id}/objectives/reorder: Reorder a mission's draft queue
    */
   patchMissionsByIdObjectivesReorder: {
     operationId: "patchMissionsByIdObjectivesReorder",
@@ -188910,7 +188816,7 @@ var apiOperations = {
     extension: null,
     security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
     parameters: { path: patchMissionsByIdObjectivesReorderPathParamsSchema, query: null, header: null },
-    requestBody: { required: true, content: { "application/json": { kind: "json", schema: reorderFutureObjectivesBodySchema } } },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: reorderObjectivesBodySchema } } },
     responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: objectiveListSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
   },
   /**
@@ -197034,11 +196940,6 @@ async function dispatchProjectRunQueues(db, projectId) {
           tx,
           entry.enqueued_by_workspace_user_id
         );
-        if (action.promoteFutureToDraft)
-          await tx.run(
-            "UPDATE objectives SET state = 'draft', updated_at = ?, revision = revision + 1 WHERE id = ? AND state = 'future'",
-            [now2, objective.id]
-          );
         if (objective.state === "launching")
           await resetWedgedLaunchingObjective(tx, objective.id, now2);
         await tx.run(
@@ -199174,7 +199075,7 @@ app.get(
 );
 app.patch(
   "/api/missions/:id/objectives/reorder",
-  handle3((req) => reorderFutureObjectives(req.params.id, req.body), { mutates: true })
+  handle3((req) => reorderObjectives(req.params.id, req.body), { mutates: true })
 );
 app.post(
   "/api/missions/:id/session-channel",
