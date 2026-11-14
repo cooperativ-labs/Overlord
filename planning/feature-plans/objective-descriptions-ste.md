@@ -56,17 +56,17 @@ Overlord writes a summary automatically only for **agent-submitted** objectives.
 | --- | --- | --- |
 | An agent in an attached session (`ovld protocol create`, `add-objectives`, `update-objective`, or the same MCP tools called with a session) | Yes, when longer than the threshold | The summary; the instructions behind the disclosure |
 | A person in the web, desktop or iOS app | No | The instructions as the body, as today |
-| A person who asks an assistant to add it over MCP or in the in-app chat (no attached session) | No | The instructions as the body |
+| An assistant over MCP or in-app chat, including without an attached session | Yes, when longer than the threshold | The summary; the instructions behind the disclosure |
 | Automation (runner, inbox conversion) | No | The instructions as the body |
 
-- The test runs at each instruction write, not only at create: the write must come from the protocol surface (`origin.kind = 'agent'`) **and** carry a session id (`created_by_session_id` on create; the resolved session on update). No new column is needed for it.
+- Test authenticated agent/assistant authorship at each instruction write, not only at create. An attached session is not required. Include assistant writes through MCP and in-app chat; do not infer human authorship from a missing session. Persist current-instruction eligibility or provenance for later catch-up; creation provenance alone is insufficient after edits.
 - For a person-written objective, `description` stays `NULL`. The instructions are not copied into it, so there is only one text to keep current.
 - Every objective with long enough instructions shows a **Summarize** action. It enqueues the same brief job and stores the result with source `generated`. After that, the objective follows the normal staleness rules (§4.9): an instruction edit regenerates a `generated` summary, whoever makes the edit.
 - An agent can still send its own `description` on any write. Overlord stores it with source `agent`.
 - Title eligibility is unchanged: short instructions use the local title fallback, longer instructions use the model.
 - Apply this policy to every eligible objective by ID, including non-head drafts and submitted rows. Queue position, card expansion and moving a row to the head do not confer agent authorship or trigger generation. Blank instructions never trigger a brief job.
 
-Assumption to confirm: hosted MCP calls with no attached session count as "a person asked for it". An agent that plans objectives from a chat without attaching gets no automatic summary, unless it sends a description itself or the person clicks Summarize.
+**Decided:** unattached assistants qualify for automatic summaries. A person asking an assistant to write an objective does not make that instruction person-authored for this policy.
 
 Alternative considered: a separate description call next to the title call. Rejected: twice the latency and cost, and the two texts can disagree.
 
@@ -86,7 +86,7 @@ Rules for the middle:
 
 The two prefixes start sentences, not list items. The UI and later features (for example a "1 open question" badge) can still find these sentences by their prefix.
 
-Total target: ≤ 120 words. The model returns structured JSON (`goal`, `body`, `doneWhen`), and `body` can be empty. The server joins the three parts into paragraphs: the goal starts the first paragraph and the done-when sentence ends the last paragraph. When the body is short, the result is a single paragraph. The opening and closing sentences are therefore always present, and the text still reads as prose.
+Total target: 120 words, not a hard limit. Preserve essential meaning when additional words are needed. The model returns structured JSON (`goal`, `body`, `doneWhen`), and `body` can be empty. The server joins the three parts into paragraphs: the goal starts the first paragraph and the done-when sentence ends the last paragraph. When the body is short, the result is a single paragraph. The opening and closing sentences are therefore always present, and the text still reads as prose.
 
 Alternatives considered: a four-part layout with headed sections, and a Goal/bullets/Done-when layout. Both read as forms, not as a note. The user chose prose with a fixed opening and a fixed closing sentence.
 
@@ -154,11 +154,11 @@ STE allows project "technical names". A per-project glossary (canonical term + f
 Mirror titles exactly:
 
 - `create`, `prompt`, `add-objectives`: optional `description` per objective item.
-- `ovld protocol update-objective --description <text> | --description-file <path|->`; empty value clears it and returns to generation.
+- `ovld protocol update-objective --description <text> | --description-file <path|->`; an empty value removes the summary and suppresses automatic generation until a user clicks Summarize (see §10).
 - REST `POST/PATCH` objective bodies and the hosted MCP tools (`overlord_create_mission`, `overlord_add_objectives`, `overlord_update_objective`) gain the same field.
-- The `overlord-mission` skill tells agents: "The instruction is for the agent: be complete. The description is for the human: follow the Human Communication Standard. If you do not write a description, Overlord writes one for eligible long instructions submitted from an attached agent session. Otherwise, the human can use Summarize."
+- The `overlord-mission` skill tells agents: "The instruction is for the agent: be complete. The description is for the human: follow the Human Communication Standard. If you do not write a description, Overlord writes one for eligible long instructions written by an agent or assistant, whether or not it has an attached session. Otherwise, the human can use Summarize."
 
-Agent-written descriptions are not rewritten by the model, only linted (§4.6). Address mutations by objective ID, never by queue index or “the draft”. Preserve existing surface-specific instruction-edit guards: protocol instruction edits are draft-only; submitted membership in the sortable queue does not grant protocol edit permission. Description-only editing is presentation metadata and must have an explicit authorized API policy, separate from instruction or lifecycle mutation.
+Agent-written descriptions are not rewritten by the model, only linted (§4.6). Address mutations by objective ID, never by queue index or “the draft”. Preserve existing surface-specific instruction-edit guards: protocol instruction edits are draft-only; submitted membership in the sortable queue does not grant protocol edit permission. Description-only editing is presentation metadata. People can edit descriptions after launch, including on completed objectives; this does not change instructions or execution evidence. Specify authorization, audit provenance and conflicts separately from instruction or lifecycle mutation.
 
 ### 4.9 Provenance and staleness rules — recommended
 
@@ -179,6 +179,8 @@ Rules when the instruction changes and the caller sends no new description:
 Title provenance follows the same ownership protections, but keeps its own length/generation eligibility. Capture the instruction hash and field ownership/generation token when scheduling; compare them atomically when writing. An instruction hash alone cannot prevent overwriting a manual description edit made while the instruction stayed unchanged. Do not reject a valid result only because reorder changed the row revision.
 
 Reorder, head changes, launch and reopen without instruction changes preserve the description, provenance and hash and schedule no new brief. A pending result follows the objective ID even if the card moves or launches. Deleted objectives accept no results. Clearing instructions invalidates pending work and hides the old summary; existing attachment/history retention and blank-draft cleanup rules stay authoritative. A short replacement instruction shows the instruction body instead of a generated summary. Keep a user-authored description as stale metadata without letting it make a blank objective appear runnable.
+
+**Removal policy — decided:** removing a summary clears its displayed text and persists an objective-level suppression flag. Show the instructions instead. Instruction edits, catch-up scans, reorder, reopen and retries do not clear suppression. Invalidate pending description generations so an in-flight result cannot restore removed text. Only a user explicitly clicking Summarize re-enables generation; title generation remains independent. Apply this check before enqueue and again at publication.
 
 ### 4.10 Durable job instead of fire-and-forget — recommended
 
@@ -251,11 +253,14 @@ Proposed feature implementation only; this documentation revision has no runtime
 ## 10. Questions for the decision maker
 
 1. Layout of the description? **Decided 2026-11-14:** one to three prose paragraphs that open with the goal sentence and close with the done-when sentence, with no headings or bullets (§4.2).
-2. Can a person edit the description, or only regenerate it? **Decided 2026-11-14:** edit allowed, marked "Edited by you".
+2. Can a person edit the description, or only regenerate it? **Decided 2026-11-14:** edit allowed, including after launch and completion. Attribute the editor correctly; show "Edited by you" only to that editor.
 3. Backfill existing open objectives, or generate only on new or edited ones? **Decided 2026-11-14:** new/edited only, plus eligible open draft/submitted queue entries under §4.1; no wider backfill.
 4. Should the title also move to strict STE (it is already verb-first and short)? **Decided 2026-11-14:** yes, through the shared module, no other change.
 5. Show the summary on collapsed executed rows? **Decided 2026-11-14:** no. The summary shows only in an open row; the title explains a closed row (§4.12).
-6. Which objectives get a summary automatically? **Decided 2026-11-14:** only agent-submitted ones. For a person-written objective, the instructions are the summary, and a Summarize action makes one on request (§4.1).
+6. Which objectives get a summary automatically? **Decided 2026-11-14:** agent/assistant-written objectives qualify with or without an attached session, including MCP and in-app chat. For a person-written objective, the instructions are the summary, and a Summarize action makes one on request (§4.1).
+
+7. Is 120 words a hard limit? **Decided:** no, it is a target; essential meaning takes priority.
+8. What does removing a description do? **Decided:** keep it removed and show instructions until a user clicks Summarize. Persist suppression across instruction edits and catch-up; reject pending results after removal. Regenerate remains a separate request to replace an existing summary.
 
 ## 11. Queue integration acceptance criteria
 
@@ -271,5 +276,7 @@ These checks supplement the STE fidelity/provenance tests. Use the matching unif
 8. Exercise full/compact no-summary, pending, failure, generated, agent-authored, user-edited and stale states. Decision/caution indicators reveal the complete prose. Keyboard and touch users can read instructions and launch eligible compact cards without dragging.
 9. Catch up all eligible open draft/submitted IDs, including non-head rows. Do not generate for person-authored/unknown-origin, blank, deleted or already-started rows; deduplicate repeat scans. Opening or dragging a card causes no jobs.
 10. Preserve positional `previousObjectives`/`futureObjectives` response fields and executing-agent instruction-only context. Verify protocol draft-only instruction guards independently from REST and description-only permissions.
+
+11. Remove a summary while generation is pending, then edit instructions, reload, reorder, reopen and run catch-up. The summary stays absent and instructions remain visible. A late result cannot restore it. A user clicking Summarize re-enables generation; title behavior is unaffected.
 
 Run focused service/job/DTO tests with each backend phase, UI tests with each client phase, then matching-client interaction checks and applicable contract/parity/generated-artifact gates before release. This objective revises the plan and design only; it does not claim these future implementation checks have run.

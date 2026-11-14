@@ -68,6 +68,8 @@ The sample prose is illustrative content, not a new product decision. Executed r
 
 Expand and the decision/caution indicators are keyboard-accessible buttons with an explicit accessible name and expanded state. The indicators open the complete summary; they never imply that the full instructions have been checked. On touch screens, direct launch and the drag handle remain distinct targets. Keep existing toolbar focus behavior: opening agent/model menus does not expand or collapse the body.
 
+People can edit descriptions after launch, including on completed objectives. This changes presentation only; instruction-edit restrictions and execution evidence remain unchanged. Assistant-written instructions qualify for automatic summaries even without an attached session. The prose aims for 120 words, with extra words allowed to preserve essential meaning. Remove summary shows the original instructions and keeps the summary absent until a user clicks Summarize. Instruction edits, reloads and late generation results must not restore it. Regenerate replaces an existing summary and is a separate action.
+
 ## Summary states
 
 ```text

@@ -6,6 +6,10 @@ Contract impact: none. This review changes no runtime behavior or normative cont
 
 Reviewed: [implementation proposal](objective-descriptions-ste.md), [queue design](objective-descriptions-unified-queue-design.md), current title automation, objective creation/update paths, shared worker jobs, and relevant data/architecture contracts. This is a source-backed design review, not runtime or production verification.
 
+## Follow-up decisions
+
+The user has settled all four choices: 120 words is a target; people can edit descriptions after launch; unattached assistants qualify for automatic summaries. These decisions supersede the corresponding open choices and recommendations below and are reflected in the implementation plan. Remove keeps the summary absent until a user clicks Summarize; the plan now specifies persistent suppression and invalidation of pending results. The original findings below describe the reviewed revision, not unresolved product choices.
+
 ## Assessment
 
 The direction is sound. Keep full instructions authoritative, summaries optional, and launch independent of generation. The revised design correctly separates queue layout from runnable selection and preserves objective identity through reorder and reopen. Keep the six product decisions already recorded in §10.
