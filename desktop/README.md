@@ -114,7 +114,7 @@ bleed into subsequent publishable builds.
 | `APPLE_TEAM_ID` | Developer Team ID |
 | `OVERLORD_UPDATE_FEED_URL` | Override the default GitHub Releases update feed (see `desktop/update-feed.ts`) |
 
-The packaging step requires `GEMINI_API_KEY` so the desktop app ships with a
+The packaging step requires `OPENROUTER_API_KEY` so the desktop app ships with a
 default Gemini key, but it filters build-only secrets such as `APPLE_*` out of
 the bundled `.env.prod`.
 

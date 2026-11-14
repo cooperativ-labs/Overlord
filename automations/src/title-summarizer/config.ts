@@ -6,12 +6,12 @@ export type GeminiConfig = {
 };
 
 export function readGeminiConfigFromEnv(env: NodeJS.ProcessEnv = process.env): GeminiConfig | null {
-  const apiKey = env.GEMINI_API_KEY?.trim() ?? '';
+  const apiKey = env.OPENROUTER_API_KEY?.trim() ?? '';
   if (!apiKey) {
     return null;
   }
 
-  const model = env.GEMINI_MODEL?.trim() || DEFAULT_GEMINI_MODEL;
+  const model = env.OPENROUTER_MODEL?.trim() || DEFAULT_GEMINI_MODEL;
   return { apiKey, model };
 }
 

@@ -19,9 +19,8 @@ import { createCompletionListenerFactory } from '../execution/local-target-compl
 
 import { sdkGeminiClient } from './gemini-client.ts';
 import { GeminiChatRuntime } from './gemini-runtime.ts';
-import { GeminiStaticCache } from './static-cache.ts';
 
-/** Default chat model (milestone one); `CHAT_GEMINI_MODEL` overrides it. */
+/** Default chat model (milestone one); `CHAT_OPENROUTER_MODEL` overrides it. */
 const DEFAULT_CHAT_MODEL = 'gemini-3.8-flash';
 
 /** Source checkers for the kinds owned outside the connections module. */
@@ -50,7 +49,7 @@ export interface ChatEngine {
 
 /**
  * Builds the Gemini engine from server configuration. Chat has its own key and model
- * settings (`CHAT_GEMINI_API_KEY`, falling back to `GEMINI_API_KEY`; `CHAT_GEMINI_MODEL`),
+ * settings (`CHAT_OPENROUTER_API_KEY`, falling back to `OPENROUTER_API_KEY`; `CHAT_OPENROUTER_MODEL`),
  * separate from the title and delivery automations. Without a key the runtime reports
  * `not_configured` and every run fails `provider_unavailable`; it never answers with mocks.
  */
@@ -59,9 +58,10 @@ export function createChatEngine(options: {
   env: NodeJS.ProcessEnv;
   connections: () => ConnectionsRuntime;
 }): ChatEngine {
-  // An empty CHAT_GEMINI_API_KEY (as in the env examples) falls back too.
-  const key = options.env.CHAT_GEMINI_API_KEY?.trim() || options.env.GEMINI_API_KEY?.trim() || '';
-  const model = (options.env.CHAT_GEMINI_MODEL ?? '').trim() || DEFAULT_CHAT_MODEL;
+  // An empty CHAT_OPENROUTER_API_KEY (as in the env examples) falls back too.
+  const key =
+    options.env.CHAT_OPENROUTER_API_KEY?.trim() || options.env.OPENROUTER_API_KEY?.trim() || '';
+  const model = (options.env.CHAT_OPENROUTER_MODEL ?? '').trim() || DEFAULT_CHAT_MODEL;
   const budget = Number(options.env.CHAT_MAX_GATHERED_BYTES_PER_RUN);
   // Model input limit in tokens; whole number 131072–2097152, otherwise the verified default.
   const inputTokenLimit = Number(options.env.CHAT_GEMINI_INPUT_TOKEN_LIMIT);
@@ -95,14 +95,11 @@ export function createChatEngine(options: {
     readRepository: queuedRepositoryReader
   });
   const client = key ? sdkGeminiClient(key) : null;
-  // Static-prefix explicit caching is on with a key unless CHAT_GEMINI_STATIC_CACHE=off.
-  const staticCacheOff =
-    (options.env.CHAT_GEMINI_STATIC_CACHE ?? '').trim().toLowerCase() === 'off';
   const runtime = new GeminiChatRuntime({
     client,
     gateway,
     model,
-    staticCache: client && !staticCacheOff ? new GeminiStaticCache(client) : null,
+    staticCache: null,
     ...(Number.isSafeInteger(budget) && budget > 0 ? { maxGatheredBytesPerRun: budget } : {}),
     ...(Number.isSafeInteger(inputTokenLimit) &&
     inputTokenLimit >= 131_072 &&

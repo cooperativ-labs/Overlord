@@ -1,16 +1,18 @@
-import { GoogleGenAI } from '@google/genai';
+import { createOpenRouterClient } from '../openrouter/index.js';
 
 import { readGeminiConfigFromEnv } from './config.js';
 
-let cachedClient: GoogleGenAI | null | undefined;
+let cachedClient: ReturnType<typeof createOpenRouterClient> | null | undefined;
 
-export function getGeminiClient(env: NodeJS.ProcessEnv = process.env): GoogleGenAI | null {
+export function getGeminiClient(
+  env: NodeJS.ProcessEnv = process.env
+): ReturnType<typeof createOpenRouterClient> | null {
   if (cachedClient !== undefined) {
     return cachedClient;
   }
 
   const config = readGeminiConfigFromEnv(env);
-  cachedClient = config ? new GoogleGenAI({ apiKey: config.apiKey }) : null;
+  cachedClient = config ? createOpenRouterClient(config.apiKey) : null;
   return cachedClient;
 }
 
@@ -38,7 +40,7 @@ export async function generateGeminiText(params: {
   const client = getGeminiClient(env);
   const config = readGeminiConfigFromEnv(env);
   if (!client || !config) {
-    console.warn(`${logPrefix} GEMINI_API_KEY not set`);
+    console.warn(`${logPrefix} OPENROUTER_API_KEY not set`);
     return null;
   }
 

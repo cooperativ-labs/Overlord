@@ -140,7 +140,7 @@ Other explicitly listed suites in `test:conformance` may use different names.
 `*-test-fixture.ts` files hold test-only helpers and are not test suites. Keep
 them beside the domain they support (or in `backend/test-helpers.ts` when shared
 across domains). `*.live-eval.ts` files are manual evaluations, are not part of
-either test suite, and may require `GEMINI_API_KEY`; document their run command
+either test suite, and may require `OPENROUTER_API_KEY`; document their run command
 with the evaluation. All these TypeScript files are included in
 `yarn typecheck:backend`.
 

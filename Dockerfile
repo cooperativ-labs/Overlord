@@ -7,7 +7,7 @@
 # auth, the execution-request queue, protocol writeback, and the realtime feed,
 # and it reaches Neon Postgres over the injected `DATABASE_URL`.
 #
-# The cloud server bundle keeps `@google/genai` external (see build-server.mjs).
+# The OpenRouter transport is bundled (see build-server.mjs).
 # `better-sqlite3` is lazy-loaded only on the Local SQLite path and is not
 # installed in this image. The SPA is served from Vercel, not this container
 # (`OVERLORD_SERVE_SPA=false`). `nodeLinker: node-modules` (see .yarnrc.yml)

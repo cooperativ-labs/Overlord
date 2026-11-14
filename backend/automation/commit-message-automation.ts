@@ -17,7 +17,7 @@ const SYSTEM_INSTRUCTION = [
 /**
  * Drafts a commit message from a worktree diff via the Automations Layer (Gemini).
  * Returns the trimmed message, or `null` when the summarizer is unavailable
- * (e.g. no `GEMINI_API_KEY`) or returns nothing — the caller maps that to a
+ * (e.g. no `OPENROUTER_API_KEY`) or returns nothing — the caller maps that to a
  * typed error so the UI can explain why no draft appeared.
  */
 export async function generateCommitMessageFromDiff(params: {

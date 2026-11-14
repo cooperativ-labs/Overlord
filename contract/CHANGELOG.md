@@ -5,6 +5,18 @@ is the current version and must equal [VERSION](VERSION); `yarn version:contract
 writes its skeleton. Dates use ISO 8601 and describe the contract change, not
 merely the files edited.
 
+## [171.0.0] - 2026-11-14
+
+Contract impact: major. Google model calls now use the server-only OpenRouter
+transport and OpenRouter credentials. Google explicit-cache creation/deletion and
+its operator toggle are retired. Model defaults, REST provider identity, checkpoint
+schema, authorization and deterministic fallbacks remain unchanged. Backend,
+automations and desktop remove the Google SDK dependency. See ADR 0055.
+
+### Version
+
+- Major contract version 171.0.0, from 170.0.0.
+
 ## [170.0.0] - 2026-11-13
 
 Legacy compatibility surfaces are retired: the personal-connection alias routes, the protocol

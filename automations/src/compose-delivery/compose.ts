@@ -1,5 +1,4 @@
-import { type Schema, Type } from '@google/genai';
-
+import type { Schema } from '../openrouter/index.js';
 import { readGeminiConfigFromEnv } from '../title-summarizer/config.js';
 import { getGeminiClient, resetGeminiClientForTests } from '../title-summarizer/gemini-client.js';
 
@@ -51,42 +50,42 @@ export type ComposeDeliveryDraft = {
 };
 
 export const COMPOSE_DELIVERY_RESPONSE_SCHEMA: Schema = {
-  type: Type.OBJECT,
+  type: 'object',
   properties: {
-    markdown: { type: Type.STRING },
+    markdown: { type: 'string' },
     humanActions: {
-      type: Type.ARRAY,
+      type: 'array',
       items: {
-        type: Type.OBJECT,
+        type: 'object',
         properties: {
-          sourceId: { type: Type.STRING },
-          action: { type: Type.STRING },
-          reason: { type: Type.STRING },
-          category: { type: Type.STRING },
-          command: { type: Type.STRING },
-          verify: { type: Type.STRING },
-          link: { type: Type.STRING }
+          sourceId: { type: 'string' },
+          action: { type: 'string' },
+          reason: { type: 'string' },
+          category: { type: 'string' },
+          command: { type: 'string' },
+          verify: { type: 'string' },
+          link: { type: 'string' }
         },
         required: ['sourceId', 'action']
       }
     },
     tradeoffsMade: {
-      type: Type.ARRAY,
+      type: 'array',
       items: {
-        type: Type.OBJECT,
+        type: 'object',
         properties: {
-          sourceId: { type: Type.STRING },
-          decision: { type: Type.STRING },
-          rationale: { type: Type.STRING },
-          alternativesConsidered: { type: Type.ARRAY, items: { type: Type.STRING } },
-          impact: { type: Type.STRING }
+          sourceId: { type: 'string' },
+          decision: { type: 'string' },
+          rationale: { type: 'string' },
+          alternativesConsidered: { type: 'array', items: { type: 'string' } },
+          impact: { type: 'string' }
         },
         required: ['sourceId', 'decision', 'rationale']
       }
     },
-    knownRisks: { type: Type.ARRAY, items: { type: Type.STRING } },
-    assumptions: { type: Type.ARRAY, items: { type: Type.STRING } },
-    reviewHighlights: { type: Type.ARRAY, items: { type: Type.STRING } }
+    knownRisks: { type: 'array', items: { type: 'string' } },
+    assumptions: { type: 'array', items: { type: 'string' } },
+    reviewHighlights: { type: 'array', items: { type: 'string' } }
   },
   required: ['markdown', 'humanActions', 'tradeoffsMade']
 };
@@ -203,13 +202,13 @@ async function generateComposeJson(params: {
   const client = getGeminiClient(env);
   const config = readGeminiConfigFromEnv(env);
   if (!client || !config) {
-    console.warn(`${logPrefix} GEMINI_API_KEY not set`);
+    console.warn(`${logPrefix} OPENROUTER_API_KEY not set`);
     return null;
   }
 
   try {
     const response = await client.models.generateContent({
-      model: 'gemini-3.5-flash-lite',
+      model: config.model,
       contents: [{ role: 'user', parts: [{ text: prompt }] }],
       config: {
         systemInstruction,

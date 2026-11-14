@@ -286,7 +286,7 @@ CLI, and a runtime-only `.env.prod`, then runs electron-builder:
   `CSC_LINK`); notarization (`--notarize`) uses `APPLE_ID` /
   `APPLE_APP_SPECIFIC_PASSWORD` / `APPLE_TEAM_ID`. `--no-sign` produces an ad-hoc
   build.
-- `GEMINI_API_KEY` is required for `desktop:package:prod` so packaged builds
+- `OPENROUTER_API_KEY` is required for `desktop:package:prod` so packaged builds
   ship with a default Gemini key, but the staged `.env.prod` is filtered to
   runtime keys only and excludes build-only secrets such as `APPLE_*`.
 - `OVERLORD_UPDATE_FEED_URL` overrides the default GitHub Releases updater feed

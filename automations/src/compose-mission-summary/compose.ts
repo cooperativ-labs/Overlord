@@ -1,6 +1,5 @@
-import { type Schema, Type } from '@google/genai';
-
 import { WRITING_RULES } from '../compose-delivery/compose.js';
+import type { Schema } from '../openrouter/index.js';
 import { readGeminiConfigFromEnv } from '../title-summarizer/config.js';
 import { getGeminiClient } from '../title-summarizer/gemini-client.js';
 
@@ -40,17 +39,17 @@ export type ComposeMissionSummaryDraft = {
 };
 
 export const COMPOSE_MISSION_SUMMARY_RESPONSE_SCHEMA: Schema = {
-  type: Type.OBJECT,
+  type: 'object',
   properties: {
-    headline: { type: Type.STRING },
-    summary: { type: Type.STRING },
+    headline: { type: 'string' },
+    summary: { type: 'string' },
     risks: {
-      type: Type.ARRAY,
+      type: 'array',
       items: {
-        type: Type.OBJECT,
+        type: 'object',
         properties: {
-          ref: { type: Type.STRING },
-          text: { type: Type.STRING }
+          ref: { type: 'string' },
+          text: { type: 'string' }
         },
         required: ['ref']
       }
@@ -140,13 +139,13 @@ async function generateMissionSummaryJson(params: {
   const client = getGeminiClient(env);
   const config = readGeminiConfigFromEnv(env);
   if (!client || !config) {
-    console.warn(`${logPrefix} GEMINI_API_KEY not set`);
+    console.warn(`${logPrefix} OPENROUTER_API_KEY not set`);
     return null;
   }
 
   try {
     const response = await client.models.generateContent({
-      model: 'gemini-3.5-flash-lite',
+      model: config.model,
       contents: [{ role: 'user', parts: [{ text: prompt }] }],
       config: {
         systemInstruction: MISSION_SUMMARY_SYSTEM_INSTRUCTION,

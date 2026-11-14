@@ -1,5 +1,5 @@
 /** Static schema probe. Only Overlord-authored declarations and synthetic connection ids.
- * GEMINI_API_KEY=... node --import tsx backend/chat/tool-manifest.live-eval.ts <aggregate.json>
+ * OPENROUTER_API_KEY=... node --import tsx backend/chat/tool-manifest.live-eval.ts <aggregate.json>
  * Provider prompt usage minus the identical tool-free control counts schema overhead.
  */
 import { createSqliteClient, openInMemoryDatabase } from '@overlord/database';
@@ -11,8 +11,8 @@ import { REVIEWED_KNOWLEDGEBASE_TOOLS } from '../connections/policy.ts';
 import { type GeminiChunk, sdkGeminiClient } from './gemini-client.ts';
 import { createToolManifest, TOOL_FAMILIES, type ToolFamily } from './tool-manifest.ts';
 
-const key = process.env.GEMINI_API_KEY;
-if (!key || !process.argv[2]) throw new Error('GEMINI_API_KEY and output path required.');
+const key = process.env.OPENROUTER_API_KEY;
+if (!key || !process.argv[2]) throw new Error('OPENROUTER_API_KEY and output path required.');
 const client = sdkGeminiClient(key);
 const raw = openInMemoryDatabase();
 const db = createSqliteClient(raw);

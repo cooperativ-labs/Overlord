@@ -7,7 +7,7 @@ import { afterEach, describe, it } from 'node:test';
 import { loadRepoEnv, loadRepoEnvForProfile } from './load-repo-env.ts';
 
 const ENV_KEYS = [
-  'GEMINI_API_KEY',
+  'OPENROUTER_API_KEY',
   'OVLD_HOME',
   'OVERLORD_WEB_PORT',
   'OVERLORD_BACKEND_URL',
@@ -57,34 +57,34 @@ function makeEnvFile(contents: string): string {
 describe('loadRepoEnv', () => {
   it('loads values from .env when the process env is unset', () => {
     withCleanEnv(() => {
-      const envPath = makeEnvFile('GEMINI_API_KEY=from-dotenv\nOVERLORD_WEB_PORT=4310\n');
+      const envPath = makeEnvFile('OPENROUTER_API_KEY=from-dotenv\nOVERLORD_WEB_PORT=4310\n');
 
       loadRepoEnv(envPath);
 
-      assert.equal(process.env.GEMINI_API_KEY, 'from-dotenv');
+      assert.equal(process.env.OPENROUTER_API_KEY, 'from-dotenv');
       assert.equal(process.env.OVERLORD_WEB_PORT, '4310');
     });
   });
 
   it('replaces blank exported values with .env values', () => {
     withCleanEnv(() => {
-      process.env.GEMINI_API_KEY = '   ';
-      const envPath = makeEnvFile('GEMINI_API_KEY=from-dotenv\n');
+      process.env.OPENROUTER_API_KEY = '   ';
+      const envPath = makeEnvFile('OPENROUTER_API_KEY=from-dotenv\n');
 
       loadRepoEnv(envPath);
 
-      assert.equal(process.env.GEMINI_API_KEY, 'from-dotenv');
+      assert.equal(process.env.OPENROUTER_API_KEY, 'from-dotenv');
     });
   });
 
   it('preserves non-blank process env overrides', () => {
     withCleanEnv(() => {
-      process.env.GEMINI_API_KEY = 'from-process';
-      const envPath = makeEnvFile('GEMINI_API_KEY=from-dotenv\n');
+      process.env.OPENROUTER_API_KEY = 'from-process';
+      const envPath = makeEnvFile('OPENROUTER_API_KEY=from-dotenv\n');
 
       loadRepoEnv(envPath);
 
-      assert.equal(process.env.GEMINI_API_KEY, 'from-process');
+      assert.equal(process.env.OPENROUTER_API_KEY, 'from-process');
     });
   });
 
@@ -94,17 +94,17 @@ describe('loadRepoEnv', () => {
       tempDirs.push(dir);
       writeFileSync(
         path.join(dir, '.env.prod'),
-        'OVERLORD_WEB_PORT=4310\nGEMINI_API_KEY=from-prod\n'
+        'OVERLORD_WEB_PORT=4310\nOPENROUTER_API_KEY=from-prod\n'
       );
       writeFileSync(
         path.join(dir, '.env.local'),
-        'OVERLORD_WEB_PORT=4320\nGEMINI_API_KEY=from-dev\n'
+        'OVERLORD_WEB_PORT=4320\nOPENROUTER_API_KEY=from-dev\n'
       );
 
       loadRepoEnvForProfile(dir, 'development');
 
       assert.equal(process.env.OVERLORD_WEB_PORT, '4320');
-      assert.equal(process.env.GEMINI_API_KEY, 'from-dev');
+      assert.equal(process.env.OPENROUTER_API_KEY, 'from-dev');
     });
   });
 
@@ -144,14 +144,14 @@ describe('loadRepoEnv', () => {
       tempDirs.push(dir);
       writeFileSync(
         path.join(dir, '.env.prod'),
-        'OVERLORD_WEB_PORT=4310\nGEMINI_API_KEY=from-prod\n'
+        'OVERLORD_WEB_PORT=4310\nOPENROUTER_API_KEY=from-prod\n'
       );
       writeFileSync(path.join(dir, '.env.local'), 'OVERLORD_WEB_PORT=4320\n');
 
       loadRepoEnvForProfile(dir, 'production');
 
       assert.equal(process.env.OVERLORD_WEB_PORT, '4310');
-      assert.equal(process.env.GEMINI_API_KEY, 'from-prod');
+      assert.equal(process.env.OPENROUTER_API_KEY, 'from-prod');
     });
   });
 });

@@ -66,7 +66,7 @@ COPY cli/src/agent-catalog.ts \
 
 # Prune runtime deps to the bundle's cloud external set under the existing
 # workspace lockfile. The bundled server carries its own code; Railway only
-# needs the automations provider package (@google/genai) and its transitives.
+# bundles the OpenRouter transport without a provider SDK.
 RUN repo-yarn contract:build:prod \
   && repo-yarn db:build:prod \
   && repo-yarn auth:build:prod \
@@ -87,7 +87,7 @@ ENV NODE_ENV=production \
 
 # Runtime keeps the bundled backend, its Postgres migrations, and a pruned
 # production node_modules containing only the cloud-path external runtime deps
-# (today: @google/genai plus transitives resolved from the lockfile). The SPA
+# (the OpenRouter transport is bundled without a provider SDK). The SPA
 # and SQLite migrations are not copied into this hosted Postgres-only image.
 COPY --from=builder /app/backend/dist-server ./backend/dist-server
 COPY --from=builder /app/backend/postgres ./backend/postgres

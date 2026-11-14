@@ -88194,7 +88194,7 @@ var require_dist_cjs5 = __commonJS({
         return next(args);
       }
       const { request, input: input2 } = args;
-      const { body: requestBody, headers } = request;
+      const { body: requestBody2, headers } = request;
       const { base64Encoder, streamHasher } = config4;
       const { requestChecksumRequired, requestAlgorithmMember } = middlewareConfig;
       const requestChecksumCalculation = await config4.requestChecksumCalculation();
@@ -88213,7 +88213,7 @@ var require_dist_cjs5 = __commonJS({
         requestAlgorithmMember: requestAlgorithmMember?.name,
         requestChecksumCalculation
       });
-      let updatedBody = requestBody;
+      let updatedBody = requestBody2;
       let updatedHeaders = headers;
       if (checksumAlgorithm) {
         switch (checksumAlgorithm) {
@@ -88235,9 +88235,9 @@ var require_dist_cjs5 = __commonJS({
         }
         const checksumLocationName = getChecksumLocationName(checksumAlgorithm);
         const checksumAlgorithmFn = selectChecksumAlgorithmFunction(checksumAlgorithm, config4);
-        if (isStreaming(requestBody)) {
+        if (isStreaming(requestBody2)) {
           const { getAwsChunkedEncodingStream: getAwsChunkedEncodingStream3, bodyLengthChecker } = config4;
-          updatedBody = getAwsChunkedEncodingStream3(typeof config4.requestStreamBufferSize === "number" && config4.requestStreamBufferSize >= 8 * 1024 ? createBufferedReadable2(requestBody, config4.requestStreamBufferSize, context.logger) : requestBody, {
+          updatedBody = getAwsChunkedEncodingStream3(typeof config4.requestStreamBufferSize === "number" && config4.requestStreamBufferSize >= 8 * 1024 ? createBufferedReadable2(requestBody2, config4.requestStreamBufferSize, context.logger) : requestBody2, {
             base64Encoder,
             bodyLengthChecker,
             checksumLocationName,
@@ -88254,7 +88254,7 @@ var require_dist_cjs5 = __commonJS({
           };
           delete updatedHeaders["content-length"];
         } else if (!hasHeader(checksumLocationName, headers)) {
-          const rawChecksum = await stringHasher(checksumAlgorithmFn, requestBody);
+          const rawChecksum = await stringHasher(checksumAlgorithmFn, requestBody2);
           updatedHeaders = {
             ...headers,
             [checksumLocationName]: base64Encoder(rawChecksum)
@@ -89107,7 +89107,7 @@ ${toHex2(hashedRequest)}`;
       return hash2.digest();
     };
     var getCanonicalHeaders = ({ headers }, unsignableHeaders, signableHeaders) => {
-      const canonical2 = {};
+      const canonical = {};
       for (const headerName of Object.keys(headers).sort()) {
         if (headers[headerName] == void 0) {
           continue;
@@ -89118,9 +89118,9 @@ ${toHex2(hashedRequest)}`;
             continue;
           }
         }
-        canonical2[canonicalHeaderName] = headers[headerName].trim().replace(/\s+/g, " ");
+        canonical[canonicalHeaderName] = headers[headerName].trim().replace(/\s+/g, " ");
       }
-      return canonical2;
+      return canonical;
     };
     var getPayloadHash = async ({ headers, body }, hashConstructor) => {
       for (const headerName of Object.keys(headers)) {
@@ -89929,14 +89929,14 @@ var init_ProtocolLib = __esm({
       setQueryCompatError(output2, response) {
         const queryErrorHeader = response.headers?.["x-amzn-query-error"];
         if (output2 !== void 0 && queryErrorHeader != null) {
-          const [Code, Type3] = queryErrorHeader.split(";");
+          const [Code, Type] = queryErrorHeader.split(";");
           const keys = Object.keys(output2);
           const Error2 = {
             Code,
-            Type: Type3
+            Type
           };
           output2.Code = Code;
-          output2.Type = Type3;
+          output2.Type = Type;
           for (let i5 = 0; i5 < keys.length; i5++) {
             const k5 = keys[i5];
             Error2[k5 === "message" ? "Message" : k5] = output2[k5];
@@ -105525,7 +105525,7 @@ var require_dist_cjs16 = __commonJS({
     var { setCredentialFeature: setCredentialFeature2 } = (init_client3(), __toCommonJS(client_exports2));
     var { CredentialsProviderError: CredentialsProviderError2, readFile: readFile4, parseKnownFiles: parseKnownFiles2, getProfileName: getProfileName2 } = (init_config2(), __toCommonJS(config_exports));
     var { HttpRequest: HttpRequest2 } = (init_protocols(), __toCommonJS(protocols_exports));
-    var { createHash: createHash28, createPrivateKey, createPublicKey, sign: sign2 } = require("node:crypto");
+    var { createHash: createHash27, createPrivateKey, createPublicKey, sign: sign2 } = require("node:crypto");
     var { promises } = require("node:fs");
     var { homedir: homedir2 } = require("node:os");
     var { dirname, join: join6 } = require("node:path");
@@ -105686,7 +105686,7 @@ var require_dist_cjs16 = __commonJS({
       getTokenFilePath() {
         const directory = process.env.AWS_LOGIN_CACHE_DIRECTORY ?? join6(homedir2(), ".aws", "login", "cache");
         const loginSessionBytes = Buffer.from(this.loginSession, "utf8");
-        const loginSessionSha256 = createHash28("sha256").update(loginSessionBytes).digest("hex");
+        const loginSessionSha256 = createHash27("sha256").update(loginSessionBytes).digest("hex");
         return join6(directory, `${loginSessionSha256}.json`);
       }
       derToRawSignature(derSignature) {
@@ -109981,7 +109981,7 @@ var require_dist_cjs21 = __commonJS({
       Enabled: "Enabled",
       Suspended: "Suspended"
     };
-    var Type3 = {
+    var Type = {
       AmazonCustomerByEmail: "AmazonCustomerByEmail",
       CanonicalUser: "CanonicalUser",
       Group: "Group"
@@ -110572,7 +110572,7 @@ var require_dist_cjs21 = __commonJS({
     exports2.Tier = Tier;
     exports2.TransitionDefaultMinimumObjectSize = TransitionDefaultMinimumObjectSize;
     exports2.TransitionStorageClass = TransitionStorageClass;
-    exports2.Type = Type3;
+    exports2.Type = Type;
     exports2.UpdateBucketMetadataAnnotationTableConfigurationCommand = UpdateBucketMetadataAnnotationTableConfigurationCommand;
     exports2.UpdateBucketMetadataInventoryTableConfigurationCommand = UpdateBucketMetadataInventoryTableConfigurationCommand;
     exports2.UpdateBucketMetadataJournalTableConfigurationCommand = UpdateBucketMetadataJournalTableConfigurationCommand;
@@ -114505,23 +114505,23 @@ function serializeJoseHeader(Err, header) {
 
 // ../node_modules/jose/dist/webapi/lib/key.js
 var tag = (key) => key[Symbol.toStringTag];
-var jwkMatchesOp = (entry, key, usage) => {
+var jwkMatchesOp = (entry, key, usage2) => {
   const { alg: alg2 } = entry;
   if (key.use !== void 0) {
-    const expected = usage === "sign" || usage === "verify" ? "sig" : "enc";
+    const expected = usage2 === "sign" || usage2 === "verify" ? "sig" : "enc";
     if (key.use !== expected)
       throw new TypeError(`Invalid key for this operation, its "use" must be "${expected}" when present`);
   }
   if (key.alg !== void 0 && key.alg !== alg2)
     throw new TypeError(`Invalid key for this operation, its "alg" must be "${alg2}" when present`);
   if (Array.isArray(key.key_ops)) {
-    const expectedKeyOp = usage === "encrypt" || usage === "decrypt" ? entry.ops?.[usage === "encrypt" ? 0 : 1] : usage;
+    const expectedKeyOp = usage2 === "encrypt" || usage2 === "decrypt" ? entry.ops?.[usage2 === "encrypt" ? 0 : 1] : usage2;
     if (expectedKeyOp && !key.key_ops.includes(expectedKeyOp))
       throw new TypeError(`Invalid key for this operation, its "key_ops" must include "${expectedKeyOp}" when present`);
   }
 };
-async function prepareKey(entry, key, usage) {
-  const { alg: alg2, secret } = entry, requiresPrivateKey = usage === "decrypt" || usage === "sign";
+async function prepareKey(entry, key, usage2) {
+  const { alg: alg2, secret } = entry, requiresPrivateKey = usage2 === "decrypt" || usage2 === "sign";
   if (secret && key instanceof Uint8Array)
     return key;
   let normalized, keyObject;
@@ -114530,7 +114530,7 @@ async function prepareKey(entry, key, usage) {
       throw invalidKeyType(alg2, key, secret);
     if (!(secret ? normalized.kty === "oct" && typeof normalized.k == "string" : normalized.kty !== "oct" && (requiresPrivateKey ? normalized.kty === "AKP" && typeof normalized.priv == "string" || typeof normalized.d == "string" : normalized.d === void 0 && normalized.priv === void 0)))
       throw new TypeError(secret ? 'JSON Web Key for symmetric algorithms must have JWK "kty" (Key Type) equal to "oct" and the JWK "k" (Key Value) present' : `JSON Web Key for this operation must be a ${requiresPrivateKey ? "private" : "public"} JWK`);
-    if (jwkMatchesOp(entry, normalized, usage), normalized.kty === "oct")
+    if (jwkMatchesOp(entry, normalized, usage2), normalized.kty === "oct")
       return decode(normalized.k);
     if (!Object.isFrozen(key)) {
       const { key_ops } = key;
@@ -114593,16 +114593,16 @@ function invalidKeyType(alg2, actual, secret) {
   return secret && types3.push("Uint8Array"), new TypeError(message(`Key for the ${alg2} algorithm must be `, actual, ...types3));
 }
 var unusable = (name2, prop = "algorithm.name") => new TypeError(`CryptoKey does not support this operation, its ${prop} must be ${name2}`);
-function checkUsage(key, usage) {
-  if (usage && !key.usages.includes(usage))
-    throw new TypeError(`CryptoKey does not support this operation, its usages must include ${usage}.`);
+function checkUsage(key, usage2) {
+  if (usage2 && !key.usages.includes(usage2))
+    throw new TypeError(`CryptoKey does not support this operation, its usages must include ${usage2}.`);
 }
 function checkModulusLength(alg2, key) {
   const { modulusLength } = key.algorithm;
   if (typeof modulusLength != "number" || modulusLength < 2048)
     throw new TypeError(`${alg2} requires key modulusLength to be 2048 bits or larger`);
 }
-function checkCryptoKey(key, expected, usage) {
+function checkCryptoKey(key, expected, usage2) {
   const algorithm2 = key.algorithm;
   if (algorithm2.name !== expected.name)
     throw unusable(expected.name);
@@ -114612,7 +114612,7 @@ function checkCryptoKey(key, expected, usage) {
     throw unusable(expected.namedCurve, "algorithm.namedCurve");
   if (expected.length !== void 0 && algorithm2.length !== expected.length)
     throw unusable(expected.length, "algorithm.length");
-  checkUsage(key, usage);
+  checkUsage(key, usage2);
 }
 function snapshotJwk(jwk) {
   return { __proto__: null, ...jwk };
@@ -114640,8 +114640,8 @@ async function jwkToKey(entry, jwk, extractable) {
   const algorithm2 = entry.resolve?.({ kty: jwk.kty, crv: jwk.crv }) ?? entry.subtle, isPrivate = !!(jwk.d || jwk.priv), keyData = { ...jwk, ext: extractable ?? jwk.ext };
   return keyData.kty !== "AKP" && delete keyData.alg, delete keyData.use, crypto.subtle.importKey("jwk", keyData, algorithm2, keyData.ext ?? !isPrivate, jwk.key_ops ?? entry.usages[isPrivate ? 1 : 0]);
 }
-async function rawKey(key, expected, usage, extractable = false) {
-  return key instanceof Uint8Array && (key = await crypto.subtle.importKey("raw", key, expected, extractable, [usage])), checkCryptoKey(key, expected, usage), key;
+async function rawKey(key, expected, usage2, extractable = false) {
+  return key instanceof Uint8Array && (key = await crypto.subtle.importKey("raw", key, expected, extractable, [usage2])), checkCryptoKey(key, expected, usage2), key;
 }
 
 // ../node_modules/jose/dist/webapi/lib/content_encryption.js
@@ -114656,10 +114656,10 @@ function checkIvLength(enc2, iv) {
   if (iv.length << 3 !== enc2.ivBits)
     throw new JWEInvalid("Invalid Initialization Vector length");
 }
-async function cbcKeySetup(enc2, cek, usage) {
+async function cbcKeySetup(enc2, cek, usage2) {
   if (!(cek instanceof Uint8Array))
     throw new TypeError(invalidKeyInput(cek, "Uint8Array"));
-  const keyLengthBits = enc2.cekBits >> 1, encKey = await crypto.subtle.importKey("raw", cek.subarray(keyLengthBits >> 3), "AES-CBC", false, [usage]), macKey = await crypto.subtle.importKey("raw", cek.subarray(0, keyLengthBits >> 3), {
+  const keyLengthBits = enc2.cekBits >> 1, encKey = await crypto.subtle.importKey("raw", cek.subarray(keyLengthBits >> 3), "AES-CBC", false, [usage2]), macKey = await crypto.subtle.importKey("raw", cek.subarray(0, keyLengthBits >> 3), {
     hash: `SHA-${keyLengthBits << 1}`,
     name: "HMAC"
   }, false, ["sign"]);
@@ -114847,10 +114847,10 @@ function jweEncryption(enc2) {
 }
 
 // ../node_modules/jose/dist/webapi/lib/key_management.js
-function checkEcdhCryptoKey(key, usage) {
+function checkEcdhCryptoKey(key, usage2) {
   if (key.algorithm.name !== "ECDH" && key.algorithm.name !== "X25519")
     throw new TypeError("CryptoKey does not support this operation, its algorithm.name must be ECDH or X25519");
-  checkUsage(key, usage);
+  checkUsage(key, usage2);
 }
 async function aeskwWrap(alg2, key, cek) {
   const cryptoKey = await rawKey(key, jweAlgorithm(alg2).subtle, "wrapKey", true), cryptoKeyCek = await crypto.subtle.importKey("raw", cek, { hash: "SHA-256", name: "HMAC" }, true, ["sign"]);
@@ -114860,8 +114860,8 @@ async function aeskwUnwrap(alg2, key, encryptedKey) {
   const cryptoKey = await rawKey(key, jweAlgorithm(alg2).subtle, "unwrapKey", true), cryptoKeyCek = await crypto.subtle.unwrapKey("raw", encryptedKey, cryptoKey, "AES-KW", { hash: "SHA-256", name: "HMAC" }, true, ["sign"]);
   return new Uint8Array(await crypto.subtle.exportKey("raw", cryptoKeyCek));
 }
-function checkRsaKey(alg2, key, usage) {
-  checkCryptoKey(key, jweAlgorithm(alg2).subtle, usage), checkModulusLength(alg2, key);
+function checkRsaKey(alg2, key, usage2) {
+  checkCryptoKey(key, jweAlgorithm(alg2).subtle, usage2), checkModulusLength(alg2, key);
 }
 async function deriveKey(p2s, alg2, p2c, key) {
   if (!(p2s instanceof Uint8Array) || p2s.length < 8)
@@ -122253,16 +122253,16 @@ function classifyHost(host) {
     literal: "ipv4",
     canonical: lowered
   };
-  const canonical2 = normalizeIP(lowered, { ipv6Subnet: 128 });
-  if (looksLikeIPv4(canonical2)) return {
-    kind: classifyIPv4(canonical2),
+  const canonical = normalizeIP(lowered, { ipv6Subnet: 128 });
+  if (looksLikeIPv4(canonical)) return {
+    kind: classifyIPv4(canonical),
     literal: "ipv4",
-    canonical: canonical2
+    canonical
   };
   return {
-    kind: classifyIPv6(canonical2),
+    kind: classifyIPv6(canonical),
     literal: "ipv6",
-    canonical: canonical2
+    canonical
   };
 }
 function isLoopbackHost(host) {
@@ -133013,32 +133013,228 @@ function scopeGrantsForPreset(scope2) {
   return [];
 }
 
-// ../automations/dist/compose-delivery/compose.js
-var import_genai2 = require("@google/genai");
-
 // ../automations/dist/title-summarizer/config.js
 var DEFAULT_GEMINI_MODEL = "gemini-3.5-flash-lite";
 function readGeminiConfigFromEnv(env3 = process.env) {
-  const apiKey = env3.GEMINI_API_KEY?.trim() ?? "";
+  const apiKey = env3.OPENROUTER_API_KEY?.trim() ?? "";
   if (!apiKey) {
     return null;
   }
-  const model = env3.GEMINI_MODEL?.trim() || DEFAULT_GEMINI_MODEL;
+  const model = env3.OPENROUTER_MODEL?.trim() || DEFAULT_GEMINI_MODEL;
   return { apiKey, model };
 }
 function isGeminiConfigured(env3 = process.env) {
   return readGeminiConfigFromEnv(env3) !== null;
 }
 
+// ../automations/dist/openrouter/index.js
+var openRouterModel = (model) => model.includes("/") ? model : `google/${model}`;
+function requestBody(request, stream = false) {
+  const { config: config4 } = request;
+  const messages = [];
+  if (config4.systemInstruction)
+    messages.push({ role: "system", content: config4.systemInstruction });
+  const calls = /* @__PURE__ */ new Map();
+  for (const turn of request.contents) {
+    const toolCalls = turn.parts.filter((p3) => p3.functionCall).map((p3, index) => {
+      const call = p3.functionCall;
+      const id2 = call.id || `call_${messages.length}_${index}`;
+      calls.set(call.name, [...calls.get(call.name) ?? [], id2]);
+      return {
+        id: id2,
+        type: "function",
+        function: { name: call.name, arguments: JSON.stringify(call.args ?? {}) },
+        ...p3.thoughtSignature ? { extra_content: { google: { thought_signature: p3.thoughtSignature } } } : {}
+      };
+    });
+    const text = turn.parts.filter((p3) => !p3.thought && typeof p3.text === "string").map((p3) => p3.text).join("");
+    const details = turn.parts.flatMap((p3) => p3.reasoning_details ?? []);
+    if (turn.role === "model" || text)
+      messages.push({
+        role: turn.role === "model" ? "assistant" : "user",
+        content: text || null,
+        ...toolCalls.length ? { tool_calls: toolCalls } : {},
+        ...details.length ? { reasoning_details: details } : {}
+      });
+    for (const part of turn.parts)
+      if (part.functionResponse) {
+        const result2 = part.functionResponse;
+        const ids = calls.get(result2.name) ?? [];
+        const id2 = result2.id || ids[0];
+        if (!id2)
+          throw new Error("Tool result has no matching call.");
+        calls.set(result2.name, ids.filter((value2) => value2 !== id2));
+        messages.push({ role: "tool", tool_call_id: id2, content: JSON.stringify(result2.response) });
+      }
+  }
+  const tools2 = config4.tools?.flatMap((t) => t.functionDeclarations).map((t) => ({
+    type: "function",
+    function: { name: t.name, description: t.description, parameters: t.parametersJsonSchema }
+  }));
+  const schema2 = config4.responseJsonSchema ?? config4.responseSchema;
+  return {
+    model: openRouterModel(request.model),
+    messages,
+    stream,
+    ...stream ? { stream_options: { include_usage: true } } : {},
+    ...tools2?.length ? {
+      tools: tools2,
+      tool_choice: config4.toolConfig?.functionCallingConfig.mode === "NONE" ? "none" : "auto"
+    } : {},
+    ...schema2 ? {
+      response_format: {
+        type: "json_schema",
+        json_schema: { name: "response", schema: schema2, strict: false }
+      }
+    } : config4.responseMimeType === "application/json" ? { response_format: { type: "json_object" } } : {},
+    ...config4.maxOutputTokens ? { max_tokens: config4.maxOutputTokens } : {},
+    ...config4.temperature !== void 0 ? { temperature: config4.temperature } : {},
+    ...config4.thinkingConfig?.thinkingLevel ? { reasoning: { effort: config4.thinkingConfig.thinkingLevel } } : {}
+  };
+}
+function providerError(status, message2) {
+  return Object.assign(new Error(message2), { status });
+}
+function checkError(value2) {
+  if (value2.error)
+    throw providerError(value2.error.code || 502, value2.error.message || "OpenRouter request failed.");
+}
+function usage(value2) {
+  return value2.usage ? {
+    usageMetadata: {
+      promptTokenCount: value2.usage.prompt_tokens ?? 0,
+      candidatesTokenCount: value2.usage.completion_tokens ?? 0,
+      totalTokenCount: value2.usage.total_tokens ?? 0,
+      cachedContentTokenCount: value2.usage.prompt_tokens_details?.cached_tokens ?? 0,
+      thoughtsTokenCount: value2.usage.completion_tokens_details?.reasoning_tokens ?? 0
+    }
+  } : {};
+}
+function createOpenRouterClient(apiKey, fetcher = fetch) {
+  async function send(request, stream) {
+    const response = await fetcher("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify(requestBody(request, stream)),
+      signal: request.config.abortSignal ? AbortSignal.any([request.config.abortSignal, AbortSignal.timeout(12e4)]) : AbortSignal.timeout(12e4)
+    });
+    if (!response.ok) {
+      const body = await response.json().catch(() => null);
+      const context = response.status === 413 || response.status === 400 && /token|context|too long|exceeds the maximum|input size/i.test(body?.error?.message ?? "");
+      throw providerError(context ? 400 : response.status, `OpenRouter HTTP ${response.status}${context ? " context limit" : ""}`);
+    }
+    return response;
+  }
+  return {
+    models: {
+      async generateContent(request) {
+        const raw = await (await send(request, false)).json();
+        checkError(raw);
+        return {
+          text: raw.choices?.[0]?.message?.content ?? "",
+          ...usage(raw),
+          rawResponse: {
+            ...raw,
+            ...usage(raw),
+            candidates: [
+              {
+                finishReason: raw.choices?.[0]?.finish_reason === "stop" ? "STOP" : raw.choices?.[0]?.finish_reason
+              }
+            ]
+          }
+        };
+      }
+    },
+    async stream(request) {
+      const response = await send(request, true);
+      if (!response.body)
+        throw providerError(502, "OpenRouter response body missing.");
+      return (async function* () {
+        const reader = response.body.getReader();
+        const decoder2 = new TextDecoder();
+        let buffer = "";
+        let doneMarker = false;
+        const calls = /* @__PURE__ */ new Map();
+        const details = [];
+        try {
+          while (!doneMarker) {
+            const next = await reader.read();
+            buffer += decoder2.decode(next.value, { stream: !next.done });
+            let boundary;
+            while (boundary = /\r?\n\r?\n/.exec(buffer)) {
+              const event = buffer.slice(0, boundary.index);
+              buffer = buffer.slice(boundary.index + boundary[0].length);
+              const data = event.split(/\r?\n/).filter((line2) => line2.startsWith("data:")).map((line2) => line2.slice(5).trimStart()).join("\n");
+              if (!data)
+                continue;
+              if (data === "[DONE]") {
+                doneMarker = true;
+                break;
+              }
+              const raw = JSON.parse(data);
+              checkError(raw);
+              const choice = raw.choices?.[0];
+              const delta = choice?.delta;
+              if (delta?.content)
+                yield { candidates: [{ content: { parts: [{ text: delta.content }] } }] };
+              if (delta?.reasoning_details)
+                details.push(...delta.reasoning_details);
+              for (const call of delta?.tool_calls ?? []) {
+                const index = call.index ?? 0;
+                const previous = calls.get(index) ?? { id: "", name: "", args: "" };
+                if (call.id)
+                  previous.id = call.id;
+                if (call.function?.name)
+                  previous.name += call.function.name;
+                previous.args += call.function?.arguments ?? "";
+                calls.set(index, previous);
+              }
+              if (choice?.finish_reason && !["stop", "tool_calls"].includes(choice.finish_reason))
+                throw providerError(502, "OpenRouter stream incomplete or refused.");
+              if (choice?.finish_reason)
+                yield {
+                  candidates: [
+                    {
+                      finishReason: choice.finish_reason === "stop" ? "STOP" : choice.finish_reason
+                    }
+                  ]
+                };
+              if (raw.usage)
+                yield usage(raw);
+            }
+            if (next.done)
+              break;
+          }
+          if (!doneMarker)
+            throw providerError(502, "OpenRouter stream ended before completion.");
+          const parts = [];
+          if (details.length)
+            parts.push({ reasoning_details: details });
+          for (const [, call] of [...calls].sort(([a5], [b5]) => a5 - b5)) {
+            const args = JSON.parse(call.args || "{}");
+            if (!call.id || !call.name || !args || Array.isArray(args) || typeof args !== "object")
+              throw providerError(502, "Invalid OpenRouter tool call.");
+            parts.push({ functionCall: { id: call.id, name: call.name, args } });
+          }
+          if (parts.length)
+            yield { candidates: [{ content: { parts } }] };
+        } finally {
+          await reader.cancel();
+          reader.releaseLock();
+        }
+      })();
+    }
+  };
+}
+
 // ../automations/dist/title-summarizer/gemini-client.js
-var import_genai = require("@google/genai");
 var cachedClient;
 function getGeminiClient(env3 = process.env) {
   if (cachedClient !== void 0) {
     return cachedClient;
   }
   const config4 = readGeminiConfigFromEnv(env3);
-  cachedClient = config4 ? new import_genai.GoogleGenAI({ apiKey: config4.apiKey }) : null;
+  cachedClient = config4 ? createOpenRouterClient(config4.apiKey) : null;
   return cachedClient;
 }
 async function generateGeminiText(params) {
@@ -133046,7 +133242,7 @@ async function generateGeminiText(params) {
   const client = getGeminiClient(env3);
   const config4 = readGeminiConfigFromEnv(env3);
   if (!client || !config4) {
-    console.warn(`${logPrefix} GEMINI_API_KEY not set`);
+    console.warn(`${logPrefix} OPENROUTER_API_KEY not set`);
     return null;
   }
   try {
@@ -133074,42 +133270,42 @@ async function generateGeminiText(params) {
 
 // ../automations/dist/compose-delivery/compose.js
 var COMPOSE_DELIVERY_RESPONSE_SCHEMA = {
-  type: import_genai2.Type.OBJECT,
+  type: "object",
   properties: {
-    markdown: { type: import_genai2.Type.STRING },
+    markdown: { type: "string" },
     humanActions: {
-      type: import_genai2.Type.ARRAY,
+      type: "array",
       items: {
-        type: import_genai2.Type.OBJECT,
+        type: "object",
         properties: {
-          sourceId: { type: import_genai2.Type.STRING },
-          action: { type: import_genai2.Type.STRING },
-          reason: { type: import_genai2.Type.STRING },
-          category: { type: import_genai2.Type.STRING },
-          command: { type: import_genai2.Type.STRING },
-          verify: { type: import_genai2.Type.STRING },
-          link: { type: import_genai2.Type.STRING }
+          sourceId: { type: "string" },
+          action: { type: "string" },
+          reason: { type: "string" },
+          category: { type: "string" },
+          command: { type: "string" },
+          verify: { type: "string" },
+          link: { type: "string" }
         },
         required: ["sourceId", "action"]
       }
     },
     tradeoffsMade: {
-      type: import_genai2.Type.ARRAY,
+      type: "array",
       items: {
-        type: import_genai2.Type.OBJECT,
+        type: "object",
         properties: {
-          sourceId: { type: import_genai2.Type.STRING },
-          decision: { type: import_genai2.Type.STRING },
-          rationale: { type: import_genai2.Type.STRING },
-          alternativesConsidered: { type: import_genai2.Type.ARRAY, items: { type: import_genai2.Type.STRING } },
-          impact: { type: import_genai2.Type.STRING }
+          sourceId: { type: "string" },
+          decision: { type: "string" },
+          rationale: { type: "string" },
+          alternativesConsidered: { type: "array", items: { type: "string" } },
+          impact: { type: "string" }
         },
         required: ["sourceId", "decision", "rationale"]
       }
     },
-    knownRisks: { type: import_genai2.Type.ARRAY, items: { type: import_genai2.Type.STRING } },
-    assumptions: { type: import_genai2.Type.ARRAY, items: { type: import_genai2.Type.STRING } },
-    reviewHighlights: { type: import_genai2.Type.ARRAY, items: { type: import_genai2.Type.STRING } }
+    knownRisks: { type: "array", items: { type: "string" } },
+    assumptions: { type: "array", items: { type: "string" } },
+    reviewHighlights: { type: "array", items: { type: "string" } }
   },
   required: ["markdown", "humanActions", "tradeoffsMade"]
 };
@@ -133194,12 +133390,12 @@ async function generateComposeJson(params) {
   const client = getGeminiClient(env3);
   const config4 = readGeminiConfigFromEnv(env3);
   if (!client || !config4) {
-    console.warn(`${logPrefix} GEMINI_API_KEY not set`);
+    console.warn(`${logPrefix} OPENROUTER_API_KEY not set`);
     return null;
   }
   try {
     const response = await client.models.generateContent({
-      model: "gemini-3.5-flash-lite",
+      model: config4.model,
       contents: [{ role: "user", parts: [{ text: prompt }] }],
       config: {
         systemInstruction,
@@ -133229,19 +133425,18 @@ var composeDeliveryTool = {
 };
 
 // ../automations/dist/compose-mission-summary/compose.js
-var import_genai3 = require("@google/genai");
 var COMPOSE_MISSION_SUMMARY_RESPONSE_SCHEMA = {
-  type: import_genai3.Type.OBJECT,
+  type: "object",
   properties: {
-    headline: { type: import_genai3.Type.STRING },
-    summary: { type: import_genai3.Type.STRING },
+    headline: { type: "string" },
+    summary: { type: "string" },
     risks: {
-      type: import_genai3.Type.ARRAY,
+      type: "array",
       items: {
-        type: import_genai3.Type.OBJECT,
+        type: "object",
         properties: {
-          ref: { type: import_genai3.Type.STRING },
-          text: { type: import_genai3.Type.STRING }
+          ref: { type: "string" },
+          text: { type: "string" }
         },
         required: ["ref"]
       }
@@ -133310,12 +133505,12 @@ async function generateMissionSummaryJson(params) {
   const client = getGeminiClient(env3);
   const config4 = readGeminiConfigFromEnv(env3);
   if (!client || !config4) {
-    console.warn(`${logPrefix} GEMINI_API_KEY not set`);
+    console.warn(`${logPrefix} OPENROUTER_API_KEY not set`);
     return null;
   }
   try {
     const response = await client.models.generateContent({
-      model: "gemini-3.5-flash-lite",
+      model: config4.model,
       contents: [{ role: "user", parts: [{ text: prompt }] }],
       config: {
         systemInstruction: MISSION_SUMMARY_SYSTEM_INSTRUCTION,
@@ -141521,13 +141716,13 @@ function deferredWorkInputProblem(deliveryReport) {
   return null;
 }
 function deferredWorkId(index, item) {
-  const canonical2 = JSON.stringify([
+  const canonical = JSON.stringify([
     item.title.trim(),
     item.change.trim(),
     item.location.trim(),
     item.doneWhen.trim()
   ]);
-  const digest5 = (0, import_node_crypto8.createHash)("sha256").update(canonical2, "utf8").digest("hex").slice(0, 16);
+  const digest5 = (0, import_node_crypto8.createHash)("sha256").update(canonical, "utf8").digest("hex").slice(0, 16);
   return `deferred-work-${index}-${digest5}`;
 }
 var GIT_ACTION_PATTERN = /\b(?:git\s+(?:commit|push|pull|merge|rebase|checkout|switch|branch)|(?:commit|push|pull|merge|rebase|create|open)\s+(?:a\s+)?(?:branch|pull request|pr))\b/i;
@@ -157685,7 +157880,7 @@ async function missionBranchDto(row) {
       branchName: name2,
       executionTargetId
     });
-    const canonical2 = missionWorktreePath({
+    const canonical = missionWorktreePath({
       worktreeRoot,
       projectSlug,
       resourceKey,
@@ -157694,7 +157889,7 @@ async function missionBranchDto(row) {
     const worktreePath = await resolvePreparedWorktreePath({
       projectId: row.project_id,
       branchName: name2,
-      fallback: canonical2,
+      fallback: canonical,
       executionTargetId
     });
     const branch = {
@@ -177201,34 +177396,14 @@ async function updateAgentCatalog(body, workspaceId2) {
 }
 
 // chat/gemini-client.ts
-var import_genai4 = require("@google/genai");
 function sdkGeminiClient(apiKey) {
-  const ai = new import_genai4.GoogleGenAI({ apiKey });
+  const client = createOpenRouterClient(apiKey);
   return {
-    async stream(request) {
-      return await ai.models.generateContentStream(
-        request
-      );
-    },
-    async generate(request) {
-      const response = await ai.models.generateContent(
-        request
-      );
-      return { text: response.text ?? "", rawResponse: response };
-    },
-    async createCache(request) {
-      const cache8 = await ai.caches.create(
-        request
-      );
-      if (!cache8.name) throw new Error("Cache created without a name.");
-      return cache8;
-    },
-    async deleteCache(name2) {
-      await ai.caches.delete({ name: name2 });
-    }
+    stream: (request) => client.stream(request),
+    generate: (request) => client.models.generateContent(request)
   };
 }
-var NETWORK = /fetch failed|network|econn|enotfound|etimedout|socket|timed out/;
+var NETWORK = /fetch failed|network|econn|enotfound|etimedout|socket|timed out|timeout/;
 function isProviderError(error64) {
   return typeof error64?.status === "number" || NETWORK.test(String(error64?.message ?? "").toLowerCase());
 }
@@ -177236,7 +177411,7 @@ function classifyGeminiError(error64) {
   const status = Number(error64?.status);
   const message2 = String(error64?.message ?? "").toLowerCase();
   if (status === 429 || message2.includes("resource_exhausted")) return "rate_limited";
-  if (status === 400 && /token|context|too long|exceeds the maximum|input size/.test(message2))
+  if ([400, 413].includes(status) && /token|context|too long|exceeds the maximum|input size/.test(message2))
     return "context_limit";
   if (status === 400) return "provider_error";
   if ([401, 403, 404, 500, 502, 503, 504].includes(status)) return "provider_unavailable";
@@ -177245,7 +177420,7 @@ function classifyGeminiError(error64) {
 }
 
 // chat/gemini-runtime.ts
-var import_node_crypto31 = require("node:crypto");
+var import_node_crypto30 = require("node:crypto");
 
 // chat-worker.ts
 var import_node_crypto27 = require("node:crypto");
@@ -177367,8 +177542,8 @@ var RunMetrics = class extends ChatPerformance {
   staticCacheRequests = 0;
   staticCacheFallbacks = 0;
   usage(raw) {
-    const usage = raw?.usageMetadata;
-    if (!usage) return;
+    const usage2 = raw?.usageMetadata;
+    if (!usage2) return;
     this.usageExchanges++;
     for (const key of [
       "promptTokenCount",
@@ -177376,7 +177551,7 @@ var RunMetrics = class extends ChatPerformance {
       "candidatesTokenCount",
       "thoughtsTokenCount"
     ]) {
-      const value2 = usage[key];
+      const value2 = usage2[key];
       if (typeof value2 === "number" && Number.isFinite(value2) && value2 >= 0) {
         this.tokenTotals[key] = (this.tokenTotals[key] ?? 0) + value2;
         this.tokenReportedExchanges[key] = (this.tokenReportedExchanges[key] ?? 0) + 1;
@@ -177532,145 +177707,7 @@ function instrumentGeminiClient(client, hooks) {
 }
 
 // chat/static-cache.ts
-var import_node_crypto29 = require("node:crypto");
 var STATIC_CACHE_SWITCH_TOKENS = 16e3;
-function canonical(value2) {
-  if (Array.isArray(value2)) return value2.map(canonical);
-  if (value2 && typeof value2 === "object")
-    return Object.fromEntries(
-      Object.keys(value2).sort().map((k5) => [k5, canonical(value2[k5])])
-    );
-  return value2;
-}
-var GeminiStaticCache = class {
-  constructor(client, options = {}) {
-    this.client = client;
-    this.ttlSeconds = options.ttlSeconds ?? 600;
-    this.reuseMarginMs = options.reuseMarginMs ?? 6e4;
-    this.maxEntries = options.maxEntries ?? 64;
-    this.maxPerOwner = options.maxPerOwner ?? 4;
-    this.createTimeoutMs = options.createTimeoutMs ?? 15e3;
-    this.now = options.now ?? Date.now;
-  }
-  client;
-  entries = /* @__PURE__ */ new Map();
-  ttlSeconds;
-  reuseMarginMs;
-  maxEntries;
-  maxPerOwner;
-  createTimeoutMs;
-  now;
-  get supported() {
-    return Boolean(this.client.createCache && this.client.deleteCache);
-  }
-  key(owner, model, prefix) {
-    return (0, import_node_crypto29.createHash)("sha256").update(
-      JSON.stringify(canonical({ owner: [owner.profileId, owner.organizationId], model, prefix }))
-    ).digest("hex");
-  }
-  /**
-   * Returns a ready cache name, or null for an inline request. When no entry exists (and the
-   * registry has room) it starts creation and returns that promise; the caller awaits it
-   * before its attempt finishes. The promise never rejects.
-   */
-  use(owner, model, prefix, observe) {
-    const key = this.key(owner, model, prefix);
-    if (!this.supported) return { key, name: null, creation: null };
-    this.prune();
-    const entry = this.entries.get(key);
-    if (entry)
-      return {
-        key,
-        name: entry.state === "ready" && entry.expiresAt - this.now() >= this.reuseMarginMs ? entry.name : null,
-        creation: null
-      };
-    if (this.entries.size >= this.maxEntries) return { key, name: null, creation: null };
-    const ownerKey = `${owner.profileId}\0${owner.organizationId}`;
-    const created = {
-      key,
-      owner: ownerKey,
-      state: "pending",
-      name: null,
-      createdAt: this.now(),
-      expiresAt: this.now() + this.ttlSeconds * 1e3
-    };
-    this.entries.set(key, created);
-    return { key, name: null, creation: this.create(created, model, prefix, observe) };
-  }
-  /** Drops an entry the provider refused, so later requests go inline or recreate it. */
-  invalidate(key, name2) {
-    const entry = this.entries.get(key);
-    if (entry?.name === name2) this.entries.delete(key);
-  }
-  prune() {
-    const now2 = this.now();
-    for (const [key, entry] of this.entries)
-      if (entry.state !== "pending" && entry.expiresAt <= now2) this.entries.delete(key);
-  }
-  async create(entry, model, prefix, observe) {
-    const request = {
-      model,
-      config: {
-        ...prefix,
-        ttl: `${this.ttlSeconds}s`,
-        displayName: `overlord-chat-${entry.key.slice(0, 16)}`
-      }
-    };
-    const started = this.now();
-    try {
-      const cache8 = await this.client.createCache({
-        ...request,
-        config: { ...request.config, abortSignal: AbortSignal.timeout(this.createTimeoutMs) }
-      });
-      const reported = cache8.expireTime ? Date.parse(cache8.expireTime) : NaN;
-      try {
-        await observe("provider.cache_create", {
-          key: entry.key,
-          request,
-          response: cache8,
-          elapsedMs: this.now() - started
-        });
-      } catch {
-        entry.state = "failed";
-        return;
-      }
-      entry.name = cache8.name;
-      entry.expiresAt = Number.isFinite(reported) ? Math.min(entry.expiresAt, reported) : entry.expiresAt;
-      entry.state = "ready";
-      await this.retireOverflow(entry, observe);
-    } catch (error64) {
-      entry.state = "failed";
-      await observe("provider.cache_create", {
-        key: entry.key,
-        request,
-        error: error64,
-        elapsedMs: this.now() - started
-      }).catch(() => void 0);
-    }
-  }
-  /** Deletes the owner's oldest ready caches beyond the per-owner bound, from that owner's attempt. */
-  async retireOverflow(current, observe) {
-    const mine = [...this.entries.values()].filter(
-      (e5) => e5.owner === current.owner && e5.state !== "failed"
-    );
-    const retire = mine.filter((e5) => e5.state === "ready" && e5 !== current).sort((a5, b5) => a5.createdAt - b5.createdAt).slice(0, Math.max(0, mine.length - this.maxPerOwner));
-    for (const entry of retire) {
-      this.entries.delete(entry.key);
-      let error64;
-      try {
-        await this.client.deleteCache(entry.name);
-      } catch (e5) {
-        error64 = e5;
-      }
-      await observe("provider.cache_delete", {
-        key: entry.key,
-        name: entry.name,
-        reason: "owner_bound",
-        ...error64 === void 0 ? {} : { error: error64 }
-      }).catch(() => void 0);
-    }
-  }
-};
 
 // chat/thread-summary.ts
 var SUMMARY_TRANSCRIPT_MAX_CHARS = 128 * 1024;
@@ -177807,7 +177844,7 @@ ${text}`;
 }
 
 // chat/tool-manifest.ts
-var import_node_crypto30 = require("node:crypto");
+var import_node_crypto29 = require("node:crypto");
 var RELEVANCE_POLICY_VERSION = "expandable-families-v1";
 var TOOL_FAMILIES = ["status", "repository", "knowledgebase", "feature"];
 var EXPAND_CAPABILITIES_TOOL = "expand_capabilities";
@@ -177858,15 +177895,15 @@ function common(d5) {
   return !toolFamilies(d5).length || /^kb_.*_list_workspaces$/.test(d5.name);
 }
 function digest3(value2) {
-  const canonical2 = (v) => {
-    if (Array.isArray(v)) return v.map(canonical2);
+  const canonical = (v) => {
+    if (Array.isArray(v)) return v.map(canonical);
     if (v && typeof v === "object")
       return Object.fromEntries(
-        Object.entries(v).sort(([a5], [b5]) => a5 < b5 ? -1 : a5 > b5 ? 1 : 0).map(([key, item]) => [key, canonical2(item)])
+        Object.entries(v).sort(([a5], [b5]) => a5 < b5 ? -1 : a5 > b5 ? 1 : 0).map(([key, item]) => [key, canonical(item)])
       );
     return v;
   };
-  return (0, import_node_crypto30.createHash)("sha256").update(JSON.stringify(canonical2(value2))).digest("hex");
+  return (0, import_node_crypto29.createHash)("sha256").update(JSON.stringify(canonical(value2))).digest("hex");
 }
 function createToolManifest(catalog, families) {
   const value2 = {
@@ -177934,7 +177971,7 @@ var GeminiChatRuntime = class {
       provider: "gemini",
       model,
       checkpointVersion: GEMINI_CHECKPOINT_VERSION,
-      configDigest: (0, import_node_crypto31.createHash)("sha256").update(
+      configDigest: (0, import_node_crypto30.createHash)("sha256").update(
         JSON.stringify({
           model,
           SYSTEM_PROMPT_VERSION,
@@ -178724,8 +178761,8 @@ var queuedRepositoryReader = ({ ctx, request, scopeKey, signal }) => performRepo
   queueOptions: { createCompletionListener: createCompletionListenerFactory() }
 });
 function createChatEngine(options) {
-  const key = options.env.CHAT_GEMINI_API_KEY?.trim() || options.env.GEMINI_API_KEY?.trim() || "";
-  const model = (options.env.CHAT_GEMINI_MODEL ?? "").trim() || DEFAULT_CHAT_MODEL;
+  const key = options.env.CHAT_OPENROUTER_API_KEY?.trim() || options.env.OPENROUTER_API_KEY?.trim() || "";
+  const model = (options.env.CHAT_OPENROUTER_MODEL ?? "").trim() || DEFAULT_CHAT_MODEL;
   const budget = Number(options.env.CHAT_MAX_GATHERED_BYTES_PER_RUN);
   const inputTokenLimit = Number(options.env.CHAT_GEMINI_INPUT_TOKEN_LIMIT);
   const assignmentCatalog = async (workspaceId2) => {
@@ -178756,12 +178793,11 @@ function createChatEngine(options) {
     readRepository: queuedRepositoryReader
   });
   const client = key ? sdkGeminiClient(key) : null;
-  const staticCacheOff = (options.env.CHAT_GEMINI_STATIC_CACHE ?? "").trim().toLowerCase() === "off";
   const runtime = new GeminiChatRuntime({
     client,
     gateway,
     model,
-    staticCache: client && !staticCacheOff ? new GeminiStaticCache(client) : null,
+    staticCache: null,
     ...Number.isSafeInteger(budget) && budget > 0 ? { maxGatheredBytesPerRun: budget } : {},
     ...Number.isSafeInteger(inputTokenLimit) && inputTokenLimit >= 131072 && inputTokenLimit <= 2097152 ? { inputTokenLimit } : {}
   });
@@ -178814,10 +178850,10 @@ function chatLimitsFromEnv(env3) {
 }
 
 // connections/keyring.ts
-var import_node_crypto33 = require("node:crypto");
+var import_node_crypto32 = require("node:crypto");
 
 // connections/crypto.ts
-var import_node_crypto32 = require("node:crypto");
+var import_node_crypto31 = require("node:crypto");
 var SecretEnvelopeError = class extends Error {
   constructor() {
     super("The stored secret cannot be decrypted.");
@@ -178834,8 +178870,8 @@ function sealSecret({
   key,
   aad
 }) {
-  const nonce = (0, import_node_crypto32.randomBytes)(12);
-  const cipher = (0, import_node_crypto32.createCipheriv)("aes-256-gcm", key, nonce);
+  const nonce = (0, import_node_crypto31.randomBytes)(12);
+  const cipher = (0, import_node_crypto31.createCipheriv)("aes-256-gcm", key, nonce);
   cipher.setAAD(Buffer.from(aad, "utf8"));
   const ciphertext = Buffer.concat([cipher.update(plaintext, "utf8"), cipher.final()]);
   const tag2 = cipher.getAuthTag();
@@ -178851,7 +178887,7 @@ function openSecret({
     throw new SecretEnvelopeError();
   }
   try {
-    const decipher = (0, import_node_crypto32.createDecipheriv)("aes-256-gcm", key, Buffer.from(nonceText, "base64url"));
+    const decipher = (0, import_node_crypto31.createDecipheriv)("aes-256-gcm", key, Buffer.from(nonceText, "base64url"));
     decipher.setAAD(Buffer.from(aad, "utf8"));
     decipher.setAuthTag(Buffer.from(tagText, "base64url"));
     return Buffer.concat([
@@ -178863,7 +178899,7 @@ function openSecret({
   }
 }
 function hashSecret(value2) {
-  return (0, import_node_crypto32.createHash)("sha256").update(value2).digest("hex");
+  return (0, import_node_crypto31.createHash)("sha256").update(value2).digest("hex");
 }
 
 // connections/keyring.ts
@@ -178882,7 +178918,7 @@ function platformKeyFromSecret(secret) {
   const trimmed9 = secret?.trim();
   if (!trimmed9 || trimmed9.length < MIN_PLATFORM_SECRET_LENGTH) return null;
   const key = Buffer.from(
-    (0, import_node_crypto33.hkdfSync)(
+    (0, import_node_crypto32.hkdfSync)(
       "sha256",
       Buffer.from(trimmed9, "utf8"),
       Buffer.from("overlord:account-connections", "utf8"),
@@ -178890,7 +178926,7 @@ function platformKeyFromSecret(secret) {
       32
     )
   );
-  const fingerprint = (0, import_node_crypto33.createHash)("sha256").update("overlord:account-connections:platform-key-id:v1:").update(key).digest("hex").slice(0, 16);
+  const fingerprint = (0, import_node_crypto32.createHash)("sha256").update("overlord:account-connections:platform-key-id:v1:").update(key).digest("hex").slice(0, 16);
   return { id: `${PLATFORM_KEY_ID_PREFIX}${fingerprint}`, key };
 }
 function keyRingFromEnv(env3) {
@@ -179482,7 +179518,7 @@ function validateJson(value2, at, depth, budget) {
 }
 
 // connections/service.ts
-var import_node_crypto36 = require("node:crypto");
+var import_node_crypto35 = require("node:crypto");
 
 // connections/credential-rows.ts
 var REFRESH_LEASE_MS = 15e3;
@@ -179615,7 +179651,7 @@ async function refreshLeased(db, row, lockOwner, options) {
 }
 
 // connections/oauth.ts
-var import_node_crypto34 = require("node:crypto");
+var import_node_crypto33 = require("node:crypto");
 var OAuthError = class extends Error {
   constructor(code) {
     super(code);
@@ -179629,8 +179665,8 @@ var METADATA_BYTES = 64 * 1024;
 var TOKEN_BYTES = 64 * 1024;
 var TIMEOUT_MS = 1e4;
 function pkcePair() {
-  const verifier = (0, import_node_crypto34.randomBytes)(32).toString("base64url");
-  return { verifier, challenge: (0, import_node_crypto34.createHash)("sha256").update(verifier).digest("base64url") };
+  const verifier = (0, import_node_crypto33.randomBytes)(32).toString("base64url");
+  return { verifier, challenge: (0, import_node_crypto33.createHash)("sha256").update(verifier).digest("base64url") };
 }
 function sameResource(a5, b5) {
   return a5.replace(/\/+$/, "") === b5.replace(/\/+$/, "");
@@ -179785,7 +179821,7 @@ var KnowledgebaseOAuth = class {
 };
 
 // connections/oauth-flow.ts
-var import_node_crypto35 = require("node:crypto");
+var import_node_crypto34 = require("node:crypto");
 
 // connections/authorizations.ts
 var AUTHORIZATION_TTL_MS = 10 * 60 * 1e3;
@@ -179840,16 +179876,16 @@ async function consumeAuthorization(tx, options) {
 
 // connections/oauth-flow.ts
 async function beginConnectionOAuth(db, options) {
-  const state2 = (0, import_node_crypto35.randomBytes)(32).toString("base64url");
+  const state2 = (0, import_node_crypto34.randomBytes)(32).toString("base64url");
   const { verifier, challenge } = pkcePair();
   const authorizeUrl = await options.authorizeUrl(state2, challenge);
-  const authorizationId = (0, import_node_crypto35.randomUUID)();
+  const authorizationId = (0, import_node_crypto34.randomUUID)();
   const expiresAt = options.timestamp(AUTHORIZATION_TTL_MS);
   const connectionId = await db.transaction(async (tx) => {
     const now2 = options.timestamp();
     let row = await options.findLiveRow(tx);
     if (!row) {
-      const id2 = (0, import_node_crypto35.randomUUID)();
+      const id2 = (0, import_node_crypto34.randomUUID)();
       await options.insertPendingRow(tx, id2, now2);
       row = await tx.get("SELECT * FROM account_connections WHERE id = ?", [id2]);
     }
@@ -179967,7 +180003,7 @@ var AccountConnections = class {
   }
   db;
   options;
-  lockOwner = (0, import_node_crypto36.randomUUID)();
+  lockOwner = (0, import_node_crypto35.randomUUID)();
   now() {
     return this.options.now?.() ?? Date.now();
   }
@@ -180779,7 +180815,7 @@ function provenance(text, connectionId, workspace2, maxSources) {
 }
 
 // connections/profile.ts
-var import_node_crypto37 = require("node:crypto");
+var import_node_crypto36 = require("node:crypto");
 var ProviderOAuthError = class extends Error {
   constructor(code) {
     super(code);
@@ -180813,7 +180849,7 @@ var ProfileConnections = class {
   db;
   ring;
   options;
-  lockOwner = (0, import_node_crypto37.randomUUID)();
+  lockOwner = (0, import_node_crypto36.randomUUID)();
   adapters;
   provider(provider) {
     return this.adapters.get(provider) ?? null;
@@ -180947,7 +180983,7 @@ var ProfileConnections = class {
       );
       return connectionDto(await this.row(profileId, existing.id));
     }
-    const id2 = (0, import_node_crypto37.randomUUID)();
+    const id2 = (0, import_node_crypto36.randomUUID)();
     const draft = { id: id2, owner_profile_id: profileId, organization_id: null, provider };
     await this.db.run(
       `INSERT INTO account_connections (id, owner_profile_id, organization_id, provider, server_url, state, credential_kind, credential_format, credential_ciphertext, credential_key_id, credential_revision, external_account_id, external_account_label, external_account_avatar_url, last_validated_at, connected_at, created_at, updated_at, revision) VALUES (?, ?, NULL, ?, ?, 'connected', 'api_key', 'connection-v1', ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, 1)`,
@@ -184065,9 +184101,9 @@ function createGitHubUserOAuth(connections) {
     let nextUrl = path29;
     const visited = /* @__PURE__ */ new Set();
     while (nextUrl) {
-      const canonical2 = new URL(nextUrl, GITHUB_API3).toString();
-      if (visited.has(canonical2)) throw new ApiError(502, "GitHub returned a repeated page link.");
-      visited.add(canonical2);
+      const canonical = new URL(nextUrl, GITHUB_API3).toString();
+      if (visited.has(canonical)) throw new ApiError(502, "GitHub returned a repeated page link.");
+      visited.add(canonical);
       const page = await githubUserFetchUrl(
         nextUrl,
         token
@@ -193158,7 +193194,7 @@ function createChatRouter(options) {
 }
 
 // chat-notification-dispatcher.ts
-var import_node_crypto39 = require("node:crypto");
+var import_node_crypto38 = require("node:crypto");
 
 // ../packages/core/service/push-notification-jobs.ts
 var PUSH_NOTIFICATION_DISPATCH_JOB_TYPE = "overlord.push_notification.dispatch.v1";
@@ -193173,7 +193209,7 @@ function isPushNotificationMode(value2) {
 }
 
 // apns-client.ts
-var import_node_crypto38 = require("node:crypto");
+var import_node_crypto37 = require("node:crypto");
 var import_node_http2 = __toESM(require("node:http2"), 1);
 var SANDBOX_HOST = "https://api.sandbox.push.apple.com";
 var PRODUCTION_HOST = "https://api.push.apple.com";
@@ -193202,7 +193238,7 @@ function apnsJwt(config4) {
   const signingInput = `${b64url(JSON.stringify({ alg: "ES256", kid: config4.keyId }))}.${b64url(
     JSON.stringify({ iss: config4.teamId, iat: now2 })
   )}`;
-  const signer = (0, import_node_crypto38.createSign)("SHA256");
+  const signer = (0, import_node_crypto37.createSign)("SHA256");
   signer.update(signingInput);
   signer.end();
   const signature = signer.sign({ key: config4.privateKey, dsaEncoding: "ieee-p1363" });
@@ -193790,7 +193826,7 @@ var ChatNotificationDispatcher = class extends PollLoop {
   db;
   options;
   send;
-  workerId = `chat-notifications:${(0, import_node_crypto39.randomUUID)()}`;
+  workerId = `chat-notifications:${(0, import_node_crypto38.randomUUID)()}`;
   /** One claim/deliver pass. Returns how many candidates it processed. */
   async tick() {
     return await this.poll() ?? 0;
@@ -194342,7 +194378,7 @@ function boundComposeText(value2, maxChars) {
 var deliveryComposeWorker = new DeliveryComposeWorker();
 
 // desktop-oauth-handoff.ts
-var import_node_crypto40 = require("node:crypto");
+var import_node_crypto39 = require("node:crypto");
 var HANDOFF_TTL_MS = 6e4;
 var TICKET_PATTERN = /^[A-Za-z0-9_-]{32,128}$/;
 var handoffs = /* @__PURE__ */ new Map();
@@ -194353,7 +194389,7 @@ function discardExpiredHandoffs(now2 = Date.now()) {
 }
 function createOAuthHandoff(sessionToken, audience) {
   discardExpiredHandoffs();
-  const ticket = (0, import_node_crypto40.randomBytes)(32).toString("base64url");
+  const ticket = (0, import_node_crypto39.randomBytes)(32).toString("base64url");
   handoffs.set(ticket, { audience, sessionToken, expiresAt: Date.now() + HANDOFF_TTL_MS });
   return ticket;
 }
@@ -194399,7 +194435,7 @@ function beginDesktopGitHubOAuth(auth2, authBaseUrl2) {
 }
 
 // live-activities.ts
-var import_node_crypto41 = require("node:crypto");
+var import_node_crypto40 = require("node:crypto");
 var MAX_RUNNING = 2;
 var COMPLETION_HOLD_MS = 30 * 60 * 1e3;
 var START_TOKEN_MAX_LENGTH = 512;
@@ -194715,7 +194751,7 @@ async function buildLiveActivityContentState(db, profileId, now2 = /* @__PURE__ 
   };
 }
 function liveActivityContentHash(state2) {
-  return (0, import_node_crypto41.createHash)("sha256").update(
+  return (0, import_node_crypto40.createHash)("sha256").update(
     JSON.stringify(
       state2 && {
         running: state2.running,
@@ -195766,11 +195802,11 @@ var MissionSummaryComposeWorker = class extends WorkerJobPoller {
 var missionSummaryComposeWorker = new MissionSummaryComposeWorker();
 
 // native-github-oauth.ts
-var import_node_crypto42 = require("node:crypto");
+var import_node_crypto41 = require("node:crypto");
 var FLOW_TTL_MS = 10 * 6e4;
 var RECOVERY_TTL_MS = 6e4;
 var MAX_FLOWS = 256;
-var digest4 = (value2) => (0, import_node_crypto42.createHash)("sha256").update(value2).digest("hex");
+var digest4 = (value2) => (0, import_node_crypto41.createHash)("sha256").update(value2).digest("hex");
 function cookieValue(request, name2) {
   const values = (request.headers.get("cookie") ?? "").split(";").map((value2) => value2.trim()).filter((value2) => value2.startsWith(`${name2}=`));
   return values.length === 1 ? values[0].slice(name2.length + 1) : void 0;
@@ -195839,7 +195875,7 @@ function createNativeGitHubOAuth(auth2, baseUrl, options = {}) {
         if (typeof payload.url !== "string") throw new Error("Missing GitHub authorization URL");
         const state2 = new URL(payload.url).searchParams.get("state");
         if (!state2) throw new Error("Missing GitHub OAuth state");
-        const marker = (0, import_node_crypto42.randomBytes)(32).toString("base64url");
+        const marker = (0, import_node_crypto41.randomBytes)(32).toString("base64url");
         const stateCookie = response.headers.getSetCookie().map((value2) => /^((?:__Secure-)?better-auth\.state)=([^;]+)/.exec(value2)).find(Boolean);
         const flow = {
           expiresAt: now2() + FLOW_TTL_MS,
@@ -196139,7 +196175,7 @@ var NotificationDispatcher = class extends WorkerJobPoller {
 var notificationDispatcher = new NotificationDispatcher();
 
 // oauth.ts
-var import_node_crypto43 = require("node:crypto");
+var import_node_crypto42 = require("node:crypto");
 var CLIENT_ID_PREFIX = "ovlc_";
 var AUTH_CODE_PREFIX = "ovla_";
 var AUTH_CODE_TTL_MS = 5 * 60 * 1e3;
@@ -196173,12 +196209,12 @@ function oauthSigningSecret() {
   return process.env.OVERLORD_OAUTH_SIGNING_SECRET?.trim() || process.env.BETTER_AUTH_SECRET?.trim() || "overlord-local-oauth-development-secret";
 }
 function signPayload(payload) {
-  return (0, import_node_crypto43.createHmac)("sha256", oauthSigningSecret()).update(payload).digest("base64url");
+  return (0, import_node_crypto42.createHmac)("sha256", oauthSigningSecret()).update(payload).digest("base64url");
 }
 function fixedTimeEqual(a5, b5) {
   const left = Buffer.from(a5);
   const right = Buffer.from(b5);
-  return left.length === right.length && (0, import_node_crypto43.timingSafeEqual)(left, right);
+  return left.length === right.length && (0, import_node_crypto42.timingSafeEqual)(left, right);
 }
 function jsonError(res, status, error64, description) {
   res.status(status).json({ error: error64, error_description: description });
@@ -196499,7 +196535,7 @@ async function handleOAuthApprove(req, res) {
       issuanceWorkspaceUserId: consent.issuanceWorkspace.workspaceUserId
     }
   );
-  const code = `${AUTH_CODE_PREFIX}${(0, import_node_crypto43.randomBytes)(32).toString("base64url")}`;
+  const code = `${AUTH_CODE_PREFIX}${(0, import_node_crypto42.randomBytes)(32).toString("base64url")}`;
   authorizationCodes.set(code, {
     clientId: parsed.clientId,
     redirectUri: parsed.redirectUri,
@@ -196543,7 +196579,7 @@ async function handleOAuthToken(req, res) {
     jsonError(res, 400, "invalid_target", "OAuth resource does not match the authorization code.");
     return;
   }
-  const challenge = (0, import_node_crypto43.createHash)("sha256").update(codeVerifier).digest("base64url");
+  const challenge = (0, import_node_crypto42.createHash)("sha256").update(codeVerifier).digest("base64url");
   if (!codeVerifier || challenge !== entry.codeChallenge) {
     await revokeOrphanedAccessToken(entry.accessToken);
     jsonError(res, 400, "invalid_grant", "PKCE verification failed.");
@@ -197093,12 +197129,12 @@ var RunQueueDispatchWorker = class extends WorkerJobPoller {
 var runQueueDispatchWorker = new RunQueueDispatchWorker();
 
 // webhook-security.ts
-var import_node_crypto44 = require("node:crypto");
+var import_node_crypto43 = require("node:crypto");
 var import_promises6 = __toESM(require("node:dns/promises"), 1);
 var import_node_net = require("node:net");
 function signWebhookPayload(secret, rawBody) {
   const timestamp2 = Math.floor(Date.now() / 1e3);
-  const signature = (0, import_node_crypto44.createHmac)("sha256", secret).update(`${timestamp2}.${rawBody}`).digest("hex");
+  const signature = (0, import_node_crypto43.createHmac)("sha256", secret).update(`${timestamp2}.${rawBody}`).digest("hex");
   return { header: `t=${timestamp2},v1=${signature}`, timestamp: timestamp2 };
 }
 function internalHostPatterns() {
@@ -197435,7 +197471,7 @@ async function recordSubscriptionFailure(client, subscriptionId, currentConsecut
 var webhookDispatcher = new WebhookDispatcher();
 
 // webhooks.ts
-var import_node_crypto45 = require("node:crypto");
+var import_node_crypto44 = require("node:crypto");
 var WEBHOOK_SECRET_SCHEME = "whsec";
 var SUBSCRIPTION_COLUMNS = "id, workspace_id, project_id, name, endpoint_url, secret, event_types_json, payload_mode, created_by_workspace_user_id, enabled, disabled_reason, consecutive_failures, last_success_at, last_failure_at, created_at, updated_at, revision";
 function parseEventTypes(json2) {
@@ -197468,7 +197504,7 @@ function toSubscriptionDto(row) {
   };
 }
 function generateWebhookSecret() {
-  return { secret: `${WEBHOOK_SECRET_SCHEME}_${(0, import_node_crypto45.randomBytes)(24).toString("hex")}` };
+  return { secret: `${WEBHOOK_SECRET_SCHEME}_${(0, import_node_crypto44.randomBytes)(24).toString("hex")}` };
 }
 function normalizeEventTypes(input2) {
   if (!Array.isArray(input2) || input2.length === 0) {

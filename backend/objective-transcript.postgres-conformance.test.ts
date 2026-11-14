@@ -24,7 +24,7 @@ const dbModule = await import('./db.ts');
 const { createProject, createMission, createObjective, createInboxItem, updateMission } =
   await import('./repository.ts');
 const { listObjectiveTranscript } = await import('./objective-transcript.ts');
-process.env.GEMINI_API_KEY = '';
+process.env.OPENROUTER_API_KEY = '';
 
 for (const adapter of conformanceAdapters())
   describe(`objective transcript (${adapter})`, () => {

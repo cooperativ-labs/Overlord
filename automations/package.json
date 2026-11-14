@@ -21,6 +21,10 @@
     "./scheduling-engine": {
       "types": "./dist/scheduling-engine/index.d.ts",
       "default": "./dist/scheduling-engine/index.js"
+    },
+    "./openrouter": {
+      "types": "./dist/openrouter/index.d.ts",
+      "default": "./dist/openrouter/index.js"
     }
   },
   "files": [
@@ -32,7 +36,6 @@
     "test": "tsx --test 'src/**/*.test.ts'"
   },
   "dependencies": {
-    "@google/genai": "^2.24.0",
     "zod": "^4.6.7"
   },
   "license": "MIT"

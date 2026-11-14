@@ -15,7 +15,7 @@ be copied out and run as its own service.
 2. Verifies the HMAC signature (rejecting stale timestamps).
 3. If the subscription is `thin`, pulls the full mission via the REST API with
    a `USER_TOKEN`; if `full`, the context is already inline.
-4. Drafts a one-line feed post — via Gemini if `GEMINI_API_KEY` is set, or a
+4. Drafts a one-line feed post — via Google Gemini on OpenRouter if `OPENROUTER_API_KEY` is set, or a
    deterministic fallback otherwise (never blocks on an unavailable provider).
 5. Appends the result to `feed-posts.jsonl` as a stand-in for "post it
    somewhere else" (a CMS, a Slack channel, a database — swap in your own
@@ -36,7 +36,7 @@ Copy the secret it shows you.
 export OVERLORD_WEBHOOK_SECRET=whsec_...        # from the subscription you just created
 export OVERLORD_BACKEND_URL=http://127.0.0.1:4310   # your Overlord backend
 export OVERLORD_USER_TOKEN=out_...              # only needed for a `thin` subscription
-export GEMINI_API_KEY=...                       # optional; omit for the deterministic fallback
+export OPENROUTER_API_KEY=...                       # optional; omit for the deterministic fallback
 
 npm start
 ```

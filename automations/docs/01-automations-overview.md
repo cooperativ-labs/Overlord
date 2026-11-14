@@ -36,7 +36,7 @@ custom automations with `registerAutomation` during module initialization.
 | `@overlord/automations/scheduling-engine` | Yes                      | Schedule date generation and schedule types                                   |
 
 Browser / Electron renderer code must use the subpath exports when it only needs lifecycle or
-scheduling helpers so Vite does not bundle `@google/genai` into the SPA.
+scheduling helpers so Vite does not bundle the server-only OpenRouter transport into the SPA.
 
 ## Built-In Automations
 
@@ -45,7 +45,7 @@ scheduling helpers so Vite does not bundle `@google/genai` into the SPA.
 | `summarize-text`   | Generic Gemini summarization with optional length cap                                                                                                                                        |
 | `compose-delivery` | Schema-constrained Gemini polish of delivery Markdown + structured callouts; the backend worker logs bounded queued/composed/fallback/failed timing and model metrics without prompt content |
 
-Both summarization automations and `compose-delivery` return `null` when `GEMINI_API_KEY` is unset or the provider call fails.
+Both summarization automations and `compose-delivery` return `null` when `OPENROUTER_API_KEY` is unset or the provider call fails.
 
 ## Objective Title Automation
 
@@ -86,8 +86,8 @@ Environment variables (see [`.env.local.example`](../../.env.local.example) and 
 
 | Variable                      | Required | Default                 | Purpose                                                                                                                |
 | ----------------------------- | -------- | ----------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `GEMINI_API_KEY`              | No       | —                       | Enables Gemini-backed automations when set                                                                             |
-| `GEMINI_MODEL`                | No       | `gemini-3.5-flash-lite` | Model identifier for summarization calls                                                                               |
+| `OPENROUTER_API_KEY`              | No       | —                       | Enables Gemini-backed automations when set                                                                             |
+| `OPENROUTER_MODEL`                | No       | `gemini-3.5-flash-lite` | Model identifier for summarization calls                                                                               |
 | `OVERLORD_AUTOMATIONS_MODULE` | No       | —                       | Comma-separated downstream automation bundle(s) loaded at boot (see [Downstream Automations](#downstream-automations)) |
 
 ## Layout
@@ -100,7 +100,7 @@ persistence helpers. Shared module code (`types.ts`, `registry.ts`, `index.ts`) 
 ## Extension Guidelines
 
 1. Add new automations as folders under `automations/src/<automation-name>/`.
-2. Keep provider clients inside the automation folder (do not leak `@google/genai` into other modules).
+2. Keep provider clients inside the automation folder (do not leak the server-only OpenRouter transport into other modules).
 3. Document any new secrets in `.env.local.example` and `.env.prod.example`.
 4. Never import database adapters from automations — pass store interfaces from callers.
 

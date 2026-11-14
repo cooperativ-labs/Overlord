@@ -32,7 +32,7 @@ describe('generateObjectiveTitle', () => {
 
   it('falls back locally when the Gemini API call fails', async () => {
     resetGeminiClientForTests();
-    const env = { GEMINI_API_KEY: 'test-key' };
+    const env = { OPENROUTER_API_KEY: 'test-key' };
     const client = getGeminiClient(env);
     assert.ok(client, 'a client should be constructed when an API key is present');
     // Simulate a real service failure (e.g. 503) rather than a missing key.
@@ -60,7 +60,7 @@ describe('generateObjectiveTitle', () => {
     const title = await generateObjectiveTitle({
       instructionText: longText,
       aiTitleGenerationEnabled: false,
-      env: { GEMINI_API_KEY: 'test-key' }
+      env: { OPENROUTER_API_KEY: 'test-key' }
     });
 
     assert.equal(title, `${'y'.repeat(100)}…`);

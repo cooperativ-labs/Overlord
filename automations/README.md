@@ -19,8 +19,8 @@ summarization and objective title generation.
 ### Configuration
 
 Copy [`.env.local.example`](../.env.local.example) to `.env.local` for development, or
-copy [`.env.prod.example`](../.env.prod.example) to `.env.prod` for packaged builds, and set `GEMINI_API_KEY` to enable
-Gemini-backed automations. When the key is missing or a call fails, automations return `null` and
+copy [`.env.prod.example`](../.env.prod.example) to `.env.prod` for packaged builds, and set `OPENROUTER_API_KEY` to enable
+Google Gemini models through OpenRouter. When the key is missing or a call fails, automations return `null` and
 callers should use deterministic local fallbacks (see `deriveTitleFromInstructionText`).
 
 When enabled, mission and objective titles are refined asynchronously with Gemini
@@ -34,7 +34,7 @@ after an immediate local title is set. Title updates stream through the
 Maps to the **Automations Layer** (`automations`) in [`contract/architecture.md`](../contract/architecture.md), which owns:
 
 - The `Automation` interface and built-in automation registry
-- Gemini provider configuration (`GEMINI_API_KEY`, optional `GEMINI_MODEL`)
+- OpenRouter provider configuration (`OPENROUTER_API_KEY`, optional `OPENROUTER_MODEL`)
 - Reference summarization automations
 - Fire-and-forget helpers that persist results through caller-supplied store interfaces
 
@@ -43,7 +43,7 @@ behavior.
 
 ### Documentation
 
-- [01 — Automations Overview](docs/01-automations-overview.md): automation model, Gemini setup, and extension guide
+- [01 — Automations Overview](docs/01-automations-overview.md): automation model, OpenRouter setup, and extension guide
 - [Test Plan](docs/testing.md): unit coverage for title derivation, fallbacks, and registry behavior
 
 ### Code & Tests
@@ -56,7 +56,7 @@ Implementation lives under [`src/`](src):
 
 Inside `title-summarizer/`:
 
-- `config.ts` / `gemini-client.ts` — Gemini provider configuration and client lifecycle
+- `config.ts` / `gemini-client.ts` — OpenRouter provider configuration and client lifecycle
 - `tools/summarize-text.ts` — generic Gemini summarization
 - `tools/summarize-objective-title.ts` — mission-style objective title summarization
 - `objectives/generate-objective-title.ts` — `generateObjectiveTitle` and `generateAndSetObjectiveTitle`
@@ -73,3 +73,11 @@ Colocated tests:
 Other components consume automations only through the `@overlord/automations` package API.
 Persistence must go through injected callbacks such as `ObjectiveTitleStore`; the
 module must not read or write domain tables directly.
+
+Google model defaults are unchanged: `google/gemini-3.5-flash-lite` for automations,
+`google/gemini-3.8-flash` for chat. Bare model ids are accepted. Chat uses
+`CHAT_OPENROUTER_API_KEY` (falls back to `OPENROUTER_API_KEY`) and optional
+`CHAT_OPENROUTER_MODEL`. Existing Gemini-named JavaScript helpers remain compatible;
+Google credentials are no longer used. Google explicit caching is retired; prompts
+and authorized tool schemas are sent inline. The server transport lives in
+`src/openrouter/` and must not be imported by browser code.

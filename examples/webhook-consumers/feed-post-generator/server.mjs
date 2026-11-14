@@ -4,7 +4,7 @@
 //
 // Flow: verify the HMAC signature -> hydrate full mission context (inline for
 // `full`-mode subscriptions, or pulled over the REST API for `thin` ones) ->
-// digest it into a short feed post (an LLM call if GEMINI_API_KEY is set, a
+// digest it into a short feed post (an LLM call if OPENROUTER_API_KEY is set, a
 // deterministic fallback otherwise, mirroring the upstream pipeline's own
 // fallback behavior) -> append it to a local JSON file as the "somewhere
 // else" sink. See ../../../developer-instructions/webhooks.md for the full contract.
@@ -17,7 +17,7 @@ const PORT = process.env.PORT ?? 8787;
 const WEBHOOK_SECRET = process.env.OVERLORD_WEBHOOK_SECRET;
 const OVERLORD_BACKEND_URL = process.env.OVERLORD_BACKEND_URL ?? 'http://127.0.0.1:4310';
 const OVERLORD_USER_TOKEN = process.env.OVERLORD_USER_TOKEN;
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 const SIGNATURE_TOLERANCE_SECONDS = 300;
 
 if (!WEBHOOK_SECRET) {
@@ -68,20 +68,22 @@ async function draftFeedPost(envelope) {
     tags: [envelope.type],
     followUps: followUpTitles(envelope)
   };
-  if (!GEMINI_API_KEY) return fallback;
+  if (!OPENROUTER_API_KEY) return fallback;
 
   try {
     const prompt = `Write a one-sentence changelog entry for this delivered mission:\nTitle: ${envelope.mission.title}\nSummary: ${envelope.delivery?.summary ?? ''}`;
     const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=${GEMINI_API_KEY}`,
+      'https://openrouter.ai/api/v1/chat/completions',
       {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${OPENROUTER_API_KEY}` },
+        body: JSON.stringify({ model: 'google/gemini-3.5-flash-lite', messages: [{ role: 'user', content: prompt }] }),
+        signal: AbortSignal.timeout(30_000)
       }
     );
+    if (!res.ok) return fallback;
     const data = await res.json();
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+    const text = data.choices?.[0]?.message?.content?.trim();
     return text ? { ...fallback, summary: text } : fallback;
   } catch {
     return fallback; // provider unavailable -> deterministic fallback, never blocks the pipeline

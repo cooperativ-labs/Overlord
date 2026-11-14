@@ -669,7 +669,7 @@ Owns:
 - The pure `planRunQueueDispatch` planner. It plans each project queue independently, permits one dispatched/running entry per queue, retains and skips held entries, and never performs I/O or target selection.
 
 - Pluggable automation interface (`Automation`) and built-in automation registry
-- Provider configuration for optional Gemini-backed tools (`GEMINI_API_KEY`, model selection)
+- Provider configuration for optional Gemini-backed tools (`OPENROUTER_API_KEY`, model selection)
 - Reference summarization tools (text summarization, objective title generation)
 - Built-in `compose-delivery` automation for schema-constrained delivery presentation drafts
 - Fire-and-forget automation helpers that callers invoke through injected persistence callbacks
@@ -1377,10 +1377,9 @@ _Repository-read implementation details (coo:1108.zg8m)._
 
 **Gemini research runtime and tool gateway (coo:1108.vx29).**
 
-- _Runtime adapter._ `backend/chat/` implements the worker's `ChatRuntime` with Gemini
-  through `@google/genai` `models.generateContentStream` (function declarations as
-  `parametersJsonSchema`). Configuration: `CHAT_GEMINI_API_KEY` (falls back to
-  `GEMINI_API_KEY`), `CHAT_GEMINI_MODEL` (default `gemini-3.8-flash`), and
+- _Runtime adapter._ `backend/chat/` implements the worker's `ChatRuntime` with Google Gemini models
+  through OpenRouter HTTPS chat completions (streaming, JSON Schema tools and responses). Configuration: `CHAT_OPENROUTER_API_KEY` (falls back to
+  `OPENROUTER_API_KEY`), `CHAT_OPENROUTER_MODEL` (default `gemini-3.8-flash`), and
   `CHAT_MAX_GATHERED_BYTES_PER_RUN` (default 1 MiB of recorded tool results per run).
   Without a key the runtime reports `not_configured` and runs fail
   `provider_unavailable`; it never answers with fixed text. Provider errors map to the
@@ -1444,53 +1443,17 @@ _Repository-read implementation details (coo:1108.zg8m)._
   authorized-workspace list contributes no write declarations; an all-workspaces connection
   with an empty authorized list contributes none either. Call-time checks remain unchanged.
   Full fallback means all currently authorized tools, never all possible permissions.
-- _Static-prefix cache (coo:1127.0904)._ Backend may place a tool-enabled request's exact
-  static prefix in a Gemini explicit cache (`caches.create`, same Generate Content API
-  family) and reference it with `cachedContent`. The prefix is only the exact system
-  instruction, the request's exact function declarations and `functionCallingConfig.mode
-  = AUTO`; never conversation, summaries, tool results, source content, proposals,
-  credentials or connection secrets. A `cachedContent` request carries no system
-  instruction, tools or tool config (the provider rejects them), so tool-free closing
-  (`NONE`) requests and summary generation are always sent inline.
-  - _Hybrid use._ Only while the attempt's previous reported `promptTokenCount` (before
-    any report: request bytes / 4) is below 16,000 tokens; larger requests go inline so
-    implicit caching can cover the growing conversation. A cached request reports only
-    the cache's tokens as cached and gains no implicit hits, so caching every request
-    would raise cost on long runs. The cache never removes prompt tokens or context
-    occupancy: the context budget still counts the cached declarations.
-  - _Key and isolation._ SHA-256 over the owner's profile and organization, the model and
-    the canonical static config. Caches are never shared across owners, even for
-    identical manifests. A changed prompt, grant, connection, family or schema yields a
-    different key; a cache is never used for a different manifest, and a cache reference
-    never authorizes anything (every call still faces the live gateway checks; schema-2
-    checkpoint manifests are unchanged).
-  - _Lifecycle._ TTL 600 s; reuse only with at least 60 s remaining. A process-local,
-    in-memory registry (no database state) holds at most 64 entries and 4 per owner.
-    Creation is single-flight per key, never blocks a request (that request goes inline),
-    is bounded to 15 s and is awaited by the creating attempt before it finishes, so its
-    observation is durable. A failed creation suppresses that key for the TTL. When an
-    owner exceeds 4 entries, the oldest of that owner's caches is deleted from that
-    owner's attempt. A full registry skips creation. Caches left by a restart expire by
-    TTL; a restart starts cold.
-  - _Fallback._ A cached request refused at stream open with 400, 403 or 404, before any
-    chunk arrives, invalidates the entry and is sent once inline with identical contents.
-    Nothing is retried after a chunk arrives; transient-retry and rate-limit rules are
-    unchanged, so no turn or tool call is duplicated.
-  - _Digest, checkpoint and recovery._ The effective model input is identical with or
-    without the cache, so the config digest, checkpoint schema 2 and fresh-generation
-    rules are unchanged. The cache name is never stored in checkpoints, snapshots or
-    events; a resumed attempt recomputes the key and reuses or recreates the cache.
-  - _Diagnostics._ Owner-private and captured only in the triggering owner's thread:
-    `provider.cache_create` (complete create config including the instruction and
-    declarations, then the provider response metadata or original error),
-    `provider.cache_delete` and `provider.cache_fallback`. A cached `provider.request`
-    records the SDK request actually sent plus `staticCache` holding the cache name, key
-    and the effective system instruction, declarations and tool config, so the effective
-    input stays inspectable. `performance.attempt` adds cached-request and fallback
-    counts. These are open diagnostic kinds.
-  - _Configuration._ On by default with a configured key; `CHAT_GEMINI_STATIC_CACHE=off`
-    disables it (any other value keeps the default). Explicit caches incur provider
-    storage charges for their TTL.
+- _Provider transport (ADR 0055)._ The server-only OpenRouter transport is shared by
+  chat and automations. Bare model names are qualified with `google/`; defaults remain
+  Gemini 3.8 Flash for chat and Gemini 3.5 Flash Lite for automations. Tool calls are
+  assembled by stream index and parsed only after a completed stream. Call ids and
+  OpenRouter `reasoning_details` survive private checkpoints and are replayed unchanged.
+  Legacy Gemini checkpoint part names remain internal; legacy signatures are translated
+  on tool calls. Provider identity remains `gemini` on the REST surface and stored runs.
+  Google explicit-cache creation/deletion is retired; every request sends its authorized
+  system instruction and exact tool manifest inline. No cache handle or conversation
+  content is shared across owners. Existing optional cache test seams are not used by
+  production. OpenRouter usage is mapped to existing token diagnostics and budgets.
 - _Questions._ `ask_user` is a checkpointed call: reads in the same turn run first, the
   question opens through the existing question path (run `waiting_user`, notification
   candidate), and the answer becomes that call's recorded result when the run resumes
@@ -1711,8 +1674,8 @@ Specified in [authorization.md](authorization.md).
 ### Service → Automations (Automation Surface)
 
 - **Transport**: Service-layer function calls to the automations module's exported package API (`@overlord/automations`)
-- **Browser-safe subpaths**: SPA / renderer callers that need pure lifecycle or scheduling helpers MUST import `@overlord/automations/objective-manager` or `@overlord/automations/scheduling-engine` instead of the package root. The root barrel also re-exports Gemini-backed title tools and therefore pulls `@google/genai` into the client graph when imported from the webapp.
-- **Configuration**: Environment variables documented in `.env.prod.example` / `.env.local.example` (`GEMINI_API_KEY`, optional model override)
+- **Browser-safe subpaths**: SPA / renderer callers that need pure lifecycle or scheduling helpers MUST import `@overlord/automations/objective-manager` or `@overlord/automations/scheduling-engine` instead of the package root. The root barrel also re-exports server-only OpenRouter title tools. The provider transport is available only at `@overlord/automations/openrouter`; browser callers must not import it.
+- **Configuration**: Environment variables documented in `.env.prod.example` / `.env.local.example` (`OPENROUTER_API_KEY`, optional model override)
 - **Rule**: Automations must not read or write domain tables directly; persistence goes through caller-supplied store interfaces (e.g. `ObjectiveTitleStore`)
 - **Fallback**: When a provider is unavailable or a call fails, automations return `null` and callers use deterministic local fallbacks
 - **Downstream extension**: Forks add automations via `OVERLORD_AUTOMATIONS_MODULE` (`custom-automation` extension point), registering through the module API — never by editing the built-in registry

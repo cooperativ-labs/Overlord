@@ -7,7 +7,7 @@
  * outgoing request) with the `current` arm (the checked-out prompt). Every source is a
  * synthetic fixture: no owner content, credentials or real repository leaves this machine.
  *
- *   GEMINI_API_KEY=... CHAT_LIVE_EVAL_REPEATS=3 \
+ *   OPENROUTER_API_KEY=... CHAT_LIVE_EVAL_REPEATS=3 \
  *     node --import tsx backend/chat/research-planning.live-eval.ts <private-output-dir>
  *
  * Raw per-run records (answers, arguments) go to a mode-0700 directory; stdout carries only
@@ -975,8 +975,8 @@ function aggregate(records: RunRecord[]) {
 }
 
 async function main() {
-  const key = process.env.GEMINI_API_KEY;
-  if (!key) throw new Error('GEMINI_API_KEY is required.');
+  const key = process.env.OPENROUTER_API_KEY;
+  if (!key) throw new Error('OPENROUTER_API_KEY is required.');
   const out = resolve(process.argv[2] ?? '.');
   mkdirSync(out, { recursive: true, mode: 0o700 });
   chmodSync(out, 0o700);

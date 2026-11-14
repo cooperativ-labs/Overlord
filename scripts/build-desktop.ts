@@ -51,8 +51,8 @@ type Args = {
 };
 
 const PACKAGED_RUNTIME_ENV_KEYS = [
-  'GEMINI_API_KEY',
-  'GEMINI_MODEL',
+  'OPENROUTER_API_KEY',
+  'OPENROUTER_MODEL',
   'OVERLORD_WEB_HOST',
   'OVERLORD_WEB_PORT',
   'OVERLORD_BACKEND_URL',
@@ -296,12 +296,12 @@ function stageProductionEnv(): void {
 
   if (
     !stagedLines
-      .find(line => line.startsWith('GEMINI_API_KEY='))
-      ?.slice('GEMINI_API_KEY='.length)
+      .find(line => line.startsWith('OPENROUTER_API_KEY='))
+      ?.slice('OPENROUTER_API_KEY='.length)
       .trim()
   ) {
     fail(
-      'desktop:package:prod requires GEMINI_API_KEY in the environment or repo .env.prod so the packaged app ships with a default Gemini key.'
+      'desktop:package:prod requires OPENROUTER_API_KEY in the environment or repo .env.prod so the packaged app ships with a default Gemini key.'
     );
   }
 

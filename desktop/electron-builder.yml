@@ -36,7 +36,7 @@ files:
 
 # Unpacked from the asar: the native addon, loaded by dlopen. The server's
 # JS dependency graph (express, the @overlord/* packages, …) is bundled into
-# server/index.cjs; only better-sqlite3 and @google/genai remain as packed
+# server/index.cjs; only better-sqlite3 remain as packed
 # node_modules, and the SQL migrations are staged under sqlite/.
 asar: true
 asarUnpack:

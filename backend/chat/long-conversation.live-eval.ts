@@ -11,7 +11,7 @@
  * - `current` is the checked-out policy: covered messages replaced by the summary and a
  *   dedicated bounded summary call.
  *
- *   GEMINI_API_KEY=... CHAT_LIVE_EVAL_REPEATS=3 \
+ *   OPENROUTER_API_KEY=... CHAT_LIVE_EVAL_REPEATS=3 \
  *     node --import tsx backend/chat/long-conversation.live-eval.ts <private-output-dir>
  *
  * Only synthetic content is sent. Raw records (answers) go to a mode-0700 directory;
@@ -451,10 +451,10 @@ function aggregate(records: TurnRecord[]) {
 }
 
 async function main() {
-  const key = process.env.GEMINI_API_KEY;
+  const key = process.env.OPENROUTER_API_KEY;
   const dir = process.argv[2];
   if (!key || !dir)
-    throw new Error('Usage: GEMINI_API_KEY=... long-conversation.live-eval.ts <dir>');
+    throw new Error('Usage: OPENROUTER_API_KEY=... long-conversation.live-eval.ts <dir>');
   const repeats = Number(process.env.CHAT_LIVE_EVAL_REPEATS ?? 3);
   const arms = (process.env.CHAT_LIVE_EVAL_ARMS?.split(',') ?? ['baseline', 'current']) as Arm[];
   const out = resolve(dir);

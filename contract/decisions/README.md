@@ -89,3 +89,4 @@ record and the index disagree.
 - [0052 — A release gate around the manual release checks the contract range](0052-manual-release-gate.md)
 - [0053 — The production baseline is the version in force when phase 5 finished](0053-baseline-is-the-version-in-force.md)
 - [0054 — Retire legacy alias routes and protocol aliases](0054-retire-legacy-aliases.md)
+- [0055 — Route Google models through OpenRouter](0055-openrouter-google-model-transport.md)

@@ -5,13 +5,11 @@
 // forks inside an Electron `utilityProcess`. The dev flow keeps using
 // `tsx backend/index.ts` unchanged.
 //
-// Two packages stay external:
+// One package stays external:
 //   - `better-sqlite3` is a native addon that must load the build matching the
 //     runtime ABI (Node for `ovld serve`, Electron for the desktop utilityProcess).
 //     The cloud image omits the package from `node_modules`; Postgres boot never
 //     calls the lazy loader, so the external `require` is never reached there.
-//   - `@google/genai` pulls `google-auth-library`, a CommonJS package that does
-//     dynamic `require()`s esbuild cannot resolve in an ESM bundle.
 // The cloud build (`--cloud`) additionally skips staging the SQLite migration tree.
 //
 // `@overlord/database` resolves its SQL migrations relative to its own module
@@ -29,10 +27,10 @@ const outdir = path.join(backendRoot, 'dist-server');
 const cloudBuild =
   process.argv.includes('--cloud') || process.env.OVERLORD_SERVER_BUILD_TARGET === 'cloud';
 
-const externals = ['better-sqlite3', '@google/genai'];
+const externals = ['better-sqlite3'];
 
 // CommonJS output: native `require` for the CJS dependency graph (dotenv,
-// express, the google-auth chain), and esbuild shims `import.meta.url` against
+// express), and esbuild shims `import.meta.url` against
 // the output file's location so the bundled @overlord/database resolves its
 // migrations relative to this file.
 await build({

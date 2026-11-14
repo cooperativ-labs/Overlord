@@ -11,7 +11,7 @@ describe('generate commit message', () => {
     runner: typeof import('./execution/runner.ts');
   }> {
     const dir = mkdtempSync(path.join('/tmp', 'ovld-gcm-db-'));
-    delete process.env.GEMINI_API_KEY;
+    delete process.env.OPENROUTER_API_KEY;
     const { bootstrapIntegrationTestDb } = await import('./test-helpers.ts');
     await bootstrapIntegrationTestDb({ sqlitePath: path.join(dir, 'Overlord.sqlite') });
     const api = await import('./repository.ts');

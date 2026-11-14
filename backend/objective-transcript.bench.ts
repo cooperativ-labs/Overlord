@@ -13,7 +13,7 @@ await bootstrapIntegrationTestDb({
 const { db, requireDatabaseClient } = await import('./db.ts');
 const { createProject, createMission, listMissions } = await import('./repository.ts');
 const { listObjectiveTranscript } = await import('./objective-transcript.ts');
-process.env.GEMINI_API_KEY = '';
+process.env.OPENROUTER_API_KEY = '';
 
 // A loopback transport harness around the actual authorized read services.
 // This measures transport/JSON too, but is not the deployed auth middleware or WAN.

@@ -58,7 +58,7 @@ Mission and objective titles are derived from instruction text via the
 
 - On create (and when an objective's instruction changes without an explicit
   title edit), the server sets an immediate local title, then asynchronously
-  refines it with Gemini when `GEMINI_API_KEY` is set in the active env file.
+  refines it with Gemini when `OPENROUTER_API_KEY` is set in the active env file.
 - Title updates are written through the same `entity_changes` feed, so the
   board and mission panel refresh live.
 

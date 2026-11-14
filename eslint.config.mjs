@@ -47,6 +47,7 @@ export default [
       ecmaVersion: 2022,
       sourceType: 'module',
       globals: {
+        AbortSignal: 'readonly',
         Buffer: 'readonly',
         __dirname: 'readonly',
         __filename: 'readonly',
