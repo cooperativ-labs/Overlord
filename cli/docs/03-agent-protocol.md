@@ -62,10 +62,11 @@ Requirements:
   `execution_request:create` authorization, launchability, target-selection,
   sibling, and active-request idempotency rules; it does not attach the calling
   agent or claim a runner request.
-- `reorder-future-objectives`: reorder a mission UUID's future objectives using the
-  complete desired UUID list in `--ordered-objective-ids-json`. It retains the
-  existing `objective:update` authorization and rejects duplicate, missing, or
-  non-future ids while returning the full objective list.
+- `reorder-objectives`: replace a mission UUID's complete order of unstarted
+  (`draft`/`submitted`) objectives using the UUID list in
+  `--ordered-objective-ids-json`. It retains the existing `objective:update`
+  authorization, rejects duplicate, missing, extra, or non-queued ids, keeps
+  launching/active/complete positions fixed, and returns the full objective list.
 - `run-queue`: return all live queues and entries for `--project-id` (UUID,
   slug, or name), `--objective-id`, or `--mission-id`, optionally narrowed with
   `--queue`. It is a read of delivery-driven sequencing state, not a direct
@@ -118,7 +119,7 @@ Requirements:
 - `update-objective`: accepts `--title` to replace or clear the custom title
   without changing the instruction text, maps `--auto-advance` /
   `--no-auto-advance` to queue membership, and can edit instruction text on
-  draft/future objectives. Context and update responses include the assigned
+  draft objectives. Context and update responses include the assigned
   agent, model, reasoning effort, and resource key. The returned `autoAdvance`
   field is deprecated and derived from `queueEntry`.
 - `delete-missions` and `delete-objectives`: atomically soft-delete one to 100

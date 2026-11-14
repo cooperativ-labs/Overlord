@@ -78,9 +78,9 @@ The current tool catalog is mission-first:
 - `overlord_changes` — read one objective's synchronized changed-file evidence (`ObjectiveFileChangesDto`, server scope, capped at 200)
 - `overlord_list_deliveries` — read a `{ items, total, limit }` page of normalized delivery summaries, verification/follow-up notes, and authoritative delivery evidence for one mission
 - `overlord_launch_objective` — explicitly queue the normal execution request for one objective; this is distinct from attaching the MCP agent to work
-- `overlord_reorder_future_objectives` — explicitly replace one mission's complete future-objective ordering
+- `overlord_reorder_objectives` — explicitly replace one mission's complete order of unstarted (draft/submitted) objectives
 - `overlord_add_objectives`
-- `overlord_update_objective` — rewrite the title in any state, turn auto-advance on or off, and/or edit instruction text on draft/future objectives
+- `overlord_update_objective` — rewrite the title in any state, turn auto-advance on or off, and/or edit instruction text on draft objectives
 - `overlord_delete_missions` — bulk soft-delete one to 100 missions atomically (also soft-deletes live objectives); requires `confirm: true` after the resolved list is shown to and approved by the user
 - `overlord_delete_objectives` — bulk soft-delete one to 100 objectives atomically (also removes live Run Queue membership); requires `confirm: true` after the resolved list is shown to and approved by the user
 - `overlord_list_run_queues` — read compact or full live Run Queue state before changing it

@@ -3,14 +3,14 @@ import type {
   ObjectiveAttachmentDto,
   ObjectiveDto,
   ObjectivePromptDto,
-  ReorderFutureObjectivesBody,
+  ReorderObjectivesBody,
   UpdateObjectiveBody
 } from '@overlord/contract';
 
 import { request } from './request.ts';
 
 export const objectivesApi = {
-  reorderFutureObjectives: (missionId: string, body: ReorderFutureObjectivesBody) =>
+  reorderObjectives: (missionId: string, body: ReorderObjectivesBody) =>
     request<ObjectiveDto[]>('PATCH', `/api/missions/${missionId}/objectives/reorder`, body),
   createObjective: (body: CreateObjectiveBody) =>
     request<ObjectiveDto>('POST', '/api/objectives', body),

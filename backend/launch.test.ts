@@ -193,7 +193,7 @@ test('parking an active objective to submitted clears its queue and allows launc
   assert.equal(secondRequest.objectiveId, second.id);
 });
 
-test('force-disconnecting an executing objective to draft clears stale execution and parks the draft sibling', async () => {
+test('force-disconnecting an executing objective to draft clears stale execution, keeps the draft sibling a draft and moves to the queue head', async () => {
   const project = await createProject({ name: 'Force Disconnect To Draft Test' });
   await createProjectResource(project.id, {
     directoryPath: createIsolatedCheckout('overlord-launch-force-disconnect-resource-'),
@@ -226,7 +226,17 @@ test('force-disconnecting an executing objective to draft clears stale execution
   const siblingAfterDisconnect = db
     .prepare(`SELECT state FROM objectives WHERE id = ?`)
     .get(draftSibling.id) as { state: string };
-  assert.equal(siblingAfterDisconnect.state, 'future');
+  assert.equal(siblingAfterDisconnect.state, 'draft');
+  const queueOrder = db
+    .prepare(
+      `SELECT id FROM objectives WHERE mission_id = ? AND deleted_at IS NULL
+         AND state IN ('draft', 'submitted') ORDER BY position`
+    )
+    .all(mission.id) as Array<{ id: string }>;
+  assert.deepEqual(
+    queueOrder.map(row => row.id),
+    [firstObjective.id, draftSibling.id]
+  );
 
   const retry = await launchObjective(firstObjective.id, { agent: 'codex' });
   assert.notEqual(retry.id, firstRequest.id);

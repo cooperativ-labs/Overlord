@@ -35,7 +35,7 @@ Owns:
 
 - Table definitions, column types, indexes, foreign keys, CHECK constraints
 - `objectives.display_key`: required Crockford Base32 key (lowercase, typically 4 characters), unique among non-deleted rows of the same mission. The public id `{missions.display_id}.{display_key}` is computed at read time and is not persisted as a second column. Soft-deleted keys may be reused.
-- `objectives.reopened_at`: nullable `TimestampUTC`, last-wins. Stamped when an objective in `executing`, `pending_delivery`, or `complete` is set back to `draft`, marking where its latest run begins; never stamped by a post-delivery re-attach, a `future → draft` promotion, or a `launching → draft` reset. Projected additively as `ObjectiveDto.reopenedAt`.
+- `objectives.reopened_at`: nullable `TimestampUTC`, last-wins. Stamped when an objective in `executing`, `pending_delivery`, or `complete` is set back to `draft`, marking where its latest run begins; never stamped by a post-delivery re-attach or a `launching → draft` reset. A reopen moves the objective to the head of the mission's draft queue (ADR 0056). Projected additively as `ObjectiveDto.reopenedAt`.
 - `missions.allow_parallel_objectives`: `boolean NOT NULL DEFAULT false`. Opt-in permission for two objectives on the same mission to execute at once, on the same `resource_key` or different ones. Domain enforcement is service-layer (no unique partial index); checkout safety is the Runner Layer's per-objective branch/worktree isolation.
 - The `organizations` table (grouping layer above `workspaces`: `id` uuid, `name`, `settings_json` incl. `logoUrl`, timestamps, `deleted_at`, `revision`) and the required `workspaces.organization_id` FK; workspaces remain the sole RBAC layer, and slugs are unique per organization, not instance-wide
 - `execution_target_runner_registrations`: the core, **one-to-many** record of live runner processes serving one `local` execution target (`runner_instance_id`, `native`/`adopted` `relation`, non-secret `label`/`runner_version`/`capabilities_json`/`supported_agents_json`, and `health`/`last_heartbeat_at`/`last_error_code`). It is the source of truth for **local** target reachability; `devices.last_seen_at` reverts to last observed machine traffic with no scheduling effect, and is honored for reachability only for a target that has never had a runner registration (upgrade compatibility). This table is distinct from the gateway-owned `execution_target_registrations`, which stays one registration per `virtual` target. `execution_requests.claimed_by_runner_registration_id` records which runner instance won a local claim
@@ -219,13 +219,14 @@ Owns:
   `attemptCount` reset to 0 and enqueues a dispatch tick; it is refused (409) for an entry
   already `dispatched`/`running` and may not be combined with a move. On every Run Queue
   surface (REST, Protocol, MCP and the legacy `autoAdvance` input): queueing an objective also
-  queues every later objective of the mission (by position) that has not started (`draft`,
-  `submitted` or `future`, with instruction text, not already queued), directly behind it in
+  queues every later objective of the mission (by position) that has not started (`draft` or
+  `submitted`, with instruction text, not already queued; earlier unqueued drafts stay
+  unqueued even though objectives may launch out of order), directly behind it in
   mission order, while the response stays the requested objective's single entry (the core
   service's internal `cascade: false` option is not exposed); a queue reorder or move
   redistributes the mission's queued objectives, in queue order, across the position slots
   queued objectives already occupy (unqueued objectives never move), and
-  `reorderFutureObjectives` carries the new objective order into every queue holding that
+  `reorderObjectives` (the mission draft queue, ADR 0056) carries the new objective order into every queue holding that
   mission's `waiting`/`blocked` entries across the slots they occupy (in-flight entries and
   other missions' entries never move; a changed queue requests a dispatch tick); removing an
   entry whose objective has not started (or a forced removal that reset `launching` to `draft`)

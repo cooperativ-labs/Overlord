@@ -55,7 +55,7 @@ import type {
   PurgeWorktreesResultDto,
   RemoveWorktreeBody,
   ReorderBoardColumnBody,
-  ReorderFutureObjectivesBody,
+  ReorderObjectivesBody,
   ReorderProjectsBody,
   ReorderProjectStatusesBody,
   RunQueueWaitingReason,
@@ -156,6 +156,12 @@ import {
   writeSharedContext
 } from '../packages/core/service/missions.ts';
 import { emitNotification } from '../packages/core/service/notifications/notifications.ts';
+import {
+  lockMissionObjectiveQueue,
+  ObjectiveQueueError,
+  planQueuedObjectiveReorder,
+  planReopenToQueueHead
+} from '../packages/core/service/objective-queue.ts';
 import {
   agentInstructionsFromProfileMetadata,
   avatarUrlFromProfileMetadata,
@@ -3765,12 +3771,14 @@ function selectMissionsSql(dialect: SqlDialect): string {
             AS has_completed_objective,
          (SELECT COUNT(*) > 0 FROM objectives o
             WHERE o.mission_id = t.id AND o.deleted_at IS NULL
-              AND o.state IN ('draft', 'future') AND TRIM(o.instruction_text) != '')
+              AND o.state = 'draft' AND TRIM(o.instruction_text) != '')
             AS has_pending_objective_with_instructions,
 ${missionHasUnseenBlockingQuestionSql(dialect)},
 ${missionHasUnseenReturnedToExecuteSql},
+         -- firstDraft (automations): the first live draft by position, blank allowed.
          (SELECT o.resource_key FROM objectives o
             WHERE o.mission_id = t.id AND o.deleted_at IS NULL AND o.state = 'draft'
+            ORDER BY o.position ASC, o.created_at ASC, o.id ASC
             LIMIT 1) AS draft_objective_resource_key
   FROM missions t
   WHERE t.workspace_id = ? AND t.deleted_at IS NULL
@@ -6026,6 +6034,12 @@ export async function deleteObjectives(
       throw new ApiError(400, 'objectiveIds contains duplicate objectives');
     }
 
+    // Deleting changes the mission's queued set; serialize with reorder.
+    for (const missionId of [
+      ...new Set(objectives.map(({ existing }) => existing.mission_id))
+    ].sort()) {
+      await lockMissionObjectiveQueue(tx, missionId);
+    }
     const now = nowIso();
     for (const { existing, workspaceId, workspaceUserId } of objectives) {
       const revision = existing.revision + 1;
@@ -6535,12 +6549,14 @@ function selectInboxMissionsSql(workspacePlaceholders: string, dialect: SqlDiale
             AS has_completed_objective,
          (SELECT COUNT(*) > 0 FROM objectives o
             WHERE o.mission_id = t.id AND o.deleted_at IS NULL
-              AND o.state IN ('draft', 'future') AND TRIM(o.instruction_text) != '')
+              AND o.state = 'draft' AND TRIM(o.instruction_text) != '')
             AS has_pending_objective_with_instructions,
 ${missionHasUnseenBlockingQuestionSql(dialect)},
 ${missionHasUnseenReturnedToExecuteSql},
+         -- firstDraft (automations): the first live draft by position, blank allowed.
          (SELECT o.resource_key FROM objectives o
             WHERE o.mission_id = t.id AND o.deleted_at IS NULL AND o.state = 'draft'
+            ORDER BY o.position ASC, o.created_at ASC, o.id ASC
             LIMIT 1) AS draft_objective_resource_key
     FROM missions t
     JOIN projects p ON p.id = t.project_id AND p.workspace_id = t.workspace_id
@@ -6736,9 +6752,25 @@ async function applyObjectivePositionUpdates(
     rows: ObjectiveRow[];
     positionById: Map<string, number>;
     now: string;
+    /**
+     * Reorder only: every written row must still be `draft`/`submitted`. A row
+     * that left the queue concurrently (a launch) fails the write with 409 and
+     * rolls the caller's transaction back.
+     */
+    requireQueuedState?: boolean;
   }
 ): Promise<void> {
   const { workspaceId, missionId, projectId, rows, positionById, now } = options;
+  const stateGuard = options.requireQueuedState ? ` AND state IN ('draft', 'submitted')` : '';
+  const checkedRun = async (sql: string, params: unknown[]) => {
+    const result = await tx.run(sql + stateGuard, params);
+    if (options.requireQueuedState && result.changes !== 1) {
+      throw new ApiError(
+        409,
+        'The mission draft queue changed while reordering; reload and try again.'
+      );
+    }
+  };
   const byId = new Map(rows.map(row => [row.id, row]));
 
   const updates = [...positionById.entries()]
@@ -6758,7 +6790,7 @@ async function applyObjectivePositionUpdates(
   const tempBase = maxPosition + updates.length + 1;
 
   for (const [index, { existing }] of updates.entries()) {
-    await tx.run(
+    await checkedRun(
       `UPDATE objectives SET position = ?, updated_at = ?
          WHERE id = ? AND workspace_id = ?`,
       [tempBase + index, now, existing.id, workspaceId]
@@ -6766,7 +6798,7 @@ async function applyObjectivePositionUpdates(
   }
 
   for (const { existing, position, revision } of updates) {
-    await tx.run(
+    await checkedRun(
       `UPDATE objectives SET position = ?, updated_at = ?, revision = ?
          WHERE id = ? AND workspace_id = ?`,
       [position, now, revision, existing.id, workspaceId]
@@ -6790,17 +6822,22 @@ async function applyObjectivePositionUpdates(
 }
 
 /**
- * Reorder a mission's `future` objectives. `orderedObjectiveIds` is the full
- * top-to-bottom order the future group should have afterwards. The future rows
- * are renumbered relative to one another starting at the lowest position they
- * currently occupy, so they keep sitting after any non-future objectives.
- * Objectives whose position is already correct are skipped so no redundant
- * change-feed rows are written. Returns the mission's full objective list in its
- * new order.
+ * Reorder a mission's draft queue (coo:1274). `orderedObjectiveIds` must be
+ * exactly the mission's live `draft` + `submitted` objectives, top to bottom.
+ * They are written into the sorted position slots they already hold, so a
+ * `launching`, active or complete objective between them never moves. Rows
+ * whose position is already right are skipped (no revision, no change-feed
+ * row); an unchanged order writes nothing. Mission order is carried into every
+ * Run Queue holding the mission's waiting entries in the same transaction.
+ *
+ * Queue-shaping writes for the mission are serialized by
+ * `lockMissionObjectiveQueue`. A launch moving a listed row out of the queue
+ * concurrently is caught by the state-checked position writes, which roll the
+ * whole reorder back with 409 so the client refetches.
  */
-export async function reorderFutureObjectives(
+export async function reorderObjectives(
   missionId: string,
-  body: ReorderFutureObjectivesBody
+  body: ReorderObjectivesBody
 ): Promise<ObjectiveDto[]> {
   const orderedIds = body.orderedObjectiveIds;
   if (!Array.isArray(orderedIds)) {
@@ -6822,72 +6859,33 @@ export async function reorderFutureObjectives(
     )) as { id: string; project_id: string } | undefined;
     if (!mission) throw new ApiError(404, 'Mission not found');
 
+    await lockMissionObjectiveQueue(tx, mission.id);
     const rows = (await tx.all(
       `SELECT * FROM objectives
            WHERE mission_id = ? AND workspace_id = ? AND deleted_at IS NULL`,
-      [missionId, workspaceId]
+      [mission.id, workspaceId]
     )) as ObjectiveRow[];
-    const byId = new Map(rows.map(row => [row.id, row]));
 
-    const targets = orderedIds.map(id => {
-      const row = byId.get(id);
-      if (!row) throw new ApiError(404, `Objective ${id} not found on mission`);
-      if (row.state !== 'future') {
-        throw new ApiError(400, `Objective ${id} is not a future objective`);
+    let positionById: Map<string, number>;
+    try {
+      positionById = planQueuedObjectiveReorder(rows, orderedIds);
+    } catch (error) {
+      if (error instanceof ObjectiveQueueError) {
+        throw new ApiError(error.code === 'unknown_objective' ? 404 : 400, error.message);
       }
-      return row;
+      throw error;
+    }
+    if (positionById.size === 0) return;
+
+    await applyObjectivePositionUpdates(tx, {
+      workspaceId,
+      missionId: mission.id,
+      projectId: mission.project_id,
+      rows,
+      positionById,
+      now: nowIso(),
+      requireQueuedState: true
     });
-    if (targets.length === 0) return;
-
-    // Renumber starting at the lowest position the future group currently holds,
-    // keeping the whole group after any non-future objectives.
-    const basePosition = Math.min(...targets.map(row => row.position));
-
-    const updates = targets
-      .map((existing, index) => ({
-        existing,
-        position: basePosition + index,
-        revision: existing.revision + 1
-      }))
-      .filter(({ existing, position }) => existing.position !== position);
-    if (updates.length === 0) return;
-
-    const now = nowIso();
-    const maxPosition = Math.max(...rows.map(row => row.position), basePosition);
-    const tempBase = maxPosition + updates.length + 1;
-
-    // Move every changed row out of the constrained range first so swaps do not
-    // trip the mission_id+position uniqueness constraint mid-transaction.
-    for (const [index, { existing }] of updates.entries()) {
-      await tx.run(
-        `UPDATE objectives SET position = ?, updated_at = ?
-           WHERE id = ? AND workspace_id = ?`,
-        [tempBase + index, now, existing.id, workspaceId]
-      );
-    }
-
-    for (const { existing, position, revision } of updates) {
-      await tx.run(
-        `UPDATE objectives SET position = ?, updated_at = ?, revision = ?
-           WHERE id = ? AND workspace_id = ?`,
-        [position, now, revision, existing.id, workspaceId]
-      );
-
-      await recordChange(
-        {
-          entityType: 'objective',
-          entityId: existing.id,
-          operation: 'update',
-          entityRevision: revision,
-          projectId: mission.project_id,
-          missionId,
-          objectiveId: existing.id,
-          changedFields: ['position'],
-          workspaceId
-        },
-        tx
-      );
-    }
 
     // Mission order and Run Queue order are one sequence. Carry the new
     // objective order into every queue holding this mission's entries.
@@ -6965,103 +6963,6 @@ export async function createObjective(body: CreateObjectiveBody): Promise<Object
   return objective;
 }
 
-/**
- * Refills the next-up draft slot after an objective leaves the queue by
- * promoting the first authored `future` objective (and dropping any leftover
- * blank draft it replaces).
- *
- * It never *creates* a blank draft. A stored objective with no instruction text
- * is indistinguishable from real work to agents, counts, and auto-advance, so
- * the "empty field to type into" is a client-only composer (the mission panel's
- * ghost objective card) that persists an objective only once it has content.
- */
-async function ensureDraftSlotAfterObjectiveLeavesQueue(
-  db: DatabaseClient,
-  {
-    workspaceId,
-    missionId,
-    projectId,
-    now
-  }: {
-    workspaceId: string;
-    missionId: string;
-    projectId: string;
-    now: string;
-  }
-): Promise<void> {
-  const drafts = (await db.all(
-    `SELECT id, instruction_text, revision FROM objectives
-       WHERE mission_id = ? AND workspace_id = ? AND state = 'draft' AND deleted_at IS NULL
-       ORDER BY position ASC, created_at ASC`,
-    [missionId, workspaceId]
-  )) as Array<{
-    id: string;
-    instruction_text: string;
-    revision: number;
-  }>;
-
-  if (drafts.some(draft => draft.instruction_text.trim())) return;
-
-  // Only an authored future objective refills the slot; a blank one (legacy rows
-  // from when blank slots were persisted) is not real work to promote.
-  const nextFuture = (await db.get(
-    `SELECT id, revision FROM objectives
-       WHERE mission_id = ? AND workspace_id = ? AND state = 'future' AND deleted_at IS NULL
-         AND TRIM(instruction_text) <> ''
-       ORDER BY position ASC, created_at ASC LIMIT 1`,
-    [missionId, workspaceId]
-  )) as { id: string; revision: number } | undefined;
-
-  if (nextFuture) {
-    for (const draft of drafts) {
-      const draftRevision = draft.revision + 1;
-      await db.run(
-        `UPDATE objectives
-         SET deleted_at = ?, updated_at = ?, revision = ?
-         WHERE id = ? AND workspace_id = ?`,
-        [now, now, draftRevision, draft.id, workspaceId]
-      );
-
-      await recordChange(
-        {
-          entityType: 'objective',
-          entityId: draft.id,
-          operation: 'delete',
-          entityRevision: draftRevision,
-          projectId,
-          missionId,
-          objectiveId: draft.id,
-          workspaceId
-        },
-        db
-      );
-    }
-
-    const nextRevision = nextFuture.revision + 1;
-    await db.run(
-      `UPDATE objectives
-       SET state = 'draft', completed_at = NULL, updated_at = ?, revision = ?
-       WHERE id = ? AND workspace_id = ?`,
-      [now, nextRevision, nextFuture.id, workspaceId]
-    );
-
-    await recordChange(
-      {
-        entityType: 'objective',
-        entityId: nextFuture.id,
-        operation: 'update',
-        entityRevision: nextRevision,
-        projectId,
-        missionId,
-        objectiveId: nextFuture.id,
-        changedFields: ['state', 'completed_at'],
-        workspaceId
-      },
-      db
-    );
-  }
-}
-
 async function updateObjectiveTx(
   idRef: string,
   body: UpdateObjectiveBody
@@ -7093,8 +6994,7 @@ async function updateObjectiveTx(
     if (body.instructionText !== undefined) {
       const instruction = body.instructionText.trim();
       const resultingState = body.state ?? existing.state;
-      const allowsBlankInstruction = resultingState === 'draft' || resultingState === 'future';
-      if (!instruction && !allowsBlankInstruction) {
+      if (!instruction && resultingState !== 'draft') {
         throw new ApiError(400, 'Objective instruction is required');
       }
       const lockedStates = ['executing', 'pending_delivery', 'complete'] as const;
@@ -7114,9 +7014,6 @@ async function updateObjectiveTx(
     if (body.state !== undefined) {
       if (!OBJECTIVE_STATES.includes(body.state as ObjectiveState)) {
         throw new ApiError(400, 'Invalid objective state');
-      }
-      if (existing.state === 'complete' && body.state === 'future') {
-        throw new ApiError(400, 'Completed objectives cannot be moved back to the future queue.');
       }
       fields.push('state = ?');
       setParams.push(body.state);
@@ -7157,9 +7054,15 @@ async function updateObjectiveTx(
       if (!Number.isInteger(body.position) || body.position < 0) {
         throw new ApiError(400, 'Invalid position');
       }
-      fields.push('position = ?');
-      setParams.push(body.position);
-      changed.push('position');
+      // Positions move only through the queue-aware paths (reorder, reopen,
+      // Run Queue), which keep launching/active rows fixed and the Run Queue in
+      // sync. An unchanged position stays a no-op for older callers.
+      if (body.position !== existing.position) {
+        throw new ApiError(
+          400,
+          'Objective position is changed only through PATCH /api/missions/{id}/objectives/reorder'
+        );
+      }
     }
     if (body.assignedAgent !== undefined) {
       fields.push('assigned_agent = ?');
@@ -7221,67 +7124,11 @@ async function updateObjectiveTx(
 
     const now = nowIso();
     const revision = existing.revision + 1;
-    if (body.state === 'draft') {
-      const otherDrafts = (await tx.all(
-        `SELECT id, revision, position FROM objectives
-           WHERE mission_id = ? AND workspace_id = ? AND state = 'draft'
-             AND id <> ? AND deleted_at IS NULL`,
-        [existing.mission_id, workspaceId, id]
-      )) as Array<{ id: string; revision: number; position: number }>;
-
-      for (const draft of otherDrafts) {
-        const draftRevision = draft.revision + 1;
-        await tx.run(
-          `UPDATE objectives SET state = 'future', updated_at = ?, revision = ?
-           WHERE id = ? AND workspace_id = ?`,
-          [now, draftRevision, draft.id, workspaceId]
-        );
-
-        await recordChange(
-          {
-            entityType: 'objective',
-            entityId: draft.id,
-            operation: 'update',
-            entityRevision: draftRevision,
-            projectId: existing.project_id,
-            missionId: existing.mission_id,
-            objectiveId: draft.id,
-            changedFields: ['state'],
-            workspaceId
-          },
-          tx
-        );
-      }
-
-      if (existing.state === 'future' && otherDrafts.length > 0) {
-        const draftSlotPosition = Math.min(...otherDrafts.map(draft => draft.position));
-        if (existing.position > draftSlotPosition) {
-          const missionRows = (await tx.all(
-            `SELECT * FROM objectives
-               WHERE mission_id = ? AND workspace_id = ? AND deleted_at IS NULL`,
-            [existing.mission_id, workspaceId]
-          )) as ObjectiveRow[];
-          const positionById = new Map<string, number>();
-          for (const row of missionRows) {
-            if (row.id === id) {
-              positionById.set(row.id, draftSlotPosition);
-              continue;
-            }
-            if (row.position >= draftSlotPosition && row.position < existing.position) {
-              positionById.set(row.id, row.position + 1);
-            }
-          }
-          await applyObjectivePositionUpdates(tx, {
-            workspaceId,
-            missionId: existing.mission_id,
-            projectId: existing.project_id,
-            rows: missionRows,
-            positionById,
-            now
-          });
-        }
-      }
-    }
+    const reopening =
+      body.state === 'draft' &&
+      body.state !== existing.state &&
+      OBJECTIVE_REOPENABLE_STATES.includes(existing.state);
+    if (reopening) await lockMissionObjectiveQueue(tx, existing.mission_id);
 
     await tx.run(
       `UPDATE objectives SET ${fields.join(', ')}, updated_at = ?, revision = ?
@@ -7346,29 +7193,13 @@ async function updateObjectiveTx(
       }
     }
 
-    if (
-      body.state === 'executing' &&
-      body.state !== existing.state &&
-      (existing.state === 'draft' ||
-        existing.state === 'future' ||
-        existing.state === 'submitted' ||
-        existing.state === 'launching')
-    ) {
-      await ensureDraftSlotAfterObjectiveLeavesQueue(tx, {
-        workspaceId,
-        missionId: existing.mission_id,
-        projectId: existing.project_id,
-        now
-      });
-    }
-
     const disconnectingToQueue =
       (body.state === 'draft' || body.state === 'submitted') &&
       body.state !== existing.state &&
       DISCONNECT_FROM_STATES.includes(existing.state as (typeof DISCONNECT_FROM_STATES)[number]);
 
     // When a user manually moves an objective out of the launch pipeline
-    // (completing it, disconnecting it back to submitted, or parking to future),
+    // (completing it, or disconnecting it back to draft/submitted),
     // the runner must stop seeing it: clear queued work and end open sessions.
     if (
       body.state !== undefined &&
@@ -7386,6 +7217,31 @@ async function updateObjectiveTx(
         now,
         tx
       });
+    }
+
+    // A reopened objective returns to the head of the draft queue (coo:1274).
+    // This runs after the dequeue above, which may have moved it to the end of
+    // the mission while removing its Run Queue entry. Only the reopened row and
+    // the queued rows trade their existing slots; launching, active and
+    // complete rows keep their positions.
+    if (reopening) {
+      const missionRows = (await tx.all(
+        `SELECT * FROM objectives
+           WHERE mission_id = ? AND workspace_id = ? AND deleted_at IS NULL`,
+        [existing.mission_id, workspaceId]
+      )) as ObjectiveRow[];
+      const positionById = planReopenToQueueHead(missionRows, id);
+      if (positionById.size > 0) {
+        await applyObjectivePositionUpdates(tx, {
+          workspaceId,
+          missionId: existing.mission_id,
+          projectId: existing.project_id,
+          rows: missionRows,
+          positionById,
+          now
+        });
+        await syncRunQueueOrderFromMissionPositions(tx, existing.mission_id);
+      }
     }
 
     // REST and Protocol retain `autoAdvance` as a compatibility input, but the

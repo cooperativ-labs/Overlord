@@ -28,7 +28,7 @@ export interface MissionCardState {
   objectiveCount: number;
   /**
    * True when the badge should flag attention: a completed objective exists
-   * alongside a draft/future objective that already has instruction text
+   * alongside a draft objective that already has instruction text
    * (i.e. queued work behind something already finished).
    */
   objectiveCountAlert: boolean;

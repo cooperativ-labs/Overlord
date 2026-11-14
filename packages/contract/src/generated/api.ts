@@ -5,10 +5,10 @@
 import { z } from 'zod';
 
 /** The contract version (contract/VERSION) this API description belongs to. */
-export const contractVersion = "171.0.0";
+export const contractVersion = "172.0.1";
 
 /** The API description's own version (OpenAPI `info.version`). */
-export const apiVersion = "3.0.0";
+export const apiVersion = "4.0.0";
 
 /** A non-JSON request or response body: raw bytes (G3). */
 export type BinaryBody = Uint8Array | ArrayBuffer | Blob;
@@ -78,8 +78,8 @@ export const statusTypeSchema: z.ZodType<StatusType> = z.enum(["draft", "next", 
 export type MissionPriority = "low" | "normal" | "high" | "urgent";
 export const missionPrioritySchema: z.ZodType<MissionPriority> = z.enum(["low", "normal", "high", "urgent"]);
 
-export type ObjectiveState = "future" | "draft" | "submitted" | "launching" | "executing" | "pending_delivery" | "complete";
-export const objectiveStateSchema: z.ZodType<ObjectiveState> = z.enum(["future", "draft", "submitted", "launching", "executing", "pending_delivery", "complete"]);
+export type ObjectiveState = "draft" | "submitted" | "launching" | "executing" | "pending_delivery" | "complete";
+export const objectiveStateSchema: z.ZodType<ObjectiveState> = z.enum(["draft", "submitted", "launching", "executing", "pending_delivery", "complete"]);
 
 /**
  * Rows predating creation provenance report `human`.
@@ -1016,7 +1016,7 @@ export interface SearchResponseV3 {
 export const searchResponseV3Schema: z.ZodType<SearchResponseV3> = z.object({ "version": z.literal(3), "results": z.array(searchResultV3Schema), "appliedFilters": searchAppliedFiltersV3Schema, "totalMatchedBeforeLimit": z.int().min(0), "entityCounts": z.object({ "mission": z.int().min(0), "objective": z.int().min(0), "delivery": z.int().min(0), "event": z.int().min(0) }), "workspaceCounts": z.array(missionSearchWorkspaceCountSchema), "truncatedCandidates": z.boolean() });
 
 /**
- * At least one of `title`, `firstObjective` and `objectives` must carry text (400 otherwise). `objectives` wins over `firstObjective`; the first objective is created `draft`, the rest `future`.
+ * At least one of `title`, `firstObjective` and `objectives` must carry text (400 otherwise). `objectives` wins over `firstObjective`; every objective is created `draft`, in order.
  */
 export interface CreateMissionBody {
   /**
@@ -1120,13 +1120,13 @@ export const updateMissionBodySchema: z.ZodType<UpdateMissionBody> = z.object({ 
 export type ObjectiveList = ObjectiveDto[];
 export const objectiveListSchema: z.ZodType<ObjectiveList> = z.array(objectiveDtoSchema);
 
-export interface ReorderFutureObjectivesBody {
+export interface ReorderObjectivesBody {
   /**
-   * Objective UUIDs, each a `future` objective of the mission (400 otherwise), top to bottom.
+   * Every live `draft` and `submitted` objective UUID of the mission, exactly once, top to bottom (400 otherwise; 409 when the queued set changed concurrently).
    */
   orderedObjectiveIds: string[];
 }
-export const reorderFutureObjectivesBodySchema: z.ZodType<ReorderFutureObjectivesBody> = z.object({ "orderedObjectiveIds": z.array(z.string()).refine(hasUniqueItems, { error: 'Expected unique items' }) });
+export const reorderObjectivesBodySchema: z.ZodType<ReorderObjectivesBody> = z.object({ "orderedObjectiveIds": z.array(z.string()).refine(hasUniqueItems, { error: 'Expected unique items' }) });
 
 export interface MissionEventActorDto {
   workspaceUserId: string;
@@ -1799,7 +1799,7 @@ export interface CreateObjectiveBody {
    */
   missionId: string;
   /**
-   * Trimmed; may be blank only for a `draft` or `future` objective.
+   * Trimmed; may be blank only for a `draft` objective.
    */
   instructionText: string;
   /**
@@ -1807,7 +1807,7 @@ export interface CreateObjectiveBody {
    */
   title?: string | null;
   /**
-   * Defaults to `draft`; a `draft` request becomes `future` when the mission already has a draft.
+   * Defaults to `draft`. Creating a draft never changes another objective.
    */
   state?: ObjectiveState;
   /**
@@ -1826,7 +1826,7 @@ export const createObjectiveBodySchema: z.ZodType<CreateObjectiveBody> = z.objec
  */
 export interface UpdateObjectiveBody {
   /**
-   * Trimmed; may be blank only when the resulting state is `draft` or `future`. Refused (400) once the objective is `executing`, `pending_delivery` or `complete`.
+   * Trimmed; may be blank only when the resulting state is `draft`. Refused (400) once the objective is `executing`, `pending_delivery` or `complete`.
    */
   instructionText?: string;
   /**
@@ -1834,7 +1834,7 @@ export interface UpdateObjectiveBody {
    */
   title?: string | null;
   /**
-   * `complete` cannot move back to `future` (400). Moving an executed objective back to `draft` reopens it (a new run); leaving an active state dequeues it and clears its active execution requests.
+   * Moving an executed objective back to `draft` reopens it (a new run) and moves it to the head of the mission's draft queue, redistributing only the queued objectives' existing position slots; leaving an active state dequeues it and clears its active execution requests. Setting `draft` never changes another objective's state.
    */
   state?: ObjectiveState;
   /**
@@ -11807,7 +11807,7 @@ export const apiOperations = {
     responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: objectiveListSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "500": apiResponses.InternalError }
   },
   /**
-   * PATCH /api/missions/{id}/objectives/reorder: Reorder a mission's future objectives
+   * PATCH /api/missions/{id}/objectives/reorder: Reorder a mission's draft queue
    */
   patchMissionsByIdObjectivesReorder: {
     operationId: "patchMissionsByIdObjectivesReorder",
@@ -11822,7 +11822,7 @@ export const apiOperations = {
     extension: null,
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: patchMissionsByIdObjectivesReorderPathParamsSchema, query: null, header: null },
-    requestBody: { required: true, content: { "application/json": { kind: "json", schema: reorderFutureObjectivesBodySchema } } },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: reorderObjectivesBodySchema } } },
     responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: objectiveListSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
   },
   /**

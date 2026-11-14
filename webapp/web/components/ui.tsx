@@ -112,7 +112,6 @@ export function statusClasses(type: StatusType): string {
 }
 
 export const OBJECTIVE_STATE_LABEL: Record<ObjectiveState, string> = {
-  future: 'Future',
   draft: 'Draft',
   submitted: 'Submitted',
   launching: 'Launching',

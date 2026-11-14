@@ -81,7 +81,7 @@ The tool catalog is mission-first:
 - `overlord_changes` — read one objective's synchronized changed-file evidence (`ObjectiveFileChangesDto`, server scope, capped at 200); never includes unsynchronized local evidence
 - `overlord_list_deliveries` — read a `{ items, total, limit }` page (items capped at 200) of normalized delivery summaries for one mission; an objective display id such as `coo:756.k7xm` supplies the mission
 - `overlord_launch_objective` — queue the normal execution request for one objective; requires `objectiveId` (UUID or display id) and `agent`; does not attach this MCP agent
-- `overlord_reorder_future_objectives` — replace one mission's complete future-objective UUID order
+- `overlord_reorder_objectives` — replace one mission's complete draft/submitted objective UUID order
 - `overlord_add_objectives`
 - `overlord_update_objective` — turn auto-advance on or off, edit instruction text, and/or reassign the objective with `agent` (plus optional `model` / `reasoningEffort`); `agent: manual` (alias `human`) assigns it to a person, is never launched, and is held blocked in the Run Queue; requires `objectiveId`
 - `overlord_delete_missions` — bulk soft-delete one to 100 missions (UUID or display id) atomically, also deleting their live objectives; requires `confirm: true` after the resolved list is shown to and approved by the user
@@ -114,8 +114,8 @@ Most mission-scoped tools take `objectiveId` — an objective UUID or a display
 id such as `coo:756.k7xm` — alongside `missionId`. A display id already names
 its parent mission, so `missionId` is **optional** whenever one is supplied.
 An objective **UUID** names no mission and still needs `missionId`.
-`overlord_reorder_future_objectives` is the exception: it only takes
-`missionId`, since it replaces the mission's entire future-objective order
+`overlord_reorder_objectives` is the exception: it only takes
+`missionId`, since it replaces the mission's entire draft-queue order
 rather than acting on one objective.
 
 `overlord_launch_objective`, `overlord_queue_objective`, and

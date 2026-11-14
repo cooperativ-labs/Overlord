@@ -36,9 +36,9 @@ The hosted server advertises these mission-lifecycle tools:
 | `overlord_create_mission`            | Creates a draft mission in a project you specify, or an account-owned inbox item when no project is given (never chooses a project for you). |
 | `overlord_create_inbox_item`         | Creates a private, account-owned unassigned task capture.                                                                                    |
 | `overlord_add_objectives`            | Appends draft objectives to an existing mission.                                                                                             |
-| `overlord_update_objective`          | Turns auto-advance on or off, edits instruction text on a draft or future objective, and/or reassigns it to another agent (optional `model`, `reasoningEffort`) or to a person (`agent: manual`, alias `human`). Requires `objectiveId` (UUID or display id). |
+| `overlord_update_objective`          | Turns auto-advance on or off, edits instruction text on a draft objective, and/or reassigns it to another agent (optional `model`, `reasoningEffort`) or to a person (`agent: manual`, alias `human`). Requires `objectiveId` (UUID or display id). |
 | `overlord_launch_objective`          | Queues the normal execution request for one objective. Requires `objectiveId` (UUID or display id) and `agent`. Does not attach this agent.  |
-| `overlord_reorder_future_objectives` | Replaces one mission's complete future-objective order.                                                                                      |
+| `overlord_reorder_objectives`        | Replaces one mission's complete draft/submitted objective order.                                                                             |
 | `overlord_delete_missions`           | Soft-deletes 1–100 missions (also soft-deletes their live objectives) atomically. Requires `confirm: true` after the resolved list is shown to and approved by the user.    |
 | `overlord_delete_objectives`         | Soft-deletes 1–100 objectives (also removes their live Run Queue membership) atomically. Requires `confirm: true` after the resolved list is shown to and approved by the user. |
 | `overlord_list_run_queues`           | Reads compact or full live Run Queue state before a mutation.                                                                                |
@@ -56,9 +56,9 @@ Most mission-scoped tools accept `objectiveId` — an objective UUID or a displa
 id such as `coo:756.k7xm` — next to `missionId`. A display id already names its
 mission, so `missionId` is optional whenever you pass one, and a client holding
 only the objective can call the tool with it. An objective UUID names no mission
-and still needs `missionId`. `overlord_reorder_future_objectives` is the
+and still needs `missionId`. `overlord_reorder_objectives` is the
 exception: it only takes `missionId`, since it replaces the mission's entire
-future-objective order rather than acting on one objective.
+draft-queue order rather than acting on one objective.
 
 `overlord_launch_objective`, `overlord_queue_objective`, and
 `overlord_update_objective` **require** `objectiveId` as the primary argument —

@@ -25,7 +25,7 @@ import {
   deleteMissions,
   deleteObjectives,
   listMissionDeliveries,
-  reorderFutureObjectives,
+  reorderObjectives,
   searchMissionReferences,
   searchMissionsAcrossWorkspacesV2,
   searchMissionsAcrossWorkspacesV3,
@@ -164,11 +164,8 @@ async function assertInstructionEditableOnProtocolSurface(objectiveRef: string):
   if (!row) {
     throw new ApiError(404, 'Objective not found');
   }
-  if (row.state !== 'draft' && row.state !== 'future') {
-    throw new ApiError(
-      400,
-      'Objective instruction text can only be edited in draft or future state'
-    );
+  if (row.state !== 'draft') {
+    throw new ApiError(400, 'Objective instruction text can only be edited in draft state');
   }
 }
 
@@ -546,7 +543,7 @@ export const missionSubcommands: SubcommandTable = {
       })
   },
 
-  'reorder-future-objectives': {
+  'reorder-objectives': {
     permission: PERMISSIONS.OBJECTIVE_UPDATE,
     handler: (_ctx, body) => {
       const orderedObjectiveIds = parseJsonInput<string[]>(
@@ -557,7 +554,7 @@ export const missionSubcommands: SubcommandTable = {
       if (orderedObjectiveIds === undefined) {
         throw new ApiError(400, 'Missing required flag: --ordered-objective-ids-json');
       }
-      return reorderFutureObjectives(missionRefFlag(body), { orderedObjectiveIds });
+      return reorderObjectives(missionRefFlag(body), { orderedObjectiveIds });
     }
   },
 

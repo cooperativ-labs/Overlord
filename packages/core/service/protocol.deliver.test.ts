@@ -700,7 +700,59 @@ describe('deliverSession mechanical change capture', () => {
     await db.close();
   });
 
-  it('leaves future objectives untouched until Run Queue dispatch', async () => {
+  it('after an out-of-order delivery, the approval notice names the lower runnable draft and skips submitted and blank ones', async () => {
+    const { db, ctx } = await setup();
+    const project = await createProject({ ctx, name: 'Deliver Out Of Order Approval' });
+    const { mission, objectives } = await createMissionWithObjectives({
+      ctx,
+      projectId: project.id,
+      objectives: [
+        { objective: 'Being discussed' },
+        { objective: 'Blank soon' },
+        { objective: 'Lower runnable draft' },
+        { objective: 'Launched out of order' }
+      ]
+    });
+    await ctx.db.run(`UPDATE objectives SET state = 'submitted' WHERE id = ?`, [objectives[0]?.id]);
+    await ctx.db.run(`UPDATE objectives SET instruction_text = '' WHERE id = ?`, [
+      objectives[1]?.id
+    ]);
+    const attached = await attachSession({
+      ctx,
+      missionId: mission.displayId,
+      objectiveId: objectives[3]?.id
+    });
+    assert.equal(attached.objective.id, objectives[3]?.id);
+
+    await deliverSession({
+      ctx,
+      missionId: mission.displayId,
+      sessionKey: attached.sessionKey,
+      summary: 'Delivered the out-of-order objective.'
+    });
+
+    const approvalEvents = (await ctx.db.all(
+      `SELECT objective_id FROM mission_events WHERE mission_id = ? AND type = 'awaiting_approval'`,
+      [mission.id]
+    )) as Array<{ objective_id: string }>;
+    assert.deepEqual(
+      approvalEvents.map(event => event.objective_id),
+      [objectives[2]?.id]
+    );
+    // Delivery never changes another objective's state or queue membership.
+    const states = (await ctx.db.all(
+      `SELECT state FROM objectives WHERE mission_id = ? ORDER BY position`,
+      [mission.id]
+    )) as Array<{ state: string }>;
+    assert.deepEqual(
+      states.map(row => row.state),
+      ['submitted', 'draft', 'draft', 'complete']
+    );
+
+    await db.close();
+  });
+
+  it('leaves queued drafts untouched until Run Queue dispatch', async () => {
     const { db, ctx } = await setup();
     const project = await createProject({ ctx, name: 'Deliver Future Before Placeholder' });
     const { mission } = await createMissionWithObjectives({
@@ -725,7 +777,7 @@ describe('deliverSession mechanical change capture', () => {
       instructionText: 'Continue with real objective',
       state: 'draft'
     });
-    assert.equal(future.state, 'future');
+    assert.equal(future.state, 'draft');
 
     await deliverSession({
       ctx,
@@ -743,7 +795,7 @@ describe('deliverSession mechanical change capture', () => {
     )) as Array<{ id: string; instruction_text: string; state: string }>;
     assert.deepEqual(
       rows.map(row => row.state),
-      ['complete', 'draft', 'future']
+      ['complete', 'draft', 'draft']
     );
     assert.equal(rows[2]?.id, future.id);
     assert.equal(rows[2]?.instruction_text, 'Continue with real objective');

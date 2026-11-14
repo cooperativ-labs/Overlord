@@ -1,3 +1,4 @@
+import { firstDraft } from '@overlord/automations';
 import type {
   MissionSearchDateField,
   SearchMissionsResponseV2,
@@ -27,7 +28,7 @@ import {
   toSearchResponseV3
 } from './mission-search.js';
 import { allocateObjectiveDisplayKey } from './objective-display-id.js';
-import { OBJECTIVE_LAUNCHED_AT_ASSIGNMENT } from './objective-lifecycle-timestamps.js';
+import { lockMissionObjectiveQueue } from './objective-queue.js';
 import { assertProjectResourceKeyExists } from './projects.js';
 import {
   enqueueObjectiveAfterLastQueuedSibling,
@@ -414,17 +415,16 @@ export async function insertObjective({
     throw new ServiceError(`Invalid objective state: ${requestedState}`, 'validation_error');
   }
 
-  const draftRow = (await ctx.db.get(
-    `SELECT id FROM objectives
-       WHERE mission_id = ? AND state = 'draft' AND deleted_at IS NULL
-       LIMIT 1`,
-    [mission.id]
-  )) as { id: string } | undefined;
-  const resolvedState = requestedState === 'draft' && draftRow ? 'future' : requestedState;
-  const allowsBlankInstruction = resolvedState === 'draft' || resolvedState === 'future';
-  if (!instruction && !allowsBlankInstruction) {
+  // Every new objective is appended to the draft queue as requested; creating
+  // one never demotes or promotes another (coo:1274).
+  const resolvedState = requestedState;
+  if (!instruction && resolvedState !== 'draft') {
     throw new ServiceError('Objective instruction is required', 'validation_error');
   }
+
+  // Serialize with reorder/reopen/delete so the appended slot cannot race a
+  // concurrent queue rewrite.
+  await lockMissionObjectiveQueue(ctx.db, mission.id);
 
   const maxRow = (await ctx.db.get(
     `SELECT MAX(position) AS max_pos FROM objectives WHERE mission_id = ? AND deleted_at IS NULL`,
@@ -435,7 +435,7 @@ export async function insertObjective({
   const id = newId();
   const resolvedTitle =
     title?.trim() || (instruction ? initialTitleFromInstruction(instruction) : 'New objective');
-  // Editable slots (draft/future) default to the project's last-used selection so
+  // Drafts default to the project's last-used selection so
   // the agent is always recorded in the db; an explicit agent passed by the caller
   // still wins. Executed/complete states are created with whatever the caller set.
   // `human` folds onto the canonical `manual` key every client reads.
@@ -451,7 +451,7 @@ export async function insertObjective({
     );
   }
   const launchSelection =
-    !explicitAgent && (resolvedState === 'draft' || resolvedState === 'future')
+    !explicitAgent && resolvedState === 'draft'
       ? await readProjectLaunchSelection(ctx, mission.projectId)
       : { agent: null, model: null, reasoningEffort: null };
   const resolvedAssignedAgent = explicitAgent ?? launchSelection.agent;
@@ -533,87 +533,6 @@ export async function insertObjective({
     display_key: displayKey,
     mission_display_id: mission.displayId
   });
-}
-
-/**
- * Refills the next-up draft slot after an objective leaves the queue by
- * promoting the first authored `future` objective, dropping any leftover blank
- * draft it replaces.
- *
- * It never *creates* a blank draft. A stored objective with no instruction text
- * is indistinguishable from real work to agents, counts, and auto-advance, so
- * the "empty field to type into" is a client-only composer (the mission panel's
- * ghost objective card) that persists an objective only once it has content.
- */
-export async function ensureNextDraftObjective({
-  ctx,
-  missionId,
-  projectId,
-  now
-}: {
-  ctx: ServiceContext;
-  missionId: string;
-  projectId: string;
-  now: string;
-}): Promise<void> {
-  const drafts = (await ctx.db.all(
-    `SELECT id, instruction_text, revision FROM objectives
-       WHERE mission_id = ? AND state = 'draft' AND deleted_at IS NULL
-       ORDER BY position ASC, created_at ASC`,
-    [missionId]
-  )) as Array<{ id: string; instruction_text: string; revision: number }>;
-
-  if (drafts.some(draft => draft.instruction_text.trim())) return;
-
-  // Only an authored future objective refills the slot; a blank one (legacy rows
-  // from when blank slots were persisted) is not real work to promote.
-  const nextFuture = (await ctx.db.get(
-    `SELECT id, revision FROM objectives
-       WHERE mission_id = ? AND state = 'future' AND deleted_at IS NULL
-         AND TRIM(instruction_text) <> ''
-       ORDER BY position ASC, created_at ASC LIMIT 1`,
-    [missionId]
-  )) as { id: string; revision: number } | undefined;
-
-  if (nextFuture) {
-    for (const draft of drafts) {
-      const revision = draft.revision + 1;
-      await ctx.db.run(
-        `UPDATE objectives SET deleted_at = ?, updated_at = ?, revision = ?
-           WHERE id = ? AND mission_id = ?`,
-        [now, now, revision, draft.id, missionId]
-      );
-      await recordChange({
-        ctx,
-        entityType: 'objective',
-        entityId: draft.id,
-        operation: 'delete',
-        entityRevision: revision,
-        projectId,
-        missionId,
-        objectiveId: draft.id
-      });
-    }
-
-    const revision = nextFuture.revision + 1;
-    await ctx.db.run(
-      `UPDATE objectives SET state = 'draft', updated_at = ?, revision = ?
-         WHERE id = ? AND mission_id = ?`,
-      [now, revision, nextFuture.id, missionId]
-    );
-
-    await recordChange({
-      ctx,
-      entityType: 'objective',
-      entityId: nextFuture.id,
-      operation: 'update',
-      entityRevision: revision,
-      projectId,
-      missionId,
-      objectiveId: nextFuture.id,
-      changedFields: ['state']
-    });
-  }
 }
 
 /**
@@ -750,8 +669,7 @@ export async function createMissionWithObjectives({
           'validation_error'
         );
       }
-      const objectiveState =
-        statusType === 'review' ? 'complete' : index === 0 ? 'draft' : 'future';
+      const objectiveState = statusType === 'review' ? 'complete' : 'draft';
       createdObjectives.push(
         await insertObjective({
           ctx: txCtx,
@@ -1226,20 +1144,21 @@ export async function discussObjective({
   objectiveId?: string | null;
 }): Promise<ObjectiveSummary> {
   const objectives = await listObjectives({ ctx, missionId });
-  // A mission may hold several drafts once objectives are added in batches, so
-  // "the draft" is only unambiguous when the caller did not name one.
+  // A mission holds an ordered draft queue, so without an explicit objective
+  // the first draft by position is discussed (blank drafts stay editable).
   const draft = objectiveId?.trim()
     ? await resolveDraftObjectiveToDiscuss({ ctx, missionId, objectives, objectiveId })
-    : objectives.find(o => o.state === 'draft');
+    : firstDraft(objectives);
   if (!draft) {
     throw new ServiceError('No draft objective found on mission', 'validation_error');
   }
 
-  const now = nowIso();
+  // Discussion is not execution (draft → submitted): the objective keeps its
+  // queue position and no launch timestamp is stamped.
   await ctx.db.run(
-    `UPDATE objectives SET state = 'launching', ${OBJECTIVE_LAUNCHED_AT_ASSIGNMENT}, updated_at = ?, revision = revision + 1
+    `UPDATE objectives SET state = 'submitted', updated_at = ?, revision = revision + 1
        WHERE id = ? AND mission_id = ?`,
-    [now, now, draft.id, draft.missionId]
+    [nowIso(), draft.id, draft.missionId]
   );
 
   await recordChange({
@@ -1253,7 +1172,7 @@ export async function discussObjective({
     changedFields: ['state']
   });
 
-  return { ...draft, state: 'launching' };
+  return { ...draft, state: 'submitted' };
 }
 
 export async function listMissionEvents({

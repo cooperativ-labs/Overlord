@@ -76,8 +76,8 @@ export function ObjectiveMenuButton({
 
   const pending = update.isPending || remove.isPending;
 
-  const canShowMarkComplete = state !== 'complete' && state !== 'future';
-  const canShowMarkDraft = state !== 'draft' && state !== 'future';
+  const canShowMarkComplete = state !== 'complete';
+  const canShowMarkDraft = state !== 'draft';
 
   function setState(next: ObjectiveState) {
     update.mutate({ id: objectiveId, body: { state: next } });
@@ -215,8 +215,8 @@ export function ObjectiveMenuButton({
             <DialogTitle>Disconnect this executing objective?</DialogTitle>
             <DialogDescription>
               Moving an executing objective to Draft ends its active session and clears its pending
-              launch. Any existing draft becomes the first future objective. Its deliveries, file
-              changes, and terminal session are kept as previous runs.
+              launch. It returns to the top of the draft queue. Its deliveries, file changes, and
+              terminal session are kept as previous runs.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

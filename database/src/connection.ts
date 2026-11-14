@@ -87,7 +87,7 @@ function applyMigration(
     return;
   }
 
-  db.exec(migration.sql);
+  executeMigrationSql(db, migration.sql);
   if (isExtEverhourPersistenceMigration(migration)) {
     finalizeExtEverhourMissionLinksSqlite(db);
   }
@@ -115,6 +115,19 @@ function applyMigration(
   );
 }
 
+/** A failed table rebuild must not leave its transaction or FK override active. */
+function executeMigrationSql(db: OverlordDatabase, sql: string): void {
+  const wasInTransaction = db.inTransaction;
+  const foreignKeys = db.pragma('foreign_keys', { simple: true });
+  try {
+    db.exec(sql);
+  } catch (error) {
+    if (!wasInTransaction && db.inTransaction) db.exec('ROLLBACK');
+    if (!wasInTransaction) db.pragma(`foreign_keys = ${foreignKeys ? 'ON' : 'OFF'}`);
+    throw error;
+  }
+}
+
 export function openDatabase({ databasePath }: { databasePath: string }): OverlordDatabase {
   mkdirSync(path.dirname(databasePath), { recursive: true });
   const Database = loadBetterSqlite3();
@@ -129,9 +142,24 @@ export function openDatabase({ databasePath }: { databasePath: string }): Overlo
   return db;
 }
 
-export function migrateDatabase(db: OverlordDatabase): void {
-  const migrationFiles = listSqliteMigrationFiles();
-  const knownVersions = knownMigrationVersions(migrationFiles);
+export function migrateDatabase(
+  db: OverlordDatabase,
+  options: {
+    /**
+     * Test-only: apply migrations strictly older than this version, so an
+     * upgrade test can seed pre-migration data and then finish the run through
+     * this same runner.
+     */
+    stopBeforeVersion?: string;
+  } = {}
+): void {
+  const allMigrationFiles = listSqliteMigrationFiles();
+  const knownVersions = knownMigrationVersions(allMigrationFiles);
+  const migrationFiles = allMigrationFiles.filter(
+    fileName =>
+      options.stopBeforeVersion === undefined ||
+      (fileName.split('_', 1)[0] ?? fileName).localeCompare(options.stopBeforeVersion) < 0
+  );
   const hasSchemaLedger = Boolean(
     db
       .prepare(`SELECT 1 FROM sqlite_schema WHERE type = 'table' AND name = 'schema_migrations'`)
@@ -148,7 +176,7 @@ export function migrateDatabase(db: OverlordDatabase): void {
       .prepare(`SELECT 1 FROM sqlite_schema WHERE type = 'table' AND name = 'schema_migrations'`)
       .get();
     if (!hasSchema) {
-      db.exec(migration.sql);
+      executeMigrationSql(db, migration.sql);
       const createdSchema = db
         .prepare(`SELECT 1 FROM sqlite_schema WHERE type = 'table' AND name = 'schema_migrations'`)
         .get();

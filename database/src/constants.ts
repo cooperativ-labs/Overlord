@@ -59,7 +59,6 @@ export const DEFAULT_STATUSES = [
 ] as const;
 
 export const OBJECTIVE_STATES = [
-  'future',
   'draft',
   'submitted',
   'launching',

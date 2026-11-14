@@ -1,4 +1,4 @@
-contractVersion: 171.0.0
+contractVersion: 172.0.0
 componentType: rest-module
 componentKey: everhour
 label: "Everhour REST Extension"

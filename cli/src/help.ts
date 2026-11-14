@@ -92,7 +92,7 @@ Agents:
   ${primaryCommand} launch <agent> --mission-id <missionId>
   Use ${primaryCommand} protocol help for the full mission lifecycle reference.
   Key protocol commands: auth-status, discover-project, create, prompt, attach,
-  connect, load-context, list-deliveries, launch-objective, reorder-future-objectives,
+  connect, load-context, list-deliveries, launch-objective, reorder-objectives,
   update, heartbeat, ask, deliver.
 
 Protocol (JSON output by default):
@@ -106,7 +106,7 @@ Protocol (JSON output by default):
   ${primaryCommand} protocol load-context --mission-id <id>
   ${primaryCommand} protocol list-deliveries --mission-id <id>
   ${primaryCommand} protocol launch-objective --objective-id <id> --agent <agent>
-  ${primaryCommand} protocol reorder-future-objectives --mission-id <id> --ordered-objective-ids-json '["<id>"]'
+  ${primaryCommand} protocol reorder-objectives --mission-id <id> --ordered-objective-ids-json '["<id>"]'
   ${primaryCommand} protocol help
 
 After installation, run \`${primaryCommand} auth login\` to choose your backend.

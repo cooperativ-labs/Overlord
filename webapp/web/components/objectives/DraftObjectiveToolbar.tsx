@@ -1,9 +1,7 @@
 import { siblingBlocksParallelLaunch } from '@overlord/automations/objective-manager';
 import type { ExecutionRequestDto, ObjectiveDto, ObjectiveState } from '@overlord/contract';
-import { ArrowUpToLine, Loader2 } from 'lucide-react';
 
 import { useProjectResources, useUpdateObjective } from '../../lib/queries.ts';
-import { Button } from '../ui.tsx';
 
 import { AgentLaunchButton } from './AgentLaunchButton.tsx';
 import { AgentModelChooserButton } from './AgentModelChooserButton.tsx';
@@ -47,7 +45,6 @@ export function DraftObjectiveToolbar({
     loaded
   } = useObjectiveAgentSelection(objective);
 
-  const isFuture = objective.state === 'future';
   const isLaunching = objective.state === 'launching';
   const isSubmitted = objective.state === 'submitted';
   const isLaunchable = objective.state === 'draft' || isSubmitted || isLaunching;
@@ -78,10 +75,6 @@ export function DraftObjectiveToolbar({
   const activeSiblingId = resolvedActiveSibling?.id ?? null;
   const activeRequest = executionRequests.find(r => r.objectiveId === objective.id) ?? null;
 
-  function handlePromote() {
-    update.mutate({ id: objective.id, body: { state: 'draft' } });
-  }
-
   return (
     <div className="flex shrink-0 flex-nowrap items-center gap-2">
       {objective.displayId ? (
@@ -108,21 +101,9 @@ export function DraftObjectiveToolbar({
         launchConfigSourceHint={launchConfigSourceHint}
       />
 
-      {isFuture ? (
-        <Button
-          variant="secondary"
-          className="h-8 gap-1.5 px-3 text-xs"
-          disabled={update.isPending}
-          onClick={handlePromote}
-        >
-          {update.isPending ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          ) : (
-            <ArrowUpToLine className="h-3.5 w-3.5" />
-          )}
-          Promote
-        </Button>
-      ) : isLaunchable ? (
+      {/* Every draft, submitted or launching objective launches directly —
+          wherever it sits in the queue; there is no promote step. */}
+      {isLaunchable ? (
         <AgentLaunchButton
           objective={objective}
           selection={selection}

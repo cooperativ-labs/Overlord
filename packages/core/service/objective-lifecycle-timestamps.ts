@@ -29,8 +29,7 @@ export const OBJECTIVE_REOPENED_AT_ASSIGNMENT = 'reopened_at = ?';
 /**
  * The states from which a move back to `draft` counts as reopening a run, and
  * therefore stamps `reopened_at`. `launching → draft` (a wedged launch reset)
- * and `future → draft` (queue promotion) leave no evidence behind, so they are
- * not run boundaries.
+ * has not begun an execution run, so it is not a run boundary.
  */
 export const OBJECTIVE_REOPENABLE_STATES: readonly string[] = Object.freeze([
   'executing',

@@ -5,6 +5,64 @@ is the current version and must equal [VERSION](VERSION); `yarn version:contract
 writes its skeleton. Dates use ISO 8601 and describe the contract change, not
 merely the files edited.
 
+## [172.0.1] - 2026-11-14
+
+Contract impact: patch. Correct Run Queue write-through to enforce the existing
+slot-preservation obligation in architecture.md and ADR 0056. Reorder only moves
+waiting/blocked draft or submitted objectives across their existing slots;
+launching, active, completed and unqueued rows retain their positions and revisions.
+Explicit removal still moves the removed unstarted objective to the end, without
+compacting other rows. Lifecycle removal preserves positions before reopen applies
+its existing head-of-queue rule. No wire shape, vocabulary or migration changes.
+The SQLite runner also rolls back a failed rebuild and restores the connection's
+foreign-key setting before propagating the error; migration files are unchanged.
+Run Queue mutations acquire mission locks before entry writes, consistently with
+mission reorder, preventing the PostgreSQL deadlock reproduced by the concurrent
+reorder regression.
+
+### Version
+
+- Patch contract version 172.0.1, from 172.0.0.
+
+## [172.0.0] - 2026-11-14
+
+Contract impact: major. `future` is retired from the closed `objectives.state` vocabulary:
+unstarted objectives are `draft` (any number per mission) or `submitted`, and together form one
+ordered draft queue. There is no promotion or refill; every queued objective launches directly.
+`reorder-future-objectives` / `overlord_reorder_future_objectives` become `reorder-objectives` /
+`overlord_reorder_objectives`, which require the complete draft/submitted set and recycle its
+existing slots. Reopen moves an objective to the queue head. Direct REST position writes are
+refused. SQLite and Postgres migrations convert every `future` row losslessly. Attach/load-context
+`previousObjectives`/`futureObjectives` keep their positional meaning. See ADR 0056.
+
+### Changed
+
+- `objectives.state` (data, conformance, extension-points, OpenAPI `ObjectiveState`, search
+  `objectiveStates`): `future` removed; lifecycle is `draft -> submitted -> launching -> executing
+  -> complete`.
+- Protocol `reorder-objectives` and MCP `overlord_reorder_objectives` replace the future-only
+  reorder; REST `PATCH /api/missions/{id}/objectives/reorder` takes `ReorderObjectivesBody`
+  (exact draft/submitted set, 409 on a concurrent change). OpenAPI `info.version` 4.0.0.
+- `update-objective` instruction edits are allowed only in `draft`.
+- Creation always appends `draft`; setting `draft` never demotes another objective; reopen moves
+  the objective to the draft-queue head; Run Queue dispatch no longer promotes.
+- Automatic next-objective selection after delivery uses the next runnable draft (first draft
+  with instruction text) regardless of position relative to the delivered objective; unpinned
+  attach prefers a submitted objective, then the next runnable draft.
+- `PATCH /api/objectives/{id}` refuses a changed `position`.
+- The mission card's `draftObjectiveResourceKey` reads the first draft by position.
+- Shared mission-summary derivation fixture uses `draft` in place of `future`.
+
+### Migration
+
+- `20261114120000_unify_draft_future_objectives` (SQLite table rebuild, Postgres constraint
+  swap) converts live and soft-deleted `future` rows to `draft`, preserving every other column,
+  attachments and Run Queue entries.
+
+### Version
+
+- Major contract version 172.0.0, from 171.0.0.
+
 ## [171.0.0] - 2026-11-14
 
 Contract impact: major. Google model calls now use the server-only OpenRouter

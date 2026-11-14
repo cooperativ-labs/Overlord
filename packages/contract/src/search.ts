@@ -15,7 +15,6 @@ export const SEARCH_RESULT_ENTITY_TYPES = ['mission', 'objective', 'delivery'] a
 export type SearchResultEntityType = (typeof SEARCH_RESULT_ENTITY_TYPES)[number];
 
 export const SEARCH_OBJECTIVE_STATES = vocabulary<ObjectiveState>()([
-  'future',
   'draft',
   'submitted',
   'launching',
@@ -107,7 +106,7 @@ export function parseSearchObjectiveStates(
       return {
         ok: false,
         error:
-          'objectiveStates must be future, draft, submitted, launching, executing, pending_delivery, and/or complete'
+          'objectiveStates must be draft, submitted, launching, executing, pending_delivery, and/or complete'
       };
     }
     parsed.push(value as SearchObjectiveState);

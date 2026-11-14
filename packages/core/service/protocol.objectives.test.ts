@@ -39,13 +39,13 @@ describe('protocol objective creation', () => {
     assert.equal(result.objectives.length, 2);
     assert.deepEqual(
       result.objectives.map(objective => objective.state),
-      ['draft', 'future']
+      ['draft', 'draft']
     );
 
     await db.close();
   });
 
-  it('allows blank inline-authored draft and future objective slots', async () => {
+  it('allows several blank inline-authored draft objectives', async () => {
     const { db, ctx } = await createSeededServiceContext({ source: 'protocol' });
     const project = await createProject({ ctx, name: 'Blank Objective Slots' });
     const { mission } = await createMissionWithObjectives({
@@ -66,16 +66,16 @@ describe('protocol objective creation', () => {
     assert.equal(draft.objective, '');
     assert.equal(draft.title, 'New objective');
 
-    const future = await insertObjective({
+    const second = await insertObjective({
       ctx,
       missionId: mission.id,
       instructionText: '',
       state: 'draft'
     });
 
-    assert.equal(future.state, 'future');
-    assert.equal(future.objective, '');
-    assert.equal(future.title, 'New objective');
+    assert.equal(second.state, 'draft');
+    assert.equal(second.objective, '');
+    assert.equal(second.position, draft.position + 1);
 
     await db.close();
   });
@@ -163,16 +163,13 @@ describe('protocol objective creation', () => {
     await db.close();
   });
 
-  it('promotes the earliest future objective when attach consumes the next-up objective', async () => {
+  it('attach leaves the later draft untouched and reports it positionally', async () => {
     const { db, ctx } = await createSeededServiceContext({ source: 'protocol' });
-    const project = await createProject({ ctx, name: 'Attach Future Refill' });
+    const project = await createProject({ ctx, name: 'Attach Leaves Drafts' });
     const { mission, objectives } = await createMissionWithObjectives({
       ctx,
       projectId: project.id,
-      objectives: [
-        { objective: 'Run current objective' },
-        { objective: 'Use existing future objective' }
-      ]
+      objectives: [{ objective: 'Run current objective' }, { objective: 'Later draft' }]
     });
 
     const attached = await attachSession({
@@ -181,32 +178,28 @@ describe('protocol objective creation', () => {
       agentIdentifier: 'codex'
     });
 
+    assert.equal(attached.objective.id, objectives[0]?.id);
     assert.equal(attached.objective.state, 'executing');
     assert.equal(attached.previousObjectives.length, 0);
     assert.deepEqual(
-      attached.futureObjectives.map(objective => objective.state),
-      ['draft']
+      attached.futureObjectives.map(objective => [objective.id, objective.state]),
+      [[objectives[1]?.id, 'draft']]
     );
-    assert.equal(attached.futureObjectives[0]?.id, objectives[1]?.id);
-    assert.equal(attached.futureObjectives[0]?.objective, 'Use existing future objective');
 
     await db.close();
   });
 
-  it('promotes a future objective over a blank draft placeholder when attach begins execution', async () => {
+  it('attach keeps a saved blank draft and never refills or deletes rows', async () => {
     const { db, ctx } = await createSeededServiceContext({ source: 'protocol' });
-    const project = await createProject({ ctx, name: 'Attach Future Before Placeholder' });
+    const project = await createProject({ ctx, name: 'Attach Keeps Blank Draft' });
     const { mission, objectives } = await createMissionWithObjectives({
       ctx,
       projectId: project.id,
-      objectives: [
-        { objective: 'Run current objective' },
-        { objective: 'Use queued future objective' }
-      ]
+      objectives: [{ objective: 'Run current objective' }, { objective: 'Queued draft' }]
     });
 
     await ctx.db.run(`UPDATE objectives SET state = 'launching' WHERE id = ?`, [objectives[0]?.id]);
-    const placeholder = await insertObjective({
+    const blank = await insertObjective({
       ctx,
       missionId: mission.id,
       instructionText: '',
@@ -219,19 +212,42 @@ describe('protocol objective creation', () => {
       agentIdentifier: 'codex'
     });
 
-    assert.equal(attached.objective.state, 'executing');
-    assert.equal(attached.previousObjectives.length, 0);
+    assert.equal(attached.objective.id, objectives[0]?.id);
+    const rows = (await ctx.db.all(
+      `SELECT id, state, deleted_at FROM objectives WHERE mission_id = ? ORDER BY position`,
+      [mission.id]
+    )) as Array<{ id: string; state: string; deleted_at: string | null }>;
     assert.deepEqual(
-      attached.futureObjectives.map(objective => objective.state),
-      ['draft']
+      rows.map(row => [row.id, row.state, row.deleted_at]),
+      [
+        [objectives[0]?.id, 'executing', null],
+        [objectives[1]?.id, 'draft', null],
+        [blank.id, 'draft', null]
+      ]
     );
-    assert.equal(attached.futureObjectives[0]?.id, objectives[1]?.id);
-    assert.equal(attached.futureObjectives[0]?.objective, 'Use queued future objective');
 
-    const placeholderRow = (await ctx.db.get(`SELECT deleted_at FROM objectives WHERE id = ?`, [
-      placeholder.id
-    ])) as { deleted_at: string | null };
-    assert.ok(placeholderRow.deleted_at);
+    await db.close();
+  });
+
+  it('attach without an objective picks the lowest-position runnable draft among several', async () => {
+    const { db, ctx } = await createSeededServiceContext({ source: 'protocol' });
+    const project = await createProject({ ctx, name: 'Attach Lowest Draft' });
+    const { mission, objectives } = await createMissionWithObjectives({
+      ctx,
+      projectId: project.id,
+      objectives: [{ objective: 'Blank soon' }, { objective: 'Second' }, { objective: 'Third' }]
+    });
+    await ctx.db.run(`UPDATE objectives SET instruction_text = '' WHERE id = ?`, [
+      objectives[0]?.id
+    ]);
+
+    const attached = await attachSession({
+      ctx,
+      missionId: mission.displayId,
+      agentIdentifier: 'codex'
+    });
+
+    assert.equal(attached.objective.id, objectives[1]?.id);
 
     await db.close();
   });

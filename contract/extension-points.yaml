@@ -217,7 +217,6 @@ agentSession:
 closedVocabularies:
   objectives.state:
     values:
-      - future
       - draft
       - submitted
       - launching
@@ -225,7 +224,7 @@ closedVocabularies:
       - pending_delivery
       - complete
     transitions:
-      normal: 'future → draft → submitted → launching → executing → complete'
+      normal: 'draft → submitted → launching → executing → complete (draft and submitted form the ordered, reorderable draft queue; ADR 0056)'
       followUp: 'executing → pending_delivery (only after a prior delivery starts follow-up execution)'
       reopen: 'complete → executing or pending_delivery via explicit follow-up or admin transition with mission_events record'
 

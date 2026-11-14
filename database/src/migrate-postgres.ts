@@ -93,13 +93,28 @@ async function recordMigration(
  * created inside `002_initial_core.sql` — by buffering the migrations that run
  * before the table exists and recording them once it does.
  */
-export async function migratePostgres(client: DatabaseClient): Promise<void> {
+export async function migratePostgres(
+  client: DatabaseClient,
+  options: {
+    /**
+     * Test-only: apply migrations strictly older than this version, so an
+     * upgrade test can seed pre-migration data and then finish the run through
+     * this same runner.
+     */
+    stopBeforeVersion?: string;
+  } = {}
+): Promise<void> {
   if (client.dialect !== 'postgres') {
     throw new Error(`migratePostgres requires a postgres client, got '${client.dialect}'`);
   }
 
-  const migrationFiles = listPostgresMigrationFiles();
-  const knownVersions = knownMigrationVersions(migrationFiles);
+  const allMigrationFiles = listPostgresMigrationFiles();
+  const knownVersions = knownMigrationVersions(allMigrationFiles);
+  const migrationFiles = allMigrationFiles.filter(
+    fileName =>
+      options.stopBeforeVersion === undefined ||
+      (fileName.split('_', 1)[0] ?? fileName).localeCompare(options.stopBeforeVersion) < 0
+  );
   if (await schemaMigrationsExists(client)) {
     await pruneObsoleteMigrationLedgerPostgres({ client, knownVersions });
   }

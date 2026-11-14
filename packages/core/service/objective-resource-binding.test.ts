@@ -164,7 +164,7 @@ describe('objective resource binding', () => {
           missionId: mission.id,
           instructionText: 'Bound to missing key',
           resourceKey: 'missing-key',
-          state: 'future'
+          state: 'draft'
         }),
       (error: unknown) =>
         error instanceof Error &&

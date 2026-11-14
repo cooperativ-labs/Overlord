@@ -135,14 +135,16 @@ ovld protocol update-objective --objective-id coo:312.k7xm --no-auto-advance
   paused; explicitly resume one or directly launch a queued objective to start
   it. Queue-definition operations require `project:update`; entry operations
   require `execution_request:create`.
-- **`reorder-future-objectives`** takes `--mission-id` and
-  `--ordered-objective-ids-json` with every future objective **UUID** in the
-  desired order. Display ids are not accepted there.
+- **`reorder-objectives`** takes `--mission-id` and
+  `--ordered-objective-ids-json` with every draft and submitted objective
+  **UUID**, exactly once, in the desired order (the head may move; launching,
+  active and complete objectives keep their positions). Display ids are not
+  accepted there. A stale set is rejected; reload and retry.
 
 Hosted MCP exposes the same operations as `overlord_launch_objective`,
 `overlord_list_deliveries`, `overlord_list_run_queues`,
 `overlord_reorder_run_queue`, `overlord_queue_objective` (`remove: true` to
-dequeue), `overlord_manage_run_queue`, and `overlord_reorder_future_objectives`.
+dequeue), `overlord_manage_run_queue`, and `overlord_reorder_objectives`.
 
 ## Attach
 
@@ -166,7 +168,7 @@ reading prior chat:
 
 - **`objective`** — the current task body is in `objective.objective`. Treat it
   as authoritative for the goal, constraints, and delivery target.
-- **`previousObjectives` / `futureObjectives`** — completed and upcoming steps.
+- **`previousObjectives` / `futureObjectives`** — objectives positioned before and after the current one. These are positions, not states: objectives can launch out of order, so check each item's `state`.
 - **`history`, `artifacts`, `attachments`, `sharedState`** — structured context.
 - **`projectResources`** — the project's logical resources resolved for the
   execution target, each with a `resourceKey`, `path`, and `state`. When a
@@ -489,7 +491,7 @@ This is distinct from `--agent`, which records who created the mission (and, on
 | `load-context`                   | Read mission context without a session (inspection only). `--objective-id` selects the objective. |
 | `list-deliveries`                | Read one mission's normalized deliveries as `{ items, total, limit }` (items capped at 200). An objective display id supplies the mission. |
 | `launch-objective`               | Queue a runner execution. Requires `--objective-id` (UUID or display id) and `--agent`.           |
-| `reorder-future-objectives`      | Replace one mission's complete future-objective UUID order.                                       |
+| `reorder-objectives`             | Replace one mission's complete draft/submitted UUID order.                                        |
 | `run-queue`                      | Read live Run Queues from project, objective, or mission scope.                                   |
 | `reorder-run-queue`              | Atomically replace one Run Queue's complete entry order.                                          |
 | `queue-objective`                | Add or move one objective in the Run Queue. Requires `--objective-id`.                            |

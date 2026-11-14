@@ -4,16 +4,13 @@ import {
   type AutoAdvanceDecision,
   decideAutoAdvanceAfterDelivery,
   deriveObjectiveLifecycleView,
-  type EnsureDraftSlotPlan,
   type ObjectiveLifecycleObjective,
   type ObjectiveLifecycleOptions,
-  type ObjectiveLifecycleViolation,
-  planEnsureDraftSlot
+  type ObjectiveLifecycleViolation
 } from './rules.js';
 
 export type {
   AutoAdvanceDecision,
-  EnsureDraftSlotPlan,
   ObjectiveLifecycleObjective,
   ObjectiveLifecycleOptions,
   ObjectiveLifecycleState,
@@ -33,17 +30,19 @@ export {
   DEFAULT_PRIMARY_RESOURCE_KEY,
   deriveObjectiveLifecycleView,
   EDITABLE_NEXT_UP_OBJECTIVE_STATES,
-  FUTURE_OBJECTIVE_STATES,
+  firstDraft,
   isActiveObjective,
   isEditableNextUpObjective,
-  isFutureObjective,
+  isQueuedObjective,
   LAUNCHABLE_OBJECTIVE_STATES,
+  nextUpDraft,
   objectiveHasInstructionText,
   objectiveInstructionText,
   objectiveResourcesConflict,
   PARALLEL_BLOCKING_OBJECTIVE_STATES,
-  planEnsureDraftSlot,
   planRunQueueDispatch,
+  QUEUED_OBJECTIVE_STATES,
+  queueHeadObjective,
   shouldDiscardEmptiedObjective,
   siblingBlocksParallelLaunch,
   sortObjectivesByLifecycleOrder,
@@ -64,13 +63,12 @@ export type ManageObjectiveLifecycleInput = {
 export type ManageObjectiveLifecycleOutput = {
   orderedObjectiveIds: string[];
   executedObjectiveIds: string[];
-  editableObjectiveIds: string[];
-  futureObjectiveIds: string[];
+  launchingObjectiveIds: string[];
+  queuedObjectiveIds: string[];
   activeObjectiveId: string | null;
   nextUpObjectiveId: string | null;
   hasNonExecuted: boolean;
   violations: ObjectiveLifecycleViolation[];
-  ensureDraftSlotPlan: EnsureDraftSlotPlan;
   autoAdvanceDecision: AutoAdvanceDecision | null;
 };
 
@@ -91,13 +89,12 @@ export function manageObjectiveLifecycle(
   return {
     orderedObjectiveIds: view.orderedObjectives.map(objective => objective.id),
     executedObjectiveIds: view.executedObjectives.map(objective => objective.id),
-    editableObjectiveIds: view.editableObjectives.map(objective => objective.id),
-    futureObjectiveIds: view.futureObjectives.map(objective => objective.id),
+    launchingObjectiveIds: view.launchingObjectives.map(objective => objective.id),
+    queuedObjectiveIds: view.queuedObjectives.map(objective => objective.id),
     activeObjectiveId: view.activeObjective?.id ?? null,
     nextUpObjectiveId: view.nextUpObjective?.id ?? null,
     hasNonExecuted: view.hasNonExecuted,
     violations: view.violations,
-    ensureDraftSlotPlan: planEnsureDraftSlot(input.objectives),
     autoAdvanceDecision: input.planAutoAdvance
       ? decideAutoAdvanceAfterDelivery(input.objectives, autoAdvanceOptions)
       : null
@@ -111,6 +108,6 @@ export const manageObjectiveLifecycleTool: Automation<
   id: 'manage-objective-lifecycle',
   label: 'Manage objective lifecycle',
   description:
-    'Applies the objective lifecycle ruleset to classify objectives, validate invariants, and plan refill or auto-advance actions without writing persistence.',
+    'Applies the objective lifecycle ruleset to classify objectives, validate invariants, and plan auto-advance actions without writing persistence.',
   run: async ({ input }) => manageObjectiveLifecycle(input)
 };

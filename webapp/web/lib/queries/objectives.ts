@@ -9,7 +9,7 @@ import { api } from '../api.ts';
 import { invalidateNonEverhourQueries as invalidateAll } from '../query-invalidation.ts';
 import { keys } from '../query-keys.ts';
 
-import { createReorderFutureObjectivesMutation } from './optimistic-updates.ts';
+import { createReorderObjectivesMutation } from './optimistic-updates.ts';
 
 export function useCreateObjective() {
   const qc = useQueryClient();
@@ -73,13 +73,15 @@ export function useDeleteObjectiveAttachment(objectiveId: string) {
 }
 
 /**
- * Reorders a mission's future objectives with an optimistic cache update: the new
- * order shows instantly and is reverted only if the server rejects it. The
- * realtime SSE feed reconciles the cache with server truth on success.
+ * Reorders a mission's draft queue (every draft and submitted objective) with an
+ * optimistic cache update: the new order shows instantly and is reverted only if
+ * the server rejects it — including a 409 when the queued set changed under the
+ * client, after which the settled refetch shows the current queue. The realtime
+ * SSE feed reconciles the cache with server truth on success.
  */
-export function useReorderFutureObjectives() {
+export function useReorderObjectives() {
   const qc = useQueryClient();
-  return useMutation(createReorderFutureObjectivesMutation(qc));
+  return useMutation(createReorderObjectivesMutation(qc));
 }
 
 // ---- Agent launch ----------------------------------------------------------

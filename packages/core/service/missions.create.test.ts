@@ -60,7 +60,7 @@ describe('createMissionWithObjectives — agent-surface defaults', () => {
     assert.deepEqual(tags, []);
   });
 
-  it('sequences objective #1 as draft and the rest as future', async () => {
+  it('creates every objective as a draft in order', async () => {
     const { ctx } = await setup();
     const project = await createProject({ ctx, name: 'Core Sequencing' });
 
@@ -72,7 +72,7 @@ describe('createMissionWithObjectives — agent-surface defaults', () => {
 
     assert.deepEqual(
       objectives.map(objective => objective.state),
-      ['draft', 'future', 'future']
+      ['draft', 'draft', 'draft']
     );
   });
 

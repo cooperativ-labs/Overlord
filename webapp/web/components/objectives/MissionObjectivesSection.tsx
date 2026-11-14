@@ -21,28 +21,30 @@ import {
   NO_EVIDENCE_TRUNCATION,
   type ObjectiveEvidenceTruncation
 } from '../../lib/objective-evidence.ts';
-import { useReorderFutureObjectives } from '../../lib/queries.ts';
+import { useReorderObjectives } from '../../lib/queries.ts';
 import { cn } from '../../lib/utils.ts';
 import { KANBAN_TOUCH_DRAGGABLE_CLASS, useKanbanSensors } from '../../pages/kanban-dnd.ts';
 import { Button } from '../ui.tsx';
 
 import { DraftObjective } from './DraftObjective.tsx';
-import { mergeFutureObjectiveOrder } from './future-objective-order.ts';
 import { GhostObjective } from './GhostObjective.tsx';
 import { ObjectiveCollapsibleItem } from './ObjectiveCollapsibleItem.tsx';
 import type { ObjectiveEvidenceLoading } from './ObjectiveEvidenceSections.tsx';
+import { mergeQueuedObjectiveOrder } from './queued-objective-order.ts';
 
 /**
- * A future objective wrapped for drag-and-drop reordering. Mirrors the kanban
- * board's `useSortable` setup: the grip handle owns the drag listeners so the
- * objective card's own inline editing stays fully interactive. On touch the
- * handle needs a press-and-hold (same sensors as the board), so a swipe that
- * starts on it scrolls the panel instead of reordering. The editable
- * card itself is the existing {@link DraftObjective}, which already renders the
- * collapsed future styling and the Promote action.
+ * A draft-queue objective (draft or submitted) wrapped for drag-and-drop
+ * reordering. Mirrors the kanban board's `useSortable` setup: the grip handle
+ * owns the drag listeners so the objective card's own inline editing stays
+ * fully interactive. On touch the handle needs a press-and-hold (same sensors
+ * as the board), so a swipe that starts on it scrolls the panel instead of
+ * reordering. The card is the existing {@link DraftObjective}: the queue head
+ * renders full, every other card compact. React keys this by objective id, so
+ * a drag that changes which card is the head keeps each card's editor state.
  */
-function SortableFutureObjective({
+function SortableQueuedObjective({
   objective,
+  isHead,
   siblings,
   executionRequests,
   focusObjectiveRef,
@@ -52,6 +54,7 @@ function SortableFutureObjective({
   evidenceTruncation
 }: {
   objective: ObjectiveDto;
+  isHead: boolean;
   siblings: ObjectiveDto[];
   executionRequests: ExecutionRequestDto[];
   focusObjectiveRef: string | undefined;
@@ -72,7 +75,7 @@ function SortableFutureObjective({
     >
       <button
         type="button"
-        aria-label="Reorder future objective"
+        aria-label="Reorder objective"
         className={cn(
           'flex w-5 shrink-0 cursor-grab items-center justify-center self-stretch rounded text-muted-foreground/40 hover:text-muted-foreground active:cursor-grabbing',
           KANBAN_TOUCH_DRAGGABLE_CLASS
@@ -92,6 +95,7 @@ function SortableFutureObjective({
             evidence={evidenceForObjective(evidence, objective.id)}
             evidenceLoading={evidenceLoading}
             evidenceTruncation={evidenceTruncation}
+            compact={!isHead}
           />
         </ObjectiveFocusAnchor>
       </div>
@@ -151,22 +155,23 @@ function ObjectiveFocusAnchor({
  *    {@link ObjectiveCollapsibleItem}s that run edge to edge across the panel,
  *    divided by full-width rules, each holding its own evidence (coo:879).
  *    One is open at a time by default; shift-click opens more.
- * 2. **Editable** (launching, then draft / submitted) — full
- *    {@link DraftObjective} launch cards.
- * 3. **Future** — {@link DraftObjective} cards made sortable via dnd-kit so they
- *    can be reordered; the new order is persisted optimistically.
+ * 2. **Launching** — full {@link DraftObjective} cards, not draggable: a launch
+ *    in flight keeps its position.
+ * 3. **Draft queue** (draft and submitted, coo:1274) — one sortable list. The
+ *    queue head renders as the full launch card and the rest as compact cards,
+ *    so dragging a card to the top expands it. Every card launches directly;
+ *    there is no promote step. Reorders send the complete queued set and are
+ *    persisted optimistically; a stale-set conflict rolls back and refetches.
  *
  * Order inside the first two groups is the mission's history, not its queue:
  * `deriveObjectiveLifecycleView` sorts completed objectives by completion time,
  * executing ones by start time, and launching ones by launch time, all oldest
  * first. Only work that has not started yet is still ordered by position, which
- * is why drag-to-reorder applies to the future group alone.
+ * is why drag-to-reorder applies to the draft queue alone.
  *
- * Plus the {@link GhostObjective} composer, which is *not* an objective: the
- * always-available empty field used to be a blank objective row written to the
- * database, which every other surface then had to filter out. It is now purely
- * client-side and only persists an objective once it has instruction text, so
- * "Add objective" and the next-up slot never create empty work.
+ * Plus one {@link GhostObjective} composer at the end of the queue, which is
+ * *not* an objective: it is purely client-side and only persists an objective
+ * once it has instruction text, so "Add objective" never creates empty work.
  */
 export function MissionObjectivesSection({
   mission,
@@ -183,8 +188,8 @@ export function MissionObjectivesSection({
   evidenceLoading: ObjectiveEvidenceLoading;
   evidenceTruncation?: ObjectiveEvidenceTruncation;
 }) {
-  const reorder = useReorderFutureObjectives();
-  /** Whether the user asked for an extra (queued) composer via "+ Add objective". */
+  const reorder = useReorderObjectives();
+  /** Whether the user asked for the end-of-queue composer via "+ Add objective". */
   const [extraSlotRequested, setExtraSlotRequested] = useState(false);
   // Executed rows behave as an accordion: one open at a time keeps the timeline
   // scannable now that each row holds its whole evidence stack. Shift-click adds
@@ -252,70 +257,65 @@ export function MissionObjectivesSection({
   );
   const objectives = lifecycleView.orderedObjectives;
   const executedObjectives = lifecycleView.executedObjectives;
-  const editableObjectives = lifecycleView.editableObjectives;
-  const futureObjectivesFromServer = lifecycleView.futureObjectives;
+  const launchingObjectives = lifecycleView.launchingObjectives;
+  const queuedObjectivesFromServer = lifecycleView.queuedObjectives;
 
   // Locally-mirrored order for optimistic drag-and-drop. While our own reorder
   // is in flight the local order wins, so a dragged item does not jump back
   // before it lands. Otherwise the server order wins, because the Run Queue
   // also reorders objectives (queue reorder, dequeue-to-end).
-  const [futureOrder, setFutureOrder] = useState<string[]>(() =>
-    futureObjectivesFromServer.map(o => o.id)
+  const [queueOrder, setQueueOrder] = useState<string[]>(() =>
+    queuedObjectivesFromServer.map(o => o.id)
   );
   useEffect(() => {
-    const incomingIds = futureObjectivesFromServer.map(o => o.id);
-    setFutureOrder(previous =>
-      mergeFutureObjectiveOrder({
+    const incomingIds = queuedObjectivesFromServer.map(o => o.id);
+    setQueueOrder(previous =>
+      mergeQueuedObjectiveOrder({
         previousIds: previous,
         incomingIds,
         reorderPending: reorder.isPending
       })
     );
-  }, [futureObjectivesFromServer, reorder.isPending]);
+  }, [queuedObjectivesFromServer, reorder.isPending]);
 
-  const orderedFutureObjectives = useMemo(() => {
-    const byId = new Map(futureObjectivesFromServer.map(o => [o.id, o]));
-    return futureOrder.map(id => byId.get(id)).filter((o): o is ObjectiveDto => Boolean(o));
-  }, [futureObjectivesFromServer, futureOrder]);
+  const orderedQueuedObjectives = useMemo(() => {
+    const byId = new Map(queuedObjectivesFromServer.map(o => [o.id, o]));
+    return queueOrder.map(id => byId.get(id)).filter((o): o is ObjectiveDto => Boolean(o));
+  }, [queuedObjectivesFromServer, queueOrder]);
 
   const sensors = useKanbanSensors(true);
 
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
-    const activeObjective = futureObjectivesFromServer.find(
-      objective => objective.id === active.id
-    );
-    const overObjective = futureObjectivesFromServer.find(objective => objective.id === over.id);
-    if (!activeObjective || !overObjective) return;
     // One ordering surface: the server carries this mission order into the Run
     // Queue, so queued and unqueued cards reorder the same way and a drag never
-    // changes queue membership.
-    const oldIndex = futureOrder.indexOf(activeObjective.id);
-    const newIndex = futureOrder.indexOf(overObjective.id);
+    // changes queue membership. The request names the complete queued set.
+    const oldIndex = queueOrder.indexOf(String(active.id));
+    const newIndex = queueOrder.indexOf(String(over.id));
     if (oldIndex === -1 || newIndex === -1) return;
+    if (queueOrder.length !== queuedObjectivesFromServer.length) return;
 
-    const nextOrder = arrayMove(futureOrder, oldIndex, newIndex);
-    setFutureOrder(nextOrder);
+    const nextOrder = arrayMove(queueOrder, oldIndex, newIndex);
+    setQueueOrder(nextOrder);
     reorder.mutate(
       { missionId: mission.id, orderedObjectiveIds: nextOrder },
       {
-        onError: () => setFutureOrder(futureObjectivesFromServer.map(o => o.id))
+        // A rejected reorder (including a 409 for a stale queued set) rolls the
+        // cache back; the settled invalidation refetches the current queue.
+        onError: () => setQueueOrder(queuedObjectivesFromServer.map(o => o.id))
       }
     );
   }
 
-  // The next-up composer only appears when nothing occupies the editable slot.
-  // A legacy blank draft row (written before the slot became client-only) still
-  // renders as its own card, so we must not stack a ghost on top of it.
-  const showNextUpGhost = editableObjectives.length === 0;
-  // A second composer, queued behind the next-up objective, appears only when
-  // the user explicitly asks for another slot.
-  const showQueuedGhost = extraSlotRequested && !showNextUpGhost;
+  // One composer, at the end of the queue: always shown when nothing is
+  // launching or queued, otherwise only when the user asks for another slot.
+  const showComposer =
+    (launchingObjectives.length === 0 && orderedQueuedObjectives.length === 0) ||
+    extraSlotRequested;
   const hasBlankSlot =
-    showNextUpGhost ||
-    showQueuedGhost ||
-    [...editableObjectives, ...orderedFutureObjectives].some(
+    showComposer ||
+    [...launchingObjectives, ...orderedQueuedObjectives].some(
       objective => !objectiveHasInstructionText(objective)
     );
 
@@ -350,9 +350,9 @@ export function MissionObjectivesSection({
         </div>
       ) : null}
 
-      {/* Editable, future, and composer cards keep the panel gutter: they are cards, not history rows. */}
+      {/* Launching, queued, and composer cards keep the panel gutter: they are cards, not history rows. */}
       <div className="space-y-3 px-5">
-        {editableObjectives.map(objective => (
+        {launchingObjectives.map(objective => (
           <ObjectiveFocusAnchor
             key={objective.id}
             objective={objective}
@@ -370,31 +370,22 @@ export function MissionObjectivesSection({
           </ObjectiveFocusAnchor>
         ))}
 
-        {showNextUpGhost ? (
-          <GhostObjective
-            missionId={mission.id}
-            projectId={mission.projectId}
-            autoFocus={extraSlotRequested}
-            onMaterialized={() => setExtraSlotRequested(false)}
-            onDismissEmpty={() => setExtraSlotRequested(false)}
-          />
-        ) : null}
-
-        {orderedFutureObjectives.length > 0 ? (
+        {orderedQueuedObjectives.length > 0 ? (
           <DndContext
             sensors={sensors}
             collisionDetection={closestCenter}
             onDragEnd={handleDragEnd}
           >
             <SortableContext
-              items={orderedFutureObjectives.map(o => o.id)}
+              items={orderedQueuedObjectives.map(o => o.id)}
               strategy={verticalListSortingStrategy}
             >
               <div className="space-y-3">
-                {orderedFutureObjectives.map(objective => (
-                  <SortableFutureObjective
+                {orderedQueuedObjectives.map((objective, index) => (
+                  <SortableQueuedObjective
                     key={objective.id}
                     objective={objective}
+                    isHead={index === 0}
                     siblings={objectives}
                     executionRequests={mission.executionRequests}
                     focusObjectiveRef={focusObjectiveRef}
@@ -409,11 +400,11 @@ export function MissionObjectivesSection({
           </DndContext>
         ) : null}
 
-        {showQueuedGhost ? (
+        {showComposer ? (
           <GhostObjective
             missionId={mission.id}
             projectId={mission.projectId}
-            autoFocus
+            autoFocus={extraSlotRequested}
             onMaterialized={() => setExtraSlotRequested(false)}
             onDismissEmpty={() => setExtraSlotRequested(false)}
           />

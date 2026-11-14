@@ -34,12 +34,12 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover.tsx';
 
 /** States that may show the Run Queue membership control. */
-const QUEUE_CONTROL_STATES: ObjectiveState[] = ['future', 'draft', 'submitted', 'launching'];
+const QUEUE_CONTROL_STATES: ObjectiveState[] = ['draft', 'submitted', 'launching'];
 /** Sentinel for "this mission's queue" before that queue has been created. */
 const MISSION_QUEUE_OPTION = 'mission-queue';
 // The lifecycle pipeline owns submitted through pending-delivery; people can
-// only sequence a card, make it the active draft, or mark it finished here.
-const MANUALLY_SETTABLE_STATES: ObjectiveState[] = ['future', 'draft', 'complete'];
+// only sequence a card, return it to draft, or mark it finished here.
+const MANUALLY_SETTABLE_STATES: ObjectiveState[] = ['draft', 'complete'];
 
 type DraftObjectiveActionsProps = {
   objective: ObjectiveDto;

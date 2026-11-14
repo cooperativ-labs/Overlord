@@ -18,7 +18,7 @@ type CreatedMission = {
   objectives: Array<{ id: string; displayId: string; objective: string; state: string }>;
 };
 
-test('PM protocol commands preserve delivery, launch, and future-order service behavior', async () => {
+test('PM protocol commands preserve delivery, launch, and draft-queue order service behavior', async () => {
   const project = await createProject({ name: `PM protocol ${Date.now()}` });
   await createProjectResource(project.id, {
     directoryPath: createIsolatedCheckout('overlord-protocol-pm-management-resource-'),
@@ -31,8 +31,8 @@ test('PM protocol commands preserve delivery, launch, and future-order service b
       '--project-id': project.id,
       '--objectives-json': JSON.stringify([
         { objective: 'Launch through the normal execution queue' },
-        { objective: 'Second future objective' },
-        { objective: 'Third future objective' }
+        { objective: 'Second queued objective' },
+        { objective: 'Third queued objective' }
       ])
     }
   })) as CreatedMission;
@@ -45,14 +45,14 @@ test('PM protocol commands preserve delivery, launch, and future-order service b
   assert.equal(queued.objectiveId, launchable.id);
   assert.equal(queued.requestedAgent, 'codex');
 
-  const reordered = (await runProtocolSubcommand('reorder-future-objectives', {
+  const reordered = (await runProtocolSubcommand('reorder-objectives', {
     flags: {
       '--mission-id': queuedMission.mission.id,
       '--ordered-objective-ids-json': JSON.stringify([thirdFuture.id, secondFuture.id])
     }
   })) as Array<{ id: string; state: string }>;
   assert.deepEqual(
-    reordered.filter(objective => objective.state === 'future').map(objective => objective.id),
+    reordered.filter(objective => objective.state === 'draft').map(objective => objective.id),
     [thirdFuture.id, secondFuture.id]
   );
 

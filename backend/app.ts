@@ -238,7 +238,7 @@ import {
   removeWorktree,
   renameUserToken,
   reorderBoardColumn,
-  reorderFutureObjectives,
+  reorderObjectives,
   reorderProjects,
   reorderProjectStatuses,
   revokeUserToken,
@@ -1853,7 +1853,7 @@ app.get(
 );
 app.patch(
   '/api/missions/:id/objectives/reorder',
-  handle(req => reorderFutureObjectives(req.params.id, req.body), { mutates: true })
+  handle(req => reorderObjectives(req.params.id, req.body), { mutates: true })
 );
 // Historical session-channel mint. Launch no longer creates Agent Session Exchange
 // credentials; the route stays mounted so older CLIs receive 410 instead of minting.

@@ -88,7 +88,7 @@ describe('mission and objective access in a secondary (non-active) workspace', (
       updateObjective,
       deleteObjective,
       updateMission,
-      reorderFutureObjectives,
+      reorderObjectives,
       getMissionSchedule,
       upsertMissionSchedule,
       clearMissionSchedule,
@@ -155,8 +155,10 @@ describe('mission and objective access in a secondary (non-active) workspace', (
     const updatedObjective = await updateObjective(objective.id, { title: 'Renamed objective' });
     assert.equal(updatedObjective.title, 'Renamed objective');
 
-    const reordered = await reorderFutureObjectives(mission.id, {
-      orderedObjectiveIds: detail.objectives.filter(o => o.state === 'future').map(o => o.id)
+    const reordered = await reorderObjectives(mission.id, {
+      orderedObjectiveIds: (await listObjectives(mission.id))
+        .filter(o => o.state === 'draft' || o.state === 'submitted')
+        .map(o => o.id)
     });
     assert.ok(Array.isArray(reordered));
 

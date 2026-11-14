@@ -141,7 +141,7 @@ test('running snapshots are one row per executing objective, capped at two', asy
     missionId: firstMission.id,
     title: 'Objective B',
     instructionText: 'Second running objective',
-    state: 'future'
+    state: 'draft'
   });
   const otherMission = await createMission({
     projectId: project.id,

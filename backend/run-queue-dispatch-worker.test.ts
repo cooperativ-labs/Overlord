@@ -361,6 +361,63 @@ test('a successful dispatch links the request, spends one attempt, and clears ev
   assert.equal(objectiveState(mission.first), 'launching');
 });
 
+test('real out-of-order delivery dispatches the queued successor and leaves earlier drafts unqueued', async () => {
+  const project = await createProject({ name: `Delivery queue ${Date.now()}` });
+  await createProjectResource(project.id, {
+    directoryPath: createIsolatedCheckout('overlord-delivery-queue-'),
+    executionTargetId: null,
+    isPrimary: true
+  });
+  const created = (await runProtocolSubcommand('create', {
+    flags: {
+      '--project-id': project.id,
+      '--objectives-json': JSON.stringify(
+        ['Earlier unqueued', 'Deliver out of order', 'Queued successor'].map(objective => ({
+          objective,
+          agent: 'codex'
+        }))
+      )
+    }
+  })) as { mission: { id: string }; objectives: Array<{ id: string }> };
+  const [earlier, delivered, successor] = created.objectives;
+  const attached = (await runProtocolSubcommand('attach', {
+    flags: {
+      '--mission-id': created.mission.id,
+      '--objective-id': delivered!.id,
+      '--agent': 'codex'
+    }
+  })) as { sessionKey: string };
+  await postRunQueueEntry(project.id, { objectiveId: successor!.id });
+  await runProtocolSubcommand('deliver', {
+    flags: {
+      '--mission-id': created.mission.id,
+      '--session-key': attached.sessionKey,
+      '--summary': 'Integration delivery'
+    }
+  });
+  assert.equal(objectiveState(delivered!.id), 'complete');
+  const notice = bootstrap.db
+    .prepare(
+      "SELECT objective_id FROM mission_events WHERE mission_id = ? AND type = 'awaiting_approval' ORDER BY created_at DESC LIMIT 1"
+    )
+    .get(created.mission.id) as { objective_id: string };
+  assert.equal(notice.objective_id, earlier!.id);
+  await dispatchProjectRunQueues(requireDatabaseClient(), project.id);
+  assert.equal(fullEntryFor(successor!.id).state, 'dispatched');
+  assert.equal(objectiveState(successor!.id), 'launching');
+  assert.equal(objectiveState(earlier!.id), 'draft');
+  assert.equal(
+    (
+      bootstrap.db
+        .prepare(
+          'SELECT COUNT(*) AS count FROM run_queue_entries WHERE objective_id = ? AND deleted_at IS NULL'
+        )
+        .get(earlier!.id) as { count: number }
+    ).count,
+    0
+  );
+});
+
 test('a retry of a launching objective still holding an active request does not reset it', async () => {
   const project = await createProject({ name: `Wedge guard ${Date.now()}` });
   await createProjectResource(project.id, {

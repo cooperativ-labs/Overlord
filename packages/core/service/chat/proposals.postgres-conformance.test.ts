@@ -161,7 +161,7 @@ for (const adapter of ['sqlite', ...(process.env.TEST_DATABASE_URL ? ['postgres'
           }>('SELECT * FROM objectives WHERE mission_id = ? ORDER BY position', [m.missionId]);
           assert.deepEqual(
             objectives.map(o => o.state),
-            ['draft', 'future']
+            ['draft', 'draft']
           );
           assert.deepEqual(
             objectives.map(o => o.reasoning_effort),

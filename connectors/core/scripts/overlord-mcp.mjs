@@ -519,10 +519,10 @@ const tools = [
     }
   },
   {
-    name: 'overlord_reorder_future_objectives',
-    title: 'Reorder future objectives',
+    name: 'overlord_reorder_objectives',
+    title: 'Reorder draft objectives',
     description:
-      'Use this only when the user explicitly asks to change the order of future objectives in one mission. Supply every future objective UUID in its complete desired top-to-bottom order; draft, active, and completed objectives cannot be moved by this tool.',
+      "Use this only when the user explicitly asks to change the order of one mission's unstarted objectives. Supply every draft and submitted objective UUID exactly once, in the complete desired top-to-bottom order; launching, active, and completed objectives keep their positions and cannot be listed. A stale set is rejected; reload and retry.",
     inputSchema: {
       type: 'object',
       properties: {
@@ -533,10 +533,10 @@ const tools = [
         orderedObjectiveIds: {
           type: 'array',
           description:
-            'Complete desired top-to-bottom UUID order of every objective currently in the future state.',
+            'Complete desired top-to-bottom UUID order of every objective currently in the draft or submitted state.',
           items: {
             type: 'string',
-            description: 'Future objective UUID.'
+            description: 'Draft or submitted objective UUID.'
           }
         }
       },
@@ -619,7 +619,7 @@ const tools = [
     name: 'overlord_update_objective',
     title: 'Update objective',
     description:
-      'Use this to rewrite an objective title in any state, turn auto-advance on or off, edit instruction text on a draft or future objective, and/or reassign the objective to another agent or to a person (agent manual, alias human).',
+      'Use this to rewrite an objective title in any state, turn auto-advance on or off, edit instruction text on a draft objective, and/or reassign the objective to another agent or to a person (agent manual, alias human).',
     inputSchema: {
       type: 'object',
       properties: {
@@ -640,7 +640,7 @@ const tools = [
         instructionText: {
           type: 'string',
           description:
-            'Replacement instruction text. Allowed only when the objective is in draft or future state; blank clears the text in those states.'
+            'Replacement instruction text. Allowed only when the objective is in draft state; blank clears the text.'
         },
         agent: {
           type: 'string',
@@ -1160,7 +1160,7 @@ const tools = [
         deferredWork: {
           type: 'array',
           description:
-            'Each deferredWork item is one recommended objective outside this mission. Be very concise. title names the work in an imperative phrase. change states only the specific change that is needed. location says where to find it in the code: the file, function, component, or command. doneWhen states the observable result in one sentence. Do not add instructions on how to do the work, background, or rationale. The operator turns the item into an objective or a mission as written, so it must read as a task, not as a note. Omit queued future objectives, leftover current-objective work, and human follow-up (those belong in humanActions). Vague: { title: "Fix flaky test", change: "The sync worker has a flaky test.", location: "backend", doneWhen: "It passes." }. Good: { title: "Advance the fake clock before the second retry", change: "The test asserts the retry fired but never advances the fake clock between attempts, so it passes or fails on real time.", location: "backend/sync-worker.test.ts › retries after a 503", doneWhen: "The test passes 20 consecutive runs with the fake clock driving both attempts." }.',
+            'Each deferredWork item is one recommended objective outside this mission. Be very concise. title names the work in an imperative phrase. change states only the specific change that is needed. location says where to find it in the code: the file, function, component, or command. doneWhen states the observable result in one sentence. Do not add instructions on how to do the work, background, or rationale. The operator turns the item into an objective or a mission as written, so it must read as a task, not as a note. Omit work already queued as later objectives of this mission, leftover current-objective work, and human follow-up (those belong in humanActions). Vague: { title: "Fix flaky test", change: "The sync worker has a flaky test.", location: "backend", doneWhen: "It passes." }. Good: { title: "Advance the fake clock before the second retry", change: "The test asserts the retry fired but never advances the fake clock between attempts, so it passes or fails on real time.", location: "backend/sync-worker.test.ts › retries after a 503", doneWhen: "The test passes 20 consecutive runs with the fake clock driving both attempts." }.',
           items: {
             type: 'object',
             properties: {
@@ -1551,11 +1551,11 @@ async function callOverlordTool(name, args) {
         : {})
     });
   }
-  if (name === 'overlord_reorder_future_objectives') {
+  if (name === 'overlord_reorder_objectives') {
     if (!Array.isArray(args.orderedObjectiveIds)) {
       throw new Error('orderedObjectiveIds must be an array');
     }
-    return runProtocol('reorder-future-objectives', {
+    return runProtocol('reorder-objectives', {
       'mission-id': requiredString(args, 'missionId'),
       'ordered-objective-ids-json': args.orderedObjectiveIds
     });
@@ -1862,7 +1862,7 @@ process.stdin.on('data', async chunk => {
         result: {
           protocolVersion: PROTOCOL_VERSION,
           capabilities: { tools: { listChanged: false } },
-          serverInfo: { name: 'overlord-__OVERLORD_ADAPTER_KEY__', version: '0.3.60' }
+          serverInfo: { name: 'overlord-__OVERLORD_ADAPTER_KEY__', version: '0.3.62' }
         }
       });
       continue;

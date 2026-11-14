@@ -165,7 +165,8 @@ export async function dequeueObjective({
   // intervention point, however, so it pauses that queue transactionally and
   // cannot release the following objective.
   await removeRunQueueEntryForObjective(tx, projectId, objectiveId, {
-    pauseQueue: reason === 'disconnected'
+    pauseQueue: reason === 'disconnected',
+    preserveObjectivePositions: true
   });
 
   const { cleared } = await clearExecutionRequests({
@@ -309,9 +310,7 @@ export async function launchObjective(
       throw new ApiError(
         409,
         `Objective is not launchable from state "${objective.state}"`,
-        objective.state === 'future'
-          ? 'Promote the objective to draft first.'
-          : 'Only draft, submitted, or launching objectives can be launched.'
+        'Only draft, submitted, or launching objectives can be launched.'
       );
     }
 

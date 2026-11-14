@@ -9,7 +9,7 @@ import test from 'node:test';
 
 import { createSeededCliContext } from './support/seeded-context.ts';
 
-test('mission creation creates one draft objective and future objectives for the rest', async () => {
+test('mission creation creates every objective as a draft', async () => {
   const { db, ctx } = await createSeededCliContext();
   const project = await createProject({ ctx, name: 'Objective Creation Test' });
 
@@ -25,13 +25,13 @@ test('mission creation creates one draft objective and future objectives for the
 
   assert.deepEqual(
     objectives.map(objective => objective.state),
-    ['draft', 'future', 'future']
+    ['draft', 'draft', 'draft']
   );
 
   await db.close();
 });
 
-test('adding objectives to a mission with a draft creates future objectives', async () => {
+test('adding objectives to a mission with a draft appends more drafts', async () => {
   const { db, ctx } = await createSeededCliContext();
   const project = await createProject({ ctx, name: 'Add Objectives Test' });
   const { mission } = await createMissionWithObjectives({
@@ -48,13 +48,13 @@ test('adding objectives to a mission with a draft creates future objectives', as
 
   assert.deepEqual(
     added.map(objective => objective.state),
-    ['future', 'future']
+    ['draft', 'draft']
   );
 
   await db.close();
 });
 
-test('adding objectives to a mission without a draft creates exactly one draft', async () => {
+test('adding objectives to a mission without a draft creates drafts and leaves the submitted objective alone', async () => {
   const { db, ctx } = await createSeededCliContext();
   const project = await createProject({ ctx, name: 'Refill Draft Test' });
   const { mission, objectives } = await createMissionWithObjectives({
@@ -72,8 +72,13 @@ test('adding objectives to a mission without a draft creates exactly one draft',
 
   assert.deepEqual(
     added.map(objective => objective.state),
-    ['draft', 'future']
+    ['draft', 'draft']
   );
+  const discussed = await ctx.db.get<{ state: string }>(
+    `SELECT state FROM objectives WHERE id = ?`,
+    [objectives[0]?.id]
+  );
+  assert.equal(discussed?.state, 'submitted');
 
   await db.close();
 });

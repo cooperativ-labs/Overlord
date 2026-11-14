@@ -8,7 +8,7 @@ const { bootstrapIntegrationTestDb } = await import('./test-helpers.ts');
 const bootstrap = await bootstrapIntegrationTestDb({
   sqlitePath: path.join(tempDir, 'webapp.sqlite')
 });
-const { createProject, reorderFutureObjectives, updateObjective } = await import('./repository.ts');
+const { createProject, reorderObjectives, updateObjective } = await import('./repository.ts');
 const { runProtocolSubcommand } = await import('./protocol.ts');
 const {
   deleteRunQueueEntry,
@@ -265,7 +265,7 @@ test('an unforced removal leaves a stuck objective state alone', async () => {
 test('reordering a mission carries the new order into its Run Queue', async () => {
   const project = await createProject({ name: `Mission reorder ${Date.now()}` });
   const created = await mission(project.id, 4, 'Reorder');
-  const [, second, third, fourth] = created.objectives.map(objective => objective.id);
+  const [first, second, third, fourth] = created.objectives.map(objective => objective.id);
 
   // Queuing the second objective queues everything after it as well.
   await postRunQueueEntry(project.id, { objectiveId: second! });
@@ -275,8 +275,10 @@ test('reordering a mission carries the new order into its Run Queue', async () =
       .entries.map(entry => entry.objectiveId);
   assert.deepEqual(await queueOrder(), [second, third, fourth]);
 
-  await reorderFutureObjectives(created.missionId, {
-    orderedObjectiveIds: [fourth!, second!, third!]
+  // The reorder names the complete draft queue, including the unqueued head,
+  // which can now move like any other draft.
+  await reorderObjectives(created.missionId, {
+    orderedObjectiveIds: [fourth!, first!, second!, third!]
   });
   assert.deepEqual(await queueOrder(), [fourth, second, third]);
 });

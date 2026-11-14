@@ -7,7 +7,7 @@ import { keys } from '../query-keys.ts';
 
 import {
   createReorderBoardColumnMutation,
-  createReorderFutureObjectivesMutation
+  createReorderObjectivesMutation
 } from './optimistic-updates.ts';
 
 /** Whether a cached key sits under a prefix, as React Query's matcher does. */
@@ -100,24 +100,30 @@ test('board reorder cancels, patches, rolls back, then invalidates the same key'
   assert.equal(initial.get(JSON.stringify(key)), previous);
 });
 
-test('future-objective reorder patches, rolls back, and invalidates its mission', async () => {
+test('draft-queue reorder patches into existing slots, rolls back, and invalidates its mission', async () => {
   const key = keys.mission('mission-1');
   const previous = {
     objectives: [
       { id: 'objective-1', position: 2 },
-      { id: 'objective-2', position: 3 }
+      { id: 'launching', position: 3 },
+      { id: 'objective-2', position: 4 }
     ]
   } as unknown as MissionDetailDto;
   const { calls, client, initial } = fakeClient(new Map([[JSON.stringify(key), previous]]));
-  const mutation = createReorderFutureObjectivesMutation(client);
+  const mutation = createReorderObjectivesMutation(client);
   const vars = { missionId: 'mission-1', orderedObjectiveIds: ['objective-2', 'objective-1'] };
 
   const context = await mutation.onMutate(vars);
   assert.deepEqual(
-    (initial.get(JSON.stringify(key)) as MissionDetailDto).objectives.map(
-      objective => objective.id
-    ),
-    ['objective-2', 'objective-1']
+    (initial.get(JSON.stringify(key)) as MissionDetailDto).objectives.map(objective => [
+      objective.id,
+      objective.position
+    ]),
+    [
+      ['objective-2', 2],
+      ['launching', 3],
+      ['objective-1', 4]
+    ]
   );
   mutation.onError(new Error('nope'), vars, context);
   mutation.onSettled(undefined, undefined, vars);

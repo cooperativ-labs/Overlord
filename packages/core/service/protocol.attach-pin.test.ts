@@ -16,12 +16,12 @@ describe('protocol attach pinning', () => {
     const { mission, objectives } = await createMissionWithObjectives({
       ctx,
       projectId: project.id,
-      objectives: [{ objective: 'First draft' }, { objective: 'Second future' }]
+      objectives: [{ objective: 'First draft' }, { objective: 'Second draft' }]
     });
     const first = objectives[0]!;
     const second = objectives[1]!;
     assert.equal(first.state, 'draft');
-    assert.equal(second.state, 'future');
+    assert.equal(second.state, 'draft');
 
     const rediscovered = await attachSession({
       ctx,

@@ -28,7 +28,7 @@ const EXPECTED_PERMISSIONS = {
   'list-deliveries': PERMISSIONS.MISSION_READ,
   'objective-changes': PERMISSIONS.MISSION_READ,
   'launch-objective': PERMISSIONS.EXECUTION_REQUEST_CREATE,
-  'reorder-future-objectives': PERMISSIONS.OBJECTIVE_UPDATE,
+  'reorder-objectives': PERMISSIONS.OBJECTIVE_UPDATE,
   'queue-objective': PERMISSIONS.EXECUTION_REQUEST_CREATE,
   'dequeue-objective': PERMISSIONS.EXECUTION_REQUEST_CREATE,
   'retry-queue-entry': PERMISSIONS.EXECUTION_REQUEST_CREATE,

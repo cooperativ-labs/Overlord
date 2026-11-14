@@ -1,3 +1,4 @@
+import { firstDraft, nextUpDraft, sortObjectivesByLifecycleOrder } from '@overlord/automations';
 import {
   CAPTURE_GAP_CODES,
   type CaptureBindingState,
@@ -43,7 +44,6 @@ import {
   type ArtifactSummary,
   type AttachmentSummary,
   createMissionWithObjectives,
-  ensureNextDraftObjective,
   getMissionSummary,
   insertArtifactRow,
   listArtifacts,
@@ -166,8 +166,16 @@ function resolveActiveObjective(objectives: ObjectiveSummary[]): ObjectiveSummar
     if (matches.length === 1) return matches[0]!;
   }
 
+  // No active objective. Attach is an explicit execution order, so an
+  // objective an agent already submitted for discussion wins (discuss → attach),
+  // then the next runnable draft (skips blank drafts), then the first draft,
+  // then any unfinished objective — each by position, created_at, id (coo:1274).
+  const ordered = sortObjectivesByLifecycleOrder(objectives);
   const active =
-    objectives.find(o => o.state === 'draft') ?? objectives.find(o => o.state !== 'complete');
+    ordered.find(o => o.state === 'submitted') ??
+    nextUpDraft(objectives) ??
+    firstDraft(objectives) ??
+    ordered.find(o => o.state !== 'complete');
 
   if (!active) {
     throw new ServiceError('No active objective found on mission', 'no_active_objective', 409);
@@ -377,10 +385,10 @@ function hasInstruction(objective: ObjectiveSummary): boolean {
 /**
  * Split a mission's objectives into the objectives before and after the current
  * one. Both arrays exclude the current objective (which is surfaced separately as
- * the top-level `objective`). `previousObjectives` are what has already been
- * worked (positioned before the current objective) and `futureObjectives` are
- * what is expected next (positioned after) — distinct from what the agent should
- * operate on today. Objectives with empty instructions are excluded from both:
+ * the top-level `objective`). The split is purely positional: `previousObjectives`
+ * are positioned before the current objective and `futureObjectives` after it.
+ * Neither is a lifecycle state — objectives can launch out of order, so a
+ * lower-position draft may still be unexecuted. Objectives with empty instructions are excluded from both:
  * they are empty input slots, not planned work.
  */
 function splitObjectivesAroundCurrent({
@@ -883,13 +891,6 @@ export async function attachSession({
       db: txCtx.db,
       workspaceId: ctx.workspace.id,
       missionId: context.mission.id,
-      now
-    });
-
-    await ensureNextDraftObjective({
-      ctx: txCtx,
-      missionId: context.mission.id,
-      projectId: context.mission.projectId,
       now
     });
 
@@ -2744,17 +2745,17 @@ export async function deliverSession({
   // owns target/config resolution and launch retries.
   await enqueueRunQueueDispatch(ctx.db, mission.projectId, ctx.workspace.id);
 
-  // A draft with no instruction text is the blank slot the UI keeps ready for the
-  // user to type into, not queued work. Treating it as the next objective raised
-  // a bogus "waiting for approval: New objective" status item on every delivery.
+  // The next runnable draft (`nextUpDraft`): the first live draft with
+  // instruction text, wherever it sits relative to the delivered objective —
+  // objectives can launch out of order (coo:1274). Submitted objectives and
+  // blank drafts are skipped; Run Queue membership stays authoritative.
   const nextObjective = (await ctx.db.get(
     `SELECT id, title
        FROM objectives
-       WHERE mission_id = ? AND position > (
-         SELECT position FROM objectives WHERE id = ?
-       ) AND state = 'draft' AND TRIM(COALESCE(instruction_text, '')) <> ''
-       ORDER BY position ASC LIMIT 1`,
-    [mission.id, session.objective_id]
+       WHERE mission_id = ? AND deleted_at IS NULL
+         AND state = 'draft' AND TRIM(COALESCE(instruction_text, '')) <> ''
+       ORDER BY position ASC, created_at ASC, id ASC LIMIT 1`,
+    [mission.id]
   )) as
     | {
         id: string;

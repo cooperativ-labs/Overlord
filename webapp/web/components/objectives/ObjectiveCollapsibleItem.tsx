@@ -444,9 +444,8 @@ export function ObjectiveCollapsibleItem({
                       <DialogTitle>Force disconnect this objective?</DialogTitle>
                       <DialogDescription>
                         This ends Overlord&apos;s active session and clears its pending launch. The
-                        objective returns to Draft, and any existing draft becomes the first future
-                        objective. Its deliveries, file changes, and terminal session are kept as
-                        previous runs.
+                        objective returns to the top of the draft queue. Its deliveries, file
+                        changes, and terminal session are kept as previous runs.
                       </DialogDescription>
                     </DialogHeader>
                     <DialogFooter>

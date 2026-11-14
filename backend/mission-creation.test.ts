@@ -14,8 +14,15 @@ const tempDir = mkdtempSync(path.join(os.tmpdir(), 'overlord-mission-creation-')
 const { bootstrapIntegrationTestDb } = await import('./test-helpers.ts');
 await bootstrapIntegrationTestDb({ sqlitePath: path.join(tempDir, 'webapp.sqlite') });
 
-const { createMission, createProject, createProjectTag, getMissionDetail, listProjectStatuses } =
-  await import('./repository.ts');
+const {
+  createMission,
+  createObjective,
+  createProject,
+  createProjectTag,
+  getMissionDetail,
+  listObjectives,
+  listProjectStatuses
+} = await import('./repository.ts');
 const { db } = await import('./db.ts');
 const { createTestWorkspaceContext } = await import('./test-helpers.ts');
 const { WORKSPACE } = createTestWorkspaceContext(await import('./db.ts'));
@@ -118,7 +125,7 @@ describe('REST mission creation', () => {
     );
   });
 
-  it('creates objective #1 as draft and the rest as future', async () => {
+  it('creates every objective as a draft in position order', async () => {
     const project = await createProject({ name: 'REST Create Objective States' });
     const mission = await createMission({
       projectId: project.id,
@@ -133,9 +140,22 @@ describe('REST mission creation', () => {
       })),
       [
         { text: 'First', state: 'draft', position: 0 },
-        { text: 'Second', state: 'future', position: 1 },
-        { text: 'Third', state: 'future', position: 2 }
+        { text: 'Second', state: 'draft', position: 1 },
+        { text: 'Third', state: 'draft', position: 2 }
       ]
+    );
+
+    // Appending another objective adds a draft at the end and changes no row.
+    const before = await listObjectives(mission.id);
+    const added = await createObjective({ missionId: mission.id, instructionText: 'Fourth' });
+    assert.equal(added.state, 'draft');
+    assert.equal(added.position, 3);
+    const after = await listObjectives(mission.id);
+    assert.deepEqual(
+      after
+        .filter(objective => objective.id !== added.id)
+        .map(o => [o.id, o.state, o.position, o.revision]),
+      before.map(o => [o.id, o.state, o.position, o.revision])
     );
   });
 

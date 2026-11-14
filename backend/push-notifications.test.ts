@@ -366,7 +366,7 @@ test('an objective-scoped push leads with the objective display id and title', a
     missionId: mission.id,
     title: 'Phase C: Activity surfaces',
     instructionText: 'Do not leak this instruction text',
-    state: 'future'
+    state: 'draft'
   });
 
   const presentation = await buildPushNotificationPresentation({

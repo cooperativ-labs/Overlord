@@ -54,7 +54,7 @@ type GhostObjectiveProps = {
  * the ordinary {@link DraftObjective} card, Run included.
  *
  * Creating with `state: 'draft'` matches the previous affordance: the server
- * promotes it to `future` automatically when a draft already exists, so the
+ * appends another `draft` when a draft already exists, so the
  * queue keeps exactly one next-up objective.
  */
 export function GhostObjective({

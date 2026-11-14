@@ -170,7 +170,7 @@ export function useDeferredWorkActions(
         missionId: item.missionId,
         instructionText: promotion.instructionText,
         title: promotion.title,
-        state: 'future',
+        state: 'draft',
         resourceKey: resourceKeyOf(source)
       });
       await record({ status: 'done', outcome: 'objective_added', outcomeRef: created.displayId });

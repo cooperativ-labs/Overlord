@@ -104,7 +104,7 @@ describe('human objective scoping', () => {
       ctx,
       missionId: fixtureMissionId,
       instructionText: 'Sibling route scope',
-      state: 'future'
+      state: 'draft'
     });
     const firstChannel = await createSessionChannel({
       ctx,

@@ -1,6 +1,6 @@
 {
-  "description": "Shared fixture for the Mission summary client derivations (plan mission-summary-section-implementation.md §5.2, §5.6). The web tests (webapp/web/lib/mission-summary-derive.test.ts) and the iOS tests (OverlordTests/MissionSummaryDeriveTests.swift) both load this file and assert the `expected` block. A review mission with four deliveries across three objectives: delivery-a1 is superseded for actions by the newer delivery-a2 on the same objective, objective obj-x was deleted (its delivery renders as the unassigned `Delivery` row), and obj-c has one open question. seenAt sits between the second and third delivery so the new-item dot is exercised. The envelope is what the server returns: it already applied supersession and selection; the client merges questions, dedupes actions by normalised text and dates suggestions and risks.",
-  "contractVersion": 167,
+  "description": "Shared fixture for the Mission summary client derivations (plan mission-summary-section-implementation.md §5.2, §5.6). The web tests (webapp/web/lib/mission-summary-derive.test.ts) and the iOS tests (OverlordTests/MissionSummaryDeriveTests.swift) both load this file and assert the `expected` block. A review mission with four deliveries across three objectives: delivery-a1 is superseded for actions by the newer delivery-a2 on the same objective, objective obj-x was deleted (its delivery renders as the unassigned `Delivery` row), and obj-c has one open question. seenAt sits between the second and third delivery so the new-item dot is exercised. The unstarted objectives form the draft queue (contract v172, ADR 0056): a submitted objective, a blank draft and an authored draft, none of which is running or a source. The envelope is what the server returns: it already applied supersession and selection; the client merges questions, dedupes actions by normalised text and dates suggestions and risks.",
+  "contractVersion": 172,
   "reviewMission": {
     "input": {
       "mission": {
@@ -11,7 +11,9 @@
           { "id": "obj-a", "displayId": "coo:900.aaaa", "title": "Build the derive module", "state": "complete", "reopenedAt": null },
           { "id": "obj-c", "displayId": "coo:900.cccc", "title": "Port the section to iOS", "state": "executing", "reopenedAt": null },
           { "id": "obj-d", "displayId": "coo:900.dddd", "title": "Write the docs", "state": "pending_delivery", "reopenedAt": null },
-          { "id": "obj-e", "displayId": "coo:900.eeee", "title": "Polish the empty state", "state": "future", "reopenedAt": null }
+          { "id": "obj-s", "displayId": "coo:900.ssss", "title": "Discuss the widget layout", "state": "submitted", "reopenedAt": null },
+          { "id": "obj-b", "displayId": "coo:900.bbbb", "title": "New objective", "state": "draft", "reopenedAt": null },
+          { "id": "obj-e", "displayId": "coo:900.eeee", "title": "Polish the empty state", "state": "draft", "reopenedAt": null }
         ]
       },
       "deliveries": [

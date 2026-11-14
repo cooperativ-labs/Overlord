@@ -192,7 +192,7 @@ test('a mission card lists every objective in mission-panel display order', asyn
   const running = await createObjective({
     missionId: mission.id,
     instructionText: 'Second',
-    state: 'future'
+    state: 'draft'
   });
   db.prepare(
     `UPDATE objectives SET state = 'executing', started_at = '2026-08-02T00:00:00.000Z'
@@ -202,7 +202,7 @@ test('a mission card lists every objective in mission-panel display order', asyn
   const planned = await createObjective({
     missionId: mission.id,
     instructionText: 'Third',
-    state: 'future',
+    state: 'draft',
     autoAdvance: true
   });
 
@@ -217,7 +217,7 @@ test('a mission card lists every objective in mission-panel display order', asyn
   );
   assert.deepEqual(
     item.objectives.map(objective => objective.state),
-    ['complete', 'executing', 'future']
+    ['complete', 'executing', 'draft']
   );
   assert.equal(item.objectives[2]!.autoAdvance, true);
 });
@@ -229,7 +229,7 @@ test('one mission running two objectives is still a single card', async () => {
   const right = await createObjective({
     missionId: mission.id,
     instructionText: 'Right',
-    state: 'future'
+    state: 'draft'
   });
   db.prepare(`UPDATE objectives SET state = 'executing' WHERE id IN (?, ?)`).run(left.id, right.id);
 

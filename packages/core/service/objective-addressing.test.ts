@@ -145,11 +145,6 @@ describe('objective-addressed protocol entry points', () => {
       projectId: project.id,
       objectives: [{ objective: 'First' }, { objective: 'Second' }]
     });
-    // createMissionWithObjectives leaves later objectives in `future`; make both
-    // drafts so "the draft" is genuinely ambiguous.
-    for (const objective of objectives) {
-      await ctx.db.run(`UPDATE objectives SET state = 'draft' WHERE id = ?`, [objective.id]);
-    }
     const second = objectives[1]!;
 
     const submitted = await discussObjective({
@@ -158,11 +153,47 @@ describe('objective-addressed protocol entry points', () => {
       objectiveId: second.displayId
     });
     assert.equal(submitted.id, second.id);
+    assert.equal(submitted.state, 'submitted');
+    const stored = (await ctx.db.get(
+      `SELECT state, launched_at, position FROM objectives WHERE id = ?`,
+      [second.id]
+    )) as { state: string; launched_at: string | null; position: number };
+    assert.equal(stored.state, 'submitted');
+    assert.equal(stored.launched_at, null);
+    assert.equal(stored.position, second.position);
 
     const first = (await ctx.db.get(`SELECT state FROM objectives WHERE id = ?`, [
       objectives[0]!.id
     ])) as { state: string };
     assert.equal(first.state, 'draft');
+
+    await db.close();
+  });
+
+  it('discuss-objective without an objective submits the first draft without launching it', async () => {
+    const { db, ctx } = await createSeededServiceContext({ source: 'protocol' });
+    const project = await createProject({ ctx, name: 'Default Draft' });
+    const { mission, objectives } = await createMissionWithObjectives({
+      ctx,
+      projectId: project.id,
+      objectives: [{ objective: 'First' }, { objective: 'Second' }]
+    });
+
+    const submitted = await discussObjective({ ctx, missionId: mission.displayId });
+    assert.equal(submitted.id, objectives[0]!.id);
+    assert.equal(submitted.state, 'submitted');
+
+    const rows = (await ctx.db.all(
+      `SELECT id, state, launched_at FROM objectives WHERE mission_id = ? ORDER BY position`,
+      [mission.id]
+    )) as Array<{ id: string; state: string; launched_at: string | null }>;
+    assert.deepEqual(
+      rows.map(row => [row.id, row.state, row.launched_at]),
+      [
+        [objectives[0]!.id, 'submitted', null],
+        [objectives[1]!.id, 'draft', null]
+      ]
+    );
 
     await db.close();
   });

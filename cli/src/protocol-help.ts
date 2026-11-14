@@ -30,7 +30,7 @@ export const SUPPORTED_PROTOCOL_SUBCOMMANDS = [
   'read-context',
   'record-work',
   'register-target',
-  'reorder-future-objectives',
+  'reorder-objectives',
   'reorder-project-run-queues',
   'reorder-run-queue',
   'run-queue',
@@ -113,8 +113,7 @@ Subcommands:
   load-context           Read mission context without creating a session
   list-deliveries        List normalized deliveries for one mission
   launch-objective       Queue an objective for execution
-  reorder-future-objectives
-                         Reorder all future objectives in one mission
+  reorder-objectives     Replace one mission's complete order of unstarted (draft/submitted) objectives
   search                 Find grouped mission/objective/delivery matches
   statuses                List one project's ordered board columns
   discuss-objective      Mark a draft objective as submitted (does not start execution)
@@ -322,18 +321,19 @@ launch-objective:
     The queued or already-active ExecutionRequestDto. Existing launchability,
     authorization, target resolution, sibling, and idempotency rules apply.
 
-reorder-future-objectives:
+reorder-objectives:
   Purpose:
-    Change the order of one mission's future objectives without moving draft,
-    active, or complete objectives.
+    Replace one mission's complete order of unstarted (draft/submitted)
+    objectives. Launching, active, and complete objectives keep their positions.
   Required:
     --mission-id <uuid>
     --ordered-objective-ids-json <json>
   Returns:
     The mission's full ObjectiveDto[] list in its new order.
   Rules:
-    Supply every future objective UUID in the complete desired top-to-bottom order.
-    Duplicate, missing, and non-future objective ids are rejected.
+    Supply every draft and submitted objective UUID exactly once, in the complete
+    desired top-to-bottom order; the head may move. Duplicate, missing, extra, and
+    non-queued objective ids are rejected; a stale set is rejected (reload and retry).
 
 run-queue:
   Purpose:
@@ -596,8 +596,8 @@ update-objective:
     Run Queue holds it as blocked until an agent is assigned.
     Title edits are allowed in any objective state. An empty title clears the
     custom title and restores instruction-derived presentation.
-    Instruction text may be edited only when the objective is in draft or future state.
-    Blank instruction text is allowed in those states.
+    Instruction text may be edited only when the objective is in draft state.
+    Blank instruction text is allowed in that state.
   Returns:
     The updated objective JSON, including assignedAgent, model, reasoningEffort,
     and resourceKey. autoAdvance is deprecated and derived from live queueEntry membership.

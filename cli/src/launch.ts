@@ -307,6 +307,22 @@ function objectiveTitleText(objective: Record<string, unknown>): string | null {
   return instruction.length > 80 ? `${instruction.slice(0, 77).trimEnd()}…` : instruction;
 }
 
+/**
+ * Next runnable draft (`nextUpDraft` in automations): the first draft with
+ * instruction text by position, then id. Skips submitted and blank drafts.
+ */
+function nextRunnableDraft(
+  objectives: Record<string, unknown>[]
+): Record<string, unknown> | undefined {
+  return [...objectives]
+    .filter(objective => objective.state === 'draft' && objectiveInstruction(objective).trim())
+    .sort(
+      (a, b) =>
+        Number(a.position ?? 0) - Number(b.position ?? 0) ||
+        String(a.id ?? '').localeCompare(String(b.id ?? ''))
+    )[0];
+}
+
 /** Match server `resolveActiveObjective` when the caller did not pin an objective. */
 function pickLaunchObjective(
   objectives: Record<string, unknown>[],
@@ -323,6 +339,8 @@ function pickLaunchObjective(
     objectives.find(objective => objective.state === 'executing') ??
     objectives.find(objective => objective.state === 'launching') ??
     objectives.find(objective => objective.state === 'pending_delivery') ??
+    objectives.find(objective => objective.state === 'submitted') ??
+    nextRunnableDraft(objectives) ??
     objectives.find(objective => objective.state === 'draft') ??
     objectives.find(objective => objective.state !== 'complete') ??
     objectives[0]

@@ -348,12 +348,12 @@ test('PM-management MCP tools preserve the protocol contracts', () => {
   assert.match(launch.description, /does not attach this MCP agent/);
 
   const reorder = hostedMcpToolDefinitions.find(
-    definition => definition.name === 'overlord_reorder_future_objectives'
+    definition => definition.name === 'overlord_reorder_objectives'
   );
   assert.ok(reorder);
   assert.equal(reorder.annotations?.readOnlyHint, false);
   assert.deepEqual(reorder.inputSchema.required, ['missionId', 'orderedObjectiveIds']);
-  assert.match(reorder.description, /every future objective UUID/);
+  assert.match(reorder.description, /every draft and submitted objective UUID/);
 
   for (const [name, listProperty] of [
     ['overlord_delete_missions', 'missionIds'],

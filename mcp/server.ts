@@ -503,12 +503,12 @@ const toolHandlers: Record<string, ToolHandler> = {
           : {})
       })
     ),
-  overlord_reorder_future_objectives: args => {
+  overlord_reorder_objectives: args => {
     if (!Array.isArray(args.orderedObjectiveIds)) {
       throw new Error('orderedObjectiveIds must be an array');
     }
     return runProtocolSubcommand(
-      'reorder-future-objectives',
+      'reorder-objectives',
       protocolBody({
         '--mission-id': requiredString(args, 'missionId'),
         '--ordered-objective-ids-json': JSON.stringify(args.orderedObjectiveIds)

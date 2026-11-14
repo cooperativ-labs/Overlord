@@ -1,73 +1,73 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { mergeFutureObjectiveOrder } from './future-objective-order.ts';
+import { mergeQueuedObjectiveOrder } from './queued-objective-order.ts';
 
-describe('mergeFutureObjectiveOrder', () => {
+describe('mergeQueuedObjectiveOrder', () => {
   it('keeps the local order while a local reorder is pending', () => {
-    const previousIds = ['future-2', 'future-1', 'future-3'];
-    const next = mergeFutureObjectiveOrder({
+    const previousIds = ['queued-2', 'queued-1', 'queued-3'];
+    const next = mergeQueuedObjectiveOrder({
       previousIds,
-      incomingIds: ['future-1', 'future-2', 'future-3'],
+      incomingIds: ['queued-1', 'queued-2', 'queued-3'],
       reorderPending: true
     });
     assert.equal(next, previousIds);
-    assert.deepEqual(next, ['future-2', 'future-1', 'future-3']);
+    assert.deepEqual(next, ['queued-2', 'queued-1', 'queued-3']);
   });
 
   it('takes a server-side reorder when no local reorder is pending', () => {
     assert.deepEqual(
-      mergeFutureObjectiveOrder({
-        previousIds: ['future-1', 'future-2', 'future-3'],
-        incomingIds: ['future-2', 'future-3', 'future-1'],
+      mergeQueuedObjectiveOrder({
+        previousIds: ['queued-1', 'queued-2', 'queued-3'],
+        incomingIds: ['queued-2', 'queued-3', 'queued-1'],
         reorderPending: false
       }),
-      ['future-2', 'future-3', 'future-1']
+      ['queued-2', 'queued-3', 'queued-1']
     );
   });
 
   it('returns the same array when nothing changed', () => {
-    const previousIds = ['future-1', 'future-2'];
+    const previousIds = ['queued-1', 'queued-2'];
     assert.equal(
-      mergeFutureObjectiveOrder({
+      mergeQueuedObjectiveOrder({
         previousIds,
-        incomingIds: ['future-1', 'future-2'],
+        incomingIds: ['queued-1', 'queued-2'],
         reorderPending: false
       }),
       previousIds
     );
   });
 
-  it('places a demoted draft first when a future objective is promoted', () => {
+  it('places a reopened objective first when another one launched', () => {
     assert.deepEqual(
-      mergeFutureObjectiveOrder({
-        previousIds: ['future-1', 'future-2', 'future-3', 'future-4'],
-        incomingIds: ['draft', 'future-1', 'future-2', 'future-4'],
+      mergeQueuedObjectiveOrder({
+        previousIds: ['queued-1', 'queued-2', 'queued-3', 'queued-4'],
+        incomingIds: ['reopened', 'queued-1', 'queued-2', 'queued-4'],
         reorderPending: false
       }),
-      ['draft', 'future-1', 'future-2', 'future-4']
+      ['reopened', 'queued-1', 'queued-2', 'queued-4']
     );
   });
 
-  it('appends a newly authored future at the end of the server order', () => {
+  it('appends a newly authored draft at the end of the server order', () => {
     assert.deepEqual(
-      mergeFutureObjectiveOrder({
-        previousIds: ['future-1', 'future-2'],
-        incomingIds: ['future-1', 'future-2', 'future-3'],
+      mergeQueuedObjectiveOrder({
+        previousIds: ['queued-1', 'queued-2'],
+        incomingIds: ['queued-1', 'queued-2', 'queued-3'],
         reorderPending: false
       }),
-      ['future-1', 'future-2', 'future-3']
+      ['queued-1', 'queued-2', 'queued-3']
     );
   });
 
-  it('drops a deleted future without reordering the rest', () => {
+  it('drops a deleted draft without reordering the rest', () => {
     assert.deepEqual(
-      mergeFutureObjectiveOrder({
-        previousIds: ['future-1', 'future-2', 'future-3'],
-        incomingIds: ['future-1', 'future-3'],
+      mergeQueuedObjectiveOrder({
+        previousIds: ['queued-1', 'queued-2', 'queued-3'],
+        incomingIds: ['queued-1', 'queued-3'],
         reorderPending: false
       }),
-      ['future-1', 'future-3']
+      ['queued-1', 'queued-3']
     );
   });
 });

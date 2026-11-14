@@ -1,5 +1,4 @@
 export type ObjectiveLifecycleState =
-  | 'future'
   | 'draft'
   | 'submitted'
   | 'launching'
@@ -91,21 +90,10 @@ export function siblingBlocksParallelLaunch({
 }
 
 export type ObjectiveLifecycleViolation = {
-  code:
-    | 'multiple_drafts'
-    | 'multiple_active_objectives'
-    | 'duplicate_position'
-    | 'blank_instruction_after_draft';
+  code: 'multiple_active_objectives' | 'duplicate_position' | 'blank_instruction_after_draft';
   objectiveIds: string[];
   message: string;
 };
-
-export type EnsureDraftSlotPlan =
-  | {
-      action: 'none';
-      reason: 'draft_slot_filled' | 'next_up_still_launching' | 'no_future_objective';
-    }
-  | { action: 'promote_future'; objectiveId: string };
 
 export type AutoAdvanceDecision =
   | { action: 'none'; reason: 'no_non_empty_draft' | 'human_only_mission' }
@@ -178,7 +166,6 @@ export type RunQueueDispatchAction =
       action: 'dispatch';
       entryId: string;
       objectiveId: string;
-      promoteFutureToDraft: boolean;
       idempotencyKey: string;
     };
 
@@ -278,7 +265,6 @@ export function planRunQueueDispatch(input: {
         action: 'dispatch',
         entryId: entry.id,
         objectiveId: entry.objectiveId,
-        promoteFutureToDraft: objective.state === 'future',
         idempotencyKey: `run_queue:${entry.id}:attempt:${entry.attemptCount + 1}`
       });
       if (!allowParallel) claimedMissions.set(objective.missionId, objective.id);
@@ -291,11 +277,17 @@ export function planRunQueueDispatch(input: {
 export type ObjectiveLifecycleView<TObjective extends ObjectiveLifecycleObjective> = {
   orderedObjectives: TObjective[];
   executedObjectives: TObjective[];
-  editableObjectives: TObjective[];
-  futureObjectives: TObjective[];
+  /** Every `launching` objective, oldest launch first. Not reorderable. */
+  launchingObjectives: TObjective[];
+  /**
+   * The reorderable draft queue: every `draft` / `submitted` objective in
+   * position order. `queuedObjectives[0]` is the queue head.
+   */
+  queuedObjectives: TObjective[];
   activeObjective: TObjective | null;
   /** Every `executing` / `pending_delivery` objective, position order. */
   activeObjectives: TObjective[];
+  /** First objective in `[...launchingObjectives, ...queuedObjectives]`. */
   nextUpObjective: TObjective | null;
   hasNonExecuted: boolean;
   violations: ObjectiveLifecycleViolation[];
@@ -307,8 +299,13 @@ export const EDITABLE_NEXT_UP_OBJECTIVE_STATES = [
   'launching'
 ] as const satisfies readonly ObjectiveLifecycleState[];
 
-export const FUTURE_OBJECTIVE_STATES = [
-  'future'
+/**
+ * The reorderable, not-yet-launched states: the draft queue. `launching` is
+ * deliberately excluded — a launch in flight holds its position.
+ */
+export const QUEUED_OBJECTIVE_STATES = [
+  'draft',
+  'submitted'
 ] as const satisfies readonly ObjectiveLifecycleState[];
 
 export const ACTIVE_OBJECTIVE_STATES = [
@@ -356,8 +353,50 @@ export function isEditableNextUpObjective(objective: ObjectiveLifecycleObjective
   return stateIn(objective.state, EDITABLE_NEXT_UP_OBJECTIVE_STATES);
 }
 
-export function isFutureObjective(objective: ObjectiveLifecycleObjective): boolean {
-  return stateIn(objective.state, FUTURE_OBJECTIVE_STATES);
+export function isQueuedObjective(objective: ObjectiveLifecycleObjective): boolean {
+  return stateIn(objective.state, QUEUED_OBJECTIVE_STATES);
+}
+
+/**
+ * Next runnable draft: the first live `draft` with non-empty instruction text,
+ * by `position`, then `createdAt`, then `id`. Skips `submitted` objectives
+ * (being discussed) and saved blank drafts. Use only for *automatic* draft
+ * selection (auto-advance, awaiting-approval notices, default attach after
+ * active-state resolution). SQL mirrors: `state = 'draft' AND
+ * TRIM(COALESCE(instruction_text, '')) <> '' ORDER BY position, created_at, id`.
+ */
+export function nextUpDraft<TObjective extends ObjectiveLifecycleObjective>(
+  objectives: readonly TObjective[]
+): TObjective | null {
+  return (
+    sortObjectivesByLifecycleOrder(objectives).find(
+      objective => objective.state === 'draft' && objectiveHasInstructionText(objective)
+    ) ?? null
+  );
+}
+
+/**
+ * First draft: the first live `draft` by position, blank allowed. Use for
+ * editing, discuss-objective and the mission card's draft resource badge.
+ * SQL mirrors: `state = 'draft' ORDER BY position, created_at, id LIMIT 1`.
+ */
+export function firstDraft<TObjective extends ObjectiveLifecycleObjective>(
+  objectives: readonly TObjective[]
+): TObjective | null {
+  return (
+    sortObjectivesByLifecycleOrder(objectives).find(objective => objective.state === 'draft') ??
+    null
+  );
+}
+
+/**
+ * Queue head: the first live `draft` or `submitted` objective by position,
+ * blank allowed. This is what the mission panel renders as the full card.
+ */
+export function queueHeadObjective<TObjective extends ObjectiveLifecycleObjective>(
+  objectives: readonly TObjective[]
+): TObjective | null {
+  return sortObjectivesByLifecycleOrder(objectives).find(isQueuedObjective) ?? null;
 }
 
 export function isActiveObjective(objective: ObjectiveLifecycleObjective): boolean {
@@ -399,7 +438,7 @@ export function shouldDiscardEmptiedObjective(
   if (objectiveHasInstructionText(objective)) return false;
   if (attachmentCount > 0) return false;
   if (hasHistory) return false;
-  return isFutureObjective(objective) || objective.state === 'draft';
+  return objective.state === 'draft';
 }
 
 export function sortObjectivesByLifecycleOrder<TObjective extends ObjectiveLifecycleObjective>(
@@ -458,7 +497,7 @@ function sortByLifecycleMoment<TObjective extends ObjectiveLifecycleObjective>(
  * 1. **complete** — oldest completion first, so the list reads as a timeline.
  * 2. **executing / pending_delivery** — oldest start first.
  * 3. **launching** — oldest launch first.
- * 4. **draft / submitted**, then **future** — still the authored queue order,
+ * 4. **draft / submitted** — the draft queue, in authored position order,
  *    which is the only order that means anything for work that has not started.
  *
  * Each group is sorted by its own moment; position remains the tiebreaker
@@ -479,8 +518,7 @@ export function sortObjectivesForMissionDisplay<TObjective extends ObjectiveLife
       ordered.filter(objective => objective.state === 'launching'),
       objective => objective.launchedAt
     ),
-    ...ordered.filter(objective => objective.state === 'draft' || objective.state === 'submitted'),
-    ...ordered.filter(isFutureObjective)
+    ...ordered.filter(isQueuedObjective)
   ];
 }
 
@@ -491,15 +529,6 @@ export function validateObjectiveLifecycle(
   const ordered = sortObjectivesByLifecycleOrder(objectives);
   const violations: ObjectiveLifecycleViolation[] = [];
   const allowParallel = options.allowParallelObjectives === true;
-
-  const drafts = ordered.filter(o => o.state === 'draft');
-  if (drafts.length > 1) {
-    violations.push({
-      code: 'multiple_drafts',
-      objectiveIds: drafts.map(o => o.id),
-      message: 'A mission may have at most one draft objective.'
-    });
-  }
 
   const active = ordered.filter(isActiveObjective);
   // With parallel objectives opted in, several actives are legal on any resource:
@@ -558,69 +587,32 @@ export function deriveObjectiveLifecycleView<TObjective extends ObjectiveLifecyc
       (isActiveObjective(objective) || objective.state === 'complete') &&
       objectiveHasInstructionText(objective)
   );
-  const editableObjectives = orderedObjectives.filter(isEditableNextUpObjective);
-  const futureObjectives = orderedObjectives.filter(isFutureObjective);
+  const launchingObjectives = orderedObjectives.filter(
+    objective => objective.state === 'launching'
+  );
+  const queuedObjectives = orderedObjectives.filter(isQueuedObjective);
   const activeObjectives = orderedObjectives.filter(isActiveObjective);
   const activeObjective = activeObjectives[0] ?? null;
-  const nextUpObjective = orderedObjectives.find(isEditableNextUpObjective) ?? null;
+  const nextUpObjective = launchingObjectives[0] ?? queuedObjectives[0] ?? null;
 
   return {
     orderedObjectives,
     executedObjectives,
-    editableObjectives,
-    futureObjectives,
+    launchingObjectives,
+    queuedObjectives,
     activeObjective,
     activeObjectives,
     nextUpObjective,
-    hasNonExecuted: editableObjectives.length > 0 || futureObjectives.length > 0,
+    hasNonExecuted: launchingObjectives.length + queuedObjectives.length > 0,
     violations: validateObjectiveLifecycle(orderedObjectives, options)
   };
-}
-
-/**
- * Plans the next-up slot refill after an objective leaves the queue.
- *
- * A mission's "empty slot to type into" is a **client-only** affordance (the
- * mission panel's ghost objective card), never a persisted blank objective: a
- * stored objective with no instruction text is indistinguishable from real work
- * to agents, counts, and auto-advance. So this planner only ever promotes an
- * already-authored future objective; when there is none it does nothing and the
- * UI renders its own unsaved composer.
- */
-export function planEnsureDraftSlot(
-  objectives: readonly ObjectiveLifecycleObjective[]
-): EnsureDraftSlotPlan {
-  const ordered = sortObjectivesByLifecycleOrder(objectives);
-  if (ordered.some(objective => objective.state === 'draft')) {
-    return { action: 'none', reason: 'draft_slot_filled' };
-  }
-  if (
-    ordered.some(objective => objective.state === 'submitted' || objective.state === 'launching')
-  ) {
-    return { action: 'none', reason: 'next_up_still_launching' };
-  }
-
-  // Only an authored future objective refills the slot. A blank one is a legacy
-  // row from when blank slots were persisted, not work to promote — matching the
-  // `TRIM(instruction_text) <> ''` guard the backend and core refill paths use,
-  // so the planner and the implementations cannot disagree.
-  const nextFuture = ordered.find(
-    objective => isFutureObjective(objective) && objectiveHasInstructionText(objective)
-  );
-  if (nextFuture) {
-    return { action: 'promote_future', objectiveId: nextFuture.id };
-  }
-
-  return { action: 'none', reason: 'no_future_objective' };
 }
 
 export function decideAutoAdvanceAfterDelivery(
   objectives: readonly ObjectiveLifecycleObjective[],
   options: { humanOnly?: boolean; defaultApprovalReason?: string } = {}
 ): AutoAdvanceDecision {
-  const nextDraft = sortObjectivesByLifecycleOrder(objectives).find(
-    objective => objective.state === 'draft' && objectiveHasInstructionText(objective)
-  );
+  const nextDraft = nextUpDraft(objectives);
 
   if (!nextDraft) {
     return { action: 'none', reason: 'no_non_empty_draft' };

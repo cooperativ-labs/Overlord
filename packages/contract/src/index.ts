@@ -271,7 +271,7 @@ export type {
   ReleasedAgentRequestDto,
   RemoveWorktreeBody,
   ReorderBoardColumnBody,
-  ReorderFutureObjectivesBody,
+  ReorderObjectivesBody,
   ReorderProjectRunQueuesBody,
   ReorderProjectsBody,
   ReorderProjectStatusesBody,

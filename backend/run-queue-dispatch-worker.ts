@@ -241,11 +241,6 @@ export async function dispatchProjectRunQueues(
           tx,
           entry.enqueued_by_workspace_user_id
         );
-        if (action.promoteFutureToDraft)
-          await tx.run(
-            "UPDATE objectives SET state = 'draft', updated_at = ?, revision = revision + 1 WHERE id = ? AND state = 'future'",
-            [now, objective.id]
-          );
         // A retry of an objective wedged in `launching` — its launch died before
         // the runner attached, and `expireStaleExecutionRequests` already retired
         // the request. Without this reset the `state IN ('draft','submitted')`

@@ -3,10 +3,10 @@ info:
   title: Overlord API
   # info.version is the API description's own Semantic Version; it changes when
   # this document changes and is never compared with the contract version.
-  version: 3.0.0
+  version: 4.0.0
   # The contract version (contract/VERSION) this document belongs to. Written
   # only by `yarn version:contract`.
-  x-overlord-contract-version: 171.0.0
+  x-overlord-contract-version: 172.0.1
   description: >-
     Normative description of Overlord's REST surface (ADR 0006): one operation for every
     method and path the backend registers, at the path it is served (ADR 0007), excluding
@@ -4654,8 +4654,8 @@ paths:
         objective is already running, in which case the running siblings are seeded ahead of it as
         `running` entries and the queue is resumed). An objective already `executing` or
         `pending_delivery` is entered as `running`. Unless `cascade` is `false`, every later
-        not-yet-started objective of the mission (`draft`, `submitted` or `future`, with instruction text)
-        is queued directly behind it. An objective that is already queued answers its existing entry
+        not-yet-started objective of the mission positioned after it (`draft` or `submitted`, with
+        instruction text) is queued directly behind it; earlier unqueued drafts stay unqueued. An objective that is already queued answers its existing entry
         unchanged. Mission objective positions are rewritten to the queue order and a dispatch tick is
         scheduled.
       security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
@@ -8236,10 +8236,14 @@ paths:
       x-overlord-permission: objective:update
       x-overlord-edition: both
       x-overlord-consumers: [mobile, webapp]
-      summary: Reorder a mission's future objectives
+      summary: Reorder a mission's draft queue
       description: >-
-        Requires `objective:update`. Renumbers the listed `future` objectives from the lowest position
-        they hold and carries the order into every Run Queue holding the mission's waiting entries. Only a
+        Requires `objective:update`. `orderedObjectiveIds` must be exactly the mission's live `draft` and
+        `submitted` objectives (400 when an id is missing, extra, duplicated, foreign or not queued; 409
+        when the set changed concurrently, so the client refetches). The listed objectives are written
+        into the sorted position slots they already hold, so `launching`, active and complete
+        objectives never move, and the order is carried into every Run Queue holding the mission's
+        waiting entries in the same transaction. An unchanged order writes nothing. Only a
         mission UUID works here: a display id passes authorization but then answers 404 (see
         schema-disagreements.md).
       security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
@@ -8247,7 +8251,7 @@ paths:
         required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/ReorderFutureObjectivesBody' }
+            schema: { $ref: '#/components/schemas/ReorderObjectivesBody' }
       responses:
         '200':
           description: Every objective of the mission in its new order.
@@ -8940,7 +8944,7 @@ paths:
       summary: Add an objective to a mission
       description: >-
         Requires `objective:update` on the mission's workspace. Appended after the mission's last
-        objective; draft and future slots default the agent from the project's last launch selection.
+        objective as a `draft`; a draft defaults the agent from the project's last launch selection.
       security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
       requestBody:
         required: true
@@ -10953,7 +10957,7 @@ components:
       enum: [ low, normal, high, urgent ]
     ObjectiveState:
       type: string
-      enum: [ future, draft, submitted, launching, executing, pending_delivery, complete ]
+      enum: [ draft, submitted, launching, executing, pending_delivery, complete ]
     CreatedByKind:
       type: string
       enum: [ human, agent, automation ]
@@ -12524,8 +12528,7 @@ components:
       required: [ projectId ]
       description: >-
         At least one of `title`, `firstObjective` and `objectives` must carry text (400 otherwise).
-        `objectives` wins over `firstObjective`; the first objective is created `draft`, the rest
-        `future`.
+        `objectives` wins over `firstObjective`; every objective is created `draft`, in order.
       properties:
         projectId:
           type: string
@@ -12653,14 +12656,16 @@ components:
     ObjectiveList:
       type: array
       items: { $ref: '#/components/schemas/ObjectiveDto' }
-    ReorderFutureObjectivesBody:
+    ReorderObjectivesBody:
       type: object
       required: [ orderedObjectiveIds ]
       properties:
         orderedObjectiveIds:
           type: array
           uniqueItems: true
-          description: Objective UUIDs, each a `future` objective of the mission (400 otherwise), top to bottom.
+          description: >-
+            Every live `draft` and `submitted` objective UUID of the mission, exactly once, top to bottom
+            (400 otherwise; 409 when the queued set changed concurrently).
           items: { type: string }
     MissionEventActorDto:
       type: object
@@ -13638,7 +13643,7 @@ components:
           description: Mission UUID or display id; requires `objective:update` there.
         instructionText:
           type: string
-          description: Trimmed; may be blank only for a `draft` or `future` objective.
+          description: Trimmed; may be blank only for a `draft` objective.
         title:
           description: Blank or omitted derives a title from the instruction and generates a better one
             asynchronously.
@@ -13647,8 +13652,7 @@ components:
             - type: 'null'
         state:
           $ref: '#/components/schemas/ObjectiveState'
-          description: Defaults to `draft`; a `draft` request becomes `future` when the mission already has a
-            draft.
+          description: Defaults to `draft`. Creating a draft never changes another objective.
         autoAdvance:
           type: boolean
           description: Deprecated queue hint; defaults to false.
@@ -13665,7 +13669,7 @@ components:
         instructionText:
           type: string
           description: >-
-            Trimmed; may be blank only when the resulting state is `draft` or `future`. Refused (400)
+            Trimmed; may be blank only when the resulting state is `draft`. Refused (400)
             once the objective is `executing`, `pending_delivery` or `complete`.
         title:
           description: Blank or null clears it.
@@ -13675,9 +13679,10 @@ components:
         state:
           $ref: '#/components/schemas/ObjectiveState'
           description: >-
-            `complete` cannot move back to `future` (400). Moving an executed objective back to
-            `draft` reopens it (a new run); leaving an active state dequeues it and clears its active
-            execution requests.
+            Moving an executed objective back to `draft` reopens it (a new run) and moves it to the head
+            of the mission's draft queue, redistributing only the queued objectives' existing position
+            slots; leaving an active state dequeues it and clears its active execution requests. Setting
+            `draft` never changes another objective's state.
         autoAdvance:
           type: boolean
           description: Deprecated; adds the objective to, or removes it from, its mission's Run Queue.

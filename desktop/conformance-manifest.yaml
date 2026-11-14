@@ -1,6 +1,6 @@
 # Conformance manifest for the Overlord Desktop Shell.
 # Validates against contract/conformance-manifest.schema.yaml.
-contractVersion: 171.0.0
+contractVersion: 172.0.0
 componentType: desktop-shell
 componentKey: desktop
 label: 'Overlord Desktop Shell'

@@ -4,11 +4,13 @@ import { describe, it } from 'node:test';
 import {
   decideAutoAdvanceAfterDelivery,
   deriveObjectiveLifecycleView,
+  firstDraft,
   manageObjectiveLifecycle,
+  nextUpDraft,
   type ObjectiveLifecycleObjective,
   objectiveResourcesConflict,
-  planEnsureDraftSlot,
   planRunQueueDispatch,
+  queueHeadObjective,
   shouldDiscardEmptiedObjective,
   siblingBlocksParallelLaunch,
   sortObjectivesForMissionDisplay,
@@ -20,7 +22,7 @@ function objective(
 ): ObjectiveLifecycleObjective {
   return {
     position: 0,
-    state: 'future',
+    state: 'draft',
     instructionText: 'Do work',
     autoAdvance: false,
     assignedAgent: null,
@@ -31,7 +33,7 @@ function objective(
 describe('objective lifecycle rules', () => {
   it('derives the ordered UI groups without embedding rules in the component', () => {
     const view = deriveObjectiveLifecycleView([
-      objective({ id: 'future-1', position: 3, state: 'future' }),
+      objective({ id: 'future-1', position: 3, state: 'draft' }),
       objective({ id: 'done', position: 0, state: 'complete' }),
       objective({ id: 'next', position: 2, state: 'submitted' }),
       objective({ id: 'active', position: 1, state: 'executing' })
@@ -46,18 +48,16 @@ describe('objective lifecycle rules', () => {
       ['done', 'active']
     );
     assert.deepEqual(
-      view.editableObjectives.map(item => item.id),
-      ['next']
+      view.queuedObjectives.map(item => item.id),
+      ['next', 'future-1']
     );
-    assert.deepEqual(
-      view.futureObjectives.map(item => item.id),
-      ['future-1']
-    );
+    assert.deepEqual(view.launchingObjectives, []);
+    assert.equal(view.nextUpObjective?.id, 'next');
   });
 
   it('orders the mission list by lifecycle moment, not queue position', () => {
     const ordered = sortObjectivesForMissionDisplay([
-      objective({ id: 'future-1', position: 0, state: 'future' }),
+      objective({ id: 'queued-head', position: 0, state: 'submitted' }),
       objective({ id: 'draft', position: 1, state: 'draft' }),
       objective({
         id: 'launched-second',
@@ -106,8 +106,8 @@ describe('objective lifecycle rules', () => {
         'started-second',
         'launched-first',
         'launched-second',
-        'draft',
-        'future-1'
+        'queued-head',
+        'draft'
       ]
     );
   });
@@ -134,7 +134,7 @@ describe('objective lifecycle rules', () => {
 
   it('keeps the render groups as contiguous slices of the display order', () => {
     const view = deriveObjectiveLifecycleView([
-      objective({ id: 'future-1', position: 0, state: 'future' }),
+      objective({ id: 'head', position: 0, state: 'draft' }),
       objective({
         id: 'launching',
         position: 1,
@@ -158,13 +158,13 @@ describe('objective lifecycle rules', () => {
 
     assert.deepEqual(
       view.orderedObjectives.map(item => item.id),
-      ['done', 'active', 'launching', 'draft', 'future-1']
+      ['done', 'active', 'launching', 'head', 'draft']
     );
     assert.deepEqual(
       [
         ...view.executedObjectives.map(item => item.id),
-        ...view.editableObjectives.map(item => item.id),
-        ...view.futureObjectives.map(item => item.id)
+        ...view.launchingObjectives.map(item => item.id),
+        ...view.queuedObjectives.map(item => item.id)
       ],
       view.orderedObjectives.map(item => item.id)
     );
@@ -181,56 +181,45 @@ describe('objective lifecycle rules', () => {
 
     assert.deepEqual(
       violations.map(violation => violation.code),
-      [
-        'multiple_drafts',
-        'multiple_active_objectives',
-        'duplicate_position',
-        'blank_instruction_after_draft'
-      ]
+      ['multiple_active_objectives', 'duplicate_position', 'blank_instruction_after_draft']
     );
   });
 
-  it('plans draft-slot refill by promoting a future objective, never by creating a blank one', () => {
-    assert.deepEqual(
-      planEnsureDraftSlot([
-        objective({ id: 'done', position: 0, state: 'complete', assignedAgent: 'codex' }),
-        objective({ id: 'future', position: 1, state: 'future' })
-      ]),
-      { action: 'promote_future', objectiveId: 'future' }
-    );
-
-    // With nothing authored to promote, the empty next-up slot is the client's
-    // unsaved composer, so the planner persists nothing.
-    assert.deepEqual(
-      planEnsureDraftSlot([
-        objective({ id: 'done', position: 0, state: 'complete', assignedAgent: 'codex' })
-      ]),
-      { action: 'none', reason: 'no_future_objective' }
-    );
-
-    // A legacy blank future row is not work to promote either — the planner has
-    // to agree with the `TRIM(instruction_text) <> ''` guard in the backend and
-    // core refill queries, or the two would disagree about the same mission.
-    assert.deepEqual(
-      planEnsureDraftSlot([
-        objective({ id: 'done', position: 0, state: 'complete' }),
-        objective({ id: 'blank-future', position: 1, state: 'future', instructionText: '  ' })
-      ]),
-      { action: 'none', reason: 'no_future_objective' }
-    );
-
-    // ...but an authored future objective behind the blank one still refills it.
-    assert.deepEqual(
-      planEnsureDraftSlot([
-        objective({ id: 'blank-future', position: 0, state: 'future', instructionText: '' }),
-        objective({ id: 'authored', position: 1, state: 'future' })
-      ]),
-      { action: 'promote_future', objectiveId: 'authored' }
-    );
+  it('allows any number of drafts in one mission', () => {
+    const violations = validateObjectiveLifecycle([
+      objective({ id: 'draft-1', position: 0, state: 'draft' }),
+      objective({ id: 'draft-2', position: 1, state: 'draft' }),
+      objective({ id: 'draft-3', position: 2, state: 'draft', instructionText: '' })
+    ]);
+    assert.deepEqual(violations, []);
   });
 
-  it('discards an emptied draft or future objective instead of keeping a blank row', () => {
-    for (const state of ['draft', 'future'] as const) {
+  it('separates queue head, first draft and next runnable draft selectors', () => {
+    const objectives = [
+      objective({ id: 'done', position: 0, state: 'complete' }),
+      objective({ id: 'discussing', position: 1, state: 'submitted' }),
+      objective({ id: 'blank', position: 2, state: 'draft', instructionText: '  ' }),
+      objective({ id: 'runnable', position: 3, state: 'draft' }),
+      objective({ id: 'later', position: 4, state: 'draft' })
+    ];
+    assert.equal(queueHeadObjective(objectives)?.id, 'discussing');
+    assert.equal(firstDraft(objectives)?.id, 'blank');
+    assert.equal(nextUpDraft(objectives)?.id, 'runnable');
+    assert.equal(nextUpDraft([objective({ id: 's', state: 'submitted' })]), null);
+  });
+
+  it('breaks selector ties on createdAt, then id', () => {
+    const objectives = [
+      objective({ id: 'b', position: 1, state: 'draft', createdAt: '2026-01-01T00:00:00Z' }),
+      objective({ id: 'a', position: 1, state: 'draft', createdAt: '2026-01-01T00:00:00Z' }),
+      objective({ id: 'c', position: 1, state: 'draft', createdAt: '2025-12-31T00:00:00Z' })
+    ];
+    assert.equal(nextUpDraft(objectives)?.id, 'c');
+    assert.equal(nextUpDraft(objectives.slice(0, 2))?.id, 'a');
+  });
+
+  it('discards an emptied draft objective instead of keeping a blank row', () => {
+    for (const state of ['draft'] as const) {
       assert.equal(
         shouldDiscardEmptiedObjective(objective({ id: state, state, instructionText: '   ' })),
         true,
@@ -240,9 +229,12 @@ describe('objective lifecycle rules', () => {
 
     // Attachments are real work, so the objective survives without text.
     assert.equal(
-      shouldDiscardEmptiedObjective(objective({ id: 'with-file', state: 'future' }), {
-        attachmentCount: 1
-      }),
+      shouldDiscardEmptiedObjective(
+        objective({ id: 'with-file', state: 'draft', instructionText: '' }),
+        {
+          attachmentCount: 1
+        }
+      ),
       false
     );
 
@@ -273,17 +265,6 @@ describe('objective lifecycle rules', () => {
     }
   });
 
-  it('keeps pre-attach submitted or launching objectives in the next-up slot', () => {
-    assert.deepEqual(
-      planEnsureDraftSlot([objective({ id: 'queued', position: 0, state: 'submitted' })]),
-      { action: 'none', reason: 'next_up_still_launching' }
-    );
-    assert.deepEqual(
-      planEnsureDraftSlot([objective({ id: 'launching', position: 0, state: 'launching' })]),
-      { action: 'none', reason: 'next_up_still_launching' }
-    );
-  });
-
   it('decides post-delivery auto-advance policy for the next draft', () => {
     assert.deepEqual(
       decideAutoAdvanceAfterDelivery([
@@ -306,6 +287,22 @@ describe('objective lifecycle rules', () => {
       {
         action: 'await_approval',
         objectiveId: 'next',
+        reason: 'Next objective is waiting for approval.'
+      }
+    );
+  });
+
+  it('auto-advance skips submitted and blank drafts, including lower positions', () => {
+    assert.deepEqual(
+      decideAutoAdvanceAfterDelivery([
+        objective({ id: 'discussing', position: 0, state: 'submitted' }),
+        objective({ id: 'blank', position: 1, state: 'draft', instructionText: '' }),
+        objective({ id: 'lower', position: 2, state: 'draft', autoAdvance: false }),
+        objective({ id: 'delivered', position: 3, state: 'complete' })
+      ]),
+      {
+        action: 'await_approval',
+        objectiveId: 'lower',
         reason: 'Next objective is waiting for approval.'
       }
     );
@@ -336,14 +333,14 @@ describe('objective lifecycle rules', () => {
       objectives: [
         objective({ id: 'done', position: 0, state: 'complete' }),
         objective({ id: 'next', position: 1, state: 'draft' }),
-        objective({ id: 'future', position: 2, state: 'future' })
+        objective({ id: 'later', position: 2, state: 'draft' })
       ],
       planAutoAdvance: true
     });
 
-    assert.deepEqual(output.orderedObjectiveIds, ['done', 'next', 'future']);
-    assert.deepEqual(output.editableObjectiveIds, ['next']);
-    assert.deepEqual(output.futureObjectiveIds, ['future']);
+    assert.deepEqual(output.orderedObjectiveIds, ['done', 'next', 'later']);
+    assert.deepEqual(output.queuedObjectiveIds, ['next', 'later']);
+    assert.deepEqual(output.launchingObjectiveIds, []);
     assert.equal(output.autoAdvanceDecision?.action, 'await_approval');
   });
 
@@ -503,7 +500,7 @@ describe('objective lifecycle rules', () => {
         'future-objective': {
           id: 'future-objective',
           missionId: 'mission-future',
-          state: 'future',
+          state: 'submitted',
           instructionText: 'parallel'
         },
         'paused-objective': {
@@ -520,14 +517,12 @@ describe('objective lifecycle rules', () => {
         action: 'dispatch',
         entryId: 'next',
         objectiveId: 'next-objective',
-        promoteFutureToDraft: false,
         idempotencyKey: 'run_queue:next:attempt:1'
       },
       {
         action: 'dispatch',
         entryId: 'parallel',
         objectiveId: 'future-objective',
-        promoteFutureToDraft: true,
         idempotencyKey: 'run_queue:parallel:attempt:1'
       }
     ]);
@@ -576,7 +571,6 @@ describe('objective lifecycle rules', () => {
         action: 'dispatch',
         entryId: 'later',
         objectiveId: 'later-objective',
-        promoteFutureToDraft: false,
         idempotencyKey: 'run_queue:later:attempt:1'
       }
     ]);
@@ -607,7 +601,6 @@ describe('objective lifecycle rules', () => {
         action: 'dispatch',
         entryId: 'terminal',
         objectiveId: 'failed-objective',
-        promoteFutureToDraft: false,
         idempotencyKey: 'run_queue:terminal:attempt:2'
       }
     ]);
@@ -711,7 +704,6 @@ describe('objective lifecycle rules', () => {
         action: 'dispatch',
         entryId: 'entry',
         objectiveId: 'second',
-        promoteFutureToDraft: false,
         idempotencyKey: 'run_queue:entry:attempt:1'
       }
     ]);
@@ -746,7 +738,6 @@ describe('objective lifecycle rules', () => {
         action: 'dispatch',
         entryId: 'entry',
         objectiveId: 'second',
-        promoteFutureToDraft: false,
         idempotencyKey: 'run_queue:entry:attempt:1'
       }
     ]);
@@ -802,7 +793,6 @@ describe('objective lifecycle rules', () => {
         action: 'dispatch',
         entryId: 'in-earlier',
         objectiveId: 'objective-a',
-        promoteFutureToDraft: false,
         idempotencyKey: 'run_queue:in-earlier:attempt:1'
       },
       {
@@ -862,7 +852,6 @@ describe('objective lifecycle rules', () => {
         action: 'dispatch',
         entryId: 'entry',
         objectiveId: 'objective',
-        promoteFutureToDraft: false,
         idempotencyKey: 'run_queue:entry:attempt:1'
       }
     ]);

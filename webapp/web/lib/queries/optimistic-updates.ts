@@ -75,25 +75,26 @@ export function createReorderBoardColumnMutation(qc: QueryClient) {
   };
 }
 
-export interface ReorderFutureObjectivesVars {
+export interface ReorderObjectivesVars {
   missionId: string;
   orderedObjectiveIds: string[];
 }
 
-export function createReorderFutureObjectivesMutation(qc: QueryClient) {
+export function createReorderObjectivesMutation(qc: QueryClient) {
   return {
-    mutationFn: ({ missionId, orderedObjectiveIds }: ReorderFutureObjectivesVars) =>
-      api.reorderFutureObjectives(missionId, { orderedObjectiveIds }),
-    onMutate: async (vars: ReorderFutureObjectivesVars) => {
+    mutationFn: ({ missionId, orderedObjectiveIds }: ReorderObjectivesVars) =>
+      api.reorderObjectives(missionId, { orderedObjectiveIds }),
+    onMutate: async (vars: ReorderObjectivesVars) => {
       await qc.cancelQueries({ queryKey: keys.mission(vars.missionId) });
       const previous = qc.getQueryData<MissionDetailDto>(keys.mission(vars.missionId));
       if (previous) {
         const orderIndex = new Map(vars.orderedObjectiveIds.map((id, index) => [id, index]));
-        const basePosition = Math.min(
-          ...previous.objectives
-            .filter(objective => orderIndex.has(objective.id))
-            .map(objective => objective.position)
-        );
+        // Mirror the server: the listed objectives trade the position slots they
+        // already hold, so a launching objective between them never moves.
+        const slots = previous.objectives
+          .filter(objective => orderIndex.has(objective.id))
+          .map(objective => objective.position)
+          .sort((a, b) => a - b);
         qc.setQueryData(keys.mission(vars.missionId), {
           ...previous,
           objectives: previous.objectives
@@ -101,7 +102,7 @@ export function createReorderFutureObjectivesMutation(qc: QueryClient) {
               const index = orderIndex.get(objective.id);
               return index === undefined
                 ? objective
-                : { ...objective, position: basePosition + index };
+                : { ...objective, position: slots[index] ?? objective.position };
             })
             .sort((a, b) => a.position - b.position)
         });
@@ -110,12 +111,12 @@ export function createReorderFutureObjectivesMutation(qc: QueryClient) {
     },
     onError: (
       _err: unknown,
-      vars: ReorderFutureObjectivesVars,
+      vars: ReorderObjectivesVars,
       context?: { previous?: MissionDetailDto }
     ) => {
       if (context?.previous) qc.setQueryData(keys.mission(vars.missionId), context.previous);
     },
-    onSettled: (_data: unknown, _err: unknown, vars: ReorderFutureObjectivesVars) => {
+    onSettled: (_data: unknown, _err: unknown, vars: ReorderObjectivesVars) => {
       void qc.invalidateQueries({ queryKey: keys.mission(vars.missionId) });
       // The server carries a mission reorder into its Run Queue entries, so
       // every cached project queue projection may now be stale.

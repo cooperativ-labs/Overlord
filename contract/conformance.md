@@ -63,7 +63,7 @@ See [`contract/conformance-manifest.schema.yaml`](conformance-manifest.schema.ya
 
 ### Closed (contract-version-bump required to add values)
 
-- `objectives.state`: `future`, `draft`, `submitted`, `launching`, `executing`, `pending_delivery`, `complete`
+- `objectives.state`: `draft`, `submitted`, `launching`, `executing`, `pending_delivery`, `complete` (`future` retired by ADR 0056)
 - `missions.created_by_kind`, `objectives.created_by_kind`: `human`, `agent`, `automation`
 - `project_statuses.type`: `draft`, `next`, `execute`, `review`, `complete`, `blocked`, `cancelled`
 - `execution_requests.status`: `queued`, `claimed`, `launching`, `launched`, `failed`, `cleared`, `cancelled`, `expired`

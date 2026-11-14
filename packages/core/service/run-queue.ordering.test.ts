@@ -14,6 +14,63 @@ import {
 import { createSeededServiceContext } from './test-helpers.js';
 
 describe('Run Queue objective-position write-through', () => {
+  it('preserves sparse slots and interleaved active/history rows during queue reorder', async () => {
+    const { db, ctx } = await createSeededServiceContext({ source: 'protocol' });
+    try {
+      const project = await createProject({ ctx, name: 'Sparse queue slots' });
+      const { mission, objectives } = await createMissionWithObjectives({
+        ctx,
+        projectId: project.id,
+        objectives: Array.from({ length: 5 }, (_, i) => ({ objective: `Work ${i}` }))
+      });
+      const [a, active, b, done, launching] = objectives;
+      await db.run('UPDATE objectives SET position = position * 10 + 10 WHERE mission_id = ?', [
+        mission.id
+      ]);
+      for (const [objective, state] of [
+        [active!, 'executing'],
+        [done!, 'complete'],
+        [launching!, 'launching']
+      ] as const) {
+        await db.run('UPDATE objectives SET state = ? WHERE id = ?', [state, objective.id]);
+      }
+      const anchors = () =>
+        db.all(
+          'SELECT id, position, revision FROM objectives WHERE id IN (?, ?, ?) ORDER BY position',
+          [active!.id, done!.id, launching!.id]
+        );
+      const before = await anchors();
+      await enqueueRunQueueEntry(db, project.id, a!.id, { cascade: false });
+      await enqueueRunQueueEntry(db, project.id, b!.id, { cascade: false });
+      const queue = (await listProjectRunQueues(db, project.id)).queues.find(
+        q => q.missionId === mission.id
+      )!;
+      const entry = (id: string) => queue.entries.find(e => e.objectiveId === id)!.id;
+      const revisionBefore = (await db.get<{ revision: number }>(
+        'SELECT revision FROM objectives WHERE id = ?',
+        [a!.id]
+      ))!.revision;
+      await reorderRunQueue(db, queue.id, [entry(b!.id), entry(a!.id)]);
+      assert.deepEqual(await anchors(), before);
+      const rows = await listObjectives({ ctx, missionId: mission.id });
+      assert.equal(rows.find(row => row.id === b!.id)!.position, 10);
+      assert.equal(rows.find(row => row.id === a!.id)!.position, 30);
+      const revisionAfter = (await db.get<{ revision: number }>(
+        'SELECT revision FROM objectives WHERE id = ?',
+        [a!.id]
+      ))!.revision;
+      assert.equal(revisionAfter, revisionBefore + 1);
+      const change = await db.get<{ entity_revision: number; changed_fields_json: string }>(
+        'SELECT entity_revision, changed_fields_json FROM entity_changes WHERE entity_id = ? ORDER BY seq DESC LIMIT 1',
+        [a!.id]
+      );
+      assert.equal(change!.entity_revision, revisionAfter);
+      assert.deepEqual(JSON.parse(change!.changed_fields_json), ['position']);
+    } finally {
+      await db.close();
+    }
+  });
+
   it('keeps a later queued objective behind an earlier unqueued objective', async () => {
     const { db, ctx } = await createSeededServiceContext({ source: 'protocol' });
     const project = await createProject({ ctx, name: 'Mixed Queue Ordering' });
