@@ -1,4 +1,4 @@
-contractVersion: "172.0.1"
+contractVersion: "172.3.0"
 componentType: connector
 componentKey: codex
 label: "Codex Connector"

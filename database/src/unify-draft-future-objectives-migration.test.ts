@@ -13,6 +13,8 @@ import { migrateDatabase, type OverlordDatabase } from './connection.js';
  */
 
 const VERSION = '20261114120000';
+/** The shape comparison pins this migration alone; later migrations add columns. */
+const NEXT_VERSION = '20261114180000';
 const FILE = `${VERSION}_unify_draft_future_objectives.sql`;
 const now = '2026-11-14T00:00:00.000Z';
 
@@ -91,7 +93,7 @@ test('upgrade converts every future row to draft and preserves rows, evidence an
     );
   const evidenceBefore = evidence();
 
-  migrateDatabase(db);
+  migrateDatabase(db, { stopBeforeVersion: NEXT_VERSION });
 
   assert.deepEqual(evidence(), evidenceBefore);
 

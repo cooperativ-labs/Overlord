@@ -27,6 +27,12 @@ import {
   toSearchMissionsResponseV2,
   toSearchResponseV3
 } from './mission-search.js';
+import {
+  normalizeObjectiveDescriptionInput,
+  objectiveBriefActorFromContext,
+  objectiveBriefPatchAssignments,
+  planObjectiveBriefForCreate
+} from './objective-brief.js';
 import { allocateObjectiveDisplayKey } from './objective-display-id.js';
 import { lockMissionObjectiveQueue } from './objective-queue.js';
 import { assertProjectResourceKeyExists } from './projects.js';
@@ -36,6 +42,7 @@ import {
 } from './run-queue.js';
 import { initialTitleFromInstruction, isTruthyFlag, newId, nowIso } from './util.js';
 import { enqueueWebhookEvent } from './webhook-events.js';
+import { enqueueObjectiveBriefComposeJob } from './worker-jobs.js';
 
 export type ObjectiveSummary = {
   id: string;
@@ -386,12 +393,18 @@ export async function insertObjective({
   assignedAgent,
   model,
   reasoningEffort,
-  resourceKey = null
+  resourceKey = null,
+  description
 }: {
   ctx: ServiceContext;
   missionId: string;
   instructionText: string;
   title?: string | null;
+  /**
+   * Authored human-facing description. Omitted leaves it to the automatic
+   * summary policy; `null` or blank removes it and suppresses generation.
+   */
+  description?: string | null;
   state?: string;
   autoAdvance?: boolean;
   assignedAgent?: string | null;
@@ -461,6 +474,15 @@ export async function insertObjective({
     : launchSelection.reasoningEffort;
   const origin = resolveOrigin(ctx);
   const displayKey = await allocateObjectiveDisplayKey({ db: ctx.db, missionId: mission.id });
+  // Title/description ownership and current-instruction authorship (ADR 0057).
+  const brief = planObjectiveBriefForCreate({
+    instructionText: instruction,
+    titleProvided: Boolean(title?.trim()),
+    description: normalizeObjectiveDescriptionInput(description),
+    actor: objectiveBriefActorFromContext(ctx),
+    now
+  });
+  const briefColumns = objectiveBriefPatchAssignments(ctx.db, brief.patch);
 
   await ctx.db.run(
     `INSERT INTO objectives
@@ -468,8 +490,8 @@ export async function insertObjective({
           assigned_agent, model, reasoning_effort, agent_flags_json, auto_advance,
           execution_metadata_json, resource_key, display_key, created_by_workspace_user_id,
           created_by_kind, created_by_agent, created_by_session_id,
-          created_at, updated_at, revision)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '{}', ?, '{}', ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+          created_at, updated_at, revision${briefColumns.columns.map(c => `, ${c}`).join('')})
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '{}', ?, '{}', ?, ?, ?, ?, ?, ?, ?, ?, 1${briefColumns.columns.map(() => ', ?').join('')})`,
     [
       id,
       ctx.workspace.id,
@@ -490,7 +512,8 @@ export async function insertObjective({
       origin.agent,
       origin.sessionId,
       now,
-      now
+      now,
+      ...briefColumns.params
     ]
   );
 
@@ -504,6 +527,16 @@ export async function insertObjective({
     missionId: mission.id,
     objectiveId: id
   });
+
+  // Brief intent and its job commit together (ADR 0058): every create surface
+  // (REST, protocol, hosted MCP, in-app chat, inbox conversion) passes here.
+  if (brief.titleRequested || brief.descriptionRequested) {
+    await enqueueObjectiveBriefComposeJob({
+      db: ctx.db,
+      workspaceId: ctx.workspace.id,
+      objectiveId: id
+    });
+  }
 
   // Queue membership is authoritative. Keep writing the legacy boolean during
   // the staged retirement, but immediately materialize opted-in objectives in
@@ -560,6 +593,8 @@ export async function createMissionWithObjectives({
   objectives: Array<{
     objective: string;
     title?: string | null;
+    /** Authored description; see `insertObjective`. */
+    description?: string | null;
     autoAdvance?: boolean;
     /** Explicit launch selection for this objective; omitted keeps project defaulting. */
     agent?: string | null;
@@ -676,6 +711,7 @@ export async function createMissionWithObjectives({
           missionId,
           instructionText: instruction,
           ...(item.title !== undefined ? { title: item.title } : {}),
+          ...(item.description !== undefined ? { description: item.description } : {}),
           state: objectiveState,
           autoAdvance: item.autoAdvance ?? false,
           ...(item.agent !== undefined ? { assignedAgent: item.agent } : {}),
@@ -994,6 +1030,8 @@ export async function addObjectivesToMission({
   objectives: Array<{
     objective: string;
     title?: string | null;
+    /** Authored description; see `insertObjective`. */
+    description?: string | null;
     autoAdvance?: boolean;
     agent?: string | null;
     model?: string | null;
@@ -1016,6 +1054,7 @@ export async function addObjectivesToMission({
           missionId: resolved.id,
           instructionText: item.objective,
           ...(item.title !== undefined ? { title: item.title } : {}),
+          ...(item.description !== undefined ? { description: item.description } : {}),
           autoAdvance: item.autoAdvance ?? false,
           ...(item.agent !== undefined ? { assignedAgent: item.agent } : {}),
           ...(item.model !== undefined ? { model: item.model } : {}),

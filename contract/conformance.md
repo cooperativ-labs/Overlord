@@ -65,6 +65,7 @@ See [`contract/conformance-manifest.schema.yaml`](conformance-manifest.schema.ya
 
 - `objectives.state`: `draft`, `submitted`, `launching`, `executing`, `pending_delivery`, `complete` (`future` retired by ADR 0056)
 - `missions.created_by_kind`, `objectives.created_by_kind`: `human`, `agent`, `automation`
+- `objectives.title_source`, `objectives.description_source`: `generated`, `agent`, `user`; `objectives.title_status`, `objectives.description_status`: `pending`, `failed`; `objectives.description_request_kind`: `automatic`, `explicit`; `objectives.instruction_author_kind`: `human`, `agent`, `automation`; `objectives.description_failure_code`: `provider_unavailable`, `provider_error`, `invalid_output`, `unfaithful_output` (ADR 0057)
 - `project_statuses.type`: `draft`, `next`, `execute`, `review`, `complete`, `blocked`, `cancelled`
 - `execution_requests.status`: `queued`, `claimed`, `launching`, `launched`, `failed`, `cleared`, `cancelled`, `expired`
 - `run_queue_entries.state`: `waiting`, `blocked`, `dispatched`, `running`

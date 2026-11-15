@@ -2818,6 +2818,8 @@ export async function protocolCreate({
   objectives: Array<{
     objective: string;
     title?: string | null;
+    /** Authored human-facing description (ADR 0057); never part of the agent context. */
+    description?: string | null;
     autoAdvance?: boolean;
     /** Explicit launch selection for this objective; omitted keeps project defaulting. */
     agent?: string | null;
@@ -2861,6 +2863,8 @@ export async function protocolPrompt({
   objectives: Array<{
     objective: string;
     title?: string | null;
+    /** Authored human-facing description (ADR 0057); never part of the agent context. */
+    description?: string | null;
     autoAdvance?: boolean;
     /** Explicit launch selection for this objective; omitted keeps project defaulting. */
     agent?: string | null;

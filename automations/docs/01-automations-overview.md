@@ -47,7 +47,54 @@ scheduling helpers so Vite does not bundle the server-only OpenRouter transport 
 
 Both summarization automations and `compose-delivery` return `null` when `OPENROUTER_API_KEY` is unset or the provider call fails.
 
+## Shared Writing Rules
+
+`src/writing/ste.ts` holds the STE-inspired writing rules for model-written text that people read.
+
+- `WRITING_RULES` is the base profile. `compose-delivery` and `compose-mission-summary` use it
+  unchanged; a test pins its text, so editing it is a deliberate change to both composers.
+- `OBJECTIVE_WRITING_RULES` extends it for objective titles and summaries only: "must"/"can"
+  instead of ambiguous modals, condition before command, `CAUTION:` before the step, no
+  contractions or semicolons, the confidence vocabulary ("probably … because …", "It is possible
+  that …", "X is not known") and the ambiguity vocabulary ("The instructions do not say …",
+  "Decision needed: A or B").
+- `lintSte(text)` is an advisory heuristic checker (sentence length, ambiguous modals with a
+  suggested replacement, contractions, semicolons, stacked or unsupported hedges, passive voice).
+  It ignores code spans, quoted text, URLs and paths. It does not prove ASD-STE100 compliance.
+
+## Objective Brief Automation
+
+`composeObjectiveBrief({ instructionText, fields: { title, description } })` writes an
+objective's generated title and/or summary in one provider call (ADR 0058). It never touches the
+database; `backend/objective-brief-compose-worker.ts` publishes its results through the core
+service guards.
+
+1. The instructions are sent as a JSON string value and declared to be data, not commands.
+2. The model returns schema v1: `title` and/or `description { goal, decisionsNeeded[], body[],
+   doneWhen, doneWhenStated }`, only for the requested fields.
+3. The server assembles 1–3 plain-prose paragraphs: the goal first, each `Decision needed:`
+   sentence after it, then the body, then the done-when sentence. When the instructions state no
+   completion test, the fixed sentence "The instructions do not say how to confirm that the work
+   is complete." is used. Headings, lists, HTML and control characters are removed.
+4. Fidelity checks: every identifier-like token (code span, path, file name, flag, URL, display
+   id, environment variable) must appear verbatim in the instructions, and a summary of
+   instructions with a prohibition must keep a negation.
+5. Invalid or unfaithful output, or a style issue other than passive voice, asks for one rewrite
+   with the problems quoted. The best valid candidate wins; with none, the field fails with
+   `invalid_output` or `unfaithful_output` and people keep reading the instructions.
+6. Returns `provider_unavailable` without a provider and `provider_error` (no provider text) when
+   the first call fails or times out (45 s). Input is bounded to 40,000 characters (longer text
+   gets a title only), output to 1,200 tokens.
+
+Deterministic fixtures in `src/objective-brief/fixtures/fidelity.json` run in `yarn test`.
+`src/objective-brief/objective-brief.live-eval.ts` runs the same instructions against the
+configured provider and prints the checked properties; it is manual because it costs provider
+calls.
+
 ## Objective Title Automation
+
+Objective titles are written by the objective brief automation through the backend worker. The
+helpers below remain for mission titles and for callers outside the worker.
 
 `generateObjectiveTitle` mirrors upstream behavior:
 

@@ -183,9 +183,11 @@ When creating missions from within a repository:
 - Use `create --unassigned-to-project` only when the user deliberately requests an account-owned inbox capture.
 - Create multiple missions when each prompt represents a different feature or goal.
 - Add objectives to the same mission when each prompt is a sequential step toward the same feature or goal; use `ovld protocol add-objectives --mission-id <mission_id> --objectives-json '[{"objective":"..."}]'`.
-- `create` and `prompt` require `--objectives-json` or `--objectives-file` with an ordered array of `{ "objective": "...", "title": "...", "autoAdvance": true }` objects. A single objective is just an array with one item. `--auto-advance` / `--no-auto-advance` map each opted-in item to authoritative Run Queue membership (default off).
+- `create` and `prompt` require `--objectives-json` or `--objectives-file` with an ordered array of `{ "objective": "...", "title": "...", "description": "...", "autoAdvance": true }` objects. A single objective is just an array with one item. `--auto-advance` / `--no-auto-advance` map each opted-in item to authoritative Run Queue membership (default off).
 - `add-objectives` uses the same per-item `autoAdvance` field and `--auto-advance` / `--no-auto-advance` mapping.
 - Every objective item on `create`, `prompt`, and `add-objectives` also takes optional `"agent"` and `"model"` (a model requires an agent), and `--objective-agent <id>` / `--objective-model <id>` set the default for items that name no `agent` of their own. Assign the agent on the objectives you are already creating rather than appending a second objective just to name one. `--objective-agent` is distinct from `--agent`, which records creation provenance (and, on `prompt`, the attaching agent).
+- Objective `"description"` (optional, on every item of `create`, `prompt`, and `add-objectives`) is the human-facing summary; the `objective` text stays the complete instruction for the executing agent, which never receives the description. Write one to three short prose paragraphs in Simplified Technical English style that open with the goal and close with the done-when sentence (about 120 words). Omit it and Overlord writes one for long (280+ characters) agent-written objectives. With a single `--objective`, use `--objective-description <text>` or `--objective-description-file <path|->` instead (rejected with `--objectives-json`). Style issues come back as advisory `warnings` (`{ code, message, rule?, excerpt?, suggestion? }`, code `description_style` or `description_suppressed`) on the matching created objective; the text is stored as written.
+- `update-objective --description <text>` / `--description-file <path|->` sets the description (empty removes it); `--description-request summarize|regenerate|retry` asks Overlord to write one (it cannot be combined with `--description`). Agents may do both only on `draft` objectives (400 `description_not_editable`). `retry` re-requests only a failed generation (409 `description_not_failed`); instructions under 280 characters are not summarized (409 `description_not_eligible`). If a person removed the summary, agent text is not stored (warning `description_suppressed`) and summarize/regenerate are refused (409 `description_suppressed`); only the person's Summarize in the app turns summaries back on. The response carries a top-level `warnings` array.
 - Use `ovld protocol run-queue [--project-id <id|slug|name>|--objective-id <id>|--mission-id <id>] [--queue <id|name>]` to inspect live queues. Entry operations use `queue-objective --objective-id <id> [--queue <id|name>] [--after <queued-entry|objective>|--front|--position <rank>]`, `dequeue-objective --objective-id <id>`, and `reorder-run-queue --queue <id|name> --ordered-entries-json <json>`; they require `execution_request:create`. Queue-definition operations use `create-run-queue`, `update-run-queue`, `delete-run-queue`, and `reorder-project-run-queues`; they require `project:update` and therefore a full-scope token.
 - `record-work` creates exactly one **completed** objective from a single `--objective` (or positional / an `objective` field in `--payload-json`) plus a `--summary` and optional `declaredPaths` — it does not take `--objectives-json`. See [record-work.md](record-work.md).
 
@@ -210,6 +212,12 @@ ovld protocol add-objectives --mission-id 1:899 --objectives-json '[{"objective"
 
 ```bash
 ovld protocol update-objective --objective-id <objective-uuid> --auto-advance
+```
+
+```bash
+ovld protocol update-objective --objective-id <objective-uuid> --description-file - <<'EOF'
+Add retry with backoff to the sync worker. ... The work is done when the retry test passes.
+EOF
 ```
 
 ### Record Completed Work

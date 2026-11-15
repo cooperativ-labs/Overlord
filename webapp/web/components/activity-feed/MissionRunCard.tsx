@@ -168,7 +168,9 @@ export function MissionRunCard({
         <p className="line-clamp-2 wrap-anywhere text-base text-(--color-ink-dim)">
           {/* The latest event may be raw harness markup (a background task finishing); show it the
               way the mission feed does rather than as tag soup. */}
+          {/* Falls back to the objective's human-facing summary, then its instructions (coo:1275). */}
           {(item.latestEventSummary && formatAgentHarnessText(item.latestEventSummary)) ||
+            item.descriptionPreview ||
             item.instructionPreview}
         </p>
 

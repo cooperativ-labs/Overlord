@@ -313,6 +313,8 @@ missionDiscovery:
       - --no-auto-advance
       - --objective-agent
       - --objective-model
+      - --objective-description
+      - --objective-description-file
     rules:
       - 'Supply --project-id to create a mission, or --unassigned-to-project to deliberately create an account-owned inbox item. The former --inbox alias is retired (ADR 0054) and rejected with HTTP 400 invalid_input. Omitting both is rejected; the Protocol never discovers a project for agent-created work.'
       - '--agent names the connector/agent identifier authoring the row and is recorded as creation provenance (missions.created_by_agent / objectives.created_by_agent); it does not select the agent that will run the work'
@@ -322,6 +324,7 @@ missionDiscovery:
       - '--session-key additionally attributes the created row to the calling agent session (created_by_session_id) and lets an omitted --assigned-to inherit the session mission assignee'
       - '--auto-advance / --no-auto-advance set the default autoAdvance for created objectives; per-item autoAdvance in --objectives-json / --objectives-file wins when present; omitted defaults to false'
       - 'The create response returns the created mission and ObjectiveDto records so callers can verify each persisted assignedAgent, model, resourceKey, and queue/auto-advance setting; CLI human-readable output echoes these settings for each created objective'
+      - "Objective descriptions (ADR 0059): --objective-description / --objective-description-file set the human-facing description of the single --objective form and are rejected with --objectives-json/--objectives-file (400 invalid_input); each JSON item may instead carry description (string or null). Text is stored as agent-authored; advisory warnings (code description_style, with rule, message and optional excerpt/suggestion) are attached as warnings on the matching created objective. The description is presentation only and never appears in attach/load-context ObjectiveSummary or launch prompts."
       - 'Authorization (contract v151): the project form requires mission:create in the resolved target project for every caller; the gate is no longer null. A project_automation USER_TOKEN may create only in one of its selected projects (any other project id, including one in the same workspace, is 404) and is denied the --unassigned-to-project form before any row is written. A mission created by a direct out_ bearer records created_by_token_id and a created_by_token_label snapshot; for project_automation an omitted --assigned-to leaves the mission unassigned'
     sideEffects:
       - creates-mission-or-inbox-item
@@ -338,11 +341,14 @@ missionDiscovery:
       - --no-auto-advance
       - --objective-agent
       - --objective-model
+      - --objective-description
+      - --objective-description-file
     rules:
       - 'Requires --project-id. prompt attaches work immediately and therefore cannot create an inbox item or discover a project implicitly.'
       - '--agent, --assigned-to, and --session-key carry the same meaning and resolution rules as on create; on prompt --agent additionally names the attaching agent for the session'
       - '--auto-advance / --no-auto-advance and per-item autoAdvance follow the same rules as on create'
       - 'Per-item agent / model and --objective-agent / --objective-model follow the same rules as on create'
+      - '--objective-description / --objective-description-file and per-item description follow the same rules as on create; the attach response carries no description and no warnings'
       - 'Denied for a project_automation USER_TOKEN before any write (contract v151): prompt attaches a session, which that preset cannot hold. full and mission_lifecycle behavior is unchanged'
     sideEffects:
       - creates-mission
@@ -617,29 +623,40 @@ missionDiscovery:
       - "Each item may set agent and model. agent persists as the new objective's assignedAgent; model requires a non-empty agent. When both are omitted, existing project launch-preference defaults apply."
       - 'Denied for a project_automation USER_TOKEN before any write (contract v151): that preset creates objectives only as the initial objectives of a mission it creates and never edits an existing mission'
       - '--objective-agent / --objective-model supply the launch selection for items that name no agent of their own; a per-item agent wins, and --objective-model without --objective-agent is rejected'
+      - 'Each item may carry description (string or null, ADR 0059); style warnings are attached as warnings on the matching returned objective'
     sideEffects:
       - creates-objectives-in-draft-state
 
   updateObjective:
-    description: 'Update title, auto-advance, and/or instruction text on an existing objective'
+    description: 'Update title, description, auto-advance, instruction text and/or agent on an existing objective, or request a generated summary'
     requiredFlags:
       - --objective-id
     optionalFlags:
       - --title
+      - --description
+      - --description-file
+      - --description-request
       - --auto-advance
       - --no-auto-advance
       - --instruction-text
       - --instruction-text-file
+      - --objective-agent
+      - --objective-model
+      - --objective-reasoning-effort
     responseShape: ObjectiveDto
     rules:
-      - 'At least one of --title, --auto-advance/--no-auto-advance, or --instruction-text/--instruction-text-file is required'
+      - 'At least one of --title, --description/--description-file, --description-request, --auto-advance/--no-auto-advance, --instruction-text/--instruction-text-file, or --objective-agent is required'
       - 'An empty --title clears the custom title and returns to instruction-derived presentation; title edits do not change instruction text and are permitted in any state'
       - 'Instruction text may be edited only when the objective is in draft state'
+      - "Descriptions (ADR 0059): --description / --description-file replace the human-facing description; an empty value is Remove, which keeps the summary absent (also across instruction edits and catch-up) until a person selects Summarize. --description-request summarize|regenerate|retry records a generated-summary request; it cannot be combined with --description (400 invalid_input). Protocol callers are agents with or without a session: description changes and requests are allowed only in draft state (400 description_not_editable). While a person's removal is in force, agent text is not stored and a description_suppressed warning is returned, and summarize/regenerate are refused (409 description_suppressed); retry re-requests only a failed generation (409 description_not_failed) and never clears removal. Instructions shorter than 280 characters are not summarized (409 description_not_eligible)."
+      - 'The response is the updated ObjectiveDto (including description and its summary state) plus warnings: an array of { code, message, rule?, excerpt?, suggestion? } with code description_style (advisory style issue; the text was stored) or description_suppressed'
       - 'Does not require a session key'
     sideEffects:
       - updates-objective-title
       - updates-objective-auto-advance
       - updates-objective-instruction-text
+      - updates-objective-description
+      - requests-objective-description-generation
 
   deleteMissions:
     description: 'Atomically soft-delete an explicitly confirmed list of missions'

@@ -1187,9 +1187,22 @@ export interface Objectives {
   created_by_session_id: string | null;
   created_by_workspace_user_id: string | null;
   deleted_at: string | null;
+  description: string | null;
+  description_author_agent: string | null;
+  description_author_workspace_user_id: string | null;
+  description_failure_code: string | null;
+  description_generation: Generated<number>;
+  description_instruction_hash: string | null;
+  description_request_kind: string | null;
+  description_revision: Generated<number>;
+  description_source: string | null;
+  description_status: string | null;
+  description_suppressed: Generated<number>;
+  description_updated_at: string | null;
   display_key: Generated<string>;
   execution_metadata_json: Generated<string>;
   id: string | null;
+  instruction_author_kind: string | null;
   instruction_text: string | null;
   launch_config_json: string | null;
   launched_at: string | null;
@@ -1204,6 +1217,9 @@ export interface Objectives {
   started_at: string | null;
   state: string;
   title: string | null;
+  title_generation: Generated<number>;
+  title_source: string | null;
+  title_status: string | null;
   updated_at: string;
   workspace_id: string;
 }

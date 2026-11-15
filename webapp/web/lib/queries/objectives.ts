@@ -6,6 +6,7 @@ import type {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { api } from '../api.ts';
+import type { ObjectiveDescriptionRequestMode } from '../api/objectives.ts';
 import { invalidateNonEverhourQueries as invalidateAll } from '../query-invalidation.ts';
 import { keys } from '../query-keys.ts';
 
@@ -24,6 +25,45 @@ export function useUpdateObjective() {
   return useMutation({
     mutationFn: ({ id, body }: { id: string; body: UpdateObjectiveBody }) =>
       api.updateObjective(id, body),
+    onSuccess: () => invalidateAll(qc)
+  });
+}
+
+/**
+ * A person's summary edit or Remove (`description: null`). Sends the revision the editor
+ * started from, so a concurrent change answers 409 `description_conflict` instead of being
+ * overwritten. Refetches on error too: after a conflict the card must show the current text.
+ */
+export function useUpdateObjectiveDescription() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      id,
+      description,
+      expectedDescriptionRevision
+    }: {
+      id: string;
+      description: string | null;
+      expectedDescriptionRevision?: number;
+    }) =>
+      api.updateObjective(id, {
+        description,
+        ...(expectedDescriptionRevision === undefined ? {} : { expectedDescriptionRevision })
+      }),
+    onSettled: () => invalidateAll(qc)
+  });
+}
+
+/**
+ * Summarize, Regenerate or Retry an objective's summary (ADR 0059). Only a person's
+ * Summarize or Regenerate clears a removal; the request returns at once and the worker's
+ * result arrives through the realtime refetch.
+ */
+export function useRequestObjectiveDescription() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, mode }: { id: string; mode: ObjectiveDescriptionRequestMode }) =>
+      api.requestObjectiveDescription(id, { mode }),
     onSuccess: () => invalidateAll(qc)
   });
 }

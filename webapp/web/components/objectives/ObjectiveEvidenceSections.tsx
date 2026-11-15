@@ -2,6 +2,7 @@ import type { DeliveryDto, ObjectiveAttachmentDto, ObjectiveDto } from '@overlor
 import { ChevronDown, GitBranch, History } from 'lucide-react';
 import { useState } from 'react';
 
+import { instructionLengthLabel } from '../../lib/objective-brief.ts';
 import {
   groupEvidenceByRun,
   NO_EVIDENCE_TRUNCATION,
@@ -21,9 +22,15 @@ import { ObjectiveAttachmentList } from './ObjectiveAttachments.tsx';
 import {
   ObjectiveEvidenceEmpty,
   ObjectiveEvidenceRule,
+  ObjectiveEvidenceSection,
   ObjectiveEvidenceTruncationNotice
 } from './ObjectiveEvidenceRule.tsx';
 import { ObjectiveFileChanges } from './ObjectiveFileChanges.tsx';
+import {
+  ObjectiveSummaryBody,
+  ObjectiveSummaryFallback,
+  useObjectiveSummary
+} from './ObjectiveSummary.tsx';
 
 /**
  * Which arrangement of the evidence stack to draw (coo:879 §4.2 / §4.3 / §4.5):
@@ -94,7 +101,40 @@ function RunDeliveries({
   );
 }
 
+/**
+ * The instruction text, read-only. `wrap-anywhere` (not just `break-words`):
+ * instruction text routinely carries an unbroken token with no break
+ * opportunity at all — a long absolute path, a URL, a base64 blob — and
+ * without it that single word sets the row's min-content width and pushes the
+ * panel past the viewport edge.
+ */
+function InstructionText({ objective }: { objective: ObjectiveDto }) {
+  return (
+    <div className="min-w-0 text-sm leading-relaxed text-muted-foreground">
+      <InlineEditField
+        multiline
+        disabled
+        value={objective.instructionText}
+        className="block whitespace-pre-wrap wrap-anywhere"
+        ariaLabel="Objective instruction"
+        onSave={() => undefined}
+      />
+    </div>
+  );
+}
+
+/**
+ * The head of an open executed row (coo:1275 plan §4.12). With a summary:
+ * SUMMARY (prose, provenance, Edit / Regenerate / Remove), then a closed
+ * INSTRUCTIONS disclosure with the instruction length. Without one: the
+ * instructions flat, as before, with Summarize / pending / failure under them
+ * — never an empty SUMMARY section. People can edit the summary after launch
+ * and completion; that is presentation only and leaves the instructions and
+ * every piece of evidence below untouched.
+ */
 function ObjectiveInstruction({ objective }: { objective: ObjectiveDto }) {
+  const summary = useObjectiveSummary(objective);
+  const summaryLayout = summary.view.summary !== null || summary.editing;
   return (
     <div className="min-w-0">
       {objective.branch ? (
@@ -108,23 +148,32 @@ function ObjectiveInstruction({ objective }: { objective: ObjectiveDto }) {
           Agent session: {objective.externalSessionId}
         </p>
       ) : null}
-      <div className="min-w-0 text-sm leading-relaxed text-muted-foreground">
-        {/*
-          `wrap-anywhere` (not just `break-words`): instruction text routinely
-          carries an unbroken token with no break opportunity at all — a long
-          absolute path, a URL, a base64 blob — and without it that single word
-          sets the row's min-content width and pushes the panel past the
-          viewport edge.
-        */}
-        <InlineEditField
-          multiline
-          disabled
-          value={objective.instructionText}
-          className="block whitespace-pre-wrap wrap-anywhere"
-          ariaLabel="Objective instruction"
-          onSave={() => undefined}
-        />
-      </div>
+      {summaryLayout ? (
+        <div className="grid min-w-0 gap-2">
+          <ObjectiveEvidenceRule label="Summary" />
+          <ObjectiveSummaryBody
+            objective={objective}
+            view={summary.view}
+            provenance={summary.provenance}
+            editing={summary.editing}
+          />
+          <ObjectiveEvidenceSection
+            label="Instructions"
+            trailing={
+              <span className="font-mono font-normal normal-case tracking-normal">
+                · {instructionLengthLabel(objective.instructionText)}
+              </span>
+            }
+          >
+            <InstructionText objective={objective} />
+          </ObjectiveEvidenceSection>
+        </div>
+      ) : (
+        <>
+          <InstructionText objective={objective} />
+          <ObjectiveSummaryFallback objective={objective} view={summary.view} />
+        </>
+      )}
     </div>
   );
 }

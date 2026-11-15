@@ -326,6 +326,11 @@ const tools = [
           type: 'string',
           description: 'Initial objective text.'
         },
+        description: {
+          type: 'string',
+          description:
+            'Optional human-facing summary of the objective for the people who decide whether to launch it: one to three short prose paragraphs in Simplified Technical English style that open with the goal and close with the done-when sentence, about 120 words. The objective text stays the complete instruction for the executing agent; the summary is never sent to it. Omit it and Overlord writes one for long agent-written objectives. Style issues come back as warnings; the text is stored as written.'
+        },
         title: {
           type: 'string',
           description: 'Optional mission title.'
@@ -570,7 +575,7 @@ const tools = [
         objectives: {
           type: 'array',
           description:
-            'Objective objects with objective text and optional title, agent/model launch selection, resourceKey, and autoAdvance.',
+            'Objective objects with objective text and optional title, description, agent/model launch selection, resourceKey, and autoAdvance.',
           items: {
             type: 'object',
             properties: {
@@ -581,6 +586,11 @@ const tools = [
               title: {
                 type: 'string',
                 description: 'Optional objective title.'
+              },
+              description: {
+                type: 'string',
+                description:
+                  'Optional human-facing summary of the objective for the people who decide whether to launch it: one to three short prose paragraphs in Simplified Technical English style that open with the goal and close with the done-when sentence, about 120 words. The objective text stays the complete instruction for the executing agent; the summary is never sent to it. Omit it and Overlord writes one for long agent-written objectives. Style issues come back as warnings; the text is stored as written.'
               },
               agent: {
                 type: 'string',
@@ -619,7 +629,7 @@ const tools = [
     name: 'overlord_update_objective',
     title: 'Update objective',
     description:
-      'Use this to rewrite an objective title in any state, turn auto-advance on or off, edit instruction text on a draft objective, and/or reassign the objective to another agent or to a person (agent manual, alias human).',
+      'Use this to rewrite an objective title in any state, turn auto-advance on or off, edit instruction text or the human-facing description (summary) on a draft objective, request a generated summary on a draft objective, and/or reassign the objective to another agent or to a person (agent manual, alias human).',
     inputSchema: {
       type: 'object',
       properties: {
@@ -641,6 +651,17 @@ const tools = [
           type: 'string',
           description:
             'Replacement instruction text. Allowed only when the objective is in draft state; blank clears the text.'
+        },
+        description: {
+          type: 'string',
+          description:
+            'Replacement human-facing summary, allowed only when the objective is in draft state: one to three short prose paragraphs in Simplified Technical English style that open with the goal and close with the done-when sentence. It is never sent to the executing agent. An empty string removes the summary; Overlord then writes none until a person selects Summarize. When a person has removed the summary, your text is not stored and a description_suppressed warning is returned.'
+        },
+        descriptionRequest: {
+          type: 'string',
+          enum: ['summarize', 'regenerate', 'retry'],
+          description:
+            'Ask Overlord to write the summary (summarize/regenerate) or to retry a failed generation (retry). Allowed only in draft state and only for instructions of at least 280 characters. Refused with description_suppressed when a person removed the summary: only a person can turn summaries back on. Cannot be combined with description.'
         },
         agent: {
           type: 'string',
@@ -1500,6 +1521,9 @@ async function callOverlordTool(name, args) {
         : {}),
       ...(args.unassignedToProject === true ? { 'unassigned-to-project': true } : {}),
       objective: requiredString(args, 'objective'),
+      ...(typeof args.description === 'string'
+        ? { 'objective-description': args.description }
+        : {}),
       ...(optionalString(args, 'title') ? { title: requiredString(args, 'title') } : {}),
       ...(optionalString(args, 'resourceKey')
         ? { resource: requiredString(args, 'resourceKey') }
@@ -1572,8 +1596,19 @@ async function callOverlordTool(name, args) {
     const hasAutoAdvance = typeof args.autoAdvance === 'boolean';
     const hasInstructionText = typeof args.instructionText === 'string';
     const hasAgent = typeof args.agent === 'string';
-    if (!hasTitle && !hasAutoAdvance && !hasInstructionText && !hasAgent) {
-      throw new Error('Provide title, autoAdvance, instructionText, and/or agent');
+    const hasDescription = typeof args.description === 'string';
+    const hasDescriptionRequest = typeof args.descriptionRequest === 'string';
+    if (
+      !hasTitle &&
+      !hasAutoAdvance &&
+      !hasInstructionText &&
+      !hasAgent &&
+      !hasDescription &&
+      !hasDescriptionRequest
+    ) {
+      throw new Error(
+        'Provide title, description, descriptionRequest, autoAdvance, instructionText, and/or agent'
+      );
     }
     return runProtocol('update-objective', {
       'objective-id': requiredString(args, 'objectiveId'),
@@ -1586,6 +1621,9 @@ async function callOverlordTool(name, args) {
       ...(hasInstructionText
         ? { 'instruction-text': requiredString(args, 'instructionText') }
         : {}),
+      // An empty description is Remove; pass it through verbatim.
+      ...(hasDescription ? { description: args.description } : {}),
+      ...(hasDescriptionRequest ? { 'description-request': args.descriptionRequest } : {}),
       // Validated by the protocol handler (model requires agent; manual takes none).
       ...(hasAgent ? { 'objective-agent': args.agent } : {}),
       ...(typeof args.model === 'string' ? { 'objective-model': args.model } : {}),
@@ -1862,7 +1900,7 @@ process.stdin.on('data', async chunk => {
         result: {
           protocolVersion: PROTOCOL_VERSION,
           capabilities: { tools: { listChanged: false } },
-          serverInfo: { name: 'overlord-__OVERLORD_ADAPTER_KEY__', version: '0.3.62' }
+          serverInfo: { name: 'overlord-__OVERLORD_ADAPTER_KEY__', version: '0.3.63' }
         }
       });
       continue;

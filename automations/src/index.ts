@@ -21,6 +21,26 @@ export {
   MISSION_SUMMARY_SYSTEM_INSTRUCTION
 } from './compose-mission-summary/index.js';
 export type {
+  ObjectiveBriefComposeOutcome,
+  ObjectiveBriefDescriptionParts,
+  ObjectiveBriefFieldFailure,
+  ObjectiveBriefFieldOutcome,
+  ObjectiveBriefFields,
+  ObjectiveBriefGenerate,
+  ObjectiveBriefStyleIssue
+} from './objective-brief/index.js';
+export {
+  assembleObjectiveDescription,
+  checkObjectiveBriefFidelity,
+  composeObjectiveBrief,
+  lintAuthoredObjectiveDescription,
+  OBJECTIVE_BRIEF_MAX_INPUT_CHARS,
+  OBJECTIVE_BRIEF_MISSING_DONE_WHEN,
+  OBJECTIVE_BRIEF_PROVIDER_TIMEOUT_MS,
+  OBJECTIVE_BRIEF_SCHEMA_VERSION,
+  OBJECTIVE_BRIEF_TITLE_MAX_CHARS
+} from './objective-brief/index.js';
+export type {
   AutoAdvanceDecision,
   ManageObjectiveLifecycleInput,
   ManageObjectiveLifecycleOutput,
@@ -109,3 +129,5 @@ export {
   summarizeTextWithGemini
 } from './title-summarizer/index.js';
 export type { Automation, AutomationRunContext } from './types.js';
+export type { SteLintCode, SteLintViolation } from './writing/ste.js';
+export { lintSte, OBJECTIVE_WRITING_RULES, WRITING_RULES } from './writing/ste.js';

@@ -1,7 +1,7 @@
-import { WRITING_RULES } from '../compose-delivery/compose.js';
 import type { Schema } from '../openrouter/index.js';
 import { readGeminiConfigFromEnv } from '../title-summarizer/config.js';
 import { getGeminiClient } from '../title-summarizer/gemini-client.js';
+import { WRITING_RULES } from '../writing/ste.js';
 
 /**
  * Bounded model input for the mission summary (plan §4.5, with §11 item 5:

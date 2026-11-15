@@ -102,6 +102,7 @@ import path from 'node:path';
 
 import { listObjectiveFileChanges } from '../packages/core/service/changes.ts';
 import type { ServiceContext } from '../packages/core/service/context.ts';
+import type { CreationOrigin } from '../packages/core/service/context.ts';
 import { readDeliveryReport } from '../packages/core/service/delivery-report.ts';
 import { ServiceError } from '../packages/core/service/errors.ts';
 import { LAUNCHABLE_OBJECTIVE_STATES } from '../packages/core/service/execution-requests.ts';
@@ -157,6 +158,19 @@ import {
 } from '../packages/core/service/missions.ts';
 import { emitNotification } from '../packages/core/service/notifications/notifications.ts';
 import {
+  isDescriptionEligibleInstruction,
+  isObjectiveDescriptionStale,
+  loadObjectiveBriefRow,
+  normalizeObjectiveDescriptionInput,
+  objectiveBriefActorFromOrigin,
+  objectiveBriefChangedFields,
+  objectiveBriefPatchAssignments,
+  type ObjectiveBriefWarning,
+  type ObjectiveDescriptionGenerationMode,
+  planObjectiveBriefForUpdate,
+  requestObjectiveDescriptionGeneration
+} from '../packages/core/service/objective-brief.ts';
+import {
   lockMissionObjectiveQueue,
   ObjectiveQueueError,
   planQueuedObjectiveReorder,
@@ -189,14 +203,16 @@ import {
   slugify,
   toCreatedByKind
 } from '../packages/core/service/util.ts';
-import { enqueueMissionSummaryComposeJob } from '../packages/core/service/worker-jobs.ts';
+import {
+  enqueueMissionSummaryComposeJob,
+  enqueueObjectiveBriefComposeJob
+} from '../packages/core/service/worker-jobs.ts';
 
 import { generateCommitMessageFromDiff } from './automation/commit-message-automation.ts';
 import {
   generateMissionTitleNow,
   initialTitleFromInstruction,
-  scheduleMissionTitleGeneration,
-  scheduleObjectiveTitleGeneration
+  scheduleMissionTitleGeneration
 } from './automation/title-automation.ts';
 import { listMissionTerminalSessions } from './execution/latch-sessions.ts';
 import { dequeueObjective, listMissionExecutionRequests } from './execution/launch.ts';
@@ -738,6 +754,19 @@ interface ObjectiveRow {
   queue_waiting_on_objective_id?: string | null;
   queue_waiting_on_objective_display_key?: string | null;
   queue_attempt_count?: number | null;
+  // Brief state (ADR 0057). Every ObjectiveDto read selects `o.*`.
+  title_source?: string | null;
+  title_status?: string | null;
+  description?: string | null;
+  description_source?: string | null;
+  description_instruction_hash?: string | null;
+  description_status?: string | null;
+  description_failure_code?: string | null;
+  description_suppressed?: unknown;
+  description_revision?: number | string | null;
+  description_updated_at?: string | Date | null;
+  description_author_workspace_user_id?: string | null;
+  description_author_agent?: string | null;
 }
 
 // ---- serializers ---------------------------------------------------------
@@ -1909,7 +1938,74 @@ function toObjectiveDto(r: ObjectiveRow): ObjectiveDto {
     createdByKind: toCreatedByKind(r.created_by_kind),
     createdByAgent: r.created_by_agent ?? null,
     createdByWorkspaceUserId: r.created_by_workspace_user_id ?? null,
-    launchConfigOverrides
+    launchConfigOverrides,
+    ...toObjectiveBriefDtoFields(r)
+  };
+}
+
+const BRIEF_SOURCES = new Set(['generated', 'agent', 'user']);
+const BRIEF_STATUSES = new Set(['pending', 'failed']);
+const DESCRIPTION_FAILURE_CODES = new Set([
+  'provider_unavailable',
+  'provider_error',
+  'invalid_output',
+  'unfaithful_output'
+]);
+
+function briefEnum<T extends string>(
+  value: string | null | undefined,
+  allowed: Set<string>
+): T | null {
+  return value && allowed.has(value) ? (value as T) : null;
+}
+
+/**
+ * Presentation projection of the brief columns (ADR 0057/0059). This is the
+ * only place the human-facing summary enters a DTO; agent execution contexts
+ * (attach, load-context, launch prompts) use their own instruction-only
+ * projections and never read these fields.
+ */
+function toObjectiveBriefDtoFields(
+  r: ObjectiveRow
+): Pick<
+  ObjectiveDto,
+  | 'titleSource'
+  | 'titleStatus'
+  | 'description'
+  | 'descriptionSource'
+  | 'descriptionStale'
+  | 'descriptionStatus'
+  | 'descriptionFailureCode'
+  | 'descriptionSuppressed'
+  | 'descriptionEligible'
+  | 'descriptionRevision'
+  | 'descriptionUpdatedAt'
+  | 'descriptionAuthorWorkspaceUserId'
+  | 'descriptionAuthorAgent'
+> {
+  const description = r.description ?? null;
+  const updatedAt = r.description_updated_at;
+  return {
+    titleSource: briefEnum(r.title_source, BRIEF_SOURCES),
+    titleStatus: briefEnum(r.title_status, BRIEF_STATUSES),
+    description,
+    descriptionSource: description === null ? null : briefEnum(r.description_source, BRIEF_SOURCES),
+    descriptionStale: isObjectiveDescriptionStale(
+      { description, description_instruction_hash: r.description_instruction_hash ?? null },
+      r.instruction_text
+    ),
+    descriptionStatus: briefEnum(r.description_status, BRIEF_STATUSES),
+    descriptionFailureCode:
+      r.description_status === 'failed'
+        ? briefEnum(r.description_failure_code, DESCRIPTION_FAILURE_CODES)
+        : null,
+    descriptionSuppressed: isTruthyFlag(r.description_suppressed),
+    descriptionEligible: isDescriptionEligibleInstruction(r.instruction_text),
+    descriptionRevision: Number(r.description_revision ?? 0),
+    descriptionUpdatedAt: updatedAt instanceof Date ? updatedAt.toISOString() : (updatedAt ?? null),
+    descriptionAuthorWorkspaceUserId:
+      description === null ? null : (r.description_author_workspace_user_id ?? null),
+    descriptionAuthorAgent: description === null ? null : (r.description_author_agent ?? null)
   };
 }
 
@@ -5155,7 +5251,7 @@ async function createMissionTx(
     // only REST-side rule is the shape; the service layer owns the semantic
     // "a model needs an agent" rejection.
     for (const [index, item] of objectiveInputs.entries()) {
-      for (const key of ['agent', 'model'] as const) {
+      for (const key of ['agent', 'model', 'description'] as const) {
         const value = item[key];
         if (value !== undefined && value !== null && typeof value !== 'string') {
           throw new ApiError(400, `objectives[${index}].${key} must be a string or null`);
@@ -5183,6 +5279,7 @@ async function createMissionTx(
       objectives: objectiveInputs.map(item => ({
         objective: item.objective,
         ...(item.title !== undefined ? { title: item.title } : {}),
+        ...(item.description !== undefined ? { description: item.description } : {}),
         autoAdvance: item.autoAdvance ?? false,
         ...(item.agent !== undefined ? { agent: item.agent } : {}),
         ...(item.model !== undefined ? { model: item.model } : {}),
@@ -5287,8 +5384,7 @@ async function assignMissionTags(
 }
 
 export async function createMission(body: CreateMissionBody): Promise<MissionDetailDto> {
-  const { missionId, objectiveIds, instruction, shouldGenerateMissionTitle } =
-    await createMissionTx(body);
+  const { missionId, instruction, shouldGenerateMissionTitle } = await createMissionTx(body);
   const detail = await getMissionDetail(missionId);
 
   if (shouldGenerateMissionTitle) {
@@ -5299,16 +5395,8 @@ export async function createMission(body: CreateMissionBody): Promise<MissionDet
     });
   }
 
-  const firstObjectiveId = objectiveIds[0];
-  if (firstObjectiveId) {
-    scheduleObjectiveTitleGeneration({
-      objectiveId: firstObjectiveId,
-      projectId: detail.projectId,
-      missionId: detail.id,
-      instructionText: instruction
-    });
-  }
-
+  // Objective titles and summaries are durable brief jobs enqueued with each
+  // objective (ADR 0058); an authored objective title is never requested.
   return detail;
 }
 
@@ -6921,6 +7009,7 @@ async function insertObjective(
     missionId: body.missionId,
     instructionText: body.instructionText ?? '',
     ...(body.title !== undefined ? { title: body.title } : {}),
+    ...(body.description !== undefined ? { description: body.description } : {}),
     ...(body.state !== undefined ? { state: body.state } : {}),
     autoAdvance: body.autoAdvance ?? false,
     ...(body.assignedAgent !== undefined ? { assignedAgent: body.assignedAgent } : {}),
@@ -6948,25 +7037,50 @@ function createObjectiveTx(body: InternalCreateObjectiveBody): Promise<Objective
   });
 }
 
+/** The generated title, when one is wanted, is a durable brief job (ADR 0058). */
 export async function createObjective(body: CreateObjectiveBody): Promise<ObjectiveDto> {
-  const objective = await createObjectiveTx(body);
+  return createObjectiveTx(body);
+}
 
-  if (!body.title?.trim() && objective.instructionText.trim()) {
-    scheduleObjectiveTitleGeneration({
-      objectiveId: objective.id,
-      projectId: objective.projectId,
-      missionId: objective.missionId,
-      instructionText: objective.instructionText
-    });
+/**
+ * Who is writing through `updateObjective`. REST callers are people; the
+ * protocol (CLI, hosted MCP) passes its agent origin so current-instruction
+ * authorship and title ownership are recorded correctly (ADR 0057).
+ */
+export type UpdateObjectiveOptions = {
+  origin?: CreationOrigin;
+};
+
+/** An update result with the non-fatal outcomes the caller should surface. */
+export type ObjectiveUpdateResult = {
+  objective: ObjectiveDto;
+  warnings: ObjectiveBriefWarning[];
+};
+
+function readExpectedDescriptionRevision(value: unknown): number | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) {
+    throw new ApiError(
+      400,
+      'expectedDescriptionRevision must be a non-negative integer',
+      undefined,
+      'validation_error'
+    );
   }
-
-  return objective;
+  return value;
 }
 
 async function updateObjectiveTx(
   idRef: string,
-  body: UpdateObjectiveBody
-): Promise<{ objective: ObjectiveDto; regenerateTitle: boolean }> {
+  body: UpdateObjectiveBody,
+  options: UpdateObjectiveOptions = {}
+): Promise<ObjectiveUpdateResult> {
+  // Validate the authored description before any write (ADR 0057 mutation
+  // table: omitted = unchanged, null/blank = Remove, text = authored).
+  const descriptionInput = normalizeObjectiveDescriptionInput(body.description);
+  const expectedDescriptionRevision = readExpectedDescriptionRevision(
+    body.expectedDescriptionRevision
+  );
   return requireDatabaseClient().transaction(async tx => {
     const {
       workspaceId,
@@ -6977,20 +7091,31 @@ async function updateObjectiveTx(
       permission: PERMISSIONS.OBJECTIVE_UPDATE,
       db: tx
     });
-    const existing = (await tx.get(
-      `SELECT o.*, m.display_id AS mission_display_id
-         FROM objectives o
-         JOIN missions m ON m.id = o.mission_id
-        WHERE o.id = ? AND o.workspace_id = ? AND o.deleted_at IS NULL`,
-      [id, workspaceId]
-    )) as ObjectiveRow | undefined;
+    const readExisting = async (lock: boolean) =>
+      (await tx.get(
+        `SELECT o.*, m.display_id AS mission_display_id
+           FROM objectives o
+           JOIN missions m ON m.id = o.mission_id
+          WHERE o.id = ? AND o.workspace_id = ? AND o.deleted_at IS NULL${lock ? ' FOR UPDATE OF o' : ''}`,
+        [id, workspaceId]
+      )) as ObjectiveRow | undefined;
+    let existing = await readExisting(false);
     if (!existing) throw new ApiError(404, 'Objective not found');
+    // Brief columns (ADR 0057) are planned from this snapshot and written as
+    // absolute values, so on Postgres the row is locked before it is read
+    // (SQLite serializes write transactions). A reopen also takes the mission
+    // queue lock; take it first, in the same mission → objective order as
+    // reorder and launch, so the two locks cannot deadlock.
+    if (tx.dialect === 'postgres') {
+      if (body.state === 'draft') await lockMissionObjectiveQueue(tx, existing.mission_id);
+      existing = await readExisting(true);
+      if (!existing) throw new ApiError(404, 'Objective not found');
+    }
 
     const fields: string[] = [];
     const setParams: unknown[] = [];
     const changed: string[] = [];
 
-    let instructionChanged = false;
     if (body.instructionText !== undefined) {
       const instruction = body.instructionText.trim();
       const resultingState = body.state ?? existing.state;
@@ -7004,7 +7129,6 @@ async function updateObjectiveTx(
       fields.push('instruction_text = ?');
       setParams.push(instruction);
       changed.push('instruction_text');
-      instructionChanged = true;
     }
     if (body.title !== undefined) {
       fields.push('title = ?');
@@ -7118,8 +7242,99 @@ async function updateObjectiveTx(
       setParams.push(Object.keys(launchConfigs).length > 0 ? JSON.stringify(launchConfigs) : null);
       changed.push('launch_config_json');
     }
+    if (fields.length === 0 && descriptionInput.kind === 'omit') {
+      return { objective: toObjectiveDto(existing), warnings: [] };
+    }
+
+    // Presentation ownership and current-instruction authorship move with the
+    // instruction/title write in the same statement (ADR 0057). Lifecycle,
+    // position and configuration edits leave every brief column untouched.
+    const briefRow = (await loadObjectiveBriefRow(tx, id))!;
+    if (
+      descriptionInput.kind !== 'omit' &&
+      expectedDescriptionRevision !== undefined &&
+      briefRow.description_revision !== expectedDescriptionRevision
+    ) {
+      throw new ServiceError(
+        'The summary changed after you started editing it. Reload it and try again.',
+        'description_conflict',
+        409,
+        { descriptionRevision: briefRow.description_revision, description: briefRow.description }
+      );
+    }
+    const briefPlan = planObjectiveBriefForUpdate({
+      state: briefRow,
+      currentInstruction: existing.instruction_text,
+      instructionText: body.instructionText,
+      title: body.title,
+      description: descriptionInput,
+      actor: objectiveBriefActorFromOrigin(
+        options.origin ?? { kind: 'human' },
+        workspaceUserId ?? null
+      ),
+      now: nowIso()
+    });
+
+    // A description-only edit is presentation metadata: it never touches
+    // instructions, lifecycle, Run Queue membership, evidence or `updated_at`
+    // (which orders the activity feed), in any objective state (ADR 0057).
     if (fields.length === 0) {
-      return { objective: toObjectiveDto(existing), regenerateTitle: false };
+      const briefOnly = objectiveBriefPatchAssignments(tx, briefPlan.patch);
+      if (briefOnly.assignments.length > 0) {
+        const briefRevision = existing.revision + 1;
+        const written = await tx.run(
+          `UPDATE objectives SET ${briefOnly.assignments.join(', ')}, revision = ?
+             WHERE id = ? AND workspace_id = ? AND revision = ? AND deleted_at IS NULL`,
+          [...briefOnly.params, briefRevision, id, workspaceId, existing.revision]
+        );
+        if (written.changes === 0) {
+          throw new ServiceError(
+            'The objective changed while this request ran. Reload it and try again.',
+            'objective_conflict',
+            409
+          );
+        }
+        await recordChange(
+          {
+            entityType: 'objective',
+            entityId: id,
+            operation: 'update',
+            entityRevision: briefRevision,
+            projectId: existing.project_id,
+            missionId: existing.mission_id,
+            objectiveId: id,
+            changedFields: objectiveBriefChangedFields(briefPlan.patch),
+            workspaceId
+          },
+          tx
+        );
+      }
+      const briefOnlyRow = (await tx.get(
+        `SELECT o.*, m.display_id AS mission_display_id
+           FROM objectives o
+           JOIN missions m ON m.id = o.mission_id
+          WHERE o.id = ?`,
+        [id]
+      )) as ObjectiveRow;
+      return { objective: toObjectiveDto(briefOnlyRow), warnings: briefPlan.warnings };
+    }
+    const briefAssignments = objectiveBriefPatchAssignments(tx, briefPlan.patch);
+    fields.push(...briefAssignments.assignments);
+    setParams.push(...briefAssignments.params);
+    changed.push(
+      ...objectiveBriefChangedFields(briefPlan.patch).filter(field => !changed.includes(field))
+    );
+    // A system-owned title for short instructions is written locally, in the
+    // same statement; longer instructions leave a model title pending.
+    if (briefPlan.titleDerived !== null) {
+      const titleIndex = fields.indexOf('title = ?');
+      if (titleIndex >= 0) {
+        setParams[titleIndex] = briefPlan.titleDerived;
+      } else {
+        fields.push('title = ?');
+        setParams.push(briefPlan.titleDerived);
+        changed.push('title');
+      }
     }
 
     const now = nowIso();
@@ -7135,6 +7350,10 @@ async function updateObjectiveTx(
          WHERE id = ? AND workspace_id = ?`,
       [...setParams, now, revision, id, workspaceId]
     );
+    // Brief intent and its job commit together (ADR 0058).
+    if (briefPlan.titleRequested || briefPlan.descriptionRequested) {
+      await enqueueObjectiveBriefComposeJob({ db: tx, workspaceId, objectiveId: id });
+    }
 
     await recordChange(
       {
@@ -7275,31 +7494,75 @@ async function updateObjectiveTx(
         WHERE o.id = ?`,
       [id]
     )) as ObjectiveRow;
-    const objective = toObjectiveDto(row);
-
-    return {
-      objective,
-      regenerateTitle: instructionChanged && body.title === undefined
-    };
+    return { objective: toObjectiveDto(row), warnings: briefPlan.warnings };
   });
 }
 
 export async function updateObjective(
   id: string,
-  body: UpdateObjectiveBody
+  body: UpdateObjectiveBody,
+  options: UpdateObjectiveOptions = {}
 ): Promise<ObjectiveDto> {
-  const { objective, regenerateTitle } = await updateObjectiveTx(id, body);
+  // A generated title or summary, when the write asks for one, is a durable
+  // brief job enqueued inside the transaction (ADR 0058).
+  return (await updateObjectiveTx(id, body, options)).objective;
+}
 
-  if (regenerateTitle) {
-    scheduleObjectiveTitleGeneration({
-      objectiveId: objective.id,
-      projectId: objective.projectId,
-      missionId: objective.missionId,
-      instructionText: objective.instructionText
-    });
+/**
+ * `updateObjective` plus the brief warnings of the write (for example an agent
+ * description refused because a person removed the summary). Protocol and
+ * hosted MCP surface these; REST callers are people and never receive one.
+ */
+export async function updateObjectiveWithWarnings(
+  id: string,
+  body: UpdateObjectiveBody,
+  options: UpdateObjectiveOptions = {}
+): Promise<ObjectiveUpdateResult> {
+  return updateObjectiveTx(id, body, options);
+}
+
+/**
+ * Summarize / Regenerate / Retry (ADR 0057, 0059). Durable intent plus a brief
+ * job in one transaction; the worker writes the summary later. Allowed in every
+ * objective state. A person's Summarize or Regenerate is the only operation
+ * that clears removal suppression; an agent request while suppressed is
+ * refused (409 `description_suppressed`).
+ */
+export async function requestObjectiveDescription(
+  idRef: string,
+  body: { mode?: unknown },
+  options: UpdateObjectiveOptions = {}
+): Promise<ObjectiveDto> {
+  const mode = body?.mode;
+  if (mode !== 'summarize' && mode !== 'regenerate' && mode !== 'retry') {
+    throw new ApiError(
+      400,
+      'mode must be summarize, regenerate or retry',
+      undefined,
+      'validation_error'
+    );
   }
-
-  return objective;
+  return requireDatabaseClient().transaction(async tx => {
+    const { workspaceId, workspaceUserId, objectiveId } = await requireObjectivePermission({
+      objectiveId: idRef,
+      permission: PERMISSIONS.OBJECTIVE_UPDATE,
+      db: tx
+    });
+    const ctx = await buildWebappServiceContextForWorkspace(workspaceId, tx, workspaceUserId);
+    await requestObjectiveDescriptionGeneration({
+      ctx: { ...ctx, origin: options.origin ?? { kind: 'human' } },
+      objectiveId,
+      mode: mode as ObjectiveDescriptionGenerationMode
+    });
+    const row = (await tx.get(
+      `SELECT o.*, m.display_id AS mission_display_id
+         FROM objectives o
+         JOIN missions m ON m.id = o.mission_id
+        WHERE o.id = ?`,
+      [objectiveId]
+    )) as ObjectiveRow;
+    return toObjectiveDto(row);
+  });
 }
 
 export async function deleteObjective(idRef: string): Promise<void> {

@@ -91,3 +91,6 @@ record and the index disagree.
 - [0054 — Retire legacy alias routes and protocol aliases](0054-retire-legacy-aliases.md)
 - [0055 — Route Google models through OpenRouter](0055-openrouter-google-model-transport.md)
 - [0056 — Unify draft and future objectives into one ordered draft queue](0056-unify-draft-and-future-objectives.md)
+- [0057 — Objective brief state, presentation ownership and removal suppression](0057-objective-brief-state-and-ownership.md)
+- [0058 — Durable objective brief worker and the objective writing profile](0058-objective-brief-worker.md)
+- [0059 — Objective descriptions on the REST, protocol, MCP and connector surfaces](0059-objective-description-surfaces.md)

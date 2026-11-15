@@ -1,68 +1,11 @@
-import {
-  deriveTitleFromInstructionText,
-  generateAndSetObjectiveTitle,
-  generateObjectiveTitle
-} from '@overlord/automations';
+import { deriveTitleFromInstructionText, generateObjectiveTitle } from '@overlord/automations';
 
 import { nowIso, recordChange, requireDatabaseClient } from '../db.ts';
 import { realtime } from '../realtime.ts';
 
-type ObjectiveContext = {
-  objectiveId: string;
-  projectId: string;
-  missionId: string;
-};
-
 type MissionContext = {
   missionId: string;
   projectId: string;
-};
-
-const objectiveTitleStore = {
-  updateObjectiveTitle: async ({
-    objectiveId,
-    title
-  }: {
-    objectiveId: string;
-    title: string;
-  }): Promise<void> => {
-    const existing = await requireDatabaseClient().get<{
-      id: string;
-      workspace_id: string;
-      project_id: string;
-      mission_id: string;
-      title: string | null;
-      revision: number;
-    }>(
-      `SELECT id, workspace_id, project_id, mission_id, title, revision
-         FROM objectives
-        WHERE id = ? AND deleted_at IS NULL`,
-      [objectiveId]
-    );
-
-    if (!existing || existing.title === title) {
-      return;
-    }
-
-    const now = nowIso();
-    const revision = existing.revision + 1;
-    await requireDatabaseClient().run(
-      `UPDATE objectives SET title = ?, updated_at = ?, revision = ? WHERE id = ?`,
-      [title, now, revision, objectiveId]
-    );
-
-    await recordChange({
-      entityType: 'objective',
-      entityId: objectiveId,
-      operation: 'update',
-      entityRevision: revision,
-      projectId: existing.project_id,
-      missionId: existing.mission_id,
-      objectiveId,
-      changedFields: ['title'],
-      workspaceId: existing.workspace_id
-    });
-  }
 };
 
 async function updateMissionTitle({
@@ -119,22 +62,12 @@ function notifyAfterTitleAutomation(task: Promise<void>): void {
     });
 }
 
-/** Immediate local title for create flows; Gemini may refine it asynchronously. */
+/**
+ * Immediate local title for create flows. Objective titles are refined by the
+ * durable objective-brief worker (ADR 0058); mission titles by the calls below.
+ */
 export function initialTitleFromInstruction(instructionText: string): string {
   return deriveTitleFromInstructionText(instructionText.trim());
-}
-
-export function scheduleObjectiveTitleGeneration(
-  params: ObjectiveContext & { instructionText: string }
-): void {
-  notifyAfterTitleAutomation(
-    generateAndSetObjectiveTitle({
-      store: objectiveTitleStore,
-      objectiveId: params.objectiveId,
-      instructionText: params.instructionText,
-      env: process.env
-    })
-  );
 }
 
 export function scheduleMissionTitleGeneration(

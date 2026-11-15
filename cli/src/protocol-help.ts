@@ -118,7 +118,7 @@ Subcommands:
   statuses                List one project's ordered board columns
   discuss-objective      Mark a draft objective as submitted (does not start execution)
   add-objectives         Append ordered objectives to an existing mission
-  update-objective       Set title, auto-advance, instruction text, and/or agent on an objective
+  update-objective       Set title, description, auto-advance, instruction text, and/or agent on an objective
   delete-missions        Confirmed bulk soft-delete of missions
   delete-objectives      Confirmed bulk soft-delete of objectives
   create                 Create a draft mission without attaching
@@ -568,20 +568,26 @@ add-objectives:
         Default launch selection for items that name no "agent" of their own.
         --objective-model requires --objective-agent.
   Notes:
-    Each item is { "objective": "...", "title": "...", "agent": "codex",
-    "model": "gpt-6.1-terra", "autoAdvance": true|false, "resourceKey": "..." }.
+    Each item is { "objective": "...", "title": "...", "description": "...",
+    "agent": "codex", "model": "gpt-6.1-terra", "autoAdvance": true|false,
+    "resourceKey": "..." }.
     model requires agent. Per-item autoAdvance and agent win over the flags.
+    "description" is the optional human-facing summary (see create); style
+    issues come back as "warnings" on the matching created objective.
     Use agent "manual" (alias "human") to assign an objective to a person; it
     takes no model and is never launched.
 
 update-objective:
   Purpose:
-    Rewrite an objective title, queue or dequeue compatibility auto-advance,
-    edit instruction text, and/or reassign the agent on an existing objective.
+    Rewrite an objective title or description, queue or dequeue compatibility
+    auto-advance, edit instruction text, request a generated summary, and/or
+    reassign the agent on an existing objective.
   Required:
     --objective-id <id>
     At least one of:
       --title <text>
+      --description <text> or --description-file <path|->
+      --description-request summarize | regenerate | retry
       --auto-advance or --no-auto-advance
       --instruction-text <text> or --instruction-text-file <path|->
       --objective-agent <id>
@@ -598,9 +604,22 @@ update-objective:
     custom title and restores instruction-derived presentation.
     Instruction text may be edited only when the objective is in draft state.
     Blank instruction text is allowed in that state.
+    The description (and --description-request) may be changed by an agent
+    only in draft state; people edit descriptions in any state in the app.
+    An empty --description removes the summary: Overlord then writes none,
+    even after instruction edits, until a person selects Summarize. While a
+    person's removal is in force, agent text is not stored (warning
+    description_suppressed) and summary requests are refused (409).
+    --description-request summarize|regenerate asks Overlord to write the
+    summary; retry re-requests a failed one. Instructions shorter than 280
+    characters are shown in full and are not summarized (409
+    description_not_eligible).
   Returns:
     The updated objective JSON, including assignedAgent, model, reasoningEffort,
-    and resourceKey. autoAdvance is deprecated and derived from live queueEntry membership.
+    resourceKey, description and its summary state (descriptionSource,
+    descriptionStatus, descriptionSuppressed), plus "warnings": advisory
+    description_style issues and description_suppressed. autoAdvance is
+    deprecated and derived from live queueEntry membership.
 
 delete-missions:
   Purpose:
@@ -651,6 +670,17 @@ create:
         objective just to name an agent. This is not --agent, which records
         creation provenance. Seeds only items with no "agent" of their own;
         --objective-model requires --objective-agent.
+    --objective-description <text> or --objective-description-file <path|->
+        Human-facing summary of the single --objective (see Notes). With
+        --objectives-json, set "description" on each item instead.
+  Notes:
+    The objective text is the complete instruction for the executing agent.
+    A description is a short summary for the people who decide whether to
+    launch it: one to three prose paragraphs in Simplified Technical English
+    style that open with the goal and close with the done-when sentence (about
+    120 words). It is never sent to the executing agent. Omit it and Overlord
+    writes one for long agent-written objectives. Style issues come back as
+    "warnings" on the created objective; the text is stored as written.
 
 prompt:
   Purpose:
@@ -670,6 +700,9 @@ prompt:
     --objective-agent <id> / --objective-model <id>
         Assign a launch agent (and its model) to the objectives created here.
         Distinct from --agent, which names the attaching agent for the session.
+    --objective-description <text> or --objective-description-file <path|->
+        Human-facing summary of the single --objective (see Notes). With
+        --objectives-json, set "description" on each item instead.
   Returns:
     New mission/session JSON plus SESSION_KEY on stderr when available.
 

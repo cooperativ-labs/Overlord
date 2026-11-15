@@ -185,6 +185,16 @@ Owns:
   response it produces against the operation (status, media type and body with undocumented
   members refused) and fails on an invalid request a handler accepted.
 - REST auth integration points.
+- **Objective descriptions** (`patchObjectivesById`, `postObjectives`, `postMissions`,
+  `postObjectivesByIdDescriptionRequests`; ADR 0059). REST callers are people: they write,
+  remove (`description: null`) and request summaries (`summarize`, `regenerate`, `retry`) in
+  every objective state with `objective:update`, and only their Summarize or Regenerate clears
+  removal suppression. A description-only `PATCH` and every summary request are presentation
+  writes: they never change instructions, lifecycle state or timestamps, Run Queue membership,
+  execution evidence or `updatedAt`, and raise no notification or mission-summary job; they move
+  `revision` and append one `entity_changes` row. Instruction-edit locks are unchanged.
+  `ObjectiveDto` projects the brief state for people; agent execution projections (protocol
+  `ObjectiveSummary`, launch prompts and commands) never carry the description.
 - **Project Run Queues** (`getProjectsByIdRunQueues`, `postProjectsByIdRunQueues`,
   `patchProjectsByIdRunQueuesOrder`, `postProjectsByIdRunQueuesEntries`,
   `patchRunQueuesByQueueId`, `deleteRunQueuesByQueueId`, `patchRunQueuesByQueueIdOrder`,
@@ -672,6 +682,8 @@ Owns:
 - Pluggable automation interface (`Automation`) and built-in automation registry
 - Provider configuration for optional Gemini-backed tools (`OPENROUTER_API_KEY`, model selection)
 - Reference summarization tools (text summarization, objective title generation)
+- Shared writing rules for model-written human-facing text: the base STE-inspired profile used by the delivery and mission-summary composers, the stricter objective profile for objective titles and summaries, and the advisory `lintSte` checker (ADR 0058)
+- The `objective-brief` composer: one provider call for an objective's generated title and/or summary, with deterministic assembly, fidelity checks and one bounded rewrite (ADR 0058)
 - Built-in `compose-delivery` automation for schema-constrained delivery presentation drafts
 - Fire-and-forget automation helpers that callers invoke through injected persistence callbacks
 - Downstream automation loading via `OVERLORD_AUTOMATIONS_MODULE` (the `custom-automation` extension point)
@@ -796,6 +808,7 @@ Owns:
 - Additive `assignedTo` input on `overlord_create_mission`, forwarded to the same service-layer member resolver as Protocol `--assigned-to` (accepting `workspace_users.id`, profile UUID, `orgid:username`, bare username, or email). An unresolvable member is an error, never a silent fallback to unassigned. The MCP surface never resolves members itself, and `assignedTo` is meaningless on the unassigned inbox fallback above.
 - Mission and objective results returned through MCP carry the same `createdByKind` / `createdByAgent` / `createdByWorkspaceUserId` provenance fields as the REST DTOs they project; rows an MCP caller creates are authored on the protocol surface and are therefore `agent`-kind.
 - `overlord_create_mission` and `overlord_add_objectives` return structured mission/objective DTOs with persisted launch assignments and objective settings; tool descriptions identify the fields callers should inspect (`assignedAgent`, `model`, `resourceKey`, and `queueEntry` / `autoAdvance`).
+- Additive objective description inputs (ADR 0059): `description` on `overlord_create_mission` (forwarded as `--objective-description`) and on `overlord_add_objectives` items, and `description` / `descriptionRequest` on `overlord_update_objective` (forwarded as `--description` / `--description-request`). MCP callers are agents, so the Protocol draft-only and removal-suppression rules apply unchanged; hosted MCP and the connector shim expose the identical schema.
 
 Does NOT own:
 
@@ -1677,7 +1690,7 @@ Specified in [authorization.md](authorization.md).
 - **Transport**: Service-layer function calls to the automations module's exported package API (`@overlord/automations`)
 - **Browser-safe subpaths**: SPA / renderer callers that need pure lifecycle or scheduling helpers MUST import `@overlord/automations/objective-manager` or `@overlord/automations/scheduling-engine` instead of the package root. The root barrel also re-exports server-only OpenRouter title tools. The provider transport is available only at `@overlord/automations/openrouter`; browser callers must not import it.
 - **Configuration**: Environment variables documented in `.env.prod.example` / `.env.local.example` (`OPENROUTER_API_KEY`, optional model override)
-- **Rule**: Automations must not read or write domain tables directly; persistence goes through caller-supplied store interfaces (e.g. `ObjectiveTitleStore`)
+- **Rule**: Automations must not read or write domain tables directly; persistence goes through caller-supplied store interfaces (e.g. `ObjectiveTitleStore`) or through the caller acting on a returned result (the objective-brief composer returns per-field results; the backend worker publishes them through the core service guards)
 - **Fallback**: When a provider is unavailable or a call fails, automations return `null` and callers use deterministic local fallbacks
 - **Downstream extension**: Forks add automations via `OVERLORD_AUTOMATIONS_MODULE` (`custom-automation` extension point), registering through the module API — never by editing the built-in registry
 

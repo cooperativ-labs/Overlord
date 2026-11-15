@@ -69,9 +69,9 @@ Supported built-in connector names currently include `claude`, `codex`, `cursor`
 
 | Command                                                                                                                                                                               | What it does                                                                                                                                                                             |
 | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ovld create "<objective>" [--objectives-json <json>] [--title <text>] [--project-id <id>] [--resource <key>] [--objective-agent <id>] [--objective-model <id>] [--auto-advance\|--no-auto-advance] [--json]` | Create a draft mission. `--objective-agent`/`--objective-model` (model requires agent) seed the launch selection for items naming no agent of their own.                                |
+| `ovld create "<objective>" [--objectives-json <json>] [--title <text>] [--objective-description <text>] [--project-id <id>] [--resource <key>] [--objective-agent <id>] [--objective-model <id>] [--auto-advance\|--no-auto-advance] [--json]` | Create a draft mission. `--objective-agent`/`--objective-model` (model requires agent) seed the launch selection for items naming no agent of their own. `--objective-description` sets the human-facing summary of the single objective.                                |
 | `ovld inbox create --title <text> --objective <text> [--json]`                                                                                                                        | Create a private, account-owned unassigned task capture.                                                                                                                                 |
-| `ovld prompt "<objective>" [--objectives-json <json>] [--title <text>] [--project-id <id>] [--resource <key>] [--agent <id>] [--objective-agent <id>] [--objective-model <id>] [--auto-advance\|--no-auto-advance] [--json]` | Create a mission and queue execution. `--agent` names who attaches; `--objective-agent`/`--objective-model` seed the objective's own launch selection.                                  |
+| `ovld prompt "<objective>" [--objectives-json <json>] [--title <text>] [--objective-description <text>] [--project-id <id>] [--resource <key>] [--agent <id>] [--objective-agent <id>] [--objective-model <id>] [--auto-advance\|--no-auto-advance] [--json]` | Create a mission and queue execution. `--agent` names who attaches; `--objective-agent`/`--objective-model` seed the objective's own launch selection; `--objective-description` sets its summary.                                  |
 | `ovld attach <mission-id> [agent] [--objective-id <id>] [--model <id>] [--thinking <level>] [--json]`                                                                                 | Queue an agent for an existing mission.                                                                                                                                                  |
 | `ovld execution --mission-id <id> [--objective-id <id>] [--agent <id>] [--model <id>] [--thinking <level>] [--json]`                                                                  | Alias of `attach` without positional-`missionId` support. `--mission-id` is optional when `--objective-id` is a display id (e.g. `coo:8.k7xm`), same as `attach`.                       |
 | `ovld missions list [--status <csv>] [--query <text>] [--project-id <id>] [--limit <n>] [--json]`                                                                                     | List missions.                                                                                                                                                                           |
@@ -159,8 +159,8 @@ Every command below is available from `ovld protocol help`.
 | `search`                           | Find grouped mission, objective, and delivery matches by text, state, or project. `--reference <token>` with `--project-id` runs an exhaustive exact-token lookup (`--limit`, `--cursor`; follow `nextCursor` until `complete` is true).                          |
 | `statuses`                         | List one project's board columns.                                                                         |
 | `discuss-objective`                | Submit the latest draft objective for discussion without execution.                                       |
-| `add-objectives`                   | Append ordered objectives to a mission.                                                                   |
-| `update-objective`                 | Turn auto-advance on or off, edit instruction text, or reassign with `--objective-agent` (`manual`/`human` for a person). Requires `--objective-id`.|
+| `add-objectives`                   | Append ordered objectives to a mission; each item may carry a `description`.                              |
+| `update-objective`                 | Turn auto-advance on or off, edit instruction text or the description (`--description`, `--description-request`), or reassign with `--objective-agent` (`manual`/`human` for a person). Requires `--objective-id`.|
 | `delete-missions`                  | Confirmed bulk soft-delete of one to 100 missions (requires `--confirm`).                                  |
 | `delete-objectives`                | Confirmed bulk soft-delete of one to 100 objectives (requires `--confirm`).                                |
 | `create`                           | Create a draft mission without attaching.                                                                 |
@@ -231,6 +231,34 @@ objective to start it. The exception is queueing an objective behind a sibling
 that is already running: its new mission queue shows that sibling in flight
 ahead of it and starts running, so the queued objective launches as soon as
 the sibling delivers.
+
+### Objective descriptions
+
+An objective has instructions (the complete text the executing agent receives)
+and an optional human-facing description: one to three short prose paragraphs
+in Simplified Technical English style that open with the goal and close with
+the done-when sentence, about 120 words. The description is never sent to the
+executing agent. Omit it and Overlord writes one for long (280+ characters)
+agent-written objectives.
+
+- `create` / `prompt`: `--objective-description <text>` or
+  `--objective-description-file <path|->` with a single `--objective`; with
+  `--objectives-json`, set `"description"` on each item instead.
+- `add-objectives`: per-item `"description"`.
+- `update-objective`: `--description <text>` or `--description-file <path|->`
+  (empty removes the summary), or `--description-request summarize|regenerate|retry`
+  (not combined with `--description`).
+
+Agents may change descriptions or request summaries only on `draft` objectives
+(400 `description_not_editable`); people edit them in any state in the app.
+`retry` re-requests only a failed generation (409 `description_not_failed`), and
+instructions under 280 characters are not summarized (409
+`description_not_eligible`). When a person removed the summary, agent text is
+not stored and summary requests are refused (`description_suppressed`) until
+that person selects Summarize. Responses carry advisory `warnings` (code
+`description_style` or `description_suppressed`): on the matching created
+objective for `create`/`add-objectives`, top-level for `update-objective`. The
+text is stored as written.
 
 ## Environment variables
 

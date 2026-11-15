@@ -1,6 +1,7 @@
 import type { Schema } from '../openrouter/index.js';
 import { readGeminiConfigFromEnv } from '../title-summarizer/config.js';
 import { getGeminiClient, resetGeminiClientForTests } from '../title-summarizer/gemini-client.js';
+import { WRITING_RULES } from '../writing/ste.js';
 
 export { resetGeminiClientForTests };
 
@@ -90,21 +91,7 @@ export const COMPOSE_DELIVERY_RESPONSE_SCHEMA: Schema = {
   required: ['markdown', 'humanActions', 'tradeoffsMade']
 };
 
-/**
- * STE-inspired writing rules (loosely based on ASD-STE100), shared with the
- * mission summary composer. Guidance for the model, not a checker.
- */
-export const WRITING_RULES = `WRITING rules:
-- One topic per sentence. Keep sentences short: about 20 words for an instruction, about 25 for a description.
-- Use the active voice and name the actor: "The migration adds a table", not "A table is added".
-- Use the present tense for state and the simple past for what the agent did.
-- Use the imperative for anything the operator must do: "Run the test suite", not "The test suite should be run".
-- Use one term for one thing throughout a message. Do not vary vocabulary for style.
-- Prefer short, common words. Avoid noun stacks longer than three words; rewrite "delivery compose worker fallback path" as "the fallback path of the compose worker".
-- Keep articles ("the", "a"). Do not drop them for brevity.
-- No idioms, no hedging filler, no marketing adjectives.
-- Technical names, commands, paths, and quoted agent text are exempt and are copied exactly.
-- When the evidence is unclear, say that it is unclear. Do not smooth it over.`;
+export { WRITING_RULES };
 
 export const SYSTEM_INSTRUCTION = `You compose a polished delivery review message for a coding agent handoff.
 Return JSON only matching the schema.

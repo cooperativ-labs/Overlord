@@ -5,6 +5,151 @@ is the current version and must equal [VERSION](VERSION); `yarn version:contract
 writes its skeleton. Dates use ISO 8601 and describe the contract change, not
 merely the files edited.
 
+## [172.3.0] - 2026-11-14
+
+Contract impact: minor. Objective descriptions reach every surface (coo:1275,
+ADR 0059): REST, protocol (CLI), hosted MCP and the connector shim read and
+write the human-facing summary and request Summarize, Regenerate or Retry,
+under the ADR 0057 ownership and removal rules. All additions are optional
+inputs or additive response fields; agent execution contexts stay
+instruction-only.
+
+### Added
+
+- `ObjectiveDto` fields `titleSource`, `titleStatus`, `description`,
+  `descriptionSource`, `descriptionStale`, `descriptionStatus`,
+  `descriptionFailureCode`, `descriptionSuppressed`, `descriptionEligible`,
+  `descriptionRevision`, `descriptionUpdatedAt`,
+  `descriptionAuthorWorkspaceUserId` and `descriptionAuthorAgent`, with schemas
+  `ObjectiveBriefSource`, `ObjectiveBriefStatus` and
+  `ObjectiveDescriptionFailureCode`.
+- `description` on `CreateMissionBody.objectives[]`, `CreateObjectiveBody` and
+  `UpdateObjectiveBody` (`ObjectiveDescriptionInput`: omitted unchanged,
+  `null`/blank Remove, text authored), and `expectedDescriptionRevision` on
+  `UpdateObjectiveBody` (409 `description_conflict`).
+- `POST /api/objectives/{id}/description-requests`
+  (`postObjectivesByIdDescriptionRequests`, `objective:update`) with
+  `{ mode: summarize | regenerate | retry }`.
+- `ActivityFeedMissionItemDto.descriptionPreview`.
+- Protocol flags: `--objective-description` / `--objective-description-file`
+  on `create` and `prompt`; per-item `description` in `--objectives-json` for
+  `create`, `prompt` and `add-objectives`; `--description`,
+  `--description-file` and `--description-request` on `update-objective`, which
+  also lists its existing `--objective-agent`, `--objective-model` and
+  `--objective-reasoning-effort` flags. Responses carry advisory `warnings`
+  (`description_style`, `description_suppressed`).
+- MCP inputs: `description` on `overlord_create_mission` and
+  `overlord_add_objectives` items; `description` and `descriptionRequest` on
+  `overlord_update_objective`.
+- Stable error codes `description_not_editable` (agent write outside draft),
+  `description_not_eligible`, `description_not_failed`,
+  `description_suppressed`, `description_conflict`, `description_too_long`.
+
+### Changed
+
+- A description-only `PATCH /api/objectives/{id}` is a presentation write: it
+  never moves `updatedAt`, raises no notification and changes no lifecycle,
+  queue or evidence state (data/README.md "Objective brief state").
+- The CLI reads `--instruction-text-file`, `--description-file` and
+  `--objective-description-file` as file inputs; `--instruction-text-file` was
+  previously accepted by the backend but never read by the CLI.
+- OpenAPI `info.version` 4.1.0.
+
+### Version
+
+- Minor contract version 172.3.0, from 172.2.0.
+
+## [172.2.0] - 2026-11-14
+
+Contract impact: minor. The objective brief worker consumes the brief state of
+ADR 0057 (coo:1275, ADR 0058): one durable job writes the generated title
+and/or the human-facing summary of an objective in one provider call, under
+the existing ownership, generation and suppression guards. Objective titles
+move from a fire-and-forget call to the same job. No REST, protocol or MCP
+wire shape changes.
+
+### Added
+
+- Core worker job type `overlord.objective.brief.compose.v1` with payload
+  `{ objectiveId }`, enqueued in the transaction of every write that leaves
+  `title_status` or `description_status` pending (create on any surface,
+  REST/protocol instruction and title edits, Summarize/Regenerate/Retry,
+  catch-up). Automatic requests are debounced (5 s, at most 60 s after
+  queueing); explicit requests run at once. Completion takes the objective row
+  lock and queues a successor while brief work is still pending.
+- Backend worker `backend/objective-brief-compose-worker.ts` for both
+  editions: bounded passes per job, provider timeout, input/output bounds,
+  retries with the shared backoff, `provider_unavailable` without credentials,
+  bounded catch-up of eligible draft/submitted rows and recovery of pending
+  rows that lost their job. Kill switch
+  `OVERLORD_OBJECTIVE_BRIEF_COMPOSE_DISABLED=1`.
+- Automations: shared writing rules (`automations/src/writing/ste.ts`), a
+  stricter objective writing profile, an advisory STE linter, and the
+  objective-brief composer with a versioned output schema, deterministic
+  paragraph assembly, a fixed missing-done-when sentence, identifier and
+  prohibition fidelity checks and one bounded rewrite.
+
+### Changed
+
+- `title_status = 'pending'` is now written for system-owned titles whose
+  instructions exceed 100 characters; shorter instructions get the local
+  title in the same statement, including when an authored title is cleared.
+  The fire-and-forget objective title call is retired; mission titles are
+  unchanged.
+- `description_failure_code = 'unfaithful_output'` also records instructions
+  longer than the bounded model input (40,000 characters), for which no
+  summary is generated.
+- Delivery and mission-summary composers keep byte-identical base writing
+  rules; the stricter profile applies to objective titles and summaries only.
+
+### Version
+
+- Minor contract version 172.2.0, from 172.1.0.
+
+## [172.1.0] - 2026-11-14
+
+Contract impact: minor. Objectives gain persisted brief state for human-facing
+summaries (coo:1275, ADR 0057): independent title and description ownership,
+current-instruction authorship, durable generation intent with stale-write
+tokens, and durable removal suppression. Additive columns only; no REST,
+protocol or MCP wire shape changes in this version, and no description is
+generated yet. See data/README.md "Objective brief state".
+
+### Added
+
+- `objectives` columns `title_source`, `title_generation`, `title_status`,
+  `description`, `description_source`, `description_instruction_hash`,
+  `description_author_workspace_user_id`, `description_author_agent`,
+  `description_updated_at`, `description_revision`, `description_suppressed`,
+  `description_generation`, `description_status`, `description_request_kind`,
+  `description_failure_code`, `instruction_author_kind`, with closed
+  vocabularies in data/README.md and conformance.md.
+- Mutation rules: omitted / `null` / blank / text description values; Remove;
+  Summarize and Regenerate (only a person clears suppression); Retry of failed
+  generations; optimistic concurrency on `description_revision`; publication
+  only for the current generation and instruction hash.
+
+### Changed
+
+- Generated objective titles publish only while `title_source = 'generated'`
+  and `title_generation` matches, so authored and legacy titles are never
+  replaced and late results never overwrite newer edits. `createMission` no
+  longer schedules a generated title for a first objective with an authored
+  title.
+- Protocol `update-objective` (and hosted MCP `overlord_update_objective`)
+  writes record agent authorship of the instruction text.
+
+### Migration
+
+- `20261114180000_objective_brief_state` (SQLite and Postgres) adds the
+  columns with conservative defaults and backfills `instruction_author_kind`
+  only where the change feed proves the instructions were never edited.
+  `revision` and `updated_at` are unchanged.
+
+### Version
+
+- Minor contract version 172.1.0, from 172.0.1.
+
 ## [172.0.1] - 2026-11-14
 
 Contract impact: patch. Correct Run Queue write-through to enforce the existing

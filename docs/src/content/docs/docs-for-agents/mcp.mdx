@@ -75,15 +75,15 @@ The tool catalog is mission-first:
 - `overlord_create_project`
 - `overlord_list_project_statuses` — read one project's board columns (names and order are per project; the status type is not)
 - `overlord_search_missions` — ranked search by default; with `reference` and `projectId` an exhaustive exact-token lookup (for example a `kb-feature:` Knowledgebase Feature reference) paged by `cursor` until `complete` is true, the only search that proves absence
-- `overlord_create_mission` — optional `agent` / `model` assign the initial objective's launch selection in the same call, so no follow-up `overlord_add_objectives` is needed just to name an agent
+- `overlord_create_mission` — optional `agent` / `model` assign the initial objective's launch selection in the same call, so no follow-up `overlord_add_objectives` is needed just to name an agent; optional `description` sets its human-facing summary
 - `overlord_create_inbox_item` — create a private, account-owned unassigned task capture
 - `overlord_load_mission_context`
 - `overlord_changes` — read one objective's synchronized changed-file evidence (`ObjectiveFileChangesDto`, server scope, capped at 200); never includes unsynchronized local evidence
 - `overlord_list_deliveries` — read a `{ items, total, limit }` page (items capped at 200) of normalized delivery summaries for one mission; an objective display id such as `coo:756.k7xm` supplies the mission
 - `overlord_launch_objective` — queue the normal execution request for one objective; requires `objectiveId` (UUID or display id) and `agent`; does not attach this MCP agent
 - `overlord_reorder_objectives` — replace one mission's complete draft/submitted objective UUID order
-- `overlord_add_objectives`
-- `overlord_update_objective` — turn auto-advance on or off, edit instruction text, and/or reassign the objective with `agent` (plus optional `model` / `reasoningEffort`); `agent: manual` (alias `human`) assigns it to a person, is never launched, and is held blocked in the Run Queue; requires `objectiveId`
+- `overlord_add_objectives` — each item takes optional `description`
+- `overlord_update_objective` — turn auto-advance on or off, edit instruction text, set or remove the `description` (or ask for one with `descriptionRequest`), and/or reassign the objective with `agent` (plus optional `model` / `reasoningEffort`); `agent: manual` (alias `human`) assigns it to a person, is never launched, and is held blocked in the Run Queue; requires `objectiveId`
 - `overlord_delete_missions` — bulk soft-delete one to 100 missions (UUID or display id) atomically, also deleting their live objectives; requires `confirm: true` after the resolved list is shown to and approved by the user
 - `overlord_delete_objectives` — bulk soft-delete one to 100 objectives (UUID or display id) atomically, also removing their live Run Queue membership; requires `confirm: true` after the resolved list is shown to and approved by the user
 - `overlord_list_run_queues` — read compact or full Run Queue state before changing it
@@ -107,6 +107,38 @@ enumerate changed files or inspect a worktree.
 `ObjectiveDto` records. Inspect each one's `assignedAgent`, `model`,
 `resourceKey`, and `queueEntry` / `autoAdvance` fields to verify the launch
 settings that were actually saved.
+
+### Objective descriptions
+
+Each objective has instructions and an optional `description`. They have
+different readers:
+
+- Instructions are for the executing agent. Make them complete; the agent
+  receives nothing else.
+- The description is for the person who decides whether to launch the
+  objective, and it is never sent to the executing agent. Write one to three
+  short prose paragraphs in Simplified Technical English style that open with
+  the goal and close with the done-when sentence, about 120 words (a target,
+  not a cap).
+- You may omit it. Overlord writes one for long (280+ characters)
+  agent-written objectives, with or without an attached session.
+
+Pass `description` on `overlord_create_mission`, on each
+`overlord_add_objectives` item, or on `overlord_update_objective`, where an
+empty value removes it. `descriptionRequest` (`summarize` | `regenerate` |
+`retry`) on `overlord_update_objective` asks Overlord to write one instead and
+cannot be combined with `description`. Agents may do either only on `draft`
+objectives (400 `description_not_editable`). `retry` re-requests only a failed
+generation (409 `description_not_failed`); instructions under 280 characters
+are not summarized (409 `description_not_eligible`).
+
+If a person removed the summary, your text is not stored (warning
+`description_suppressed`) and summarize/regenerate are refused (409
+`description_suppressed`). Do not work around it: only that person's Summarize
+in the app turns summaries back on. Responses carry advisory `warnings`
+(`{ code, message, rule?, excerpt?, suggestion? }`, code `description_style` or
+`description_suppressed`) on the matching created objective, or top-level on
+`overlord_update_objective`. The text is stored as written.
 
 ### Addressing a mission or an objective
 

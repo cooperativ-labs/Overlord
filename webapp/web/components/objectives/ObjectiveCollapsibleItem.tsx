@@ -19,6 +19,7 @@ import { buildAgentResumeCommand } from '../../lib/helpers/agent-resume-command.
 import { useCopyToClipboard } from '../../lib/hooks/use-copy-to-clipboard.ts';
 import { objectiveOriginLabel } from '../../lib/mission-origin.ts';
 import { selectObjectiveBlockingRequests } from '../../lib/objective-blocking-requests.ts';
+import { summaryMentions } from '../../lib/objective-brief.ts';
 import type {
   ObjectiveEvidence,
   ObjectiveEvidenceTruncation
@@ -57,6 +58,7 @@ import {
   ObjectiveEvidenceSections
 } from './ObjectiveEvidenceSections.tsx';
 import { ObjectiveMenuButton } from './ObjectiveMenuButton.tsx';
+import { SummaryMentionBadges } from './ObjectiveSummary.tsx';
 
 /** Stops a header-action click from also toggling the row it sits in. */
 function stopRowToggle(event: MouseEvent) {
@@ -201,6 +203,9 @@ export function ObjectiveCollapsibleItem({
   };
 
   const toggle = (event: MouseEvent) => onToggle({ additive: event.shiftKey });
+  // A closed row says only that its summary mentions a decision (plan §10.5);
+  // the summary itself appears when the row is open.
+  const mentions = summaryMentions(objective.description);
 
   return (
     <Collapsible className="min-w-0" open={open}>
@@ -402,6 +407,15 @@ export function ObjectiveCollapsibleItem({
                   </Tooltip>
                 </span>
               ) : null}
+              <SummaryMentionBadges
+                mentions={mentions}
+                kinds={['decision']}
+                expanded={open}
+                controls={panelId}
+                onReveal={() => {
+                  if (!open) onToggle({ additive: true });
+                }}
+              />
               <ObjectiveEvidenceBadges
                 evidence={evidence}
                 fileCount={fileChangesQuery.data?.total}

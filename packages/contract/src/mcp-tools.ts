@@ -231,6 +231,9 @@ export function overlordMcpToolDefinitions({
             'Set true only to intentionally create an account-owned inbox item instead of a project mission. Cannot be combined with projectId.'
           ),
           objective: stringProperty('Initial objective text.'),
+          description: stringProperty(
+            'Optional human-facing summary of the objective for the people who decide whether to launch it: one to three short prose paragraphs in Simplified Technical English style that open with the goal and close with the done-when sentence, about 120 words. The objective text stays the complete instruction for the executing agent; the summary is never sent to it. Omit it and Overlord writes one for long agent-written objectives. Style issues come back as warnings; the text is stored as written.'
+          ),
           title: stringProperty('Optional mission title.'),
           resourceKey: stringProperty('Optional logical project resource key for the objective.'),
           agent: stringProperty(
@@ -386,10 +389,13 @@ export function overlordMcpToolDefinitions({
           objectives: {
             type: 'array',
             description:
-              'Objective objects with objective text and optional title, agent/model launch selection, resourceKey, and autoAdvance.',
+              'Objective objects with objective text and optional title, description, agent/model launch selection, resourceKey, and autoAdvance.',
             items: objectSchema({
               objective: stringProperty('Objective text.'),
               title: stringProperty('Optional objective title.'),
+              description: stringProperty(
+                'Optional human-facing summary of the objective for the people who decide whether to launch it: one to three short prose paragraphs in Simplified Technical English style that open with the goal and close with the done-when sentence, about 120 words. The objective text stays the complete instruction for the executing agent; the summary is never sent to it. Omit it and Overlord writes one for long agent-written objectives. Style issues come back as warnings; the text is stored as written.'
+              ),
               agent: stringProperty(
                 'Optional agent identifier to assign to this objective, such as codex or claude, or manual (alias human) when a person will do it: manual takes no model and is never launched.'
               ),
@@ -414,7 +420,7 @@ export function overlordMcpToolDefinitions({
       name: 'overlord_update_objective',
       title: 'Update objective',
       description:
-        'Use this to rewrite an objective title in any state, turn auto-advance on or off, edit instruction text on a draft objective, and/or reassign the objective to another agent or to a person (agent manual, alias human).',
+        'Use this to rewrite an objective title in any state, turn auto-advance on or off, edit instruction text or the human-facing description (summary) on a draft objective, request a generated summary on a draft objective, and/or reassign the objective to another agent or to a person (agent manual, alias human).',
       inputSchema: objectSchema(
         {
           objectiveId: stringProperty('Objective UUID or display id.'),
@@ -427,6 +433,15 @@ export function overlordMcpToolDefinitions({
           instructionText: stringProperty(
             'Replacement instruction text. Allowed only when the objective is in draft state; blank clears the text.'
           ),
+          description: stringProperty(
+            'Replacement human-facing summary, allowed only when the objective is in draft state: one to three short prose paragraphs in Simplified Technical English style that open with the goal and close with the done-when sentence. It is never sent to the executing agent. An empty string removes the summary; Overlord then writes none until a person selects Summarize. When a person has removed the summary, your text is not stored and a description_suppressed warning is returned.'
+          ),
+          descriptionRequest: {
+            type: 'string',
+            enum: ['summarize', 'regenerate', 'retry'],
+            description:
+              'Ask Overlord to write the summary (summarize/regenerate) or to retry a failed generation (retry). Allowed only in draft state and only for instructions of at least 280 characters. Refused with description_suppressed when a person removed the summary: only a person can turn summaries back on. Cannot be combined with description.'
+          },
           agent: stringProperty(
             'Agent to assign, such as codex or claude, or manual (alias human) so a person does the objective instead of an agent. Manual objectives are never launched and the Run Queue holds them until an agent is assigned. Changing agent clears any model or reasoning effort not passed alongside it.'
           ),
@@ -440,7 +455,7 @@ export function overlordMcpToolDefinitions({
         ['objectiveId']
       ),
       outputSchema: protocolOutputSchema(
-        'The updated objective, including title, assignedAgent, model, reasoningEffort, resourceKey, autoAdvance, and instructionText.'
+        'The updated objective, including title, description and its summary state (descriptionSource, descriptionStatus, descriptionSuppressed), assignedAgent, model, reasoningEffort, resourceKey, autoAdvance, and instructionText, plus warnings: advisory description_style issues and description_suppressed.'
       ),
       annotations: writeAction
     },

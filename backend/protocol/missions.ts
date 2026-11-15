@@ -6,6 +6,10 @@ import { resolveProjectId, type ServiceContext } from '../../packages/core/servi
 import { isManualAgentKey, normalizeAgentKey } from '../../packages/core/service/manual-agent.ts';
 import { parseMissionSearchOptions } from '../../packages/core/service/mission-search.ts';
 import {
+  type ObjectiveBriefWarning,
+  objectiveDescriptionStyleWarnings
+} from '../../packages/core/service/objective-brief.ts';
+import {
   addObjectivesToMission,
   discussObjective,
   loadMissionContext,
@@ -26,10 +30,11 @@ import {
   deleteObjectives,
   listMissionDeliveries,
   reorderObjectives,
+  requestObjectiveDescription,
   searchMissionReferences,
   searchMissionsAcrossWorkspacesV2,
   searchMissionsAcrossWorkspacesV3,
-  updateObjective as updateObjectiveRecord
+  updateObjectiveWithWarnings
 } from '../repository.ts';
 
 import {
@@ -152,8 +157,15 @@ async function withAgentOrigin({
   };
 }
 
-/** Agent protocol surfaces may edit instruction text only on queued objectives. */
-async function assertInstructionEditableOnProtocolSurface(objectiveRef: string): Promise<void> {
+/**
+ * Agent protocol surfaces may edit instruction text only on draft objectives.
+ * Agent description edits and summary requests stay inside the same planning
+ * scope (ADR 0059); people edit descriptions in any state over REST.
+ */
+async function assertDraftOnProtocolSurface(
+  objectiveRef: string,
+  what: 'instruction text' | 'description'
+): Promise<void> {
   const db = requireDatabaseClient();
   const resolved = await resolveObjectiveIdForRest({ ref: objectiveRef, db });
   const row = (await db.get(
@@ -165,7 +177,14 @@ async function assertInstructionEditableOnProtocolSurface(objectiveRef: string):
     throw new ApiError(404, 'Objective not found');
   }
   if (row.state !== 'draft') {
-    throw new ApiError(400, 'Objective instruction text can only be edited in draft state');
+    throw new ApiError(
+      400,
+      what === 'description'
+        ? 'An agent can change an objective description or request a summary only in draft state'
+        : 'Objective instruction text can only be edited in draft state',
+      undefined,
+      what === 'description' ? 'description_not_editable' : undefined
+    );
   }
 }
 
@@ -289,6 +308,8 @@ function objectiveText(body: ProtocolRequestBody): string {
 type ObjectiveInput = {
   objective: string;
   title?: string | null;
+  /** Authored human-facing description; null or blank removes it (ADR 0057). */
+  description?: string | null;
   autoAdvance?: boolean;
   agent?: string | null;
   model?: string | null;
@@ -300,6 +321,7 @@ const MAX_PROTOCOL_DELETIONS = 100;
 const OBJECTIVE_INPUT_KEYS = new Set([
   'objective',
   'title',
+  'description',
   'autoAdvance',
   'agent',
   'model',
@@ -343,7 +365,7 @@ function parseObjectiveArrayInput(body: ProtocolRequestBody): ObjectiveInput[] |
         'invalid_input'
       );
     }
-    for (const key of ['title', 'agent', 'model', 'resourceKey'] as const) {
+    for (const key of ['title', 'description', 'agent', 'model', 'resourceKey'] as const) {
       if (item[key] !== undefined && item[key] !== null && typeof item[key] !== 'string') {
         throw new ApiError(
           400,
@@ -400,11 +422,32 @@ function parseDeletionReferences(
   return references;
 }
 
+/**
+ * `--objective-description` / `--objective-description-file`: the authored
+ * description of the single `--objective` form. With `--objectives-json` each
+ * item carries its own `description` instead.
+ */
+function singleObjectiveDescription(body: ProtocolRequestBody): string | undefined {
+  const given =
+    hasFlag(body, '--objective-description') || hasFlag(body, '--objective-description-file');
+  if (!given) return undefined;
+  return resolveInput(body, '--objective-description', '--objective-description-file') ?? '';
+}
+
 /** Objective array for create/prompt: `--objectives-json`, else a one-item `--objective`. */
 function objectiveInputs(body: ProtocolRequestBody): ObjectiveInput[] {
   const parsed = parseObjectiveArrayInput(body);
   const autoAdvance = optionalAutoAdvanceFlag(body);
+  const description = singleObjectiveDescription(body);
   if (parsed !== undefined) {
+    if (description !== undefined) {
+      throw new ApiError(
+        400,
+        '--objective-description applies to --objective; set "description" on each --objectives-json item instead',
+        undefined,
+        'invalid_input'
+      );
+    }
     return withDefaultAgentSelection(withDefaultAutoAdvance(parsed, autoAdvance), body);
   }
   const resourceKey = strFlag(body, '--resource');
@@ -413,6 +456,7 @@ function objectiveInputs(body: ProtocolRequestBody): ObjectiveInput[] {
       [
         {
           objective: objectiveText(body),
+          ...(description !== undefined ? { description } : {}),
           ...(resourceKey ? { resourceKey } : {})
         }
       ],
@@ -421,6 +465,25 @@ function objectiveInputs(body: ProtocolRequestBody): ObjectiveInput[] {
     body
   );
 }
+
+/**
+ * Advisory style warnings for each created objective whose item carried an
+ * authored description. Warnings never reject a write; they are attached to
+ * the matching created objective so a batch shows which item they belong to.
+ */
+function withDescriptionWarnings<T extends { id: string }>(
+  created: T[],
+  inputs: ObjectiveInput[]
+): Array<T & { warnings?: ObjectiveBriefWarning[] }> {
+  return created.map((objective, index) => {
+    const text = inputs[index]?.description;
+    if (typeof text !== 'string' || !text.trim()) return objective;
+    const warnings = objectiveDescriptionStyleWarnings(text.trim());
+    return warnings.length > 0 ? { ...objective, warnings } : objective;
+  });
+}
+
+const DESCRIPTION_REQUEST_MODES = ['summarize', 'regenerate', 'retry'] as const;
 
 export const missionSubcommands: SubcommandTable = {
   // Mission creation and discovery -----------------------------------------
@@ -468,13 +531,14 @@ export const missionSubcommands: SubcommandTable = {
         permission: PERMISSIONS.MISSION_CREATE
       });
       const assignedTo = strFlag(body, '--assigned-to');
-      return await protocolCreate({
+      const created = await protocolCreate({
         ctx: await withAgentOrigin({ ctx, body }),
         projectId,
         objectives,
         title: strFlag(body, '--title') ?? null,
         ...(assignedTo !== undefined ? { assignedTo } : {})
       });
+      return { ...created, objectives: withDescriptionWarnings(created.objectives, objectives) };
     }
   },
 
@@ -629,23 +693,23 @@ export const missionSubcommands: SubcommandTable = {
 
   'add-objectives': {
     permission: PERMISSIONS.OBJECTIVE_UPDATE,
-    handler: async (ctx, body) =>
-      addObjectivesToMission({
+    handler: async (ctx, body) => {
+      const objectives = withDefaultAgentSelection(
+        withDefaultAutoAdvance(parseObjectiveArrayInput(body) ?? [], optionalAutoAdvanceFlag(body)),
+        body
+      );
+      const created = await addObjectivesToMission({
         ctx: await withAgentOrigin({ ctx, body }),
         missionId: missionRefFlag(body),
-        objectives: withDefaultAgentSelection(
-          withDefaultAutoAdvance(
-            parseObjectiveArrayInput(body) ?? [],
-            optionalAutoAdvanceFlag(body)
-          ),
-          body
-        )
-      })
+        objectives
+      });
+      return withDescriptionWarnings(created, objectives);
+    }
   },
 
   'update-objective': {
     permission: PERMISSIONS.OBJECTIVE_UPDATE,
-    handler: async (_ctx, body) => {
+    handler: async (ctx, body) => {
       const objectiveId = requireFlag(body, '--objective-id');
       const update: UpdateObjectiveBody = {};
       const autoAdvance = optionalAutoAdvanceFlag(body);
@@ -656,23 +720,77 @@ export const missionSubcommands: SubcommandTable = {
         update.title = strFlag(body, '--title') ?? '';
       }
       if (hasFlag(body, '--instruction-text') || hasFlag(body, '--instruction-text-file')) {
-        await assertInstructionEditableOnProtocolSurface(objectiveId);
+        await assertDraftOnProtocolSurface(objectiveId, 'instruction text');
         update.instructionText =
           resolveInput(body, '--instruction-text', '--instruction-text-file') ?? '';
+      }
+      const hasDescription = hasFlag(body, '--description') || hasFlag(body, '--description-file');
+      const descriptionRequest = strFlag(body, '--description-request');
+      if (hasFlag(body, '--description-request')) {
+        if (
+          !descriptionRequest ||
+          !(DESCRIPTION_REQUEST_MODES as readonly string[]).includes(descriptionRequest)
+        ) {
+          throw new ApiError(
+            400,
+            '--description-request must be summarize, regenerate or retry',
+            undefined,
+            'invalid_input'
+          );
+        }
+        if (hasDescription) {
+          throw new ApiError(
+            400,
+            '--description-request cannot be combined with --description/--description-file',
+            undefined,
+            'invalid_input'
+          );
+        }
+      }
+      if (hasDescription || descriptionRequest) {
+        await assertDraftOnProtocolSurface(objectiveId, 'description');
+      }
+      if (hasDescription) {
+        // An empty value is Remove: the summary stays absent until a person
+        // selects Summarize (ADR 0057).
+        update.description = resolveInput(body, '--description', '--description-file') ?? '';
       }
       Object.assign(update, objectiveAssignmentUpdate(body));
       if (
         autoAdvance === undefined &&
         update.instructionText === undefined &&
         update.title === undefined &&
-        update.assignedAgent === undefined
+        update.description === undefined &&
+        update.assignedAgent === undefined &&
+        !descriptionRequest
       ) {
         throw new ApiError(
           400,
-          'Provide at least one of --title, --auto-advance/--no-auto-advance, --instruction-text/--instruction-text-file, or --objective-agent'
+          'Provide at least one of --title, --description/--description-file, --description-request, --auto-advance/--no-auto-advance, --instruction-text/--instruction-text-file, or --objective-agent'
         );
       }
-      return updateObjectiveRecord(objectiveId, update);
+      // Protocol writes (CLI, hosted MCP) are agent-authored, attached or not.
+      const { origin } = await withAgentOrigin({ ctx, body });
+      const options = origin ? { origin } : {};
+      const result = await updateObjectiveWithWarnings(objectiveId, update, options);
+      const warnings: ObjectiveBriefWarning[] = [...result.warnings];
+      let objective = result.objective;
+      // Advisory style warnings only for text that was actually stored.
+      if (
+        typeof update.description === 'string' &&
+        update.description.trim() &&
+        !warnings.some(warning => warning.code === 'description_suppressed')
+      ) {
+        warnings.push(...objectiveDescriptionStyleWarnings(update.description.trim()));
+      }
+      if (descriptionRequest) {
+        objective = await requestObjectiveDescription(
+          objective.id,
+          { mode: descriptionRequest },
+          options
+        );
+      }
+      return { ...objective, warnings };
     }
   },
 

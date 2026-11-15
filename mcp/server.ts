@@ -353,6 +353,51 @@ export function referenceSearchProtocolBody(
   });
 }
 
+/**
+ * Protocol body for `overlord_update_objective`. An empty `description` is
+ * Remove and passes through verbatim; the protocol handler applies the agent
+ * draft-only and removal-suppression rules (ADR 0059).
+ */
+export function updateObjectiveProtocolBody(args: Record<string, unknown>): ProtocolRequestBody {
+  const hasTitle = typeof args.title === 'string';
+  const hasAutoAdvance = typeof args.autoAdvance === 'boolean';
+  const hasInstructionText = typeof args.instructionText === 'string';
+  const hasAgent = typeof args.agent === 'string';
+  const hasDescription = typeof args.description === 'string';
+  const hasDescriptionRequest = typeof args.descriptionRequest === 'string';
+  if (
+    !hasTitle &&
+    !hasAutoAdvance &&
+    !hasInstructionText &&
+    !hasAgent &&
+    !hasDescription &&
+    !hasDescriptionRequest
+  ) {
+    throw new Error(
+      'Provide title, description, descriptionRequest, autoAdvance, instructionText, and/or agent'
+    );
+  }
+  return protocolBody({
+    '--objective-id': requiredString(args, 'objectiveId'),
+    ...(hasTitle ? { '--title': args.title as string } : {}),
+    ...(hasAutoAdvance ? autoAdvanceFlags(args) : {}),
+    ...(hasInstructionText
+      ? { '--instruction-text': requiredString(args, 'instructionText') }
+      : {}),
+    ...(hasDescription ? { '--description': args.description as string } : {}),
+    ...(hasDescriptionRequest
+      ? { '--description-request': args.descriptionRequest as string }
+      : {}),
+    // The protocol handler validates the selection (model requires agent,
+    // manual takes none), so pass whatever was supplied straight through.
+    ...(hasAgent ? { '--objective-agent': args.agent as string } : {}),
+    ...(typeof args.model === 'string' ? { '--objective-model': args.model } : {}),
+    ...(typeof args.reasoningEffort === 'string'
+      ? { '--objective-reasoning-effort': args.reasoningEffort }
+      : {})
+  });
+}
+
 const toolHandlers: Record<string, ToolHandler> = {
   overlord_resolve_project: args =>
     runProtocolSubcommand(
@@ -449,6 +494,9 @@ const toolHandlers: Record<string, ToolHandler> = {
           : {}),
         ...(args.unassignedToProject === true ? { '--unassigned-to-project': true } : {}),
         '--objective': requiredString(args, 'objective'),
+        ...(typeof args.description === 'string'
+          ? { '--objective-description': args.description }
+          : {}),
         ...(optionalString(args, 'title') ? { '--title': requiredString(args, 'title') } : {}),
         ...(optionalString(args, 'resourceKey')
           ? { '--resource': requiredString(args, 'resourceKey') }
@@ -527,33 +575,8 @@ const toolHandlers: Record<string, ToolHandler> = {
       fileInputs: { '--objectives-file': JSON.stringify(args.objectives) }
     });
   },
-  overlord_update_objective: args => {
-    const hasTitle = typeof args.title === 'string';
-    const hasAutoAdvance = typeof args.autoAdvance === 'boolean';
-    const hasInstructionText = typeof args.instructionText === 'string';
-    const hasAgent = typeof args.agent === 'string';
-    if (!hasTitle && !hasAutoAdvance && !hasInstructionText && !hasAgent) {
-      throw new Error('Provide title, autoAdvance, instructionText, and/or agent');
-    }
-    return runProtocolSubcommand(
-      'update-objective',
-      protocolBody({
-        '--objective-id': requiredString(args, 'objectiveId'),
-        ...(hasTitle ? { '--title': args.title as string } : {}),
-        ...(hasAutoAdvance ? autoAdvanceFlags(args) : {}),
-        ...(hasInstructionText
-          ? { '--instruction-text': requiredString(args, 'instructionText') }
-          : {}),
-        // The protocol handler validates the selection (model requires agent,
-        // manual takes none), so pass whatever was supplied straight through.
-        ...(hasAgent ? { '--objective-agent': args.agent as string } : {}),
-        ...(typeof args.model === 'string' ? { '--objective-model': args.model } : {}),
-        ...(typeof args.reasoningEffort === 'string'
-          ? { '--objective-reasoning-effort': args.reasoningEffort }
-          : {})
-      })
-    );
-  },
+  overlord_update_objective: args =>
+    runProtocolSubcommand('update-objective', updateObjectiveProtocolBody(args)),
   overlord_delete_missions: args => {
     if (!Array.isArray(args.missionIds) || !args.missionIds.every(id => typeof id === 'string')) {
       throw new Error('missionIds must be an array of strings');

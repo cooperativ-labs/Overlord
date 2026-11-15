@@ -159,6 +159,7 @@ import {
   oauthProtectedResourceMetadata,
   redirectToOAuthApproval
 } from './oauth.ts';
+import { objectiveBriefComposeWorker } from './objective-brief-compose-worker.ts';
 import { listObjectiveTranscript } from './objective-transcript.ts';
 import {
   addOrganizationAdmin,
@@ -241,6 +242,7 @@ import {
   reorderObjectives,
   reorderProjects,
   reorderProjectStatuses,
+  requestObjectiveDescription,
   revokeUserToken,
   searchMissions,
   searchMissionsAcrossWorkspacesV2,
@@ -541,6 +543,7 @@ const mutationPollLoops: readonly PollLoop<unknown>[] = [
   webhookDispatcher,
   deliveryComposeWorker,
   missionSummaryComposeWorker,
+  objectiveBriefComposeWorker,
   liveActivityDispatcher,
   pushNotificationDispatcher,
   notificationDispatcher
@@ -1959,6 +1962,12 @@ app.patch(
 app.delete(
   '/api/objectives/:id',
   handle(req => deleteObjective(req.params.id), { mutates: true })
+);
+// Summarize / Regenerate / Retry an objective summary (ADR 0059). Authorized
+// against the objective's own workspace inside the handler, like PATCH.
+app.post(
+  '/api/objectives/:id/description-requests',
+  handle(req => requestObjectiveDescription(req.params.id, req.body), { mutates: true })
 );
 app.post(
   '/api/objectives/:id/launch',

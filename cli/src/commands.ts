@@ -638,6 +638,8 @@ function createdObjectiveLines(mission: unknown): string[] {
 type CreateObjectiveInput = {
   objective: string;
   title?: string | null;
+  /** Human-facing summary; null or blank removes it (never sent to the agent). */
+  description?: string | null;
   autoAdvance?: boolean;
   agent?: string | null;
   model?: string | null;
@@ -661,7 +663,10 @@ const PROTOCOL_FILE_FLAGS = [
   '--ordered-queues-file',
   '--ordered-objective-ids-file',
   '--mission-ids-file',
-  '--objective-ids-file'
+  '--objective-ids-file',
+  '--instruction-text-file',
+  '--description-file',
+  '--objective-description-file'
 ] as const;
 
 /** Protocol subcommands that require a session key the cache can auto-inject. */
@@ -1806,6 +1811,9 @@ export async function runManagementCommand({
               withAgentSelection({
                 objective,
                 title: flagValue(parsed.flags, '--title') ?? null,
+                ...(flagValue(parsed.flags, '--objective-description') !== undefined
+                  ? { description: flagValue(parsed.flags, '--objective-description') }
+                  : {}),
                 ...(autoAdvance !== undefined ? { autoAdvance } : {}),
                 ...(flagValue(parsed.flags, '--resource')
                   ? { resourceKey: flagValue(parsed.flags, '--resource') }

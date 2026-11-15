@@ -387,7 +387,7 @@ When creating missions from within a repository:
 - Use `create --unassigned-to-project` only when the user deliberately requests an account-owned inbox capture.
 - Create multiple missions when each prompt represents a different feature or goal.
 - Add objectives to the same mission when each prompt is a sequential step toward the same feature or goal; use `ovld protocol add-objectives --mission-id <mission_id> --objectives-json '[{"objective":"..."}]'`.
-- `create` and `prompt` require `--objectives-json` or `--objectives-file` with an ordered array of `{ "objective": "...", "title": "...", "autoAdvance": true }` objects. A single objective is just an array with one item. `--auto-advance` / `--no-auto-advance` set the default when an item omits `autoAdvance` (default off).
+- `create` and `prompt` require `--objectives-json` or `--objectives-file` with an ordered array of `{ "objective": "...", "title": "...", "description": "...", "autoAdvance": true }` objects. A single objective is just an array with one item. `--auto-advance` / `--no-auto-advance` set the default when an item omits `autoAdvance` (default off).
 - `add-objectives` uses the same per-item `autoAdvance` field and `--auto-advance` / `--no-auto-advance` default.
 - **Assign the agent on the objectives you are already creating.** Every objective item on `create`, `prompt`, and `add-objectives` takes optional `"agent"` (and `"model"`, which requires an agent), and `--objective-agent <id>` / `--objective-model <id>` set the default for items that name no `agent` of their own. Never create a mission and then append a second objective just to name an agent — that leaves a duplicate objective behind. Note this is **not** `--agent`, which records who created the mission (and, on `prompt`, which agent attaches).
 - To change auto-advance on an existing objective: `ovld protocol update-objective --objective-id <id> --auto-advance` or `--no-auto-advance`.
@@ -427,6 +427,18 @@ ovld protocol discover-project --directory /path/to/repo
 ```
 
 Use `--project-id` when the project ID or name is already known (names are unique per organization, matched case-insensitively). Use `--directory` to override cwd path matching; resource-directory matching automatically prefers the device the CLI is running on (its identity is sent as request headers). Set `OVERLORD_DEVICE_FINGERPRINT` to pin a stable execution-target identity across disposable containers that share one environment (AgentPod sets this). Set `OVERLORD_DEVICE_LABEL` to override the display name (defaults to hostname); alone it does not change the fingerprint.
+
+#### Objective Descriptions
+
+Each objective has **instructions** (the `objective` text) and an optional **description**. They have different readers:
+
+- Instructions are for the executing agent. Make them complete; the agent receives nothing else.
+- The description is for the person who decides whether to launch the objective. It is never sent to the executing agent. Write one to three short prose paragraphs in Simplified Technical English style: open with the goal, close with the done-when sentence, about 120 words (a target, not a cap).
+- You may omit it. Overlord writes one automatically for long (280+ characters) agent-written objectives. Shorter instructions are shown in full and are not summarized.
+- Pass it as per-item `"description"` in `--objectives-json` (`create`, `prompt`, `add-objectives`), as `--objective-description <text>` / `--objective-description-file <path|->` with a single `--objective`, or later with `ovld protocol update-objective --objective-id <id> --description <text>` (or `--description-file`). `--description-request summarize|regenerate|retry` asks Overlord to write one instead.
+- Agents may change descriptions only on `draft` objectives (400 `description_not_editable`). An empty `--description` removes the summary.
+- Style issues come back as advisory `warnings` (`description_style`); the text is stored as written. Fix them if you can, but they never block the write.
+- **Never fight a person's removal.** If a person removed the summary, your text is not stored (warning `description_suppressed`) and summary requests are refused (409 `description_suppressed`). Do not retry or work around it; only the person's Summarize in the app turns summaries back on.
 
 ### Creating Projects
 
@@ -529,4 +541,4 @@ objective** list grouped by resource. Prepare delivery cheaply:
 - [reference/context.md](reference/context.md) — Shared state, attachments, and large artifact policy
 - [reference/shell-escaping.md](reference/shell-escaping.md) — Heredoc input through explicit `--*-file -` flags
 
-<!-- version: 0.8.0 -->
+<!-- version: 0.9.0 -->

@@ -41,7 +41,10 @@ Requirements:
   selection for items naming no `agent` of their own — so a mission is created
   with its first objective already assigned instead of needing a second
   objective appended just to name an agent. These are distinct from `--agent`,
-  which records creation provenance only.
+  which records creation provenance only. `--objective-description <text>` /
+  `--objective-description-file <path|->` set the human-facing summary of a
+  single `--objective` (rejected with `--objectives-json`; set a per-item
+  `"description"` instead). See "Objective Descriptions" below.
 - `prompt`: create a mission and attach or queue execution immediately. It takes
   the same per-item `agent` / `model` and `--objective-agent` /
   `--objective-model` selection as create; its `--agent` names the attaching
@@ -115,13 +118,18 @@ Requirements:
   retain project launch-preference defaults, and `--objective-agent` /
   `--objective-model` supply the default for items omitting `agent`. It uses the
   same `autoAdvance` JSON field and `--auto-advance` / `--no-auto-advance` Run
-  Queue mapping as create.
+  Queue mapping as create, and the same per-item `"description"`.
 - `update-objective`: accepts `--title` to replace or clear the custom title
   without changing the instruction text, maps `--auto-advance` /
   `--no-auto-advance` to queue membership, and can edit instruction text on
-  draft objectives. Context and update responses include the assigned
-  agent, model, reasoning effort, and resource key. The returned `autoAdvance`
-  field is deprecated and derived from `queueEntry`.
+  draft objectives. `--description <text>` / `--description-file <path|->` set
+  the description (empty removes it) and `--description-request
+  summarize|regenerate|retry` asks Overlord to write one (not combined with
+  `--description`); both are draft-only for agents. Context and update
+  responses include the assigned agent, model, reasoning effort, and resource
+  key; the update response also carries the description state and a top-level
+  `warnings` array. The returned `autoAdvance` field is deprecated and derived
+  from `queueEntry`.
 - `delete-missions` and `delete-objectives`: atomically soft-delete one to 100
   unique mission or objective UUID/display-id references from
   `--mission-ids-json` / `--objective-ids-json` (or the matching file flag).
@@ -131,6 +139,29 @@ Requirements:
   request without deleting a subset. Mission deletion also deletes live child
   objectives; objective deletion removes live Run Queue membership.
 - `record-work`: record already-completed chat work as a review mission with completed objective and delivery record.
+
+### Objective Descriptions
+
+An objective has instructions (the complete text the executing agent receives)
+and an optional human-facing description: one to three short prose paragraphs
+in Simplified Technical English style that open with the goal and close with the
+done-when sentence, about 120 words (a target, not a cap). Attach, load-context
+and launch prompts are instruction-only; the description is never sent to the
+executing agent. When it is omitted, Overlord writes one for long (280+
+characters) agent-written objectives, with or without an attached session.
+
+- Agents may write descriptions or request summaries only on `draft` objectives
+  (400 `description_not_editable`). People edit them in any state in the app.
+- While a person's removal is in force, agent text is not stored (warning
+  `description_suppressed`) and agent summarize/regenerate is refused (409
+  `description_suppressed`). Only a person's Summarize turns summaries back on.
+- `retry` re-requests only a failed generation (409 `description_not_failed`).
+  Instructions under 280 characters are not summarized (409
+  `description_not_eligible`).
+- Responses carry advisory `warnings` (`{ code, message, rule?, excerpt?,
+  suggestion? }`, code `description_style` or `description_suppressed`). On
+  `create` / `add-objectives` they sit on the matching created objective; on
+  `update-objective` they are top-level. The text is stored as written.
 
 ### Addressing A Mission Or An Objective
 

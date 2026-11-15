@@ -14,6 +14,8 @@ import { migratePostgres } from './migrate-postgres.js';
  */
 
 const VERSION = '20261114120000';
+/** The shape comparison pins this migration alone; later migrations add columns. */
+const NEXT_VERSION = '20261114180000';
 const now = '2026-11-14T00:00:00.000Z';
 const connectionString = process.env.TEST_DATABASE_URL;
 
@@ -109,7 +111,7 @@ describe('unify draft/future objectives migration [postgres]', { skip: !connecti
         );
       const evidenceBefore = await evidence();
 
-      await migratePostgres(client);
+      await migratePostgres(client, { stopBeforeVersion: NEXT_VERSION });
       assert.deepEqual(await evidence(), evidenceBefore);
 
       const rows = await client.all<{

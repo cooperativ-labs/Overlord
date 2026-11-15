@@ -10,6 +10,20 @@ export const DELIVERY_COMPOSE_JOB_TYPE = 'overlord.delivery.compose.v1';
 /** Core-documented worker job type for the operator-only mission summary (coo:1202). */
 export const MISSION_SUMMARY_COMPOSE_JOB_TYPE = 'overlord.mission.summary.compose.v1';
 
+/**
+ * Core-documented worker job type for objective briefs: the generated title
+ * and summary of one objective (coo:1275, ADR 0058). Payload `{ objectiveId }`.
+ */
+export const OBJECTIVE_BRIEF_COMPOSE_JOB_TYPE = 'overlord.objective.brief.compose.v1';
+
+/**
+ * Debounce for automatic brief requests: repeated instruction saves within
+ * this window coalesce into one provider call.
+ */
+export const OBJECTIVE_BRIEF_DEBOUNCE_MS = 5_000;
+/** A debounced brief job is never pushed later than this after it was queued. */
+export const OBJECTIVE_BRIEF_MAX_DEBOUNCE_MS = 60_000;
+
 const DEFAULT_MAX_ATTEMPTS = 5;
 const DEFAULT_PRIORITY = 50;
 const DEFAULT_LOCK_TTL_MS = 60_000;
@@ -597,4 +611,146 @@ export async function missionOwnerProfileId({
     [missionId, workspaceId]
   );
   return owner?.profile_id ?? null;
+}
+
+function addMs(iso: string, ms: number): string {
+  return new Date(Date.parse(iso) + ms).toISOString();
+}
+
+/**
+ * Enqueue the brief job for one objective. Call it inside the transaction of
+ * the write that left brief work pending (`title_status` or
+ * `description_status = 'pending'`), after that write: on Postgres the write
+ * holds the objective row lock, which {@link completeObjectiveBriefComposeJob}
+ * also takes, so a request made while a job runs either is seen by that job's
+ * completion (which queues a successor) or finds no active job and queues one.
+ * The durable intent lives on the objective row, never in the payload, so
+ * coalescing jobs cannot lose a request.
+ *
+ * - A queued job is reused. An automatic request pushes its `run_after` to
+ *   `now + debounceMs` (a debounce), but never more than
+ *   {@link OBJECTIVE_BRIEF_MAX_DEBOUNCE_MS} after the job was queued; an
+ *   explicit request (`debounceMs = 0`) pulls it forward to now.
+ * - A running job is left alone; its completion re-checks the row.
+ */
+export async function enqueueObjectiveBriefComposeJob({
+  db,
+  workspaceId,
+  objectiveId,
+  debounceMs = OBJECTIVE_BRIEF_DEBOUNCE_MS,
+  now = nowIso(),
+  maxAttempts = DEFAULT_MAX_ATTEMPTS,
+  priority = DEFAULT_PRIORITY
+}: {
+  db: DatabaseClient;
+  workspaceId: string;
+  objectiveId: string;
+  debounceMs?: number;
+  now?: string;
+  maxAttempts?: number;
+  priority?: number;
+}): Promise<{ jobId: string; enqueued: boolean }> {
+  const runAfter = addMs(now, Math.max(0, debounceMs));
+  const active = await db.get<{
+    id: string;
+    status: string;
+    run_after: unknown;
+    created_at: unknown;
+  }>(
+    `SELECT id, status, run_after, created_at FROM worker_jobs
+      WHERE workspace_id = ?
+        AND type = ?
+        AND status IN ('queued', 'running')
+        AND deleted_at IS NULL
+        AND ${workerJobJsonFieldPredicate(db.dialect, 'objectiveId')}
+      ORDER BY created_at ASC
+      LIMIT 1`,
+    [workspaceId, OBJECTIVE_BRIEF_COMPOSE_JOB_TYPE, objectiveId]
+  );
+  if (active) {
+    if (active.status === 'queued') {
+      const queuedAt = new Date(String(active.created_at as string | Date)).toISOString();
+      const latest = addMs(queuedAt, OBJECTIVE_BRIEF_MAX_DEBOUNCE_MS);
+      const target =
+        debounceMs <= 0 ? now : runAfter < latest ? runAfter : latest > now ? latest : now;
+      await db.run(
+        `UPDATE worker_jobs SET run_after = ?, updated_at = ?, revision = revision + 1
+          WHERE id = ? AND status = 'queued'`,
+        [target, now, active.id]
+      );
+    }
+    return { jobId: active.id, enqueued: false };
+  }
+
+  const jobId = newId();
+  await db.run(
+    `INSERT INTO worker_jobs
+         (id, workspace_id, type, status, priority, run_after, attempt_count, max_attempts,
+          payload_json, created_at, updated_at, revision)
+       VALUES (?, ?, ?, 'queued', ?, ?, 0, ?, ?, ?, ?, 1)`,
+    [
+      jobId,
+      workspaceId,
+      OBJECTIVE_BRIEF_COMPOSE_JOB_TYPE,
+      priority,
+      runAfter,
+      maxAttempts,
+      JSON.stringify({ objectiveId }),
+      now,
+      now
+    ]
+  );
+  // Structured operational metric only; instruction text is never logged.
+  console.info(
+    '[objective-brief-compose-worker]',
+    JSON.stringify({ event: 'objective_brief_queued', objectiveId, jobId, debounceMs })
+  );
+  return { jobId, enqueued: true };
+}
+
+/**
+ * Finish a brief job under the objective row lock. If brief work is still
+ * pending on the live row (an edit or request arrived while the job ran, or a
+ * pass found its result stale), a successor job is queued in the same
+ * transaction, so the latest generation is always processed.
+ */
+export async function completeObjectiveBriefComposeJob({
+  db,
+  jobId,
+  objectiveId,
+  status,
+  lastError = null,
+  now = nowIso()
+}: {
+  db: DatabaseClient;
+  jobId: string;
+  objectiveId: string;
+  status: 'succeeded' | 'failed' | 'cancelled';
+  lastError?: string | null;
+  now?: string;
+}): Promise<{ successorJobId: string | null }> {
+  return db.transaction(async tx => {
+    const lockClause = tx.dialect === 'postgres' ? 'FOR UPDATE' : '';
+    const row = await tx.get<{
+      workspace_id: string;
+      title_status: string | null;
+      description_status: string | null;
+    }>(
+      `SELECT workspace_id, title_status, description_status FROM objectives
+        WHERE id = ? AND deleted_at IS NULL ${lockClause}`,
+      [objectiveId]
+    );
+    await finishWorkerJob(tx, jobId, status, lastError, now);
+    if (!row || (row.title_status !== 'pending' && row.description_status !== 'pending')) {
+      return { successorJobId: null };
+    }
+    const successor = await enqueueObjectiveBriefComposeJob({
+      db: tx,
+      workspaceId: row.workspace_id,
+      objectiveId,
+      debounceMs: 0,
+      now
+    });
+    return { successorJobId: successor.jobId };
+  });
 }

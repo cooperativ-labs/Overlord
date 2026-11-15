@@ -1,0 +1,1343 @@
+/**
+ * Objective brief state (coo:1275, contract ADR 0057).
+ *
+ * An objective carries agent-facing instructions plus two presentation fields
+ * for people: a title and a short description ("summary"). This module owns
+ * the persistence rules for those presentation fields:
+ *
+ * - independent title and description ownership (`*_source`);
+ * - current-instruction authorship (`instruction_author_kind`), which decides
+ *   whether an instruction write asks for an automatic summary;
+ * - durable generation intent (`*_generation`, `*_status`,
+ *   `description_request_kind`), which a worker consumes and which guards
+ *   publication against stale results;
+ * - durable removal suppression (`description_suppressed`).
+ *
+ * The planners are pure functions over a row snapshot, so the rules are tested
+ * without a database. The service operations apply a plan inside one
+ * transaction and append one change-feed row. Presentation writes never touch
+ * `instruction_text`, `state`, lifecycle timestamps, execution evidence or
+ * `updated_at` (which orders activity), so editing a description after launch
+ * cannot unlock an instruction edit or reorder the activity feed.
+ *
+ * This module does not call a model provider. A pending status is durable
+ * intent; every write that leaves one pending enqueues the brief worker job
+ * (`overlord.objective.brief.compose.v1`) in the same transaction, and the
+ * worker publishes through {@link publishObjectiveBrief}.
+ */
+import {
+  AI_TITLE_THRESHOLD,
+  deriveTitleFromInstructionText,
+  lintAuthoredObjectiveDescription
+} from '@overlord/automations';
+import { bindBool, type DatabaseClient } from '@overlord/database';
+import { createHash } from 'node:crypto';
+
+import { recordChange } from './change-feed.js';
+import {
+  type CreationOrigin,
+  resolveObjectiveRef,
+  resolveOrigin,
+  type ServiceContext
+} from './context.js';
+import { ServiceError } from './errors.js';
+import { isTruthyFlag, jsonTextFieldSql, nowIso } from './util.js';
+import {
+  enqueueObjectiveBriefComposeJob,
+  OBJECTIVE_BRIEF_COMPOSE_JOB_TYPE
+} from './worker-jobs.js';
+
+export const OBJECTIVE_TITLE_SOURCES = ['generated', 'agent', 'user'] as const;
+export const OBJECTIVE_DESCRIPTION_SOURCES = ['generated', 'agent', 'user'] as const;
+export const OBJECTIVE_BRIEF_STATUSES = ['pending', 'failed'] as const;
+export const OBJECTIVE_DESCRIPTION_REQUEST_KINDS = ['automatic', 'explicit'] as const;
+export const OBJECTIVE_INSTRUCTION_AUTHOR_KINDS = ['human', 'agent', 'automation'] as const;
+export const OBJECTIVE_DESCRIPTION_GENERATION_MODES = ['summarize', 'regenerate', 'retry'] as const;
+/**
+ * Stable failure codes a worker may record. Raw provider messages are never
+ * stored or projected.
+ */
+export const OBJECTIVE_BRIEF_FAILURE_CODES = [
+  'provider_unavailable',
+  'provider_error',
+  'invalid_output',
+  'unfaithful_output'
+] as const;
+
+export type ObjectiveTitleSource = (typeof OBJECTIVE_TITLE_SOURCES)[number];
+export type ObjectiveDescriptionSource = (typeof OBJECTIVE_DESCRIPTION_SOURCES)[number];
+export type ObjectiveBriefStatus = (typeof OBJECTIVE_BRIEF_STATUSES)[number];
+export type ObjectiveDescriptionRequestKind = (typeof OBJECTIVE_DESCRIPTION_REQUEST_KINDS)[number];
+export type ObjectiveInstructionAuthorKind = (typeof OBJECTIVE_INSTRUCTION_AUTHOR_KINDS)[number];
+export type ObjectiveDescriptionGenerationMode =
+  (typeof OBJECTIVE_DESCRIPTION_GENERATION_MODES)[number];
+export type ObjectiveBriefFailureCode = (typeof OBJECTIVE_BRIEF_FAILURE_CODES)[number];
+
+/** Maximum stored description length, in characters, after normalization. */
+export const OBJECTIVE_DESCRIPTION_MAX_CHARS = 4000;
+/**
+ * Instructions shorter than this (trimmed, in characters) are already short
+ * enough to read; they never get an automatic or requested summary.
+ */
+export const OBJECTIVE_DESCRIPTION_MIN_INSTRUCTION_CHARS = 280;
+
+/** Who performs a write, derived from the service context origin. */
+export type ObjectiveBriefActor = {
+  kind: ObjectiveInstructionAuthorKind;
+  workspaceUserId: string | null;
+  /** Connector/agent identifier for agent actors, e.g. `claude-code`. */
+  agent: string | null;
+};
+
+export function objectiveBriefActorFromContext(ctx: ServiceContext): ObjectiveBriefActor {
+  const origin = resolveOrigin(ctx);
+  return {
+    kind: origin.kind,
+    workspaceUserId: ctx.actorWorkspaceUserId,
+    agent: origin.kind === 'agent' ? (origin.agent ?? null) : null
+  };
+}
+
+export function objectiveBriefActorFromOrigin(
+  origin: CreationOrigin,
+  workspaceUserId: string | null
+): ObjectiveBriefActor {
+  return {
+    kind: origin.kind,
+    workspaceUserId,
+    agent: origin.kind === 'agent' ? (origin.agent ?? null) : null
+  };
+}
+
+/** The persisted brief columns of one objective row. */
+export type ObjectiveBriefState = {
+  title_source: ObjectiveTitleSource | null;
+  title_generation: number;
+  title_status: ObjectiveBriefStatus | null;
+  description: string | null;
+  description_source: ObjectiveDescriptionSource | null;
+  description_instruction_hash: string | null;
+  description_author_workspace_user_id: string | null;
+  description_author_agent: string | null;
+  description_updated_at: string | null;
+  description_revision: number;
+  description_suppressed: boolean;
+  description_generation: number;
+  description_status: ObjectiveBriefStatus | null;
+  description_request_kind: ObjectiveDescriptionRequestKind | null;
+  description_failure_code: string | null;
+  instruction_author_kind: ObjectiveInstructionAuthorKind | null;
+};
+
+export type ObjectiveBriefPatch = Partial<ObjectiveBriefState>;
+
+export const OBJECTIVE_BRIEF_COLUMNS = [
+  'title_source',
+  'title_generation',
+  'title_status',
+  'description',
+  'description_source',
+  'description_instruction_hash',
+  'description_author_workspace_user_id',
+  'description_author_agent',
+  'description_updated_at',
+  'description_revision',
+  'description_suppressed',
+  'description_generation',
+  'description_status',
+  'description_request_kind',
+  'description_failure_code',
+  'instruction_author_kind'
+] as const satisfies ReadonlyArray<keyof ObjectiveBriefState>;
+
+/** Brief columns plus the fields the rules read from the rest of the row. */
+export type ObjectiveBriefRow = ObjectiveBriefState & {
+  id: string;
+  workspace_id: string;
+  project_id: string;
+  mission_id: string;
+  instruction_text: string | null;
+  title: string | null;
+  revision: number;
+  deleted_at: string | null;
+};
+
+/** Initial brief columns for a row that has no brief state yet. */
+export const EMPTY_OBJECTIVE_BRIEF_STATE: ObjectiveBriefState = {
+  title_source: null,
+  title_generation: 0,
+  title_status: null,
+  description: null,
+  description_source: null,
+  description_instruction_hash: null,
+  description_author_workspace_user_id: null,
+  description_author_agent: null,
+  description_updated_at: null,
+  description_revision: 0,
+  description_suppressed: false,
+  description_generation: 0,
+  description_status: null,
+  description_request_kind: null,
+  description_failure_code: null,
+  instruction_author_kind: null
+};
+
+/** SHA-256 hex of the trimmed instruction text; null when blank. */
+export function hashObjectiveInstruction(
+  instructionText: string | null | undefined
+): string | null {
+  const trimmed = (instructionText ?? '').trim();
+  if (!trimmed) return null;
+  return createHash('sha256').update(trimmed, 'utf8').digest('hex');
+}
+
+export function isDescriptionEligibleInstruction(
+  instructionText: string | null | undefined
+): boolean {
+  return (instructionText ?? '').trim().length >= OBJECTIVE_DESCRIPTION_MIN_INSTRUCTION_CHARS;
+}
+
+/**
+ * Instructions longer than this get a model-written title; shorter ones keep
+ * the local title derived from the text (no provider call).
+ */
+export const OBJECTIVE_TITLE_MODEL_MIN_INSTRUCTION_CHARS = AI_TITLE_THRESHOLD + 1;
+
+export function isTitleModelEligibleInstruction(
+  instructionText: string | null | undefined
+): boolean {
+  return (instructionText ?? '').trim().length >= OBJECTIVE_TITLE_MODEL_MIN_INSTRUCTION_CHARS;
+}
+
+/** Brief work is outstanding for this row: the worker has something to do. */
+export function objectiveBriefHasPendingWork(
+  state: Pick<ObjectiveBriefState, 'title_status' | 'description_status'>
+): boolean {
+  return state.title_status === 'pending' || state.description_status === 'pending';
+}
+
+/** A description is stale when it was written from different instruction text. */
+export function isObjectiveDescriptionStale(
+  state: Pick<ObjectiveBriefState, 'description' | 'description_instruction_hash'>,
+  instructionText: string | null | undefined
+): boolean {
+  if (state.description === null) return false;
+  return state.description_instruction_hash !== hashObjectiveInstruction(instructionText);
+}
+
+/**
+ * Normalized description input on a create/update write.
+ *
+ * - `undefined` (field omitted): no description change.
+ * - `null` or a string that is empty after trimming: Remove — clear the text
+ *   and suppress automatic summaries until a person explicitly asks for one.
+ * - Any other string: set this text as authored by the caller.
+ */
+export type ObjectiveDescriptionInput =
+  | { kind: 'omit' }
+  | { kind: 'remove' }
+  | { kind: 'set'; text: string };
+
+export function normalizeObjectiveDescriptionInput(value: unknown): ObjectiveDescriptionInput {
+  if (value === undefined) return { kind: 'omit' };
+  if (value === null) return { kind: 'remove' };
+  if (typeof value !== 'string') {
+    throw new ServiceError('description must be a string or null', 'validation_error', 400);
+  }
+  const text = value.replace(/\r\n?/g, '\n').trim();
+  if (!text) return { kind: 'remove' };
+  if (text.length > OBJECTIVE_DESCRIPTION_MAX_CHARS) {
+    throw new ServiceError(
+      `description must be at most ${OBJECTIVE_DESCRIPTION_MAX_CHARS} characters`,
+      'description_too_long',
+      400,
+      { maxLength: OBJECTIVE_DESCRIPTION_MAX_CHARS, length: text.length }
+    );
+  }
+  return { kind: 'set', text };
+}
+
+/**
+ * Non-fatal outcome of a write that the caller should surface.
+ *
+ * - `description_suppressed`: a person removed the summary, so agent text was
+ *   not stored.
+ * - `description_style`: advisory Simplified Technical English style issue in
+ *   authored text (`rule` names the check). The text was stored as written.
+ */
+export type ObjectiveBriefWarning = {
+  code: 'description_suppressed' | 'description_style';
+  message: string;
+  rule?: string;
+  excerpt?: string;
+  suggestion?: string;
+};
+
+/** Style warnings returned for one authored description, at most this many. */
+export const OBJECTIVE_DESCRIPTION_MAX_STYLE_WARNINGS = 10;
+
+/**
+ * Advisory style warnings for an authored description (plan §4.6). Never
+ * rejects or rewrites the text; agents use them to improve their next write.
+ */
+export function objectiveDescriptionStyleWarnings(text: string): ObjectiveBriefWarning[] {
+  return lintAuthoredObjectiveDescription(text)
+    .slice(0, OBJECTIVE_DESCRIPTION_MAX_STYLE_WARNINGS)
+    .map(issue => ({
+      code: 'description_style' as const,
+      rule: issue.code,
+      message: issue.message,
+      ...('excerpt' in issue && issue.excerpt ? { excerpt: issue.excerpt.slice(0, 300) } : {}),
+      ...('suggestion' in issue && issue.suggestion ? { suggestion: issue.suggestion } : {})
+    }));
+}
+
+export type ObjectiveBriefPlan = {
+  patch: ObjectiveBriefPatch;
+  warnings: ObjectiveBriefWarning[];
+  /** The write leaves a model-written title pending (title is system-owned). */
+  titleRequested: boolean;
+  /**
+   * A local title the caller writes in the same statement: the title is
+   * system-owned and the instructions are too short for a model title.
+   */
+  titleDerived: string | null;
+  /** The write leaves a description generation pending. */
+  descriptionRequested: boolean;
+};
+
+const SUPPRESSED_WARNING: ObjectiveBriefWarning = {
+  code: 'description_suppressed',
+  message:
+    'The summary was removed for this objective. An agent-written description is not stored until a person selects Summarize.'
+};
+
+function emptyPlan(): ObjectiveBriefPlan {
+  return {
+    patch: {},
+    warnings: [],
+    titleRequested: false,
+    titleDerived: null,
+    descriptionRequested: false
+  };
+}
+
+/**
+ * Ask for a system-owned title for `instruction`: a model title when the text
+ * is long enough, otherwise a local title written in the same statement.
+ */
+function requestGeneratedTitle(plan: ObjectiveBriefPlan, instruction: string): void {
+  if (isTitleModelEligibleInstruction(instruction)) {
+    plan.patch.title_status = 'pending';
+    plan.titleRequested = true;
+    plan.titleDerived = null;
+    return;
+  }
+  plan.patch.title_status = null;
+  plan.titleRequested = false;
+  plan.titleDerived = instruction ? deriveTitleFromInstructionText(instruction) : null;
+}
+
+function descriptionSourceFor(actor: ObjectiveBriefActor): ObjectiveDescriptionSource {
+  return actor.kind === 'human' ? 'user' : 'agent';
+}
+
+function titleSourceFor(actor: ObjectiveBriefActor): ObjectiveTitleSource {
+  return actor.kind === 'human' ? 'user' : 'agent';
+}
+
+const CLEARED_DESCRIPTION: ObjectiveBriefPatch = {
+  description: null,
+  description_source: null,
+  description_instruction_hash: null,
+  description_author_workspace_user_id: null,
+  description_author_agent: null
+};
+
+function setDescriptionPatch(
+  state: ObjectiveBriefState,
+  text: string,
+  actor: ObjectiveBriefActor,
+  instructionText: string | null,
+  now: string
+): ObjectiveBriefPatch {
+  return {
+    description: text,
+    description_source: descriptionSourceFor(actor),
+    description_instruction_hash: hashObjectiveInstruction(instructionText),
+    description_author_workspace_user_id: actor.workspaceUserId,
+    description_author_agent: actor.kind === 'human' ? null : actor.agent,
+    description_updated_at: now,
+    description_revision: state.description_revision + 1,
+    description_generation: state.description_generation + 1,
+    description_status: null,
+    description_request_kind: null,
+    description_failure_code: null
+  };
+}
+
+function removeDescriptionPatch(state: ObjectiveBriefState, now: string): ObjectiveBriefPatch {
+  return {
+    ...CLEARED_DESCRIPTION,
+    description_updated_at: now,
+    description_revision: state.description_revision + 1,
+    description_suppressed: true,
+    description_generation: state.description_generation + 1,
+    description_status: null,
+    description_request_kind: null,
+    description_failure_code: null
+  };
+}
+
+/**
+ * Apply an authored description (set or remove) to a state snapshot. Agents
+ * cannot store text while removal suppression is active; the caller receives
+ * a warning instead of an error, so a batch write is not rejected.
+ */
+function planDescriptionInput(
+  state: ObjectiveBriefState,
+  input: ObjectiveDescriptionInput,
+  actor: ObjectiveBriefActor,
+  instructionText: string | null,
+  now: string
+): ObjectiveBriefPlan {
+  const plan = emptyPlan();
+  if (input.kind === 'omit') return plan;
+  if (input.kind === 'remove') {
+    plan.patch = removeDescriptionPatch(state, now);
+    return plan;
+  }
+  if (state.description_suppressed && actor.kind !== 'human') {
+    plan.warnings.push(SUPPRESSED_WARNING);
+    return plan;
+  }
+  plan.patch = setDescriptionPatch(state, input.text, actor, instructionText, now);
+  return plan;
+}
+
+/**
+ * Description consequences of an instruction change when the same write
+ * supplies no description. The generation counter always moves, so no result
+ * computed from the old text can publish.
+ */
+function planDescriptionAfterInstructionChange(
+  state: ObjectiveBriefState,
+  nextInstruction: string,
+  actor: ObjectiveBriefActor,
+  now: string
+): { patch: ObjectiveBriefPatch; requested: boolean } {
+  const eligible = isDescriptionEligibleInstruction(nextInstruction);
+  const base: ObjectiveBriefPatch = {
+    description_generation: state.description_generation + 1,
+    description_failure_code: null
+  };
+  const pending = (kind: ObjectiveDescriptionRequestKind) => ({
+    patch: { ...base, description_status: 'pending' as const, description_request_kind: kind },
+    requested: true
+  });
+  const idle = (extra: ObjectiveBriefPatch = {}) => ({
+    patch: { ...base, description_status: null, description_request_kind: null, ...extra },
+    requested: false
+  });
+
+  // Removal suppression survives instruction edits. Any authored text stays as
+  // stale metadata; nothing is generated.
+  if (state.description_suppressed) return idle();
+
+  const explicitOutstanding =
+    state.description_status !== null && state.description_request_kind === 'explicit';
+
+  switch (state.description_source) {
+    case 'generated':
+    case 'agent':
+      // The text described instructions that no longer exist: regenerate while
+      // the new text is still long enough, whoever made the edit. Otherwise the
+      // instruction body is the readable text, so the old summary is cleared.
+      if (eligible) return pending(explicitOutstanding ? 'explicit' : 'automatic');
+      return idle({
+        ...CLEARED_DESCRIPTION,
+        description_updated_at: now,
+        description_revision: state.description_revision + 1
+      });
+    case 'user':
+      // A person's text is never replaced automatically; it becomes stale.
+      // An explicit Regenerate that was already outstanding continues.
+      return explicitOutstanding && eligible ? pending('explicit') : idle();
+    default:
+      if (!eligible) return idle();
+      if (explicitOutstanding) return pending('explicit');
+      // Automatic summaries are only for agent/assistant-written instructions,
+      // with or without an attached session.
+      return actor.kind === 'agent' ? pending('automatic') : idle();
+  }
+}
+
+/**
+ * Plan the brief columns for a new objective.
+ */
+export function planObjectiveBriefForCreate({
+  instructionText,
+  titleProvided,
+  description,
+  actor,
+  now
+}: {
+  instructionText: string;
+  titleProvided: boolean;
+  description: ObjectiveDescriptionInput;
+  actor: ObjectiveBriefActor;
+  now: string;
+}): ObjectiveBriefPlan {
+  const instruction = instructionText.trim();
+  const state = EMPTY_OBJECTIVE_BRIEF_STATE;
+  // The caller writes the local title at create time; only a model title
+  // stays pending.
+  const titleRequested = !titleProvided && isTitleModelEligibleInstruction(instruction);
+  const patch: ObjectiveBriefPatch = {
+    title_source: titleProvided ? titleSourceFor(actor) : 'generated',
+    instruction_author_kind: instruction ? actor.kind : null,
+    ...(titleRequested ? { title_status: 'pending' as const } : {})
+  };
+  if (description.kind !== 'omit') {
+    const authored = planDescriptionInput(state, description, actor, instruction, now);
+    return {
+      patch: { ...patch, ...authored.patch },
+      warnings: authored.warnings,
+      titleRequested,
+      titleDerived: null,
+      descriptionRequested: false
+    };
+  }
+  const after = planDescriptionAfterInstructionChange(state, instruction, actor, now);
+  // A create has no previous result to invalidate, so the counter stays at 0.
+  const descriptionPatch: ObjectiveBriefPatch = { ...after.patch };
+  delete descriptionPatch.description_generation;
+  return {
+    patch: { ...patch, ...descriptionPatch },
+    warnings: [],
+    titleRequested,
+    titleDerived: null,
+    descriptionRequested: after.requested
+  };
+}
+
+/**
+ * Plan the brief columns for an update write.
+ *
+ * `instructionText` is the new instruction when the write changes it, or
+ * `undefined` when the write does not touch instructions. `title` follows the
+ * same convention: `undefined` leaves the title alone, a string (possibly
+ * empty) is an authored title edit.
+ */
+export function planObjectiveBriefForUpdate({
+  state,
+  currentInstruction,
+  instructionText,
+  title,
+  description,
+  actor,
+  now
+}: {
+  state: ObjectiveBriefState;
+  currentInstruction: string | null;
+  instructionText: string | undefined;
+  title: string | null | undefined;
+  description: ObjectiveDescriptionInput;
+  actor: ObjectiveBriefActor;
+  now: string;
+}): ObjectiveBriefPlan {
+  const plan = emptyPlan();
+  const nextInstruction =
+    instructionText === undefined ? (currentInstruction ?? '').trim() : instructionText.trim();
+  const instructionChanged =
+    instructionText !== undefined && nextInstruction !== (currentInstruction ?? '').trim();
+
+  if (title !== undefined) {
+    // An authored title is owned by its author. Clearing it hands the title
+    // back to automation, which writes one now. Either way an in-flight
+    // generated title is stale.
+    const authored = (title ?? '').trim();
+    plan.patch.title_source = authored ? titleSourceFor(actor) : 'generated';
+    plan.patch.title_generation = state.title_generation + 1;
+    plan.patch.title_status = null;
+    if (!authored) requestGeneratedTitle(plan, nextInstruction);
+  }
+
+  if (instructionChanged) {
+    plan.patch.instruction_author_kind = nextInstruction ? actor.kind : null;
+    if (title === undefined) {
+      plan.patch.title_generation = state.title_generation + 1;
+      plan.patch.title_status = null;
+      if (state.title_source === 'generated' && nextInstruction) {
+        requestGeneratedTitle(plan, nextInstruction);
+      }
+    }
+    if (description.kind === 'omit') {
+      const after = planDescriptionAfterInstructionChange(state, nextInstruction, actor, now);
+      Object.assign(plan.patch, after.patch);
+      plan.descriptionRequested = after.requested;
+    }
+  }
+
+  if (description.kind !== 'omit') {
+    const authored = planDescriptionInput(state, description, actor, nextInstruction, now);
+    if (authored.warnings.length > 0 && instructionChanged) {
+      // The authored text was refused; still apply the instruction-change rules.
+      const after = planDescriptionAfterInstructionChange(state, nextInstruction, actor, now);
+      Object.assign(plan.patch, after.patch);
+      plan.descriptionRequested = after.requested;
+    }
+    Object.assign(plan.patch, authored.patch);
+    plan.warnings.push(...authored.warnings);
+  }
+
+  return plan;
+}
+
+/**
+ * Plan an explicit Summarize / Regenerate / Retry request.
+ *
+ * Summarize and Regenerate by a person clear removal suppression; they are the
+ * only operations that do. An agent cannot request a summary while the
+ * objective is suppressed. A request that is already outstanding is
+ * deduplicated: it keeps its generation, so the pending result still counts.
+ */
+export function planObjectiveDescriptionGenerationRequest({
+  state,
+  instructionText,
+  mode,
+  actor
+}: {
+  state: ObjectiveBriefState;
+  instructionText: string | null;
+  mode: ObjectiveDescriptionGenerationMode;
+  actor: ObjectiveBriefActor;
+}): ObjectiveBriefPlan {
+  const plan = emptyPlan();
+  if (!isDescriptionEligibleInstruction(instructionText)) {
+    throw new ServiceError(
+      `Instructions shorter than ${OBJECTIVE_DESCRIPTION_MIN_INSTRUCTION_CHARS} characters are shown in full and are not summarized`,
+      'description_not_eligible',
+      409
+    );
+  }
+  if (mode === 'retry') {
+    if (state.description_status === 'pending') {
+      plan.descriptionRequested = true;
+      return plan;
+    }
+    if (state.description_status !== 'failed') {
+      throw new ServiceError(
+        'There is no failed summary generation to retry',
+        'description_not_failed',
+        409
+      );
+    }
+    plan.patch = {
+      description_status: 'pending',
+      description_generation: state.description_generation + 1,
+      description_failure_code: null
+    };
+    plan.descriptionRequested = true;
+    return plan;
+  }
+
+  if (state.description_suppressed && actor.kind !== 'human') {
+    throw new ServiceError(
+      'The summary was removed for this objective. Only a person can select Summarize to turn summaries back on.',
+      'description_suppressed',
+      409
+    );
+  }
+  if (state.description_status === 'pending' && !state.description_suppressed) {
+    plan.descriptionRequested = true;
+    if (state.description_request_kind !== 'explicit') {
+      plan.patch = { description_request_kind: 'explicit' };
+    }
+    return plan;
+  }
+  plan.patch = {
+    description_suppressed: false,
+    description_status: 'pending',
+    description_request_kind: 'explicit',
+    description_generation: state.description_generation + 1,
+    description_failure_code: null
+  };
+  plan.descriptionRequested = true;
+  return plan;
+}
+
+/** What a worker generated, bound to the state it was generated from. */
+export type ObjectiveBriefResult = {
+  /** The trimmed instruction hash the worker read before calling the model. */
+  instructionHash: string;
+  title?: { generation: number; text: string };
+  description?: { generation: number; text: string };
+};
+
+export type ObjectiveBriefPublishOutcome = {
+  patch: ObjectiveBriefPatch;
+  title: 'published' | 'not_requested' | 'stale';
+  description: 'published' | 'not_requested' | 'stale' | 'suppressed' | 'invalid';
+};
+
+/**
+ * Decide which parts of a generated result may publish. A result publishes
+ * only against the exact generation and instruction text it was produced
+ * from; position, launch or reopen changes do not invalidate it.
+ */
+export function planObjectiveBriefPublication({
+  row,
+  result,
+  now
+}: {
+  row: ObjectiveBriefRow;
+  result: ObjectiveBriefResult;
+  now: string;
+}): ObjectiveBriefPublishOutcome {
+  const outcome: ObjectiveBriefPublishOutcome = {
+    patch: {},
+    title: result.title ? 'stale' : 'not_requested',
+    description: result.description ? 'stale' : 'not_requested'
+  };
+  if (row.deleted_at !== null) return outcome;
+  const instructionMatches =
+    hashObjectiveInstruction(row.instruction_text) === result.instructionHash;
+
+  if (result.title) {
+    const text = result.title.text.trim();
+    if (
+      instructionMatches &&
+      text &&
+      row.title_source === 'generated' &&
+      row.title_generation === result.title.generation
+    ) {
+      outcome.patch.title_status = null;
+      outcome.title = 'published';
+    }
+  }
+
+  if (result.description) {
+    let text: string | null = null;
+    try {
+      const input = normalizeObjectiveDescriptionInput(result.description.text);
+      text = input.kind === 'set' ? input.text : null;
+    } catch {
+      text = null;
+    }
+    if (row.description_suppressed) {
+      outcome.description = 'suppressed';
+    } else if (
+      instructionMatches &&
+      row.description_status === 'pending' &&
+      row.description_generation === result.description.generation
+    ) {
+      if (text === null) {
+        outcome.description = 'invalid';
+      } else {
+        Object.assign(outcome.patch, {
+          description: text,
+          description_source: 'generated',
+          description_instruction_hash: result.instructionHash,
+          description_author_workspace_user_id: null,
+          description_author_agent: null,
+          description_updated_at: now,
+          description_revision: row.description_revision + 1,
+          description_status: null,
+          description_request_kind: null,
+          description_failure_code: null
+        } satisfies ObjectiveBriefPatch);
+        outcome.description = 'published';
+      }
+    }
+  }
+  return outcome;
+}
+
+// ---------------------------------------------------------------------------
+// Persistence
+// ---------------------------------------------------------------------------
+
+const OBJECTIVE_BRIEF_SELECT = `o.id, o.workspace_id, o.project_id, o.mission_id, o.instruction_text,
+  o.title, o.revision, o.deleted_at, ${OBJECTIVE_BRIEF_COLUMNS.map(c => `o.${c}`).join(', ')}`;
+
+type RawBriefRow = Omit<ObjectiveBriefRow, 'description_suppressed' | 'description_updated_at'> & {
+  description_suppressed: unknown;
+  description_updated_at: unknown;
+};
+
+function toBriefRow(raw: RawBriefRow): ObjectiveBriefRow {
+  const updatedAt = raw.description_updated_at;
+  return {
+    ...raw,
+    title_generation: Number(raw.title_generation),
+    description_revision: Number(raw.description_revision),
+    description_generation: Number(raw.description_generation),
+    revision: Number(raw.revision),
+    description_suppressed: isTruthyFlag(raw.description_suppressed),
+    description_updated_at:
+      updatedAt instanceof Date
+        ? updatedAt.toISOString()
+        : typeof updatedAt === 'string'
+          ? updatedAt
+          : null
+  };
+}
+
+export async function loadObjectiveBriefRow(
+  db: DatabaseClient,
+  objectiveId: string,
+  {
+    includeDeleted = false,
+    forUpdate = false
+  }: {
+    includeDeleted?: boolean;
+    /**
+     * Lock the row for the rest of the transaction (Postgres; SQLite
+     * serializes write transactions). Every writer that plans brief columns
+     * from this snapshot sets it, so plan and write see the same row.
+     */
+    forUpdate?: boolean;
+  } = {}
+): Promise<ObjectiveBriefRow | null> {
+  const lock = forUpdate && db.dialect === 'postgres' ? ' FOR UPDATE' : '';
+  const raw = await db.get<RawBriefRow>(
+    `SELECT ${OBJECTIVE_BRIEF_SELECT}
+       FROM objectives o
+      WHERE o.id = ?${includeDeleted ? '' : ' AND o.deleted_at IS NULL'}${lock}`,
+    [objectiveId]
+  );
+  return raw ? toBriefRow(raw) : null;
+}
+
+/** Column assignments and parameters for a patch, in a stable column order. */
+export function objectiveBriefPatchAssignments(
+  db: Pick<DatabaseClient, 'dialect'>,
+  patch: ObjectiveBriefPatch
+): { assignments: string[]; params: unknown[]; columns: string[] } {
+  const assignments: string[] = [];
+  const params: unknown[] = [];
+  const columns: string[] = [];
+  for (const column of OBJECTIVE_BRIEF_COLUMNS) {
+    if (!(column in patch)) continue;
+    const value = patch[column];
+    assignments.push(`${column} = ?`);
+    columns.push(column);
+    params.push(column === 'description_suppressed' ? bindBool(db.dialect, Boolean(value)) : value);
+  }
+  return { assignments, params, columns };
+}
+
+/**
+ * Change-feed field names for a patch. Generation bookkeeping is reported as
+ * the presentation field it guards, so clients refresh the right view.
+ */
+export function objectiveBriefChangedFields(patch: ObjectiveBriefPatch): string[] {
+  const fields = new Set<string>();
+  for (const column of Object.keys(patch)) {
+    if (column.startsWith('title_')) fields.add('title_source');
+    else if (column.startsWith('description')) fields.add('description');
+    else if (column === 'instruction_author_kind') fields.add('instruction_author_kind');
+  }
+  return [...fields];
+}
+
+/**
+ * Write a brief patch, bumping the row revision but never `updated_at`, and
+ * append one change-feed row. Returns false when the guarded write matched no
+ * row (for example, the objective was deleted or a generation moved).
+ */
+async function writeObjectiveBriefPatch({
+  ctx,
+  row,
+  patch,
+  extraAssignments = [],
+  extraParams = [],
+  extraChangedFields = [],
+  guard = '',
+  guardParams = []
+}: {
+  ctx: ServiceContext;
+  row: ObjectiveBriefRow;
+  patch: ObjectiveBriefPatch;
+  extraAssignments?: string[];
+  extraParams?: unknown[];
+  extraChangedFields?: string[];
+  guard?: string;
+  guardParams?: unknown[];
+}): Promise<boolean> {
+  const { assignments, params } = objectiveBriefPatchAssignments(ctx.db, patch);
+  const allAssignments = [...extraAssignments, ...assignments];
+  if (allAssignments.length === 0) return true;
+  const revision = row.revision + 1;
+  const result = await ctx.db.run(
+    `UPDATE objectives SET ${allAssignments.join(', ')}, revision = ?
+      WHERE id = ? AND revision = ? AND deleted_at IS NULL${guard}`,
+    [...extraParams, ...params, revision, row.id, row.revision, ...guardParams]
+  );
+  if (result.changes === 0) return false;
+  await recordChange({
+    ctx,
+    entityType: 'objective',
+    entityId: row.id,
+    operation: 'update',
+    entityRevision: revision,
+    projectId: row.project_id,
+    missionId: row.mission_id,
+    objectiveId: row.id,
+    changedFields: [...extraChangedFields, ...objectiveBriefChangedFields(patch)]
+  });
+  return true;
+}
+
+/** Public projection of an objective's brief state for service callers. */
+export type ObjectiveBriefView = {
+  objectiveId: string;
+  title: string | null;
+  titleSource: ObjectiveTitleSource | null;
+  titleStatus: ObjectiveBriefStatus | null;
+  description: string | null;
+  descriptionSource: ObjectiveDescriptionSource | null;
+  descriptionStale: boolean;
+  descriptionStatus: ObjectiveBriefStatus | null;
+  descriptionFailureCode: string | null;
+  descriptionSuppressed: boolean;
+  descriptionRevision: number;
+  descriptionUpdatedAt: string | null;
+  descriptionAuthorWorkspaceUserId: string | null;
+  descriptionAuthorAgent: string | null;
+  instructionAuthorKind: ObjectiveInstructionAuthorKind | null;
+};
+
+export function toObjectiveBriefView(row: ObjectiveBriefRow): ObjectiveBriefView {
+  return {
+    objectiveId: row.id,
+    title: row.title,
+    titleSource: row.title_source,
+    titleStatus: row.title_status,
+    description: row.description,
+    descriptionSource: row.description_source,
+    descriptionStale: isObjectiveDescriptionStale(row, row.instruction_text),
+    descriptionStatus: row.description_status,
+    descriptionFailureCode: row.description_failure_code,
+    descriptionSuppressed: row.description_suppressed,
+    descriptionRevision: row.description_revision,
+    descriptionUpdatedAt: row.description_updated_at,
+    descriptionAuthorWorkspaceUserId: row.description_author_workspace_user_id,
+    descriptionAuthorAgent: row.description_author_agent,
+    instructionAuthorKind: row.instruction_author_kind
+  };
+}
+
+export type ObjectiveBriefMutationResult = {
+  brief: ObjectiveBriefView;
+  warnings: ObjectiveBriefWarning[];
+  /** A description generation is pending after this write (worker input). */
+  descriptionRequested: boolean;
+};
+
+async function resolveBriefRowForCtx(
+  ctx: ServiceContext,
+  objectiveRef: string
+): Promise<ObjectiveBriefRow> {
+  const resolved = await resolveObjectiveRef({ ctx, ref: objectiveRef });
+  const row = await loadObjectiveBriefRow(ctx.db, resolved.id, { forUpdate: true });
+  if (!row || row.workspace_id !== ctx.workspace.id) {
+    throw new ServiceError(`Objective not found: ${objectiveRef}`, 'objective_not_found', 404);
+  }
+  return row;
+}
+
+function assertExpectedDescriptionRevision(
+  row: ObjectiveBriefRow,
+  expectedDescriptionRevision: number | undefined
+): void {
+  if (expectedDescriptionRevision === undefined) return;
+  if (row.description_revision !== expectedDescriptionRevision) {
+    throw new ServiceError(
+      'The summary changed after you started editing it. Reload it and try again.',
+      'description_conflict',
+      409,
+      { descriptionRevision: row.description_revision, description: row.description }
+    );
+  }
+}
+
+async function runInTransaction<T>(
+  ctx: ServiceContext,
+  work: (txCtx: ServiceContext) => Promise<T>
+): Promise<T> {
+  return ctx.db.transaction(tx => work({ ...ctx, db: tx }));
+}
+
+/**
+ * Set or remove an objective's description (presentation-only). Allowed in
+ * every objective state, including after launch and completion; it never
+ * touches instructions, lifecycle state or execution evidence. Callers check
+ * surface permissions before calling.
+ */
+export async function setObjectiveDescription({
+  ctx,
+  objectiveId,
+  description,
+  expectedDescriptionRevision
+}: {
+  ctx: ServiceContext;
+  objectiveId: string;
+  /** `null` or blank removes the summary and suppresses generation. */
+  description: string | null;
+  expectedDescriptionRevision?: number;
+}): Promise<ObjectiveBriefMutationResult> {
+  const input = normalizeObjectiveDescriptionInput(description);
+  return runInTransaction(ctx, async tx => {
+    const row = await resolveBriefRowForCtx(tx, objectiveId);
+    assertExpectedDescriptionRevision(row, expectedDescriptionRevision);
+    const actor = objectiveBriefActorFromContext(tx);
+    const plan = planDescriptionInput(row, input, actor, row.instruction_text, nowIso());
+    const written = await writeObjectiveBriefPatch({ ctx: tx, row, patch: plan.patch });
+    if (!written) throw conflictError();
+    const next = (await loadObjectiveBriefRow(tx.db, row.id))!;
+    return {
+      brief: toObjectiveBriefView(next),
+      warnings: plan.warnings,
+      descriptionRequested: false
+    };
+  });
+}
+
+/** Remove: clear the summary and suppress generation until a person selects Summarize. */
+export async function removeObjectiveDescription({
+  ctx,
+  objectiveId,
+  expectedDescriptionRevision
+}: {
+  ctx: ServiceContext;
+  objectiveId: string;
+  expectedDescriptionRevision?: number;
+}): Promise<ObjectiveBriefMutationResult> {
+  return setObjectiveDescription({
+    ctx,
+    objectiveId,
+    description: null,
+    ...(expectedDescriptionRevision !== undefined ? { expectedDescriptionRevision } : {})
+  });
+}
+
+/** Summarize / Regenerate / Retry. Durable intent only; the worker publishes. */
+export async function requestObjectiveDescriptionGeneration({
+  ctx,
+  objectiveId,
+  mode
+}: {
+  ctx: ServiceContext;
+  objectiveId: string;
+  mode: ObjectiveDescriptionGenerationMode;
+}): Promise<ObjectiveBriefMutationResult> {
+  if (!OBJECTIVE_DESCRIPTION_GENERATION_MODES.includes(mode)) {
+    throw new ServiceError(`Unknown summary request: ${String(mode)}`, 'validation_error', 400);
+  }
+  return runInTransaction(ctx, async tx => {
+    const row = await resolveBriefRowForCtx(tx, objectiveId);
+    const plan = planObjectiveDescriptionGenerationRequest({
+      state: row,
+      instructionText: row.instruction_text,
+      mode,
+      actor: objectiveBriefActorFromContext(tx)
+    });
+    const written = await writeObjectiveBriefPatch({ ctx: tx, row, patch: plan.patch });
+    if (!written) throw conflictError();
+    // An explicit request runs without the edit debounce.
+    if (plan.descriptionRequested) {
+      await enqueueObjectiveBriefComposeJob({
+        db: tx.db,
+        workspaceId: row.workspace_id,
+        objectiveId: row.id,
+        debounceMs: 0
+      });
+    }
+    const next = (await loadObjectiveBriefRow(tx.db, row.id))!;
+    return {
+      brief: toObjectiveBriefView(next),
+      warnings: plan.warnings,
+      descriptionRequested: plan.descriptionRequested
+    };
+  });
+}
+
+function conflictError(): ServiceError {
+  return new ServiceError(
+    'The objective changed while this request ran. Reload it and try again.',
+    'objective_conflict',
+    409
+  );
+}
+
+/**
+ * Worker-facing: publish a generated title and/or description. The context is
+ * the worker's (`source: 'runner'`); it authorizes nothing by itself, so the
+ * objective is addressed by id. Stale, suppressed and deleted results are
+ * dropped without error.
+ */
+export async function publishObjectiveBrief({
+  ctx,
+  objectiveId,
+  result
+}: {
+  ctx: ServiceContext;
+  objectiveId: string;
+  result: ObjectiveBriefResult;
+}): Promise<Omit<ObjectiveBriefPublishOutcome, 'patch'>> {
+  return runInTransaction(ctx, async tx => {
+    const row = await loadObjectiveBriefRow(tx.db, objectiveId, {
+      includeDeleted: true,
+      forUpdate: true
+    });
+    if (!row)
+      return {
+        title: result.title ? 'stale' : 'not_requested',
+        description: result.description ? 'stale' : 'not_requested'
+      };
+    const outcome = planObjectiveBriefPublication({ row, result, now: nowIso() });
+    const titleText = outcome.title === 'published' ? result.title!.text.trim() : null;
+    // The row is locked above; these predicates restate the planned guard in
+    // the write itself, so a result can never land on another generation, a
+    // non-pending request or a removed summary.
+    const guards: string[] = [];
+    const guardParams: unknown[] = [];
+    if (outcome.title === 'published') {
+      guards.push(` AND title_generation = ? AND title_source = 'generated'`);
+      guardParams.push(result.title!.generation);
+    }
+    if (outcome.description === 'published') {
+      guards.push(
+        ` AND description_generation = ? AND description_status = 'pending' AND description_suppressed = ?`
+      );
+      guardParams.push(result.description!.generation, bindBool(tx.db.dialect, false));
+    }
+    const written = await writeObjectiveBriefPatch({
+      guard: guards.join(''),
+      guardParams,
+      ctx: { ...tx, workspace: { ...tx.workspace, id: row.workspace_id } },
+      row,
+      patch: outcome.patch,
+      extraAssignments: titleText !== null ? ['title = ?'] : [],
+      extraParams: titleText !== null ? [titleText] : [],
+      extraChangedFields: titleText !== null ? ['title'] : []
+    });
+    if (!written) {
+      return {
+        title: outcome.title === 'published' ? 'stale' : outcome.title,
+        description: outcome.description === 'published' ? 'stale' : outcome.description
+      };
+    }
+    return { title: outcome.title, description: outcome.description };
+  });
+}
+
+/**
+ * Worker-facing: record that the pending description generation failed for
+ * good. A failure for a superseded generation is ignored.
+ */
+export async function failObjectiveDescriptionGeneration({
+  ctx,
+  objectiveId,
+  generation,
+  failureCode
+}: {
+  ctx: ServiceContext;
+  objectiveId: string;
+  generation: number;
+  failureCode: ObjectiveBriefFailureCode;
+}): Promise<boolean> {
+  if (!OBJECTIVE_BRIEF_FAILURE_CODES.includes(failureCode)) {
+    throw new ServiceError(
+      `Unknown brief failure code: ${String(failureCode)}`,
+      'validation_error'
+    );
+  }
+  return runInTransaction(ctx, async tx => {
+    const row = await loadObjectiveBriefRow(tx.db, objectiveId, { forUpdate: true });
+    if (!row || row.description_status !== 'pending' || row.description_generation !== generation) {
+      return false;
+    }
+    return writeObjectiveBriefPatch({
+      ctx: { ...tx, workspace: { ...tx.workspace, id: row.workspace_id } },
+      row,
+      patch: { description_status: 'failed', description_failure_code: failureCode }
+    });
+  });
+}
+
+/**
+ * Bounded catch-up selection: live draft/submitted objectives whose current
+ * instructions were written by an agent or assistant, are long enough, have
+ * no summary, no outstanding or failed request and no removal suppression.
+ * Unknown authorship (NULL) never qualifies.
+ */
+export async function listObjectiveBriefCatchUpCandidates(
+  db: DatabaseClient,
+  { limit }: { limit: number }
+): Promise<string[]> {
+  const bounded = Math.max(0, Math.min(Math.trunc(limit), 500));
+  if (bounded === 0) return [];
+  const rows = await db.all<{ id: string }>(
+    `SELECT id FROM objectives
+      WHERE deleted_at IS NULL
+        AND state IN ('draft', 'submitted')
+        AND instruction_author_kind = 'agent'
+        AND description IS NULL
+        AND description_status IS NULL
+        AND description_suppressed = ?
+        AND LENGTH(TRIM(COALESCE(instruction_text, ''))) >= ?
+      ORDER BY created_at ASC, id ASC
+      LIMIT ?`,
+    [bindBool(db.dialect, false), OBJECTIVE_DESCRIPTION_MIN_INSTRUCTION_CHARS, bounded]
+  );
+  return rows.map(r => r.id);
+}
+
+/**
+ * Mark one catch-up candidate pending. Re-checks eligibility under the write
+ * so repeated or concurrent scans are idempotent.
+ */
+export async function markObjectiveBriefCatchUpPending(
+  ctx: ServiceContext,
+  objectiveId: string
+): Promise<boolean> {
+  return runInTransaction(ctx, async tx => {
+    const row = await loadObjectiveBriefRow(tx.db, objectiveId, { forUpdate: true });
+    if (
+      !row ||
+      row.instruction_author_kind !== 'agent' ||
+      row.description !== null ||
+      row.description_status !== null ||
+      row.description_suppressed ||
+      !isDescriptionEligibleInstruction(row.instruction_text)
+    ) {
+      return false;
+    }
+    const state = await tx.db.get<{ state: string }>('SELECT state FROM objectives WHERE id = ?', [
+      row.id
+    ]);
+    if (!state || (state.state !== 'draft' && state.state !== 'submitted')) return false;
+    const written = await writeObjectiveBriefPatch({
+      ctx: { ...tx, workspace: { ...tx.workspace, id: row.workspace_id } },
+      row,
+      patch: {
+        description_status: 'pending',
+        description_request_kind: 'automatic',
+        description_generation: row.description_generation + 1,
+        description_failure_code: null
+      }
+    });
+    if (written) {
+      await enqueueObjectiveBriefComposeJob({
+        db: tx.db,
+        workspaceId: row.workspace_id,
+        objectiveId: row.id,
+        debounceMs: 0
+      });
+    }
+    return written;
+  });
+}
+
+/**
+ * Worker-facing: settle an outstanding title request without a model title.
+ * `null` keeps the current (local) title as final, for example when no
+ * provider is configured; `failed` records that generation failed. A request
+ * for a superseded generation is ignored.
+ */
+export async function settleObjectiveTitleGeneration({
+  ctx,
+  objectiveId,
+  generation,
+  status
+}: {
+  ctx: ServiceContext;
+  objectiveId: string;
+  generation: number;
+  status: 'failed' | null;
+}): Promise<boolean> {
+  return runInTransaction(ctx, async tx => {
+    const row = await loadObjectiveBriefRow(tx.db, objectiveId, { forUpdate: true });
+    if (!row || row.title_status !== 'pending' || row.title_generation !== generation) {
+      return false;
+    }
+    return writeObjectiveBriefPatch({
+      ctx: { ...tx, workspace: { ...tx.workspace, id: row.workspace_id } },
+      row,
+      patch: { title_status: status }
+    });
+  });
+}
+
+/**
+ * Worker-facing: clear pending intent that no result can satisfy, so a job
+ * never loops on it: a title that is no longer system-owned or has blank
+ * instructions, or a description that is suppressed or whose instructions
+ * are no longer long enough. Returns the cleared fields.
+ */
+export async function clearUnsatisfiableObjectiveBriefIntent(
+  ctx: ServiceContext,
+  objectiveId: string
+): Promise<Array<'title' | 'description'>> {
+  return runInTransaction(ctx, async tx => {
+    const row = await loadObjectiveBriefRow(tx.db, objectiveId, { forUpdate: true });
+    if (!row) return [];
+    const patch: ObjectiveBriefPatch = {};
+    const cleared: Array<'title' | 'description'> = [];
+    if (
+      row.title_status === 'pending' &&
+      (row.title_source !== 'generated' || !(row.instruction_text ?? '').trim())
+    ) {
+      patch.title_status = null;
+      cleared.push('title');
+    }
+    if (
+      row.description_status === 'pending' &&
+      (row.description_suppressed || !isDescriptionEligibleInstruction(row.instruction_text))
+    ) {
+      patch.description_status = null;
+      patch.description_request_kind = null;
+      cleared.push('description');
+    }
+    if (cleared.length === 0) return [];
+    const written = await writeObjectiveBriefPatch({
+      ctx: { ...tx, workspace: { ...tx.workspace, id: row.workspace_id } },
+      row,
+      patch
+    });
+    return written ? cleared : [];
+  });
+}
+
+/**
+ * Live rows with pending brief work and no queued or running brief job: rows
+ * whose intent predates the worker, or whose job was lost outside a
+ * transaction. Bounded; the worker enqueues each one.
+ */
+export async function listObjectiveBriefOrphans(
+  db: DatabaseClient,
+  { limit }: { limit: number }
+): Promise<Array<{ id: string; workspaceId: string }>> {
+  const bounded = Math.max(0, Math.min(Math.trunc(limit), 500));
+  if (bounded === 0) return [];
+  const rows = await db.all<{ id: string; workspace_id: string }>(
+    `SELECT o.id, o.workspace_id FROM objectives o
+      WHERE o.deleted_at IS NULL
+        AND (o.title_status = 'pending' OR o.description_status = 'pending')
+        AND NOT EXISTS (
+          SELECT 1 FROM worker_jobs j
+           WHERE j.workspace_id = o.workspace_id
+             AND j.type = ?
+             AND j.status IN ('queued', 'running')
+             AND j.deleted_at IS NULL
+             AND ${jsonTextFieldSql('j.payload_json', 'objectiveId', db.dialect)} = o.id
+        )
+      ORDER BY o.created_at ASC, o.id ASC
+      LIMIT ?`,
+    [OBJECTIVE_BRIEF_COMPOSE_JOB_TYPE, bounded]
+  );
+  return rows.map(row => ({ id: row.id, workspaceId: row.workspace_id }));
+}

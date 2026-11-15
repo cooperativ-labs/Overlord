@@ -31,6 +31,15 @@ const QUESTION_LIMIT = 10;
 const QUESTION_MAX_AGE_MS = 3 * 24 * 60 * 60 * 1000;
 const FEED_LIMIT = 40;
 const INSTRUCTION_PREVIEW_CHARS = 400;
+
+/**
+ * Presentation-only summary preview of the primary objective (ADR 0059); null
+ * when it has none, so the card falls back to the instruction preview.
+ */
+function descriptionPreview(description: string | null | undefined): string | null {
+  const text = description?.trim();
+  return text ? truncate(text, INSTRUCTION_PREVIEW_CHARS) : null;
+}
 const EVENT_SUMMARY_CHARS = 240;
 /** First page, and each scroll page, of delivered missions. */
 const DELIVERED_WINDOW_MS = 14 * 24 * 60 * 60 * 1000;
@@ -81,6 +90,7 @@ interface RunRow extends FeedContextRow {
   objective_display_key: string;
   objective_title: string | null;
   instruction_text: string | null;
+  description: string | null;
   state: string;
   position: number;
   branch: string | null;
@@ -142,6 +152,7 @@ interface DeliveredRow extends FeedContextRow {
   objective_display_key: string;
   objective_title: string | null;
   instruction_text: string | null;
+  description: string | null;
   branch: string | null;
   resource_key: string | null;
   assigned_agent: string | null;
@@ -240,7 +251,7 @@ async function loadRuns(workspaceIds: string[]): Promise<RunRow[]> {
   return (await requireDatabaseClient().all(
     `SELECT ${CONTEXT_COLUMNS}, ${MISSION_PROVENANCE_COLUMNS},
             o.id AS objective_id, o.display_key AS objective_display_key,
-            o.title AS objective_title, o.instruction_text, o.state, o.position,
+            o.title AS objective_title, o.instruction_text, o.description, o.state, o.position,
             o.branch, o.resource_key, o.assigned_agent, o.model,
             o.updated_at AS objective_updated_at, o.launched_at, o.started_at,
             (SELECT s.agent_identifier FROM agent_sessions s
@@ -419,7 +430,7 @@ async function loadDelivered({
     `SELECT ${CONTEXT_COLUMNS}, ${MISSION_PROVENANCE_COLUMNS},
             d.id AS delivery_id, d.summary AS delivery_summary, d.delivered_at,
             o.id AS objective_id, o.display_key AS objective_display_key,
-            o.title AS objective_title, o.instruction_text,
+            o.title AS objective_title, o.instruction_text, o.description,
             o.branch, o.resource_key, o.assigned_agent, o.model,
             s.agent_identifier AS session_agent_identifier,
             s.model_identifier AS session_model_identifier
@@ -591,6 +602,7 @@ function toMissionItem({
     activeObjectiveIds: runs.map(run => run.objective_id),
     objectiveTitle: primary.objective_title,
     instructionPreview: truncate(primary.instruction_text, INSTRUCTION_PREVIEW_CHARS),
+    descriptionPreview: descriptionPreview(primary.description),
     agentIdentifier: resolveAgentIdentifier(
       primary.session_agent_identifier,
       primary.assigned_agent
@@ -641,6 +653,7 @@ function toDeliveredMissionItem({
     activeObjectiveIds: [],
     objectiveTitle: row.objective_title,
     instructionPreview: truncate(row.instruction_text, INSTRUCTION_PREVIEW_CHARS),
+    descriptionPreview: descriptionPreview(row.description),
     agentIdentifier: resolveAgentIdentifier(row.session_agent_identifier, row.assigned_agent),
     modelIdentifier: row.session_model_identifier ?? row.model,
     branch: row.branch,
