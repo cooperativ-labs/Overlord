@@ -38,6 +38,7 @@ import { answerApplicationStateFromResult } from '../packages/core/service/local
 import { getProjectExecutionTargetSelection } from '../packages/core/service/project-execution-target.ts';
 
 import { buildWebappServiceContextForWorkspace, requireDatabaseClient } from './db.ts';
+import { optionalString, queryString } from './http/query.ts';
 import { requireWorkspacePermission } from './rbac.ts';
 import { callerWorkspaceMemberships } from './repository.ts';
 
@@ -170,10 +171,6 @@ function handle(
       }
     })();
   };
-}
-
-function optionalString(value: unknown): string | null {
-  return typeof value === 'string' && value.trim() !== '' ? value.trim() : null;
 }
 
 function isAllowedValue<T extends string>(value: string, allowed: readonly T[]): value is T {
@@ -741,9 +738,9 @@ export function createAgentRequestHumanRouter(): Router {
     '/',
     handle(async req => {
       const client = requireDatabaseClient();
-      const objectiveRef = typeof req.query.objectiveId === 'string' ? req.query.objectiveId : null;
+      const objectiveRef = queryString(req, 'objectiveId', { trim: false, first: false });
       const missionRef =
-        (typeof req.query.missionId === 'string' ? req.query.missionId : null) ??
+        queryString(req, 'missionId', { trim: false, first: false }) ??
         missionDisplayIdFromObjectiveRef(objectiveRef);
       // A mission-scoped read resolves the mission inside the caller's own memberships and
       // authorizes against the mission's *own* workspace, the same way every other
@@ -905,9 +902,9 @@ export function createAgentSessionInputHumanRouter(): Router {
   router.get(
     '/',
     handle(async req => {
-      const objectiveRef = typeof req.query.objectiveId === 'string' ? req.query.objectiveId : null;
+      const objectiveRef = queryString(req, 'objectiveId', { trim: false, first: false });
       const missionId =
-        (typeof req.query.missionId === 'string' ? req.query.missionId : null) ??
+        queryString(req, 'missionId', { trim: false, first: false }) ??
         missionDisplayIdFromObjectiveRef(objectiveRef);
       if (!missionId) {
         throw new ServiceError(

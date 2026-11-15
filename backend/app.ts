@@ -3,6 +3,7 @@ import './bootstrap-env.ts';
 import { githubOAuthConfigFromEnv, type Permission, PERMISSIONS } from '@overlord/auth';
 import { loadExternalAutomations } from '@overlord/automations';
 import type { ProjectListLifecycle, StorageBucketKey, StoredImageDto } from '@overlord/contract';
+import { projectListLifecycleSchema } from '@overlord/contract/api';
 import { fromNodeHeaders, toNodeHandler } from 'better-auth/node';
 import cors from 'cors';
 import express, { type NextFunction, type Request, type Response } from 'express';
@@ -80,6 +81,7 @@ import { isAllowedBrowserOrigin } from './http/browser-origins.ts';
 import { runnerRegistrationFromBody } from './http/client-device.ts';
 import { buildMeta } from './http/meta.ts';
 import { resolveAuthBaseUrl } from './http/public-backend-url.ts';
+import { parseSeqCursor, queryCursor, queryEnum, queryFlag, queryString } from './http/query.ts';
 import {
   ATTACHMENT_UPLOAD_ROUTE,
   IMAGE_UPLOAD_ROUTE,
@@ -768,8 +770,7 @@ app.get(
 app.get(
   '/api/diagnostics/execution-target-migration',
   handle(req => {
-    const workspaceId =
-      typeof req.query.workspaceId === 'string' ? req.query.workspaceId.trim() : '';
+    const workspaceId = queryString(req, 'workspaceId', { first: false }) ?? '';
     return getExecutionTargetMigrationDiagnostics(workspaceId);
   })
 );
@@ -962,7 +963,13 @@ app.get(
 // caller's currently active workspace) inside `listProjectsForWorkspace`.
 app.get(
   '/api/workspaces/:id/projects',
-  handle(req => listProjectsForWorkspace(req.params.id, undefined, parseProjectListLifecycle(req)))
+  handle(req =>
+    listProjectsForWorkspace(
+      req.params.id,
+      undefined,
+      queryEnum(req, 'lifecycle', projectListLifecycles, 'active')
+    )
+  )
 );
 app.get(
   '/api/workspaces/:id/project-statuses',
@@ -1104,9 +1111,7 @@ app.delete(
 app.get(
   '/api/webhooks',
   handle(req =>
-    listWebhookSubscriptions(
-      typeof req.query.workspaceId === 'string' ? req.query.workspaceId : null
-    )
+    listWebhookSubscriptions(queryString(req, 'workspaceId', { trim: false, first: false }))
   )
 );
 app.post(
@@ -1136,8 +1141,11 @@ app.get(
   handle(
     req =>
       listWebhookDeliveries(req.params.id, {
-        before: typeof req.query.before === 'string' ? req.query.before : null,
-        limit: typeof req.query.limit === 'string' ? Number(req.query.limit) : undefined
+        before: queryString(req, 'before', { trim: false, first: false }),
+        limit:
+          queryString(req, 'limit', { trim: false, first: false }) === null
+            ? undefined
+            : Number(queryString(req, 'limit', { trim: false, first: false }))
       }),
     {}
   )
@@ -1191,10 +1199,7 @@ app.post(
       if (!upload || !uploadPermission) {
         throw new ApiError(404, `Uploads are not configured for bucket '${bucketKey}'`);
       }
-      const workspaceId =
-        typeof req.query.workspaceId === 'string' && req.query.workspaceId.trim()
-          ? req.query.workspaceId.trim()
-          : null;
+      const workspaceId = queryString(req, 'workspaceId', { first: false });
       if (bucketKey === 'workspace-images' && !workspaceId) {
         throw new ApiError(400, 'workspaceId query parameter is required for this upload');
       }
@@ -1261,33 +1266,13 @@ app.get(
   }
 );
 
+const projectListLifecycles = (
+  projectListLifecycleSchema as typeof projectListLifecycleSchema & {
+    options: readonly ProjectListLifecycle[];
+  }
+).options;
+
 // ---- Realtime ------------------------------------------------------------
-
-function parseSeqCursor(value: unknown): number | null {
-  const raw = Array.isArray(value) ? value[0] : value;
-  if (typeof raw !== 'string' || raw.trim().length === 0) return null;
-  const parsed = Number(raw);
-  if (!Number.isFinite(parsed) || parsed < 0) return null;
-  return Math.floor(parsed);
-}
-
-function parseProjectListLifecycle(req: Request): ProjectListLifecycle {
-  const value = Array.isArray(req.query.lifecycle) ? req.query.lifecycle[0] : req.query.lifecycle;
-  if (value === undefined) return 'active';
-  if (value === 'active' || value === 'archived' || value === 'all') return value;
-  throw new ApiError(400, 'lifecycle must be one of: active, archived, all');
-}
-
-/** Reads an opt-in boolean query flag: present-and-not-false counts as true. */
-function isTruthyQueryFlag(value: unknown): boolean {
-  const raw = Array.isArray(value) ? value[0] : value;
-  if (raw === undefined || raw === null) return false;
-  if (typeof raw !== 'string') return false;
-  // A bare `?flag` arrives as an empty string and means "on"; only an explicit
-  // `0`/`false` opts back out.
-  const normalized = raw.trim().toLowerCase();
-  return normalized !== '0' && normalized !== 'false';
-}
 
 function streamRealtime(req: Request, res: Response, next: NextFunction): void {
   void (async () => {
@@ -1298,9 +1283,7 @@ function streamRealtime(req: Request, res: Response, next: NextFunction): void {
         return;
       }
       const afterSeq =
-        parseSeqCursor(req.query.after) ??
-        parseSeqCursor(req.headers['last-event-id']) ??
-        undefined;
+        queryCursor(req, 'after') ?? parseSeqCursor(req.headers['last-event-id']) ?? undefined;
       realtime.addClient(res, {
         afterSeq,
         workspaceIds,
@@ -1327,7 +1310,7 @@ app.get(
           res.status(403).json({ error: 'Permission denied: realtime catch-up' });
           return;
         }
-        const afterSeq = parseSeqCursor(req.query.after);
+        const afterSeq = queryCursor(req, 'after');
         if (afterSeq === null) {
           res.status(400).json({ error: 'Query parameter "after" must be a non-negative integer' });
           return;
@@ -1344,7 +1327,9 @@ app.get(
 
 app.get(
   '/api/projects',
-  handle(req => listProjects(undefined, parseProjectListLifecycle(req)))
+  handle(req =>
+    listProjects(undefined, queryEnum(req, 'lifecycle', projectListLifecycles, 'active'))
+  )
 );
 app.post(
   '/api/projects',
@@ -1443,7 +1428,7 @@ app.get(
   '/api/activity-feed',
   handle(req =>
     listActivityFeed({
-      before: typeof req.query.before === 'string' ? req.query.before : null
+      before: queryString(req, 'before', { trim: false, first: false })
     })
   )
 );
@@ -1693,14 +1678,8 @@ app.post(
 app.get(
   '/api/projects/:id/repository',
   handle(req => {
-    const executionTargetId =
-      typeof req.query.executionTargetId === 'string' && req.query.executionTargetId.trim()
-        ? req.query.executionTargetId.trim()
-        : null;
-    const resourceKey =
-      typeof req.query.resourceKey === 'string' && req.query.resourceKey.trim()
-        ? req.query.resourceKey.trim()
-        : null;
+    const executionTargetId = queryString(req, 'executionTargetId', { first: false });
+    const resourceKey = queryString(req, 'resourceKey', { first: false });
     return getProjectRepository(req.params.id, executionTargetId, resourceKey);
   })
 );
@@ -1729,8 +1708,8 @@ app.get(
   // otherwise bounds `complete`/`cancelled` missions (coo:941).
   handle(req =>
     listMissions(req.params.id, {
-      includeObjectives: isTruthyQueryFlag(req.query.includeObjectives),
-      includeAllCompleted: isTruthyQueryFlag(req.query.includeAllCompleted)
+      includeObjectives: queryFlag(req, 'includeObjectives'),
+      includeAllCompleted: queryFlag(req, 'includeAllCompleted')
     })
   )
 );
@@ -1994,12 +1973,10 @@ app.get(
   '/api/objectives/:id/launch-command',
   handle(req =>
     getObjectiveLaunchCommand(req.params.id, {
-      agent: typeof req.query.agent === 'string' ? req.query.agent : '',
-      model: typeof req.query.model === 'string' ? req.query.model : null,
-      reasoningEffort:
-        typeof req.query.reasoningEffort === 'string' ? req.query.reasoningEffort : null,
-      executionTargetId:
-        typeof req.query.executionTargetId === 'string' ? req.query.executionTargetId : null
+      agent: queryString(req, 'agent', { trim: false, first: false }) ?? '',
+      model: queryString(req, 'model', { trim: false, first: false }),
+      reasoningEffort: queryString(req, 'reasoningEffort', { trim: false, first: false }),
+      executionTargetId: queryString(req, 'executionTargetId', { trim: false, first: false })
     })
   )
 );
@@ -2007,9 +1984,8 @@ app.get(
   '/api/objectives/:id/effective-launch-config',
   handle(req =>
     getObjectiveEffectiveLaunchConfig(req.params.id, {
-      agent: typeof req.query.agent === 'string' ? req.query.agent : '',
-      executionTargetId:
-        typeof req.query.executionTargetId === 'string' ? req.query.executionTargetId : null
+      agent: queryString(req, 'agent', { trim: false, first: false }) ?? '',
+      executionTargetId: queryString(req, 'executionTargetId', { trim: false, first: false })
     })
   )
 );
@@ -2078,7 +2054,7 @@ app.delete(
 app.get(
   '/api/agent-catalog',
   handle(req =>
-    getAgentCatalog(typeof req.query.workspaceId === 'string' ? req.query.workspaceId : undefined)
+    getAgentCatalog(queryString(req, 'workspaceId', { trim: false, first: false }) ?? undefined)
   )
 );
 app.post(
@@ -2086,7 +2062,7 @@ app.post(
   handle(
     req =>
       refreshAgentCatalog(
-        typeof req.query.workspaceId === 'string' ? req.query.workspaceId : undefined
+        queryString(req, 'workspaceId', { trim: false, first: false }) ?? undefined
       ),
     { mutates: true }
   )
@@ -2097,7 +2073,7 @@ app.put(
     req =>
       updateAgentCatalog(
         req.body,
-        typeof req.query.workspaceId === 'string' ? req.query.workspaceId : undefined
+        queryString(req, 'workspaceId', { trim: false, first: false }) ?? undefined
       ),
     { mutates: true }
   )
@@ -2105,7 +2081,7 @@ app.put(
 app.get(
   '/api/launch-settings',
   handle(req =>
-    getLaunchSettings(typeof req.query.workspaceId === 'string' ? req.query.workspaceId : undefined)
+    getLaunchSettings(queryString(req, 'workspaceId', { trim: false, first: false }) ?? undefined)
   )
 );
 app.patch(
@@ -2115,7 +2091,7 @@ app.patch(
       updateAgentLaunchConfig(
         req.params.agentKey,
         req.body,
-        typeof req.query.workspaceId === 'string' ? req.query.workspaceId : undefined
+        queryString(req, 'workspaceId', { trim: false, first: false }) ?? undefined
       ),
     { mutates: true }
   )
@@ -2126,7 +2102,7 @@ app.patch(
     req =>
       updateTerminalProfile(
         req.body,
-        typeof req.query.workspaceId === 'string' ? req.query.workspaceId : undefined
+        queryString(req, 'workspaceId', { trim: false, first: false }) ?? undefined
       ),
     { mutates: true }
   )
@@ -2137,7 +2113,7 @@ app.patch(
     req =>
       updateLaunchSessionDefaults(
         req.body,
-        typeof req.query.workspaceId === 'string' ? req.query.workspaceId : undefined
+        queryString(req, 'workspaceId', { trim: false, first: false }) ?? undefined
       ),
     { mutates: true }
   )
@@ -2148,7 +2124,7 @@ app.patch(
     req =>
       updateWorktreeBranchAutomation(
         req.body,
-        typeof req.query.workspaceId === 'string' ? req.query.workspaceId : undefined
+        queryString(req, 'workspaceId', { trim: false, first: false }) ?? undefined
       ),
     { mutates: true }
   )
@@ -2235,10 +2211,7 @@ app.post(
 app.get(
   '/api/runner/status',
   handle(req => {
-    const projectId =
-      typeof req.query.projectId === 'string' && req.query.projectId.trim()
-        ? req.query.projectId.trim()
-        : null;
+    const projectId = queryString(req, 'projectId', { first: false });
     return runnerStatus(projectId);
   }, {})
 );

@@ -10,6 +10,7 @@ import {
 import { ChatNotifications } from '../packages/core/service/chat/notifications.ts';
 
 import { chatOwnerGate, chatRoute } from './chat/router-support.ts';
+import { queryString } from './http/query.ts';
 
 export interface ChatRouterOptions {
   cloud: () => boolean;
@@ -73,7 +74,7 @@ export function createChatRouter(options: ChatRouterOptions): Router {
         .list(
           owner(),
           req.query.archived === '1',
-          typeof req.query.cursor === 'string' ? req.query.cursor : undefined
+          queryString(req, 'cursor', { trim: false, first: false }) ?? undefined
         )
     )
   );
@@ -89,7 +90,7 @@ export function createChatRouter(options: ChatRouterOptions): Router {
         .snapshot(
           owner(),
           req.params.id!,
-          typeof req.query.before === 'string' ? req.query.before : undefined
+          queryString(req, 'before', { trim: false, first: false }) ?? undefined
         )
     )
   );

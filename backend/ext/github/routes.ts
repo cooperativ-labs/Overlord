@@ -3,6 +3,7 @@ import { type NextFunction, type Request, type Response, Router } from 'express'
 
 import type { ProfileConnections } from '../../connections/profile.ts';
 import { ApiError } from '../../errors.ts';
+import { queryString } from '../../http/query.ts';
 import { missionRoute, projectRoute } from '../resource-routes.ts';
 
 import {
@@ -24,7 +25,7 @@ type RouteHandler = (
 ) => (req: Request, res: Response, next: NextFunction) => void;
 
 function workspaceId(req: Request): string {
-  const value = typeof req.query.workspaceId === 'string' ? req.query.workspaceId.trim() : '';
+  const value = queryString(req, 'workspaceId', { first: false }) ?? '';
   if (!value) throw new ApiError(400, 'workspaceId query parameter is required');
   return value;
 }
@@ -53,7 +54,7 @@ export function createGitHubExtensionRouter(
       async req => {
         await completeGitHubInstall({
           installationId: String(req.query.installation_id ?? ''),
-          state: typeof req.query.state === 'string' ? req.query.state : undefined
+          state: queryString(req, 'state', { trim: false, first: false }) ?? undefined
         });
         return { connected: true };
       },
@@ -67,7 +68,7 @@ export function createGitHubExtensionRouter(
   router.get(
     '/repos',
     handle(req =>
-      listGitHubRepos(typeof req.query.q === 'string' ? req.query.q : null, workspaceId(req))
+      listGitHubRepos(queryString(req, 'q', { trim: false, first: false }), workspaceId(req))
     )
   );
   router.get(
