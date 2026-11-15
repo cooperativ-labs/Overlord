@@ -2,8 +2,7 @@
   "before": "The implementation of the export capability has been successfully completed and production enablement should now be performed.",
   "after": {
     "headline": "Enable the CSV export in production.",
-    "summary": "The exporter writes CSV files. Enable the export in production.",
-    "risks": []
+    "summary": "The exporter writes CSV files. Enable the export in production."
   },
   "deferredWork": {
     "title": "Measure export duration",

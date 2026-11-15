@@ -5,6 +5,8 @@ import assert from 'node:assert/strict';
 import { afterEach, describe, it } from 'node:test';
 import type { ReactNode } from 'react';
 
+import { keys } from '../lib/query-keys.ts';
+
 import { deferredWorkPromotion } from './DeferredWorkItem.tsx';
 import {
   DeliveryPresentation,
@@ -12,7 +14,12 @@ import {
   deliveryVariantForEligibility
 } from './DeliverySummaryCard.tsx';
 
-afterEach(() => cleanup());
+const clients: QueryClient[] = [];
+afterEach(() => {
+  cleanup();
+  // Cached queries schedule gc timers that would keep the test process alive.
+  clients.splice(0).forEach(client => client.clear());
+});
 
 const deferred = {
   id: 'deferred-work-0-d8cae660820aadbb',
@@ -123,6 +130,75 @@ describe('DeliveryPresentation', () => {
     assert.ok(screen.getByText(deferred.location));
     assert.ok(screen.getByText(deferred.doneWhen));
     assert.ok(screen.getByText('Tradeoffs made'));
+  });
+});
+
+describe('deferred work resolved by an agent or a person', () => {
+  function renderResolved(
+    resolution: NonNullable<DeliveryDto['deferredWorkItems'][number]['resolution']>
+  ) {
+    const value = delivery();
+    value.deferredWorkItems = [{ ...value.deferredWorkItems[0]!, resolution }];
+    const client = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity } } });
+    clients.push(client);
+    // The mission panel has already loaded the mission and its workspace members.
+    client.setQueryData(keys.mission(value.missionId), {
+      id: value.missionId,
+      workspaceId: 'workspace-1',
+      objectives: [
+        { id: value.objectiveId, displayId: 'coo:900.cccc', title: 'Retry', state: 'complete' }
+      ]
+    });
+    client.setQueryData(keys.workspaceMembers('workspace-1'), [
+      {
+        workspaceUserId: 'wu-1',
+        displayName: 'Dana Reyes',
+        handle: 'dana',
+        email: null,
+        isOperator: false
+      }
+    ]);
+    return render(
+      <QueryClientProvider client={client}>
+        <DeliveryPresentation delivery={value} summaryText={value.summary} variant="full" />
+      </QueryClientProvider>
+    );
+  }
+
+  it("shows the closing objective and the agent's reason", () => {
+    renderResolved({
+      status: 'done',
+      resolvedAt: '2026-10-23T10:00:00.000Z',
+      resolvedByWorkspaceUserId: null,
+      outcome: null,
+      outcomeRef: null,
+      reason: 'Implemented by the retry guard in this objective.',
+      resolvedBy: {
+        kind: 'agent',
+        workspaceUserId: null,
+        objectiveId: delivery().objectiveId,
+        deliveryId: 'd-2'
+      }
+    });
+    assert.ok(screen.getByRole('status').textContent?.includes('Done'));
+    assert.ok(screen.getByText('coo:900.cccc'));
+    assert.ok(screen.getByText('Implemented by the retry guard in this objective.'));
+    assert.ok(screen.getByRole('button', { name: `Reopen: ${deferred.title}` }));
+  });
+
+  it('names the person who dismissed it', () => {
+    renderResolved({
+      status: 'dismissed',
+      resolvedAt: '2026-10-23T10:00:00.000Z',
+      resolvedByWorkspaceUserId: 'wu-1',
+      outcome: null,
+      outcomeRef: null,
+      reason: null,
+      resolvedBy: { kind: 'person', workspaceUserId: 'wu-1', objectiveId: null, deliveryId: null }
+    });
+    assert.ok(screen.getByRole('status').textContent?.includes('Dismissed'));
+    assert.ok(screen.getByText('Dana Reyes'));
+    assert.equal(screen.queryByText(/Reason:/), null);
   });
 });
 

@@ -295,11 +295,20 @@ function jsonText(value: unknown): ToolCallResult {
   };
 }
 
-function toolErrorText(error: unknown): ToolCallResult {
+export function toolErrorText(error: unknown): ToolCallResult {
   const message =
     error instanceof Error ? error.message : 'Overlord could not complete this tool call.';
+  // A self-servicing error (for example mission_summary_conflict, whose details
+  // carry the fresh summary baseline) keeps its code and details for the agent.
+  const record = isRecord(error) ? error : {};
+  const code = typeof record.code === 'string' ? record.code : null;
+  const details = record.details;
+  const text =
+    code !== null && details !== undefined
+      ? `${message}\n${JSON.stringify({ code, details }, null, 2)}`
+      : message;
   return {
-    content: [{ type: 'text', text: message }],
+    content: [{ type: 'text', text }],
     isError: true
   };
 }
@@ -351,6 +360,81 @@ export function referenceSearchProtocolBody(
       : {}),
     ...rankedSearchFlagsForReference(args)
   });
+}
+
+/**
+ * The Protocol `record-work` body for `overlord_record_work`: one payload-file
+ * envelope, so objective/summary/title, declared-path arrays and the summary
+ * write travel as one unambiguous JSON object.
+ */
+export function recordWorkProtocolBody(args: Record<string, unknown>): ProtocolRequestBody {
+  const payload: Record<string, unknown> = {
+    objective: requiredString(args, 'objective'),
+    summary: requiredString(args, 'summary'),
+    ...(optionalString(args, 'title') ? { title: requiredString(args, 'title') } : {}),
+    ...(Array.isArray(args.declaredPaths) ? { declaredPaths: args.declaredPaths } : {}),
+    ...(Array.isArray(args.artifacts) ? { artifacts: args.artifacts } : {}),
+    ...(isRecord(args.missionSummary) ? { missionSummary: args.missionSummary } : {})
+  };
+  return {
+    flags: {
+      '--project-id': requiredString(args, 'projectId'),
+      '--payload-file': true
+    },
+    fileInputs: { '--payload-file': JSON.stringify(payload) }
+  };
+}
+
+/** The Protocol `deliver` body for `overlord_deliver_session`. */
+export function deliverSessionProtocolBody(args: Record<string, unknown>): ProtocolRequestBody {
+  return {
+    flags: {
+      ...missionScopeFlags(args),
+      '--session-key': requiredString(args, 'sessionKey'),
+      '--summary': requiredString(args, 'summary'),
+      ...(Array.isArray(args.artifacts) ? { '--artifacts-file': true } : {}),
+      ...(Array.isArray(args.declaredPaths) ? { '--declared-paths-file': true } : {}),
+      ...(isRecord(args.missionSummary) ? { '--mission-summary-file': true } : {}),
+      ...(Array.isArray(args.humanActions) ||
+      Array.isArray(args.tradeoffsMade) ||
+      Array.isArray(args.knownRisks) ||
+      Array.isArray(args.deferredWork) ||
+      Array.isArray(args.assumptions)
+        ? {
+            '--payload-json': JSON.stringify({
+              deliveryReport: {
+                schemaVersion: 1,
+                agentReport: {
+                  ...(Array.isArray(args.humanActions) ? { humanActions: args.humanActions } : {}),
+                  ...(Array.isArray(args.tradeoffsMade)
+                    ? { tradeoffsMade: args.tradeoffsMade }
+                    : {}),
+                  ...(Array.isArray(args.knownRisks) ? { knownRisks: args.knownRisks } : {}),
+                  ...(Array.isArray(args.deferredWork) ? { deferredWork: args.deferredWork } : {}),
+                  ...(Array.isArray(args.assumptions) ? { assumptions: args.assumptions } : {})
+                }
+              }
+            })
+          }
+        : {})
+    },
+    fileInputs:
+      Array.isArray(args.artifacts) ||
+      Array.isArray(args.declaredPaths) ||
+      isRecord(args.missionSummary)
+        ? {
+            ...(Array.isArray(args.artifacts)
+              ? { '--artifacts-file': JSON.stringify(args.artifacts) }
+              : {}),
+            ...(Array.isArray(args.declaredPaths)
+              ? { '--declared-paths-file': JSON.stringify(args.declaredPaths) }
+              : {}),
+            ...(isRecord(args.missionSummary)
+              ? { '--mission-summary-file': JSON.stringify(args.missionSummary) }
+              : {})
+          }
+        : undefined
+  };
 }
 
 /**
@@ -654,52 +738,7 @@ const toolHandlers: Record<string, ToolHandler> = {
         : undefined
     }),
   overlord_deliver_session: args =>
-    runProtocolSubcommand('deliver', {
-      flags: {
-        ...missionScopeFlags(args),
-        '--session-key': requiredString(args, 'sessionKey'),
-        '--summary': requiredString(args, 'summary'),
-        ...(Array.isArray(args.artifacts) ? { '--artifacts-file': true } : {}),
-        ...(Array.isArray(args.declaredPaths) ? { '--declared-paths-file': true } : {}),
-        ...(Array.isArray(args.humanActions) ||
-        Array.isArray(args.tradeoffsMade) ||
-        Array.isArray(args.knownRisks) ||
-        Array.isArray(args.deferredWork) ||
-        Array.isArray(args.assumptions)
-          ? {
-              '--payload-json': JSON.stringify({
-                deliveryReport: {
-                  schemaVersion: 1,
-                  agentReport: {
-                    ...(Array.isArray(args.humanActions)
-                      ? { humanActions: args.humanActions }
-                      : {}),
-                    ...(Array.isArray(args.tradeoffsMade)
-                      ? { tradeoffsMade: args.tradeoffsMade }
-                      : {}),
-                    ...(Array.isArray(args.knownRisks) ? { knownRisks: args.knownRisks } : {}),
-                    ...(Array.isArray(args.deferredWork)
-                      ? { deferredWork: args.deferredWork }
-                      : {}),
-                    ...(Array.isArray(args.assumptions) ? { assumptions: args.assumptions } : {})
-                  }
-                }
-              })
-            }
-          : {})
-      },
-      fileInputs:
-        Array.isArray(args.artifacts) || Array.isArray(args.declaredPaths)
-          ? {
-              ...(Array.isArray(args.artifacts)
-                ? { '--artifacts-file': JSON.stringify(args.artifacts) }
-                : {}),
-              ...(Array.isArray(args.declaredPaths)
-                ? { '--declared-paths-file': JSON.stringify(args.declaredPaths) }
-                : {})
-            }
-          : undefined
-    }),
+    runProtocolSubcommand('deliver', deliverSessionProtocolBody(args)),
   overlord_add_artifact: args => {
     const hasContentText = typeof args.contentText === 'string' && args.contentText.trim() !== '';
     const hasExternalUrl = typeof args.externalUrl === 'string' && args.externalUrl.trim() !== '';
@@ -741,24 +780,7 @@ const toolHandlers: Record<string, ToolHandler> = {
       fileInputs: hasContentText ? { '--content-text-file': args.contentText as string } : undefined
     });
   },
-  overlord_record_work: args => {
-    // record-work takes one payload-file envelope so objective/summary/title and
-    // declared-path arrays travel as one unambiguous JSON object.
-    const payload: Record<string, unknown> = {
-      objective: requiredString(args, 'objective'),
-      summary: requiredString(args, 'summary'),
-      ...(optionalString(args, 'title') ? { title: requiredString(args, 'title') } : {}),
-      ...(Array.isArray(args.declaredPaths) ? { declaredPaths: args.declaredPaths } : {}),
-      ...(Array.isArray(args.artifacts) ? { artifacts: args.artifacts } : {})
-    };
-    return runProtocolSubcommand('record-work', {
-      flags: {
-        '--project-id': requiredString(args, 'projectId'),
-        '--payload-file': true
-      },
-      fileInputs: { '--payload-file': JSON.stringify(payload) }
-    });
-  }
+  overlord_record_work: args => runProtocolSubcommand('record-work', recordWorkProtocolBody(args))
 };
 
 const tools: ToolEntry[] = hostedMcpToolDefinitions.map(definition => {

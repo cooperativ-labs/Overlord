@@ -6,6 +6,8 @@ import type { Deliveries } from '../types/db.js';
 
 import { type EntityChangeFields, insertEntityChange } from './change-feed.js';
 import type { DeferredWorkObjectiveRef } from './delivery-compose.js';
+import { reconcileDeliveryMissionItems } from './mission-items.js';
+import { lockMissionObjectiveQueue } from './objective-queue.js';
 import { nowIso } from './util.js';
 import { enqueueMissionSummaryComposeJob } from './worker-jobs.js';
 
@@ -20,7 +22,7 @@ type DeliveryRow = Pick<
   | 'follow_up_notes'
   | 'payload_json'
   | 'revision'
-> & { id: string };
+> & { id: string; delivered_at: string };
 
 export type DeliveryComposeContext = {
   delivery: DeliveryRow;
@@ -38,7 +40,7 @@ export async function readDeliveryComposeContext(
 ): Promise<DeliveryComposeContext | null> {
   const delivery = await db.get<DeliveryRow>(
     `SELECT id, workspace_id, project_id, mission_id, objective_id, summary,
-            verification_summary, follow_up_notes, payload_json, revision
+            verification_summary, follow_up_notes, payload_json, revision, delivered_at
        FROM deliveries
       WHERE id = ? AND deleted_at IS NULL`,
     [deliveryId]
@@ -102,7 +104,13 @@ export async function readDeliveryComposeContext(
   };
 }
 
-/** Persists a composed or fallback presentation with its change and summary trigger atomically. */
+/**
+ * Persists a composed or fallback presentation with its change, its mission
+ * items and its summary trigger atomically. The delivery's `mission_items` rows
+ * are reconciled with the new presentation (new items such as
+ * `deterministic_rule` actions are inserted, reworded ones updated, open ones it
+ * no longer lists deleted), so the table and the delivery card cannot disagree.
+ */
 export async function persistDeliveryPresentation({
   db,
   delivery,
@@ -129,6 +137,8 @@ export async function persistDeliveryPresentation({
   payload.deliveryReport = nextReport;
 
   await db.transaction(async tx => {
+    // Same mission-first order as delivery and operator resolution.
+    await lockMissionObjectiveQueue(tx, delivery.mission_id);
     const updated = await tx.run(
       `UPDATE deliveries
            SET payload_json = ?, updated_at = ?, revision = revision + 1
@@ -137,6 +147,7 @@ export async function persistDeliveryPresentation({
     );
     if (updated.changes === 0) return;
 
+    const attribution = await resolveChangeAttribution(tx);
     await insertEntityChange(tx, {
       entityType: 'delivery',
       entityId: delivery.id,
@@ -147,7 +158,20 @@ export async function persistDeliveryPresentation({
       objectiveId: delivery.objective_id,
       changedFields,
       workspaceId: delivery.workspace_id,
-      ...(await resolveChangeAttribution(tx))
+      ...attribution
+    });
+    await reconcileDeliveryMissionItems(tx, {
+      delivery: {
+        id: delivery.id,
+        workspaceId: delivery.workspace_id,
+        projectId: delivery.project_id,
+        missionId: delivery.mission_id,
+        objectiveId: delivery.objective_id,
+        deliveredAt: delivery.delivered_at
+      },
+      report: nextReport,
+      attribution,
+      now
     });
 
     const status = nextReport.presentation.status;

@@ -10,11 +10,22 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { after, describe, it } from 'node:test';
 
+import { seedMissionItemsFixture } from '../../../database/src/mission-items.test-fixture.ts';
+
 import { listObjectiveFileChanges } from './changes.js';
 import { createServiceContext } from './context.js';
+import { buildDeliveryReport } from './delivery-report.js';
 import { ServiceError } from './errors.js';
 import { claimNextExecutionRequest, expireStaleExecutionRequests } from './execution-requests.js';
 import { backendHostFingerprint, ensureCallerDeviceTarget } from './execution-targets.js';
+import {
+  applyMissionItemSupersedeRules,
+  closeMissionItem,
+  insertDeliveryMissionItems,
+  listMissionItems,
+  reconcileDeliveryMissionItems,
+  restoreMissionItem
+} from './mission-items.js';
 import {
   getProjectExecutionTargetSelection,
   listEligibleProjectExecutionTargets,
@@ -1002,6 +1013,138 @@ for (const adapter of adapters) {
           `SELECT id FROM entity_changes WHERE entity_id = 'commit'`
         );
         assert.equal(afterCommit.length, 1);
+      } finally {
+        await teardown();
+      }
+    });
+  });
+}
+
+// ---- Mission items (coo:1260, ADR 0060) -------------------------------------
+
+for (const adapter of adapters) {
+  describe(`mission items service conformance [${adapter.label}]`, () => {
+    it('writes, reconciles, supersedes, closes, restores and lists identically', async () => {
+      const { client, teardown } = await adapter.create();
+      try {
+        await seedMissionItemsFixture(client, { legacyResolutions: false });
+        const attribution = { actorWorkspaceUserId: null, source: 'protocol' } as const;
+        const report = buildDeliveryReport({
+          summary: 'Delivered.',
+          deliveryReport: {
+            schemaVersion: 1,
+            agentReport: {
+              humanActions: [{ action: 'Set FOO in production.', category: 'environment' }],
+              knownRisks: ['Retry storms.'],
+              deferredWork: [
+                { title: 'Add metrics', change: 'Add them.', location: 'x.ts', doneWhen: 'Added.' }
+              ]
+            }
+          }
+        });
+        const deliveries = ['2026-11-10T00:00:00.000Z', '2026-11-11T00:00:00.000Z'].map(
+          (deliveredAt, index) => ({
+            id: `d-conf-${index}`,
+            workspaceId: 'w-items',
+            projectId: 'p-items',
+            missionId: 'm-items',
+            objectiveId: 'oa',
+            deliveredAt
+          })
+        );
+        const deliver = async (delivery: (typeof deliveries)[number]) => {
+          await client.run(
+            `INSERT INTO deliveries (id, workspace_id, project_id, mission_id, objective_id, summary,
+               payload_json, delivered_at, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, 'Delivered.', ?, ?, ?, ?)`,
+            [
+              delivery.id,
+              delivery.workspaceId,
+              delivery.projectId,
+              delivery.missionId,
+              delivery.objectiveId,
+              JSON.stringify({ deliveryReport: report }),
+              delivery.deliveredAt,
+              delivery.deliveredAt,
+              delivery.deliveredAt
+            ]
+          );
+          return insertDeliveryMissionItems(client, { delivery, report, attribution });
+        };
+        const [first, second] = deliveries as [(typeof deliveries)[0], (typeof deliveries)[0]];
+        assert.equal((await deliver(first)).superseded.length, 0);
+        const inserted = await deliver(second);
+        assert.equal(inserted.inserted.length, 3);
+        assert.equal(inserted.superseded.length, 1, 'the first delivery’s human action');
+
+        const reworded = {
+          ...report,
+          presentation: {
+            ...report.presentation,
+            status: 'composed' as const,
+            generatedBy: 'gemini' as const,
+            humanActions: report.presentation.humanActions.map(action => ({
+              ...action,
+              action: 'Set the FOO variable in production.'
+            }))
+          }
+        };
+        const reconciled = await reconcileDeliveryMissionItems(client, {
+          delivery: second,
+          report: reworded,
+          attribution
+        });
+        assert.equal(reconciled.updated.length, 1);
+
+        const open = await listMissionItems(client, { missionId: 'm-items' });
+        assert.deepEqual(
+          open.items.map(item => [item.deliveryId, item.kind, item.text]),
+          [
+            ['d-conf-1', 'human_action', 'Set the FOO variable in production.'],
+            ['d-conf-1', 'risk', 'Retry storms.'],
+            ['d-conf-1', 'suggestion', 'Add metrics'],
+            ['d-conf-0', 'risk', 'Retry storms.'],
+            ['d-conf-0', 'suggestion', 'Add metrics']
+          ]
+        );
+        const action = open.items[0]!;
+        assert.equal(action.reportedAt, '2026-11-11T00:00:00.000Z');
+        assert.equal(action.detail.actionId, 'human-action-1');
+        assert.equal(action.revision, 2);
+
+        const risk = open.items[1]!;
+        const closed = await closeMissionItem(client, {
+          itemId: risk.id,
+          missionId: 'm-items',
+          status: 'dismissed',
+          reason: 'The retry path was removed.',
+          resolver: { kind: 'agent', objectiveId: 'ob', deliveryId: 'dB2' },
+          attribution
+        });
+        assert.ok(closed.ok);
+        assert.deepEqual(closed.item.resolvedBy, {
+          kind: 'agent',
+          objectiveId: 'ob',
+          deliveryId: 'dB2'
+        });
+        const restored = await restoreMissionItem(client, { itemId: risk.id, attribution });
+        assert.ok(restored.ok && restored.changed && restored.item.status === 'open');
+
+        await client.run(`UPDATE objectives SET reopened_at = ? WHERE id = 'oa'`, [
+          '2026-11-12T00:00:00.000Z'
+        ]);
+        const superseded = await applyMissionItemSupersedeRules(client, {
+          objectiveId: 'oa',
+          attribution
+        });
+        assert.equal(superseded.length, 5);
+        assert.deepEqual((await listMissionItems(client, { missionId: 'm-items' })).items, []);
+
+        const changes = await client.get<{ total: number | string }>(
+          `SELECT COUNT(*) AS total FROM entity_changes WHERE entity_type = 'mission_item'`
+        );
+        // 6 inserts, 1 + 5 supersedes, 1 reword, 1 close, 1 restore.
+        assert.equal(Number(changes?.total), 15);
       } finally {
         await teardown();
       }

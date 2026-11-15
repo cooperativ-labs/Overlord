@@ -83,7 +83,7 @@ function renderInline(text: string, keyPrefix: string): ReactNode[] {
         return (
           <code
             key={key}
-            className="rounded-sm bg-(--color-surface-2) px-1 py-0.5 font-mono text-[0.85em]"
+            className="code-inline"
           >
             {token.value}
           </code>
@@ -303,7 +303,7 @@ export function Markdown({ text }: { text: string }) {
             return (
               <pre
                 key={key}
-                className="overflow-x-auto rounded-sm bg-(--color-surface-2) p-2 font-mono text-[0.8rem] leading-snug"
+                className="code-block"
               >
                 <code>{block.text}</code>
               </pre>

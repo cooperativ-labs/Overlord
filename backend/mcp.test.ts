@@ -1,14 +1,23 @@
 import { overlordMcpToolDefinitions } from '@overlord/contract/mcp-tools';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
+import { chmod, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
 import { compactRunQueueResponse } from '../mcp/run-queue-detail.ts';
 import { compactSearchResponse } from '../mcp/search-detail.ts';
-import { referenceSearchProtocolBody, runQueueMcpProtocolCall } from '../mcp/server.ts';
+import {
+  deliverSessionProtocolBody,
+  recordWorkProtocolBody,
+  referenceSearchProtocolBody,
+  runQueueMcpProtocolCall,
+  toolErrorText
+} from '../mcp/server.ts';
 import { hostedMcpToolDefinitions } from '../mcp/tool-catalog.ts';
 import { hostedMcpWidgetResources, readHostedMcpWidget } from '../mcp/widgets.ts';
+import { ServiceError } from '../packages/core/service/errors.ts';
 
 const repoRoot = path.resolve(import.meta.dirname, '..');
 
@@ -116,6 +125,115 @@ function assertChangeTrackingSchema(tools: Array<Record<string, any>>): void {
   ]);
   assert.match(changes.description, /server_objective/);
 }
+
+/**
+ * Calls one tool on the local shim with a fake `ovld` binary. The fake prints
+ * its argv as JSON, or, with `conflict`, prints a conflict body on stdout and
+ * exits 1 as the CLI does for mission_summary_conflict.
+ */
+async function callLocalShimTool(
+  name: string,
+  args: Record<string, unknown>,
+  { conflict = false }: { conflict?: boolean } = {}
+): Promise<Record<string, any>> {
+  const dir = await mkdtemp(path.join(os.tmpdir(), 'ovld-shim-'));
+  try {
+    const fakeBin = path.join(dir, 'ovld');
+    await writeFile(
+      fakeBin,
+      conflict
+        ? `#!/usr/bin/env node\nprocess.stdout.write(JSON.stringify({ code: 'mission_summary_conflict', missionSummary: { contentRevision: 9 } }));\nprocess.exit(1);\n`
+        : `#!/usr/bin/env node\nprocess.stdout.write(JSON.stringify({ argv: process.argv.slice(2) }));\n`
+    );
+    await chmod(fakeBin, 0o755);
+    const child = spawn(
+      process.execPath,
+      [path.join(repoRoot, 'connectors/core/scripts/overlord-mcp.mjs')],
+      { cwd: repoRoot, stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, OVLD_BIN: fakeBin } }
+    );
+    const stdoutChunks: Buffer[] = [];
+    child.stdout.on('data', chunk => stdoutChunks.push(Buffer.from(chunk)));
+    child.stdin.write(
+      encodeMcpMessage({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'tools/call',
+        params: { name, arguments: args }
+      })
+    );
+    child.stdin.end();
+    await new Promise(resolve => child.on('exit', resolve));
+    const response = parseMcpMessages(Buffer.concat(stdoutChunks)).find(
+      message => message.id === 1
+    );
+    assert.ok(response, `${name} returned no response`);
+    return response.result;
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+}
+
+function flagValue(argv: string[], flag: string): string | undefined {
+  const index = argv.indexOf(flag);
+  return index === -1 ? undefined : argv[index + 1];
+}
+
+const MISSION_SUMMARY_ARG = {
+  baseContentRevision: 3,
+  headline: 'Retries survive provider outages.',
+  summary: 'Implemented and tested, not deployed.',
+  closeItems: [{ id: 'item-1', status: 'done', reason: 'Fixed in this objective.' }]
+};
+
+test('local MCP shim forwards missionSummary on deliver with the delivery report', async () => {
+  const result = await callLocalShimTool('overlord_deliver_session', {
+    objectiveId: 'coo:1.abcd',
+    sessionKey: 'sess_x',
+    summary: 'Done.',
+    knownRisks: ['Risk'],
+    missionSummary: MISSION_SUMMARY_ARG
+  });
+  const argv = result.structuredContent.argv as string[];
+  assert.equal(argv[1], 'deliver');
+  const payload = JSON.parse(flagValue(argv, '--payload-json') ?? '{}');
+  assert.deepEqual(payload.missionSummary, MISSION_SUMMARY_ARG);
+  assert.deepEqual(payload.deliveryReport.agentReport, { knownRisks: ['Risk'] });
+});
+
+test('local MCP shim sends no payload on a summary-only deliver', async () => {
+  const result = await callLocalShimTool('overlord_deliver_session', {
+    objectiveId: 'coo:1.abcd',
+    sessionKey: 'sess_x',
+    summary: 'Done.'
+  });
+  assert.equal(flagValue(result.structuredContent.argv, '--payload-json'), undefined);
+});
+
+test('local MCP shim forwards missionSummary on record-work', async () => {
+  const recordSummary = {
+    headline: MISSION_SUMMARY_ARG.headline,
+    summary: MISSION_SUMMARY_ARG.summary
+  };
+  const result = await callLocalShimTool('overlord_record_work', {
+    projectId: 'p1',
+    objective: 'Did it.',
+    summary: 'Done.',
+    missionSummary: recordSummary
+  });
+  const payload = JSON.parse(flagValue(result.structuredContent.argv, '--payload-json') ?? '{}');
+  assert.deepEqual(payload.missionSummary, recordSummary);
+});
+
+test('local MCP shim returns the conflict baseline the CLI prints on stdout', async () => {
+  const result = await callLocalShimTool(
+    'overlord_deliver_session',
+    { objectiveId: 'coo:1.abcd', sessionKey: 'sess_x', summary: 'Done.' },
+    { conflict: true }
+  );
+  assert.equal(result.isError, true);
+  assert.match(result.content[0].text, /mission_summary_conflict/);
+  assert.match(result.content[0].text, /"contentRevision":9/);
+});
 
 test('local MCP bridge tools stay in sync with hosted MCP registry', async () => {
   const expected = hostedToolContracts();
@@ -696,4 +814,71 @@ test('overlord_search_missions maps exact-reference mode to Protocol search --re
       '--matches-per-result': '2'
     }
   );
+});
+
+test('MCP deliver and record-work pass missionSummary through to Protocol', () => {
+  const missionSummary = {
+    baseContentRevision: 3,
+    headline: 'The export works.',
+    summary: 'Tested, not deployed.',
+    closeItems: [{ id: 'item-1', status: 'done', reason: 'Fixed here.' }]
+  };
+  const deliver = deliverSessionProtocolBody({
+    objectiveId: 'coo:1.abcd',
+    sessionKey: 'sess_x',
+    summary: 'Delivered.',
+    missionSummary
+  });
+  assert.equal(deliver.flags?.['--mission-summary-file'], true);
+  assert.deepEqual(JSON.parse(deliver.fileInputs!['--mission-summary-file']!), missionSummary);
+
+  const without = deliverSessionProtocolBody({
+    objectiveId: 'coo:1.abcd',
+    sessionKey: 'sess_x',
+    summary: 'Delivered.'
+  });
+  assert.equal('--mission-summary-file' in (without.flags ?? {}), false);
+  assert.equal(without.fileInputs, undefined);
+
+  const recorded = recordWorkProtocolBody({
+    projectId: 'project',
+    objective: 'Fixed it.',
+    summary: 'Fixed it.',
+    missionSummary: { headline: 'Fixed.', summary: 'Tested.' }
+  });
+  assert.deepEqual(JSON.parse(recorded.fileInputs!['--payload-file']!).missionSummary, {
+    headline: 'Fixed.',
+    summary: 'Tested.'
+  });
+
+  for (const name of ['overlord_deliver_session', 'overlord_record_work']) {
+    const tool = hostedMcpToolDefinitions.find(definition => definition.name === name)!;
+    const schema = (tool.inputSchema as { properties: Record<string, any> }).properties
+      .missionSummary;
+    assert.ok(schema, `${name} accepts missionSummary`);
+    assert.deepEqual(Object.keys(schema.properties).sort(), [
+      'baseContentRevision',
+      'closeItems',
+      'headline',
+      'summary'
+    ]);
+    assert.deepEqual(schema.properties.closeItems.items.required, ['id', 'status', 'reason']);
+  }
+});
+
+test('an MCP tool error keeps the conflict code and fresh baseline', () => {
+  const baseline = { contentRevision: 2, headline: 'A landed.', summary: 'Tested.', openItems: [] };
+  const result = toolErrorText(
+    new ServiceError('The mission summary changed.', 'mission_summary_conflict', 409, {
+      baseContentRevision: 1,
+      missionSummary: baseline
+    })
+  );
+  assert.equal(result.isError, true);
+  const text = result.content[0]!.text;
+  assert.ok(text.startsWith('The mission summary changed.'));
+  const parsed = JSON.parse(text.slice(text.indexOf('\n') + 1));
+  assert.equal(parsed.code, 'mission_summary_conflict');
+  assert.deepEqual(parsed.details.missionSummary, baseline);
+  assert.equal(toolErrorText(new Error('plain')).content[0]!.text, 'plain');
 });

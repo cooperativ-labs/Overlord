@@ -94,3 +94,4 @@ record and the index disagree.
 - [0057 — Objective brief state, presentation ownership and removal suppression](0057-objective-brief-state-and-ownership.md)
 - [0058 — Durable objective brief worker and the objective writing profile](0058-objective-brief-worker.md)
 - [0059 — Objective descriptions on the REST, protocol, MCP and connector surfaces](0059-objective-description-surfaces.md)
+- [0060 — Mission items hold live risks, human actions and suggestions; agents may edit the mission summary](0060-mission-items-and-agent-authored-summary.md)

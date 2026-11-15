@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync } from 'node:fs';
+import fsPromises from 'node:fs/promises';
+import { syncBuiltinESMExports } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
-import test from 'node:test';
+import test, { mock } from 'node:test';
 
 function restoreEnv(name: string, value: string | undefined): void {
   if (value === undefined) delete process.env[name];
@@ -21,6 +23,27 @@ test('PI extension skips the injected launch input and publishes later user inpu
   process.env.MISSION_ID = 'coo:pi-test';
   process.env.OVERLORD_EXECUTION_REQUEST_ID = 'request-123';
   process.env.SESSION_KEY = 'session-key';
+
+  // Input handlers intentionally cache in the background. Track both filesystem
+  // stages so teardown waits for completed writes instead of racing mkdir/writeFile.
+  const operations: Promise<unknown>[] = [];
+  const mkdir = fsPromises.mkdir;
+  const writeFile = fsPromises.writeFile;
+  const mkdirMock = mock.method(fsPromises, 'mkdir', (...args: Parameters<typeof mkdir>) => {
+    const operation = mkdir(...args);
+    operations.push(operation);
+    return operation;
+  });
+  const writeMock = mock.method(
+    fsPromises,
+    'writeFile',
+    (...args: Parameters<typeof writeFile>) => {
+      const operation = writeFile(...args);
+      operations.push(operation);
+      return operation;
+    }
+  );
+  syncBuiltinESMExports();
 
   try {
     const handlers = new Map<string, (event: any, ctx: any) => any>();
@@ -75,6 +98,11 @@ test('PI extension skips the injected launch input and publishes later user inpu
       }
     ]);
   } finally {
+    // Awaiting mkdir also lets its continuation register the corresponding write.
+    for (let index = 0; index < operations.length; index += 1) await operations[index];
+    mkdirMock.mock.restore();
+    writeMock.mock.restore();
+    syncBuiltinESMExports();
     restoreEnv('HOME', previous.home);
     restoreEnv('MISSION_ID', previous.missionId);
     restoreEnv('OVERLORD_EXECUTION_REQUEST_ID', previous.executionRequestId);

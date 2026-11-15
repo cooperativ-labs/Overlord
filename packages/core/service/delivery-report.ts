@@ -1,5 +1,4 @@
 import {
-  DEFERRED_WORK_LIMITS,
   type DeferredWorkInputV1,
   type DeferredWorkV1,
   type DeliveryAgentReportInputV1,
@@ -8,37 +7,36 @@ import {
   type HumanActionV1,
   type TradeoffMadeV1
 } from '@overlord/contract';
+import {
+  actionTextSchema,
+  commandTextSchema,
+  conciseTextSchema,
+  deferredWorkFieldSchemas,
+  DELIVERY_REPORT_MAX_ACTION_LENGTH,
+  DELIVERY_REPORT_MAX_ALTERNATIVES,
+  DELIVERY_REPORT_MAX_COMMAND_LENGTH,
+  DELIVERY_REPORT_MAX_DETAIL_LENGTH,
+  DELIVERY_REPORT_MAX_ITEMS,
+  DELIVERY_REPORT_MAX_LINK_LENGTH,
+  DELIVERY_REPORT_MAX_WARNINGS,
+  humanActionCategorySchema,
+  humanActionLinkSchema,
+  readDeliveryReport as readPersistedDeliveryReport
+} from '@overlord/contract/delivery-report';
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
 
-const MAX_ITEMS = 12;
-const MAX_ALTERNATIVES = 6;
-const MAX_ACTION_LENGTH = 280;
-const MAX_DETAIL_LENGTH = 800;
+const MAX_ITEMS = DELIVERY_REPORT_MAX_ITEMS;
+const MAX_ALTERNATIVES = DELIVERY_REPORT_MAX_ALTERNATIVES;
+const MAX_ACTION_LENGTH = DELIVERY_REPORT_MAX_ACTION_LENGTH;
+const MAX_DETAIL_LENGTH = DELIVERY_REPORT_MAX_DETAIL_LENGTH;
+const MAX_COMMAND_LENGTH = DELIVERY_REPORT_MAX_COMMAND_LENGTH;
+const MAX_LINK_LENGTH = DELIVERY_REPORT_MAX_LINK_LENGTH;
 
-const humanActionCategorySchema = z.enum([
-  'environment',
-  'database',
-  'deployment',
-  'codegen',
-  'packaging',
-  'external_service',
-  'other'
-]);
-
-const MAX_COMMAND_LENGTH = 600;
-const MAX_LINK_LENGTH = 400;
-
-const conciseTextSchema = z.string().trim().min(1).max(MAX_DETAIL_LENGTH);
-const commandTextSchema = z.string().trim().min(1).max(MAX_COMMAND_LENGTH);
-
-const LINK_PATTERN = /^(?:https?:\/\/\S+|(?![a-z][a-z0-9+.-]*:)[^\s<>"'`]+)$/i;
-
-/** An HTTP(S) URL or a repository-relative file path; other URI schemes are rejected. */
-const linkSchema = z.string().trim().min(1).max(MAX_LINK_LENGTH).regex(LINK_PATTERN);
+const linkSchema = humanActionLinkSchema;
 
 const humanActionSchema = z.strictObject({
-  action: z.string().trim().min(1).max(MAX_ACTION_LENGTH),
+  action: actionTextSchema,
   reason: conciseTextSchema.optional(),
   category: humanActionCategorySchema.optional(),
   blocking: z.boolean().optional(),
@@ -53,26 +51,16 @@ export function isValidHumanActionLink(link: string): boolean {
 }
 
 const tradeoffSchema = z.strictObject({
-  decision: z.string().trim().min(1).max(MAX_ACTION_LENGTH),
+  decision: actionTextSchema,
   alternativesConsidered: z.array(conciseTextSchema).max(MAX_ALTERNATIVES).optional(),
   rationale: conciseTextSchema,
   impact: conciseTextSchema.optional()
 });
 
-const deferredWorkFields = {
-  title: z.string().trim().min(1).max(DEFERRED_WORK_LIMITS.maxTitleLength),
-  change: z.string().trim().min(1).max(DEFERRED_WORK_LIMITS.maxChangeLength),
-  location: z.string().trim().min(1).max(DEFERRED_WORK_LIMITS.maxLocationLength),
-  doneWhen: z.string().trim().min(1).max(DEFERRED_WORK_LIMITS.maxDoneWhenLength)
-};
+const deferredWorkFields = deferredWorkFieldSchemas;
 
 /** Agent-written deferred-work item (contract v166); plain strings are not accepted. */
 export const deferredWorkInputSchema = z.strictObject(deferredWorkFields);
-
-const normalizedDeferredWorkSchema = z.strictObject({
-  id: z.string().trim().min(1).max(200),
-  ...deferredWorkFields
-});
 
 /**
  * Strict check of the wire `deliveryReport.agentReport.deferredWork` (contract
@@ -172,7 +160,7 @@ function normalizeAgentReport(input: DeliveryAgentReportInputV1): DeliveryAgentR
   };
 }
 
-const MAX_WARNINGS = 12;
+const MAX_WARNINGS = DELIVERY_REPORT_MAX_WARNINGS;
 const DELIVERY_REPORT_ROOT_KEYS = new Set(['schemaVersion', 'agentReport']);
 const AGENT_REPORT_INPUT_KEYS = new Set([
   'humanActions',
@@ -276,57 +264,6 @@ function salvageWireAgentReport(deliveryReport: unknown): {
   };
 }
 
-const normalizedHumanActionSchema = z.strictObject({
-  id: z.string().trim().min(1).max(200),
-  action: z.string().trim().min(1).max(MAX_ACTION_LENGTH),
-  reason: conciseTextSchema.optional(),
-  category: humanActionCategorySchema,
-  blocking: z.boolean().optional(),
-  command: commandTextSchema.optional(),
-  verify: conciseTextSchema.optional(),
-  link: linkSchema.optional(),
-  source: z.enum(['agent', 'deterministic_rule']),
-  sourceRef: z.string().trim().min(1).max(200).optional()
-});
-
-const normalizedTradeoffSchema = z.strictObject({
-  id: z.string().trim().min(1).max(200),
-  decision: z.string().trim().min(1).max(MAX_ACTION_LENGTH),
-  alternativesConsidered: z.array(conciseTextSchema).max(MAX_ALTERNATIVES),
-  rationale: conciseTextSchema,
-  impact: conciseTextSchema.optional(),
-  source: z.literal('agent'),
-  sourceRef: z.string().trim().min(1).max(200).optional()
-});
-
-const normalizedAgentReportSchema = z.strictObject({
-  humanActions: z.array(normalizedHumanActionSchema).max(MAX_ITEMS),
-  tradeoffsMade: z.array(normalizedTradeoffSchema).max(MAX_ITEMS),
-  knownRisks: z.array(conciseTextSchema).max(MAX_ITEMS),
-  deferredWork: z.array(normalizedDeferredWorkSchema).max(MAX_ITEMS),
-  assumptions: z.array(conciseTextSchema).max(MAX_ITEMS)
-});
-
-const deliveryPresentationSchema = z.strictObject({
-  status: z.enum(['deterministic', 'pending', 'composed', 'fallback']),
-  markdown: z.string(),
-  humanActions: z.array(normalizedHumanActionSchema).max(MAX_ITEMS),
-  tradeoffsMade: z.array(normalizedTradeoffSchema).max(MAX_ITEMS),
-  knownRisks: z.array(conciseTextSchema).max(MAX_ITEMS),
-  deferredWork: z.array(normalizedDeferredWorkSchema).max(MAX_ITEMS),
-  assumptions: z.array(conciseTextSchema).max(MAX_ITEMS),
-  generatedBy: z.enum(['deterministic', 'gemini']),
-  generatedAt: z.string().max(64).optional(),
-  model: z.string().trim().min(1).max(200).optional()
-});
-
-const persistedDeliveryReportSchema = z.strictObject({
-  schemaVersion: z.literal(1),
-  agentReport: normalizedAgentReportSchema,
-  warnings: z.array(conciseTextSchema).max(MAX_WARNINGS).optional(),
-  presentation: deliveryPresentationSchema
-});
-
 /**
  * Builds the contract-v15 fallback synchronously. A later worker may replace only
  * `presentation`; the immutable summary and normalized evidence always remain.
@@ -361,7 +298,9 @@ export function buildDeliveryReport({
 /**
  * Returns a safe read-side delivery report. Persisted V1 reports retain their
  * presentation status (including pending/composed/fallback); missing or malformed
- * payloads receive the same deterministic projection used by REST readers.
+ * payloads receive the same deterministic projection used by REST readers. The
+ * schema lives in `@overlord/contract/delivery-report` so the database backfill
+ * reads stored reports exactly as this function does.
  */
 export function readDeliveryReport({
   summary,
@@ -370,9 +309,7 @@ export function readDeliveryReport({
   summary: string;
   deliveryReport: unknown;
 }): DeliveryReportPayloadV1 {
-  const parsed = persistedDeliveryReportSchema.safeParse(deliveryReport);
-  if (parsed.success) return parsed.data;
-  return buildDeliveryReport({ summary, deliveryReport: undefined });
+  return readPersistedDeliveryReport({ summary, deliveryReport });
 }
 
 /** Marks an immediate deterministic report as awaiting async composition. */

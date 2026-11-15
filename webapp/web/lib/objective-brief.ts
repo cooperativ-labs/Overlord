@@ -123,6 +123,24 @@ export function summaryMarkerSegments(
   return segments;
 }
 
+/**
+ * Splits text on `backtick` spans. Matched pairs (non-empty, on one line) become code
+ * segments without their backticks; an unmatched backtick stays literal. Text only, never HTML.
+ */
+export function summaryCodeSegments(text: string): Array<{ text: string; code: boolean }> {
+  const segments: Array<{ text: string; code: boolean }> = [];
+  const pattern = /`([^`\n]+)`/g;
+  let last = 0;
+  for (const match of text.matchAll(pattern)) {
+    const index = match.index ?? 0;
+    if (index > last) segments.push({ text: text.slice(last, index), code: false });
+    segments.push({ text: match[1], code: true });
+    last = index + match[0].length;
+  }
+  if (last < text.length) segments.push({ text: text.slice(last), code: false });
+  return segments;
+}
+
 export function objectiveSummaryView(objective: ObjectiveBriefFields): ObjectiveSummaryView {
   const summary = objective.description?.trim() ? objective.description.trim() : null;
   const pending = objective.descriptionStatus === 'pending';

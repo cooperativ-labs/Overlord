@@ -247,8 +247,8 @@ export async function enqueueDeliveryComposeJob({
 /** Why a mission summary compose was requested; logged as a bounded metric only. */
 export type MissionSummaryComposeReason =
   | 'delivery_presented'
-  | 'deferred_work_resolved'
-  | 'deferred_work_reopened'
+  | 'mission_item_closed'
+  | 'mission_item_restored'
   | 'agent_request_opened'
   | 'agent_request_closed'
   | 'objective_reopened';
@@ -276,7 +276,7 @@ function isSummaryEnabled(value: unknown): boolean {
   return value === true || Number(value) === 1;
 }
 
-async function recordMissionSummaryChange(
+export async function recordMissionSummaryChange(
   db: DatabaseClient,
   fields: {
     workspaceId: string;
@@ -345,22 +345,32 @@ export async function enqueueMissionSummaryComposeJob({
     return { triggered: false, generation: null, jobId: null };
   }
 
+  // All triggers serialize on the summary row, including the no-op for agent prose.
+  const current = await lockMissionSummaryRow(db, missionId);
+  if (current && (await hasCurrentNarrative(db, missionId, current.narrative_delivery_id))) {
+    return { triggered: false, generation: null, jobId: null };
+  }
+
   const row = await db.get<{ revision: number; requested_generation: number }>(
     `INSERT INTO mission_summaries
          (mission_id, workspace_id, project_id, revision, requested_generation,
-          completed_generation, status, headline, summary_markdown, risks_json,
-          suggestions_json, source_delivery_id, generated_by, generated_at, model,
+          completed_generation, status, headline, summary_markdown,
+          source_delivery_id, generated_by, generated_at, model,
           created_at, updated_at)
-       VALUES (?, ?, ?, 1, 1, 0, 'pending', '', '', '[]', '[]', ?, 'deterministic', NULL, NULL, ?, ?)
+       VALUES (?, ?, ?, 1, 1, 0, 'pending', '', '', ?, 'deterministic', NULL, NULL, ?, ?)
        ON CONFLICT (mission_id) DO UPDATE SET
          requested_generation = mission_summaries.requested_generation + 1,
          revision = mission_summaries.revision + 1,
          status = 'pending',
          source_delivery_id = excluded.source_delivery_id,
          updated_at = excluded.updated_at
+       WHERE mission_summaries.narrative_delivery_id IS NULL
+          OR mission_summaries.narrative_delivery_id IS DISTINCT FROM (SELECT id FROM deliveries
+               WHERE mission_id = ? AND deleted_at IS NULL ORDER BY delivered_at DESC, id DESC LIMIT 1)
        RETURNING revision, requested_generation`,
-    [missionId, workspaceId, mission.project_id, sourceDeliveryId, now, now]
+    [missionId, workspaceId, mission.project_id, sourceDeliveryId, now, now, missionId]
   );
+  if (!row) return { triggered: false, generation: null, jobId: null };
   const revision = Number(row?.revision ?? 1);
   const generation = Number(row?.requested_generation ?? 1);
   await recordMissionSummaryChange(db, {
@@ -439,7 +449,7 @@ export async function readMissionSummaryGeneration(
   };
 }
 
-async function lockMissionSummaryRow(
+export async function lockMissionSummaryRow(
   tx: DatabaseClient,
   missionId: string
 ): Promise<{
@@ -448,6 +458,7 @@ async function lockMissionSummaryRow(
   revision: number;
   requested_generation: number;
   completed_generation: number;
+  narrative_delivery_id: string | null;
 } | null> {
   const lockClause = tx.dialect === 'postgres' ? 'FOR UPDATE' : '';
   return (
@@ -457,21 +468,34 @@ async function lockMissionSummaryRow(
       revision: number;
       requested_generation: number;
       completed_generation: number;
+      narrative_delivery_id: string | null;
     }>(
-      `SELECT workspace_id, project_id, revision, requested_generation, completed_generation
+      `SELECT workspace_id, project_id, revision, requested_generation, completed_generation, narrative_delivery_id
          FROM mission_summaries WHERE mission_id = ? ${lockClause}`,
       [missionId]
     )) ?? null
   );
 }
 
-/** Content written by a guarded publication; risks and suggestions are references. */
+/** True only when the current live delivery is the narrative's source. */
+async function hasCurrentNarrative(
+  db: DatabaseClient,
+  missionId: string,
+  narrativeDeliveryId: string | null
+): Promise<boolean> {
+  if (narrativeDeliveryId === null) return false;
+  const latest = await db.get<{ id: string }>(
+    `SELECT id FROM deliveries WHERE mission_id = ? AND deleted_at IS NULL ORDER BY delivered_at DESC, id DESC LIMIT 1`,
+    [missionId]
+  );
+  return latest?.id === narrativeDeliveryId;
+}
+
+/** Prose written by a guarded fallback publication. */
 export type MissionSummaryPublication = {
   status: 'composed' | 'fallback';
   headline: string;
   summary: string;
-  risks: unknown[];
-  suggestions: unknown[];
   sourceDeliveryId: string | null;
   generatedBy: 'deterministic' | 'gemini';
   model: string | null;
@@ -499,6 +523,7 @@ export async function publishMissionSummary({
   return db.transaction(async tx => {
     const row = await lockMissionSummaryRow(tx, missionId);
     if (!row) return 'missing';
+    if (await hasCurrentNarrative(tx, missionId, row.narrative_delivery_id)) return 'stale';
     if (
       Number(row.requested_generation) !== generation ||
       Number(row.completed_generation) >= generation
@@ -507,17 +532,16 @@ export async function publishMissionSummary({
     const revision = Number(row.revision) + 1;
     await tx.run(
       `UPDATE mission_summaries
-          SET status = ?, headline = ?, summary_markdown = ?, risks_json = ?,
-              suggestions_json = ?, source_delivery_id = ?, generated_by = ?,
+          SET status = ?, headline = ?, summary_markdown = ?,
+              source_delivery_id = ?, generated_by = ?,
               generated_at = ?, model = ?, completed_generation = ?, revision = ?,
-              updated_at = ?
+              updated_at = ?, content_revision = content_revision + 1,
+              narrative_delivery_id = NULL, narrative_objective_id = NULL
         WHERE mission_id = ? AND requested_generation = ?`,
       [
         publication.status,
         publication.headline,
         publication.summary,
-        JSON.stringify(publication.risks),
-        JSON.stringify(publication.suggestions),
         publication.sourceDeliveryId,
         publication.generatedBy,
         now,
@@ -539,8 +563,9 @@ export async function publishMissionSummary({
         'status',
         'headline',
         'summary_markdown',
-        'risks_json',
-        'suggestions_json',
+        'content_revision',
+        'narrative_delivery_id',
+        'narrative_objective_id',
         'completed_generation'
       ],
       actorWorkspaceUserId: null,
@@ -574,7 +599,11 @@ export async function completeMissionSummaryComposeJob({
   return db.transaction(async tx => {
     const row = await lockMissionSummaryRow(tx, missionId);
     await finishWorkerJob(tx, jobId, status, lastError, now);
-    if (!row || Number(row.requested_generation) <= Number(row.completed_generation)) {
+    if (
+      !row ||
+      Number(row.requested_generation) <= Number(row.completed_generation) ||
+      (await hasCurrentNarrative(tx, missionId, row.narrative_delivery_id))
+    ) {
       return { successorJobId: null };
     }
     const successor = await enqueueWorkerJob({

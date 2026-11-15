@@ -27,7 +27,11 @@ identical across the CLI (`--payload-file -`) and the hosted MCP tool
   "declaredPaths": ["src/widget.ts", "src/generated.ts"], // optional repository-relative paths
   "artifacts": [
     { "type": "next_steps", "label": "Next steps", "content": "…" } // optional
-  ]
+  ],
+  "missionSummary": {                                     // optional
+    "headline": "One sentence for people, at most 140 characters.",
+    "summary": "Markdown, at most 1,200 characters: what the work provides, limits, what a person must do."
+  }
 }
 ```
 
@@ -60,6 +64,15 @@ identical across the CLI (`--payload-file -`) and the hosted MCP tool
   work already covered by this mission's future objectives, leftover slices of the
   current objective, or human implementation follow-up (those belong in `humanActions`).
   Use an empty array when nothing qualifies. It improves review visibility but never blocks the record.
+
+- **`missionSummary`** (optional) — the new mission's headline and summary for people,
+  written as in `deliver` (see the **Mission Summary** section of the skill). `headline`
+  and `summary` go together. No `baseContentRevision` is needed: the mission is new, so
+  there is nothing to conflict with. `closeItems` is accepted with the same rules, but a
+  new mission has no earlier open items to close. Malformed input is rejected with
+  `invalid_input` before anything is written; style issues come back as advisory
+  warnings. Without it, Overlord writes the mission summary automatically. On the CLI,
+  `--mission-summary-file <path|->` sends the same object and wins over the envelope field.
 
 ## CLI
 
@@ -95,4 +108,5 @@ Call `overlord_record_work` with the same fields as first-class arguments
 ```
 
 The tool returns the created review-column mission and the `deliveryId` whose Gemini
-summary is composing asynchronously.
+summary is composing asynchronously. The same `missionSummary` object is accepted as a
+first-class argument.

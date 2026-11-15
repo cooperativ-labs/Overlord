@@ -42,9 +42,9 @@ Owns:
 - The virtual execution target core tables (`execution_target_registrations`, `project_environment_definitions`, `project_resource_sources`, `execution_request_snapshots`, `execution_request_grants`, `execution_request_observations`, `mission_target_resources`) and the additive `execution_requests` snapshot/failure/gateway columns — these are **core** (not `ext_` extension) because they drive queue status, audit, authorization, and UI. The immutable `execution_request_snapshots` row (canonical `payload_json` + SHA-256 `payload_digest`) is created in the same transaction as its `queued` request and is never updated; retrying only increments `attempt_count`. Grant records store hashes/opaque IDs, never bearer values
 - Optional per-agent `launchDefaults` in each `project_resource_sources.descriptor_json`; these source-owned pre-commands and normalized flags are project configuration and contain no credentials
 - The **Agent Session Exchange** core tables — `agent_session_channels`, `agent_session_events`, `agent_requests`, and `agent_session_inputs` — declared by this contract and migrated with the channel bootstrap. They are core rather than `ext_` because they drive authorization, audit, presence, and UI gating. The scoped channel credential is stored hash-only and scoped to exactly one channel; `native_session_id` is a correlation alias and never an authorization key; raw native payloads are never persisted (no transcripts or transcript paths, no raw tool input or output, no file contents, no environment variables), and stored summaries are bounded, redacted, and carry a `formatter_version`. No derived capability tier is persisted — a connector's static tier is derived from fixtures at build time and a session's effective capabilities live in `capabilities_json` on its channel. The documented-but-never-migrated `hook_events` and `permission_requests` designs are **superseded** by them: sanitized hook events become normalized `agent_session_events`, and a permission becomes one kind of `agent_requests`. The closed `permission_requests.status` vocabulary and the `mission_events.type = permission_request` value remain valid; only the dedicated tables are retired, and no component may begin writing them
-- `human_action_resolutions`: operator decisions on the deferred-work items of a delivery (the reported-human-action resolutions it also held before v150 were deleted by migration). Primary key `(delivery_id, action_id)` where `action_id` is the stable delivery-local `DeferredWorkV1.id` (agent-report index plus the digest of the canonical deferred-work object; historical string-item rows were deleted with their items by the v166 migration); denormalized `workspace_id`, `mission_id`, `objective_id`; closed `status` (`done` \| `dismissed`); nullable closed `outcome` (`mission_created` \| `objective_added`) and `outcome_ref` recording a promotion; `resolved_by_workspace_user_id`; `resolved_at`. Rows cascade with their delivery, are never soft-deleted (reopening deletes the row), and never duplicate the item text — the delivery report stays the sole source of what the item says.
+- `mission_items` (v173, ADR 0060): one row per risk, human action or suggestion a delivery reported, with closed `kind` (`risk` \| `human_action` \| `suggestion`) and closed `status` (`open` \| `done` \| `dismissed` \| `superseded`); denormalized `workspace_id`, `project_id`, `mission_id`, `objective_id`, `delivery_id` (mission, objective and delivery cascade); `item_ref` unique per `(delivery_id, kind)`; `position`, `text`, `detail_json`; nullable `status_reason` (at most 280 characters), closed `resolved_by_kind` (`person` \| `agent`) with the resolving workspace user or objective and delivery, closed `outcome` and `outcome_ref`, `resolved_at`; `reported_at`, timestamps and `revision`. The core item service is its only writer and `listMissionItems` its single reader (the delivery card reads a delivery's rows by delivery id through the same service); every write appends a `mission_item` entity change. Writers: `deliverSession` and `recordWork` (delivery transaction), `persistDeliveryPresentation` (reconcile), the objective reopen in `PATCH /api/objectives/:id` (supersede), the mission project move (repoint), and the deferred-work and mission-item resolution routes. It replaces `human_action_resolutions`, whose rows the v173 migration copies onto suggestion rows.
 - `missions.summary_enabled`: Bool, NOT NULL, default true; false for every mission that existed at the v166 migration. It is the only source of mission-summary eligibility and is never inferred from a summary row.
-- `mission_summaries`: one row per eligible mission, primary key `mission_id` (FK cascade), denormalized `workspace_id` and `project_id`, `revision`, `requested_generation`, `completed_generation`, closed `status` (`pending` \| `composed` \| `fallback`), `headline`, `summary_markdown`, `risks_json` (`{ deliveryId, objectiveId, index, text }[]`), `suggestions_json` (`{ deliveryId, objectiveId, actionId }[]` references only; item text is read from the delivery report at projection time), nullable `source_delivery_id`, closed `generated_by` (`deterministic` \| `gemini`), nullable `generated_at` and `model`, `created_at`, `updated_at`. Replaced in place; every write appends a `mission_summary` entity change.
+- `mission_summaries`: one row per eligible mission, primary key `mission_id` (FK cascade), denormalized `workspace_id` and `project_id`, `revision`, `requested_generation`, `completed_generation`, closed `status` (`pending` \| `composed` \| `fallback`), `headline`, `summary_markdown`, nullable `source_delivery_id`, closed `generated_by` (`deterministic` \| `gemini` \| `agent`), nullable `generated_at` and `model`, `created_at`, `updated_at`, `content_revision` (moves only when the headline or summary is written), and soft references `narrative_delivery_id` and `narrative_objective_id`. Replaced in place; every write appends a `mission_summary` entity change.
 - `mission_summary_seen`: `mission_id`, `workspace_user_id` (both FK cascade, primary key on the pair) and `seen_at`, the monotonic per-user evidence watermark. Writes append no entity change.
 - Controlled vocabularies (closed and open sets)
 - The **assistant conversation** core tables: `chat_threads`, `chat_messages`, `chat_runs`, `chat_run_attempts`, `chat_provider_checkpoints`, `chat_tool_calls`, `chat_source_refs`, `chat_dependency_sets`, `chat_dependency_set_members`, `chat_evidence`, `chat_thread_summaries`, `chat_questions`, `chat_events`, `chat_work_proposals`, `chat_work_proposal_revisions`, `chat_work_receipts`, `chat_work_receipt_missions`, `chat_presence`, `chat_event_acks`, and `chat_notifications`, plus `account_connections`, `account_connection_authorizations`, and `missions.created_from_chat_thread_id` (soft reference, no FK). Both editions enforce the same invariants: one unfinished run per thread, one leased attempt per run, attempt/checkpoint/tool-call/event writes only at the run's current fence, gap-free append-only per-thread event sequences, one open question per run, frozen proposal revisions, one creation receipt per proposal and per `(owner, client request id)`, monotonic acknowledgements, one conversation notification per `(owner, thread, run, type, transition)` addressed to the thread owner, and one live account connection per `(owner, organization, provider, server)`. Every row cascades from `profiles`/`organizations`. Checkpoint payloads, tool results, and credential envelopes are private server state
@@ -335,26 +335,51 @@ Owns:
   absent and falls back to the objective's `assigned_agent`. Truncation is reported through
   `counts` rather than implied, and no raw payload JSON is exposed.
 - **Deferred-work resolutions** (`putDeliveriesByDeliveryIdDeferredWorkByActionIdResolution`,
-  `deleteDeliveriesByDeliveryIdDeferredWorkByActionIdResolution`) upsert or remove a
-  `human_action_resolutions` row, require `mission:update` on the delivery's workspace, answer
-  404 for an unknown delivery or an action id that is not one of the delivery's deferred-work
-  ids (reported human actions have no resolution since v150), and emit a
-  `human_action_resolution` entity-change row carrying the mission and objective ids. `outcome`
+  `deleteDeliveriesByDeliveryIdDeferredWorkByActionIdResolution`) close or restore the
+  suggestion's `mission_items` row (v173) as a person's decision, require `mission:update` on the
+  delivery's workspace, answer 404 for an unknown delivery or an action id that is not one of the
+  delivery's deferred-work ids (reported human actions are closed through the item routes below),
+  and emit a `mission_item` entity-change row carrying the mission and objective ids. Request and
+  response shapes are unchanged; `HumanActionResolutionDto` adds `reason` and `resolvedBy`, so a
+  close made by an agent is reported through the same `resolution` field with a null
+  `resolvedByWorkspaceUserId`. A suggestion that is `superseded` reads as unresolved, may still be
+  decided, and returns to `superseded` when reopened (a no-op when it was never decided). `outcome`
   is allowed only with `status: 'done'` and `outcomeRef` requires `outcome` (400 otherwise). The
   web app may promote deferred work through `postMissions` (`title` as the first objective's
   title and `change`, `Location: {location}`, `Done when: {doneWhen}` separated by blank lines
   as its instruction, `statusId` omitted so the project default applies) or `postObjectives` as
   a future objective on the delivering mission with the same title and instruction, then record
   the matching outcome. No raw payload JSON is exposed.
-- **Mission summary** (`getMissionsByIdSummary`, `putMissionsByIdSummarySeen`; operator surface
-  only, exempt from MCP parity, no Protocol, CLI or MCP counterpart). Evidence is selected in
+- **Mission item resolutions** (`putMissionItemsByIdResolution`,
+  `deleteMissionItemsByIdResolution`, v173) let a person close (`done` or `dismissed`, optional
+  `reason` of at most 280 characters) or restore any `mission_items` row: risk, human action or
+  suggestion. They require `mission:update` on the item's mission (project tokens only within
+  their projects); a non-member, an unknown item and an item of a deleted delivery answer 404.
+  Re-deciding overwrites an earlier decision, including an agent's. Restore applies to `done` and
+  `dismissed` items, clears the resolver, reason and outcome, and re-applies the supersede rules;
+  restoring a `superseded` item answers 409 `mission_item_superseded`. Both return
+  `MissionItemDto`, emit a `mission_item` entity change and request a mission summary compose in
+  the same transaction. Operator surface only: no Protocol, CLI or MCP counterpart.
+- **Mission summary** (`getMissionsByIdSummary`, `putMissionsByIdSummarySeen`; operator read
+  surface, exempt from MCP parity, no Protocol, CLI or MCP read counterpart). Agents receive the
+  summary only as the attach and resume-follow-up editing baseline and write it only through
+  `deliver` / `record-work` `missionSummary` (protocol.md, ADR 0060); an agent narrative write
+  sets `generated_by = 'agent'` and the `narrative_*` references and increments
+  `content_revision` in the delivery transaction. Evidence is selected in
   the database before limits and capped at `MISSION_SUMMARY_EVIDENCE_LIMIT` with pre-cap totals
-  and truncation flags; suggestions are projected at read time from current-run delivery
-  deferred work and resolutions (dismissed and no-longer-current items omitted, promoted items
-  reduced to identity, title and resolution). Evidence is the latest current-run delivery per
-  objective, its human actions and source rows, deleted objectives included. `deliveredAt` on
-  risks and suggestions is the source delivery timestamp projected from the delivery row, not
-  model output or persisted summary JSON. Clients learn eligibility only from the summary read
+  and truncation flags. Risks, suggestions and evidence actions come only from open
+  `mission_items` rows and carry their stable item `id`; risks and suggestions keep newest-first
+  display dedupe by normalized text/title. Sources remain the latest current-run delivery per
+  objective, deleted objectives included. `MissionSummaryDto` includes `contentRevision`,
+  `author: { kind, objectiveId, deliveryId }` and up to 100 `closedItems` (`done` or `dismissed`,
+  newest resolution first), including reason and resolver provenance. Closed suggestions leave
+  the open list; delivery cards retain their resolution. The composer writes only headline and
+  summary prose, increments `content_revision` and clears narrative author references. Triggers
+  leave the row and job queue unchanged when the newest live delivery is `narrative_delivery_id`;
+  publication checks the same guard under the summary row lock. Legacy resolution storage and
+  summary item-reference columns are dropped after the backfill (ADR 0060). `deliveredAt` on
+  risks and suggestions is the source delivery timestamp copied to `mission_items.reported_at`
+  at delivery or backfill, never model output or persisted summary JSON. Clients learn eligibility only from the summary read
   envelope; `MissionDto` and `MissionDetailDto` do not carry it. `watermark` is the newest
   `deliveredAt` of the current-run deliveries the response draws on or `createdAt` of an open
   `question` or `choice` request. Marking seen refuses (`invalid_input`) a watermark later than

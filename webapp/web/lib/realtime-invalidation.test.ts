@@ -219,13 +219,13 @@ test('falls back to full invalidation for malformed or unroutable changes', () =
   }
 });
 
-test('routes deferred-work resolutions to the mission deliveries and summary', () => {
+test('routes mission item changes to the mission deliveries and summary', () => {
   const { client, calls } = fakeClient();
 
   const mode = invalidateRealtimeChanges(client, [
     change({
-      entityType: 'human_action_resolution',
-      entityId: 'delivery-1:human-action-1',
+      entityType: 'mission_item',
+      entityId: 'item-1',
       objectiveId: 'objective-1',
       changedFields: ['status']
     })

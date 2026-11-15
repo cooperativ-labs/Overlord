@@ -59,7 +59,14 @@ async function runProtocol(subcommand, args = {}) {
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    return { content: [{ type: 'text', text: message }], isError: true };
+    // A self-servicing failure (for example mission_summary_conflict) prints its
+    // JSON body, such as the fresh mission summary baseline, on stdout.
+    const stdout =
+      error && typeof error === 'object' && typeof error.stdout === 'string'
+        ? error.stdout.trim()
+        : '';
+    const text = stdout ? `${message}\n${stdout}` : message;
+    return { content: [{ type: 'text', text }], isError: true };
   }
 }
 
@@ -1215,6 +1222,55 @@ const tools = [
             type: 'string',
             description: 'Material implementation assumption.'
           }
+        },
+        missionSummary: {
+          type: 'object',
+          properties: {
+            baseContentRevision: {
+              type: 'integer',
+              minimum: 0,
+              description:
+                'missionSummary.contentRevision from attach. Required with headline and summary; a stale value rejects the whole delivery with mission_summary_conflict and a fresh baseline.'
+            },
+            headline: {
+              type: 'string',
+              description: 'One sentence, at most 140 characters. Send together with summary.'
+            },
+            summary: {
+              type: 'string',
+              description:
+                'Markdown, at most 1,200 characters, rewritten to be true now: what the mission provides and why it matters, current limits, then what a person must do. Say whether claims are implemented, tested or deployed. Do not restate open actions or suggestions.'
+            },
+            closeItems: {
+              type: 'array',
+              maxItems: 50,
+              description:
+                'Open items of this mission (ids from the attach baseline openItems) that you checked are addressed (done) or no longer apply (dismissed). Unknown, foreign or already-closed ids are skipped with a warning.',
+              items: {
+                type: 'object',
+                properties: {
+                  id: {
+                    type: 'string',
+                    description: 'Item id from missionSummary.openItems.'
+                  },
+                  status: {
+                    type: 'string',
+                    enum: ['done', 'dismissed']
+                  },
+                  reason: {
+                    type: 'string',
+                    description: 'Required. Why, at most 280 characters. Shown to people.'
+                  }
+                },
+                required: ['id', 'status', 'reason'],
+                additionalProperties: false
+              }
+            }
+          },
+          required: [],
+          additionalProperties: false,
+          description:
+            'Optional agent-written mission summary for people: a replacement headline and summary based on the attach baseline, and open items to close. On mission_summary_conflict nothing is delivered: rewrite from error details.missionSummary and retry once, then deliver without headline and summary.'
         }
       },
       required: ['sessionKey', 'summary'],
@@ -1362,6 +1418,55 @@ const tools = [
         artifacts: {
           type: 'array',
           description: 'Optional artifacts: next_steps, test_results, decision, note, or url.'
+        },
+        missionSummary: {
+          type: 'object',
+          properties: {
+            baseContentRevision: {
+              type: 'integer',
+              minimum: 0,
+              description:
+                'Not needed: record-work creates a new mission with no summary to conflict with.'
+            },
+            headline: {
+              type: 'string',
+              description: 'One sentence, at most 140 characters. Send together with summary.'
+            },
+            summary: {
+              type: 'string',
+              description:
+                'Markdown, at most 1,200 characters, rewritten to be true now: what the mission provides and why it matters, current limits, then what a person must do. Say whether claims are implemented, tested or deployed. Do not restate open actions or suggestions.'
+            },
+            closeItems: {
+              type: 'array',
+              maxItems: 50,
+              description:
+                'Open items of this mission (ids from the attach baseline openItems) that you checked are addressed (done) or no longer apply (dismissed). Unknown, foreign or already-closed ids are skipped with a warning.',
+              items: {
+                type: 'object',
+                properties: {
+                  id: {
+                    type: 'string',
+                    description: 'Item id from missionSummary.openItems.'
+                  },
+                  status: {
+                    type: 'string',
+                    enum: ['done', 'dismissed']
+                  },
+                  reason: {
+                    type: 'string',
+                    description: 'Required. Why, at most 280 characters. Shown to people.'
+                  }
+                },
+                required: ['id', 'status', 'reason'],
+                additionalProperties: false
+              }
+            }
+          },
+          required: [],
+          additionalProperties: false,
+          description:
+            'Optional agent-written mission summary for the new mission: headline and summary.'
         }
       },
       required: ['projectId', 'objective', 'summary'],
@@ -1379,6 +1484,28 @@ const tools = [
 function optionalString(args, name) {
   const value = args?.[name];
   return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
+function isPlainObject(value) {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+/**
+ * The deliver `--payload-json` envelope: the structured delivery report and the
+ * agent-authored mission summary write, when either is present.
+ */
+function deliverPayload(args) {
+  const reportKeys = ['humanActions', 'tradeoffsMade', 'knownRisks', 'deferredWork', 'assumptions'];
+  const agentReport = Object.fromEntries(
+    reportKeys.filter(key => Array.isArray(args[key])).map(key => [key, args[key]])
+  );
+  const payload = {
+    ...(Object.keys(agentReport).length > 0
+      ? { deliveryReport: { schemaVersion: 1, agentReport } }
+      : {}),
+    ...(isPlainObject(args.missionSummary) ? { missionSummary: args.missionSummary } : {})
+  };
+  return Object.keys(payload).length > 0 ? { payload } : {};
 }
 
 function requiredString(args, name) {
@@ -1815,30 +1942,10 @@ async function callOverlordTool(name, args) {
       summary: requiredString(args, 'summary'),
       ...(Array.isArray(args.artifacts) ? { 'artifacts-json': args.artifacts } : {}),
       ...(Array.isArray(args.declaredPaths) ? { 'declared-paths-json': args.declaredPaths } : {}),
-      ...(Array.isArray(args.humanActions) ||
-      Array.isArray(args.tradeoffsMade) ||
-      Array.isArray(args.knownRisks) ||
-      Array.isArray(args.deferredWork) ||
-      Array.isArray(args.assumptions)
-        ? {
-            payload: {
-              deliveryReport: {
-                schemaVersion: 1,
-                agentReport: {
-                  ...(Array.isArray(args.humanActions) ? { humanActions: args.humanActions } : {}),
-                  ...(Array.isArray(args.tradeoffsMade)
-                    ? { tradeoffsMade: args.tradeoffsMade }
-                    : {}),
-                  ...(Array.isArray(args.knownRisks) ? { knownRisks: args.knownRisks } : {}),
-                  ...(Array.isArray(args.deferredWork) ? { deferredWork: args.deferredWork } : {}),
-                  ...(Array.isArray(args.assumptions) ? { assumptions: args.assumptions } : {})
-                }
-              }
-            }
-          }
-        : {})
+      ...deliverPayload(args)
     });
   }
+
   if (name === 'overlord_add_artifact') {
     const hasContentText = typeof args.contentText === 'string' && args.contentText.trim() !== '';
     const hasExternalUrl = typeof args.externalUrl === 'string' && args.externalUrl.trim() !== '';
@@ -1883,7 +1990,8 @@ async function callOverlordTool(name, args) {
         summary: requiredString(args, 'summary'),
         ...(optionalString(args, 'title') ? { title: requiredString(args, 'title') } : {}),
         ...(Array.isArray(args.declaredPaths) ? { declaredPaths: args.declaredPaths } : {}),
-        ...(Array.isArray(args.artifacts) ? { artifacts: args.artifacts } : {})
+        ...(Array.isArray(args.artifacts) ? { artifacts: args.artifacts } : {}),
+        ...(isPlainObject(args.missionSummary) ? { missionSummary: args.missionSummary } : {})
       }
     });
   }
@@ -1900,7 +2008,7 @@ process.stdin.on('data', async chunk => {
         result: {
           protocolVersion: PROTOCOL_VERSION,
           capabilities: { tools: { listChanged: false } },
-          serverInfo: { name: 'overlord-__OVERLORD_ADAPTER_KEY__', version: '0.3.63' }
+          serverInfo: { name: 'overlord-__OVERLORD_ADAPTER_KEY__', version: '0.3.64' }
         }
       });
       continue;

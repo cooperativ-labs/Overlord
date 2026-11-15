@@ -12,7 +12,11 @@ import { readFileSync } from 'node:fs';
 
 import { lintSte } from '../writing/ste.js';
 
-import { DECISION_PREFIX, OBJECTIVE_BRIEF_MISSING_DONE_WHEN } from './brief.js';
+import {
+  DECISION_PREFIX,
+  findGoalDecisionOptions,
+  OBJECTIVE_BRIEF_MISSING_DONE_WHEN
+} from './brief.js';
 import { composeObjectiveBrief } from './compose.js';
 
 type Fixture = { name: string; instruction: string };
@@ -33,6 +37,21 @@ for (const fixture of fixtures) {
     continue;
   }
   const description = outcome.description.status === 'ok' ? outcome.description.text : null;
+  // The goal is the text before the first "Decision needed:" sentence, or the
+  // first sentence when there is no decision.
+  const firstParagraph = description?.split('\n\n')[0] ?? '';
+  const decisionAt = firstParagraph.indexOf(DECISION_PREFIX);
+  const goal = description
+    ? decisionAt >= 0
+      ? firstParagraph.slice(0, decisionAt).trim()
+      : (firstParagraph.match(/^.*?[.!?](?=\s|$)/)?.[0] ?? firstParagraph)
+    : null;
+  const decisions = description
+    ? firstParagraph
+        .split(DECISION_PREFIX)
+        .slice(1)
+        .map(item => item.trim())
+    : [];
   const report = {
     attempts: outcome.attempts,
     title: outcome.title.status === 'ok' ? outcome.title.text : outcome.title.status,
@@ -40,7 +59,9 @@ for (const fixture of fixtures) {
       description ?? (outcome.description.status === 'failed' ? outcome.description.code : null),
     paragraphs: description ? description.split('\n\n').length : null,
     words: description ? description.split(/\s+/).length : null,
+    goal,
     decisions: description ? description.split(DECISION_PREFIX).length - 1 : null,
+    goalPicksDecisionOption: goal ? findGoalDecisionOptions(goal, decisions) : null,
     missingDoneWhen: description ? description.endsWith(OBJECTIVE_BRIEF_MISSING_DONE_WHEN) : null,
     lint: description ? lintSte(description).map(issue => issue.code) : null
   };

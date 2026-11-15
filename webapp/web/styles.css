@@ -138,6 +138,13 @@
   --color-ink: var(--foreground);
   --color-ink-dim: var(--muted-foreground);
   --color-accent: var(--primary);
+
+  /* Code in rendered content (Notion-style): reddish-orange inline code on a soft
+   * warm-gray chip; fenced blocks on a flat gray panel in the normal ink colour. */
+  --code-inline-fg: #d44c47;
+  --code-inline-bg: rgba(135, 131, 120, 0.15);
+  --code-block-bg: rgb(247, 246, 243);
+  --code-block-fg: var(--foreground);
 }
 
 .dark {
@@ -173,6 +180,10 @@
   --sidebar-border: oklch(1 0 0 / 12%);
   --sidebar-ring: oklch(0.553 0.013 58.071);
   --shadow-side-left: -4px 0 12px -4px rgba(0, 0, 0, 0.1);
+  --code-inline-fg: #ff7369;
+  --code-inline-bg: rgba(135, 131, 120, 0.2);
+  --code-block-bg: rgba(255, 255, 255, 0.04);
+  --code-block-fg: var(--foreground);
 
   /* Overlord design system extensions */
   --fg1: oklch(0.92 0.002 106.423);
@@ -212,6 +223,30 @@
 
 /* ── Overlord semantic typography ─────────────────────────── */
 @layer components {
+  /* Notion-style code in rendered content (Markdown, objective summaries). */
+  .code-inline {
+    font-family: var(--font-mono), ui-monospace, monospace;
+    font-size: 0.85em;
+    color: var(--code-inline-fg);
+    background: var(--code-inline-bg);
+    border-radius: 4px;
+    padding: 0.15em 0.35em;
+    -webkit-box-decoration-break: clone;
+    box-decoration-break: clone;
+  }
+
+  .code-block {
+    font-family: var(--font-mono), ui-monospace, monospace;
+    font-size: 0.8rem;
+    line-height: 1.55;
+    color: var(--code-block-fg);
+    background: var(--code-block-bg);
+    border-radius: 4px;
+    padding: 0.75rem 1rem;
+    overflow-x: auto;
+    tab-size: 2;
+  }
+
   .h1 {
     font-family: var(--font-display);
     font-size: 2.25rem;

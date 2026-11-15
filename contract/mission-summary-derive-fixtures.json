@@ -1,6 +1,6 @@
 {
-  "description": "Shared fixture for the Mission summary client derivations (plan mission-summary-section-implementation.md §5.2, §5.6). The web tests (webapp/web/lib/mission-summary-derive.test.ts) and the iOS tests (OverlordTests/MissionSummaryDeriveTests.swift) both load this file and assert the `expected` block. A review mission with four deliveries across three objectives: delivery-a1 is superseded for actions by the newer delivery-a2 on the same objective, objective obj-x was deleted (its delivery renders as the unassigned `Delivery` row), and obj-c has one open question. seenAt sits between the second and third delivery so the new-item dot is exercised. The unstarted objectives form the draft queue (contract v172, ADR 0056): a submitted objective, a blank draft and an authored draft, none of which is running or a source. The envelope is what the server returns: it already applied supersession and selection; the client merges questions, dedupes actions by normalised text and dates suggestions and risks.",
-  "contractVersion": 172,
+  "description": "Shared fixture for the Mission summary client derivations. The web tests (webapp/web/lib/mission-summary-derive.test.ts, webapp/web/components/mission-summary/MissionSummarySection.test.tsx) and the iOS tests (OverlordTests/MissionSummaryDeriveTests.swift) load this file and assert the `expected` block. A review mission with four deliveries across three objectives: objective obj-x was deleted (its delivery renders as the unassigned `Delivery` row), and obj-c has one open question. seenAt sits between the second and third delivery so the new-item dot is exercised. The unstarted objectives form the draft queue (contract v172, ADR 0056): a submitted objective, a blank draft and an authored draft, none of which is running or a source. Since contract v173 (ADR 0060) risks, actions and suggestions are mission_items rows with ids: the envelope holds only open items, already superseded and resolved by the server, and closedItems lists done and dismissed items, newest first. The headline and summary were written by the agent of obj-c (author.kind agent). Closed items cover an agent close with a reason, a close by the viewer (`you`), a person's promotion of a suggestion with its outcome, and a close by an agent whose objective was deleted. The client merges questions, dedupes actions by normalised text, marks new items, and names the author and who closed each item.",
+  "contractVersion": 173,
   "reviewMission": {
     "input": {
       "mission": {
@@ -8,35 +8,107 @@
         "displayId": "coo:900",
         "statusType": "review",
         "objectives": [
-          { "id": "obj-a", "displayId": "coo:900.aaaa", "title": "Build the derive module", "state": "complete", "reopenedAt": null },
-          { "id": "obj-c", "displayId": "coo:900.cccc", "title": "Port the section to iOS", "state": "executing", "reopenedAt": null },
-          { "id": "obj-d", "displayId": "coo:900.dddd", "title": "Write the docs", "state": "pending_delivery", "reopenedAt": null },
-          { "id": "obj-s", "displayId": "coo:900.ssss", "title": "Discuss the widget layout", "state": "submitted", "reopenedAt": null },
-          { "id": "obj-b", "displayId": "coo:900.bbbb", "title": "New objective", "state": "draft", "reopenedAt": null },
-          { "id": "obj-e", "displayId": "coo:900.eeee", "title": "Polish the empty state", "state": "draft", "reopenedAt": null }
-        ]
+          {
+            "id": "obj-a",
+            "displayId": "coo:900.aaaa",
+            "title": "Build the derive module",
+            "state": "complete",
+            "reopenedAt": null
+          },
+          {
+            "id": "obj-c",
+            "displayId": "coo:900.cccc",
+            "title": "Port the section to iOS",
+            "state": "executing",
+            "reopenedAt": null
+          },
+          {
+            "id": "obj-d",
+            "displayId": "coo:900.dddd",
+            "title": "Write the docs",
+            "state": "pending_delivery",
+            "reopenedAt": null
+          },
+          {
+            "id": "obj-s",
+            "displayId": "coo:900.ssss",
+            "title": "Discuss the widget layout",
+            "state": "submitted",
+            "reopenedAt": null
+          },
+          {
+            "id": "obj-b",
+            "displayId": "coo:900.bbbb",
+            "title": "New objective",
+            "state": "draft",
+            "reopenedAt": null
+          },
+          {
+            "id": "obj-e",
+            "displayId": "coo:900.eeee",
+            "title": "Polish the empty state",
+            "state": "draft",
+            "reopenedAt": null
+          }
+        ],
+        "workspaceId": "workspace-1"
       },
       "deliveries": [
-        { "id": "delivery-c4", "objectiveId": "obj-c", "deliveredAt": "2026-10-23T10:00:00.000Z" },
-        { "id": "delivery-x3", "objectiveId": "obj-x", "deliveredAt": "2026-10-22T10:00:00.000Z" },
-        { "id": "delivery-a2", "objectiveId": "obj-a", "deliveredAt": "2026-10-21T10:00:00.000Z" },
-        { "id": "delivery-a1", "objectiveId": "obj-a", "deliveredAt": "2026-10-20T10:00:00.000Z" }
+        {
+          "id": "delivery-c4",
+          "objectiveId": "obj-c",
+          "deliveredAt": "2026-10-23T10:00:00.000Z"
+        },
+        {
+          "id": "delivery-x3",
+          "objectiveId": "obj-x",
+          "deliveredAt": "2026-10-22T10:00:00.000Z"
+        },
+        {
+          "id": "delivery-a2",
+          "objectiveId": "obj-a",
+          "deliveredAt": "2026-10-21T10:00:00.000Z"
+        },
+        {
+          "id": "delivery-a1",
+          "objectiveId": "obj-a",
+          "deliveredAt": "2026-10-20T10:00:00.000Z"
+        }
       ],
       "summaryResponse": {
         "eligible": true,
         "summary": {
           "missionId": "mission-1",
           "revision": 7,
+          "contentRevision": 3,
           "status": "composed",
           "headline": "The derive module is ready for review; the iOS port is waiting on your answer.",
           "summary": "Two objectives have delivered. The derive module has tests for every rule. The iOS port stopped on a question about the formatter.",
+          "author": {
+            "kind": "agent",
+            "objectiveId": "obj-c",
+            "deliveryId": "delivery-c4"
+          },
           "risks": [
-            { "deliveryId": "delivery-c4", "deliveredAt": "2026-10-23T10:00:00.000Z", "objectiveId": "obj-c", "text": "The formatter move can break the widget target." },
-            { "deliveryId": "delivery-a1", "deliveredAt": "2026-10-20T10:00:00.000Z", "objectiveId": "obj-a", "text": "Text-based dedupe can fold two different actions into one." }
+            {
+              "deliveryId": "delivery-c4",
+              "deliveredAt": "2026-10-23T10:00:00.000Z",
+              "objectiveId": "obj-c",
+              "text": "The formatter move can break the widget target.",
+              "id": "item-risk-c4"
+            },
+            {
+              "deliveryId": "delivery-a1",
+              "deliveredAt": "2026-10-20T10:00:00.000Z",
+              "objectiveId": "obj-a",
+              "text": "Text-based dedupe can fold two different actions into one.",
+              "id": "item-risk-a1"
+            }
           ],
           "suggestions": [
             {
-              "deliveryId": "delivery-c4", "deliveredAt": "2026-10-23T10:00:00.000Z",
+              "deliveryId": "delivery-c4",
+              "deliveredAt": "2026-10-23T10:00:00.000Z",
               "objectiveId": "obj-c",
               "actionId": "deferred-work-0-c4c4c4c4c4c4c4c4",
               "title": "Share the relative-time formatter",
@@ -44,24 +116,12 @@
               "change": "Replace the two inline relative-time implementations with one helper.",
               "location": "webapp/web/components/mission-summary/",
               "doneWhen": "Both call sites import the helper.",
-              "resolution": null
+              "resolution": null,
+              "id": "item-suggestion-c4"
             },
             {
-              "deliveryId": "delivery-a1", "deliveredAt": "2026-10-20T10:00:00.000Z",
-              "objectiveId": "obj-a",
-              "actionId": "deferred-work-0-a1a1a1a1a1a1a1a1",
-              "title": "Add derivation tests on iOS",
-              "state": "resolved",
-              "resolution": {
-                "status": "done",
-                "resolvedAt": "2026-10-21T09:00:00.000Z",
-                "resolvedByWorkspaceUserId": "wu-1",
-                "outcome": "objective_added",
-                "outcomeRef": "coo:900.ffff"
-              }
-            },
-            {
-              "deliveryId": "delivery-x3", "deliveredAt": "2026-10-22T10:00:00.000Z",
+              "deliveryId": "delivery-x3",
+              "deliveredAt": "2026-10-22T10:00:00.000Z",
               "objectiveId": "obj-x",
               "actionId": "deferred-work-0-x3x3x3x3x3x3x3x3",
               "title": "Record when the summary was last seen",
@@ -69,13 +129,84 @@
               "change": "Store a per-user seen marker and mark newer items.",
               "location": "missions table · mission detail route",
               "doneWhen": "Items newer than the marker show a dot.",
-              "resolution": null
+              "resolution": null,
+              "id": "item-suggestion-x3"
+            }
+          ],
+          "closedItems": [
+            {
+              "id": "item-risk-c4-old",
+              "kind": "risk",
+              "text": "The summary cache can serve a stale headline.",
+              "objectiveId": "obj-a",
+              "status": "done",
+              "reason": "Fixed by the cache key added in this objective.",
+              "outcome": null,
+              "outcomeRef": null,
+              "resolvedBy": {
+                "kind": "agent",
+                "workspaceUserId": null,
+                "objectiveId": "obj-c",
+                "deliveryId": "delivery-c4"
+              },
+              "resolvedAt": "2026-10-23T10:00:00.000Z"
+            },
+            {
+              "id": "item-action-x3-old",
+              "kind": "human_action",
+              "text": "Restart the worker after deploy",
+              "objectiveId": "obj-x",
+              "status": "dismissed",
+              "reason": "The worker restarts on deploy now.",
+              "outcome": null,
+              "outcomeRef": null,
+              "resolvedBy": {
+                "kind": "person",
+                "workspaceUserId": "wu-2",
+                "objectiveId": null,
+                "deliveryId": null
+              },
+              "resolvedAt": "2026-10-22T12:00:00.000Z"
+            },
+            {
+              "id": "item-suggestion-a1",
+              "kind": "suggestion",
+              "text": "Add derivation tests on iOS",
+              "objectiveId": "obj-a",
+              "status": "done",
+              "reason": null,
+              "outcome": "objective_added",
+              "outcomeRef": "coo:900.ffff",
+              "resolvedBy": {
+                "kind": "person",
+                "workspaceUserId": "wu-1",
+                "objectiveId": null,
+                "deliveryId": null
+              },
+              "resolvedAt": "2026-10-21T09:00:00.000Z"
+            },
+            {
+              "id": "item-risk-x3",
+              "kind": "risk",
+              "text": "The old summary route may still be cached by proxies.",
+              "objectiveId": "obj-x",
+              "status": "dismissed",
+              "reason": "No proxy caches this route.",
+              "outcome": null,
+              "outcomeRef": null,
+              "resolvedBy": {
+                "kind": "agent",
+                "workspaceUserId": null,
+                "objectiveId": "obj-x",
+                "deliveryId": "delivery-x3"
+              },
+              "resolvedAt": "2026-10-22T10:00:00.000Z"
             }
           ],
           "sourceDeliveryId": "delivery-c4",
-          "generatedBy": "gemini",
+          "generatedBy": "agent",
           "generatedAt": "2026-10-23T10:05:00.000Z",
-          "model": "gemini-test"
+          "model": "claude-opus-5-5"
         },
         "evidence": {
           "actions": [
@@ -90,7 +221,8 @@
               "blocking": true,
               "command": "yarn db:migrate --env staging",
               "verify": "The summary route returns eligible: true.",
-              "source": "agent"
+              "source": "agent",
+              "id": "item-action-c4-0"
             },
             {
               "deliveryId": "delivery-c4",
@@ -101,7 +233,8 @@
               "reason": "The flag gates the new section.",
               "category": "environment",
               "blocking": false,
-              "source": "agent"
+              "source": "agent",
+              "id": "item-action-c4-1"
             },
             {
               "deliveryId": "delivery-x3",
@@ -111,7 +244,8 @@
               "action": "add  OVERLORD_FLAG to the backend env",
               "category": "environment",
               "blocking": false,
-              "source": "agent"
+              "source": "agent",
+              "id": "item-action-x3-0"
             },
             {
               "deliveryId": "delivery-x3",
@@ -122,7 +256,8 @@
               "category": "external_service",
               "blocking": false,
               "link": "developer-instructions/webhooks.md",
-              "source": "agent"
+              "source": "agent",
+              "id": "item-action-x3-1"
             },
             {
               "deliveryId": "delivery-a2",
@@ -132,66 +267,329 @@
               "action": "Review the empty-state copy",
               "category": "other",
               "blocking": false,
-              "source": "agent"
+              "source": "agent",
+              "id": "item-action-a2-0"
             }
           ],
           "sources": [
-            { "objectiveId": "obj-c", "deliveryId": "delivery-c4", "deliveredAt": "2026-10-23T10:00:00.000Z" },
-            { "objectiveId": "obj-x", "deliveryId": "delivery-x3", "deliveredAt": "2026-10-22T10:00:00.000Z" },
-            { "objectiveId": "obj-a", "deliveryId": "delivery-a2", "deliveredAt": "2026-10-21T10:00:00.000Z" }
+            {
+              "objectiveId": "obj-c",
+              "deliveryId": "delivery-c4",
+              "deliveredAt": "2026-10-23T10:00:00.000Z"
+            },
+            {
+              "objectiveId": "obj-x",
+              "deliveryId": "delivery-x3",
+              "deliveredAt": "2026-10-22T10:00:00.000Z"
+            },
+            {
+              "objectiveId": "obj-a",
+              "deliveryId": "delivery-a2",
+              "deliveredAt": "2026-10-21T10:00:00.000Z"
+            }
           ],
-          "totals": { "actions": 5, "sources": 3, "currentRunDeliveries": 4 },
-          "truncated": { "actions": false, "sources": false }
+          "totals": {
+            "actions": 5,
+            "sources": 3,
+            "currentRunDeliveries": 4
+          },
+          "truncated": {
+            "actions": false,
+            "sources": false
+          }
         },
         "watermark": "2026-10-23T11:00:00.000Z",
         "seenAt": "2026-10-21T12:00:00.000Z"
       },
       "agentRequests": [
-        { "id": "request-q1", "missionId": "mission-1", "objectiveId": "obj-c", "kind": "question", "status": "open", "summary": "Should the formatter live in OverlordCore or the app target?", "createdAt": "2026-10-23T11:00:00.000Z" },
-        { "id": "request-q2", "missionId": "mission-1", "objectiveId": "obj-a", "kind": "question", "status": "resolved", "summary": "Which fixture?", "createdAt": "2026-10-20T08:00:00.000Z" },
-        { "id": "request-p3", "missionId": "mission-1", "objectiveId": "obj-c", "kind": "permission", "status": "open", "summary": "Allow npm install?", "createdAt": "2026-10-23T11:30:00.000Z" }
+        {
+          "id": "request-q1",
+          "missionId": "mission-1",
+          "objectiveId": "obj-c",
+          "kind": "question",
+          "status": "open",
+          "summary": "Should the formatter live in OverlordCore or the app target?",
+          "createdAt": "2026-10-23T11:00:00.000Z"
+        },
+        {
+          "id": "request-q2",
+          "missionId": "mission-1",
+          "objectiveId": "obj-a",
+          "kind": "question",
+          "status": "resolved",
+          "summary": "Which fixture?",
+          "createdAt": "2026-10-20T08:00:00.000Z"
+        },
+        {
+          "id": "request-p3",
+          "missionId": "mission-1",
+          "objectiveId": "obj-c",
+          "kind": "permission",
+          "status": "open",
+          "summary": "Allow npm install?",
+          "createdAt": "2026-10-23T11:30:00.000Z"
+        }
       ],
       "fileChanges": {
         "truncated": false,
         "items": [
-          { "id": "fc-1", "missionId": "mission-1", "objectiveId": "obj-c", "resourceKey": "mobile", "filePath": "OverlordCore/MissionSummaryDerive.swift", "source": "declared_edit", "observedAt": "2026-10-23T09:00:00.000Z", "hookHealth": null },
-          { "id": "fc-2", "missionId": "mission-1", "objectiveId": "obj-a", "resourceKey": "web", "filePath": "webapp/web/lib/mission-summary-derive.ts", "source": "agent_declared", "observedAt": "2026-10-21T09:00:00.000Z", "hookHealth": null },
-          { "id": "fc-3", "missionId": "mission-1", "objectiveId": "obj-c", "resourceKey": "web", "filePath": "webapp/web/lib/mission-summary-derive.ts", "source": "declared_edit", "observedAt": "2026-10-23T08:00:00.000Z", "hookHealth": null },
-          { "id": "fc-4", "missionId": "mission-1", "objectiveId": "obj-x", "resourceKey": "web", "filePath": "README.md", "source": null, "observedAt": "2026-10-22T09:00:00.000Z", "hookHealth": null },
-          { "id": "fc-5", "missionId": "mission-1", "objectiveId": "obj-a", "resourceKey": "web", "filePath": "webapp/web/components/MissionPanel.tsx", "source": "declared_edit", "observedAt": "2026-10-20T09:00:00.000Z", "hookHealth": null },
-          { "id": "fc-6", "missionId": "mission-1", "objectiveId": "obj-a", "resourceKey": "web", "filePath": "webapp/web/components/mission-summary/MissionSummarySection.tsx", "source": "declared_edit", "observedAt": "2026-10-20T09:30:00.000Z", "hookHealth": null },
-          { "id": "fc-7", "missionId": "mission-1", "objectiveId": "obj-a", "resourceKey": "web", "filePath": "webapp/web/components/mission-summary/MissionSummaryPost.tsx", "source": "declared_edit", "observedAt": "2026-10-20T09:40:00.000Z", "hookHealth": null },
-          { "id": "fc-8", "missionId": "mission-1", "objectiveId": "obj-a", "resourceKey": "web", "filePath": "webapp/web/components/mission-summary/MissionSummaryFiles.tsx", "source": "agent_declared", "observedAt": "2026-10-20T09:50:00.000Z", "hookHealth": null }
+          {
+            "id": "fc-1",
+            "missionId": "mission-1",
+            "objectiveId": "obj-c",
+            "resourceKey": "mobile",
+            "filePath": "OverlordCore/MissionSummaryDerive.swift",
+            "source": "declared_edit",
+            "observedAt": "2026-10-23T09:00:00.000Z",
+            "hookHealth": null
+          },
+          {
+            "id": "fc-2",
+            "missionId": "mission-1",
+            "objectiveId": "obj-a",
+            "resourceKey": "web",
+            "filePath": "webapp/web/lib/mission-summary-derive.ts",
+            "source": "agent_declared",
+            "observedAt": "2026-10-21T09:00:00.000Z",
+            "hookHealth": null
+          },
+          {
+            "id": "fc-3",
+            "missionId": "mission-1",
+            "objectiveId": "obj-c",
+            "resourceKey": "web",
+            "filePath": "webapp/web/lib/mission-summary-derive.ts",
+            "source": "declared_edit",
+            "observedAt": "2026-10-23T08:00:00.000Z",
+            "hookHealth": null
+          },
+          {
+            "id": "fc-4",
+            "missionId": "mission-1",
+            "objectiveId": "obj-x",
+            "resourceKey": "web",
+            "filePath": "README.md",
+            "source": null,
+            "observedAt": "2026-10-22T09:00:00.000Z",
+            "hookHealth": null
+          },
+          {
+            "id": "fc-5",
+            "missionId": "mission-1",
+            "objectiveId": "obj-a",
+            "resourceKey": "web",
+            "filePath": "webapp/web/components/MissionPanel.tsx",
+            "source": "declared_edit",
+            "observedAt": "2026-10-20T09:00:00.000Z",
+            "hookHealth": null
+          },
+          {
+            "id": "fc-6",
+            "missionId": "mission-1",
+            "objectiveId": "obj-a",
+            "resourceKey": "web",
+            "filePath": "webapp/web/components/mission-summary/MissionSummarySection.tsx",
+            "source": "declared_edit",
+            "observedAt": "2026-10-20T09:30:00.000Z",
+            "hookHealth": null
+          },
+          {
+            "id": "fc-7",
+            "missionId": "mission-1",
+            "objectiveId": "obj-a",
+            "resourceKey": "web",
+            "filePath": "webapp/web/components/mission-summary/MissionSummaryPost.tsx",
+            "source": "declared_edit",
+            "observedAt": "2026-10-20T09:40:00.000Z",
+            "hookHealth": null
+          },
+          {
+            "id": "fc-8",
+            "missionId": "mission-1",
+            "objectiveId": "obj-a",
+            "resourceKey": "web",
+            "filePath": "webapp/web/components/mission-summary/MissionSummaryFiles.tsx",
+            "source": "agent_declared",
+            "observedAt": "2026-10-20T09:50:00.000Z",
+            "hookHealth": null
+          }
         ]
-      }
+      },
+      "members": [
+        {
+          "workspaceUserId": "wu-1",
+          "displayName": "Dana Reyes",
+          "handle": "dana",
+          "email": null,
+          "isOperator": false
+        },
+        {
+          "workspaceUserId": "wu-2",
+          "displayName": "Sam Ortiz",
+          "handle": "sam",
+          "email": null,
+          "isOperator": true
+        }
+      ]
     },
     "expected": {
       "visitBaseline": "2026-10-21T12:00:00.000Z",
-      "statusChip": { "label": "In review", "tone": "review" },
+      "statusChip": {
+        "label": "In review",
+        "tone": "review"
+      },
       "runningSentences": [
         "Port the section to iOS is waiting on a question.",
         "Write the docs is running."
       ],
       "sources": [
-        { "deliveryId": "delivery-c4", "objectiveKey": "coo:900.cccc", "label": "coo:900.cccc", "live": true },
-        { "deliveryId": "delivery-x3", "objectiveKey": null, "label": "Delivery", "live": false },
-        { "deliveryId": "delivery-a2", "objectiveKey": "coo:900.aaaa", "label": "coo:900.aaaa", "live": false }
+        {
+          "deliveryId": "delivery-c4",
+          "objectiveKey": "coo:900.cccc",
+          "label": "coo:900.cccc",
+          "live": true
+        },
+        {
+          "deliveryId": "delivery-x3",
+          "objectiveKey": null,
+          "label": "Delivery",
+          "live": false
+        },
+        {
+          "deliveryId": "delivery-a2",
+          "objectiveKey": "coo:900.aaaa",
+          "label": "coo:900.aaaa",
+          "live": false
+        }
       ],
       "actions": [
-        { "key": "action:delivery-c4:human-action-0", "kind": "action", "title": "Run the migration on staging", "blocking": true, "objectiveKey": "coo:900.cccc", "isNew": true },
-        { "key": "request:request-q1", "kind": "question", "title": "Answer the agent's question on Port the section to iOS", "blocking": false, "objectiveKey": "coo:900.cccc", "isNew": true },
-        { "key": "action:delivery-c4:human-action-1", "kind": "action", "title": "Add OVERLORD_FLAG to the backend env.", "blocking": false, "objectiveKey": "coo:900.cccc", "isNew": true },
-        { "key": "action:delivery-x3:human-action-1", "kind": "action", "title": "Rotate the webhook secret", "blocking": false, "objectiveKey": null, "isNew": true },
-        { "key": "action:delivery-a2:human-action-0", "kind": "action", "title": "Review the empty-state copy", "blocking": false, "objectiveKey": "coo:900.aaaa", "isNew": false }
+        {
+          "key": "action:delivery-c4:human-action-0",
+          "kind": "action",
+          "title": "Run the migration on staging",
+          "blocking": true,
+          "objectiveKey": "coo:900.cccc",
+          "isNew": true,
+          "itemId": "item-action-c4-0"
+        },
+        {
+          "key": "request:request-q1",
+          "kind": "question",
+          "title": "Answer the agent's question on Port the section to iOS",
+          "blocking": false,
+          "objectiveKey": "coo:900.cccc",
+          "isNew": true,
+          "itemId": null
+        },
+        {
+          "key": "action:delivery-c4:human-action-1",
+          "kind": "action",
+          "title": "Add OVERLORD_FLAG to the backend env.",
+          "blocking": false,
+          "objectiveKey": "coo:900.cccc",
+          "isNew": true,
+          "itemId": "item-action-c4-1"
+        },
+        {
+          "key": "action:delivery-x3:human-action-1",
+          "kind": "action",
+          "title": "Rotate the webhook secret",
+          "blocking": false,
+          "objectiveKey": null,
+          "isNew": true,
+          "itemId": "item-action-x3-1"
+        },
+        {
+          "key": "action:delivery-a2:human-action-0",
+          "kind": "action",
+          "title": "Review the empty-state copy",
+          "blocking": false,
+          "objectiveKey": "coo:900.aaaa",
+          "isNew": false,
+          "itemId": "item-action-a2-0"
+        }
       ],
       "suggestions": [
-        { "actionId": "deferred-work-0-c4c4c4c4c4c4c4c4", "state": "open", "objectiveKey": "coo:900.cccc", "isNew": true },
-        { "actionId": "deferred-work-0-x3x3x3x3x3x3x3x3", "state": "open", "objectiveKey": null, "isNew": true },
-        { "actionId": "deferred-work-0-a1a1a1a1a1a1a1a1", "state": "resolved", "objectiveKey": "coo:900.aaaa", "isNew": false }
+        {
+          "id": "item-suggestion-c4",
+          "actionId": "deferred-work-0-c4c4c4c4c4c4c4c4",
+          "objectiveKey": "coo:900.cccc",
+          "isNew": true
+        },
+        {
+          "id": "item-suggestion-x3",
+          "actionId": "deferred-work-0-x3x3x3x3x3x3x3x3",
+          "objectiveKey": null,
+          "isNew": true
+        }
       ],
       "risks": [
-        { "deliveryId": "delivery-c4", "objectiveKey": "coo:900.cccc", "isNew": true },
-        { "deliveryId": "delivery-a1", "objectiveKey": "coo:900.aaaa", "isNew": false }
+        {
+          "itemId": "item-risk-c4",
+          "deliveryId": "delivery-c4",
+          "objectiveKey": "coo:900.cccc",
+          "isNew": true
+        },
+        {
+          "itemId": "item-risk-a1",
+          "deliveryId": "delivery-a1",
+          "objectiveKey": "coo:900.aaaa",
+          "isNew": false
+        }
+      ],
+      "provenance": {
+        "kind": "agent",
+        "objectiveKey": "coo:900.cccc"
+      },
+      "closedItems": [
+        {
+          "id": "item-risk-c4-old",
+          "kindLabel": "Risk",
+          "outcomeLabel": "Done",
+          "reason": "Fixed by the cache key added in this objective.",
+          "resolver": {
+            "kind": "agent",
+            "objectiveKey": "coo:900.cccc"
+          },
+          "resolverText": "coo:900.cccc",
+          "objectiveKey": "coo:900.aaaa"
+        },
+        {
+          "id": "item-action-x3-old",
+          "kindLabel": "Action",
+          "outcomeLabel": "Dismissed",
+          "reason": "The worker restarts on deploy now.",
+          "resolver": {
+            "kind": "person",
+            "name": "you"
+          },
+          "resolverText": "you",
+          "objectiveKey": null
+        },
+        {
+          "id": "item-suggestion-a1",
+          "kindLabel": "Suggestion",
+          "outcomeLabel": "Objective coo:900.ffff added",
+          "reason": null,
+          "resolver": {
+            "kind": "person",
+            "name": "Dana Reyes"
+          },
+          "resolverText": "Dana Reyes",
+          "objectiveKey": "coo:900.aaaa"
+        },
+        {
+          "id": "item-risk-x3",
+          "kindLabel": "Risk",
+          "outcomeLabel": "Dismissed",
+          "reason": "No proxy caches this route.",
+          "resolver": {
+            "kind": "agent",
+            "objectiveKey": null
+          },
+          "resolverText": "an agent",
+          "objectiveKey": null
+        }
       ],
       "files": {
         "total": 7,
@@ -199,16 +597,49 @@
         "resourceCount": 2,
         "showResourceKey": true,
         "collapsedChips": [
-          { "resourceKey": "mobile", "directory": "OverlordCore/", "basename": "MissionSummaryDerive.swift", "badge": "N" },
-          { "resourceKey": "web", "directory": "webapp/web/lib/", "basename": "mission-summary-derive.ts", "badge": "N" },
-          { "resourceKey": "web", "directory": "", "basename": "README.md", "badge": "?" },
-          { "resourceKey": "web", "directory": "webapp/web/components/mission-summary/", "basename": "MissionSummaryFiles.tsx", "badge": "D" },
-          { "resourceKey": "web", "directory": "webapp/web/components/mission-summary/", "basename": "MissionSummaryPost.tsx", "badge": "N" },
-          { "resourceKey": "web", "directory": "webapp/web/components/mission-summary/", "basename": "MissionSummarySection.tsx", "badge": "N" }
+          {
+            "resourceKey": "mobile",
+            "directory": "OverlordCore/",
+            "basename": "MissionSummaryDerive.swift",
+            "badge": "N"
+          },
+          {
+            "resourceKey": "web",
+            "directory": "webapp/web/lib/",
+            "basename": "mission-summary-derive.ts",
+            "badge": "N"
+          },
+          {
+            "resourceKey": "web",
+            "directory": "",
+            "basename": "README.md",
+            "badge": "?"
+          },
+          {
+            "resourceKey": "web",
+            "directory": "webapp/web/components/mission-summary/",
+            "basename": "MissionSummaryFiles.tsx",
+            "badge": "D"
+          },
+          {
+            "resourceKey": "web",
+            "directory": "webapp/web/components/mission-summary/",
+            "basename": "MissionSummaryPost.tsx",
+            "badge": "N"
+          },
+          {
+            "resourceKey": "web",
+            "directory": "webapp/web/components/mission-summary/",
+            "basename": "MissionSummarySection.tsx",
+            "badge": "N"
+          }
         ],
         "hiddenCount": 1
       },
-      "trailer": { "generatedAt": "2026-10-23T10:05:00.000Z", "currentRunDeliveries": 4 },
+      "trailer": {
+        "generatedAt": "2026-10-23T10:05:00.000Z",
+        "currentRunDeliveries": 4
+      },
       "sectionState": "summary",
       "updatingSourceObjectiveKey": "coo:900.cccc",
       "watermark": "2026-10-23T11:00:00.000Z",

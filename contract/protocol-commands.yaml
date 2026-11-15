@@ -86,6 +86,7 @@ sessionLifecycle:
     returnsSessionKey: true
     responseShape: attach-response-v3
     rules:
+      - 'For a summary-enabled mission the response carries the optional top-level missionSummary editing baseline (ADR 0060) and agentInstructions gains a Mission summary block; load-context and connect never carry either'
       - 'When --objective-id or --execution-request-id is present, attach pins to that objective and must not rediscover via mission state'
       - 'Without a pin, attach rediscovers in this order: the single executing, launching or pending_delivery objective (two equally ranked active objectives return 409 ambiguous_active_objective); then the first submitted objective; then the next runnable draft (first draft with instruction text); then the first draft; then the first unfinished objective — each by position, created_at, id (ADR 0056)'
       - 'Session commands (attach, connect, resume-follow-up, update, heartbeat, sync-changes, hook-event, ask, deliver) and launch/queue commands are denied for a project_automation USER_TOKEN (contract v151); it holds no session:attach, event:create, or execution_request:create grant, and the REST allowlist for that preset does not admit them'
@@ -278,6 +279,19 @@ sessionLifecycle:
       - --follow-up-notes
       - --paths
       - --paths-file
+      # Agent-authored mission summary write (ADR 0060); wins over payload missionSummary.
+      - --mission-summary-file
+    missionSummaryInput:
+      shape: '{ baseContentRevision, headline, summary, closeItems: [{ id, status: done|dismissed, reason }] }'
+      sources:
+        - --mission-summary-file
+        - 'missionSummary field of --payload-json / --payload-file'
+      rules:
+        - 'Validated before any write; malformed input, headline and summary not sent together, a headline that is empty, multi-line or over 140 characters, a summary empty or over 1,200 characters, prose without baseContentRevision, more than 50 closeItems, or a close entry without status done|dismissed and a reason of at most 280 characters answers 400 invalid_input'
+        - 'The base revision is compared with mission_summaries.content_revision under the summary row lock before any delivery row is written; a stale base rejects the whole delivery with 409 mission_summary_conflict, writes nothing, and returns details { baseContentRevision, missionSummary } with a fresh baseline in the attach shape. The CLI prints that object on stdout before failing'
+        - 'closeItems close only open items of the delivering mission with agent provenance; unknown, foreign, duplicate, superseded or already-closed ids are skipped with bounded mission_summary_item_skipped warnings and never reject the delivery'
+        - 'The narrative is written with generated_by agent, status composed, the narrative_* references and content_revision + 1, visible at once; the response carries missionSummary { contentRevision, narrativeWritten, closedItemIds, warnings } with advisory mission_summary_style warnings'
+        - 'The field is never stored in the delivery payload. A delivery without it behaves as before and gets fallback prose'
     clientCapture:
       - 'The client CLI drains every pending bounded batch from the attached objective ledger through sync-changes before delivery. It never derives or injects file paths from a worktree delta.'
       - 'Optional bounded --paths (comma list) and --paths-file (JSON string array; commas are path characters) append agent-known shell/script/generator outputs, deletes, and both rename endpoints to the attached objective ledger as agent_declared before the drain. They are normalized against the session checkout (absent targets valid; traversal, out-of-checkout symlinks, ignored and Overlord-managed paths rejected with a reason) and are not a changed-file reconciliation input.'
@@ -690,12 +704,14 @@ missionDiscovery:
     optionalFlags:
       - --project-id
       - --assigned-to
+      - --mission-summary-file
     rules:
       - 'Requires --project-id; completed work always records a normal project mission and never discovers a project implicitly.'
       - 'For work already done in chat, not for in-progress work'
       - '--assigned-to resolves one workspace member by the same rules as on create; an unresolvable member is rejected rather than silently left unassigned'
       - 'Explicit declaredPaths are stored as sessionless agent_declared rows with a null resource; record-work does not inspect a current checkout and accepts no VCS status.'
       - 'Denied for a project_automation USER_TOKEN before any write (contract v151): record-work creates a completed objective and a delivery, which exceed mission:create'
+      - 'Accepts the deliver missionSummary input (payload field or --mission-summary-file) with the same validation and close rules; the mission is new, so no base revision is checked'
     sideEffects:
       - creates-mission-in-review-status
       - creates-completed-objective
@@ -962,6 +978,21 @@ responseShapes:
     objectivesOptionalFields:
       - resourceKey
     objectivesExcludeCurrent: true
+    # Additive (ADR 0060): attach and resume-follow-up only, summary-enabled missions only.
+    missionSummaryOptionalField:
+      fields:
+        - contentRevision
+        - headline
+        - summary
+        - author
+        - openItems
+        - truncated
+      openItemFields:
+        - id
+        - kind
+        - objective
+        - text
+        - blocking
     agentInstructionsRequiredContent:
       - mission ID
       - objective ID
@@ -970,3 +1001,4 @@ responseShapes:
       - required protocol workflow instructions
     agentInstructionsOptionalContent:
       - user custom agent instructions
+      - mission summary writing guidance and the one-retry conflict rule (when missionSummary is present)

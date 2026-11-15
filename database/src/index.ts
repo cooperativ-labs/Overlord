@@ -48,6 +48,39 @@ export {
 } from './local-paths.js';
 export { listPostgresMigrationFiles, migratePostgres } from './migrate-postgres.js';
 export {
+  COPY_HUMAN_ACTION_RESOLUTIONS_SQL,
+  type DerivedMissionItem,
+  deriveMissionItems,
+  INSERT_MISSION_ITEM_SQL,
+  insertMissionItemParams,
+  insertMissionItemsSql,
+  MISSION_ITEM_CLOSED_STATUSES,
+  MISSION_ITEM_KINDS,
+  MISSION_ITEM_OUTCOMES,
+  MISSION_ITEM_RESOLVER_KINDS,
+  MISSION_ITEM_STATUS_REASON_MAX_LENGTH,
+  MISSION_ITEM_STATUSES,
+  type MissionItemClosedStatus,
+  type MissionItemDeliveryScope,
+  type MissionItemKind,
+  type MissionItemOutcome,
+  missionItemRef,
+  type MissionItemResolverKind,
+  type MissionItemStatus,
+  normaliseMissionItemText,
+  REOPENED_ITEM_PREDICATE_SQL,
+  REPLACED_HUMAN_ACTION_PREDICATE_SQL,
+  SUPERSEDED_ITEM_PREDICATE_SQL,
+  supersedeMissionItemsSql
+} from './mission-items.js';
+export {
+  finalizeMissionItemsPostgres,
+  finalizeMissionItemsSqlite,
+  isMissionItemsMigration,
+  MISSION_ITEMS_BACKFILL_BATCH_SIZE,
+  MISSION_ITEMS_MIGRATION_VERSION
+} from './mission-items-migration-runtime.js';
+export {
   formatObjectiveDisplayId,
   generateObjectiveDisplayKey,
   missionDisplayIdFromObjectiveRef,

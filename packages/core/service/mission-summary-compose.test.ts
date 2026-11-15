@@ -7,7 +7,6 @@ import {
   type MissionSummaryDeliveryEvidence,
   type MissionSummaryObjectiveEvidence,
   reconcileMissionSummaryDraft,
-  selectMissionSummarySuggestions,
   splitMissionSummaryRuns
 } from './mission-summary-compose.js';
 
@@ -46,10 +45,6 @@ function delivery(
       deliveryReport: { schemaVersion: 1, agentReport: { humanActions: [], ...agentReport } }
     })
   };
-}
-
-function deferred(title: string) {
-  return { title, change: `Change ${title}.`, location: 'src/a.ts', doneWhen: `${title} works.` };
 }
 
 describe('splitMissionSummaryRuns', () => {
@@ -99,44 +94,26 @@ describe('splitMissionSummaryRuns', () => {
     assert.deepEqual(runs.superseded.map(item => item.id).sort(), ['a-just-before', 'b-1', 'b-2']);
   });
 
-  it('keeps suggestions and risks across every current-run delivery, newest first', () => {
+  it('publishes only prose even when a model returns invented item references', () => {
     const objectives = [objective('a')];
-    const older = delivery('older', 'a', '2026-10-20T09:00:00.000Z', {
-      knownRisks: ['Old risk.'],
-      deferredWork: [deferred('Shared item'), deferred('Dismissed item'), deferred('Older only')]
+    const runs = splitMissionSummaryRuns({
+      objectives,
+      deliveries: [delivery('d', 'a', '2026-10-20T10:00:00.000Z')]
     });
-    const newer = delivery('newer', 'a', '2026-10-20T10:00:00.000Z', {
-      deferredWork: [deferred('shared   ITEM')]
-    });
-    const runs = splitMissionSummaryRuns({ objectives, deliveries: [older, newer] });
-    const dismissedId = older.report.presentation.deferredWork[1]!.id;
-    const suggestions = selectMissionSummarySuggestions({
-      currentRun: runs.currentRun,
-      resolutionStatus: new Map([[`older:${dismissedId}`, 'dismissed']])
-    });
-    assert.deepEqual(
-      suggestions.map(ref => ref.deliveryId),
-      ['newer', 'older'],
-      'the newer duplicate wins and the dismissed item is hidden'
-    );
-    assert.equal(suggestions[1]!.actionId, older.report.presentation.deferredWork[2]!.id);
-
-    const composed = reconcileMissionSummaryDraft({
-      draft: {
-        headline: 'Newer delivery shipped.',
-        summary: 'The newer delivery shipped.',
-        risks: [{ ref: 'older:0', text: 'Old risk, shortened.' }, { ref: 'invented:3' }]
-      },
+    const result = reconcileMissionSummaryDraft({
+      draft: { headline: 'Shipped.', summary: 'Works.', risks: [{ ref: 'invented' }] },
       objectives,
       runs,
       openQuestions: [],
-      suggestions,
-      model: 'gemini-test'
+      model: 'test'
     });
-    assert.equal(composed.status, 'composed');
-    assert.deepEqual(composed.risks, [
-      { deliveryId: 'older', objectiveId: 'a', index: 0, text: 'Old risk, shortened.' }
-    ]);
+    assert.deepEqual(result, {
+      status: 'composed',
+      headline: 'Shipped.',
+      summary: 'Works.',
+      generatedBy: 'gemini',
+      model: 'test'
+    });
   });
 });
 
@@ -155,7 +132,6 @@ describe('deterministic fallback', () => {
       objectives,
       runs,
       openQuestions: [],
-      suggestions: [],
       model: 'gemini-test'
     });
     assert.equal(result.status, 'fallback');
@@ -163,17 +139,12 @@ describe('deterministic fallback', () => {
     assert.equal(result.model, null);
     assert.equal(result.headline, 'Delivery b1 shipped.');
     assert.equal(result.summary, 'Delivery b1 shipped. Delivery a1 shipped.');
-    assert.deepEqual(
-      result.risks.map(risk => risk.deliveryId),
-      ['b1'],
-      'risks are deduped by normalised text, newest kept'
-    );
+    assert.equal('risks' in result, false);
   });
 
   it('does not dereference a missing delivery before the first delivery', () => {
     const base = {
-      runs: splitMissionSummaryRuns({ objectives: [], deliveries: [] }),
-      suggestions: []
+      runs: splitMissionSummaryRuns({ objectives: [], deliveries: [] })
     };
 
     const question = buildDeterministicMissionSummary({
@@ -204,6 +175,6 @@ describe('deterministic fallback', () => {
       openQuestions: []
     });
     assert.equal(awaiting.headline, 'No objective has delivered yet.');
-    assert.deepEqual(awaiting.risks, []);
+    assert.equal('risks' in awaiting, false);
   });
 });

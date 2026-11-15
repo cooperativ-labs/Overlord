@@ -35,40 +35,28 @@ export type ComposeMissionSummaryInput = {
 export type ComposeMissionSummaryDraft = {
   headline?: unknown;
   summary?: unknown;
-  risks?: unknown;
 };
 
 export const COMPOSE_MISSION_SUMMARY_RESPONSE_SCHEMA: Schema = {
   type: 'object',
   properties: {
     headline: { type: 'string' },
-    summary: { type: 'string' },
-    risks: {
-      type: 'array',
-      items: {
-        type: 'object',
-        properties: {
-          ref: { type: 'string' },
-          text: { type: 'string' }
-        },
-        required: ['ref']
-      }
-    }
+    summary: { type: 'string' }
   },
-  required: ['headline', 'summary', 'risks']
+  required: ['headline', 'summary']
 };
 
-export const MISSION_SUMMARY_SYSTEM_INSTRUCTION = `You maintain the summary of one software mission for the operator who owns it.
+export const MISSION_SUMMARY_SYSTEM_INSTRUCTION = `You write fallback headline and summary prose when a delivery supplied no agent-authored mission summary.
 Return JSON only matching the schema.
 Rules:
 - Write for the operator who owns the mission. Say what is done, what is in flight, what is blocked, and what is waiting on them, in that order.
 - The headline is one sentence of at most 140 characters. It names the single most important fact right now. Prefer the newest delivery unless an open blocking action or question outranks it.
 - The summary is Markdown of two to five sentences.
-- When a previous summary is given, update it to match the evidence. Do not restart it from nothing.
-- Keep a risk only when it can change what the operator does next or hides a real follow-up. Drop routine caveats. Cite each kept risk by its ref from the evidence; you may shorten its text.
+- Rewrite the whole summary to be true from the supplied evidence. The previous summary may be agent-authored; retain only claims the evidence still supports.
+- Risks, human actions and suggestions are separate live lists. Never return, select or rewrite list items; do not repeat them in prose.
 - Pending suggestions are context only. You may say that work is waiting; do not restate the suggestions.
 - Use only facts in the evidence. Never invent files, commands, or state.
-Apply the WRITING rules below to headline, summary, and risk text. They do not apply to commands, paths, identifiers, or quoted agent text; copy those exactly.
+Apply the WRITING rules below to headline and summary. They do not apply to commands, paths, identifiers, or quoted agent text; copy those exactly.
 ${WRITING_RULES}`;
 
 export function buildComposeMissionSummaryPrompt(input: ComposeMissionSummaryInput): string {

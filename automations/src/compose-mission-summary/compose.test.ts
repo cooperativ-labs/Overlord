@@ -89,3 +89,17 @@ it('the summary automation rejects missing, malformed, scalar and array drafts',
     );
   }
 });
+
+it('the fallback model schema requests prose only', async () => {
+  await composeMissionSummaryWithGemini({
+    input,
+    generate: async ({ responseSchema, systemInstruction }) => {
+      assert.deepEqual(Object.keys(responseSchema.properties ?? {}).sort(), [
+        'headline',
+        'summary'
+      ]);
+      assert.match(systemInstruction, /fallback/);
+      return JSON.stringify({ headline: 'Ready.', summary: 'The exporter writes CSV.' });
+    }
+  });
+});

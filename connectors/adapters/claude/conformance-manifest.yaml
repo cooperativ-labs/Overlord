@@ -1,4 +1,4 @@
-contractVersion: "172.3.0"
+contractVersion: "173.0.0"
 componentType: connector
 componentKey: claude
 label: "Claude Code Connector"

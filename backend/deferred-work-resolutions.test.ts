@@ -9,7 +9,7 @@ const { bootstrapIntegrationTestDb } = await import('./test-helpers.ts');
 await bootstrapIntegrationTestDb({ sqlitePath: path.join(tempDir, 'webapp.sqlite') });
 
 const { db } = await import('./db.ts');
-const { seedDelivery: seedDeliveryRow } = await import('./test-helpers.ts');
+const { seedDelivery: seedDeliveryRow, syncSeededMissionItems } = await import('./test-helpers.ts');
 const { createProject, createMission, listMissionDeliveries } = await import('./repository.ts');
 const { reopenDeferredWork, resolveDeferredWork } = await import('./deferred-work-resolutions.ts');
 const { buildDeliveryReport, deferredWorkId } =
@@ -56,6 +56,8 @@ function keepPresentationDeferredWork(deliveryId: string, indexes: number[]): vo
     JSON.stringify(payload),
     deliveryId
   );
+  // Saving a presentation reconciles the delivery's items.
+  syncSeededMissionItems(db, deliveryId);
 }
 
 /**
@@ -179,13 +181,21 @@ test('resolving records a realtime change, and reopening forgets the decision', 
   assert.equal(dismissed.resolution?.status, 'dismissed');
   assert.ok(dismissed.resolution?.resolvedAt);
 
+  const row = db
+    .prepare(
+      `SELECT id, status, resolved_by_kind FROM mission_items
+        WHERE delivery_id = ? AND kind = 'suggestion' AND item_ref = ?`
+    )
+    .get(deliveryId, open.actionId) as { id: string; status: string; resolved_by_kind: string };
+  assert.equal(row.status, 'dismissed', 'the decision is the mission item status');
+  assert.equal(row.resolved_by_kind, 'person');
   const change = db
     .prepare(
       `SELECT entity_type, mission_id, objective_id, operation FROM entity_changes
-        WHERE entity_type = 'human_action_resolution' AND entity_id = ?
-        ORDER BY id DESC LIMIT 1`
+        WHERE entity_type = 'mission_item' AND entity_id = ?
+        ORDER BY seq DESC LIMIT 1`
     )
-    .get(`${deliveryId}:${open.actionId}`) as
+    .get(row.id) as
     | { entity_type: string; mission_id: string; objective_id: string; operation: string }
     | undefined;
   assert.ok(change, 'a realtime change row is recorded');

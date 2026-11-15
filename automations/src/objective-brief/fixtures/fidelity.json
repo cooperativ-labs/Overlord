@@ -78,6 +78,44 @@
     }
   },
   {
+    "name": "contradiction-decision-neutral-goal",
+    "why": "A goal that picks an option of an open decision asks for one rewrite; the neutral goal publishes.",
+    "instruction": "Store the brief state in SQLite for the Local edition. Later in this plan: the brief state must be stored only in Postgres. Add a migration and tests for the chosen database. Keep the migration additive and reversible. Keep the migration additive and reversible. Keep the migration additive and reversible. Keep the migration additive and reversible. ",
+    "fields": {
+      "title": false,
+      "description": true
+    },
+    "outputs": [
+      "{\"description\": {\"goal\": \"Store the brief state in SQLite with a migration and tests.\", \"decisionsNeeded\": [\"Store the state in SQLite or only in Postgres\"], \"body\": [\"The migration is additive and reversible.\"], \"doneWhen\": \"The migration and its tests exist for the chosen database.\", \"doneWhenStated\": true}}",
+      "{\"description\": {\"goal\": \"Store the brief state in the database that the decision selects.\", \"decisionsNeeded\": [\"Store the state in SQLite or only in Postgres\"], \"body\": [\"The migration is additive and reversible.\"], \"doneWhen\": \"The migration and its tests exist for the chosen database.\", \"doneWhenStated\": true}}"
+    ],
+    "expect": {
+      "description": "ok",
+      "attempts": 2,
+      "startsWith": "Store the brief state in the database that the decision selects. Decision needed: Store the state in SQLite or only in Postgres.",
+      "paragraphs": 2
+    }
+  },
+  {
+    "name": "two-decisions-goal-still-picks",
+    "why": "With two open decisions, a goal that still names an option after the rewrite publishes the best valid candidate; it does not fail.",
+    "instruction": "Add an export button to the mission panel. Choose CSV or JSON for the format. Choose whether archived objectives are included. Keep the existing toolbar layout and the keyboard shortcuts. Keep the existing toolbar layout and the keyboard shortcuts. Keep the existing toolbar layout and the keyboard shortcuts. Keep the existing toolbar layout and the keyboard shortcuts. ",
+    "fields": {
+      "title": false,
+      "description": true
+    },
+    "outputs": [
+      "{\"description\": {\"goal\": \"Add a CSV export button to the mission panel.\", \"decisionsNeeded\": [\"Use CSV or JSON\", \"Include archived objectives or leave them out\"], \"body\": [\"The toolbar layout and the keyboard shortcuts stay the same.\"], \"doneWhen\": \"\", \"doneWhenStated\": false}}",
+      "{\"description\": {\"goal\": \"Add a JSON export button to the mission panel.\", \"decisionsNeeded\": [\"Use CSV or JSON\", \"Include archived objectives or leave them out\"], \"body\": [\"The toolbar layout and the keyboard shortcuts stay the same.\"], \"doneWhen\": \"\", \"doneWhenStated\": false}}"
+    ],
+    "expect": {
+      "description": "ok",
+      "attempts": 2,
+      "startsWith": "Add a CSV export button to the mission panel. Decision needed: Use CSV or JSON. Decision needed: Include archived objectives or leave them out.",
+      "paragraphs": 2
+    }
+  },
+  {
     "name": "quoted-modals",
     "why": "Modals inside quotes and code are exempt; a bare modal asks for one rewrite.",
     "instruction": "Rename the CLI flag `--may-run` and update the help text that says \"you should run this first\". Keep backwards compatibility for one release and document the change. Keep backwards compatibility for one release and document the change. Keep backwards compatibility for one release and document the change. Keep backwards compatibility for one release and document the change. Do not remove the old flag yet.",

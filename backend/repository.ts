@@ -128,6 +128,10 @@ import {
   loadMissionBranchObservationsForMissions,
   mergeMissionBranchObservation
 } from '../packages/core/service/mission-branch-observations.ts';
+import {
+  applyMissionItemSupersedeRules,
+  repointMissionItemsProject
+} from '../packages/core/service/mission-items.ts';
 import { searchMissionReferencesInProject } from '../packages/core/service/mission-reference-search.ts';
 import {
   clearMissionSchedule as clearMissionScheduleService,
@@ -242,6 +246,7 @@ import {
   recordChange,
   requireDatabaseClient,
   resolveActiveProfileId,
+  restChangeAttribution,
   restMissionSummaryTriggerContext
 } from './db.ts';
 import {
@@ -5945,6 +5950,13 @@ async function moveMissionProjectTx({
       newProjectId: targetProjectId,
       now
     });
+    await repointMissionItemsProject(tx, {
+      missionId: id,
+      workspaceId: existing.workspace_id,
+      projectId: targetProjectId,
+      attribution: await restChangeAttribution(existing.workspace_id, tx),
+      now
+    });
     await tx.run(
       `UPDATE missions SET ${fields.join(', ')}, updated_at = ?, revision = ?
          WHERE id = ? AND workspace_id = ?`,
@@ -7370,8 +7382,14 @@ async function updateObjectiveTx(
       tx
     );
 
-    // A new run boundary changes which deliveries the mission summary may use.
+    // A new run boundary changes which deliveries the mission summary may use:
+    // every open item of the objective's earlier deliveries is superseded.
     if (changed.includes('reopened_at')) {
+      await applyMissionItemSupersedeRules(tx, {
+        objectiveId: id,
+        attribution: await restChangeAttribution(workspaceId, tx, workspaceUserId),
+        now
+      });
       await enqueueMissionSummaryComposeJob({
         ctx: restMissionSummaryTriggerContext(tx, workspaceId, workspaceUserId),
         missionId: existing.mission_id,

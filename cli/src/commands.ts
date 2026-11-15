@@ -60,7 +60,8 @@ import {
   CliError,
   formatExecutionRequestAlreadyLinkedDiagnostic,
   isExecutionRequestAlreadyLinkedError,
-  isUnlinkableExecutionRequestError
+  isUnlinkableExecutionRequestError,
+  missionSummaryConflictOutput
 } from './errors.js';
 import { launchAgent } from './launch.js';
 import { recoverLaunchBootstrapFromProjectTmp } from './launch-bootstrap.js';
@@ -655,6 +656,7 @@ const PROTOCOL_FILE_FLAGS = [
   '--objectives-file',
   '--changes-file',
   '--declared-paths-file',
+  '--mission-summary-file',
   '--paths-file',
   '--value-file',
   '--content-text-file',
@@ -1380,6 +1382,10 @@ export async function runProtocolCommand({
     } else if (isExecutionRequestAlreadyLinkedError(error)) {
       throw new CliError({ message: formatExecutionRequestAlreadyLinkedDiagnostic() });
     } else {
+      // A stale summary base rejected the whole delivery. Print the fresh
+      // baseline on stdout so the agent can rewrite and deliver again.
+      const conflict = missionSummaryConflictOutput(error);
+      if (conflict) printJson(conflict);
       throw error;
     }
   }

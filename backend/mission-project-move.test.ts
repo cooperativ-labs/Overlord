@@ -45,7 +45,62 @@ async function runMissionProjectMoveCase(): Promise<void> {
   const mission = await createMission({ projectId: p1.id, firstObjective: 'Move me' });
   assert.equal(mission.projectId, p1.id);
 
+  // A delivered risk is a mission item whose denormalized project follows the mission.
+  const { requireDatabaseClient } = await import('./db.ts');
+  const { buildDeliveryReport } = await import('../packages/core/service/delivery-report.ts');
+  const { insertDeliveryMissionItems } = await import('../packages/core/service/mission-items.ts');
+  const db = requireDatabaseClient();
+  const deliveredAt = new Date().toISOString();
+  const delivery = {
+    id: `delivery-move-${Date.now()}`,
+    workspaceId: mission.workspaceId,
+    projectId: p1.id,
+    missionId: mission.id,
+    objectiveId: mission.objectives[0]!.id,
+    deliveredAt
+  };
+  const report = buildDeliveryReport({
+    summary: 'Moved work.',
+    deliveryReport: { schemaVersion: 1, agentReport: { knownRisks: ['Moves are rare.'] } }
+  });
+  await db.run(
+    `INSERT INTO deliveries (id, workspace_id, project_id, mission_id, objective_id, summary,
+                             payload_json, delivered_at, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, 'Moved work.', ?, ?, ?, ?)`,
+    [
+      delivery.id,
+      delivery.workspaceId,
+      p1.id,
+      mission.id,
+      delivery.objectiveId,
+      JSON.stringify({ deliveryReport: report }),
+      deliveredAt,
+      deliveredAt,
+      deliveredAt
+    ]
+  );
+  await insertDeliveryMissionItems(db, {
+    delivery,
+    report,
+    attribution: { actorWorkspaceUserId: null, actorTokenId: null, source: 'webapp' }
+  });
+
   const updated = await updateMission(mission.id, { projectId: p2.id });
+  const movedItems = await db.all<{ id: string; project_id: string }>(
+    'SELECT id, project_id FROM mission_items WHERE mission_id = ?',
+    [mission.id]
+  );
+  assert.deepEqual(
+    movedItems.map(item => item.project_id),
+    [p2.id],
+    'mission items follow the mission to its new project'
+  );
+  const itemChange = await db.get<{ changed_fields_json: string }>(
+    `SELECT changed_fields_json FROM entity_changes
+      WHERE entity_type = 'mission_item' AND entity_id = ? ORDER BY seq DESC LIMIT 1`,
+    [movedItems[0]!.id]
+  );
+  assert.deepEqual(JSON.parse(itemChange!.changed_fields_json), ['project_id']);
   assert.equal(updated.projectId, p2.id);
   const p2Default = (await listProjectStatuses(p2.id)).find(status => status.isDefault)!;
   assert.equal(updated.statusId, p2Default.id, 'the target project receives its matching status');

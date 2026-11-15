@@ -2,6 +2,7 @@ import { formatObjectiveDisplayId } from '@overlord/contract';
 import type { DatabaseClient } from '@overlord/database';
 
 import { readDeliveryReport } from './delivery-report.js';
+import { listMissionItems, type MissionItem } from './mission-items.js';
 import {
   currentRunDeliveryPredicateSql,
   type MissionSummaryDeliveryEvidence,
@@ -17,7 +18,7 @@ import { readMissionSummaryGeneration } from './worker-jobs.js';
  * current-run delivery evidence, shared by the compose worker and the
  * operator read route. Deliveries are selected in the database by current-run
  * eligibility before any limit (plan §4.4a), then split in memory by
- * {@link splitMissionSummaryRuns}, which stays the authority on supersession.
+ * {@link splitMissionSummaryRuns}, for prose and source history only. Item supersession is stored by the item service.
  */
 
 /** Evidence for one compose pass, read together with the generation it serves. */
@@ -29,7 +30,7 @@ export type MissionSummaryEvidence = {
   objectives: MissionSummaryObjectiveEvidence[];
   runs: MissionSummaryRuns;
   openQuestions: MissionSummaryQuestionEvidence[];
-  resolutionStatus: Map<string, string>;
+  openItems: MissionItem[];
   counts: { deliveries: number; filePaths: number };
 };
 
@@ -153,17 +154,7 @@ export async function readMissionSummaryEvidence(
     }));
     const runs = await readRuns(tx, missionId, objectives, workspaceId);
 
-    const resolutionRows =
-      runs.currentRun.length === 0
-        ? []
-        : await tx.all<{ delivery_id: string; action_id: string; status: string }>(
-            `SELECT delivery_id, action_id, status FROM human_action_resolutions
-              WHERE mission_id = ?`,
-            [missionId]
-          );
-    const resolutionStatus = new Map(
-      resolutionRows.map(row => [`${row.delivery_id}:${row.action_id}`, row.status])
-    );
+    const openItems = await readMissionSummaryOpenItems(tx, missionId, workspaceId);
 
     const questionRows = await tx.all<{
       id: string;
@@ -202,11 +193,30 @@ export async function readMissionSummaryEvidence(
         prompt: row.summary,
         createdAt: row.created_at
       })),
-      resolutionStatus,
+      openItems,
       counts: {
         deliveries: runs.currentRun.length,
         filePaths: Number(filePathCount?.total ?? 0)
       }
     };
   });
+}
+
+/** Read every open item before display dedupe and caps, so a busy delivery cannot hide others. */
+export async function readMissionSummaryOpenItems(
+  db: DatabaseClient,
+  missionId: string,
+  workspaceId?: string
+): Promise<MissionItem[]> {
+  const items: MissionItem[] = [];
+  for (;;) {
+    const page = await listMissionItems(db, {
+      missionId,
+      ...(workspaceId === undefined ? {} : { workspaceId }),
+      limit: 1_000,
+      offset: items.length
+    });
+    items.push(...page.items);
+    if (!page.truncated) return items;
+  }
 }

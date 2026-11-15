@@ -18,6 +18,10 @@
       "types": "./dist/generated/api.d.ts",
       "default": "./dist/generated/api.js"
     },
+    "./delivery-report": {
+      "types": "./dist/delivery-report.d.ts",
+      "default": "./dist/delivery-report.js"
+    },
     "./mcp-tools": {
       "types": "./dist/mcp-tools.d.ts",
       "default": "./dist/mcp-tools.js"

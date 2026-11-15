@@ -10,6 +10,7 @@ import {
   SUMMARY_MAX_CHARACTERS,
   SUMMARY_TARGET_WORDS,
   summaryFailureMessage,
+  summaryCodeSegments,
   summaryMarkerSegments,
   type SummaryMentions,
   summaryProvenanceLabel,
@@ -87,7 +88,20 @@ export function ObjectiveSummaryProse({
                 {segment.text}
               </strong>
             ) : (
-              <span key={segmentIndex}>{segment.text}</span>
+              <span key={segmentIndex}>
+                {summaryCodeSegments(segment.text).map((part, partIndex) =>
+                  part.code ? (
+                    <code
+                      key={partIndex}
+                      className="code-inline"
+                    >
+                      {part.text}
+                    </code>
+                  ) : (
+                    <span key={partIndex}>{part.text}</span>
+                  )
+                )}
+              </span>
             )
           )}
           {clamp && index < paragraphs.length - 1 ? ' ' : null}

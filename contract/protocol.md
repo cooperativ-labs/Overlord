@@ -166,8 +166,28 @@ Command names, flags and response shapes are in
   `agent_sessions` row (session attribution is null), and enqueues the standard delivery
   compose job exactly as a normal `deliver` does. It accepts the whole submission as a
   single `--payload-json` / `--payload-file` envelope
-  (`{ objective, summary, title, declaredPaths, artifacts, deliveryReport }`), with explicit
-  flags overriding envelope fields.
+  (`{ objective, summary, title, declaredPaths, artifacts, deliveryReport, missionSummary }`),
+  with explicit flags overriding envelope fields.
+- **Mission summary (ADR 0060).** `attach` and `resume-follow-up` return a top-level
+  `missionSummary` editing baseline for summary-enabled missions: `contentRevision`, the
+  current `headline` and `summary`, `author` (`agent`, `gemini`, `deterministic`, or null
+  before the first write), up to 60 `openItems` (`id`, `kind`, objective display id,
+  `text`, `blocking` for human actions) and `truncated`. `load-context` and `connect` never
+  carry it, and the seen marker stays operator-only. `deliver` and `record-work` accept an
+  optional `missionSummary { baseContentRevision, headline, summary, closeItems }` in the
+  payload envelope or through `--mission-summary-file`; headline and summary travel
+  together, and `closeItems` may travel alone. Input is validated before any write
+  (400 `invalid_input`). On `deliver`, prose requires `baseContentRevision`; the base is
+  compared under the summary row lock before the delivery is written, and a stale base
+  rejects the whole delivery with 409 `mission_summary_conflict` whose `details` carry the
+  fresh baseline. The agent rewrites from it and retries once; on a second conflict it
+  delivers without prose, which lets the fallback composer write. `record-work` creates a
+  new mission and never checks a base. Close entries close only open items of the
+  delivering mission, with agent provenance and a required reason; other ids produce
+  bounded warnings and never reject the delivery. Agent prose is visible at once with
+  `generated_by = 'agent'`; the fallback composer never overwrites it while its delivery
+  is the newest. Style issues come back as advisory warnings. An installed client that
+  omits the field delivers as before and gets fallback prose.
 
 ## Interaction Surfaces
 

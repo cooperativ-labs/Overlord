@@ -32,6 +32,11 @@ ovld protocol attach --objective-id coo:756.k7xm
 
 `attach` establishes the objective/session binding used by the local change ledger. It does not snapshot or diff the working tree.
 
+For a mission with a summary, the attach JSON (and `resume-follow-up`) also carries a top-level
+`missionSummary` editing baseline: `{ contentRevision, headline, summary, author, openItems:
+[{ id, kind, objective, text, blocking? }], truncated }`. `load-context` and `connect` never
+carry it. You rewrite it at delivery; see **Mission summary at delivery** below.
+
 ## Update
 
 ```bash
@@ -98,6 +103,41 @@ Larger inline `--*-json` values are rejected; stream them through the correspond
 flag.
 
 If `heartbeat` succeeds but `deliver` or `update` fails, the session is likely fine — retry with the corresponding `--*-file -` flag instead of inline `--*-json`.
+
+### Mission summary at delivery
+
+When attach returned `missionSummary`, send the rewritten mission headline and summary and the
+items you closed, either as a `missionSummary` field of `--payload-json` / `--payload-file` or
+with `--mission-summary-file <path|->` (which wins over the payload field):
+
+```bash
+ovld protocol deliver --session-key <sessionKey> --objective-id $OBJECTIVE_ID --payload-file - <<'EOF'
+{
+  "summary": "Narrative for the reviewer about this objective.",
+  "missionSummary": {
+    "baseContentRevision": 7,
+    "headline": "One sentence, at most 140 characters.",
+    "summary": "Markdown, at most 1,200 characters, true for the whole mission now.",
+    "closeItems": [{ "id": "<openItems[].id>", "status": "done", "reason": "Why, at most 280 characters." }]
+  }
+}
+EOF
+```
+
+- `baseContentRevision` is `missionSummary.contentRevision` from attach; required with prose.
+- `headline` and `summary` go together; `closeItems` may be sent alone (at most 50 entries).
+- `status` is `done` (addressed) or `dismissed` (no longer applies); `reason` is required.
+- Malformed input is rejected with 400 `invalid_input` before anything is written. Unknown,
+  foreign or already-closed ids are skipped with a `mission_summary_item_skipped` warning.
+- The response carries `missionSummary { contentRevision, narrativeWritten, closedItemIds,
+  warnings }`; `mission_summary_style` warnings are advisory.
+- Only one `--*-file` flag may read stdin at a time.
+
+On 409 `mission_summary_conflict` nothing is delivered. The CLI exits non-zero and prints
+`{ error, code, baseContentRevision, missionSummary }` on stdout, where `missionSummary` is the
+fresh baseline. Rewrite from it and deliver again once with its `contentRevision`. If that
+conflicts again, deliver without `headline` and `summary` and say so in the delivery summary.
+Writing guidance is in the **Mission Summary** section of the skill.
 
 ### Captured file evidence
 
@@ -224,7 +264,9 @@ EOF
 
 Record already-finished chat work as a completed review mission in one call — no
 `attach`/`deliver`. Creates a mission with one completed objective, records declared paths as
-Declared evidence, lands it in review, and runs the Gemini delivery summary.
+Declared evidence, lands it in review, and runs the Gemini delivery summary. An optional
+`missionSummary` (or `--mission-summary-file`) writes the new mission's headline and summary
+without a `baseContentRevision`.
 
 ```bash
 ovld protocol record-work --payload-file - <<'EOF'

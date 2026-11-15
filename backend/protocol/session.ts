@@ -194,7 +194,8 @@ export const sessionSubcommands: SubcommandTable = {
         payloadJson: envelope.payloadJson,
         verificationSummary:
           strFlag(body, '--verification-summary') ?? envelope.verificationSummary ?? null,
-        followUpNotes: strFlag(body, '--follow-up-notes') ?? envelope.followUpNotes ?? null
+        followUpNotes: strFlag(body, '--follow-up-notes') ?? envelope.followUpNotes ?? null,
+        missionSummary: envelope.missionSummary
       });
     }
   },

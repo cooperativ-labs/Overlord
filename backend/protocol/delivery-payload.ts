@@ -2,6 +2,9 @@ import { ApiError } from '../errors.ts';
 
 import { hasFlag, parseJsonObjectInput, type ProtocolRequestBody } from './flags.ts';
 
+/** File flag for the agent-authored mission summary write (contract: deliver, record-work). */
+export const MISSION_SUMMARY_FILE_FLAG = '--mission-summary-file';
+
 // ---- Delivery payload parsing ---------------------------------------------
 //
 // The delivery envelope and retired change-tracking inputs shared by `update`
@@ -90,6 +93,8 @@ type DeliveryPayloadEnvelope = {
   declaredPaths?: unknown[];
   verificationSummary?: string | null;
   followUpNotes?: string | null;
+  /** The agent's summary write; never stored in the delivery payload. */
+  missionSummary?: unknown;
   payloadJson?: Record<string, unknown>;
 };
 
@@ -98,11 +103,19 @@ type DeliveryPayloadEnvelope = {
  * flags remain authoritative when both forms are present.
  */
 export function parseDeliveryPayloadEnvelope(body: ProtocolRequestBody): DeliveryPayloadEnvelope {
+  const fromFlag = parseMissionSummaryFlag(body);
   const input = parseJsonObjectInput(body, '--payload-json', '--payload-file', 'delivery payload');
-  if (input === undefined) return {};
+  if (input === undefined) return fromFlag === undefined ? {} : { missionSummary: fromFlag };
 
-  const { summary, artifacts, declaredPaths, verificationSummary, followUpNotes, ...payloadJson } =
-    input;
+  const {
+    summary,
+    artifacts,
+    declaredPaths,
+    verificationSummary,
+    followUpNotes,
+    missionSummary,
+    ...payloadJson
+  } = input;
   if (summary !== undefined && typeof summary !== 'string') {
     throw new ApiError(400, 'Delivery payload summary must be a string');
   }
@@ -130,6 +143,37 @@ export function parseDeliveryPayloadEnvelope(body: ProtocolRequestBody): Deliver
       ? { verificationSummary }
       : {}),
     ...(followUpNotes === null || typeof followUpNotes === 'string' ? { followUpNotes } : {}),
+    // The flag wins over the payload field, as individual flags do elsewhere.
+    ...(fromFlag !== undefined
+      ? { missionSummary: fromFlag }
+      : missionSummary !== undefined
+        ? { missionSummary }
+        : {}),
     payloadJson
   };
+}
+
+/** `--mission-summary-file <path|->`: the JSON object, streamed through `fileInputs`. */
+function parseMissionSummaryFlag(body: ProtocolRequestBody): unknown {
+  if (!hasFlag(body, MISSION_SUMMARY_FILE_FLAG)) return undefined;
+  const raw = body.fileInputs?.[MISSION_SUMMARY_FILE_FLAG];
+  if (raw === undefined) {
+    throw new ApiError(
+      400,
+      `Missing file input for ${MISSION_SUMMARY_FILE_FLAG}`,
+      undefined,
+      'invalid_input'
+    );
+  }
+  if (!raw.trim()) return undefined;
+  try {
+    return JSON.parse(raw) as unknown;
+  } catch (err) {
+    throw new ApiError(
+      400,
+      `Invalid JSON for ${MISSION_SUMMARY_FILE_FLAG}`,
+      err instanceof Error ? err.message : undefined,
+      'invalid_input'
+    );
+  }
 }

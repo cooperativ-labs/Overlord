@@ -106,11 +106,11 @@ type PassOutcome =
  *
  * Launch never waits for this worker.
  */
-class ObjectiveBriefComposeWorker extends WorkerJobPoller {
+export class ObjectiveBriefComposeWorker extends WorkerJobPoller {
   private generateOverride: ObjectiveBriefGenerate | null = null;
   private lastCatchUpAt = 0;
 
-  constructor() {
+  constructor(private readonly compose = composeObjectiveBrief) {
     super({
       workerIdPrefix: 'objective-brief-compose',
       jobTypes: [OBJECTIVE_BRIEF_COMPOSE_JOB_TYPE],
@@ -286,7 +286,7 @@ class ObjectiveBriefComposeWorker extends WorkerJobPoller {
     }
 
     const startedAt = Date.now();
-    const outcome = await composeObjectiveBrief({
+    const outcome = await this.compose({
       instructionText,
       fields: { title: wanted.title !== null, description: wanted.description !== null },
       ...(generate ? { generate } : {}),
@@ -338,7 +338,7 @@ class ObjectiveBriefComposeWorker extends WorkerJobPoller {
         ? await publishObjectiveBrief({ ctx, objectiveId, result })
         : { title: 'not_requested' as const, description: 'not_requested' as const };
 
-    // Fields the composer could not produce: keep the instructions readable.
+    // Fields the composer or publication validation rejected: keep the instructions readable.
     if (wanted.title && outcome.title.status === 'failed') {
       await settleObjectiveTitleGeneration({
         ctx,
@@ -347,12 +347,16 @@ class ObjectiveBriefComposeWorker extends WorkerJobPoller {
         status: 'failed'
       });
     }
-    if (wanted.description && outcome.description.status === 'failed') {
+    if (
+      wanted.description &&
+      (outcome.description.status === 'failed' || published.description === 'invalid')
+    ) {
       await failObjectiveDescriptionGeneration({
         ctx,
         objectiveId,
         generation: wanted.description.generation,
-        failureCode: outcome.description.code
+        failureCode:
+          outcome.description.status === 'failed' ? outcome.description.code : 'invalid_output'
       });
     }
 

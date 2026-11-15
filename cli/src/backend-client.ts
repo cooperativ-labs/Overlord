@@ -179,7 +179,8 @@ export function createBackendClient(): BackendClient {
       throw new CliError({
         message:
           errorMessageFromJson(payload) ??
-          `Backend request failed: ${method} ${path} (${response.status})`
+          `Backend request failed: ${method} ${path} (${response.status})`,
+        payload
       });
     }
     return payload as T;
