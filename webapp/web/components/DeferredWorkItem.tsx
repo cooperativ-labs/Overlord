@@ -3,17 +3,23 @@ import type {
   MissionDetailDto,
   ResolveHumanActionBody
 } from '@overlord/contract';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Check, FolderPlus, ListPlus, RotateCcw, X } from 'lucide-react';
 import { type ReactNode, useEffect, useState } from 'react';
 
 import { api } from '../lib/api.ts';
 import {
+  missionItemOutcomeLabel,
+  missionItemResolver,
+  missionItemResolverText
+} from '../lib/mission-summary-derive.ts';
+import {
   keys,
   useCreateMission,
   useCreateObjective,
   useReopenDeferredWork,
-  useResolveDeferredWork
+  useResolveDeferredWork,
+  useWorkspaceMembers
 } from '../lib/queries.ts';
 import { cn } from '../lib/utils.ts';
 
@@ -51,11 +57,52 @@ export const deferredWorkActionButtonClass =
 
 /** Human label for the decision recorded on a deferred-work item. */
 export function deferredWorkOutcomeLabel(resolution: HumanActionResolutionDto): string {
-  if (resolution.status === 'dismissed') return 'Dismissed';
-  const ref = resolution.outcomeRef ? ` ${resolution.outcomeRef}` : '';
-  if (resolution.outcome === 'mission_created') return `Mission${ref} created`;
-  if (resolution.outcome === 'objective_added') return `Objective${ref} added`;
-  return 'Done';
+  return missionItemOutcomeLabel(resolution);
+}
+
+/**
+ * Who resolved the item and why (contract v173): a person, or the objective
+ * whose agent closed it at delivery. Reads the mission and members from the
+ * cache the mission panel already holds; it never fetches the mission itself.
+ */
+function DeferredWorkResolvedBy({
+  missionId,
+  resolution
+}: {
+  missionId: string;
+  resolution: HumanActionResolutionDto;
+}) {
+  const missionQ = useQuery({
+    queryKey: keys.mission(missionId),
+    queryFn: () => api.getMission(missionId),
+    enabled: false
+  });
+  const mission = missionQ.data;
+  const membersQ = useWorkspaceMembers(
+    resolution.resolvedBy.kind === 'person' ? (mission?.workspaceId ?? null) : null
+  );
+  const resolver = missionItemResolver(resolution.resolvedBy, {
+    objectives: mission?.objectives ?? [],
+    members: membersQ.data ?? []
+  });
+  const reason = resolution.reason?.trim();
+  return (
+    <>
+      {resolver ? (
+        <span className="text-xs opacity-80">
+          by{' '}
+          <span className={resolver.kind === 'agent' && resolver.objectiveKey ? 'font-mono' : ''}>
+            {missionItemResolverText(resolver)}
+          </span>
+        </span>
+      ) : null}
+      {reason ? (
+        <p className="w-full text-xs wrap-anywhere">
+          <span className="font-medium">Reason:</span> {reason}
+        </p>
+      ) : null}
+    </>
+  );
 }
 
 function OutcomeIcon({ resolution }: { resolution: HumanActionResolutionDto }) {
@@ -204,7 +251,7 @@ export function useDeferredWorkActions(
  * One deferred-work item from a delivery card (coo:1045). While open it offers
  * Create mission, Add objective, and Dismiss; once handled it fades, drops the
  * buttons, and shows which one was chosen. The decision is recorded in
- * `human_action_resolutions`.
+ * its `mission_items` row.
  */
 export function DeferredWorkItem({
   item,
@@ -248,6 +295,7 @@ export function DeferredWorkItem({
             <OutcomeIcon resolution={resolution} />
             {deferredWorkOutcomeLabel(resolution)}
           </span>
+          <DeferredWorkResolvedBy missionId={item.missionId} resolution={resolution} />
           <button
             type="button"
             disabled={busy}

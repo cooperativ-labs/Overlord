@@ -1496,51 +1496,105 @@ removed persisted presentation items whose provenance was the retired
 top-level payload keys such as `changeRationales` remain as inert, never-read
 history.
 
-### `human_action_resolutions`
+### `human_action_resolutions` (removed)
 
-Operator decisions on the deferred-work items an agent reports in a delivery (coo:971,
-coo:1045). The item text is never copied here: `action_id` names the stable delivery-local
-`DeferredWorkV1.id` (`deferred-work-<index>-<digest>`, the agent-report index plus the digest
-of the canonical `[title, change, location, doneWhen]` object), which
-`presentation.deferredWork` carries unchanged because nothing rewrites an item. The v166
-migration deleted the rows of every historical string item together with the items. The
-v166 migrations in both editions clear historical `agentReport.deferredWork` and
-`presentation.deferredWork` arrays, delete their `human_action_resolutions` rows, preserve
-every other report field and delivery, and refresh the affected delivery search documents.
-Reopening an item deletes
-its row; there is no soft delete or revision. The table was introduced for reported human
-actions (coo:963, contract v136); those resolutions were deleted when the Human Actions feed
-was removed (coo:1098, contract v150), and only `deferred-work-*` ids are written now.
+Replaced by `mission_items` in v173 (ADR 0060). The runtime step of
+`20261115120000_mission_items` copies matching resolutions to suggestion rows before
+`20261115160000_drop_mission_summary_item_storage` drops the table in both editions.
+No application reader or writer uses this table.
 
-| Column                          | Type         | Required | Notes                                                                 |
-| ------------------------------- | ------------ | -------- | --------------------------------------------------------------------- |
-| `delivery_id`                   | Id           | yes      | FK to `deliveries`, cascade delete. Part of the primary key.          |
-| `action_id`                     | text         | yes      | Stable deferred-work id within that delivery (`deferred-work-*`). Part of the primary key. |
-| `workspace_id`                  | Id           | yes      | FK to `workspaces`; denormalized from the delivery.                   |
-| `mission_id`                    | Id           | yes      | FK to `missions`; denormalized from the delivery.                     |
-| `objective_id`                  | Id           | yes      | FK to `objectives`; denormalized from the delivery.                   |
-| `status`                        | text         | yes      | Closed: `done`, `dismissed`.                                          |
-| `outcome`                       | text         | no       | Closed: `mission_created`, `objective_added`. Promotion recorded with `status = 'done'` (coo:1045). |
-| `outcome_ref`                   | text         | no       | Display id of the mission or objective the promotion created.         |
-| `resolved_by_workspace_user_id` | Id           | no       | FK to `workspace_users`, set null on delete.                          |
-| `resolved_at`                   | TimestampUTC | yes      |                                                                       |
+### `mission_items`
+
+The live working set of the risks, human actions and suggestions deliveries report
+(coo:1260, contract v173, ADR 0060): one row per item, with a status. The delivery report stays
+the immutable record of what the agent reported; this table records which items are still open
+and who closed the others. It replaces `human_action_resolutions`. Not indexed in
+`search_documents`.
+
+| Column                          | Type         | Required | Notes |
+| ------------------------------- | ------------ | -------- | ----- |
+| `id`                            | Id           | yes      | Primary key. The reference clients and agents use for an item. |
+| `workspace_id`                  | Id           | yes      | FK to `workspaces`; denormalized from the delivery. |
+| `project_id`                    | Id           | yes      | FK to `projects`, cascade delete; denormalized from the delivery. |
+| `mission_id`                    | Id           | yes      | FK to `missions`, cascade delete; denormalized from the delivery. |
+| `objective_id`                  | Id           | yes      | FK to `objectives`, cascade delete; the reporting objective. |
+| `delivery_id`                   | Id           | yes      | FK to `deliveries`, cascade delete; the reporting delivery. |
+| `kind`                          | text         | yes      | Closed: `risk`, `human_action`, `suggestion`. |
+| `item_ref`                      | text         | yes      | Stable identity inside the delivery, at most 200 characters. A suggestion reuses `DeferredWorkV1.id`. A risk is `risk-<digest>` of its normalised text (trimmed, whitespace collapsed, lower-cased). A human action is `human_action-<digest>` of `[source, id, sourceRef, normalised agent wording]`, which the delivery composer preserves when it rephrases an action. Digests are the first 16 hex characters of SHA-256 over the JSON form. |
+| `position`                      | integer      | yes      | Zero-based order inside the delivery's presentation list of that kind. |
+| `text`                          | text         | yes      | Risk text, action sentence, or suggestion title, from the current presentation. |
+| `detail_json`                   | Json         | yes      | Object of kind-specific fields. Suggestion: `change`, `location`, `doneWhen`. Human action: `actionId` (the delivery-local `HumanActionV1.id`), `category`, `source`, and when present `reason`, `blocking`, `command`, `verify`, `link`, `sourceRef`. Risk: `{}`. |
+| `status`                        | text         | yes      | Closed: `open`, `done`, `dismissed`, `superseded`. Default `open`. |
+| `status_reason`                 | text         | no       | At most 280 characters; only on `done` or `dismissed`; required when an agent closed the item. Shown to people. |
+| `resolved_by_kind`              | text         | no       | Closed: `person`, `agent`. Set exactly when `status` is `done` or `dismissed`. |
+| `resolved_by_workspace_user_id` | Id           | no       | FK to `workspace_users`, set null on delete. The person who closed the item. |
+| `resolved_by_objective_id`      | Id           | no       | FK to `objectives`, set null on delete. The objective whose delivery closed the item. |
+| `resolved_by_delivery_id`       | Id           | no       | FK to `deliveries`, set null on delete. The delivery that closed the item. |
+| `outcome`                       | text         | no       | Closed: `mission_created`, `objective_added`. Promotion of a suggestion, only with `status = 'done'`. |
+| `outcome_ref`                   | text         | no       | Display id of the mission or objective the promotion created; only with `outcome`. |
+| `resolved_at`                   | TimestampUTC | no       | Set exactly when `status` is `done` or `dismissed`. |
+| `reported_at`                   | TimestampUTC | yes      | The reporting delivery's `delivered_at`. |
+| `created_at`                    | TimestampUTC | yes      | |
+| `updated_at`                    | TimestampUTC | yes      | |
+| `revision`                      | integer      | yes      | Increments on every update. |
 
 Indexes:
 
-- Primary key `(delivery_id, action_id)`.
-- `(workspace_id, resolved_at)`.
+- Unique `(delivery_id, kind, item_ref)`.
+- `(mission_id, status, kind)`: the summary panel and the attach baseline.
+- `(project_id, status, kind)`: project-wide reads.
+- `(objective_id, status)`: the supersede rules.
 
-Mutations emit `entity_changes` rows with `entity_type = 'human_action_resolution'`,
-`entity_id = '<delivery_id>:<action_id>'`, and the mission and objective ids, so the webapp
-can refresh the mission's delivery cards. Creating or deleting a row on a summary-eligible
-mission also triggers `overlord.mission.summary.compose.v1` in the same transaction.
+Lifecycle (the core item service in `packages/core/service/mission-items.ts` is the only
+writer; row derivation, the insert statement and the supersede predicates are shared with the
+migration backfill from `@overlord/database`):
+
+- **Write.** A delivery (`deliverSession`, `recordWork`) inserts its items as `open` rows from
+  its immediate presentation, in the delivery transaction. When a presentation is saved
+  (`persistDeliveryPresentation`, which the delivery compose worker uses for the composed and the
+  fallback presentation), rows are reconciled by `(kind, item_ref)` in the same transaction: matched
+  rows take the new text, position and detail; new items are inserted `open`; a row still `open`
+  that the presentation no longer lists is deleted. A closed or superseded row is never deleted.
+  A risk whose normalised text repeats within one delivery is stored once.
+- **Supersede.** Once a newer live delivery of the same objective exists (newer by
+  `delivered_at`, ties by delivery id), the `open` human actions of the earlier deliveries become
+  `superseded`. When an objective reopens, every `open` item of a delivery made before its
+  `reopened_at` becomes `superseded`. Risks and suggestions of earlier deliveries otherwise stay
+  `open`. Only `open` rows are superseded. The rules run after every delivery, presentation save,
+  restore and objective reopen (`PATCH /api/objectives/:id` to `draft` from a state that ran).
+- **Close.** A person or an agent sets `done` or `dismissed` with the resolver columns and
+  `resolved_at`. An agent closes only `open` items and gives a reason. A person may close an item
+  in any status: re-decide a closed item, or decide a `superseded` suggestion from the delivery
+  card of a delivery made before its objective reopened, as the card has always allowed. A person's
+  reason is optional. People close through `PUT /api/mission-items/:id/resolution` (any kind) and
+  `PUT /api/deliveries/:deliveryId/deferred-work/:actionId/resolution` (suggestions, with the
+  promotion `outcome`).
+- **Restore.** A person sets a `done` or `dismissed` item back to `open`; every resolver column,
+  the reason and the outcome are cleared, then the supersede rules run again, so an item of a
+  delivery that is no longer current returns to `superseded`. A `superseded` item cannot be
+  restored.
+- **Project move.** When a mission moves to another project, its items' `project_id` follows it.
+- **Read.** `listMissionItems({ missionId | projectId, kinds, statuses, limit })` is the single
+  definition of "open"; it never returns items of a deleted delivery and orders newest delivery
+  first, then by kind and position.
+
+Every insert, update and delete appends an `entity_changes` row with
+`entity_type = 'mission_item'`, `entity_id = id`, and the mission and objective ids.
+
+Migration `20261115120000_mission_items` creates the table in both editions; its TypeScript
+runtime step (`database/src/mission-items-migration-runtime.ts`) then derives rows from every
+live delivery with the strict stored-report reader (`@overlord/contract/delivery-report`),
+copies each `human_action_resolutions` row onto its suggestion row as a `person` decision, and
+applies the supersede rules. It runs in batches, writes no `entity_changes` rows, and changes
+nothing when run again.
 
 ### `mission_summaries`
 
 The agent-maintained mission summary (coo:1202): one row per mission whose
-`missions.summary_enabled` is true, replaced in place. It is an operator surface only and is
-never part of `load-context`, the mission packet, MCP, or CLI protocol output. Not indexed in
-`search_documents`.
+`missions.summary_enabled` is true, replaced in place. It is never part of `load-context` or
+`connect`; `attach` and `resume-follow-up` return it only as the agent's editing baseline. From contract v173 (ADR 0060, amending ADR 0046) the delivering agent may
+write the headline and summary; `content_revision` is the concurrency token for those writes.
+Not indexed in `search_documents`.
 
 | Column                 | Type         | Required | Notes                                                                                                   |
 | ---------------------- | ------------ | -------- | ------------------------------------------------------------------------------------------------------- |
@@ -1553,28 +1607,43 @@ never part of `load-context`, the mission packet, MCP, or CLI protocol output. N
 | `status`               | text         | yes      | Closed: `pending`, `composed`, `fallback`.                                                              |
 | `headline`             | text         | yes      | One sentence; empty in the first pending shell.                                                         |
 | `summary_markdown`     | text         | yes      | Two to five sentences of Markdown; empty in the first pending shell.                                    |
-| `risks_json`           | Json         | yes      | `[{ deliveryId, objectiveId, index, text }]`; `text` is the composer's bounded rewrite or the original. |
-| `suggestions_json`     | Json         | yes      | `[{ deliveryId, objectiveId, actionId }]` in display order; references only, never item text.          |
 | `source_delivery_id`   | Id           | no       | Delivery whose compose triggered this pass; null for any other trigger. Soft reference.                 |
-| `generated_by`         | text         | yes      | Closed: `deterministic`, `gemini`.                                                                      |
+| `generated_by`         | text         | yes      | Closed: `deterministic`, `gemini`, `agent`. With `agent`, `model` holds the delivering objective's agent model id. |
 | `generated_at`         | TimestampUTC | no       | Null in the first pending shell.                                                                        |
 | `model`                | text         | no       |                                                                                                         |
 | `created_at`           | TimestampUTC | yes      |                                                                                                         |
 | `updated_at`           | TimestampUTC | yes      |                                                                                                         |
+| `content_revision`     | integer      | yes      | Default `0`. Increments only when the headline or summary is written; the optimistic-concurrency token for agent narrative writes. `revision` cannot serve: it also moves on every pending notification. |
+| `narrative_delivery_id` | Id          | no       | The delivery whose author wrote the current headline and summary. Soft reference.                      |
+| `narrative_objective_id` | Id         | no       | That delivery's objective, for the provenance line. Soft reference.                                    |
 
 Indexes:
 
 - Primary key `(mission_id)`.
 - `(workspace_id, updated_at)`.
 
-A trigger increments `requested_generation`, sets `status = 'pending'`, bumps `revision`,
+Risk, action and suggestion lists are read from open `mission_items`, with stable item ids,
+never from the narrative or delivery JSON. Closed (`done`, `dismissed`) rows are returned in
+`closedItems`, capped at 100, newest resolution first. Superseded rows are omitted.
+The drop migration also removes `risks_json` and `suggestions_json` from `mission_summaries`.
+
+A trigger is a no-op (no status change or job) when the newest live delivery is
+`narrative_delivery_id`. Otherwise it increments `requested_generation`, sets `status = 'pending'`, bumps `revision`,
 and keeps the previous content in the transaction of the write it follows; the first trigger
 inserts a pending shell. Triggers: a delivery presentation persisted as `composed` or
 `fallback`; a deferred-work resolution create or delete; an agent request of kind `question`
 or `choice` on creation and on every transition out of `open`; an objective reopening. The worker publishes only while `requested_generation` still equals
-the generation it captured, then sets `completed_generation`. Every write appends an
-`entity_changes` row with `entity_type = 'mission_summary'`, `entity_id = mission_id`, and
-`mission_id` set.
+the generation it captured and the newest live delivery is not `narrative_delivery_id`.
+It writes headline and summary only, sets `completed_generation`, increments `content_revision`,
+and clears the narrative author references. It never writes item lists. An agent narrative
+write (protocol `deliver` / `record-work` `missionSummary`) runs in the delivery transaction:
+it inserts an empty shell when no row exists, takes the row lock, and on `deliver` compares
+`content_revision` with the agent's base before any delivery row is written. It then sets
+`headline`, `summary_markdown`, `status = 'composed'`, `generated_by = 'agent'`, `model`,
+`generated_at`, `source_delivery_id` and both `narrative_*` references to the delivery,
+`completed_generation = requested_generation`, and increments `content_revision` and
+`revision`. Every write appends an `entity_changes` row with `entity_type = 'mission_summary'`,
+`entity_id = mission_id`, and `mission_id` set.
 
 ### `mission_summary_seen`
 
@@ -2989,6 +3058,8 @@ Closed values:
 - `objectives.state`: `draft`, `submitted`, `launching`, `executing`, `pending_delivery`, `complete`.
 - `user_tokens.scope`: `full`, `mission_lifecycle`, `project_automation`. A token-created mission keeps `created_by_kind` as the creating actor's class; the token itself is recorded on `missions.created_by_token_id` / `created_by_token_label`.
 - `objectives.title_source`, `objectives.description_source`: `generated`, `agent`, `user` (null: provenance not known / no description). `objectives.title_status`, `objectives.description_status`: `pending`, `failed`. `objectives.description_request_kind`: `automatic`, `explicit`. `objectives.instruction_author_kind`: `human`, `agent`, `automation`. `objectives.description_failure_code`: `provider_unavailable`, `provider_error`, `invalid_output`, `unfaithful_output` (ADR 0057).
+- `mission_items.kind`: `risk`, `human_action`, `suggestion`. `mission_items.status`: `open`, `done`, `dismissed`, `superseded`. `mission_items.resolved_by_kind`: `person`, `agent`. `mission_items.outcome`: `mission_created`, `objective_added` (ADR 0060).
+- `mission_summaries.status`: `pending`, `composed`, `fallback`. `mission_summaries.generated_by`: `deterministic`, `gemini`, `agent` (`agent` added in v173, ADR 0060).
 - `missions.created_by_kind`, `objectives.created_by_kind`: `human`, `agent`, `automation`. `human` is the default and covers every pre-provenance row; `agent` is the protocol surface (CLI-forwarded agent commands, connector harness, MCP); `automation` is Overlord itself creating a row with no actor in the loop, such as scheduled-mission regeneration. The companion `created_by_agent` identifier stays **open** (see connector identifiers below).
 - `execution_requests.status`: `queued`, `claimed`, `launching`, `launched`, `failed`, `cleared`, `cancelled`, `expired`.
 - `run_queue_entries.state`: `waiting`, `blocked`, `dispatched`, `running`.

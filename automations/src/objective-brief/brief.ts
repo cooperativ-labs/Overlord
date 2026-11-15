@@ -88,7 +88,7 @@ Title rules:
 - When a decision is open, do not choose one of its options in the title or the goal.
 
 Summary rules:
-- goal: one sentence of at most 25 words that says what changes. Start with the change, not with "The objective", "The task" or "The developer". Name who is affected only when the instructions say it.
+- goal: one sentence of at most 25 words that says what changes. Start with the change, not with "The objective", "The task" or "The developer". Name who is affected only when the instructions say it. When decisionsNeeded is not empty, the goal must not choose or imply one of the options: write it in a neutral form, for example "Store the brief state in the database that the decision selects."
 - decisionsNeeded: one item for each choice that a person must make because the instructions leave it open, are ambiguous or contradict themselves. Name the options, for example "Use Postgres or SQLite." Do not write the prefix "Decision needed:". Use an empty list when there is no open choice.
 - body: zero, one or two short paragraphs of plain prose about the work, the scope, the limits and the risks. Do not repeat the goal. Start a new paragraph only when the topic changes. Start a sentence about a destructive or irreversible step with "CAUTION:" and put it before the sentence for that step.
 - doneWhen: one sentence of at most 25 words that says what a person can observe when the work is complete. Take it only from the instructions. If the instructions do not say how to confirm that the work is complete, set doneWhenStated to false and doneWhen to "". Never invent a completion test.
@@ -403,6 +403,102 @@ export function describeFidelityIssue(issue: BriefFidelityIssue): string {
 // Style checks that ask for one rewrite
 // ---------------------------------------------------------------------------
 
+// Decision neutrality: an open decision must not be settled by the goal.
+
+const TERM_PATTERN = /`([^`\n]+)`|[\p{L}\p{N}][\p{L}\p{N}_+#-]*/gu;
+
+/**
+ * The options of one decision sentence ("Use Postgres or SQLite."), split on
+ * "or" and on commas in a list ("Use CSV, JSON or YAML."). A sentence without
+ * "or" names no alternatives that this check can recognize.
+ */
+export function decisionAlternatives(decision: string): string[] {
+  const sentence = stripPrefix(normalizeBriefFragment(decision), DECISION_PREFIX)
+    .replace(/[.!?]+$/, '')
+    .replace(/^either\s+/i, '');
+  if (!/\bor\b/i.test(sentence)) return [];
+  return sentence
+    .split(/\s*,\s*(?:or\s+)?|\s+or\s+/i)
+    .map(part => part.trim())
+    .filter(Boolean);
+}
+
+/**
+ * Terms that name an option: code spans, words with a digit, and words with a
+ * capital letter that is not only the sentence-initial capital (SQLite,
+ * Postgres, CSV). Common words are ignored: "review" in a goal does not pick
+ * the option "wait for the review".
+ */
+function salientTerms(alternative: string, sentenceStart: boolean): string[] {
+  const terms: string[] = [];
+  let index = 0;
+  for (const match of alternative.matchAll(TERM_PATTERN)) {
+    const code = match[1];
+    const word = match[0];
+    const first = sentenceStart && index === 0;
+    index += 1;
+    if (code) {
+      terms.push(code);
+    } else if (
+      /\p{N}/u.test(word) ||
+      /\p{Lu}/u.test(word.slice(1)) ||
+      (!first && /^\p{Lu}/u.test(word))
+    ) {
+      terms.push(word);
+    }
+  }
+  return terms;
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function containsTerm(text: string, term: string): boolean {
+  return new RegExp(`(?<![\\p{L}\\p{N}_])${escapeRegExp(term)}(?![\\p{L}\\p{N}_])`, 'iu').test(
+    text
+  );
+}
+
+export type GoalDecisionOptionMatch = { decision: string; terms: string[] };
+
+/**
+ * Deterministic check that the goal sentence stays neutral about each open
+ * decision. The goal "names an option" when it contains a term that belongs to
+ * some, but not all, of a decision's options. Paths and file names in the goal
+ * are ignored (`report.json` does not pick "JSON"), and a goal that names every
+ * option ("Compare SQLite and Postgres") stays neutral.
+ */
+export function findGoalDecisionOptions(
+  goal: string,
+  decisionsNeeded: string[]
+): GoalDecisionOptionMatch[] {
+  const neutralGoal = normalizeBriefFragment(goal).replace(/\S*[\w-][./][\w-]\S*/g, ' ');
+  const matches: GoalDecisionOptionMatch[] = [];
+  for (const decision of decisionsNeeded) {
+    const alternatives = decisionAlternatives(decision);
+    if (alternatives.length < 2) continue;
+    const named = new Set<string>();
+    let namedAlternatives = 0;
+    alternatives.forEach((alternative, position) => {
+      const others = alternatives.filter((_, other) => other !== position);
+      const distinctive = salientTerms(alternative, position === 0).filter(
+        term => !others.some(other => containsTerm(other, term))
+      );
+      const hits = distinctive.filter(term => containsTerm(neutralGoal, term));
+      if (hits.length > 0) namedAlternatives += 1;
+      for (const hit of hits) named.add(hit);
+    });
+    if (namedAlternatives > 0 && namedAlternatives < alternatives.length) {
+      matches.push({
+        decision: stripPrefix(normalizeBriefFragment(decision), DECISION_PREFIX),
+        terms: [...named]
+      });
+    }
+  }
+  return matches;
+}
+
 export type ObjectiveBriefStyleIssue = SteLintViolation | { code: string; message: string };
 
 /**
@@ -423,6 +519,16 @@ export function lintObjectiveDescription(
     issues.push({
       code: 'goal_too_long',
       message: `The goal has ${goalWords} words. Use at most ${OBJECTIVE_BRIEF_EDGE_SENTENCE_MAX_WORDS}.`
+    });
+  }
+  for (const match of findGoalDecisionOptions(parts.goal, parts.decisionsNeeded)) {
+    issues.push({
+      code: 'goal_picks_decision_option',
+      message: `The goal names ${match.terms
+        .map(term => `"${term}"`)
+        .join(
+          ', '
+        )}, an option of the open decision "${match.decision}". Write the goal in a neutral form that does not choose or imply an option, for example "Store the state in the database that the decision selects."`
     });
   }
   const doneWords = countWords(normalizeBriefFragment(parts.doneWhen));

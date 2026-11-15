@@ -8,14 +8,10 @@ import type { DatabaseClient } from '@overlord/database';
 
 import {
   buildDeterministicMissionSummary,
-  collectMissionSummaryOpenActions,
-  collectMissionSummaryRiskCandidates,
   deliveryFirstParagraph,
   MISSION_SUMMARY_LIMITS,
   type MissionSummaryResult,
-  missionSummaryRiskRef,
-  reconcileMissionSummaryDraft,
-  selectMissionSummarySuggestions
+  reconcileMissionSummaryDraft
 } from '../packages/core/service/mission-summary-compose.ts';
 import {
   type MissionSummaryEvidence,
@@ -56,10 +52,7 @@ function bound(value: string, maxChars: number): string {
  * Builds the bounded model input (plan §4.5, §11 item 5). Only unresolved
  * deferred work enters the model context, and only by title.
  */
-function toMissionSummaryInput(
-  evidence: MissionSummaryEvidence,
-  suggestions: ReturnType<typeof selectMissionSummarySuggestions>
-): ComposeMissionSummaryInput {
+function toMissionSummaryInput(evidence: MissionSummaryEvidence): ComposeMissionSummaryInput {
   const keyOf = (objectiveId: string | null) =>
     evidence.objectives.find(objective => objective.id === objectiveId && !objective.deleted)
       ?.key ?? 'unassigned';
@@ -67,7 +60,6 @@ function toMissionSummaryInput(
     evidence.runs.latestByObjective.map(delivery => [delivery.objectiveId, delivery])
   );
   const newest = evidence.runs.latestByObjective[0] ?? null;
-  const deliveries = new Map(evidence.runs.currentRun.map(delivery => [delivery.id, delivery]));
   return {
     mission: { title: evidence.mission.title, statusType: evidence.mission.statusType },
     previousSummary: evidence.previous,
@@ -98,33 +90,35 @@ function toMissionSummaryInput(
           )
         }
       : null,
-    openActions: collectMissionSummaryOpenActions(evidence.runs.latestByObjective)
+    openActions: evidence.openItems
+      .filter(item => item.kind === 'human_action')
+      .sort((a, b) => Number(b.detail.blocking === true) - Number(a.detail.blocking === true))
       .slice(0, MISSION_SUMMARY_LIMITS.openActions)
-      .map(({ delivery, action }) => ({
-        ref: `${delivery.id}:${action.id}`,
-        objectiveKey: keyOf(delivery.objectiveId),
-        action: action.action,
-        ...(action.reason ? { reason: action.reason } : {}),
-        blocking: action.blocking === true,
-        category: action.category
+      .map(item => ({
+        ref: item.id,
+        objectiveKey: keyOf(item.objectiveId),
+        action: item.text,
+        ...(typeof item.detail.reason === 'string' ? { reason: item.detail.reason } : {}),
+        blocking: item.detail.blocking === true,
+        category: String(item.detail.category ?? 'other')
       })),
     openQuestions: evidence.openQuestions.map(question => ({
       requestId: question.requestId,
       objectiveKey: keyOf(question.objectiveId),
       prompt: bound(question.prompt, MISSION_SUMMARY_LIMITS.questionPrompt)
     })),
-    pendingSuggestions: suggestions.flatMap(ref => {
-      if (evidence.resolutionStatus.has(`${ref.deliveryId}:${ref.actionId}`)) return [];
-      const item = deliveries
-        .get(ref.deliveryId)
-        ?.report.presentation.deferredWork.find(candidate => candidate.id === ref.actionId);
-      return item ? [{ objectiveKey: keyOf(ref.objectiveId), title: item.title }] : [];
-    }),
-    knownRisks: collectMissionSummaryRiskCandidates(evidence.runs.currentRun).map(risk => ({
-      ref: missionSummaryRiskRef(risk),
-      objectiveKey: keyOf(risk.objectiveId),
-      text: risk.text
-    })),
+    pendingSuggestions: evidence.openItems
+      .filter(item => item.kind === 'suggestion')
+      .slice(0, MISSION_SUMMARY_LIMITS.suggestions)
+      .map(item => ({ objectiveKey: keyOf(item.objectiveId), title: item.text })),
+    knownRisks: evidence.openItems
+      .filter(item => item.kind === 'risk')
+      .slice(0, MISSION_SUMMARY_LIMITS.riskCandidates)
+      .map(item => ({
+        ref: item.id,
+        objectiveKey: keyOf(item.objectiveId),
+        text: bound(item.text, MISSION_SUMMARY_LIMITS.riskText)
+      })),
     counts: evidence.counts
   };
 }
@@ -218,8 +212,6 @@ class MissionSummaryComposeWorker extends WorkerJobPoller {
             pass,
             durationMs: Date.now() - startedAt,
             model: outcome.result.model,
-            risks: outcome.result.risks.length,
-            suggestions: outcome.result.suggestions.length,
             inputBytes: outcome.inputBytes,
             estimatedInputTokens: Math.ceil(outcome.inputBytes / 4)
           }
@@ -285,15 +277,10 @@ class MissionSummaryComposeWorker extends WorkerJobPoller {
     const evidence = await readMissionSummaryEvidence(client, missionId);
     if (!evidence) return { kind: 'missing' };
 
-    const suggestions = selectMissionSummarySuggestions({
-      currentRun: evidence.runs.currentRun,
-      resolutionStatus: evidence.resolutionStatus
-    });
     const shared = {
       objectives: evidence.objectives,
       runs: evidence.runs,
-      openQuestions: evidence.openQuestions,
-      suggestions
+      openQuestions: evidence.openQuestions
     };
 
     let result: MissionSummaryResult;
@@ -302,7 +289,7 @@ class MissionSummaryComposeWorker extends WorkerJobPoller {
     if (forceFallback || !canGenerate) {
       result = buildDeterministicMissionSummary(shared);
     } else {
-      const input = toMissionSummaryInput(evidence, suggestions);
+      const input = toMissionSummaryInput(evidence);
       inputBytes = Buffer.byteLength(JSON.stringify(input), 'utf8');
       const generate = this.generateOverride;
       const draft = await composeMissionSummaryWithGemini({
@@ -329,8 +316,6 @@ class MissionSummaryComposeWorker extends WorkerJobPoller {
         status: result.status,
         headline: result.headline,
         summary: result.summary,
-        risks: result.risks,
-        suggestions: result.suggestions,
         sourceDeliveryId: evidence.sourceDeliveryId,
         generatedBy: result.generatedBy,
         model: result.model

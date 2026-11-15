@@ -858,6 +858,25 @@ export async function recordChange(
 }
 
 /**
+ * REST-layer change attribution for writes that go through a core service and
+ * append their own `entity_changes` rows (such as the mission item service):
+ * the explicit actor when given, else the caller's membership in `workspaceId`,
+ * as `recordChange` resolves it.
+ */
+export async function restChangeAttribution(
+  workspaceId: string,
+  client: DatabaseClient = requireDatabaseClient(),
+  actorWorkspaceUserId?: string | null
+): Promise<{ actorWorkspaceUserId: string | null; actorTokenId: string | null; source: 'webapp' }> {
+  let actor = actorWorkspaceUserId;
+  if (actor === undefined) {
+    const profileId = await resolveActiveProfileId(client);
+    actor = profileId ? await findActiveMembershipId(workspaceId, profileId, client) : null;
+  }
+  return { actorWorkspaceUserId: actor, actorTokenId: getActiveTokenId(), source: 'webapp' };
+}
+
+/**
  * REST-layer write context for a mission summary trigger
  * (`enqueueMissionSummaryComposeJob`), attributed like `recordChange`.
  */

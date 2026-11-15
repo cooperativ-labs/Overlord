@@ -5,6 +5,7 @@ import { readFileSync } from 'node:fs';
 import { describe, it } from 'node:test';
 
 import { buildDeliveryReport } from '../packages/core/service/delivery-report.ts';
+import { insertDeliveryMissionItems } from '../packages/core/service/mission-items.ts';
 import {
   claimNextWorkerJob,
   completeMissionSummaryComposeJob,
@@ -60,6 +61,17 @@ for (const adapter of conformanceAdapters()) {
             stamp
           ]
         );
+        for (const file of [
+          '20260907150000_human_action_resolutions.sql',
+          '20260923090000_human_action_resolution_outcome.sql'
+        ]) {
+          await db.exec(
+            readFileSync(
+              new URL(`../database/${adapter}/migrations/${file}`, import.meta.url),
+              'utf8'
+            )
+          );
+        }
         await db.run(
           `INSERT INTO human_action_resolutions (delivery_id, action_id, workspace_id, mission_id, objective_id, status, resolved_at)
           VALUES ('historical', 'deferred-work-0-retired', ?, ?, ?, 'dismissed', ?)`,
@@ -168,7 +180,17 @@ for (const adapter of conformanceAdapters()) {
           id: string,
           objectiveId: string,
           timestamp: string,
-          payload = report
+          payload = objectiveId === quiet.id
+            ? report
+            : buildDeliveryReport({
+                summary: 'Busy objective delivery.',
+                deliveryReport: {
+                  schemaVersion: 1,
+                  agentReport: {
+                    humanActions: [{ action: 'Enable export in production.', category: 'other' }]
+                  }
+                }
+              })
         ) => {
           await db.run(
             `INSERT INTO deliveries (id, workspace_id, project_id, mission_id, objective_id, summary, payload_json, delivered_at, created_at, updated_at)
@@ -185,6 +207,19 @@ for (const adapter of conformanceAdapters()) {
               timestamp
             ]
           );
+          // The delivery path writes its items in the same transaction.
+          await insertDeliveryMissionItems(db, {
+            delivery: {
+              id,
+              workspaceId: mission.workspaceId,
+              projectId: project.id,
+              missionId: mission.id,
+              objectiveId,
+              deliveredAt: timestamp
+            },
+            report: payload,
+            attribution: { actorWorkspaceUserId: null, actorTokenId: null, source: 'webapp' }
+          });
         };
         await insert(quietDelivery, quiet.id, '2026-10-01T00:00:00.000Z');
         await db.transaction(async () => {
@@ -241,16 +276,12 @@ for (const adapter of conformanceAdapters()) {
           outcome: 'objective_added',
           outcomeRef: 'test:1.abcd'
         });
-        const resolved = (await getMissionSummary(mission.id)).summary!.suggestions[0]!;
-        assert.equal(resolved.state, 'resolved');
-        assert.equal(resolved.deliveredAt, '2026-10-01T00:00:00.000Z');
-        assert.equal('change' in resolved, false);
-        assert.equal(resolved.resolution?.outcomeRef, 'test:1.abcd');
+        const resolved = (await getMissionSummary(mission.id)).summary!;
+        assert.deepEqual(resolved.suggestions, []);
+        assert.equal(resolved.closedItems[0]!.text, report.presentation.deferredWork[0]!.title);
+        assert.equal(resolved.closedItems[0]!.status, 'done');
         await publishMissionSummary({ db, missionId: mission.id, generation: 2, publication });
-        assert.equal(
-          (await getMissionSummary(mission.id)).summary?.suggestions[0]?.state,
-          'resolved'
-        );
+        assert.deepEqual((await getMissionSummary(mission.id)).summary?.suggestions, []);
         await reopenDeferredWork(quietDelivery, ref.actionId);
         await resolveDeferredWork(quietDelivery, ref.actionId, { status: 'dismissed' });
         assert.deepEqual((await getMissionSummary(mission.id)).summary?.suggestions, []);
@@ -496,6 +527,113 @@ for (const adapter of conformanceAdapters()) {
         const beforeEnd = await generation();
         await endChannel({ ctx, channelId: channel.id, reason: 'session_ended' });
         assert.equal(await generation(), beforeEnd + 1);
+      } finally {
+        await cleanup();
+      }
+    });
+
+    it('preserves agent prose through triggers and queued worker publication, then resumes fallback for a newer delivery', async () => {
+      const { db, cleanup } = await createConformanceDatabase(adapter, 'ovld_summary_agent_guard');
+      try {
+        await bindWebappDatabaseClient({ client: db });
+        const { createProject, createMission } = await import('./repository.ts');
+        const { buildWebappServiceContext } = await import('./db.ts');
+        const project = await createProject({ name: 'Agent guard' });
+        const mission = await createMission({ projectId: project.id, firstObjective: 'Work' });
+        const objective = mission.objectives[0]!;
+        const ctx = buildWebappServiceContext();
+        const insert = (id: string, stamp: string) =>
+          db.run(
+            `INSERT INTO deliveries (id, workspace_id, project_id, mission_id, objective_id, summary, delivered_at, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, 'Delivered.', ?, ?, ?)`,
+            [id, mission.workspaceId, project.id, mission.id, objective.id, stamp, stamp, stamp]
+          );
+        await insert('agent-delivery', '2026-11-01T00:00:00.000Z');
+        const trigger = () =>
+          db.transaction(tx =>
+            enqueueMissionSummaryComposeJob({
+              ctx: { ...ctx, db: tx },
+              missionId: mission.id,
+              reason: 'delivery_presented'
+            })
+          );
+        const queued = await trigger();
+        await db.run(
+          `UPDATE mission_summaries SET generated_by = 'agent', headline = 'Verified.', summary_markdown = 'Verified in code.',
+          status = 'composed', content_revision = 1, narrative_delivery_id = 'agent-delivery', narrative_objective_id = ? WHERE mission_id = ?`,
+          [objective.id, mission.id]
+        );
+        const before = await db.get('SELECT * FROM mission_summaries WHERE mission_id = ?', [
+          mission.id
+        ]);
+        assert.deepEqual(await trigger(), { triggered: false, generation: null, jobId: null });
+        const publication = {
+          status: 'composed' as const,
+          headline: 'Stale.',
+          summary: 'Stale.',
+          sourceDeliveryId: null,
+          generatedBy: 'gemini' as const,
+          model: 'test'
+        };
+        assert.equal(
+          await publishMissionSummary({
+            db,
+            missionId: mission.id,
+            generation: queued.generation!,
+            publication
+          }),
+          'stale'
+        );
+        assert.equal(
+          (
+            await completeMissionSummaryComposeJob({
+              db,
+              missionId: mission.id,
+              jobId: queued.jobId!,
+              status: 'succeeded'
+            })
+          ).successorJobId,
+          null
+        );
+        assert.deepEqual(
+          await db.get('SELECT * FROM mission_summaries WHERE mission_id = ?', [mission.id]),
+          before
+        );
+        await insert('legacy-delivery', '2026-11-02T00:00:00.000Z');
+        const next = await trigger();
+        assert.equal(next.triggered, true);
+        assert.equal(
+          await publishMissionSummary({
+            db,
+            missionId: mission.id,
+            generation: next.generation!,
+            publication
+          }),
+          'published'
+        );
+        const row = await db.get<{
+          generated_by: string;
+          content_revision: number;
+          narrative_delivery_id: string | null;
+        }>(
+          'SELECT generated_by, content_revision, narrative_delivery_id FROM mission_summaries WHERE mission_id = ?',
+          [mission.id]
+        );
+        assert.deepEqual(row, {
+          generated_by: 'gemini',
+          content_revision: 2,
+          narrative_delivery_id: null
+        });
+        // Deleting the narrative's delivery also permits fallback: NULL newest id is not a match.
+        await db.run(`UPDATE deliveries SET deleted_at = ? WHERE mission_id = ?`, [
+          '2026-11-03T00:00:00.000Z',
+          mission.id
+        ]);
+        await db.run(
+          `UPDATE mission_summaries SET narrative_delivery_id = 'agent-delivery' WHERE mission_id = ?`,
+          [mission.id]
+        );
+        assert.equal((await trigger()).triggered, true);
       } finally {
         await cleanup();
       }

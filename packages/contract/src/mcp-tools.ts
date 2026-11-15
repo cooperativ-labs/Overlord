@@ -37,6 +37,45 @@ const stringProperty = (description: string): Record<string, unknown> => ({
   description
 });
 
+function missionSummaryProperty({
+  requireBase
+}: {
+  requireBase: boolean;
+}): Record<string, unknown> {
+  return {
+    ...objectSchema({
+      baseContentRevision: {
+        type: 'integer',
+        minimum: 0,
+        description: requireBase
+          ? 'missionSummary.contentRevision from attach. Required with headline and summary; a stale value rejects the whole delivery with mission_summary_conflict and a fresh baseline.'
+          : 'Not needed: record-work creates a new mission with no summary to conflict with.'
+      },
+      headline: stringProperty('One sentence, at most 140 characters. Send together with summary.'),
+      summary: stringProperty(
+        'Markdown, at most 1,200 characters, rewritten to be true now: what the mission provides and why it matters, current limits, then what a person must do. Say whether claims are implemented, tested or deployed. Do not restate open actions or suggestions.'
+      ),
+      closeItems: {
+        type: 'array',
+        maxItems: 50,
+        description:
+          'Open items of this mission (ids from the attach baseline openItems) that you checked are addressed (done) or no longer apply (dismissed). Unknown, foreign or already-closed ids are skipped with a warning.',
+        items: objectSchema(
+          {
+            id: stringProperty('Item id from missionSummary.openItems.'),
+            status: { type: 'string', enum: ['done', 'dismissed'] },
+            reason: stringProperty('Required. Why, at most 280 characters. Shown to people.')
+          },
+          ['id', 'status', 'reason']
+        )
+      }
+    }),
+    description: requireBase
+      ? 'Optional agent-written mission summary for people: a replacement headline and summary based on the attach baseline, and open items to close. On mission_summary_conflict nothing is delivered: rewrite from error details.missionSummary and retry once, then deliver without headline and summary.'
+      : 'Optional agent-written mission summary for the new mission: headline and summary.'
+  };
+}
+
 const booleanProperty = (description: string): Record<string, unknown> => ({
   type: 'boolean',
   description
@@ -648,7 +687,7 @@ export function overlordMcpToolDefinitions({
         []
       ),
       outputSchema: protocolOutputSchema(
-        'Attached session context, including the session key required for lifecycle calls.'
+        'Attached session context, including the session key required for lifecycle calls. For a mission with a summary it also carries missionSummary { contentRevision, headline, summary, author, openItems [{ id, kind, objective, text, blocking? }], truncated }: the baseline to rewrite when delivering.'
       ),
       annotations: writeAction
     },
@@ -787,12 +826,13 @@ export function overlordMcpToolDefinitions({
           assumptions: {
             type: 'array',
             items: stringProperty('Material implementation assumption.')
-          }
+          },
+          missionSummary: missionSummaryProperty({ requireBase: true })
         },
         ['sessionKey', 'summary']
       ),
       outputSchema: protocolOutputSchema(
-        'The completed delivery record and any recorded file changes.'
+        'The completed delivery record and any recorded file changes, plus missionSummary { contentRevision, narrativeWritten, closedItemIds, warnings } when a summary was sent.'
       ),
       annotations: writeAction
     },
@@ -887,7 +927,8 @@ export function overlordMcpToolDefinitions({
           artifacts: {
             type: 'array',
             description: 'Optional artifacts: next_steps, test_results, decision, note, or url.'
-          }
+          },
+          missionSummary: missionSummaryProperty({ requireBase: false })
         },
         ['projectId', 'objective', 'summary']
       ),

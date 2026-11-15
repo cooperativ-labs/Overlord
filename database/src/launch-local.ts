@@ -19,6 +19,10 @@ import {
   resolveAppliedMigrationSqlite
 } from './migration-ledger.js';
 import {
+  finalizeMissionItemsSqlite,
+  isMissionItemsMigration
+} from './mission-items-migration-runtime.js';
+import {
   finalizeNextStatusTypeSqlite,
   isNextStatusTypeMigration
 } from './next-status-type-migration-runtime.js';
@@ -122,6 +126,9 @@ function applyMigration(db: DatabaseInstance, migration: Migration): 'applied' |
   }
   if (isNextStatusTypeMigration(migration)) {
     finalizeNextStatusTypeSqlite(db);
+  }
+  if (isMissionItemsMigration(migration)) {
+    finalizeMissionItemsSqlite(db);
   }
   recordMigration(db, migration);
 
@@ -274,6 +281,9 @@ function applyMigrationWithPendingRecords(
   }
   if (isNextStatusTypeMigration(migration)) {
     finalizeNextStatusTypeSqlite(db);
+  }
+  if (isMissionItemsMigration(migration)) {
+    finalizeMissionItemsSqlite(db);
   }
   if (!hasSchemaMigrationsTable(db)) {
     pendingMigrationRecords.push(migration);

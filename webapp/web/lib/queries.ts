@@ -3,6 +3,7 @@ export * from './queries/connections.ts';
 export * from './queries/deferred-work.ts';
 export * from './queries/everhour.ts';
 export * from './queries/github.ts';
+export * from './queries/mission-items.ts';
 export * from './queries/missions.ts';
 export * from './queries/objectives.ts';
 export * from './queries/organizations.ts';

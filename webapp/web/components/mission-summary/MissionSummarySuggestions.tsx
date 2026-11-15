@@ -14,7 +14,10 @@ import {
   summaryFocusRing
 } from './MissionSummaryParts.tsx';
 
-/** A promoted suggestion: title plus where it went, with no detail accordion. */
+/**
+ * A suggestion just promoted from this row: title plus where it went, shown
+ * until the summary refetch moves it to the Resolved group.
+ */
 function ResolvedSuggestionRow({
   title,
   resolution,
@@ -53,7 +56,7 @@ function OpenSuggestionRow({
   missionId,
   now
 }: {
-  row: Extract<SummarySuggestionRow, { state: 'open' }>;
+  row: SummarySuggestionRow;
   missionId: string;
   now: string;
 }) {
@@ -68,7 +71,7 @@ function OpenSuggestionRow({
     doneWhen: row.doneWhen,
     missionId,
     objectiveId: row.objectiveId,
-    resolution: row.resolution
+    resolution: null
   });
 
   // The decision is shown at once; the summary refetch then projects it.
@@ -157,9 +160,10 @@ function OpenSuggestionRow({
 }
 
 /**
- * Suggested next (plan §5.2, §5.3): the agents' deferred-work items, verbatim,
- * open ones first. Promotion and dismissal reuse the delivery card's handlers.
- * No model text appears in this block.
+ * Suggested next: the open deferred-work items of the mission's
+ * `mission_items`, verbatim. Promotion and dismissal reuse the delivery card's
+ * handlers; a decided suggestion moves to the Resolved group. No model text
+ * appears in this block.
  */
 export function MissionSummarySuggestions({
   rows,
@@ -172,31 +176,16 @@ export function MissionSummarySuggestions({
 }) {
   const headingId = useId();
   if (rows.length === 0) return null;
-  const openCount = rows.filter(row => row.state === 'open').length;
   return (
     <section
       aria-labelledby={headingId}
       className="grid gap-1.5 border-t border-(--color-border) bg-violet-50/60 px-5 pb-2.5 pt-3 dark:bg-violet-500/5"
     >
-      <SummaryBlockHeading id={headingId} label="Suggested next" count={openCount} />
+      <SummaryBlockHeading id={headingId} label="Suggested next" count={rows.length} />
       <ul className="grid">
-        {rows.map(row =>
-          row.state === 'open' ? (
-            <OpenSuggestionRow
-              key={`${row.deliveryId}:${row.actionId}`}
-              row={row}
-              missionId={missionId}
-              now={now}
-            />
-          ) : (
-            <ResolvedSuggestionRow
-              key={`${row.deliveryId}:${row.actionId}`}
-              title={row.title}
-              resolution={row.resolution}
-              now={now}
-            />
-          )
-        )}
+        {rows.map(row => (
+          <OpenSuggestionRow key={row.id} row={row} missionId={missionId} now={now} />
+        ))}
       </ul>
     </section>
   );

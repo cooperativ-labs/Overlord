@@ -157,7 +157,7 @@ export const useMissionDeliveries = (id: string, enabled: boolean) =>
 /**
  * The mission summary envelope (contract v166). Its `eligible` flag decides
  * whether the objective accordion trims delivery cards; realtime invalidates it
- * on `mission_summary`, `delivery`, `agent_request` and `human_action_resolution`.
+ * on `mission_summary`, `delivery`, `agent_request` and `mission_item`.
  */
 export const useMissionSummary = (id: string, enabled = true) =>
   useQuery<MissionSummaryResponse>({

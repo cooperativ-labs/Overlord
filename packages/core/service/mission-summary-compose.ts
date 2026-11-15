@@ -1,18 +1,6 @@
-import type { DeliveryReportPayloadV1, HumanActionV1 } from '@overlord/contract';
+import type { DeliveryReportPayloadV1 } from '@overlord/contract';
 
-/**
- * Pure half of the mission summary compose job (coo:1202, plan §4.4 and §4.5).
- *
- * The worker loads evidence and calls these functions; nothing here touches the
- * database or the model. Supersession follows plan §11 item 14: a delivery is
- * superseded when it was delivered before its objective's `reopenedAt`, or when
- * a newer current-run delivery exists for the same objective. Actions come from
- * the latest current-run delivery per objective; risks and suggestions span
- * every current-run delivery.
- *
- * Operator surface only: the result is stored on `mission_summaries` and never
- * reaches load-context, the mission packet, MCP tools, or CLI protocol commands.
- */
+/** Pure prose composition. Live item lists are owned by mission_items. */
 
 export const MISSION_SUMMARY_LIMITS = {
   headline: 140,
@@ -55,19 +43,6 @@ export interface MissionSummaryQuestionEvidence {
   createdAt: string;
 }
 
-export interface MissionSummaryRiskRef {
-  deliveryId: string;
-  objectiveId: string;
-  index: number;
-  text: string;
-}
-
-export interface MissionSummarySuggestionRef {
-  deliveryId: string;
-  objectiveId: string;
-  actionId: string;
-}
-
 export interface MissionSummaryRuns {
   /** Every current-run delivery, newest first. */
   currentRun: MissionSummaryDeliveryEvidence[];
@@ -81,8 +56,6 @@ export interface MissionSummaryResult {
   status: 'composed' | 'fallback';
   headline: string;
   summary: string;
-  risks: MissionSummaryRiskRef[];
-  suggestions: MissionSummarySuggestionRef[];
   generatedBy: 'deterministic' | 'gemini';
   model: string | null;
 }
@@ -140,86 +113,10 @@ export function splitMissionSummaryRuns({
   return { currentRun, latestByObjective, superseded };
 }
 
-function normaliseText(value: string): string {
-  return value.trim().replace(/\s+/g, ' ').toLowerCase();
-}
-
 function bound(value: string, maxChars: number): string {
   const trimmed = value.trim();
   if (trimmed.length <= maxChars) return trimmed;
   return `${trimmed.slice(0, maxChars - 1).trimEnd()}…`;
-}
-
-/**
- * Suggestion references in display order: unresolved and promoted deferred
- * work from every current-run delivery, newest delivery first, deduped by
- * normalised title. Dismissed items are hidden. Item text is never copied; the
- * read route projects it from the delivery at read time.
- */
-export function selectMissionSummarySuggestions({
-  currentRun,
-  resolutionStatus
-}: {
-  currentRun: MissionSummaryDeliveryEvidence[];
-  /** `${deliveryId}:${actionId}` → resolution status (`dismissed`, `promoted`, ...). */
-  resolutionStatus: ReadonlyMap<string, string>;
-}): MissionSummarySuggestionRef[] {
-  const refs: MissionSummarySuggestionRef[] = [];
-  const titles = new Set<string>();
-  for (const delivery of currentRun) {
-    for (const item of delivery.report.presentation.deferredWork) {
-      if (resolutionStatus.get(`${delivery.id}:${item.id}`) === 'dismissed') continue;
-      const title = normaliseText(item.title);
-      if (titles.has(title)) continue;
-      titles.add(title);
-      refs.push({ deliveryId: delivery.id, objectiveId: delivery.objectiveId, actionId: item.id });
-      if (refs.length >= MISSION_SUMMARY_LIMITS.suggestions) return refs;
-    }
-  }
-  return refs;
-}
-
-/** Known risks across current-run deliveries, newest kept, deduped by normalised text. */
-export function collectMissionSummaryRiskCandidates(
-  deliveries: MissionSummaryDeliveryEvidence[]
-): MissionSummaryRiskRef[] {
-  const candidates: MissionSummaryRiskRef[] = [];
-  const texts = new Set<string>();
-  for (const delivery of deliveries) {
-    delivery.report.presentation.knownRisks.forEach((risk, index) => {
-      const normalised = normaliseText(risk);
-      if (!normalised || texts.has(normalised)) return;
-      texts.add(normalised);
-      candidates.push({
-        deliveryId: delivery.id,
-        objectiveId: delivery.objectiveId,
-        index,
-        text: bound(risk, MISSION_SUMMARY_LIMITS.riskText)
-      });
-    });
-  }
-  return candidates.slice(0, MISSION_SUMMARY_LIMITS.riskCandidates);
-}
-
-export function missionSummaryRiskRef(risk: Pick<MissionSummaryRiskRef, 'deliveryId' | 'index'>) {
-  return `${risk.deliveryId}:${risk.index}`;
-}
-
-/** Open human actions of the latest current-run delivery per objective, blocking first. */
-export function collectMissionSummaryOpenActions(
-  latestByObjective: MissionSummaryDeliveryEvidence[]
-): Array<{ delivery: MissionSummaryDeliveryEvidence; action: HumanActionV1 }> {
-  const actions = latestByObjective.flatMap(delivery =>
-    delivery.report.presentation.humanActions.map(action => ({ delivery, action }))
-  );
-  return actions
-    .map((entry, order) => ({ entry, order }))
-    .sort(
-      (left, right) =>
-        Number(right.entry.action.blocking === true) -
-          Number(left.entry.action.blocking === true) || left.order - right.order
-    )
-    .map(({ entry }) => entry);
 }
 
 function stripMarkdownInline(text: string): string {
@@ -323,57 +220,18 @@ export function deterministicMissionSummaryText({
   };
 }
 
-/** Deterministic risks: the latest-per-objective known risks, deduped by normalised text. */
-export function deterministicMissionSummaryRisks(
-  runs: MissionSummaryRuns
-): MissionSummaryRiskRef[] {
-  return collectMissionSummaryRiskCandidates(runs.latestByObjective).slice(
-    0,
-    MISSION_SUMMARY_LIMITS.risks
-  );
-}
-
-function readDraftRisks(
-  draft: Record<string, unknown>,
-  candidates: MissionSummaryRiskRef[]
-): MissionSummaryRiskRef[] {
-  if (!Array.isArray(draft.risks)) return [];
-  const byRef = new Map(candidates.map(candidate => [missionSummaryRiskRef(candidate), candidate]));
-  const kept: MissionSummaryRiskRef[] = [];
-  const seen = new Set<string>();
-  for (const item of draft.risks) {
-    if (!item || typeof item !== 'object') continue;
-    const { ref, text } = item as Record<string, unknown>;
-    if (typeof ref !== 'string') continue;
-    const candidate = byRef.get(ref.trim());
-    if (!candidate || seen.has(ref.trim())) continue;
-    seen.add(ref.trim());
-    const rewritten = typeof text === 'string' && text.trim() ? text : candidate.text;
-    kept.push({ ...candidate, text: bound(rewritten, MISSION_SUMMARY_LIMITS.riskText) });
-    if (kept.length >= MISSION_SUMMARY_LIMITS.risks) break;
-  }
-  return kept;
-}
-
-/**
- * Reconciles the model draft against the evidence. Risks whose ref is not in
- * the evidence are dropped and text is bounded. A null draft, or one without a
- * usable headline and summary, falls back to deterministic content. Suggestions
- * are never part of the draft.
- */
+/** Reconciles fallback prose only; item lists are never model-authored. */
 export function reconcileMissionSummaryDraft({
   draft,
   objectives,
   runs,
   openQuestions,
-  suggestions,
   model
 }: {
   draft: unknown;
   objectives: MissionSummaryObjectiveEvidence[];
   runs: MissionSummaryRuns;
   openQuestions: MissionSummaryQuestionEvidence[];
-  suggestions: MissionSummarySuggestionRef[];
   model: string | null;
 }): MissionSummaryResult {
   const record =
@@ -383,14 +241,12 @@ export function reconcileMissionSummaryDraft({
   const headline = typeof record?.headline === 'string' ? record.headline.trim() : '';
   const summary = typeof record?.summary === 'string' ? record.summary.trim() : '';
   if (!record || !headline || !summary) {
-    return buildDeterministicMissionSummary({ objectives, runs, openQuestions, suggestions });
+    return buildDeterministicMissionSummary({ objectives, runs, openQuestions });
   }
   return {
     status: 'composed',
     headline: bound(headline, MISSION_SUMMARY_LIMITS.headline),
     summary: bound(summary, MISSION_SUMMARY_LIMITS.summary),
-    risks: readDraftRisks(record, collectMissionSummaryRiskCandidates(runs.currentRun)),
-    suggestions,
     generatedBy: 'gemini',
     model
   };
@@ -400,19 +256,15 @@ export function reconcileMissionSummaryDraft({
 export function buildDeterministicMissionSummary({
   objectives,
   runs,
-  openQuestions,
-  suggestions
+  openQuestions
 }: {
   objectives: MissionSummaryObjectiveEvidence[];
   runs: MissionSummaryRuns;
   openQuestions: MissionSummaryQuestionEvidence[];
-  suggestions: MissionSummarySuggestionRef[];
 }): MissionSummaryResult {
   return {
     status: 'fallback',
     ...deterministicMissionSummaryText({ objectives, runs, openQuestions }),
-    risks: deterministicMissionSummaryRisks(runs),
-    suggestions,
     generatedBy: 'deterministic',
     model: null
   };

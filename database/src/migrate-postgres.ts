@@ -19,6 +19,10 @@ import {
   resolveAppliedMigrationPostgres
 } from './migration-ledger.js';
 import {
+  finalizeMissionItemsPostgres,
+  isMissionItemsMigration
+} from './mission-items-migration-runtime.js';
+import {
   finalizeObjectivesDisplayKeyPostgres,
   isObjectivesDisplayKeyMigration
 } from './objective-display-key-migration-runtime.js';
@@ -134,6 +138,9 @@ export async function migratePostgres(
       if (isProjectStatusesMigration(migration)) {
         await finalizeProjectStatusesPostgres(client);
       }
+      if (isMissionItemsMigration(migration)) {
+        await finalizeMissionItemsPostgres(client);
+      }
       if (!(await schemaMigrationsExists(client))) {
         pending.push(migration);
         continue;
@@ -165,6 +172,9 @@ export async function migratePostgres(
     }
     if (isProjectStatusesMigration(migration)) {
       await finalizeProjectStatusesPostgres(client);
+    }
+    if (isMissionItemsMigration(migration)) {
+      await finalizeMissionItemsPostgres(client);
     }
     await recordMigration(client, migration);
   }

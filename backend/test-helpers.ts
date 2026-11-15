@@ -1,9 +1,15 @@
+import { readDeliveryReportFromPayload } from '@overlord/contract/delivery-report';
 import {
   createPostgresClient,
   createSqliteClient,
   type DatabaseClient,
+  deriveMissionItems,
+  INSERT_MISSION_ITEM_SQL,
+  insertMissionItemParams,
   migratePostgres,
-  openInMemoryDatabase
+  openInMemoryDatabase,
+  SUPERSEDED_ITEM_PREDICATE_SQL,
+  supersedeMissionItemsSql
 } from '@overlord/database';
 import type Database from 'better-sqlite3';
 import { randomUUID } from 'node:crypto';
@@ -479,5 +485,74 @@ export function seedDelivery(
     deliveredAt,
     deliveredAt
   );
+  syncSeededMissionItems(db, id);
   return id;
+}
+
+/**
+ * Brings a seeded delivery's `mission_items` rows in line with its stored
+ * report, as the live write path does (`insertDeliveryMissionItems` at
+ * delivery, `reconcileDeliveryMissionItems` when a presentation is saved): new
+ * items are inserted `open`, `open` rows the presentation no longer lists are
+ * deleted, and the supersede rules run. Call it again after a test rewrites a
+ * seeded delivery's payload. Writes no `entity_changes`.
+ */
+export function syncSeededMissionItems(db: Database.Database, deliveryId: string): void {
+  const row = db
+    .prepare(
+      `SELECT id, workspace_id, project_id, mission_id, objective_id, delivered_at, summary,
+              payload_json
+         FROM deliveries WHERE id = ?`
+    )
+    .get(deliveryId) as
+    | {
+        id: string;
+        workspace_id: string;
+        project_id: string;
+        mission_id: string;
+        objective_id: string;
+        delivered_at: string;
+        summary: string;
+        payload_json: string;
+      }
+    | undefined;
+  if (!row) return;
+  const now = new Date().toISOString();
+  const items = deriveMissionItems(readDeliveryReportFromPayload(row.payload_json, row.summary));
+  const keys = new Set(items.map(item => `${item.kind}:${item.itemRef}`));
+  db.transaction(() => {
+    const existing = db
+      .prepare(
+        `SELECT id, kind, item_ref FROM mission_items WHERE delivery_id = ? AND status = 'open'`
+      )
+      .all(deliveryId) as Array<{ id: string; kind: string; item_ref: string }>;
+    for (const stale of existing) {
+      if (!keys.has(`${stale.kind}:${stale.item_ref}`)) {
+        db.prepare(`DELETE FROM mission_items WHERE id = ?`).run(stale.id);
+      }
+    }
+    const insert = db.prepare(INSERT_MISSION_ITEM_SQL);
+    for (const item of items) {
+      insert.run(
+        ...insertMissionItemParams({
+          id: randomUUID(),
+          delivery: {
+            id: row.id,
+            workspaceId: row.workspace_id,
+            projectId: row.project_id,
+            missionId: row.mission_id,
+            objectiveId: row.objective_id,
+            deliveredAt: row.delivered_at
+          },
+          item,
+          now
+        })
+      );
+    }
+    db.prepare(
+      supersedeMissionItemsSql(
+        `${SUPERSEDED_ITEM_PREDICATE_SQL} AND mission_items.objective_id = ?`
+      )
+    ).run(now, row.objective_id);
+  })();
 }

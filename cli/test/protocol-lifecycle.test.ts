@@ -232,3 +232,45 @@ test('migrateDatabase applies every discovered SQLite migration without resettin
   assert.equal(workspace?.name, 'Migration smoke test');
   db.close();
 });
+
+test('protocol lifecycle: attach baseline → deliver with missionSummary → next attach', async () => {
+  const { db, ctx } = await createSeededCliContext({ source: 'protocol' });
+  const project = await createProject({ ctx, name: 'Mission Summary Lifecycle' });
+  const { mission, objectives } = await createMissionWithObjectives({
+    ctx,
+    projectId: project.id,
+    objectives: [{ objective: 'Build the export' }, { objective: 'Document the export' }]
+  });
+  for (const objective of objectives) {
+    await ctx.db.run(`UPDATE objectives SET state = 'submitted' WHERE id = ?`, [objective.id]);
+  }
+
+  const first = await attachSession({ ctx, missionId: mission.id, objectiveId: objectives[0]!.id });
+  assert.equal(first.missionSummary?.contentRevision, 0);
+  assert.match(first.agentInstructions, /## Mission summary/);
+
+  const delivered = await deliverSession({
+    ctx,
+    missionId: mission.displayId,
+    sessionKey: first.sessionKey,
+    summary: 'Built the export.',
+    missionSummary: {
+      baseContentRevision: first.missionSummary!.contentRevision,
+      headline: 'The export is built and tested.',
+      summary: 'The export writes CSV files. It is tested and not deployed.'
+    }
+  });
+  assert.equal(delivered.missionSummary?.narrativeWritten, true);
+  assert.equal(delivered.missionSummary?.contentRevision, 1);
+
+  const second = await attachSession({
+    ctx,
+    missionId: mission.id,
+    objectiveId: objectives[1]!.id
+  });
+  assert.equal(second.missionSummary?.contentRevision, 1);
+  assert.equal(second.missionSummary?.headline, 'The export is built and tested.');
+  assert.equal(second.missionSummary?.author, 'agent');
+
+  await db.close();
+});

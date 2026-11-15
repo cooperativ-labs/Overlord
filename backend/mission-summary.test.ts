@@ -8,7 +8,7 @@ const tempDir = mkdtempSync(path.join(tmpdir(), 'overlord-mission-summary-'));
 const { bootstrapIntegrationTestDb } = await import('./test-helpers.ts');
 await bootstrapIntegrationTestDb({ sqlitePath: path.join(tempDir, 'webapp.sqlite') });
 
-const { db } = await import('./db.ts');
+const { db, requireDatabaseClient } = await import('./db.ts');
 const { seedDelivery: seedDeliveryRow } = await import('./test-helpers.ts');
 const { createObjective, createProject, createMission } = await import('./repository.ts');
 const { getMissionSummary, markMissionSummarySeen } = await import('./mission-summary.ts');
@@ -122,6 +122,7 @@ test('a new mission is eligible and returns evidence before its first summary ro
   ]);
   assert.deepEqual(response.evidence?.actions, [
     {
+      id: response.evidence!.actions[0]!.id,
       action: 'Add GEMINI_API_KEY to the backend service.',
       category: 'other',
       source: 'agent',
@@ -172,7 +173,7 @@ test('the envelope projects current-run evidence, risks, suggestions, and the se
     humanActions: [{ action: 'Enable the flag in staging.', category: 'other' }]
   });
   // Objective three: delivered, then reopened, so its delivery is no longer current-run.
-  const reopenedDelivery = seedDelivery({
+  seedDelivery({
     mission: scope,
     objectiveId: third.id,
     deliveredAt: '2026-10-21T07:00:00.000Z',
@@ -185,10 +186,16 @@ test('the envelope projects current-run evidence, risks, suggestions, and the se
     third.id
   );
 
+  const { applyMissionItemSupersedeRules } =
+    await import('../packages/core/service/mission-items.ts');
+  await applyMissionItemSupersedeRules(requireDatabaseClient(), {
+    objectiveId: third.id,
+    attribution: { actorWorkspaceUserId: null, source: 'protocol' }
+  });
+
   const keepId = firstOld.report.agentReport.deferredWork[0]!.id;
   const dismissId = firstOld.report.agentReport.deferredWork[1]!.id;
   const promoteId = firstNew.report.agentReport.deferredWork[0]!.id;
-  const staleId = reopenedDelivery.report.agentReport.deferredWork[0]!.id;
   await resolveDeferredWork(firstOld.id, dismissId, { status: 'dismissed' });
   await resolveDeferredWork(firstNew.id, promoteId, {
     status: 'done',
@@ -200,28 +207,12 @@ test('the envelope projects current-run evidence, risks, suggestions, and the se
     // The resolutions above already created the pending shell; replace it.
     `INSERT OR REPLACE INTO mission_summaries
        (mission_id, workspace_id, project_id, revision, requested_generation, completed_generation,
-        status, headline, summary_markdown, risks_json, suggestions_json, source_delivery_id,
+        status, headline, summary_markdown, source_delivery_id,
         generated_by, generated_at, model, created_at, updated_at)
      VALUES (?, ?, ?, 4, 3, 2, 'pending', 'Backfill is waiting on you.', 'Objective one shipped.',
-             ?, ?, ?, 'gemini', '2026-10-21T10:01:00.000Z', 'gemini-test',
+             ?, 'gemini', '2026-10-21T10:01:00.000Z', 'gemini-test',
              '2026-10-21T08:01:00.000Z', '2026-10-21T10:02:00.000Z')`
-  ).run(
-    mission.id,
-    mission.workspaceId,
-    project.id,
-    JSON.stringify([
-      { deliveryId: firstOld.id, objectiveId: first.id, index: 0, text: 'Old risk, rewritten.' },
-      { deliveryId: reopenedDelivery.id, objectiveId: third.id, index: 0, text: 'Stale risk' }
-    ]),
-    JSON.stringify([
-      { deliveryId: firstNew.id, objectiveId: first.id, actionId: promoteId },
-      { deliveryId: firstOld.id, objectiveId: first.id, actionId: keepId },
-      { deliveryId: firstOld.id, objectiveId: first.id, actionId: dismissId },
-      { deliveryId: reopenedDelivery.id, objectiveId: third.id, actionId: staleId },
-      { deliveryId: firstOld.id, objectiveId: first.id, actionId: 'deferred-work-9-missing' }
-    ]),
-    firstNew.id
-  );
+  ).run(mission.id, mission.workspaceId, project.id, firstNew.id);
 
   const countSummaryChanges = () =>
     (
@@ -252,16 +243,23 @@ test('the envelope projects current-run evidence, risks, suggestions, and the se
       deliveryId: firstOld.id,
       objectiveId: first.id,
       deliveredAt: '2026-10-21T08:00:00.000Z',
-      text: 'Old risk, rewritten.'
+      id: summary.risks[0]!.id,
+      text: 'Old risk'
     }
   ]);
-  assert.equal(summary.suggestions.length, 2);
-  const [promoted, open] = summary.suggestions;
-  assert.equal(promoted!.state, 'resolved');
-  assert.equal(promoted!.title, 'Promote me');
-  assert.equal(promoted!.resolution?.outcomeRef, 'coo:99');
-  assert.equal('change' in promoted!, false, 'resolved suggestions omit their details');
+  assert.equal(summary.suggestions.length, 1);
+  const [open] = summary.suggestions;
+  assert.deepEqual(
+    summary.closedItems.map(item => [item.text, item.status]),
+    [
+      ['Promote me', 'done'],
+      ['Dismiss me', 'dismissed']
+    ]
+  );
+  assert.equal(summary.contentRevision, 0);
+  assert.deepEqual(summary.author, { kind: 'gemini', objectiveId: null, deliveryId: null });
   assert.deepEqual(open, {
+    id: open!.id,
     deliveryId: firstOld.id,
     objectiveId: first.id,
     deliveredAt: '2026-10-21T08:00:00.000Z',
@@ -313,4 +311,90 @@ test('the envelope projects current-run evidence, risks, suggestions, and the se
     changesBeforeReads,
     'reads and seen writes record no entity change'
   );
+});
+
+test('item closures update risks and actions immediately and resolved history is bounded newest first', async () => {
+  const { mission, objective } = await seedMission('Live closures');
+  const delivered = seedDelivery({
+    mission: { id: mission.id, workspaceId: mission.workspaceId, projectId: mission.projectId },
+    objectiveId: objective.id,
+    deliveredAt: '2026-10-22T10:00:00.000Z',
+    humanActions: [{ action: 'Deploy.', category: 'other' }],
+    knownRisks: ['Still open.']
+  });
+  db.prepare(
+    `INSERT INTO mission_summaries (mission_id, workspace_id, project_id, status, generated_by, headline,
+    created_at, updated_at, content_revision, narrative_delivery_id, narrative_objective_id) VALUES (?, ?, ?, 'composed', 'agent', 'Verified.', ?, ?, 3, ?, ?)`
+  ).run(
+    mission.id,
+    mission.workspaceId,
+    mission.projectId,
+    '2026-10-22T11:00:00.000Z',
+    '2026-10-22T11:00:00.000Z',
+    delivered.id,
+    objective.id
+  );
+  const { resolveMissionItem } = await import('./mission-item-resolutions.ts');
+  const before = await getMissionSummary(mission.id);
+  await resolveMissionItem(before.summary!.risks[0]!.id, { status: 'done', reason: 'Fixed.' });
+  await resolveMissionItem(before.evidence!.actions[0]!.id, { status: 'dismissed' });
+  const after = await getMissionSummary(mission.id);
+  assert.deepEqual(after.summary!.risks, []);
+  assert.deepEqual(after.evidence!.actions, []);
+  assert.deepEqual(after.summary!.author, {
+    kind: 'agent',
+    objectiveId: objective.id,
+    deliveryId: delivered.id
+  });
+  assert.equal(after.summary!.contentRevision, 3);
+  assert.equal(after.summary!.closedItems.length, 2);
+  assert.ok(after.summary!.closedItems.every(item => item.resolvedBy?.kind === 'person'));
+  assert.ok(after.summary!.closedItems.some(item => item.reason === 'Fixed.'));
+  // More than a page of decisions: cap after resolution ordering, independent of delivery age.
+  const risk = db
+    .prepare(`SELECT * FROM mission_items WHERE id = ?`)
+    .get(before.summary!.risks[0]!.id) as Record<string, unknown>;
+  const columns = Object.keys(risk);
+  const insert = db.prepare(
+    `INSERT INTO mission_items (${columns.join(',')}) VALUES (${columns.map(() => '?').join(',')})`
+  );
+  for (let i = 0; i < 105; i++) {
+    const row = {
+      ...risk,
+      id: `closed-${i}`,
+      item_ref: `closed-${i}`,
+      resolved_at: new Date(Date.UTC(2026, 11, 1, 0, i)).toISOString()
+    };
+    insert.run(...columns.map(key => row[key as keyof typeof row]));
+  }
+  const history = (await getMissionSummary(mission.id)).summary!.closedItems;
+  assert.equal(history.length, 100);
+  assert.equal(history[0]!.id, 'closed-104');
+  assert.equal(history[99]!.id, 'closed-5');
+  for (let i = 0; i < 1005; i++) {
+    const row: Record<string, unknown> = {
+      ...risk,
+      id: `open-${i}`,
+      item_ref: `open-${i}`,
+      kind: 'human_action',
+      text: `Open action ${i}`,
+      detail_json: JSON.stringify({
+        actionId: `human-action-${i}`,
+        category: 'other',
+        source: 'agent'
+      }),
+      status: 'open',
+      status_reason: null,
+      resolved_by_kind: null,
+      resolved_at: null,
+      resolved_by_workspace_user_id: null,
+      resolved_by_objective_id: null,
+      resolved_by_delivery_id: null
+    };
+    insert.run(...columns.map(key => row[key]));
+  }
+  const paged = (await getMissionSummary(mission.id)).evidence!;
+  assert.equal(paged.totals.actions, 1005, 'totals span all item-reader pages');
+  assert.equal(paged.actions.length, 100);
+  assert.equal(paged.truncated.actions, true);
 });

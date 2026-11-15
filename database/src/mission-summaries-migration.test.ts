@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 import { loadBetterSqlite3 } from './better-sqlite3-loader.js';
-import { openInMemoryDatabase } from './connection.js';
+import { migrateDatabase, openInMemoryDatabase } from './connection.js';
 
 const SUMMARIES = '20261024140000_mission_summaries.sql';
 const CUTOVER = '20261024140100_deferred_work_structured_cutover.sql';
@@ -79,8 +79,8 @@ test('fresh database: new missions are summary-eligible and both summary tables 
   assert.equal(shell.requested_generation, 0);
   assert.equal(shell.completed_generation, 0);
   assert.equal(shell.headline, '');
-  assert.equal(shell.risks_json, '[]');
-  assert.equal(shell.suggestions_json, '[]');
+  assert.equal('risks_json' in shell, false);
+  assert.equal('suggestions_json' in shell, false);
   assert.equal(shell.generated_at, null);
   assert.throws(() =>
     db
@@ -113,7 +113,8 @@ test('summary migration marks only pre-existing missions ineligible', () => {
 });
 
 test('cutover clears historical deferred work and its resolutions, keeping other evidence', () => {
-  const db = openInMemoryDatabase();
+  const db = new (loadBetterSqlite3())(':memory:');
+  migrateDatabase(db, { stopBeforeVersion: '20261024140100' });
   const seeded = seedMission(db, 'cutover');
   const legacyPayload = {
     other: 'kept',

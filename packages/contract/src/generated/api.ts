@@ -5,10 +5,10 @@
 import { z } from 'zod';
 
 /** The contract version (contract/VERSION) this API description belongs to. */
-export const contractVersion = "172.3.0";
+export const contractVersion = "173.0.0";
 
 /** The API description's own version (OpenAPI `info.version`). */
-export const apiVersion = "4.1.0";
+export const apiVersion = "4.4.0";
 
 /** A non-JSON request or response body: raw bytes (G3). */
 export type BinaryBody = Uint8Array | ArrayBuffer | Blob;
@@ -1314,14 +1314,57 @@ export interface DeliveryReportPayloadV1 {
 }
 export const deliveryReportPayloadV1Schema: z.ZodType<DeliveryReportPayloadV1> = z.strictObject({ "schemaVersion": z.literal(1), "agentReport": deliveryAgentReportV1Schema, "warnings": z.exactOptional(z.array(z.string()).max(12)), "presentation": deliveryPresentationV1Schema });
 
+/**
+ * Who closed a mission item. `person`: `workspaceUserId` is the person (null once the membership is deleted). `agent`: `objectiveId` and `deliveryId` are the objective and delivery that closed it. The fields of the other kind are null.
+ */
+export interface MissionItemResolverDto {
+  kind: "person" | "agent";
+  workspaceUserId: string | null;
+  objectiveId: string | null;
+  deliveryId: string | null;
+}
+export const missionItemResolverDtoSchema: z.ZodType<MissionItemResolverDto> = z.object({ "kind": z.enum(["person", "agent"]), "workspaceUserId": z.string().nullable(), "objectiveId": z.string().nullable(), "deliveryId": z.string().nullable() });
+
+/**
+ * The decision on a suggestion (deferred-work item), read from its `mission_items` row. An agent's close has a null `resolvedByWorkspaceUserId`, `resolvedBy.kind` `agent` and a `reason`.
+ */
 export interface HumanActionResolutionDto {
   status: "done" | "dismissed";
   resolvedAt: DateTime;
   resolvedByWorkspaceUserId: string | null;
   outcome: ("mission_created" | "objective_added") | null;
   outcomeRef: string | null;
+  /**
+   * Why the item was closed, at most 280 characters. Always set when an agent closed it; optional for a person.
+   */
+  reason: string | null;
+  resolvedBy: MissionItemResolverDto;
 }
-export const humanActionResolutionDtoSchema: z.ZodType<HumanActionResolutionDto> = z.object({ "status": z.enum(["done", "dismissed"]), "resolvedAt": dateTimeSchema, "resolvedByWorkspaceUserId": z.string().nullable(), "outcome": z.enum(["mission_created", "objective_added"]).nullable(), "outcomeRef": z.string().nullable() });
+export const humanActionResolutionDtoSchema: z.ZodType<HumanActionResolutionDto> = z.object({ "status": z.enum(["done", "dismissed"]), "resolvedAt": dateTimeSchema, "resolvedByWorkspaceUserId": z.string().nullable(), "outcome": z.enum(["mission_created", "objective_added"]).nullable(), "outcomeRef": z.string().nullable(), "reason": z.string().nullable(), "resolvedBy": missionItemResolverDtoSchema });
+
+/**
+ * One row of `mission_items` (contract v173, ADR 0060): a risk, human action or suggestion a delivery reported, with its status.
+ */
+export interface MissionItemDto {
+  id: string;
+  missionId: string;
+  objectiveId: string;
+  deliveryId: string;
+  kind: "risk" | "human_action" | "suggestion";
+  /**
+   * Risk text, action sentence or suggestion title from the delivery's presentation.
+   */
+  text: string;
+  status: "open" | "done" | "dismissed" | "superseded";
+  reason: string | null;
+  resolvedBy: MissionItemResolverDto | null;
+  resolvedAt: DateTime | null;
+  outcome: ("mission_created" | "objective_added") | null;
+  outcomeRef: string | null;
+  reportedAt: DateTime;
+  revision: number;
+}
+export const missionItemDtoSchema: z.ZodType<MissionItemDto> = z.object({ "id": z.string(), "missionId": z.string(), "objectiveId": z.string(), "deliveryId": z.string(), "kind": z.enum(["risk", "human_action", "suggestion"]), "text": z.string(), "status": z.enum(["open", "done", "dismissed", "superseded"]), "reason": z.string().nullable(), "resolvedBy": missionItemResolverDtoSchema.nullable(), "resolvedAt": dateTimeSchema.nullable(), "outcome": z.enum(["mission_created", "objective_added"]).nullable(), "outcomeRef": z.string().nullable(), "reportedAt": dateTimeSchema, "revision": z.int() });
 
 export interface DeliveryDeferredWorkItemDto {
   /**
@@ -1375,17 +1418,19 @@ export type MissionSummaryStatus = "pending" | "composed" | "fallback";
 export const missionSummaryStatusSchema: z.ZodType<MissionSummaryStatus> = z.enum(["pending", "composed", "fallback"]);
 
 export interface MissionSummaryRiskDto {
+  id: string;
   deliveryId: string;
   objectiveId: string;
   deliveredAt: DateTime;
   text: string;
 }
-export const missionSummaryRiskDtoSchema: z.ZodType<MissionSummaryRiskDto> = z.object({ "deliveryId": z.string(), "objectiveId": z.string(), "deliveredAt": dateTimeSchema, "text": z.string() });
+export const missionSummaryRiskDtoSchema: z.ZodType<MissionSummaryRiskDto> = z.object({ "id": z.string(), "deliveryId": z.string(), "objectiveId": z.string(), "deliveredAt": dateTimeSchema, "text": z.string() });
 
 /**
- * A deferred-work suggestion projected at read time; dismissed items are omitted, promoted ones reduced to identity, title and resolution.
+ * An open suggestion from mission_items. Closed suggestions appear in closedItems. `state` is always `open` and `resolution` always null; both are kept for clients that read them.
  */
-export type MissionSummarySuggestionDto = {
+export interface MissionSummarySuggestionDto {
+  id: string;
   deliveryId: string;
   objectiveId: string;
   deliveredAt: DateTime;
@@ -1396,20 +1441,42 @@ export type MissionSummarySuggestionDto = {
   location: string;
   doneWhen: string;
   resolution: null;
-} | {
-  deliveryId: string;
+}
+export const missionSummarySuggestionDtoSchema: z.ZodType<MissionSummarySuggestionDto> = z.object({ "id": z.string(), "deliveryId": z.string(), "objectiveId": z.string(), "deliveredAt": dateTimeSchema, "actionId": z.string(), "title": z.string(), "state": z.literal("open"), "change": z.string(), "location": z.string(), "doneWhen": z.string(), "resolution": z.null() });
+
+export interface MissionSummaryClosedItemDto {
+  id: string;
+  kind: "risk" | "human_action" | "suggestion";
+  text: string;
   objectiveId: string;
-  deliveredAt: DateTime;
-  actionId: string;
-  title: string;
-  state: "resolved";
-  resolution: HumanActionResolutionDto;
-};
-export const missionSummarySuggestionDtoSchema: z.ZodType<MissionSummarySuggestionDto> = z.union([z.object({ "deliveryId": z.string(), "objectiveId": z.string(), "deliveredAt": dateTimeSchema, "actionId": z.string(), "title": z.string(), "state": z.literal("open"), "change": z.string(), "location": z.string(), "doneWhen": z.string(), "resolution": z.null() }), z.object({ "deliveryId": z.string(), "objectiveId": z.string(), "deliveredAt": dateTimeSchema, "actionId": z.string(), "title": z.string(), "state": z.literal("resolved"), "resolution": humanActionResolutionDtoSchema })]);
+  status: "done" | "dismissed";
+  reason: string | null;
+  /**
+   * How a person promoted a suggestion; null for every other close.
+   */
+  outcome: ("mission_created" | "objective_added") | null;
+  /**
+   * Display id of the mission or objective a promotion created.
+   */
+  outcomeRef: string | null;
+  resolvedBy: MissionItemResolverDto | null;
+  resolvedAt: DateTime | null;
+}
+export const missionSummaryClosedItemDtoSchema: z.ZodType<MissionSummaryClosedItemDto> = z.object({ "id": z.string(), "kind": z.enum(["risk", "human_action", "suggestion"]), "text": z.string(), "objectiveId": z.string(), "status": z.enum(["done", "dismissed"]), "reason": z.string().nullable(), "outcome": z.enum(["mission_created", "objective_added"]).nullable(), "outcomeRef": z.string().nullable(), "resolvedBy": missionItemResolverDtoSchema.nullable(), "resolvedAt": dateTimeSchema.nullable() });
 
 export interface MissionSummaryDto {
   missionId: string;
   revision: number;
+  contentRevision: number;
+  author: {
+    kind: "deterministic" | "gemini" | "agent";
+    objectiveId: string | null;
+    deliveryId: string | null;
+  };
+  /**
+   * Done and dismissed items, newest resolution first; excludes superseded items.
+   */
+  closedItems: MissionSummaryClosedItemDto[];
   status: MissionSummaryStatus;
   /**
    * One sentence; empty in the first pending shell.
@@ -1422,13 +1489,14 @@ export interface MissionSummaryDto {
   risks: MissionSummaryRiskDto[];
   suggestions: MissionSummarySuggestionDto[];
   sourceDeliveryId: string | null;
-  generatedBy: "deterministic" | "gemini";
+  generatedBy: "deterministic" | "gemini" | "agent";
   generatedAt: DateTime | null;
   model: string | null;
 }
-export const missionSummaryDtoSchema: z.ZodType<MissionSummaryDto> = z.object({ "missionId": z.string(), "revision": z.int().min(1), "status": missionSummaryStatusSchema, "headline": z.string(), "summary": z.string(), "risks": z.array(missionSummaryRiskDtoSchema), "suggestions": z.array(missionSummarySuggestionDtoSchema), "sourceDeliveryId": z.string().nullable(), "generatedBy": z.enum(["deterministic", "gemini"]), "generatedAt": dateTimeSchema.nullable(), "model": z.string().nullable() });
+export const missionSummaryDtoSchema: z.ZodType<MissionSummaryDto> = z.object({ "missionId": z.string(), "revision": z.int().min(1), "contentRevision": z.int().min(0), "author": z.object({ "kind": z.enum(["deterministic", "gemini", "agent"]), "objectiveId": z.string().nullable(), "deliveryId": z.string().nullable() }), "closedItems": z.array(missionSummaryClosedItemDtoSchema).max(100), "status": missionSummaryStatusSchema, "headline": z.string(), "summary": z.string(), "risks": z.array(missionSummaryRiskDtoSchema), "suggestions": z.array(missionSummarySuggestionDtoSchema), "sourceDeliveryId": z.string().nullable(), "generatedBy": z.enum(["deterministic", "gemini", "agent"]), "generatedAt": dateTimeSchema.nullable(), "model": z.string().nullable() });
 
 export interface MissionSummaryActionDto {
+  id: string;
   deliveryId: string;
   /**
    * May name a deleted objective.
@@ -1446,7 +1514,7 @@ export interface MissionSummaryActionDto {
   source: "agent" | "deterministic_rule";
   sourceRef?: string;
 }
-export const missionSummaryActionDtoSchema: z.ZodType<MissionSummaryActionDto> = z.object({ "deliveryId": z.string(), "objectiveId": z.string(), "actionId": z.string(), "deliveredAt": dateTimeSchema, "action": z.string(), "reason": z.exactOptional(z.string()), "category": humanActionCategorySchema, "blocking": z.exactOptional(z.boolean()), "command": z.exactOptional(z.string()), "verify": z.exactOptional(z.string()), "link": z.exactOptional(z.string()), "source": z.enum(["agent", "deterministic_rule"]), "sourceRef": z.exactOptional(z.string()) });
+export const missionSummaryActionDtoSchema: z.ZodType<MissionSummaryActionDto> = z.object({ "id": z.string(), "deliveryId": z.string(), "objectiveId": z.string(), "actionId": z.string(), "deliveredAt": dateTimeSchema, "action": z.string(), "reason": z.exactOptional(z.string()), "category": humanActionCategorySchema, "blocking": z.exactOptional(z.boolean()), "command": z.exactOptional(z.string()), "verify": z.exactOptional(z.string()), "link": z.exactOptional(z.string()), "source": z.enum(["agent", "deterministic_rule"]), "sourceRef": z.exactOptional(z.string()) });
 
 export interface MissionSummarySourceDto {
   objectiveId: string;
@@ -1988,6 +2056,15 @@ export interface ObjectiveEffectiveLaunchConfigDto {
   source: "objective" | "resource_source" | "user_target" | "workspace" | "none";
 }
 export const objectiveEffectiveLaunchConfigDtoSchema: z.ZodType<ObjectiveEffectiveLaunchConfigDto> = z.object({ "objectiveId": z.string(), "missionId": z.string(), "executionTargetId": z.string().nullable(), "launchConfig": agentLaunchConfigDtoSchema, "source": z.enum(["objective", "resource_source", "user_target", "workspace", "none"]) });
+
+export interface ResolveMissionItemBody {
+  status: "done" | "dismissed";
+  /**
+   * Optional; trimmed, blank means none, at most 280 characters (400 otherwise).
+   */
+  reason?: string | null;
+}
+export const resolveMissionItemBodySchema: z.ZodType<ResolveMissionItemBody> = z.object({ "status": z.enum(["done", "dismissed"]), "reason": z.exactOptional(z.string().max(280).nullable()) });
 
 export interface ResolveHumanActionBody {
   status: "done" | "dismissed";
@@ -6771,6 +6848,22 @@ export interface DeleteDeliveriesByDeliveryIdDeferredWorkByActionIdResolutionPat
 }
 export const deleteDeliveriesByDeliveryIdDeferredWorkByActionIdResolutionPathParamsSchema: z.ZodType<DeleteDeliveriesByDeliveryIdDeferredWorkByActionIdResolutionPathParams> = z.object({ "deliveryId": z.string(), "actionId": z.string() });
 
+export interface PutMissionItemsByIdResolutionPathParams {
+  /**
+   * Mission item UUID (`mission_items.id`).
+   */
+  id: string;
+}
+export const putMissionItemsByIdResolutionPathParamsSchema: z.ZodType<PutMissionItemsByIdResolutionPathParams> = z.object({ "id": z.string() });
+
+export interface DeleteMissionItemsByIdResolutionPathParams {
+  /**
+   * Mission item UUID (`mission_items.id`).
+   */
+  id: string;
+}
+export const deleteMissionItemsByIdResolutionPathParamsSchema: z.ZodType<DeleteMissionItemsByIdResolutionPathParams> = z.object({ "id": z.string() });
+
 export interface PutMobileLiveActivitiesByActivityIdPushTokenPathParams {
   /**
    * The ActivityKit activity id, trimmed; blank answers 400, longer than 255 characters 400 (on `PUT`).
@@ -10629,6 +10722,44 @@ export const apiOperations = {
     parameters: { path: deleteDeliveriesByDeliveryIdDeferredWorkByActionIdResolutionPathParamsSchema, query: null, header: null },
     requestBody: null,
     responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: deliveryDeferredWorkItemDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+  },
+  /**
+   * PUT /api/mission-items/{id}/resolution: Close a mission item as a person
+   */
+  putMissionItemsByIdResolution: {
+    operationId: "putMissionItemsByIdResolution",
+    method: "PUT",
+    path: "/api/mission-items/{id}/resolution",
+    tags: ["missions"],
+    deprecated: false,
+    permission: "mission:update",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["webapp"],
+    extension: null,
+    security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
+    parameters: { path: putMissionItemsByIdResolutionPathParamsSchema, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: resolveMissionItemBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: missionItemDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * DELETE /api/mission-items/{id}/resolution: Restore a closed mission item
+   */
+  deleteMissionItemsByIdResolution: {
+    operationId: "deleteMissionItemsByIdResolution",
+    method: "DELETE",
+    path: "/api/mission-items/{id}/resolution",
+    tags: ["missions"],
+    deprecated: false,
+    permission: "mission:update",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["webapp"],
+    extension: null,
+    security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
+    parameters: { path: deleteMissionItemsByIdResolutionPathParamsSchema, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: missionItemDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "500": apiResponses.InternalError }
   },
   /**
    * GET /api/inbox/missions: Cross-workspace Inbox triage missions

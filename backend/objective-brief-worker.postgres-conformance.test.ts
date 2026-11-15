@@ -453,6 +453,44 @@ for (const adapter of conformanceAdapters()) {
       }
     });
 
+    it('fails blank composer text rejected at publication without a successor job', async () => {
+      const t = await setup('ovld_bw_blank_publish');
+      try {
+        const { ObjectiveBriefComposeWorker } = await import('./objective-brief-compose-worker.ts');
+        const worker = new ObjectiveBriefComposeWorker(async () => ({
+          kind: 'composed',
+          schemaVersion: 1,
+          title: { status: 'ok', text: 'Write the brief worker', warnings: [] },
+          description: { status: 'ok', text: ' \n\t ', warnings: [] },
+          attempts: 1,
+          model: null,
+          inputChars: LONG.length
+        }));
+        worker.setGenerateOverride(fakeProvider().generate);
+        const objective = await t.addAgent(LONG);
+        const job = await t.claim();
+        assert.ok(job);
+
+        await worker.processJobForTest(t.db, job);
+
+        const current = await row(t.db, objective.id);
+        assert.equal(current.description_status, 'failed');
+        assert.equal(current.description_failure_code, 'invalid_output');
+        assert.equal(current.description, null);
+        assert.equal(current.instruction_text, LONG);
+        assert.equal(current.title, 'Write the brief worker', 'the valid title still publishes');
+        assert.equal(current.title_status, null);
+        const jobs = await jobsFor(t.db, objective.id);
+        assert.equal(jobs.length, 1, 'publication rejection queues no successor job');
+        assert.equal(jobs[0]!.status, 'succeeded', 'the job settled its requested fields');
+        assert.equal(await t.claim(), null);
+        assert.deepEqual(await worker.catchUp(t.db), { marked: 0, recovered: 0 });
+        assert.equal((await jobsFor(t.db, objective.id)).length, 1);
+      } finally {
+        await t.finish();
+      }
+    });
+
     it('keeps local titles and marks summaries unavailable when no provider is configured', async () => {
       const t = await setup('ovld_bw_noprovider');
       const savedKey = process.env.OPENROUTER_API_KEY;

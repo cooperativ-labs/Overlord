@@ -24,6 +24,8 @@ If `heartbeat` succeeds but `deliver` or `update` fails, the session is likely f
 
 Declared paths that contain commas, or long path lists, go through `--paths-file -` as a JSON string array rather than `--paths`.
 
+Only one `--*-file` flag may read stdin (`-`) per command. To send a summary with backticks together with a mission summary write, put both in one envelope: `--payload-file -` with `{ "summary": "…", "missionSummary": { … } }`. If you use `--mission-summary-file -`, pass the delivery summary inline or from a file under `$OVERLORD_TMPDIR`.
+
 Use `--payload-file -` when the full delivery object (summary, artifacts, delivery report, and declared paths together) exceeds the inline limit.
 
 If the summary contains special characters, use `--summary-file -` and pipe via a single-quoted heredoc (`<<'EOF'`) to prevent shell expansion.

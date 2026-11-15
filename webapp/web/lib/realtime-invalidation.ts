@@ -122,9 +122,9 @@ function routeChange(change: EntityChangeDto): QueryKey[] | null {
       // A delivery changes the summary envelope's evidence and watermark.
       return [keys.missionDeliveries(missionId), keys.activityFeed, keys.missionSummary(missionId)];
     }
-    case 'human_action_resolution': {
-      // A deferred-work decision changes the delivery card that shows it and the
-      // summary suggestion projected from it.
+    case 'mission_item': {
+      // An item write (a delivery's items, a supersede, or a person's or agent's
+      // decision) changes the delivery card that shows it and the summary lists.
       const missionId = missionIdFor(change);
       if (!missionId) return null;
       return [keys.missionDeliveries(missionId), keys.missionSummary(missionId)];

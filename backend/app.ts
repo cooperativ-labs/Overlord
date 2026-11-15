@@ -144,6 +144,7 @@ import {
   revokeLiveActivityStartToken
 } from './live-activities.ts';
 import { liveActivityDispatcher } from './live-activity-dispatcher.ts';
+import { resolveMissionItem, restoreMissionItemResolution } from './mission-item-resolutions.ts';
 import { getMissionSummary, markMissionSummarySeen } from './mission-summary.ts';
 import { missionSummaryComposeWorker } from './mission-summary-compose-worker.ts';
 import { createNativeGitHubOAuth } from './native-github-oauth.ts';
@@ -1469,6 +1470,18 @@ app.delete(
   handle(req => reopenDeferredWork(req.params.deliveryId, req.params.actionId), {
     mutates: true
   })
+);
+
+// ---- Mission item resolutions ----------------------------------------------
+// A person closes (done or dismissed, optional reason) or restores any mission
+// item: risk, human action or suggestion. Requires mission:update on its mission.
+app.put(
+  '/api/mission-items/:id/resolution',
+  handle(req => resolveMissionItem(req.params.id, req.body), { mutates: true })
+);
+app.delete(
+  '/api/mission-items/:id/resolution',
+  handle(req => restoreMissionItemResolution(req.params.id), { mutates: true })
 );
 
 // ---- Inbox missions triage (cross-workspace) ------------------------------

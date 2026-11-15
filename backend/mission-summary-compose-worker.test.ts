@@ -27,7 +27,7 @@ type SummaryRow = {
   generated_by: string;
   requested_generation: number;
   completed_generation: number;
-  risks_json: string;
+  content_revision: number;
 };
 
 async function seedEligibleMission(name: string) {
@@ -82,7 +82,7 @@ async function runQueuedJob(): Promise<string> {
 
 async function summaryRow(missionId: string): Promise<SummaryRow> {
   const row = (await requireDatabaseClient().get(
-    `SELECT status, headline, generated_by, requested_generation, completed_generation, risks_json
+    `SELECT status, headline, generated_by, requested_generation, completed_generation, content_revision
        FROM mission_summaries WHERE mission_id = ?`,
     [missionId]
   )) as SummaryRow | undefined;
@@ -125,13 +125,12 @@ test('a trigger during generation causes a fresh pass before publication', async
   assert.equal(row.headline, 'The exporter writes CSV files.');
   assert.equal(Number(row.requested_generation), 2);
   assert.equal(Number(row.completed_generation), 2);
-  const risks = (
-    typeof row.risks_json === 'string' ? JSON.parse(row.risks_json) : row.risks_json
-  ) as Array<{ deliveryId: string; index: number }>;
+  assert.equal(Number(row.content_revision), 1);
+  const { getMissionSummary } = await import('./mission-summary.ts');
   assert.deepEqual(
-    risks.map(risk => [risk.deliveryId, risk.index]),
-    [[deliveryId, 0]],
-    'the invented risk ref is dropped'
+    (await getMissionSummary(mission.id)).summary!.risks.map(risk => [risk.deliveryId, risk.text]),
+    [[deliveryId, 'Large exports are slow.']],
+    'model references never change the live risk list'
   );
 
   const jobs = (await requireDatabaseClient().all(
@@ -236,4 +235,89 @@ test('an ineligible mission is never triggered', async () => {
     [mission.id]
   );
   assert.equal(row, undefined);
+});
+
+test('agent narrative makes triggers no-ops, blocks a queued fallback, and allows the next legacy delivery', async () => {
+  const { mission, deliveryId } = await seedEligibleMission('Agent narrative guard');
+  await trigger(mission);
+  db.prepare(
+    `UPDATE mission_summaries SET headline = 'Agent verified.', summary_markdown = 'Verified in code.',
+    status = 'composed', generated_by = 'agent', content_revision = 1, narrative_delivery_id = ?, narrative_objective_id = ? WHERE mission_id = ?`
+  ).run(deliveryId, mission.objectives[0]!.id, mission.id);
+  const before = db.prepare('SELECT * FROM mission_summaries WHERE mission_id = ?').get(mission.id);
+  assert.deepEqual(await trigger(mission), { triggered: false, generation: null, jobId: null });
+  assert.deepEqual(
+    db.prepare('SELECT * FROM mission_summaries WHERE mission_id = ?').get(mission.id),
+    before
+  );
+  missionSummaryComposeWorker.setGenerateOverride(async () =>
+    JSON.stringify({ headline: 'Overwrite.', summary: 'Bad.' })
+  );
+  await runQueuedJob();
+  assert.deepEqual(
+    db.prepare('SELECT * FROM mission_summaries WHERE mission_id = ?').get(mission.id),
+    before
+  );
+  assert.equal(
+    (
+      db
+        .prepare(
+          `SELECT COUNT(*) AS n FROM worker_jobs WHERE type = ? AND payload_json LIKE ? AND status IN ('queued','running')`
+        )
+        .get(MISSION_SUMMARY_COMPOSE_JOB_TYPE, `%${mission.id}%`) as { n: number }
+    ).n,
+    0
+  );
+  seedDelivery(db, {
+    workspaceId: mission.workspaceId,
+    projectId: mission.projectId,
+    missionId: mission.id,
+    objectiveId: mission.objectives[0]!.id,
+    summary: 'Legacy client delivery.',
+    deliveredAt: '2026-10-21T10:00:00.000Z'
+  });
+  assert.equal((await trigger(mission)).triggered, true);
+  missionSummaryComposeWorker.setGenerateOverride(async ({ prompt }) => {
+    assert.match(prompt, /Agent verified/);
+    return JSON.stringify({ headline: 'Legacy fallback.', summary: 'The new delivery shipped.' });
+  });
+  await runQueuedJob();
+  const after = await summaryRow(mission.id);
+  assert.equal(after.headline, 'Legacy fallback.');
+  assert.equal(after.generated_by, 'gemini');
+  assert.equal(Number(after.content_revision), 2);
+});
+
+test('fallback context reads live item text and omits closed claims still in delivery JSON', async () => {
+  const { mission, deliveryId } = await seedEligibleMission('Open item input');
+  await trigger(mission);
+  const risk = db
+    .prepare(`SELECT id FROM mission_items WHERE delivery_id = ? AND kind = 'risk'`)
+    .get(deliveryId) as { id: string };
+  db.prepare(
+    `UPDATE mission_items SET status = 'done', resolved_by_kind = 'agent', resolved_at = ?, status_reason = 'Fixed.' WHERE id = ?`
+  ).run('2026-10-21T10:00:00.000Z', risk.id);
+  missionSummaryComposeWorker.setGenerateOverride(async ({ prompt }) => {
+    const section = prompt.split('Known risks:\n')[1]!.split('Counts:')[0]!;
+    assert.doesNotMatch(section, /Large exports/);
+    return JSON.stringify({ headline: 'Fixed.', summary: 'The exporter shipped.' });
+  });
+  await runQueuedJob();
+});
+
+test('an agent delivery arriving during fallback generation wins publication', async () => {
+  const { mission, deliveryId } = await seedEligibleMission('In-flight narrative guard');
+  await trigger(mission);
+  missionSummaryComposeWorker.setGenerateOverride(async () => {
+    db.prepare(
+      `UPDATE mission_summaries SET headline = 'Agent won.', generated_by = 'agent',
+      status = 'composed', content_revision = 1, narrative_delivery_id = ?, narrative_objective_id = ? WHERE mission_id = ?`
+    ).run(deliveryId, mission.objectives[0]!.id, mission.id);
+    return JSON.stringify({ headline: 'Stale fallback.', summary: 'Stale.' });
+  });
+  await runQueuedJob();
+  const row = await summaryRow(mission.id);
+  assert.equal(row.headline, 'Agent won.');
+  assert.equal(row.generated_by, 'agent');
+  assert.equal(Number(row.content_revision), 1);
 });

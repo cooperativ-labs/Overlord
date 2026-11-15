@@ -1,6 +1,7 @@
 import { AlertTriangle, Check, CircleDot, Loader2 } from 'lucide-react';
 
 import type {
+  SummaryProvenance,
   SummarySource,
   SummaryStatusChip,
   SummaryStatusTone
@@ -43,6 +44,29 @@ export function MissionSummaryStatusChip({ chip }: { chip: SummaryStatusChip }) 
 }
 
 /**
+ * Who wrote the post (contract v173): the authoring objective's key as a link
+ * when an agent wrote it at delivery, otherwise a short automatic label.
+ */
+export function MissionSummaryProvenanceLine({ provenance }: { provenance: SummaryProvenance }) {
+  if (provenance.kind === 'automatic') {
+    return <p className="text-xs text-(--color-ink-dim)">Written automatically from deliveries</p>;
+  }
+  return (
+    <p className="flex min-w-0 flex-wrap items-center gap-x-1 text-xs text-(--color-ink-dim)">
+      <span>Updated by</span>
+      {provenance.objectiveKey ? (
+        <ObjectiveKeyLink
+          objectiveKey={provenance.objectiveKey}
+          ariaLabel={`Open objective ${provenance.objectiveKey}, which wrote this summary`}
+        />
+      ) : (
+        <span>an agent</span>
+      )}
+    </p>
+  );
+}
+
+/**
  * What happened: headline, status chip, the composed summary with the client's
  * running sentences appended, and the sources line. The running sentences keep
  * the post true between composes.
@@ -55,6 +79,7 @@ export function MissionSummaryPost({
   statusChip,
   sources,
   sourcesTruncated,
+  provenance,
   dimmed
 }: {
   headlineId: string;
@@ -64,6 +89,7 @@ export function MissionSummaryPost({
   statusChip: SummaryStatusChip;
   sources: readonly SummarySource[];
   sourcesTruncated: boolean;
+  provenance: SummaryProvenance;
   /** Previous content under the updating strip. */
   dimmed: boolean;
 }) {
@@ -103,6 +129,7 @@ export function MissionSummaryPost({
           {sourcesTruncated ? <span>and more</span> : null}
         </div>
       ) : null}
+      <MissionSummaryProvenanceLine provenance={provenance} />
     </div>
   );
 }

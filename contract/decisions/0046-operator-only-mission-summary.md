@@ -4,6 +4,7 @@
 - Status: accepted
 - Contract version: 166
 - Supersedes: none
+- Amended by: [ADR 0060](0060-mission-items-and-agent-authored-summary.md) (agents receive the summary as an editing baseline and may write narrative and item status)
 - Origin: contract v166 and v167 (coo:1202), backfilled 2026-11
 
 ## Context

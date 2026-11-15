@@ -88,8 +88,9 @@ mission pointer or session cache, or redirect later updates and delivery:
 ovld protocol load-context --mission-id coo:700
 ```
 
-The operator-facing mission summary is not part of the agent packet: `load-context` never
-returns it.
+`load-context` and `connect` never return the mission summary. Only `attach` and
+`resume-follow-up` carry it, as the editing baseline described under
+[Mission summary](#mission-summary).
 
 Unpinned `load-context` can still return `no_active_objective` or
 `ambiguous_active_objective`; name the objective when it does.
@@ -175,7 +176,12 @@ reading prior chat:
   project spans repositories, siblings are **read-only context** unless a future
   objective launches in them.
 - **`agentInstructions`** — concise workflow guidance and pointers into the
-  structured fields.
+  structured fields. When `missionSummary` is present it includes a Mission
+  summary block.
+- **`missionSummary`** — present only when the mission keeps a summary. The
+  current headline and summary that you rewrite at delivery, the
+  `contentRevision` token, and up to 60 open items with their ids. See
+  [Mission summary](#mission-summary).
 
 `attach` stores an exact objective/session binding for local connector evidence.
 It does not read Git state or derive a worktree baseline.
@@ -299,6 +305,90 @@ explanations, behavior, or test claims from filenames. When composition is
 unavailable the raw summary is shown, and the original summary is never
 replaced.
 
+### Mission summary
+
+People read the mission summary to learn what the whole mission has produced,
+what still limits it, and what they must do. You have seen the repository, so you
+write it when you deliver. It is separate from `--summary`, which describes only
+this objective's work for the reviewer.
+
+`attach` (and `resume-follow-up`) returns the baseline when the mission keeps a
+summary:
+
+```json
+{
+  "missionSummary": {
+    "contentRevision": 7,
+    "headline": "Current headline, or empty before the first write.",
+    "summary": "Current summary Markdown, or empty.",
+    "author": "agent",
+    "openItems": [
+      { "id": "<item id>", "kind": "risk", "objective": "coo:312.k7xm", "text": "…" },
+      { "id": "<item id>", "kind": "human_action", "objective": "coo:312.k7xm", "text": "…", "blocking": true },
+      { "id": "<item id>", "kind": "suggestion", "objective": "coo:312.k7xm", "text": "…" }
+    ],
+    "truncated": false
+  }
+}
+```
+
+`author` is `agent`, `gemini`, `deterministic`, or `null` before the first write.
+`truncated: true` means more items are open than the 60 listed.
+
+Send the rewrite as `missionSummary` in the delivery payload, or as one JSON
+object through `--mission-summary-file <path|->`, which wins over the payload
+field:
+
+```bash
+ovld protocol deliver --session-key <sessionKey> --objective-id coo:312.k7xm \
+  --payload-file - <<'EOF'
+{
+  "summary": "Added retry with backoff to the sync worker and covered it with tests.",
+  "missionSummary": {
+    "baseContentRevision": 7,
+    "headline": "Sync survives provider outages; deployment is pending.",
+    "summary": "The sync worker retries failed calls with backoff. This is implemented and tested, not deployed.",
+    "closeItems": [
+      { "id": "<item id>", "status": "done", "reason": "Retry guard added and tested in this objective." }
+    ]
+  }
+}
+EOF
+```
+
+- `baseContentRevision` is `missionSummary.contentRevision` from attach. It is
+  required with `headline` and `summary`.
+- `headline` (one line, at most 140 characters) and `summary` (Markdown, at most
+  1,200 characters) are sent together. `closeItems` may be sent alone, at most 50
+  entries.
+- Write for people: what the mission now provides and why it matters, then current
+  limits, then what a person must do. Say whether each claim is implemented,
+  tested, or deployed. Rewrite the whole summary to be true now; do not append.
+  Do not restate open actions or suggestions, which are shown as their own lists.
+- Close an item only after you checked it. `status` is `done` when it was
+  addressed and `dismissed` when it no longer applies; `reason` (at most 280
+  characters) is required and is shown to people.
+- Malformed input is rejected with 400 `invalid_input` before anything is
+  written. An unknown id, an item of another mission, or an item that is no longer
+  open is skipped with a `mission_summary_item_skipped` warning and never fails
+  the delivery.
+- The response carries `missionSummary { contentRevision, narrativeWritten,
+  closedItemIds, warnings }`. `mission_summary_style` warnings are advisory.
+
+If another objective wrote the summary after you attached, the delivery fails
+with 409 `mission_summary_conflict` and **nothing is delivered**. The CLI exits
+non-zero and prints `{ error, code, baseContentRevision, missionSummary }` on
+stdout; MCP returns `{ code, details }` with `details.missionSummary`. That
+`missionSummary` is the fresh baseline. Rewrite from it, keeping what is still
+true, and deliver again once with its `contentRevision`. If that conflicts again,
+deliver without `headline` and `summary` and say so in the delivery summary;
+Overlord then writes the mission summary automatically.
+
+A delivery without `missionSummary`, for example from an older CLI or connector,
+still succeeds, and Overlord writes the mission summary automatically.
+`record-work` accepts the same object without `baseContentRevision`, because it
+creates a new mission.
+
 ### Changed files are captured for you
 
 You do **not** enumerate changed files, diff, or run `git status` on a shared
@@ -363,7 +453,9 @@ changed. For the server's view across sessions, resources, and devices
 ### Large payloads and special characters
 
 Inline `--*-json` values are rejected above ~8 KB. For large payloads, stream
-on stdin with `--payload-file -` (or `--paths-file -` for a long path list). When a summary
+on stdin with `--payload-file -` (or `--paths-file -` for a long path list). Only one
+`--*-file` flag may read stdin per command, so put the delivery `summary` and
+`missionSummary` in the same `--payload-file -` envelope. When a summary
 or question contains backticks, `$vars`, or other shell-special characters, use
 `--summary-file -` / `--question-file -` with a single-quoted heredoc:
 
@@ -548,7 +640,7 @@ EOF
 | `update`                         | Post progress and decisions; optionally declare uncaptured paths.                                 |
 | `heartbeat`                      | Liveness ping, no feed event.                                                                     |
 | `ask`                            | Post a blocking question and stop.                                                                |
-| `deliver`                        | Finish: summary, artifacts, optional declared paths, mark complete.                               |
+| `deliver`                        | Finish: summary, artifacts, optional declared paths and mission summary write, mark complete.      |
 | `changes`                        | Local-only read of this checkout's recorded paths for an objective.                               |
 | `objective-changes`              | Server read of an objective's changed files across sessions and devices.                          |
 | `resume-follow-up`               | Reopen a delivered objective for follow-up.                                                       |

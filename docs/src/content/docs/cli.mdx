@@ -169,7 +169,7 @@ Every command below is available from `ovld protocol help`.
 | `update`                           | Post progress and activity; `--paths`/`--paths-file` declare uncaptured paths.                            |
 | `heartbeat`                        | Send liveness information without creating a feed event.                                                  |
 | `ask`                              | Raise a blocking question for a human reviewer.                                                           |
-| `deliver`                          | Finish the session with summary, artifacts, and optional declared paths.                                  |
+| `deliver`                          | Finish the session with summary, artifacts, optional declared paths, and an optional mission summary write (`--mission-summary-file`; see [Agent protocol](/docs-for-agents/agent-protocol/#mission-summary)). |
 | `resume-follow-up`                 | Reopen completed work for a follow-up.                                                                    |
 | `hook-event`                       | Record a connector lifecycle event.                                                                       |
 | `capture-change`                   | Locally capture direct, objective-bound native edit paths (connector use).                                |

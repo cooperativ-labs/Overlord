@@ -20,6 +20,10 @@ import {
   resolveAppliedMigrationSqlite
 } from './migration-ledger.js';
 import {
+  finalizeMissionItemsSqlite,
+  isMissionItemsMigration
+} from './mission-items-migration-runtime.js';
+import {
   finalizeNextStatusTypeSqlite,
   isNextStatusTypeMigration
 } from './next-status-type-migration-runtime.js';
@@ -102,6 +106,9 @@ function applyMigration(
   }
   if (isNextStatusTypeMigration(migration)) {
     finalizeNextStatusTypeSqlite(db);
+  }
+  if (isMissionItemsMigration(migration)) {
+    finalizeMissionItemsSqlite(db);
   }
   db.prepare(
     `INSERT INTO schema_migrations (version, adapter, component, contract_version, checksum, applied_at)

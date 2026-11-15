@@ -246,6 +246,9 @@ attach:
   Returns:
     Full JSON including session.sessionKey, mission, history, artifacts, sharedState,
     and agentInstructions with required workflow instructions and structured-field pointers.
+    For a mission with a summary, also missionSummary: { contentRevision, headline,
+    summary, author, openItems: [{ id, kind, objective, text, blocking? }], truncated },
+    the baseline you rewrite at delivery (see deliver).
 
 connect:
   Purpose:
@@ -724,9 +727,11 @@ record-work:
     --declared-paths-json / --declared-paths-file <path|->
                                 JSON array of repository-relative paths the work changed
     --payload-json / --payload-file <path|->   (single envelope; see Notes)
+    --mission-summary-file <path|->   Headline, summary and closeItems as for deliver;
+                                no baseContentRevision is needed for the new mission
   Notes:
     Efficient form: stream one JSON object on stdin via \`--payload-file -\` carrying
-    { objective, summary, title?, declaredPaths?, artifacts? }.
+    { objective, summary, title?, declaredPaths?, artifacts?, missionSummary? }.
     Explicit flags always win over fields inside --payload-json.
     Declared paths are stored as agent_declared with no resource and no VCS status;
     explain why they changed in the summary. The full submission format lives in
@@ -814,6 +819,24 @@ deliver:
     --paths-file <path|->       Same, as a JSON array of path strings (commas allowed)
     --verification-summary <text>
     --follow-up-notes <text>
+    --mission-summary-file <path|->
+                                The mission summary write as one JSON object (see below);
+                                wins over a missionSummary field in --payload-json
+  Mission summary (optional; missionSummary in the payload or --mission-summary-file):
+    {
+      "baseContentRevision": 7,   // missionSummary.contentRevision from attach; required with prose
+      "headline": "One sentence, at most 140 characters.",
+      "summary":  "Markdown, at most 1,200 characters: what the mission now provides, current limits, what a person must do.",
+      "closeItems": [{ "id": "<openItems[].id>", "status": "done" | "dismissed", "reason": "Why, at most 280 characters." }]
+    }
+    Headline and summary go together; closeItems may be sent alone. Rewrite the whole
+    summary to be true now. Close an item only after checking it; done = addressed,
+    dismissed = no longer applies. Unknown, foreign or already-closed ids are skipped with
+    a warning. Style issues come back as advisory warnings in missionSummary.warnings.
+    A stale baseContentRevision rejects the whole delivery with 409
+    mission_summary_conflict and nothing is written; the CLI prints the fresh baseline as
+    JSON on stdout. Rewrite from it and deliver again once; if it conflicts again, deliver
+    without headline and summary and say so in the delivery summary.
   Notes:
     A normal delivery requires only --summary: explain the outcome, why, verification,
     and limitations by behavior or component. No per-file explanation exists. The CLI
@@ -904,7 +927,8 @@ resume-follow-up:
     --summary or --summary-file <path|->
     --external-session-id <id>
   Returns:
-    attach-response-v3 JSON with a new session key.
+    attach-response-v3 JSON with a new session key, including the missionSummary
+    baseline for a mission with a summary.
 
 hook-event:
   Purpose:

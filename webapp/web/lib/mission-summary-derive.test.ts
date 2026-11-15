@@ -12,8 +12,13 @@ import { test } from 'node:test';
 
 import {
   laterWatermark,
+  missionItemOutcomeLabel,
+  missionItemResolver,
+  missionItemResolverText,
   missionSummaryActions,
+  missionSummaryClosedItems,
   missionSummaryFiles,
+  missionSummaryProvenance,
   missionSummaryRisks,
   missionSummaryRunningSentences,
   missionSummarySectionState,
@@ -24,6 +29,7 @@ import {
   openSummaryQuestions,
   SUMMARY_FILE_CHIP_LIMIT,
   type SummaryDeliveryStamp,
+  type SummaryMember,
   type SummaryObjective,
   summaryWatermarkIsDisplayed,
   updatingSourceObjective,
@@ -42,6 +48,7 @@ const fixture = JSON.parse(
     deliveries: SummaryDeliveryStamp[];
     summaryResponse: Extract<MissionSummaryResponse, { eligible: true }>;
     agentRequests: HumanAgentRequestDto[];
+    members: SummaryMember[];
     fileChanges: { truncated: boolean; items: FileChangeDto[] };
   };
   expected: Record<string, any>;
@@ -59,8 +66,7 @@ test('older current-run risks and suggestions keep new dots without delivery-fee
   const risks = missionSummaryRisks({ summary, objectives, baseline: beforeAll });
   assert.equal(risks.find(row => row.deliveryId === 'delivery-a1')?.isNew, true);
   const suggestions = missionSummarySuggestions({ summary, objectives, baseline: beforeAll });
-  assert.ok(suggestions.filter(row => row.state === 'open').every(row => row.isNew));
-  assert.ok(suggestions.filter(row => row.state === 'resolved').every(row => !row.isNew));
+  assert.ok(suggestions.length > 0 && suggestions.every(row => row.isNew));
 });
 
 test('a newer question watermark is not acknowledged before the separate requests query displays it', () => {
@@ -103,16 +109,17 @@ test('fixture: actions merge questions, dedupe by text and rank blocking first',
       title: row.title,
       blocking: row.blocking,
       objectiveKey: row.objectiveKey,
-      isNew: row.isNew
+      isNew: row.isNew,
+      itemId: row.itemId
     })
   );
   assert.deepEqual(rows, expected.actions);
 });
 
-test('fixture: suggestions list open rows first and never dot a resolved row', () => {
+test('fixture: suggestions are the open rows in server order, with item ids', () => {
   const rows = missionSummarySuggestions({ summary, objectives, baseline }).map(row => ({
+    id: row.id,
     actionId: row.actionId,
-    state: row.state,
     objectiveKey: row.objectiveKey,
     isNew: row.isNew
   }));
@@ -121,11 +128,69 @@ test('fixture: suggestions list open rows first and never dot a resolved row', (
 
 test('fixture: risks dot only deliveries newer than the baseline', () => {
   const rows = missionSummaryRisks({ summary, objectives, baseline }).map(row => ({
+    itemId: row.itemId,
     deliveryId: row.deliveryId,
     objectiveKey: row.objectiveKey,
     isNew: row.isNew
   }));
   assert.deepEqual(rows, expected.risks);
+});
+
+test('fixture: the provenance line names the authoring objective', () => {
+  assert.deepEqual(missionSummaryProvenance(summary, objectives), expected.provenance);
+});
+
+test('fixture: closed items name who closed them, the outcome and the reason', () => {
+  const rows = missionSummaryClosedItems({ summary, objectives, members: input.members }).map(
+    row => ({
+      id: row.id,
+      kindLabel: row.kindLabel,
+      outcomeLabel: row.outcomeLabel,
+      reason: row.reason,
+      resolver: row.resolver,
+      resolverText: row.resolver ? missionItemResolverText(row.resolver) : null,
+      objectiveKey: row.objectiveKey
+    })
+  );
+  assert.deepEqual(rows, expected.closedItems);
+});
+
+test('fallback and model summaries read as automatic; a deleted authoring objective stays an agent', () => {
+  for (const kind of ['gemini', 'deterministic'] as const) {
+    const automatic = { ...summary, author: { kind, objectiveId: null, deliveryId: null } };
+    assert.deepEqual(missionSummaryProvenance(automatic, objectives), { kind: 'automatic' });
+  }
+  const orphan = {
+    ...summary,
+    author: { kind: 'agent' as const, objectiveId: 'obj-gone', deliveryId: 'delivery-gone' }
+  };
+  assert.deepEqual(missionSummaryProvenance(orphan, objectives), {
+    kind: 'agent',
+    objectiveKey: null
+  });
+});
+
+test('a person no longer in the workspace and an empty reason read plainly', () => {
+  const resolver = missionItemResolver(
+    { kind: 'person', workspaceUserId: null, objectiveId: null, deliveryId: null },
+    { objectives, members: input.members }
+  );
+  assert.deepEqual(resolver, { kind: 'person', name: 'a person' });
+  assert.equal(missionItemResolver(null, { objectives, members: [] }), null);
+  const [first] = missionSummaryClosedItems({
+    summary: { ...summary, closedItems: [{ ...summary.closedItems[0]!, reason: '  ' }] },
+    objectives,
+    members: []
+  });
+  assert.equal(first!.reason, null);
+  assert.equal(
+    missionItemOutcomeLabel({ status: 'done', outcome: 'mission_created', outcomeRef: 'coo:7' }),
+    'Mission coo:7 created'
+  );
+  assert.equal(
+    missionItemOutcomeLabel({ status: 'dismissed', outcome: null, outcomeRef: null }),
+    'Dismissed'
+  );
 });
 
 test('fixture: files are distinct paths, newest first, with provenance badges', () => {

@@ -5,6 +5,160 @@ is the current version and must equal [VERSION](VERSION); `yarn version:contract
 writes its skeleton. Dates use ISO 8601 and describe the contract change, not
 merely the files edited.
 
+## [173.0.0] - 2026-11-15
+
+Contract impact: major. Agent-authored mission summaries and live mission items
+(coo:1260, ADR 0060, amending ADR 0046). Risks, human actions and suggestions
+become rows of a new `mission_items` table with a status, replacing
+`human_action_resolutions` and the summary's risk and suggestion reference
+lists; the delivering agent may write the headline, summary and item status.
+The whole change ships in one release and its migration is one-way. The release candidate uses OpenAPI 4.4.0 across web, desktop and iOS.
+
+### Added
+
+- Summary REST projection from open `mission_items`, with stable item ids,
+  narrative `author`, `contentRevision`, and bounded newest-first `closedItems`.
+  Fallback composition publishes prose only and cannot overwrite the newest
+  delivery's agent narrative. OpenAPI `info.version` 4.3.0.
+- Migration `20261115160000_drop_mission_summary_item_storage` in both editions:
+  after backfill, drop `human_action_resolutions`, `mission_summaries.risks_json`
+  and `mission_summaries.suggestions_json`.
+
+- Table `mission_items` (data/README.md "`mission_items`"): closed `kind`
+  (`risk`, `human_action`, `suggestion`), closed `status` (`open`, `done`,
+  `dismissed`, `superseded`), closed `resolved_by_kind` (`person`, `agent`),
+  `outcome`/`outcome_ref`, a 280-character `status_reason`, unique
+  `(delivery_id, kind, item_ref)` and indexes `(mission_id, status, kind)`,
+  `(project_id, status, kind)` and `(objective_id, status)`. Every write appends
+  an `entity_changes` row with `entity_type = 'mission_item'`.
+- `mission_summaries.content_revision` (narrative concurrency token, default 0),
+  `narrative_delivery_id` and `narrative_objective_id`.
+- Migration `20261115120000_mission_items` in both editions, with a TypeScript
+  runtime step that backfills `mission_items` from every live delivery, copies
+  each `human_action_resolutions` row onto its suggestion row, and applies the
+  supersede rules. Batched and idempotent.
+- `@overlord/contract/delivery-report`: the strict persisted delivery-report
+  schema and reader, shared by core and the database backfill. Behaviour of
+  `readDeliveryReport` is unchanged.
+- `PUT` and `DELETE /api/mission-items/{id}/resolution`
+  (`putMissionItemsByIdResolution`, `deleteMissionItemsByIdResolution`,
+  `mission:update`): a person closes any risk, human action or suggestion as
+  `done` or `dismissed` with an optional reason (`ResolveMissionItemBody`), or
+  restores a closed one; restoring a `superseded` item answers 409
+  `mission_item_superseded`. Schemas `MissionItemDto` and
+  `MissionItemResolverDto`. OpenAPI `info.version` 4.2.0.
+- `HumanActionResolutionDto.reason` and `HumanActionResolutionDto.resolvedBy`:
+  a close made by an agent is reported on the delivery card through the same
+  `resolution` field.
+- Protocol `attach` and `resume-follow-up` (attach-response-v3, additive
+  optional field): top-level `missionSummary { contentRevision, headline,
+  summary, author, openItems[{ id, kind, objective, text, blocking? }],
+  truncated }` for summary-enabled missions, at most 60 open items with text cut
+  to 400 characters. `load-context` and `connect` never carry it.
+  `agentInstructions` gains a "Mission summary" block with the writing guidance
+  and the one-retry rule when the baseline is present.
+- Protocol `deliver` and `record-work` accept optional `missionSummary
+  { baseContentRevision, headline, summary, closeItems[{ id, status, reason }] }`
+  in the payload envelope or through the new `--mission-summary-file <path|->`
+  flag (the flag wins). It is validated before any write: malformed input,
+  partial or over-long prose (headline one line, at most 140 characters;
+  summary at most 1,200), prose without `baseContentRevision` on `deliver`, more
+  than 50 close entries, or a close entry without `done`/`dismissed` and a
+  reason of at most 280 characters answers 400 `invalid_input`. The field is
+  never stored in the delivery payload. In the delivery transaction, under the
+  summary row lock taken before any delivery row is written, the base revision
+  is compared; listed open items of the delivering mission are closed with agent
+  provenance (resolving objective and delivery); the narrative is written with
+  `generated_by = 'agent'`, `status = 'composed'`, the session's model, the
+  `narrative_*` references, `completed_generation = requested_generation`, and
+  `content_revision + 1`. Unknown, foreign, duplicate, superseded or
+  already-closed ids are skipped with bounded `mission_summary_item_skipped`
+  warnings and never reject the delivery. The response gains `missionSummary
+  { contentRevision, narrativeWritten, closedItemIds, warnings }` with advisory
+  `mission_summary_style` (STE lint) warnings. `record-work` never checks a base.
+- Error code `mission_summary_conflict` (409): a stale `baseContentRevision`
+  rejects the whole delivery and writes nothing; `details` carries
+  `baseContentRevision` and a fresh `missionSummary` baseline in the attach
+  shape. The CLI prints `{ error, code, baseContentRevision, missionSummary }`
+  on stdout before failing; hosted and local MCP tool errors include the code
+  and details.
+- MCP `overlord_deliver_session` and `overlord_record_work` input
+  `missionSummary`; the `overlord_attach_session` output description names the
+  baseline.
+
+### Changed
+
+- Closed vocabulary `mission_summaries.generated_by` gains `agent`.
+- ADR 0046's rule that the summary is never sent to agents is amended by
+  ADR 0060: agents receive it as an editing baseline and may write narrative
+  and item status. The seen marker stays operator-only.
+- Item text is copied out of the delivery report into `mission_items`,
+  reversing the v166 rule; the delivery report remains the immutable record of
+  what the agent reported.
+- Every item write goes to `mission_items`: `deliverSession` and `recordWork`
+  insert a delivery's items in the delivery transaction and supersede the
+  objective's earlier open human actions; `persistDeliveryPresentation`
+  reconciles them when the composed or fallback presentation is saved
+  (including `deterministic_rule` actions); reopening an objective supersedes
+  every open item of its earlier deliveries; moving a mission to another project
+  repoints its items.
+- The deferred-work resolution routes keep their request and response shapes
+  but close and restore the suggestion's `mission_items` row and emit a
+  `mission_item` entity change in place of `human_action_resolution`. A
+  `superseded` suggestion on the card of a delivery made before its objective
+  reopened still reads as unresolved and may still be decided.
+- A person may close an item in any status; restoring re-applies the supersede
+  rules, so an item of a delivery that is no longer current returns to
+  `superseded`.
+- Connectors and docs teach the mission summary workflow: the core
+  `overlord-mission` skill and its `cli`, `mcp`, `record-work` and
+  `shell-escaping` references, the record-work commands, and the agent protocol
+  docs describe the attach baseline, the `missionSummary` payload,
+  `--mission-summary-file`, closing items, and the one-retry rule on
+  `mission_summary_conflict`. The local MCP shim now forwards `missionSummary`
+  on `overlord_deliver_session` and `overlord_record_work` (its schema already
+  advertised it) and returns the CLI's stdout body, which carries the fresh
+  baseline, on a failed call. Connector release 0.3.64.
+- `MissionSummarySuggestionDto` is a single open shape: the `state: resolved`
+  variant is gone, because the route returns open rows only and resolved
+  suggestions are listed in `closedItems`. `state` stays `open` and
+  `resolution` stays null for clients that read them.
+  `MissionSummaryClosedItemDto` gains `outcome` and `outcomeRef`, so the
+  resolved group can say a suggestion became a mission or objective. OpenAPI
+  `info.version` 4.4.0.
+- Web and desktop mission summary: a provenance line under the post (the
+  authoring objective, or "Written automatically from deliveries"); a collapsed
+  Resolved group listing `closedItems` with kind, outcome, who resolved each
+  (a person or the closing objective), the reason and Restore; a Resolve control
+  on open risks and human actions (done or dismissed, optional reason) through
+  `PUT /api/mission-items/{id}/resolution`. Delivery cards show who resolved a
+  suggestion and why. The client derive code drops its resolved-suggestion
+  handling; `contract/mission-summary-derive-fixtures.json` moves to the v173
+  shape (item ids, `author`, `contentRevision`, `closedItems`, workspace
+  members) with new `provenance` and `closedItems` expectations.
+
+- iOS decodes the new summary/item DTOs and shows narrative provenance and a
+  read-only Resolved group with resolver and reason; mission-item changes refresh
+  the detail and delivery cards. Its consumer manifest targets contract 173.0.0.
+- Release verification removed the stale component-registry prohibition on
+  exposing a summary to agents and documented the agent-narrative enqueue guard.
+- Release verification corrected a Postgres lock-order deadlock: delivery,
+  delivery presentation reconciliation and person item resolutions serialize on
+  the mission before taking summary or item locks, consistent with objective
+  reopen. A concurrent person resolution and agent narrative write now both
+  commit instead of aborting one with `40P01`.
+
+### Removed
+
+- Application reads and writes of `human_action_resolutions` and the
+  `human_action_resolution` entity-change type. The post-backfill drop migration
+  removes the old table and summary item-reference columns in the same release.
+
+### Version
+
+- Major contract version 173.0.0, from 172.3.0. Every conformance manifest is
+  restamped to 173.0.0.
+
 ## [172.3.0] - 2026-11-14
 
 Contract impact: minor. Objective descriptions reach every surface (coo:1275,

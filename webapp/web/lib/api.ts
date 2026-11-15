@@ -5,6 +5,7 @@ import { deferredWorkApi } from './api/deferred-work.ts';
 import { everhourApi } from './api/everhour.ts';
 import { githubApi } from './api/github.ts';
 import { localTargetApi } from './api/local-target.ts';
+import { missionItemsApi } from './api/mission-items.ts';
 import { missionsApi } from './api/missions.ts';
 import { objectivesApi } from './api/objectives.ts';
 import { organizationsApi } from './api/organizations.ts';
@@ -27,6 +28,7 @@ export const api = {
   ...runQueuesApi,
   ...missionsApi,
   ...deferredWorkApi,
+  ...missionItemsApi,
   ...objectivesApi,
   ...agentLaunchConfigApi,
   ...everhourApi,

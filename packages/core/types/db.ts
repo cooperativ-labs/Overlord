@@ -928,19 +928,6 @@ export interface ExtGithubUserOauthStates {
   updated_at: string;
 }
 
-export interface HumanActionResolutions {
-  action_id: string;
-  delivery_id: string;
-  mission_id: string;
-  objective_id: string;
-  outcome: string | null;
-  outcome_ref: string | null;
-  resolved_at: string;
-  resolved_by_workspace_user_id: string | null;
-  status: string;
-  workspace_id: string;
-}
-
 export interface IdempotencyKeys {
   actor_workspace_user_id: string | null;
   created_at: string;
@@ -1028,6 +1015,33 @@ export interface MissionEvents {
   workspace_id: string;
 }
 
+export interface MissionItems {
+  created_at: string;
+  delivery_id: string;
+  detail_json: Generated<string>;
+  id: string | null;
+  item_ref: string;
+  kind: string;
+  mission_id: string;
+  objective_id: string;
+  outcome: string | null;
+  outcome_ref: string | null;
+  position: number;
+  project_id: string;
+  reported_at: string;
+  resolved_at: string | null;
+  resolved_by_delivery_id: string | null;
+  resolved_by_kind: string | null;
+  resolved_by_objective_id: string | null;
+  resolved_by_workspace_user_id: string | null;
+  revision: Generated<number>;
+  status: Generated<string>;
+  status_reason: string | null;
+  text: string;
+  updated_at: string;
+  workspace_id: string;
+}
+
 export interface Missions {
   active_branch: string | null;
   allow_parallel_objectives: Generated<number>;
@@ -1085,19 +1099,20 @@ export interface MissionStatusSeen {
 
 export interface MissionSummaries {
   completed_generation: Generated<number>;
+  content_revision: Generated<number>;
   created_at: string;
   generated_at: string | null;
   generated_by: string;
   headline: Generated<string>;
   mission_id: string | null;
   model: string | null;
+  narrative_delivery_id: string | null;
+  narrative_objective_id: string | null;
   project_id: string;
   requested_generation: Generated<number>;
   revision: Generated<number>;
-  risks_json: Generated<string>;
   source_delivery_id: string | null;
   status: string;
-  suggestions_json: Generated<string>;
   summary_markdown: Generated<string>;
   updated_at: string;
   workspace_id: string;
@@ -1839,13 +1854,13 @@ export interface DB {
   ext_github_project_links: ExtGithubProjectLinks;
   ext_github_user_connections: ExtGithubUserConnections;
   ext_github_user_oauth_states: ExtGithubUserOauthStates;
-  human_action_resolutions: HumanActionResolutions;
   idempotency_keys: IdempotencyKeys;
   inbox_items: InboxItems;
   live_activity_push_tokens: LiveActivityPushTokens;
   live_activity_start_tokens: LiveActivityStartTokens;
   mission_branch_observations: MissionBranchObservations;
   mission_events: MissionEvents;
+  mission_items: MissionItems;
   mission_sequences: MissionSequences;
   mission_status_seen: MissionStatusSeen;
   mission_summaries: MissionSummaries;

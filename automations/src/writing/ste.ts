@@ -57,7 +57,8 @@ Additional rules for objective titles and summaries (Simplified Technical Englis
   - A gap: "The instructions do not say X."
   - A contradiction: "The instructions say X in one place and Y in another."
   - A term with two meanings: "X can mean A or B."
-  - A choice that a person must make: "Decision needed: A or B." Always name the options.`;
+  - A choice that a person must make: "Decision needed: A or B." Always name the options.
+- When a summary has a "Decision needed:" sentence, the goal sentence must not choose or imply one of its options. Write the goal in a neutral form, for example "Store the brief state in the database that the decision selects."`;
 
 export type SteLintCode =
   | 'sentence_too_long'

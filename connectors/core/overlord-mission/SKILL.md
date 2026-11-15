@@ -18,13 +18,13 @@ Use this mode when the prompt already contains a mission ID or explicitly says t
 **An objective display id is a complete address.** `coo:695.k7xm` already spells its mission, so `--mission-id` is optional on every command whenever you pass a full objective display id as `--objective-id`; Overlord derives `coo:695` from it. This is the identifier to reach for when reconnecting to a mission that is running more than one objective, where "the active objective" is ambiguous and a mission id alone is not enough. An objective **UUID** names no mission, so it still needs `--mission-id` alongside it.
 
 1. Attach first with `ovld protocol attach --mission-id <mission_id> [--objective-id <objective_id>]`.
-2. The attach response prints JSON to stdout containing `session.sessionKey`. The CLI also persists this key automatically so subsequent `ovld protocol` commands in the same working directory resolve it without `--session-key`. If auto-resolution fails, pass `--session-key <sessionKey>` explicitly on every subsequent call.
+2. The attach response prints JSON to stdout containing `session.sessionKey`. The CLI also persists this key automatically so subsequent `ovld protocol` commands in the same working directory resolve it without `--session-key`. If auto-resolution fails, pass `--session-key <sessionKey>` explicitly on every subsequent call. When the mission has a summary, the response also carries a top-level `missionSummary` baseline that you rewrite when you deliver (see **Mission Summary** below).
 3. Treat the Overlord mission prompt as authoritative for the objective, constraints, and delivery target. Begin executing the current objective immediately after attach; do not wait for more instructions or ask for confirmation. This differs from `connect` or `load-context`, which only retrieve mission context and never imply the agent should act.
 4. Post updates while working: `ovld protocol update --session-key <sessionKey> --mission-id <mission_id> --summary "..." --phase execute`.
    During long mechanical stretches with nothing meaningful to post, send `ovld protocol heartbeat --session-key <sessionKey> --mission-id <mission_id> [--phase execute] [--note "..."]` instead of an empty update.
 5. Follow-up messages after the initial mission are captured automatically by the installed `UserPromptSubmit` hook and stay in discussion intent while the mission is in review. Do not post `user_follow_up` manually unless the hook is unavailable.
 6. If blocked, call `ovld protocol ask --session-key <sessionKey> --mission-id <mission_id> --question "..."` and stop.
-7. Deliver last with `ovld protocol deliver --session-key <sessionKey> --mission-id <mission_id> --summary "..."`. Normal delivery is summary-only; objective-ledger evidence syncs independently.
+7. Deliver last with `ovld protocol deliver --session-key <sessionKey> --mission-id <mission_id> --summary "..."`. Normal delivery is summary-only; objective-ledger evidence syncs independently. When attach returned `missionSummary`, also send the rewritten mission headline and summary and any items you closed (see **Mission Summary** below).
 
 When review facts genuinely apply, you may add `deliveryReport.agentReport` through `--payload-json` / `--payload-file`: use
 `humanActions`, `tradeoffsMade`, `knownRisks`, `deferredWork`, and `assumptions`, with empty arrays
@@ -204,6 +204,114 @@ corresponding `--*-file -` flag. A real scratch path belongs under `$OVERLORD_TM
 else under `.overlord/tmp` is yours to delete.
 
 If `heartbeat` succeeds but `deliver` or `update` fails, the session is likely fine — retry with the corresponding `--*-file -` flag instead of inline `--*-json`.
+
+### Mission Summary
+
+People read the mission summary to learn what the whole mission has produced, what still limits
+it, and what they must do. You have seen the repository, so you write it when you deliver. It is
+separate from the delivery `--summary`, which describes only this objective's work for the
+reviewer.
+
+**Baseline at attach.** `attach` and `resume-follow-up` return a top-level `missionSummary` when
+the mission has a summary (`load-context` and `connect` never do):
+
+```json
+{
+  "missionSummary": {
+    "contentRevision": 7,
+    "headline": "Current headline, or empty before the first write.",
+    "summary": "Current summary Markdown, or empty.",
+    "author": "agent",
+    "openItems": [
+      { "id": "<item id>", "kind": "risk", "objective": "coo:1260.7taz", "text": "…" },
+      { "id": "<item id>", "kind": "human_action", "objective": "coo:1260.7taz", "text": "…", "blocking": true },
+      { "id": "<item id>", "kind": "suggestion", "objective": "coo:1260.7taz", "text": "…" }
+    ],
+    "truncated": false
+  }
+}
+```
+
+`author` is `agent`, `gemini`, `deterministic`, or `null` before the first write. `openItems`
+holds at most 60 entries; `truncated: true` means more are open. If attach returned no
+`missionSummary`, do not send one.
+
+**Write at delivery.** Add `missionSummary` to the delivery payload:
+
+```json
+{
+  "missionSummary": {
+    "baseContentRevision": 7,
+    "headline": "One sentence, at most 140 characters.",
+    "summary": "Markdown, at most 1,200 characters.",
+    "closeItems": [
+      { "id": "<item id>", "status": "done", "reason": "Fixed by the retry guard added in this objective." },
+      { "id": "<item id>", "status": "dismissed", "reason": "The endpoint this warned about was removed." }
+    ]
+  }
+}
+```
+
+- `baseContentRevision` is `missionSummary.contentRevision` from attach. It is required when you
+  send `headline` and `summary`.
+- `headline` and `summary` go together; send both or neither. `closeItems` may be sent alone.
+- Write the headline and summary for a person, not for an agent: what the mission now provides and
+  why it matters, then current limits, then what a person must do. Say whether each claim is
+  implemented, tested or deployed; do not merge them. Rewrite the whole summary so it is true now;
+  do not append to the previous text. Do not restate open human actions or suggestions in the
+  prose; they are shown as their own lists.
+- Close an item only after you checked it in the code or the mission history. Use `done` when the
+  item was addressed and `dismissed` when it no longer applies. `reason` is required (at most 280
+  characters) and is shown to people. Use only ids from `openItems`; an unknown id, an item of
+  another mission, or an item that is no longer open is skipped with a warning and never fails
+  the delivery. At most 50 entries.
+- Malformed input (partial or over-long prose, a missing base with prose, a close entry without
+  a reason or with another status) is rejected with 400 `invalid_input` before anything is written.
+
+The most efficient form is one JSON envelope on stdin, which carries the delivery `summary` too:
+
+```bash
+ovld protocol deliver --session-key <sessionKey> --objective-id $OBJECTIVE_ID --payload-file - <<'EOF'
+{
+  "summary": "Narrative for the reviewer: what this objective did and how it was verified.",
+  "missionSummary": {
+    "baseContentRevision": 7,
+    "headline": "Retries now survive provider outages; deployment is pending.",
+    "summary": "The sync worker retries failed calls with backoff. This is implemented and tested, not deployed.",
+    "closeItems": [{ "id": "<item id>", "status": "done", "reason": "Retry guard added and tested in this objective." }]
+  }
+}
+EOF
+```
+
+`--mission-summary-file <path|->` sends the same object on its own and wins over a
+`missionSummary` field in the payload. Only one `--*-file` flag may read stdin, so with
+`--mission-summary-file -` keep `--summary` inline or put other input in a file under
+`$OVERLORD_TMPDIR`.
+
+The deliver response carries `missionSummary { contentRevision, narrativeWritten, closedItemIds,
+warnings }`. Warnings never block: `mission_summary_item_skipped` names a skipped close entry,
+`mission_summary_style` is advisory style feedback on the prose, and `mission_summary_disabled`
+means the mission keeps no summary so the prose was not stored.
+
+**Conflict.** If another objective of the mission wrote the summary after you attached, deliver
+fails with 409 `mission_summary_conflict` and **nothing is delivered**. The CLI exits non-zero and
+prints `{ "code": "mission_summary_conflict", "baseContentRevision": …, "missionSummary": { … } }`
+on stdout; over MCP the error text carries `{ code, details }` with `details.missionSummary`.
+That `missionSummary` is the fresh baseline in the attach shape. Then:
+
+1. Read the new headline, summary and open items. Keep what the other objective wrote that is
+   still true, and add what your objective changed.
+2. Deliver again once with the new `contentRevision` as `baseContentRevision`. Drop close entries
+   for items that are no longer in `openItems`.
+3. If that delivery conflicts again, deliver without `headline` and `summary` (`closeItems` alone
+   are fine) and say in the delivery summary that the mission summary was not updated because of
+   a conflict. Overlord then writes the mission summary automatically.
+
+An installed CLI or connector that omits `missionSummary` still delivers; Overlord then writes the
+mission summary automatically. `record-work` accepts the same object, but needs no
+`baseContentRevision` because it creates a new mission (see
+[reference/record-work.md](reference/record-work.md)).
 
 ### Delivery Evidence
 
@@ -522,6 +630,7 @@ objective** list grouped by resource. Prepare delivery cheaply:
 - During follow-up execution, post progress updates and let the objective ledger capture file evidence as during initial execution.
 - Record important non-file decisions with `--event-type decision` or `--event-type discussion_summary`.
 - The `summary` in deliver is what the PM reads first, so write it as a narrative, not a command list.
+- When attach returned `missionSummary`, deliver with a rewritten mission headline and summary and close the open items you verified. On `mission_summary_conflict`, rewrite from the fresh baseline and retry once; on a second conflict deliver without headline and summary and say so. See **Mission Summary**.
 - When a summary or question contains backticks, `$vars`, or other shell-special characters, always use `--summary-file -` (or `--question-file -`) with a single-quoted heredoc (`<<'EOF'`). Never retry by stripping or escaping content — pipe stdin instead. See [reference/shell-escaping.md](reference/shell-escaping.md).
 - Use `write-context` for facts a future agent session should know.
 - Use `add-artifact` (or MCP `overlord_add_artifact`) to publish a plan, notes, decision, or URL artifact during a turn without delivering. Delivery may still attach additional artifacts later.

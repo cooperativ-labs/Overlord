@@ -3,20 +3,25 @@ import type {
   DeliveryDeferredWorkItemDto,
   DeliveryReportPayloadV1,
   HumanActionResolutionDto,
-  HumanActionResolutionOutcome,
-  HumanActionResolutionStatus
+  HumanActionResolutionStatus,
+  MissionItemResolverDto
 } from '@overlord/contract';
 
-import { sqlPlaceholders } from '../packages/core/service/util.ts';
+import {
+  listDeliveryMissionItems,
+  type MissionItem,
+  type MissionItemResolver
+} from '../packages/core/service/mission-items.ts';
 
 import { requireDatabaseClient } from './db.ts';
 
 /**
  * Addressing and resolution state for the deferred-work items of a delivery
- * (coo:971, coo:1045, contract v166). The delivery report is the only place an
- * item's text lives. Each item carries its stable `DeferredWorkV1.id`, which
- * the delivery card uses to record the operator's decision in
- * `human_action_resolutions`.
+ * (coo:971, coo:1045, contract v166; storage v173). The delivery report is the
+ * record of what the agent reported; each item carries its stable
+ * `DeferredWorkV1.id`, which is the `item_ref` of its `mission_items`
+ * suggestion row. The row's status is the item's resolution, whether a person
+ * or an agent closed it.
  */
 
 export const RESOLUTION_STATUSES: ReadonlySet<string> = new Set(['done', 'dismissed']);
@@ -27,61 +32,71 @@ export const RESOLUTION_OUTCOMES: ReadonlySet<string> = new Set([
 
 export type DeferredWorkEntry = DeferredWorkV1;
 
-export interface ResolutionRow {
-  delivery_id: string;
-  action_id: string;
-  status: string;
-  outcome: string | null;
-  outcome_ref: string | null;
-  resolved_at: string;
-  resolved_by_workspace_user_id: string | null;
-}
-
 /** One entry per `presentation.deferredWork` item, in presentation order. */
 export function deferredWorkEntries(report: DeliveryReportPayloadV1): DeferredWorkEntry[] {
   return report.presentation.deferredWork;
 }
 
-/** Resolutions of the given deliveries, keyed `<deliveryId>:<actionId>`. */
-export async function loadResolutions(deliveryIds: string[]): Promise<Map<string, ResolutionRow>> {
-  if (deliveryIds.length === 0) return new Map();
-  const rows = (await requireDatabaseClient().all(
-    `SELECT delivery_id, action_id, status, outcome, outcome_ref, resolved_at,
-            resolved_by_workspace_user_id
-       FROM human_action_resolutions
-      WHERE delivery_id IN (${sqlPlaceholders(deliveryIds.length)})`,
-    deliveryIds
-  )) as ResolutionRow[];
-  return new Map(rows.map(row => [`${row.delivery_id}:${row.action_id}`, row]));
+/** The suggestion rows of the given deliveries, keyed `<deliveryId>:<actionId>`. */
+export async function loadResolutions(deliveryIds: string[]): Promise<Map<string, MissionItem>> {
+  const items = await listDeliveryMissionItems(requireDatabaseClient(), {
+    deliveryIds,
+    kinds: ['suggestion']
+  });
+  return new Map(items.map(item => [`${item.deliveryId}:${item.itemRef}`, item]));
 }
 
-/** The resolution recorded under an entry's id. */
+/** The suggestion row stored under an entry's id. */
 export function findResolution(
-  resolutions: Map<string, ResolutionRow>,
+  resolutions: Map<string, MissionItem>,
   deliveryId: string,
   entry: { id: string }
-): ResolutionRow | undefined {
+): MissionItem | undefined {
   return resolutions.get(`${deliveryId}:${entry.id}`);
 }
 
-export function toResolution(row: ResolutionRow | undefined): HumanActionResolutionDto | null {
-  if (!row || !RESOLUTION_STATUSES.has(row.status)) return null;
+export function toResolverDto(resolver: MissionItemResolver): MissionItemResolverDto {
+  return resolver.kind === 'person'
+    ? {
+        kind: 'person',
+        workspaceUserId: resolver.workspaceUserId,
+        objectiveId: null,
+        deliveryId: null
+      }
+    : {
+        kind: 'agent',
+        workspaceUserId: null,
+        objectiveId: resolver.objectiveId,
+        deliveryId: resolver.deliveryId
+      };
+}
+
+/**
+ * The resolution of a suggestion row: set for `done` and `dismissed`, null for
+ * an `open` or `superseded` row (a superseded suggestion is shown unresolved on
+ * its delivery card, as before the table existed).
+ */
+export function toResolution(item: MissionItem | undefined): HumanActionResolutionDto | null {
+  if (!item || !RESOLUTION_STATUSES.has(item.status) || !item.resolvedAt) return null;
+  const resolvedBy: MissionItemResolver = item.resolvedBy ?? {
+    kind: 'person',
+    workspaceUserId: null
+  };
   return {
-    status: row.status as HumanActionResolutionStatus,
-    resolvedAt: row.resolved_at,
-    resolvedByWorkspaceUserId: row.resolved_by_workspace_user_id,
-    outcome:
-      row.outcome && RESOLUTION_OUTCOMES.has(row.outcome)
-        ? (row.outcome as HumanActionResolutionOutcome)
-        : null,
-    outcomeRef: row.outcome_ref ?? null
+    status: item.status as HumanActionResolutionStatus,
+    resolvedAt: item.resolvedAt,
+    resolvedByWorkspaceUserId: resolvedBy.kind === 'person' ? resolvedBy.workspaceUserId : null,
+    outcome: item.outcome,
+    outcomeRef: item.outcome === null ? null : item.outcomeRef,
+    reason: item.statusReason,
+    resolvedBy: toResolverDto(resolvedBy)
   };
 }
 
 /** The `DeliveryDeferredWorkItemDto` of one entry: the agent's fields verbatim plus its resolution. */
 export function deferredWorkItemDto(
   entry: DeferredWorkEntry,
-  row: ResolutionRow | undefined
+  item: MissionItem | undefined
 ): DeliveryDeferredWorkItemDto {
   return {
     actionId: entry.id,
@@ -89,6 +104,6 @@ export function deferredWorkItemDto(
     change: entry.change,
     location: entry.location,
     doneWhen: entry.doneWhen,
-    resolution: toResolution(row)
+    resolution: toResolution(item)
   };
 }

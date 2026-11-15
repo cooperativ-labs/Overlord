@@ -5,8 +5,11 @@ import { describe, it } from 'node:test';
 import {
   assembleObjectiveDescription,
   checkObjectiveBriefFidelity,
+  decisionAlternatives,
   extractBriefIdentifiers,
+  findGoalDecisionOptions,
   lintAuthoredObjectiveDescription,
+  lintObjectiveDescription,
   normalizeBriefFragment,
   OBJECTIVE_BRIEF_MAX_INPUT_CHARS,
   OBJECTIVE_BRIEF_MISSING_DONE_WHEN,
@@ -306,6 +309,116 @@ describe('objective brief assembly and checks', () => {
     assert.match(OBJECTIVE_BRIEF_SYSTEM_INSTRUCTION, /Do not use "should", "may", "might"/);
     assert.match(OBJECTIVE_BRIEF_SYSTEM_INSTRUCTION, /Decision needed: A or B/);
     assert.match(OBJECTIVE_BRIEF_SYSTEM_INSTRUCTION, /Never invent a completion test/);
+  });
+});
+
+describe('goal neutrality for open decisions', () => {
+  const parts = (goal: string, decisionsNeeded: string[]) => ({
+    goal,
+    decisionsNeeded,
+    body: [],
+    doneWhen: 'The tests pass.',
+    doneWhenStated: true
+  });
+
+  it('splits a decision sentence into its options', () => {
+    assert.deepEqual(decisionAlternatives('Decision needed: Use Postgres or SQLite.'), [
+      'Use Postgres',
+      'SQLite'
+    ]);
+    assert.deepEqual(decisionAlternatives('Use CSV, JSON or YAML'), ['Use CSV', 'JSON', 'YAML']);
+    assert.deepEqual(decisionAlternatives('Either keep the flag or remove it'), [
+      'keep the flag',
+      'remove it'
+    ]);
+    assert.deepEqual(decisionAlternatives('Choose the export format'), []);
+  });
+
+  it('flags a goal that names one option of an open decision', () => {
+    const matches = findGoalDecisionOptions('Store the brief state in SQLite.', [
+      'Use Postgres or SQLite'
+    ]);
+    assert.deepEqual(matches, [{ decision: 'Use Postgres or SQLite', terms: ['SQLite'] }]);
+    // Case and hyphenation do not hide the option.
+    assert.equal(
+      findGoalDecisionOptions('Add a sqlite-backed store.', ['Use Postgres or SQLite']).length,
+      1
+    );
+  });
+
+  it('checks each decision separately when there are two', () => {
+    const matches = findGoalDecisionOptions('Add a CSV export that includes archived rows.', [
+      'Use CSV or JSON',
+      'Include archived objectives or leave them out'
+    ]);
+    assert.deepEqual(matches, [{ decision: 'Use CSV or JSON', terms: ['CSV'] }]);
+  });
+
+  it('accepts a neutral goal', () => {
+    assert.deepEqual(
+      findGoalDecisionOptions('Store the brief state in the database that the decision selects.', [
+        'Store the state in SQLite or only in Postgres'
+      ]),
+      []
+    );
+    assert.deepEqual(findGoalDecisionOptions('Store the state in SQLite.', []), []);
+  });
+
+  it('does not flag an option word that the goal uses for a different reason', () => {
+    // The word is inside a file name, not a choice of format.
+    assert.deepEqual(
+      findGoalDecisionOptions('Add an export button configured by `export/settings.json`.', [
+        'Use CSV or JSON'
+      ]),
+      []
+    );
+    // A common word that also appears in an option is not an option name.
+    assert.deepEqual(
+      findGoalDecisionOptions('Review the export flow in the mission panel.', [
+        'Ship the change now or wait for the design review'
+      ]),
+      []
+    );
+    // A term that every option shares does not choose between them.
+    assert.deepEqual(
+      findGoalDecisionOptions('Keep the brief state in Postgres.', [
+        'Store the state only in Postgres or in Postgres and SQLite'
+      ]),
+      []
+    );
+    // A goal that names every option does not choose one.
+    assert.deepEqual(
+      findGoalDecisionOptions('Compare the SQLite and Postgres adapters.', [
+        'Use Postgres or SQLite'
+      ]),
+      []
+    );
+  });
+
+  it('reports a retryable style issue from the description lint', () => {
+    const picked = parts('Store the brief state in SQLite.', ['Use Postgres or SQLite']);
+    const assembled = assembleObjectiveDescription(picked);
+    assert.ok(assembled.ok);
+    const codes = lintObjectiveDescription(picked, assembled.text).map(issue => issue.code);
+    assert.ok(codes.includes('goal_picks_decision_option'), codes.join(','));
+    const neutral = parts('Store the brief state in the selected database.', [
+      'Use Postgres or SQLite'
+    ]);
+    const neutralText = assembleObjectiveDescription(neutral);
+    assert.ok(neutralText.ok);
+    assert.ok(
+      !lintObjectiveDescription(neutral, neutralText.text).some(
+        issue => issue.code === 'goal_picks_decision_option'
+      )
+    );
+  });
+
+  it('states the neutral-goal rule in the composer prompt', () => {
+    assert.match(
+      OBJECTIVE_BRIEF_SYSTEM_INSTRUCTION,
+      /the goal must not choose or imply one of the options/
+    );
+    assert.match(OBJECTIVE_BRIEF_SYSTEM_INSTRUCTION, /the database that the decision selects/);
   });
 });
 

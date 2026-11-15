@@ -12,6 +12,7 @@ Synthesize from the current conversation:
 - `declaredPaths` (optional): repository-relative paths you know this work changed, as a JSON string array (deleted files and both rename endpoints are valid). They are recorded as Declared; never infer them from a shared-worktree-wide status or diff, and never explain files one by one.
 - `title` (optional): mission title; defaults to a title derived from the objective.
 - `artifacts` (optional): `next_steps`, `test_results`, `decision`, `note`, `url`.
+- `missionSummary` (optional): `{ "headline": "...", "summary": "..." }`, the new mission's headline (at most 140 characters) and summary (Markdown, at most 1,200 characters) for people: what the work provides, its limits, and what a person must do. No `baseContentRevision` is needed. Omit it to let Overlord write the summary.
 
 If a command argument is present, treat it as additional context to weave into the summary.
 

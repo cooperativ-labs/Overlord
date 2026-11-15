@@ -3,10 +3,17 @@
  *
  * Inputs are the queries the mission panel already holds: the mission detail,
  * the summary envelope (`GET /api/missions/:id/summary`), the mission's agent
- * requests, the delivery feed (only to date suggestions and risks for the
- * new-item dot), and the mission-wide file-change page. Actions and sources
- * come from the envelope's evidence, which the server selects before any cap
- * (§4.4a, §11.1 item 3), never from the capped delivery feed.
+ * requests, the delivery feed (only to name the objective of the updating
+ * strip), the workspace members (to name who closed an item), and the
+ * mission-wide file-change page. Actions and sources come from the envelope's
+ * evidence, which the server selects before any cap, never from the capped
+ * delivery feed.
+ *
+ * Since contract v173 (ADR 0060) risks, human actions and suggestions are
+ * `mission_items` rows. The server returns only open items, already applies
+ * supersession and resolution, and lists done and dismissed items in
+ * `closedItems`. The client only merges questions, dedupes actions by
+ * normalised text, marks new items and names objectives and people.
  *
  * The iOS port (`OverlordCore/MissionSummaryDerive.swift`) mirrors these rules
  * and is tested against the same fixture,
@@ -16,8 +23,9 @@ import type {
   FileChangeDto,
   FileChangeSource,
   HumanActionCategory,
-  HumanActionResolutionDto,
   HumanAgentRequestDto,
+  MissionItemResolverDto,
+  MissionSummaryClosedItemDto,
   MissionSummaryDto,
   MissionSummaryEvidenceDto,
   MissionSummaryResponse,
@@ -196,6 +204,8 @@ export interface SummaryActionRow {
   isNew: boolean;
   /** The delivery that reported an action; null for a question. */
   deliveryId: string | null;
+  /** The `mission_items` id a person closes; null for a question or choice. */
+  itemId: string | null;
 }
 
 function questionTitle(kind: string, objective: SummaryObjective | undefined): string {
@@ -210,11 +220,10 @@ function questionTitle(kind: string, objective: SummaryObjective | undefined): s
 }
 
 /**
- * Human actions of the latest current-run delivery per objective (from the
- * envelope) plus open questions and choices. Blocking actions first, then
- * newest first, then report order. Actions are deduped across objectives by
- * normalised text, newest kept. There is no row for reviewing the mission and
- * no done state (§4.6).
+ * Open human actions (from the envelope) plus open questions and choices.
+ * Blocking actions first, then newest first, then report order. Actions are
+ * deduped across objectives by normalised text, newest kept. There is no row
+ * for reviewing the mission; a closed action moves to `closedItems`.
  */
 export function missionSummaryActions({
   evidence,
@@ -262,7 +271,8 @@ export function missionSummaryActions({
         objectiveKey: objective?.displayId ?? null,
         introducedAt: action.deliveredAt,
         isNew: isLater(action.deliveredAt, baseline),
-        deliveryId: action.deliveryId
+        deliveryId: action.deliveryId,
+        itemId: action.id
       }
     });
   }
@@ -284,7 +294,8 @@ export function missionSummaryActions({
         objectiveKey: objective?.displayId ?? null,
         introducedAt: request.createdAt,
         isNew: isLater(request.createdAt, baseline),
-        deliveryId: null
+        deliveryId: null,
+        itemId: null
       }
     });
   });
@@ -301,23 +312,24 @@ export function missionSummaryActions({
 
 // ---- Suggested next ----
 
-export type SummarySuggestionRow = {
+export interface SummarySuggestionRow {
+  /** The `mission_items` id. */
+  id: string;
   deliveryId: string;
   objectiveId: string;
   actionId: string;
   title: string;
+  change: string;
+  location: string;
+  doneWhen: string;
   objectiveKey: string | null;
-  /** Introduced after the visit baseline; never set on a resolved row. */
+  /** Introduced after the visit baseline. */
   isNew: boolean;
-} & (
-  | { state: 'open'; change: string; location: string; doneWhen: string; resolution: null }
-  | { state: 'resolved'; resolution: HumanActionResolutionDto }
-);
+}
 
 /**
- * Suggestions from the summary DTO, unresolved first, otherwise in the
- * server's display order. Resolved rows carry only title and resolution; the
- * server already omits dismissed ones. No model text reaches this block.
+ * Open suggestions from the summary DTO, in the server's display order. A
+ * closed suggestion is in `closedItems`. No model text reaches this block.
  */
 export function missionSummarySuggestions({
   summary,
@@ -329,28 +341,26 @@ export function missionSummarySuggestions({
   baseline: string | null;
 }): SummarySuggestionRow[] {
   const live = liveObjectiveMap(objectives);
-  const rows = summary.suggestions.map((suggestion): SummarySuggestionRow => {
-    const objectiveKey = live.get(suggestion.objectiveId)?.displayId ?? null;
-    if (suggestion.state === 'resolved') {
-      return { ...suggestion, objectiveKey, isNew: false };
-    }
-    const deliveredAt = suggestion.deliveredAt;
-    return {
-      ...suggestion,
-      objectiveKey,
-      isNew: deliveredAt ? isLater(deliveredAt, baseline) : false
-    };
-  });
-  return [
-    ...rows.filter(row => row.state === 'open'),
-    ...rows.filter(row => row.state === 'resolved')
-  ];
+  return summary.suggestions.map(suggestion => ({
+    id: suggestion.id,
+    deliveryId: suggestion.deliveryId,
+    objectiveId: suggestion.objectiveId,
+    actionId: suggestion.actionId,
+    title: suggestion.title,
+    change: suggestion.change,
+    location: suggestion.location,
+    doneWhen: suggestion.doneWhen,
+    objectiveKey: live.get(suggestion.objectiveId)?.displayId ?? null,
+    isNew: isLater(suggestion.deliveredAt, baseline)
+  }));
 }
 
 // ---- Risks ----
 
 export interface SummaryRiskRow {
   key: string;
+  /** The `mission_items` id a person closes. */
+  itemId: string;
   deliveryId: string;
   objectiveId: string;
   objectiveKey: string | null;
@@ -358,7 +368,7 @@ export interface SummaryRiskRow {
   isNew: boolean;
 }
 
-/** Risks from the summary DTO (composed, or the deterministic list for `fallback`). */
+/** Open risks from the summary DTO: the deterministic open list, deduped by the server. */
 export function missionSummaryRisks({
   summary,
   objectives,
@@ -369,17 +379,146 @@ export function missionSummaryRisks({
   baseline: string | null;
 }): SummaryRiskRow[] {
   const live = liveObjectiveMap(objectives);
-  return summary.risks.map((risk, index) => {
-    const deliveredAt = risk.deliveredAt;
-    return {
-      key: `risk:${risk.deliveryId}:${index}`,
-      deliveryId: risk.deliveryId,
-      objectiveId: risk.objectiveId,
-      objectiveKey: live.get(risk.objectiveId)?.displayId ?? null,
-      text: risk.text,
-      isNew: deliveredAt ? isLater(deliveredAt, baseline) : false
-    };
-  });
+  return summary.risks.map(risk => ({
+    key: `risk:${risk.id}`,
+    itemId: risk.id,
+    deliveryId: risk.deliveryId,
+    objectiveId: risk.objectiveId,
+    objectiveKey: live.get(risk.objectiveId)?.displayId ?? null,
+    text: risk.text,
+    isNew: isLater(risk.deliveredAt, baseline)
+  }));
+}
+
+// ---- Provenance and resolved items (contract v173) ----
+
+/** A workspace member, as far as naming a person needs. `isOperator` marks the viewer. */
+export interface SummaryMember {
+  workspaceUserId: string;
+  displayName: string;
+  handle: string | null;
+  email: string | null;
+  isOperator: boolean;
+}
+
+/** Who wrote the headline and summary. */
+export type SummaryProvenance =
+  /** An agent wrote it at delivery. `objectiveKey` is null once that objective is deleted. */
+  | { kind: 'agent'; objectiveKey: string | null }
+  /** The fallback composer (model or deterministic) wrote it. */
+  | { kind: 'automatic' };
+
+/** The provenance line under the post: the authoring objective, or an automatic label. */
+export function missionSummaryProvenance(
+  summary: MissionSummaryDto,
+  objectives: readonly SummaryObjective[]
+): SummaryProvenance {
+  if (summary.author.kind !== 'agent') return { kind: 'automatic' };
+  const objectiveId = summary.author.objectiveId;
+  const objective = objectiveId ? liveObjectiveMap(objectives).get(objectiveId) : undefined;
+  return { kind: 'agent', objectiveKey: objective?.displayId ?? null };
+}
+
+/** Who closed an item, ready to name. */
+export type SummaryResolver =
+  /** `name` is `you` for the viewer, the member's name, or `a person` when unknown. */
+  | { kind: 'person'; name: string }
+  /** `objectiveKey` is null once the closing objective is deleted. */
+  | { kind: 'agent'; objectiveKey: string | null };
+
+function memberName(member: SummaryMember): string {
+  if (member.isOperator) return 'you';
+  return member.displayName.trim() || member.handle || member.email || 'a person';
+}
+
+export function missionItemResolver(
+  resolvedBy: MissionItemResolverDto | null | undefined,
+  {
+    objectives,
+    members
+  }: { objectives: readonly SummaryObjective[]; members: readonly SummaryMember[] }
+): SummaryResolver | null {
+  if (!resolvedBy) return null;
+  if (resolvedBy.kind === 'agent') {
+    const objective = resolvedBy.objectiveId
+      ? liveObjectiveMap(objectives).get(resolvedBy.objectiveId)
+      : undefined;
+    return { kind: 'agent', objectiveKey: objective?.displayId ?? null };
+  }
+  const member = resolvedBy.workspaceUserId
+    ? members.find(candidate => candidate.workspaceUserId === resolvedBy.workspaceUserId)
+    : undefined;
+  return { kind: 'person', name: member ? memberName(member) : 'a person' };
+}
+
+/** Plain-text name of a resolver: `you`, a person's name, an objective key, or `an agent`. */
+export function missionItemResolverText(resolver: SummaryResolver): string {
+  if (resolver.kind === 'person') return resolver.name;
+  return resolver.objectiveKey ?? 'an agent';
+}
+
+/** What a close did: `Done`, `Dismissed`, or the suggestion's promotion. */
+export function missionItemOutcomeLabel({
+  status,
+  outcome,
+  outcomeRef
+}: {
+  status: 'done' | 'dismissed';
+  outcome: 'mission_created' | 'objective_added' | null;
+  outcomeRef: string | null;
+}): string {
+  if (status === 'dismissed') return 'Dismissed';
+  const ref = outcomeRef ? ` ${outcomeRef}` : '';
+  if (outcome === 'mission_created') return `Mission${ref} created`;
+  if (outcome === 'objective_added') return `Objective${ref} added`;
+  return 'Done';
+}
+
+const ITEM_KIND_LABEL: Record<MissionSummaryClosedItemDto['kind'], string> = {
+  risk: 'Risk',
+  human_action: 'Action',
+  suggestion: 'Suggestion'
+};
+
+export interface SummaryClosedItemRow {
+  id: string;
+  kind: MissionSummaryClosedItemDto['kind'];
+  /** `Risk`, `Action` or `Suggestion`: the kind as text, never colour alone. */
+  kindLabel: string;
+  text: string;
+  status: 'done' | 'dismissed';
+  /** `Done`, `Dismissed`, or the promotion (`Objective coo:1.abcd added`). */
+  outcomeLabel: string;
+  reason: string | null;
+  resolver: SummaryResolver | null;
+  resolvedAt: string | null;
+  /** The objective that reported the item; null once deleted. */
+  objectiveKey: string | null;
+}
+
+/** Done and dismissed items in the server's order (newest close first). */
+export function missionSummaryClosedItems({
+  summary,
+  objectives,
+  members
+}: {
+  summary: MissionSummaryDto;
+  objectives: readonly SummaryObjective[];
+  members: readonly SummaryMember[];
+}): SummaryClosedItemRow[] {
+  const live = liveObjectiveMap(objectives);
+  return summary.closedItems.map(item => ({
+    id: item.id,
+    kind: item.kind,
+    kindLabel: ITEM_KIND_LABEL[item.kind] ?? 'Item',
+    text: item.text,
+    status: item.status,
+    outcomeLabel: missionItemOutcomeLabel(item),
+    reason: item.reason?.trim() || null,
+    resolver: missionItemResolver(item.resolvedBy, { objectives, members }),
+    resolvedAt: item.resolvedAt,
+    objectiveKey: live.get(item.objectiveId)?.displayId ?? null
+  }));
 }
 
 // ---- Files changed ----

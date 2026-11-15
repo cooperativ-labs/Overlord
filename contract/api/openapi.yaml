@@ -3,10 +3,10 @@ info:
   title: Overlord API
   # info.version is the API description's own Semantic Version; it changes when
   # this document changes and is never compared with the contract version.
-  version: 4.1.0
+  version: 4.4.0
   # The contract version (contract/VERSION) this document belongs to. Written
   # only by `yarn version:contract`.
-  x-overlord-contract-version: 172.3.0
+  x-overlord-contract-version: 173.0.0
   description: >-
     Normative description of Overlord's REST surface (ADR 0006): one operation for every
     method and path the backend registers, at the path it is served (ADR 0007), excluding
@@ -5121,9 +5121,9 @@ paths:
       summary: Record the operator's decision on a deferred-work item
       description: >-
         Requires `mission:update` on the delivery's workspace; a non-member, an unknown delivery and an
-        action id that is not one of the delivery's deferred-work ids all answer 404. Upserts the
-        resolution (re-resolving overwrites it) and records a `human_action_resolution` change carrying
-        the mission and objective ids.
+        action id that is not one of the delivery's deferred-work ids all answer 404. Closes the
+        suggestion's `mission_items` row as a person's decision (re-resolving overwrites it, including
+        an agent's close), and records a `mission_item` change carrying the mission and objective ids.
       security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
       requestBody:
         required: true
@@ -5150,9 +5150,10 @@ paths:
       x-overlord-consumers: [mobile, webapp]
       summary: Reopen a deferred-work item
       description: >-
-        Requires `mission:update` on the delivery's workspace (404 rules as for the PUT). Removes the
-        resolution and records a `human_action_resolution` change; an item without one is returned
-        unchanged.
+        Requires `mission:update` on the delivery's workspace (404 rules as for the PUT). Restores the
+        suggestion's `mission_items` row and records a `mission_item` change; an item without a
+        resolution is returned unchanged. A restored suggestion of a delivery that is no longer current
+        returns to `superseded` and stays unresolved here.
       security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
       responses:
         '200':
@@ -5164,6 +5165,70 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+  "/api/mission-items/{id}/resolution":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Mission item UUID (`mission_items.id`).
+        schema: { type: string }
+    put:
+      operationId: putMissionItemsByIdResolution
+      tags: [missions]
+      x-overlord-permission: mission:update
+      x-overlord-edition: both
+      x-overlord-consumers: [webapp]
+      summary: Close a mission item as a person
+      description: >-
+        Requires `mission:update` on the item's mission; a non-member, a mission outside a project
+        token's projects, an unknown item and an item of a deleted delivery all answer 404. Closes a
+        risk, human action or suggestion as `done` or `dismissed` with an optional reason, recorded as a
+        person's decision. Re-deciding overwrites an earlier decision, including an agent's. Records a
+        `mission_item` change carrying the mission and objective ids.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ResolveMissionItemBody' }
+      responses:
+        '200':
+          description: The item with its new status.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MissionItemDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
+    delete:
+      operationId: deleteMissionItemsByIdResolution
+      tags: [missions]
+      x-overlord-permission: mission:update
+      x-overlord-edition: both
+      x-overlord-consumers: [webapp]
+      summary: Restore a closed mission item
+      description: >-
+        Requires `mission:update` on the item's mission (404 rules as for the PUT). Sets a `done` or
+        `dismissed` item back to `open`, clears who closed it, the reason and any outcome, then applies
+        the supersede rules again, so an item of a delivery that is no longer current returns to
+        `superseded`. An open item is returned unchanged. A `superseded` item cannot be restored: 409
+        with code `mission_item_superseded`. Records a `mission_item` change.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      responses:
+        '200':
+          description: The item after the restore.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MissionItemDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
         '500': { $ref: '#/components/responses/InternalError' }
   /api/inbox/missions:
     get:
@@ -13042,7 +13107,10 @@ components:
         presentation: { $ref: '#/components/schemas/DeliveryPresentationV1' }
     HumanActionResolutionDto:
       type: object
-      required: [ status, resolvedAt, resolvedByWorkspaceUserId, outcome, outcomeRef ]
+      description: >-
+        The decision on a suggestion (deferred-work item), read from its `mission_items` row. An agent's
+        close has a null `resolvedByWorkspaceUserId`, `resolvedBy.kind` `agent` and a `reason`.
+      required: [ status, resolvedAt, resolvedByWorkspaceUserId, outcome, outcomeRef, reason, resolvedBy ]
       properties:
         status:
           type: string
@@ -13061,6 +13129,96 @@ components:
           oneOf:
             - type: string
             - type: 'null'
+        reason:
+          description: >-
+            Why the item was closed, at most 280 characters. Always set when an agent closed it; optional
+            for a person.
+          oneOf:
+            - type: string
+            - type: 'null'
+        resolvedBy: { $ref: '#/components/schemas/MissionItemResolverDto' }
+    MissionItemResolverDto:
+      type: object
+      description: >-
+        Who closed a mission item. `person`: `workspaceUserId` is the person (null once the membership is
+        deleted). `agent`: `objectiveId` and `deliveryId` are the objective and delivery that closed it.
+        The fields of the other kind are null.
+      required: [ kind, workspaceUserId, objectiveId, deliveryId ]
+      properties:
+        kind:
+          type: string
+          enum: [ person, agent ]
+        workspaceUserId:
+          oneOf:
+            - type: string
+            - type: 'null'
+        objectiveId:
+          oneOf:
+            - type: string
+            - type: 'null'
+        deliveryId:
+          oneOf:
+            - type: string
+            - type: 'null'
+    MissionItemDto:
+      type: object
+      description: >-
+        One row of `mission_items` (contract v173, ADR 0060): a risk, human action or suggestion a
+        delivery reported, with its status.
+      required:
+        [
+          id,
+          missionId,
+          objectiveId,
+          deliveryId,
+          kind,
+          text,
+          status,
+          reason,
+          resolvedBy,
+          resolvedAt,
+          outcome,
+          outcomeRef,
+          reportedAt,
+          revision
+        ]
+      properties:
+        id: { type: string }
+        missionId: { type: string }
+        objectiveId: { type: string }
+        deliveryId: { type: string }
+        kind:
+          type: string
+          enum: [ risk, human_action, suggestion ]
+        text:
+          type: string
+          description: Risk text, action sentence or suggestion title from the delivery's presentation.
+        status:
+          type: string
+          enum: [ open, done, dismissed, superseded ]
+        reason:
+          oneOf:
+            - type: string
+            - type: 'null'
+        resolvedBy:
+          oneOf:
+            - $ref: '#/components/schemas/MissionItemResolverDto'
+            - type: 'null'
+        resolvedAt:
+          oneOf:
+            - $ref: '#/components/schemas/DateTime'
+            - type: 'null'
+        outcome:
+          oneOf:
+            - type: string
+              enum: [ mission_created, objective_added ]
+            - type: 'null'
+        outcomeRef:
+          oneOf:
+            - type: string
+            - type: 'null'
+        reportedAt: { $ref: '#/components/schemas/DateTime' }
+        revision: { type: integer }
     DeliveryDeferredWorkItemDto:
       type: object
       required: [ actionId, title, change, location, doneWhen, resolution ]
@@ -13145,57 +13303,52 @@ components:
       enum: [ pending, composed, fallback ]
     MissionSummaryRiskDto:
       type: object
-      required: [ deliveryId, objectiveId, deliveredAt, text ]
+      required: [ id, deliveryId, objectiveId, deliveredAt, text ]
       properties:
+        id: { type: string }
         deliveryId: { type: string }
         objectiveId: { type: string }
         deliveredAt: { $ref: '#/components/schemas/DateTime' }
         text: { type: string }
     MissionSummarySuggestionDto:
-      description: A deferred-work suggestion projected at read time; dismissed items are omitted,
-        promoted ones reduced to identity, title and resolution.
-      oneOf:
-        - type: object
-          required:
-            [
-              deliveryId,
-              objectiveId,
-              deliveredAt,
-              actionId,
-              title,
-              state,
-              change,
-              location,
-              doneWhen,
-              resolution
-            ]
-          properties:
-            deliveryId: { type: string }
-            objectiveId: { type: string }
-            deliveredAt: { $ref: '#/components/schemas/DateTime' }
-            actionId: { type: string }
-            title: { type: string }
-            state: { const: open }
-            change: { type: string }
-            location: { type: string }
-            doneWhen: { type: string }
-            resolution: { type: 'null' }
-        - type: object
-          required: [ deliveryId, objectiveId, deliveredAt, actionId, title, state, resolution ]
-          properties:
-            deliveryId: { type: string }
-            objectiveId: { type: string }
-            deliveredAt: { $ref: '#/components/schemas/DateTime' }
-            actionId: { type: string }
-            title: { type: string }
-            state: { const: resolved }
-            resolution: { $ref: '#/components/schemas/HumanActionResolutionDto' }
+      description: An open suggestion from mission_items. Closed suggestions appear in closedItems.
+        `state` is always `open` and `resolution` always null; both are kept for clients that read them.
+      type: object
+      required:
+        [
+          id,
+          deliveryId,
+          objectiveId,
+          deliveredAt,
+          actionId,
+          title,
+          state,
+          change,
+          location,
+          doneWhen,
+          resolution
+        ]
+      properties:
+        id: { type: string }
+        deliveryId: { type: string }
+        objectiveId: { type: string }
+        deliveredAt: { $ref: '#/components/schemas/DateTime' }
+        actionId: { type: string }
+        title: { type: string }
+        state: { const: open }
+        change: { type: string }
+        location: { type: string }
+        doneWhen: { type: string }
+        resolution: { type: 'null' }
     MissionSummaryDto:
       type: object
       required:
         [
           missionId,
           revision,
+          contentRevision,
+          author,
+          closedItems,
           status,
           headline,
           summary,
@@ -13209,6 +13362,25 @@ components:
       properties:
         missionId: { type: string }
         revision: { type: integer, minimum: 1 }
+        contentRevision: { type: integer, minimum: 0 }
+        author:
+          type: object
+          required: [ kind, objectiveId, deliveryId ]
+          properties:
+            kind: { type: string, enum: [ deterministic, gemini, agent ] }
+            objectiveId:
+              oneOf:
+                - type: string
+                - type: 'null'
+            deliveryId:
+              oneOf:
+                - type: string
+                - type: 'null'
+        closedItems:
+          type: array
+          maxItems: 100
+          description: Done and dismissed items, newest resolution first; excludes superseded items.
+          items: { $ref: '#/components/schemas/MissionSummaryClosedItemDto' }
         status: { $ref: '#/components/schemas/MissionSummaryStatus' }
         headline:
           type: string
@@ -13228,7 +13400,7 @@ components:
             - type: 'null'
         generatedBy:
           type: string
-          enum: [ deterministic, gemini ]
+          enum: [ deterministic, gemini, agent ]
         generatedAt:
           oneOf:
             - $ref: '#/components/schemas/DateTime'
@@ -13239,8 +13411,9 @@ components:
             - type: 'null'
     MissionSummaryActionDto:
       type: object
-      required: [ deliveryId, objectiveId, actionId, deliveredAt, action, category, source ]
+      required: [ id, deliveryId, objectiveId, actionId, deliveredAt, action, category, source ]
       properties:
+        id: { type: string }
         deliveryId: { type: string }
         objectiveId:
           type: string
@@ -13265,6 +13438,38 @@ components:
         objectiveId: { type: string }
         deliveryId: { type: string }
         deliveredAt: { $ref: '#/components/schemas/DateTime' }
+    MissionSummaryClosedItemDto:
+      type: object
+      required: [ id, kind, text, objectiveId, status, reason, resolvedBy, resolvedAt, outcome, outcomeRef ]
+      properties:
+        id: { type: string }
+        kind: { type: string, enum: [ risk, human_action, suggestion ] }
+        text: { type: string }
+        objectiveId: { type: string }
+        status: { type: string, enum: [ done, dismissed ] }
+        reason:
+          oneOf:
+            - type: string
+            - type: 'null'
+        outcome:
+          description: How a person promoted a suggestion; null for every other close.
+          oneOf:
+            - type: string
+              enum: [ mission_created, objective_added ]
+            - type: 'null'
+        outcomeRef:
+          description: Display id of the mission or objective a promotion created.
+          oneOf:
+            - type: string
+            - type: 'null'
+        resolvedBy:
+          oneOf:
+            - $ref: '#/components/schemas/MissionItemResolverDto'
+            - type: 'null'
+        resolvedAt:
+          oneOf:
+            - $ref: '#/components/schemas/DateTime'
+            - type: 'null'
     MissionSummaryEvidenceDto:
       type: object
       required: [ actions, sources, totals, truncated ]
@@ -13954,6 +14159,19 @@ components:
         source:
           type: string
           enum: [ objective, resource_source, user_target, workspace, none ]
+    ResolveMissionItemBody:
+      type: object
+      required: [ status ]
+      properties:
+        status:
+          type: string
+          enum: [ done, dismissed ]
+        reason:
+          description: Optional; trimmed, blank means none, at most 280 characters (400 otherwise).
+          oneOf:
+            - type: string
+              maxLength: 280
+            - type: 'null'
     ResolveHumanActionBody:
       type: object
       required: [ status ]

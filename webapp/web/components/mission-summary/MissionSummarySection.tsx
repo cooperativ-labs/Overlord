@@ -8,7 +8,9 @@ import {
 } from '../../lib/hooks/use-mission-summary-seen.ts';
 import {
   missionSummaryActions,
+  missionSummaryClosedItems,
   missionSummaryFiles,
+  missionSummaryProvenance,
   missionSummaryRisks,
   missionSummaryRunningSentences,
   missionSummarySectionState,
@@ -16,6 +18,7 @@ import {
   missionSummaryStatusChip,
   missionSummarySuggestions,
   openSummaryQuestions,
+  type SummaryMember,
   type SummaryObjective,
   summaryWatermarkIsDisplayed,
   updatingSourceObjective
@@ -24,7 +27,8 @@ import {
   useMissionAgentRequests,
   useMissionDeliveries,
   useMissionFileChanges,
-  useMissionSummary
+  useMissionSummary,
+  useWorkspaceMembers
 } from '../../lib/queries.ts';
 import { cn } from '../../lib/utils.ts';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip.tsx';
@@ -34,6 +38,7 @@ import { MissionSummaryFiles } from './MissionSummaryFiles.tsx';
 import { MissionSummaryHeader } from './MissionSummaryHeader.tsx';
 import { summaryFocusRing } from './MissionSummaryParts.tsx';
 import { MissionSummaryPost } from './MissionSummaryPost.tsx';
+import { MissionSummaryResolved } from './MissionSummaryResolved.tsx';
 import { MissionSummaryRisks } from './MissionSummaryRisks.tsx';
 import { MissionSummarySuggestions } from './MissionSummarySuggestions.tsx';
 
@@ -48,6 +53,7 @@ function useMinuteClock(): string {
 }
 
 const NO_DELIVERIES: DeliveryDto[] = [];
+const NO_MEMBERS: SummaryMember[] = [];
 
 const EMPTY_EVIDENCE: MissionSummaryEvidenceDto = {
   actions: [],
@@ -107,6 +113,8 @@ export function MissionSummarySection({ mission }: { mission: MissionDetailDto }
   const requestsQ = useMissionAgentRequests(mission.id, undefined, eligible);
   const deliveriesQ = useMissionDeliveries(mission.id, eligible);
   const fileChangesQ = useMissionFileChanges(mission.id);
+  const membersQ = useWorkspaceMembers(eligible ? mission.workspaceId : null);
+  const members = membersQ.data ?? NO_MEMBERS;
   const baseline = useMissionSummaryVisitBaseline(response) ?? null;
   const now = useMinuteClock();
   const sectionRef = useRef<HTMLDivElement>(null);
@@ -144,6 +152,14 @@ export function MissionSummarySection({ mission }: { mission: MissionDetailDto }
   const riskRows = useMemo(
     () => (summary ? missionSummaryRisks({ summary, objectives, baseline }) : []),
     [summary, objectives, baseline]
+  );
+  const closedRows = useMemo(
+    () => (summary ? missionSummaryClosedItems({ summary, objectives, members }) : []),
+    [summary, objectives, members]
+  );
+  const provenance = useMemo(
+    () => (summary ? missionSummaryProvenance(summary, objectives) : null),
+    [summary, objectives]
   );
   const files = useMemo(
     () =>
@@ -254,6 +270,7 @@ export function MissionSummarySection({ mission }: { mission: MissionDetailDto }
             statusChip={missionSummaryStatusChip(mission.statusType)}
             sources={sources}
             sourcesTruncated={evidence.truncated.sources}
+            provenance={provenance ?? { kind: 'automatic' }}
             dimmed={state.updating}
           />
         ) : state.running.length > 0 ? (
@@ -261,13 +278,15 @@ export function MissionSummarySection({ mission }: { mission: MissionDetailDto }
         ) : null}
         <MissionSummaryActions
           rows={actionRows}
+          missionId={mission.id}
           totalActions={evidence.totals.actions}
           truncated={evidence.truncated.actions}
         />
         <MissionSummarySuggestions rows={suggestionRows} missionId={mission.id} now={now} />
         {state.kind === 'summary' ? (
-          <MissionSummaryRisks rows={riskRows} dimmed={state.updating} />
+          <MissionSummaryRisks rows={riskRows} missionId={mission.id} dimmed={state.updating} />
         ) : null}
+        <MissionSummaryResolved rows={closedRows} missionId={mission.id} now={now} />
         <MissionSummaryFiles files={files} projectId={mission.projectId} />
         <SummaryFooter />
       </section>

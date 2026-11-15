@@ -898,6 +898,7 @@ export const missionSubcommands: SubcommandTable = {
         artifacts: artifacts ?? envelope.artifacts ?? [],
         declaredPaths: declaredPaths ?? envelope.declaredPaths,
         payloadJson: restPayload,
+        missionSummary: envelope.missionSummary,
         ...(assignedTo !== undefined ? { assignedTo } : {})
       });
     }

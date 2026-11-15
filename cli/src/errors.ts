@@ -2,12 +2,47 @@ import { redactSecrets } from './redact-secrets.js';
 
 export class CliError extends Error {
   readonly exitCode: number;
+  /** The backend's JSON error body, when the error came from a backend response. */
+  readonly payload: unknown;
 
-  constructor({ message, exitCode = 1 }: { message: string; exitCode?: number }) {
+  constructor({
+    message,
+    exitCode = 1,
+    payload
+  }: {
+    message: string;
+    exitCode?: number;
+    payload?: unknown;
+  }) {
     super(message);
     this.name = 'CliError';
     this.exitCode = exitCode;
+    this.payload = payload;
   }
+}
+
+export const MISSION_SUMMARY_CONFLICT_CODE = 'mission_summary_conflict';
+
+/**
+ * The fresh mission summary baseline carried by a 409 `mission_summary_conflict`
+ * delivery rejection, printed to stdout so the agent can reconcile and retry.
+ */
+export function missionSummaryConflictOutput(error: unknown): Record<string, unknown> | null {
+  if (!(error instanceof CliError) || !error.payload || typeof error.payload !== 'object') {
+    return null;
+  }
+  const record = error.payload as Record<string, unknown>;
+  if (record.code !== MISSION_SUMMARY_CONFLICT_CODE) return null;
+  const details =
+    record.details && typeof record.details === 'object'
+      ? (record.details as Record<string, unknown>)
+      : {};
+  return {
+    error: record.error ?? null,
+    code: MISSION_SUMMARY_CONFLICT_CODE,
+    baseContentRevision: details.baseContentRevision ?? null,
+    missionSummary: details.missionSummary ?? null
+  };
 }
 
 /**

@@ -1,6 +1,5 @@
 import { PERMISSIONS } from '@overlord/auth';
 import {
-  type HumanActionV1,
   type MarkMissionSummarySeenBody,
   MISSION_SUMMARY_EVIDENCE_LIMIT,
   type MissionSummaryActionDto,
@@ -14,41 +13,20 @@ import {
   type MissionSummarySuggestionDto
 } from '@overlord/contract';
 
+import { listMissionItems, type MissionItem } from '../packages/core/service/mission-items.ts';
+import type { MissionSummaryRuns } from '../packages/core/service/mission-summary-compose.ts';
+import { MISSION_SUMMARY_LIMITS } from '../packages/core/service/mission-summary-compose.ts';
 import {
-  type MissionSummaryDeliveryEvidence,
-  type MissionSummaryRuns
-} from '../packages/core/service/mission-summary-compose.ts';
-import { readMissionSummaryRuns } from '../packages/core/service/mission-summary-evidence.ts';
+  readMissionSummaryOpenItems,
+  readMissionSummaryRuns
+} from '../packages/core/service/mission-summary-evidence.ts';
 
 import { requireDatabaseClient } from './db.ts';
-import {
-  deferredWorkEntries,
-  findResolution,
-  loadResolutions,
-  toResolution
-} from './deferred-work.ts';
+import { toResolverDto } from './deferred-work.ts';
 import { ApiError } from './errors.ts';
 import { requireMissionPermission } from './rbac.ts';
 
-/**
- * Read side of the mission summary (coo:1202, contract v166): the summary row,
- * the evidence selected for it, and the caller's seen watermark.
- *
- * Operator surface only. Nothing here is reachable from `load-context`, the
- * mission packet, MCP tools, or CLI protocol commands; the REST routes are
- * exempt from MCP parity for that reason.
- *
- * A delivery is *current-run* when it is live and was delivered at or after its
- * objective's `reopened_at`; core's mission summary evidence reader owns that
- * rule for the worker and this route alike. Evidence is selected in the
- * database before any limit: the latest current-run delivery of every objective
- * (including deleted objectives, whose deliveries clients render as the
- * unassigned row), so a busy objective can never push another objective's
- * current delivery out of view.
- * Risks and suggestions stored on the summary row are references; they are
- * projected here from current-run deliveries only, so a reference whose source
- * stopped being current disappears even while a recompose is pending.
- */
+/** Operator read projection: prose plus live mission_items and the seen watermark. */
 
 interface MissionScope {
   missionId: string;
@@ -63,24 +41,13 @@ interface MissionSummaryRow {
   status: string;
   headline: string;
   summary_markdown: string;
-  risks_json: string;
-  suggestions_json: string;
+  content_revision: number;
+  narrative_delivery_id: string | null;
+  narrative_objective_id: string | null;
   source_delivery_id: string | null;
   generated_by: string;
   generated_at: string | null;
   model: string | null;
-}
-
-interface RiskRef {
-  deliveryId: string;
-  objectiveId: string;
-  text: string;
-}
-
-interface SuggestionRef {
-  deliveryId: string;
-  objectiveId: string;
-  actionId: string;
 }
 
 async function resolveMissionScope(missionRef: string): Promise<MissionScope> {
@@ -124,156 +91,119 @@ function latestTimestamp(...values: Array<string | null | undefined>): string | 
   return latest === null ? null : new Date(latest).toISOString();
 }
 
-/** Sources are the latest current-run delivery of every objective, newest first. */
-function buildEvidence(runs: MissionSummaryRuns) {
-  const sources = runs.latestByObjective;
-  const actions: Array<MissionSummaryActionDto & { order: number }> = [];
-  for (const source of sources) {
-    source.report.presentation.humanActions.forEach((action: HumanActionV1) => {
-      const { id, ...fields } = action;
-      actions.push({
-        ...fields,
-        deliveryId: source.id,
-        objectiveId: source.objectiveId,
-        actionId: id,
-        deliveredAt: source.deliveredAt,
-        order: actions.length
-      });
-    });
-  }
-  // Blocking first; otherwise keep newest delivery first, then report order.
-  actions.sort(
-    (left, right) =>
-      Number(right.blocking === true) - Number(left.blocking === true) || left.order - right.order
-  );
-  const sourceDtos: MissionSummarySourceDto[] = sources.map(source => ({
+/** Display dedupe keeps the newest open row, without changing its stored identity. */
+function dedupe(items: MissionItem[], kind: MissionItem['kind'], limit: number): MissionItem[] {
+  const seen = new Set<string>();
+  return items
+    .filter(item => {
+      if (item.kind !== kind) return false;
+      const key = item.text.trim().replace(/\s+/g, ' ').toLowerCase();
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .slice(0, limit);
+}
+
+function actionDto(item: MissionItem): MissionSummaryActionDto {
+  return {
+    ...item.detail,
+    id: item.id,
+    action: item.text,
+    actionId: String(item.detail.actionId),
+    category: item.detail.category as MissionSummaryActionDto['category'],
+    source: item.detail.source as MissionSummaryActionDto['source'],
+    deliveryId: item.deliveryId,
+    objectiveId: item.objectiveId,
+    deliveredAt: item.reportedAt
+  };
+}
+
+function buildEvidence(runs: MissionSummaryRuns, items: MissionItem[]): MissionSummaryEvidenceDto {
+  const actions = items
+    .filter(item => item.kind === 'human_action')
+    .map(actionDto)
+    .sort((a, b) => Number(b.blocking === true) - Number(a.blocking === true));
+  const sources: MissionSummarySourceDto[] = runs.latestByObjective.map(source => ({
     objectiveId: source.objectiveId,
     deliveryId: source.id,
     deliveredAt: source.deliveredAt
   }));
-  const evidence: MissionSummaryEvidenceDto = {
-    actions: actions
-      .slice(0, MISSION_SUMMARY_EVIDENCE_LIMIT)
-      .map(({ order: _order, ...action }) => action),
-    sources: sourceDtos.slice(0, MISSION_SUMMARY_EVIDENCE_LIMIT),
+  return {
+    actions: actions.slice(0, MISSION_SUMMARY_EVIDENCE_LIMIT),
+    sources: sources.slice(0, MISSION_SUMMARY_EVIDENCE_LIMIT),
     totals: {
       actions: actions.length,
-      sources: sourceDtos.length,
+      sources: sources.length,
       currentRunDeliveries: runs.currentRun.length
     },
     truncated: {
       actions: actions.length > MISSION_SUMMARY_EVIDENCE_LIMIT,
-      sources: sourceDtos.length > MISSION_SUMMARY_EVIDENCE_LIMIT
+      sources: sources.length > MISSION_SUMMARY_EVIDENCE_LIMIT
     }
   };
-  return evidence;
 }
 
-function parseJsonArray(value: unknown): unknown[] {
-  if (Array.isArray(value)) return value;
-  if (typeof value !== 'string') return [];
-  try {
-    const parsed: unknown = JSON.parse(value);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
-
-function isNonEmptyString(value: unknown): value is string {
-  return typeof value === 'string' && value.length > 0;
-}
-
-function parseRiskRefs(value: unknown): RiskRef[] {
-  return parseJsonArray(value).flatMap(item => {
-    if (typeof item !== 'object' || item === null) return [];
-    const { deliveryId, objectiveId, text } = item as Record<string, unknown>;
-    return isNonEmptyString(deliveryId) && isNonEmptyString(objectiveId) && isNonEmptyString(text)
-      ? [{ deliveryId, objectiveId, text }]
-      : [];
-  });
-}
-
-function parseSuggestionRefs(value: unknown): SuggestionRef[] {
-  return parseJsonArray(value).flatMap(item => {
-    if (typeof item !== 'object' || item === null) return [];
-    const { deliveryId, objectiveId, actionId } = item as Record<string, unknown>;
-    return isNonEmptyString(deliveryId) &&
-      isNonEmptyString(objectiveId) &&
-      isNonEmptyString(actionId)
-      ? [{ deliveryId, objectiveId, actionId }]
-      : [];
-  });
-}
-
-/**
- * Projects the row's risk and suggestion references onto current-run
- * deliveries. Dismissed suggestions are omitted; promoted ones keep only their
- * identity, title, and resolution.
- */
-async function projectSummary(
+function projectSummary(
   row: MissionSummaryRow,
-  runs: MissionSummaryRuns
-): Promise<MissionSummaryDto> {
-  const riskRefs = parseRiskRefs(row.risks_json);
-  const suggestionRefs = parseSuggestionRefs(row.suggestions_json);
-  const deliveries = new Map<string, MissionSummaryDeliveryEvidence>(
-    runs.currentRun.map(delivery => [delivery.id, delivery])
+  items: MissionItem[],
+  closed: MissionItem[]
+): MissionSummaryDto {
+  const risks: MissionSummaryRiskDto[] = dedupe(items, 'risk', MISSION_SUMMARY_LIMITS.risks).map(
+    item => ({
+      id: item.id,
+      deliveryId: item.deliveryId,
+      objectiveId: item.objectiveId,
+      deliveredAt: item.reportedAt,
+      text: item.text
+    })
   );
-  const resolutions = await loadResolutions([
-    ...new Set(suggestionRefs.map(ref => ref.deliveryId).filter(id => deliveries.has(id)))
-  ]);
-
-  const risks: MissionSummaryRiskDto[] = riskRefs
-    .filter(ref => deliveries.get(ref.deliveryId)?.objectiveId === ref.objectiveId)
-    .map(({ deliveryId, objectiveId, text }) => ({
-      deliveryId,
-      objectiveId,
-      deliveredAt: deliveries.get(deliveryId)!.deliveredAt,
-      text
-    }));
-
-  const suggestions: MissionSummarySuggestionDto[] = [];
-  for (const ref of suggestionRefs) {
-    const delivery = deliveries.get(ref.deliveryId);
-    if (!delivery || delivery.objectiveId !== ref.objectiveId) continue;
-    const entry = deferredWorkEntries(delivery.report).find(
-      candidate => candidate.id === ref.actionId
-    );
-    if (!entry) continue;
-    const resolution = toResolution(findResolution(resolutions, delivery.id, entry));
-    if (resolution?.status === 'dismissed') continue;
-    const identity = {
-      deliveryId: delivery.id,
-      objectiveId: delivery.objectiveId,
-      deliveredAt: delivery.deliveredAt,
-      actionId: entry.id,
-      title: entry.title
-    };
-    suggestions.push(
-      resolution
-        ? { ...identity, state: 'resolved', resolution }
-        : {
-            ...identity,
-            state: 'open',
-            change: entry.change,
-            location: entry.location,
-            doneWhen: entry.doneWhen,
-            resolution: null
-          }
-    );
-  }
-
+  const suggestions: MissionSummarySuggestionDto[] = dedupe(
+    items,
+    'suggestion',
+    MISSION_SUMMARY_LIMITS.suggestions
+  ).map(item => ({
+    id: item.id,
+    deliveryId: item.deliveryId,
+    objectiveId: item.objectiveId,
+    deliveredAt: item.reportedAt,
+    actionId: item.itemRef,
+    title: item.text,
+    state: 'open',
+    change: String(item.detail.change ?? ''),
+    location: String(item.detail.location ?? ''),
+    doneWhen: String(item.detail.doneWhen ?? ''),
+    resolution: null
+  }));
+  const generatedBy = row.generated_by as MissionSummaryDto['generatedBy'];
   return {
     missionId: row.mission_id,
     revision: Number(row.revision),
+    contentRevision: Number(row.content_revision),
     status: row.status as MissionSummaryStatus,
     headline: row.headline,
     summary: row.summary_markdown,
     risks,
     suggestions,
+    author: {
+      kind: generatedBy,
+      objectiveId: row.narrative_objective_id,
+      deliveryId: row.narrative_delivery_id
+    },
+    closedItems: closed.map(item => ({
+      id: item.id,
+      kind: item.kind,
+      text: item.text,
+      objectiveId: item.objectiveId,
+      status: item.status as 'done' | 'dismissed',
+      reason: item.statusReason,
+      resolvedBy: item.resolvedBy ? toResolverDto(item.resolvedBy) : null,
+      resolvedAt: item.resolvedAt,
+      outcome: item.outcome,
+      outcomeRef: item.outcomeRef
+    })),
     sourceDeliveryId: row.source_delivery_id,
-    generatedBy: row.generated_by === 'gemini' ? 'gemini' : 'deterministic',
+    generatedBy,
     generatedAt: row.generated_at,
     model: row.model
   };
@@ -294,22 +224,30 @@ export async function getMissionSummary(missionRef: string): Promise<MissionSumm
     return { eligible: false, summary: null, evidence: null, watermark: null, seenAt: null };
   }
   const db = requireDatabaseClient();
-  const [runs, openQuestionAt, summaryRow, seenAt] = await Promise.all([
+  const [runs, openQuestionAt, summaryRow, seenAt, open, closed] = await Promise.all([
     readMissionSummaryRuns(db, scope.missionId, { workspaceId: scope.workspaceId }),
     latestOpenQuestionAt(scope),
     db.get(
-      `SELECT mission_id, revision, status, headline, summary_markdown, risks_json,
-              suggestions_json, source_delivery_id, generated_by, generated_at, model
+      `SELECT mission_id, revision, content_revision, narrative_delivery_id, narrative_objective_id,
+              status, headline, summary_markdown, source_delivery_id, generated_by, generated_at, model
          FROM mission_summaries
         WHERE mission_id = ? AND workspace_id = ?`,
       [scope.missionId, scope.workspaceId]
     ) as Promise<MissionSummaryRow | undefined>,
-    loadSeenAt(scope)
+    loadSeenAt(scope),
+    readMissionSummaryOpenItems(db, scope.missionId, scope.workspaceId),
+    listMissionItems(db, {
+      missionId: scope.missionId,
+      workspaceId: scope.workspaceId,
+      statuses: ['done', 'dismissed'],
+      order: 'resolved',
+      limit: 100
+    })
   ]);
   return {
     eligible: true,
-    summary: summaryRow ? await projectSummary(summaryRow, runs) : null,
-    evidence: buildEvidence(runs),
+    summary: summaryRow ? projectSummary(summaryRow, open, closed.items) : null,
+    evidence: buildEvidence(runs, open),
     // Every current-run delivery the response draws on is no newer than the
     // newest source, which is always the first (uncapped) source row.
     watermark: latestTimestamp(runs.latestByObjective[0]?.deliveredAt, openQuestionAt),

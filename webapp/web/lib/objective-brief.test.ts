@@ -10,7 +10,8 @@ import {
   summaryMentions,
   summaryParagraphs,
   summaryProvenanceLabel,
-  summaryWordCount
+  summaryWordCount,
+  summaryCodeSegments
 } from './objective-brief.ts';
 
 const SUMMARY =
@@ -204,5 +205,18 @@ describe('labels', () => {
     assert.equal(summaryWordCount('  one two\nthree '), 3);
     assert.match(summaryFailureMessage('provider_unavailable'), /no model provider/);
     assert.equal(summaryFailureMessage(null), 'Summary unavailable.');
+  });
+});
+
+describe('summaryCodeSegments', () => {
+  it('renders backtick spans as code without the backticks', () => {
+    assert.deepEqual(summaryCodeSegments('Edit `backend/app.ts` now.'),[
+      { text: 'Edit ', code: false },
+      { text: 'backend/app.ts', code: true },
+      { text: ' now.', code: false }
+    ]);
+  });
+  it('keeps an unmatched backtick literal', () => {
+    assert.deepEqual(summaryCodeSegments('a ` b'), [{ text: 'a ` b', code: false }]);
   });
 });

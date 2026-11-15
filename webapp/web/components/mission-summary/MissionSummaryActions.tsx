@@ -6,6 +6,11 @@ import { cn } from '../../lib/utils.ts';
 import { HumanActionDetails } from '../HumanActionDetails.tsx';
 
 import {
+  ResolveItemButton,
+  ResolveItemForm,
+  useResolveDisclosure
+} from './MissionSummaryItemControls.tsx';
+import {
   NewDot,
   ObjectiveKeyLink,
   SummaryBlockHeading,
@@ -33,8 +38,10 @@ function hasDetails(row: SummaryActionRow): boolean {
   return Boolean(row.command?.trim() || row.verify?.trim() || row.link?.trim());
 }
 
-function ActionRow({ row }: { row: SummaryActionRow }) {
+function ActionRow({ row, missionId }: { row: SummaryActionRow; missionId: string }) {
   const [expanded, setExpanded] = useState(false);
+  const disclosure = useResolveDisclosure();
+  const itemId = row.kind === 'action' ? row.itemId : null;
   const detailsId = useId();
   const expandable = row.kind === 'action' && hasDetails(row);
   const meta = [row.kind === 'action' ? row.category : null, row.detail]
@@ -63,17 +70,22 @@ function ActionRow({ row }: { row: SummaryActionRow }) {
             <KindChip row={row} />
             {meta ? <span className="min-w-0 wrap-anywhere">{meta}</span> : null}
           </div>
-          <ObjectiveKeyLink
-            objectiveKey={row.objectiveKey}
-            chevron
-            ariaLabel={
-              row.objectiveKey
-                ? row.kind === 'action'
-                  ? `Open the delivery in objective ${row.objectiveKey}`
-                  : `Answer in objective ${row.objectiveKey}`
-                : undefined
-            }
-          />
+          <span className="flex shrink-0 items-center gap-2">
+            {itemId ? (
+              <ResolveItemButton disclosure={disclosure} noun="action" itemText={row.title} />
+            ) : null}
+            <ObjectiveKeyLink
+              objectiveKey={row.objectiveKey}
+              chevron
+              ariaLabel={
+                row.objectiveKey
+                  ? row.kind === 'action'
+                    ? `Open the delivery in objective ${row.objectiveKey}`
+                    : `Answer in objective ${row.objectiveKey}`
+                  : undefined
+              }
+            />
+          </span>
         </div>
         {expandable ? (
           <div
@@ -83,6 +95,15 @@ function ActionRow({ row }: { row: SummaryActionRow }) {
           >
             <HumanActionDetails action={row} tone="sky" className="mt-0" />
           </div>
+        ) : null}
+        {itemId && disclosure.open ? (
+          <ResolveItemForm
+            disclosure={disclosure}
+            itemId={itemId}
+            missionId={missionId}
+            noun="action"
+            itemText={row.title}
+          />
         ) : null}
       </div>
       {expandable ? (
@@ -111,16 +132,19 @@ function ActionRow({ row }: { row: SummaryActionRow }) {
 }
 
 /**
- * Your actions (plan §5.2, §5.3): human actions of each objective's latest
- * current-run delivery plus open questions and choices. Rows show; nothing is
- * ticked off (§4.6). An action row expands to its command, verify and link.
+ * Your actions: open human actions of the mission's `mission_items` plus open
+ * questions and choices. An action row expands to its command, verify and
+ * link, and can be resolved as done or dismissed (contract v173); questions
+ * are answered in their objective.
  */
 export function MissionSummaryActions({
   rows,
+  missionId,
   totalActions,
   truncated
 }: {
   rows: readonly SummaryActionRow[];
+  missionId: string;
   /** Pre-cap count of delivery actions, when the evidence list was cut. */
   totalActions: number;
   truncated: boolean;
@@ -147,7 +171,7 @@ export function MissionSummaryActions({
       />
       <ul className="grid">
         {rows.map(row => (
-          <ActionRow key={row.key} row={row} />
+          <ActionRow key={row.key} row={row} missionId={missionId} />
         ))}
       </ul>
       {truncated ? (
