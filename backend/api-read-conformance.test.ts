@@ -87,6 +87,52 @@ function query(operation: (typeof apiOperations)[keyof typeof apiOperations]): s
 }
 
 describe('read surface conformance', () => {
+  it('treats blank workspace IDs as omitted without granting an implicit HTTP workspace', async () => {
+    const headers = { authorization: `Bearer ${secret}`, 'content-type': 'application/json' };
+    const catalogResponse = await fetch(
+      `${baseUrl}/api/agent-catalog?workspaceId=${ids.workspaces}`,
+      { headers }
+    );
+    assert.equal(catalogResponse.status, 200);
+    const catalog = (await catalogResponse.json()) as { agents: unknown[] };
+    const routes = [
+      { method: 'GET', path: '/api/agent-catalog' },
+      { method: 'POST', path: '/api/agent-catalog/refresh', body: {} },
+      { method: 'PUT', path: '/api/agent-catalog', body: { agents: catalog.agents } },
+      { method: 'GET', path: '/api/launch-settings' },
+      { method: 'PATCH', path: '/api/launch-settings/agents/codex', body: {} },
+      { method: 'PATCH', path: '/api/launch-settings/terminal-profile', body: {} },
+      { method: 'PATCH', path: '/api/launch-settings/session-defaults', body: {} },
+      {
+        method: 'PATCH',
+        path: '/api/launch-settings/worktree-branch-automation',
+        body: { enabled: false }
+      }
+    ];
+    for (const route of routes) {
+      const init = {
+        method: route.method,
+        headers,
+        body: route.body ? JSON.stringify(route.body) : undefined
+      };
+      const baseline = await fetch(`${baseUrl}${route.path}`, init);
+      const baselineBody = await baseline.json();
+      assert.ok(baseline.status === 400, `${route.path}: ${JSON.stringify(baselineBody)}`);
+      const blank = await fetch(`${baseUrl}${route.path}?workspaceId=%20%20`, init);
+      const blankBody = await blank.json();
+      assert.equal(blank.status, baseline.status, `${route.path}: ${JSON.stringify(blankBody)}`);
+      assert.deepEqual(blankBody, baselineBody, route.path);
+    }
+    for (const path of ['/api/agent-catalog', '/api/launch-settings']) {
+      const response = await fetch(
+        `${baseUrl}${path}?workspaceId=${encodeURIComponent(` ${ids.workspaces} `)}`,
+        { headers }
+      );
+      assert.equal(response.status, 200, path);
+      await response.json();
+    }
+  });
+
   it('answers every GET operation as the description declares', async () => {
     const problems: string[] = [];
     let checked = 0;

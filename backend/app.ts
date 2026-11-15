@@ -1110,9 +1110,7 @@ app.delete(
 
 app.get(
   '/api/webhooks',
-  handle(req =>
-    listWebhookSubscriptions(queryString(req, 'workspaceId', { trim: false, first: false }))
-  )
+  handle(req => listWebhookSubscriptions(queryString(req, 'workspaceId', { first: false })))
 );
 app.post(
   '/api/webhooks',
@@ -2053,17 +2051,12 @@ app.delete(
 
 app.get(
   '/api/agent-catalog',
-  handle(req =>
-    getAgentCatalog(queryString(req, 'workspaceId', { trim: false, first: false }) ?? undefined)
-  )
+  handle(req => getAgentCatalog(queryString(req, 'workspaceId', { first: false }) ?? undefined))
 );
 app.post(
   '/api/agent-catalog/refresh',
   handle(
-    req =>
-      refreshAgentCatalog(
-        queryString(req, 'workspaceId', { trim: false, first: false }) ?? undefined
-      ),
+    req => refreshAgentCatalog(queryString(req, 'workspaceId', { first: false }) ?? undefined),
     { mutates: true }
   )
 );
@@ -2071,18 +2064,13 @@ app.put(
   '/api/agent-catalog',
   handle(
     req =>
-      updateAgentCatalog(
-        req.body,
-        queryString(req, 'workspaceId', { trim: false, first: false }) ?? undefined
-      ),
+      updateAgentCatalog(req.body, queryString(req, 'workspaceId', { first: false }) ?? undefined),
     { mutates: true }
   )
 );
 app.get(
   '/api/launch-settings',
-  handle(req =>
-    getLaunchSettings(queryString(req, 'workspaceId', { trim: false, first: false }) ?? undefined)
-  )
+  handle(req => getLaunchSettings(queryString(req, 'workspaceId', { first: false }) ?? undefined))
 );
 app.patch(
   '/api/launch-settings/agents/:agentKey',
@@ -2091,7 +2079,7 @@ app.patch(
       updateAgentLaunchConfig(
         req.params.agentKey,
         req.body,
-        queryString(req, 'workspaceId', { trim: false, first: false }) ?? undefined
+        queryString(req, 'workspaceId', { first: false }) ?? undefined
       ),
     { mutates: true }
   )
@@ -2102,7 +2090,7 @@ app.patch(
     req =>
       updateTerminalProfile(
         req.body,
-        queryString(req, 'workspaceId', { trim: false, first: false }) ?? undefined
+        queryString(req, 'workspaceId', { first: false }) ?? undefined
       ),
     { mutates: true }
   )
@@ -2113,7 +2101,7 @@ app.patch(
     req =>
       updateLaunchSessionDefaults(
         req.body,
-        queryString(req, 'workspaceId', { trim: false, first: false }) ?? undefined
+        queryString(req, 'workspaceId', { first: false }) ?? undefined
       ),
     { mutates: true }
   )
@@ -2124,7 +2112,7 @@ app.patch(
     req =>
       updateWorktreeBranchAutomation(
         req.body,
-        queryString(req, 'workspaceId', { trim: false, first: false }) ?? undefined
+        queryString(req, 'workspaceId', { first: false }) ?? undefined
       ),
     { mutates: true }
   )
