@@ -492,3 +492,78 @@ describe('default registry', () => {
     assert.equal(result.ok === false && result.code, 'LOCAL_TARGET_UNREACHABLE');
   });
 });
+
+it('absent mission-less inspections forget only matching project/target mappings', async () => {
+  const { db, ctx } = await createSeededServiceContext({ source: 'webapp' });
+  try {
+    const { projectId, missionId, target } = await setupProject(ctx, 'Absent inspections');
+    const objective = await db.get<{ id: string }>(
+      'SELECT id FROM objectives WHERE mission_id = ?',
+      [missionId]
+    );
+    const launchId = newId();
+    const mapping = {
+      provider: 'latch',
+      providerSessionId: 'ses_gone',
+      createdAt: nowIso(),
+      lastObservedState: 'running'
+    };
+    const insert = async (id: string, targetId: string | null) =>
+      db.run(
+        `INSERT INTO execution_requests
+       (id, workspace_id, project_id, mission_id, objective_id, execution_target_id,
+        requested_source, status, launch_mode, launch_flags_json, metadata_json, created_at, updated_at, revision)
+       VALUES (?, ?, ?, ?, ?, ?, 'manual_run', 'launched', 'run', '{}', ?, ?, ?, 1)`,
+        [
+          id,
+          ctx.workspace.id,
+          projectId,
+          missionId,
+          objective!.id,
+          targetId,
+          JSON.stringify({ providerSession: mapping }),
+          nowIso(),
+          nowIso()
+        ]
+      );
+    await insert(launchId, target.executionTargetId);
+    const unrelatedId = newId();
+    await insert(unrelatedId, null);
+    const provider = providerFor({ ctx, projectId, executionTargetId: target.executionTargetId });
+    const fake = new FakeLocalTargetProvider({
+      handlers: {
+        inspectLatchSession: async () => ({
+          ok: false,
+          code: 'LATCH_SESSION_ABSENT',
+          message: 'no session `ses_gone`',
+          target: remoteTargetMetadata(target.executionTargetId)
+        })
+      }
+    });
+    const pending = provider.inspectLatchSession({ providerSessionId: 'ses_gone' });
+    const requestId = await drainOneQueuedCapability(ctx, fake);
+    const result = await pending;
+    assert.equal(result.ok, false);
+    if (!result.ok) assert.equal(result.code, 'LATCH_SESSION_ABSENT');
+    const metadata = async (id: string) =>
+      JSON.parse(
+        (await db.get<{ metadata_json: string }>(
+          'SELECT metadata_json FROM execution_requests WHERE id = ?',
+          [id]
+        ))!.metadata_json
+      );
+    assert.equal((await metadata(launchId)).providerSession, undefined);
+    assert.equal(
+      (await metadata(launchId)).endedTerminalSession,
+      undefined,
+      'absence is not confirmed exit'
+    );
+    assert.deepEqual((await metadata(unrelatedId)).providerSession, mapping);
+    assert.equal(
+      (await metadata(requestId))['overlord.localTargetMutation'].result.code,
+      'LATCH_SESSION_ABSENT'
+    );
+  } finally {
+    await db.close();
+  }
+});

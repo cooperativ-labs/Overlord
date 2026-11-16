@@ -4,7 +4,11 @@ import { useState } from 'react';
 import { RunnerStatusModal } from '@/components/runner/RunnerStatusModal';
 import { SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
 import { useRunnerServiceStatus, useRunnerStatus } from '@/lib/queries';
-import { hasRunnerQueueError, runnerQueueErrorMessage } from '@/lib/runner-status';
+import {
+  hasRunnerQueueError,
+  isBackgroundRunnerRequest,
+  runnerQueueErrorMessage
+} from '@/lib/runner-status';
 import { cn } from '@/lib/utils';
 
 type RunnerState = 'active' | 'ready' | 'idle' | 'error';
@@ -53,7 +57,8 @@ export function RunnerStatusBox() {
   const [open, setOpen] = useState(false);
   const runner = useRunnerStatus();
   const service = useRunnerServiceStatus();
-  const activeCount = runner.data?.activeCount ?? 0;
+  const activeCount =
+    runner.data?.queue.filter(request => !isBackgroundRunnerRequest(request)).length ?? 0;
   const queueError = hasRunnerQueueError({
     isLoadingError: runner.isLoadingError,
     isFetching: runner.isFetching,

@@ -116,7 +116,7 @@ async function withRunner<T>(
   f: Awaited<ReturnType<typeof fixture>>,
   action: () => Promise<T>,
   stopState: 'exited' | 'stopping' = 'exited',
-  inspectState: 'running' | 'exited' | 'lost' = 'running',
+  inspectState: 'running' | 'exited' | 'lost' | 'absent' = 'running',
   realLatch = false
 ) {
   let done = false;
@@ -128,28 +128,36 @@ async function withRunner<T>(
       deviceLabel: 'test runner'
     },
     handlers: {
-      inspectLatchSession: async input => ({
-        ok: true,
-        target: provider.target,
-        value: realLatch
-          ? await inspectLatchSession({
-              ...input,
-              executable: process.env.OVERLORD_LIVE_LATCH_EXECUTABLE ?? input.executable
-            }).catch(() => ({
-              providerSessionId: input.providerSessionId,
-              name: 'absent',
-              state: 'lost' as const,
-              exitCode: null,
-              inspectedAt: new Date().toISOString()
-            }))
-          : {
-              providerSessionId: input.providerSessionId,
-              name: 'test',
-              state: inspectState,
-              exitCode: null,
-              inspectedAt: new Date().toISOString()
+      inspectLatchSession: async input =>
+        inspectState === 'absent'
+          ? {
+              ok: false,
+              code: 'LATCH_SESSION_ABSENT',
+              message: `no session named ${input.providerSessionId}`,
+              target: provider.target
             }
-      }),
+          : {
+              ok: true,
+              target: provider.target,
+              value: realLatch
+                ? await inspectLatchSession({
+                    ...input,
+                    executable: process.env.OVERLORD_LIVE_LATCH_EXECUTABLE ?? input.executable
+                  }).catch(() => ({
+                    providerSessionId: input.providerSessionId,
+                    name: 'absent',
+                    state: 'lost' as const,
+                    exitCode: null,
+                    inspectedAt: new Date().toISOString()
+                  }))
+                : {
+                    providerSessionId: input.providerSessionId,
+                    name: 'test',
+                    state: inspectState,
+                    exitCode: null,
+                    inspectedAt: new Date().toISOString()
+                  }
+            },
       stopLatchSession: async input => {
         stops++;
         return {
@@ -585,3 +593,31 @@ test(
     }
   }
 );
+
+test('observer forgets absent sessions without inventing terminal exit or polling them again', async () => {
+  const f = await fixture();
+  const { stops } = await withRunner(
+    f,
+    () => new TerminalSessionObserver().runOnce(),
+    'exited',
+    'absent'
+  );
+  assert.equal(stops, 0);
+  assert.equal((await getMissionDetail(f.mission.id)).terminalSessions.length, 0);
+  const row = await client.get<{ metadata_json: string }>(
+    'SELECT metadata_json FROM execution_requests WHERE id = ?',
+    [f.request.id]
+  );
+  const metadata = JSON.parse(row!.metadata_json);
+  assert.equal(metadata.providerSession, undefined);
+  assert.equal(metadata.endedTerminalSession, undefined);
+  assert.equal((await getMissionDetail(f.mission.id)).objectives[0]!.state, 'executing');
+  const countChecks = () =>
+    client.get<{ count: number }>(
+      `SELECT COUNT(*) AS count FROM execution_requests WHERE mission_id = ? AND requested_source = 'local_target_mutation'`,
+      [f.mission.id]
+    );
+  const before = await countChecks();
+  await withRunner(f, () => new TerminalSessionObserver().runOnce());
+  assert.deepEqual(await countChecks(), before);
+});

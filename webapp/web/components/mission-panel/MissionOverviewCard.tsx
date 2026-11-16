@@ -32,7 +32,6 @@ import {
   missionSummaryRisks,
   missionSummaryRunningSentences,
   missionSummarySectionState,
-  missionSummarySources,
   missionSummarySuggestions,
   openSummaryQuestions,
   summaryCoverageComplete,
@@ -48,15 +47,14 @@ import {
   useMissionFileChanges,
   type useMissionOpenAgentRequests,
   useMissionSummary,
-  useProject,
   useWorkspaceMembers
 } from '../../lib/queries.ts';
 import { cn } from '../../lib/utils.ts';
-import { KindBadge, ProjectDot } from '../activity-feed/ActivityFeedCardChrome.tsx';
+import { KindBadge } from '../activity-feed/ActivityFeedCardChrome.tsx';
 import { Markdown } from '../Markdown.tsx';
 import { MissionSummaryActions } from '../mission-summary/MissionSummaryActions.tsx';
 import { MissionSummaryFiles } from '../mission-summary/MissionSummaryFiles.tsx';
-import { NewDot, ObjectiveKeyLink } from '../mission-summary/MissionSummaryParts.tsx';
+import { NewDot } from '../mission-summary/MissionSummaryParts.tsx';
 import { MissionSummaryProvenanceLine } from '../mission-summary/MissionSummaryPost.tsx';
 import { MissionSummaryResolved } from '../mission-summary/MissionSummaryResolved.tsx';
 import { MissionSummaryRisks } from '../mission-summary/MissionSummaryRisks.tsx';
@@ -316,7 +314,6 @@ export function MissionOverviewCard({
   const deliveriesQ = useMissionDeliveries(mission.id, eligible);
   const fileChangesQ = useMissionFileChanges(mission.id);
   const membersQ = useWorkspaceMembers(eligible ? mission.workspaceId : null);
-  const projectQ = useProject(mission.projectId);
   const members = membersQ.data ?? NO_MEMBERS;
   const baseline = useMissionSummaryVisitBaseline(response) ?? null;
   const now = useMinuteClock();
@@ -347,10 +344,6 @@ export function MissionOverviewCard({
   const actionRows = useMemo(
     () => missionSummaryActions({ evidence, openQuestions, objectives, baseline }),
     [evidence, openQuestions, objectives, baseline]
-  );
-  const sources = useMemo(
-    () => missionSummarySources(evidence, objectives),
-    [evidence, objectives]
   );
   const suggestionRows = useMemo(
     () => (summary ? missionSummarySuggestions({ summary, objectives, baseline }) : []),
@@ -518,7 +511,6 @@ export function MissionOverviewCard({
       ? state.summary.headline.trim()
       : mission.title;
   const generatedAt = summary?.generatedAt ?? null;
-  const project = projectQ.data;
 
   return (
     <section
@@ -531,75 +523,38 @@ export function MissionOverviewCard({
         {updating ? <UpdatingStrip label={stripLabel} /> : null}
       </div>
       <div ref={headerRef} className="grid min-w-0 gap-2 p-4">
-        <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs text-(--color-ink-dim)">
-          {project ? (
-            <span className="inline-flex min-w-0 items-center gap-1.5">
-              <ProjectDot color={project.color} />
-              <span className="truncate">{project.name}</span>
-            </span>
-          ) : null}
-          {project ? <span aria-hidden="true">·</span> : null}
-          <span className="font-mono">{mission.displayId}</span>
-          {generatedAt ? (
-            <>
-              <span aria-hidden="true">·</span>
-              <span className="inline-flex items-center gap-1" title={formatTimestamp(generatedAt)}>
-                <Clock className="size-3" aria-hidden="true" />
-                Summary updated {relativeTime(generatedAt, now, { immediate: 'just now' })}
-              </span>
-            </>
-          ) : null}
-        </div>
-        <div className="flex min-w-0 items-center gap-2">
-          <OverviewKindBadge badge={badge} />
-          <h2
-            id={`mission-summary-headline-${mission.id}`}
-            className={cn(
-              'min-w-0 flex-1 truncate text-base font-semibold text-(--color-ink)',
-              state.kind === 'summary' && state.updating && 'opacity-55'
-            )}
-            title={headline}
-          >
-            {headline}
-          </h2>
-        </div>
         {state.kind === 'summary' ? (
           <>
+            {generatedAt ? (
+              <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs text-(--color-ink-dim)">
+                <span
+                  className="inline-flex items-center gap-1"
+                  title={formatTimestamp(generatedAt)}
+                >
+                  <Clock className="size-3" aria-hidden="true" />
+                  Summary updated {relativeTime(generatedAt, now, { immediate: 'just now' })}
+                </span>
+              </div>
+            ) : null}
+            <div className="flex min-w-0 items-center gap-2">
+              <OverviewKindBadge badge={badge} />
+              <h2
+                id={`mission-summary-headline-${mission.id}`}
+                className={cn(
+                  'min-w-0 flex-1 truncate text-base font-semibold text-(--color-ink)',
+                  state.updating && 'opacity-55'
+                )}
+                title={headline}
+              >
+                {headline}
+              </h2>
+            </div>
             <ClampedSummary dimmed={state.updating}>
               {state.summary.summary.trim() ? <Markdown text={state.summary.summary} /> : null}
               {runningSentences.length > 0 ? <p>{runningSentences.join(' ')}</p> : null}
             </ClampedSummary>
-            {sources.length > 0 ? (
-              <div className="flex min-w-0 flex-wrap items-center gap-x-3.5 gap-y-1 text-xs text-(--color-ink-dim)">
-                <span>Sources:</span>
-                {sources.map(source => (
-                  <ObjectiveKeyLink
-                    key={source.deliveryId}
-                    objectiveKey={source.objectiveKey}
-                    ariaLabel={
-                      source.objectiveKey
-                        ? `Open objective ${source.objectiveKey}${source.live ? ', running' : ''}`
-                        : undefined
-                    }
-                  >
-                    {source.live ? (
-                      <span className="font-sans text-sky-700 dark:text-sky-300"> · live</span>
-                    ) : null}
-                  </ObjectiveKeyLink>
-                ))}
-                {evidence.truncated.sources ? <span>and more</span> : null}
-              </div>
-            ) : null}
             <MissionSummaryProvenanceLine provenance={provenance ?? { kind: 'automatic' }} />
           </>
-        ) : state.kind === 'awaiting' ? (
-          <p className="text-sm text-(--color-ink)">
-            {state.running.length > 0
-              ? `${state.running.join(' ')} The summary appears after its first delivery.`
-              : 'The summary appears after the first delivery.'}
-          </p>
-        ) : state.kind === 'first_pending' && state.running.length > 0 ? (
-          <p className="text-sm text-(--color-ink)">{state.running.join(' ')}</p>
         ) : state.kind === 'error' ? (
           <p className="text-sm text-red-600 dark:text-red-400">
             Could not load the mission summary:{' '}

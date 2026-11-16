@@ -43,7 +43,7 @@ export function MissionTagSelect({ missionId, projectId, assignedTags }: Mission
   };
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    <>
       {assignedTags.map(tag => (
         <MissionTagPill
           key={tag.id}
@@ -55,8 +55,8 @@ export function MissionTagSelect({ missionId, projectId, assignedTags }: Mission
       <DropdownMenu>
         <DropdownMenuTrigger
           className={cn(
-            'px-2 inline-flex h-7 items-center gap-1 bg-transparent text-xs text-foreground/70 font-medium transition-colors',
-            'hover:text-foreground',
+            'inline-flex h-[22px] items-center gap-1 rounded-full border border-border/80 bg-transparent px-2.5 text-xs font-normal text-foreground transition-colors',
+            'hover:border-border hover:bg-muted/60',
             'disabled:cursor-not-allowed disabled:opacity-60'
           )}
           disabled={update.isPending || tagOptions.length === 0}
@@ -95,6 +95,6 @@ export function MissionTagSelect({ missionId, projectId, assignedTags }: Mission
           )}
         </DropdownMenuContent>
       </DropdownMenu>
-    </div>
+    </>
   );
 }

@@ -60,6 +60,8 @@ type ObjectiveQueuePopoverProps = {
   showTrigger?: boolean;
   /** Extra classes for the trigger (size, hover visibility). Tone comes from the queue status. */
   triggerClassName?: string;
+  /** Show a text label beside the icon (the objective detail's run-style button). */
+  showLabel?: boolean;
   /** Positioning element when there is no trigger, or to anchor somewhere other than it. */
   anchor?: RefObject<Element | null>;
   align?: 'start' | 'center' | 'end';
@@ -80,6 +82,7 @@ export function ObjectiveQueuePopover({
   onOpenChange,
   showTrigger = true,
   triggerClassName,
+  showLabel = false,
   anchor,
   align = 'end'
 }: ObjectiveQueuePopoverProps) {
@@ -144,6 +147,11 @@ export function ObjectiveQueuePopover({
             ) : (
               <ListOrdered className="h-3.5 w-3.5" />
             )}
+            {showLabel ? (
+              <span className="whitespace-nowrap">
+                {queueStatus ? `Queued · ${queueStatus.label}` : 'Queue'}
+              </span>
+            ) : null}
           </PopoverTrigger>
         ) : null}
         <PopoverContent

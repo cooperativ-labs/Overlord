@@ -2390,7 +2390,7 @@ export async function runRunnerOnce({
   runtime: CliRuntime;
   parsed: ReturnType<typeof parseArgs>;
   json: boolean;
-}): Promise<{ launched: boolean; longPoll: boolean }> {
+}): Promise<{ launched: boolean; longPoll: boolean; processed?: boolean }> {
   let claim: unknown;
   try {
     claim = await runtime.backend.post<unknown>({
@@ -2462,13 +2462,22 @@ export async function runRunnerOnce({
         path: `/api/runner/requests/${requestId}/completed`,
         body: { mutationResult }
       });
-      if (!mutationResult.ok) throw new CliError({ message: mutationResult.message });
+      // An absent session is an expected inspection outcome. The backend
+      // removes its stale mapping; preserve the envelope without marking the
+      // supervisor unhealthy or reporting an already-completed request twice.
+      const absentSession =
+        mutation.capability === 'inspectLatchSession' &&
+        !mutationResult.ok &&
+        mutationResult.code === 'LATCH_SESSION_ABSENT';
+      if (!mutationResult.ok && !absentSession) {
+        throw new CliError({ message: mutationResult.message });
+      }
       if (json) printJson({ request, mutationResult });
       else {
         const scope = requestRecord.missionId ?? requestRecord.projectId;
         console.log(`Completed ${mutation.capability} for ${scope}`);
       }
-      return { launched: true, longPoll };
+      return { launched: false, longPoll, processed: true };
     }
 
     // The execution request's agent is decided upstream from the objective row,
@@ -2672,7 +2681,7 @@ async function runRunnerCommand({
 
   if (sub === 'once') {
     const result = await runOnce();
-    if (!result.launched) {
+    if (!result.launched && !result.processed) {
       if (json) printJson({ launched: false });
       else console.log('No claimable execution requests.');
     }
@@ -2717,7 +2726,7 @@ async function runRunnerSupervisor({
   runOnce,
   json
 }: {
-  runOnce: () => Promise<{ launched: boolean; longPoll: boolean }>;
+  runOnce: () => Promise<{ launched: boolean; longPoll: boolean; processed?: boolean }>;
   json: boolean;
 }): Promise<void> {
   if (!json) console.log('Runner supervisor started. Polling for execution requests.');
@@ -2738,7 +2747,10 @@ async function runRunnerSupervisor({
       process.exit(0);
     }
     const now = new Date();
-    let result = { launched: false, longPoll: false };
+    let result: { launched: boolean; longPoll: boolean; processed?: boolean } = {
+      launched: false,
+      longPoll: false
+    };
     let lastError: string | null = null;
     try {
       result = await runOnce();
@@ -2755,7 +2767,7 @@ async function runRunnerSupervisor({
     const state = readRunnerServiceState();
     patchRunnerServiceState({
       lastHeartbeatAt: now.toISOString(),
-      lastClaimedAt: result.launched ? now.toISOString() : state.lastClaimedAt,
+      lastClaimedAt: result.launched || result.processed ? now.toISOString() : state.lastClaimedAt,
       lastLaunchedAt: result.launched ? now.toISOString() : state.lastLaunchedAt,
       // Reflect the latest poll's outcome rather than falling back to the stored
       // value. A successful poll must clear a resolved failure (for example, an

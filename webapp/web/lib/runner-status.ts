@@ -1,3 +1,26 @@
+import type { RunnerExecutionRequestDto } from '@overlord/contract';
+
+export function isBackgroundRunnerRequest(
+  request: Pick<RunnerExecutionRequestDto, 'requestedSource'>
+): boolean {
+  return request.requestedSource === 'local_target_mutation';
+}
+
+export function runnerRequestLabel(
+  request: Pick<RunnerExecutionRequestDto, 'requestedSource' | 'requestedAgent' | 'metadata'>
+): string {
+  if (!isBackgroundRunnerRequest(request)) return request.requestedAgent ?? 'agent';
+  const mutation = request.metadata?.['overlord.localTargetMutation'];
+  const capability =
+    mutation && typeof mutation === 'object' && 'capability' in mutation
+      ? mutation.capability
+      : null;
+  if (capability === 'inspectLatchSession') return 'Session check';
+  if (capability === 'openLatchSession') return 'Open session';
+  if (capability === 'stopLatchSession') return 'Stop session';
+  return 'Background operation';
+}
+
 /** Human-readable Delegator status; wire `queued` reads as delegated. */
 export function executionRequestStatusLabel(status: string): string {
   if (status === 'queued') return 'delegated';

@@ -195,7 +195,9 @@ it('keeps old missions to Objectives and For you, and shows the before-first-del
     truncated: { actions: false, sources: false }
   };
   await mount(response);
-  assert.ok(screen.getByText(/The summary appears after its first delivery/));
+  assert.equal(screen.queryByText(/The summary appears after/), null);
+  assert.equal(screen.queryByText(/Summary updated/), null);
+  assert.ok(screen.getByRole('tab', { name: /Objectives/ }));
 });
 
 it('renders updating evidence, expandable actions, compact promoted suggestions, and persistent visit dots', async () => {
@@ -270,7 +272,7 @@ it('shows first-compose evidence without an empty post and shows all-clear after
   assert.ok(screen.getByText('Objective rows'));
 });
 
-it('names the authoring objective, or says the summary was written automatically', async () => {
+it('names the authoring objective, and shows no provenance for automatic summaries', async () => {
   await mount();
   assert.ok(screen.getByText('Updated by'));
   assert.ok(
@@ -281,7 +283,7 @@ it('names the authoring objective, or says the summary was written automatically
   fallback.summary.author = { kind: 'gemini', objectiveId: null, deliveryId: null };
   fallback.summary.generatedBy = 'gemini';
   await mount(fallback);
-  assert.ok(screen.getByText('Written automatically from deliveries'));
+  assert.equal(screen.queryByText('Written automatically from deliveries') === null, true);
   assert.equal(screen.queryByText('Updated by') === null, true);
 });
 

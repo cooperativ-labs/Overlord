@@ -5,6 +5,13 @@ is the current version and must equal [VERSION](VERSION); `yarn version:contract
 writes its skeleton. Dates use ISO 8601 and describe the contract change, not
 merely the files edited.
 
+## [173.6.1] - 2026-11-16
+
+Contract impact: patch. Clarify missing Latch inspection cleanup for queued and
+background observer paths, without treating absence as runner failure. Delegator
+labels and counts distinguish background operations from agent launches. Existing
+queue DTOs and statuses are unchanged. See ADR 0066.
+
 ## [173.6.0] - 2026-11-16
 
 Contract impact: minor. Answers to blocking questions now reach the waiting

@@ -28,6 +28,7 @@ import { recordChange } from './change-feed.ts';
 import type { ServiceContext } from './context.ts';
 import { resolveMissionId, resolveProjectId } from './context.ts';
 import { ServiceError } from './errors.ts';
+import { forgetAbsentLatchProviderSessions } from './latch-provider-session.ts';
 import { newId, nowIso } from './util.ts';
 
 export const LOCAL_TARGET_MUTATION_METADATA_KEY = 'overlord.localTargetMutation';
@@ -437,7 +438,7 @@ export async function completeLocalTargetMutationRequest({
 }): Promise<LocalTargetMutationPayload | null> {
   const row = (await ctx.db.get(
     `SELECT id, workspace_id, project_id, mission_id, objective_id, status, revision, metadata_json,
-            requested_source
+            requested_source, COALESCE(claimed_by_execution_target_id, execution_target_id) AS target_id
        FROM execution_requests
       WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
     [requestId, ctx.workspace.id]
@@ -452,6 +453,7 @@ export async function completeLocalTargetMutationRequest({
         revision: number;
         metadata_json: string;
         requested_source: string;
+        target_id: string | null;
       }
     | undefined;
 
@@ -562,6 +564,20 @@ export async function completeLocalTargetMutationRequest({
           now
         ]
       );
+    }
+    if (
+      mutation.capability === 'inspectLatchSession' &&
+      !result.ok &&
+      result.code === 'LATCH_SESSION_ABSENT' &&
+      row.target_id &&
+      typeof mutation.input.providerSessionId === 'string'
+    ) {
+      await forgetAbsentLatchProviderSessions({
+        ctx: txCtx,
+        projectId: row.project_id,
+        executionTargetId: row.target_id,
+        providerSessionId: mutation.input.providerSessionId
+      });
     }
     await recordAnswerDeliveryOutcome({ ctx: txCtx, mutation, result });
   });

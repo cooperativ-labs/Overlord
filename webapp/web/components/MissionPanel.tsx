@@ -221,6 +221,11 @@ function MissionSettingsBar({
         currentStatusId={mission.statusId}
         statuses={mission.statuses}
       />
+      <MissionTagSelect
+        missionId={mission.id}
+        projectId={projectId}
+        assignedTags={mission.tags}
+      />
     </section>
   );
 }
@@ -404,13 +409,6 @@ export function MissionPanel({
             projectId={mission.projectId}
             onProjectChanged={handleProjectChanged}
           />
-          <section className="px-5 py-1.5 pt-2">
-            <MissionTagSelect
-              missionId={mission.id}
-              projectId={mission.projectId}
-              assignedTags={mission.tags}
-            />
-          </section>
           <div
             className={cn(
               'scrollbar-auto-hide min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-muted',

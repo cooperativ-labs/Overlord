@@ -17,7 +17,6 @@ import { ObjectiveResourcePicker } from '../objectives/ObjectiveResourcePicker.t
 import { isNotStartedObjective } from '../objectives/ObjectiveRow.tsx';
 import type { useObjectiveAgentSelection } from '../objectives/useObjectiveAgentSelection.ts';
 import { ObjectiveTerminalSessions } from '../ObjectiveTerminalSessions.tsx';
-import { describeQueueEntry } from '../run-queue/queue-entry-status.ts';
 import { Button } from '../ui/button.tsx';
 import {
   Dialog,
@@ -231,7 +230,6 @@ export function ObjectiveDetailSidebar({
   const origin = objectiveOriginLabel(objective);
   const timing = objectiveTimingLabel(objective, new Date().toISOString());
   const queueEntry = objective.queueEntry ?? null;
-  const queueStatus = queueEntry ? describeQueueEntry(queueEntry) : null;
   const showQueue = queueEntry !== null || QUEUEABLE_STATES.has(objective.state);
   const primary = detailPrimaryAction(objective.state);
 
@@ -299,27 +297,6 @@ export function ObjectiveDetailSidebar({
         </div>
       ) : null}
 
-      {showQueue ? (
-        <SidebarBlock label="Run Queue">
-          <span className="flex min-w-0 items-center justify-between gap-2">
-            <span className="min-w-0 truncate text-xs text-(--color-ink-dim)">
-              {queueEntry && queueStatus
-                ? `${queueStatus.label} · ${queueEntry.queueName}`
-                : 'Not queued'}
-            </span>
-            {/* The popover's own trigger lives here, inside the detail: every queue control the
-                detail opens (including the menu's "Add to queue…") anchors to it, never to a
-                row behind the modal. */}
-            <ObjectiveQueuePopover
-              objective={objective}
-              open={queueOpen}
-              onOpenChange={onQueueOpenChange}
-              triggerClassName="h-7 w-7 justify-center px-0"
-            />
-          </span>
-        </SidebarBlock>
-      ) : null}
-
       {latestSessions.length > 0 ? (
         <SidebarBlock label="Terminal session">
           <ObjectiveTerminalSessions
@@ -329,13 +306,36 @@ export function ObjectiveDetailSidebar({
         </SidebarBlock>
       ) : null}
 
-      {showPrimaryAction && primary === 'run' ? (
-        <ObjectiveRunButton
-          objective={objective}
-          mission={mission}
-          selection={selection}
-          beforeLaunch={beforeLaunch}
-        />
+      {showQueue || (showPrimaryAction && primary === 'run') ? (
+        <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
+          {showQueue ? (
+            /* The popover's own trigger lives here, inside the detail: every queue control the
+               detail opens (including the menu's "Add to queue…") anchors to it, never to a
+               row behind the modal. Styled like the Run button: both are ways to run the agent. */
+            <ObjectiveQueuePopover
+              objective={objective}
+              open={queueOpen}
+              onOpenChange={onQueueOpenChange}
+              showLabel
+              align="start"
+              triggerClassName={cn(
+                'h-8 gap-1.5 border border-input bg-background px-3 font-medium shadow-sm',
+                'hover:bg-accent hover:text-accent-foreground',
+                queueEntry ? undefined : 'text-foreground'
+              )}
+            />
+          ) : (
+            <span />
+          )}
+          {showPrimaryAction && primary === 'run' ? (
+            <ObjectiveRunButton
+              objective={objective}
+              mission={mission}
+              selection={selection}
+              beforeLaunch={beforeLaunch}
+            />
+          ) : null}
+        </div>
       ) : null}
       {showPrimaryAction && primary === 'force-disconnect' ? (
         <ForceDisconnectButton objective={objective} className="justify-self-start" />

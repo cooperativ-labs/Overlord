@@ -19,7 +19,9 @@ import { keys, useRunnerStatus } from '@/lib/queries';
 import {
   executionRequestStatusLabel,
   hasRunnerQueueError,
-  runnerQueueErrorMessage
+  isBackgroundRunnerRequest,
+  runnerQueueErrorMessage,
+  runnerRequestLabel
 } from '@/lib/runner-status';
 import { cn } from '@/lib/utils';
 
@@ -300,6 +302,9 @@ export function RunnerStatusModal({
   const queueErrorDetail =
     runnerQueueErrorMessage(runner.error) ?? runnerQueueErrorMessage(runner.failureReason);
 
+  const backgroundCount = queue.filter(isBackgroundRunnerRequest).length;
+  const launchCount = queue.length - backgroundCount;
+
   const clear = useMutation({
     mutationFn: () => api.clearRunnerQueue({}),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: keys.runnerStatus })
@@ -311,7 +316,7 @@ export function RunnerStatusModal({
         <DialogHeader>
           <DialogTitle>Delegator</DialogTitle>
           <DialogDescription>
-            In-flight work and the persistent runner that launches it.
+            Agent launches, background operations, and the persistent runner.
           </DialogDescription>
         </DialogHeader>
 
@@ -323,7 +328,7 @@ export function RunnerStatusModal({
                 <span className="text-xs text-muted-foreground">
                   {queueError
                     ? 'unavailable'
-                    : `${queue.length} ${queue.length === 1 ? 'launch' : 'launches'}`}
+                    : `${launchCount} ${launchCount === 1 ? 'launch' : 'launches'} · ${backgroundCount} background`}
                 </span>
                 {queue.length > 0 ? (
                   <Button
@@ -353,7 +358,7 @@ export function RunnerStatusModal({
                 ) : null}
               </div>
             ) : queue.length === 0 ? (
-              <p className="text-xs text-muted-foreground">No launches are in flight.</p>
+              <p className="text-xs text-muted-foreground">No work is in flight.</p>
             ) : (
               <ul className="space-y-1.5">
                 {queue.slice(0, 8).map(request => (
@@ -362,7 +367,7 @@ export function RunnerStatusModal({
                     className="flex items-center justify-between gap-2 rounded border border-border/60 px-2 py-1.5"
                   >
                     <span className="min-w-0 flex-1 truncate text-xs">
-                      {request.requestedAgent ?? 'agent'}
+                      {runnerRequestLabel(request)}
                       {request.missionId ? (
                         <span className="text-muted-foreground">
                           {' '}

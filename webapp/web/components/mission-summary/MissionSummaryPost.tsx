@@ -8,7 +8,7 @@ import { ObjectiveKeyLink } from './MissionSummaryParts.tsx';
  */
 export function MissionSummaryProvenanceLine({ provenance }: { provenance: SummaryProvenance }) {
   if (provenance.kind === 'automatic') {
-    return <p className="text-xs text-(--color-ink-dim)">Written automatically from deliveries</p>;
+    return null;
   }
   return (
     <p className="flex min-w-0 flex-wrap items-center gap-x-1 text-xs text-(--color-ink-dim)">

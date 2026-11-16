@@ -4,7 +4,9 @@ import { describe, it } from 'node:test';
 import {
   executionRequestStatusLabel,
   hasRunnerQueueError,
-  runnerQueueErrorMessage
+  isBackgroundRunnerRequest,
+  runnerQueueErrorMessage,
+  runnerRequestLabel
 } from './runner-status.ts';
 
 describe('hasRunnerQueueError', () => {
@@ -100,4 +102,17 @@ describe('runnerQueueErrorMessage', () => {
     assert.equal(runnerQueueErrorMessage(null), null);
     assert.equal(runnerQueueErrorMessage(''), null);
   });
+});
+
+it('distinguishes background session checks from agent launches', () => {
+  const check = {
+    requestedSource: 'local_target_mutation',
+    requestedAgent: null,
+    metadata: { 'overlord.localTargetMutation': { capability: 'inspectLatchSession' } }
+  };
+  const launch = { ...check, requestedSource: 'manual_run', requestedAgent: 'codex' };
+  assert.equal(isBackgroundRunnerRequest(check), true);
+  assert.equal(runnerRequestLabel(check), 'Session check');
+  assert.equal(isBackgroundRunnerRequest(launch), false);
+  assert.equal(runnerRequestLabel(launch), 'codex');
 });

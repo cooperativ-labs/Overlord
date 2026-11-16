@@ -100,3 +100,4 @@ record and the index disagree.
 - [0063 — Per-member dismissal of an agent request's notification](0063-per-member-agent-request-dismissal.md)
 - [0064 — Confirmed terminal lifecycle and retained history](0064-terminal-session-history.md)
 - [0065 — An answer is recorded, then delivered, and the two are reported separately](0065-answer-delivery-outcomes.md)
+- [0066 — Background inspection and absent terminal mappings](0066-delegator-background-inspection.md)

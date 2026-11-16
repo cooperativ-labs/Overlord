@@ -1,6 +1,7 @@
 /** Observe terminals even after their objectives deliver. No terminal output is retained. */
 import { parseMetadataJson } from '../packages/core/service/execution-requests.ts';
 import { providerSessionFromMetadata } from '../packages/core/service/latch-launch.ts';
+import { forgetLatchProviderSession } from '../packages/core/service/latch-provider-session.ts';
 import { resolveDefaultLocalTargetProvider } from '../packages/core/service/local-target/default-registry.ts';
 import { getProjectExecutionTargetSelection } from '../packages/core/service/project-execution-target.ts';
 import { launchSessionSnapshotFromMetadata } from '../packages/core/service/terminal-profile-types.ts';
@@ -82,6 +83,15 @@ export class TerminalSessionObserver extends PollLoop {
             providerSessionId: mapping.providerSessionId,
             executable: snapshot?.executionProvider.executable ?? 'latch'
           });
+          if (!result.ok && result.code === 'LATCH_SESSION_ABSENT') {
+            await forgetLatchProviderSession({
+              ctx,
+              missionId: row.mission_id,
+              executionRequestId: row.id,
+              providerSessionId: mapping.providerSessionId
+            });
+            return;
+          }
           if (result.ok) {
             state = result.value.state;
             endedAt = result.value.endedAt ?? null;

@@ -187,3 +187,37 @@ export async function forgetLatchProviderSession({
     return { forgotten: true, executionRequestId: row.id };
   });
 }
+
+/** Forget only mappings owned by the project and target that inspected them. */
+export async function forgetAbsentLatchProviderSessions({
+  ctx,
+  projectId,
+  executionTargetId,
+  providerSessionId
+}: {
+  ctx: ServiceContext;
+  projectId: string;
+  executionTargetId: string;
+  providerSessionId: string;
+}): Promise<void> {
+  const rows = await ctx.db.all<{ id: string; mission_id: string; metadata_json: string | null }>(
+    `SELECT id, mission_id, metadata_json FROM execution_requests
+     WHERE workspace_id = ? AND project_id = ? AND mission_id IS NOT NULL
+       AND COALESCE(claimed_by_execution_target_id, execution_target_id) = ?
+       AND deleted_at IS NULL`,
+    [ctx.workspace.id, projectId, executionTargetId]
+  );
+  for (const row of rows) {
+    if (
+      providerSessionFromMetadata(parseMetadata(row.metadata_json))?.providerSessionId !==
+      providerSessionId
+    )
+      continue;
+    await forgetLatchProviderSession({
+      ctx,
+      missionId: row.mission_id,
+      executionRequestId: row.id,
+      providerSessionId
+    });
+  }
+}
