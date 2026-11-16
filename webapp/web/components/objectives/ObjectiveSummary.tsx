@@ -9,8 +9,8 @@ import {
   objectiveSummaryView,
   SUMMARY_MAX_CHARACTERS,
   SUMMARY_TARGET_WORDS,
-  summaryFailureMessage,
   summaryCodeSegments,
+  summaryFailureMessage,
   summaryMarkerSegments,
   type SummaryMentions,
   summaryProvenanceLabel,
@@ -91,10 +91,7 @@ export function ObjectiveSummaryProse({
               <span key={segmentIndex}>
                 {summaryCodeSegments(segment.text).map((part, partIndex) =>
                   part.code ? (
-                    <code
-                      key={partIndex}
-                      className="code-inline"
-                    >
+                    <code key={partIndex} className="code-inline">
                       {part.text}
                     </code>
                   ) : (

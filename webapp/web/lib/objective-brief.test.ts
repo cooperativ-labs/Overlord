@@ -5,13 +5,13 @@ import {
   instructionLengthLabel,
   mentionBadgeLabel,
   objectiveSummaryView,
+  summaryCodeSegments,
   summaryFailureMessage,
   summaryMarkerSegments,
   summaryMentions,
   summaryParagraphs,
   summaryProvenanceLabel,
-  summaryWordCount,
-  summaryCodeSegments
+  summaryWordCount
 } from './objective-brief.ts';
 
 const SUMMARY =
@@ -210,7 +210,7 @@ describe('labels', () => {
 
 describe('summaryCodeSegments', () => {
   it('renders backtick spans as code without the backticks', () => {
-    assert.deepEqual(summaryCodeSegments('Edit `backend/app.ts` now.'),[
+    assert.deepEqual(summaryCodeSegments('Edit `backend/app.ts` now.'), [
       { text: 'Edit ', code: false },
       { text: 'backend/app.ts', code: true },
       { text: ' now.', code: false }

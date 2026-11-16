@@ -81,10 +81,7 @@ function renderInline(text: string, keyPrefix: string): ReactNode[] {
         );
       case 'code':
         return (
-          <code
-            key={key}
-            className="code-inline"
-          >
+          <code key={key} className="code-inline">
             {token.value}
           </code>
         );
@@ -301,10 +298,7 @@ export function Markdown({ text }: { text: string }) {
           }
           case 'code':
             return (
-              <pre
-                key={key}
-                className="code-block"
-              >
+              <pre key={key} className="code-block">
                 <code>{block.text}</code>
               </pre>
             );
