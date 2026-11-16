@@ -6995,7 +6995,42 @@ export async function reorderObjectives(
   return listObjectives(missionId);
 }
 
-type InternalCreateObjectiveBody = CreateObjectiveBody & { assignedAgent?: string | null };
+/**
+ * Applies a `launchConfigOverride` / `launchConfigAgent` pair to an objective's
+ * stored `launch_config_json`. Create and update share it, so both reject a
+ * missing agent key the same way and store the any-target (`*`) override in the
+ * same shape. Returns `undefined` when the body carries no override (leave the
+ * column alone) and `null` when nothing is left to store.
+ */
+function applyLaunchConfigOverride(
+  currentJson: string | null | undefined,
+  body: Pick<UpdateObjectiveBody, 'launchConfigOverride' | 'launchConfigAgent'>
+): string | null | undefined {
+  if (body.launchConfigOverride === undefined) return undefined;
+  const agentKey = body.launchConfigAgent?.trim();
+  if (!agentKey) throw new ApiError(400, 'launchConfigAgent is required');
+  let launchConfigs: Record<string, Record<string, unknown>> = {};
+  try {
+    const parsed = currentJson ? (JSON.parse(currentJson) as unknown) : {};
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      launchConfigs = parsed as Record<string, Record<string, unknown>>;
+    }
+  } catch {
+    launchConfigs = {};
+  }
+  const anyTarget = { ...(launchConfigs['*'] ?? {}) };
+  if (body.launchConfigOverride === null) {
+    delete anyTarget[agentKey];
+  } else {
+    anyTarget[agentKey] = {
+      preCommand: body.launchConfigOverride.preCommand?.trim() ?? '',
+      flags: normalizeAgentLaunchFlags(body.launchConfigOverride.flags)
+    };
+  }
+  if (Object.keys(anyTarget).length > 0) launchConfigs['*'] = anyTarget;
+  else delete launchConfigs['*'];
+  return Object.keys(launchConfigs).length > 0 ? JSON.stringify(launchConfigs) : null;
+}
 
 // Internal insert used by both createObjective and createMission's first objective.
 // Runs on the provided transaction-scoped client. `ctx` carries the mission's own
@@ -7009,8 +7044,11 @@ type InternalCreateObjectiveBody = CreateObjectiveBody & { assignedAgent?: strin
 async function insertObjective(
   db: DatabaseClient,
   ctx: { workspaceId: string; workspaceUserId: string | null },
-  body: InternalCreateObjectiveBody
+  body: CreateObjectiveBody
 ): Promise<ObjectiveDto> {
+  // Validate the launch-config override before any write; the agent/model
+  // rules are enforced once, by the shared service insert below.
+  const launchConfigJson = applyLaunchConfigOverride(null, body);
   const serviceCtx = await buildWebappServiceContextForWorkspace(
     ctx.workspaceId,
     db,
@@ -7025,7 +7063,10 @@ async function insertObjective(
     ...(body.state !== undefined ? { state: body.state } : {}),
     autoAdvance: body.autoAdvance ?? false,
     ...(body.assignedAgent !== undefined ? { assignedAgent: body.assignedAgent } : {}),
-    ...(body.resourceKey !== undefined ? { resourceKey: body.resourceKey } : {})
+    ...(body.model !== undefined ? { model: body.model } : {}),
+    ...(body.reasoningEffort !== undefined ? { reasoningEffort: body.reasoningEffort } : {}),
+    ...(body.resourceKey !== undefined ? { resourceKey: body.resourceKey } : {}),
+    ...(launchConfigJson !== undefined ? { launchConfigJson } : {})
   });
 
   const row = (await db.get(
@@ -7038,7 +7079,7 @@ async function insertObjective(
   return toObjectiveDto(row);
 }
 
-function createObjectiveTx(body: InternalCreateObjectiveBody): Promise<ObjectiveDto> {
+function createObjectiveTx(body: CreateObjectiveBody): Promise<ObjectiveDto> {
   return requireDatabaseClient().transaction(async tx => {
     const { workspaceId, workspaceUserId } = await requireMissionPermission({
       missionRef: body.missionId,
@@ -7225,33 +7266,10 @@ async function updateObjectiveTx(
       setParams.push(nextResourceKey);
       changed.push('resource_key');
     }
-    if (body.launchConfigOverride !== undefined) {
-      const agentKey = body.launchConfigAgent?.trim();
-      if (!agentKey) throw new ApiError(400, 'launchConfigAgent is required');
-      let launchConfigs: Record<string, Record<string, unknown>> = {};
-      try {
-        const parsed = existing.launch_config_json
-          ? (JSON.parse(existing.launch_config_json) as unknown)
-          : {};
-        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-          launchConfigs = parsed as Record<string, Record<string, unknown>>;
-        }
-      } catch {
-        launchConfigs = {};
-      }
-      const anyTarget = { ...(launchConfigs['*'] ?? {}) };
-      if (body.launchConfigOverride === null) {
-        delete anyTarget[agentKey];
-      } else {
-        anyTarget[agentKey] = {
-          preCommand: body.launchConfigOverride.preCommand?.trim() ?? '',
-          flags: normalizeAgentLaunchFlags(body.launchConfigOverride.flags)
-        };
-      }
-      if (Object.keys(anyTarget).length > 0) launchConfigs['*'] = anyTarget;
-      else delete launchConfigs['*'];
+    const nextLaunchConfigJson = applyLaunchConfigOverride(existing.launch_config_json, body);
+    if (nextLaunchConfigJson !== undefined) {
       fields.push('launch_config_json = ?');
-      setParams.push(Object.keys(launchConfigs).length > 0 ? JSON.stringify(launchConfigs) : null);
+      setParams.push(nextLaunchConfigJson);
       changed.push('launch_config_json');
     }
     if (fields.length === 0 && descriptionInput.kind === 'omit') {

@@ -5,10 +5,10 @@
 import { z } from 'zod';
 
 /** The contract version (contract/VERSION) this API description belongs to. */
-export const contractVersion = "173.0.0";
+export const contractVersion = "173.1.0";
 
 /** The API description's own version (OpenAPI `info.version`). */
-export const apiVersion = "4.4.0";
+export const apiVersion = "4.5.0";
 
 /** A non-JSON request or response body: raw bytes (G3). */
 export type BinaryBody = Uint8Array | ArrayBuffer | Blob;
@@ -1966,8 +1966,28 @@ export interface CreateObjectiveBody {
    * A resource key linked to the mission's project (409 `project_resource_key_not_found` otherwise); blank or null inherits the primary.
    */
   resourceKey?: string | null;
+  /**
+   * Agent key (`human` is stored as `manual`). Omitted, blank or null leaves a draft on the project's last launch selection and any other state unassigned.
+   */
+  assignedAgent?: string | null;
+  /**
+   * Requires a non-manual `assignedAgent` (400 `validation_error` otherwise). With an `assignedAgent`, omitted or null stores no model.
+   */
+  model?: string | null;
+  /**
+   * Same rules as `model`.
+   */
+  reasoningEffort?: string | null;
+  /**
+   * Saves the any-target override for `launchConfigAgent` with the new objective, exactly as `PATCH /api/objectives/{id}` does; null stores none.
+   */
+  launchConfigOverride?: AgentLaunchConfigInput | null;
+  /**
+   * Required (non-blank) with `launchConfigOverride` (400 otherwise).
+   */
+  launchConfigAgent?: string;
 }
-export const createObjectiveBodySchema: z.ZodType<CreateObjectiveBody> = z.object({ "missionId": z.string(), "instructionText": z.string(), "title": z.exactOptional(z.string().nullable()), "description": z.exactOptional(objectiveDescriptionInputSchema), "state": z.exactOptional(objectiveStateSchema), "autoAdvance": z.exactOptional(z.boolean()), "resourceKey": z.exactOptional(z.string().nullable()) });
+export const createObjectiveBodySchema: z.ZodType<CreateObjectiveBody> = z.object({ "missionId": z.string(), "instructionText": z.string(), "title": z.exactOptional(z.string().nullable()), "description": z.exactOptional(objectiveDescriptionInputSchema), "state": z.exactOptional(objectiveStateSchema), "autoAdvance": z.exactOptional(z.boolean()), "resourceKey": z.exactOptional(z.string().nullable()), "assignedAgent": z.exactOptional(z.string().nullable()), "model": z.exactOptional(z.string().nullable()), "reasoningEffort": z.exactOptional(z.string().nullable()), "launchConfigOverride": z.exactOptional(agentLaunchConfigInputSchema.nullable()), "launchConfigAgent": z.exactOptional(z.string()) });
 
 /**
  * Partial update; a body with no recognized member returns the objective unchanged.
@@ -9440,7 +9460,7 @@ export const apiOperations = {
     path: "/api/workspaces",
     tags: ["workspaces"],
     deprecated: false,
-    permission: "workspace-admin",
+    permission: "workspace:create",
     permissionCandidates: [],
     edition: "both",
     consumers: ["webapp"],
@@ -9877,8 +9897,8 @@ export const apiOperations = {
     path: "/api/profile/default-project",
     tags: ["profile"],
     deprecated: false,
-    permission: "unknown",
-    permissionCandidates: ["profile:self:update","project:read"],
+    permission: "profile:self:update",
+    permissionCandidates: [],
     edition: "both",
     consumers: ["mobile"],
     extension: null,

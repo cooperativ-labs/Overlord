@@ -170,8 +170,14 @@ function ObjectiveFocusAnchor({
  * is why drag-to-reorder applies to the draft queue alone.
  *
  * Plus one {@link GhostObjective} composer at the end of the queue, which is
- * *not* an objective: it is purely client-side and only persists an objective
- * once it has instruction text, so "Add objective" never creates empty work.
+ * *not* an objective: it buffers text, settings and staged files client-side and
+ * writes one objective only when the user leaves the card, so "Add objective"
+ * never creates empty or half-configured work. While it commits, the new
+ * objective's id is hidden here (`committingObjectiveId`) — from the queue and
+ * from the `showComposer` / `hasBlankSlot` decisions — so a realtime refetch
+ * that delivers the row before the composer's uploads finish never shows the
+ * objective twice. The composer reports the id cleared once the refetched row
+ * can replace it, which makes the swap happen exactly once.
  */
 export function MissionObjectivesSection({
   mission,
@@ -191,6 +197,15 @@ export function MissionObjectivesSection({
   const reorder = useReorderObjectives();
   /** Whether the user asked for the end-of-queue composer via "+ Add objective". */
   const [extraSlotRequested, setExtraSlotRequested] = useState(false);
+  /** The objective the composer is still committing; hidden until it hands over. */
+  const [committingObjectiveId, setCommittingObjectiveId] = useState<string | null>(null);
+  const visibleObjectives = useMemo(
+    () =>
+      committingObjectiveId === null
+        ? mission.objectives
+        : mission.objectives.filter(objective => objective.id !== committingObjectiveId),
+    [committingObjectiveId, mission.objectives]
+  );
   // Executed rows behave as an accordion: one open at a time keeps the timeline
   // scannable now that each row holds its whole evidence stack. Shift-click adds
   // a row instead of replacing the open one, and a `?objective=` deep link
@@ -250,10 +265,10 @@ export function MissionObjectivesSection({
 
   const lifecycleView = useMemo(
     () =>
-      deriveObjectiveLifecycleView(mission.objectives, {
+      deriveObjectiveLifecycleView(visibleObjectives, {
         allowParallelObjectives: mission.allowParallelObjectives
       }),
-    [mission.allowParallelObjectives, mission.objectives]
+    [mission.allowParallelObjectives, visibleObjectives]
   );
   const objectives = lifecycleView.orderedObjectives;
   const executedObjectives = lifecycleView.executedObjectives;
@@ -407,6 +422,7 @@ export function MissionObjectivesSection({
             autoFocus={extraSlotRequested}
             onMaterialized={() => setExtraSlotRequested(false)}
             onDismissEmpty={() => setExtraSlotRequested(false)}
+            onCommittingChange={setCommittingObjectiveId}
           />
         ) : null}
 

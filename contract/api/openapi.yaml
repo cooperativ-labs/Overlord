@@ -3,10 +3,10 @@ info:
   title: Overlord API
   # info.version is the API description's own Semantic Version; it changes when
   # this document changes and is never compared with the contract version.
-  version: 4.4.0
+  version: 4.5.0
   # The contract version (contract/VERSION) this document belongs to. Written
   # only by `yarn version:contract`.
-  x-overlord-contract-version: 173.0.0
+  x-overlord-contract-version: 173.1.0
   description: >-
     Normative description of Overlord's REST surface (ADR 0006): one operation for every
     method and path the backend registers, at the path it is served (ADR 0007), excluding
@@ -2838,16 +2838,18 @@ paths:
     post:
       operationId: postWorkspaces
       tags: [workspaces]
-      x-overlord-permission: workspace-admin
+      x-overlord-permission: workspace:create
       x-overlord-edition: both
       x-overlord-consumers: [webapp]
       summary: Create a workspace in an organization
       description: >-
-        The caller must hold an active `ADMIN` role in at least one live workspace of the named
-        organization (403 otherwise, including for an unknown organization). A token request must be
-        bound to the named organization (404 otherwise), carry a scope covering `workspace:create` and hold
-        `ADMIN` in a workspace it consents to (403). The caller becomes the new
-        workspace's `ADMIN`, and every other organization admin is joined as `ADMIN`.
+        Requires `workspace:create`, which only the `ADMIN` role grants. The caller must hold an active
+        `ADMIN` role in at least one live workspace of the named organization (403 otherwise, including
+        for an unknown organization). A token request must be bound to the named organization (404
+        otherwise), carry a scope covering `workspace:create` and hold `ADMIN` in a workspace it consents
+        to (403). The loopback-trusted local operator must also hold `workspace:create` in some
+        workspace (403). The caller becomes the new workspace's `ADMIN`, and every other organization
+        admin is joined as `ADMIN`.
       security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
       requestBody:
         required: true
@@ -3609,8 +3611,7 @@ paths:
     put:
       operationId: putProfileDefaultProject
       tags: [profile]
-      x-overlord-permission: unknown
-      x-overlord-permission-candidates: [profile:self:update, project:read]
+      x-overlord-permission: profile:self:update
       x-overlord-edition: both
       x-overlord-consumers: [mobile]
       summary: Set the caller's default project
@@ -9009,7 +9010,10 @@ paths:
       summary: Add an objective to a mission
       description: >-
         Requires `objective:update` on the mission's workspace. Appended after the mission's last
-        objective as a `draft`; a draft defaults the agent from the project's last launch selection.
+        objective as a `draft`; a draft with no `assignedAgent` defaults the agent, model and reasoning
+        effort from the project's last launch selection. The launch selection and launch-config
+        override in the body are validated before anything is written and are stored in the same
+        transaction as the objective, so a rejected member (400) creates no objective.
       security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
       requestBody:
         required: true
@@ -14040,6 +14044,35 @@ components:
           oneOf:
             - type: string
             - type: 'null'
+        assignedAgent:
+          description: >-
+            Agent key (`human` is stored as `manual`). Omitted, blank or null leaves a draft on the
+            project's last launch selection and any other state unassigned.
+          oneOf:
+            - type: string
+            - type: 'null'
+        model:
+          description: >-
+            Requires a non-manual `assignedAgent` (400 `validation_error` otherwise). With an
+            `assignedAgent`, omitted or null stores no model.
+          oneOf:
+            - type: string
+            - type: 'null'
+        reasoningEffort:
+          description: Same rules as `model`.
+          oneOf:
+            - type: string
+            - type: 'null'
+        launchConfigOverride:
+          description: >-
+            Saves the any-target override for `launchConfigAgent` with the new objective, exactly as
+            `PATCH /api/objectives/{id}` does; null stores none.
+          oneOf:
+            - $ref: '#/components/schemas/AgentLaunchConfigInput'
+            - type: 'null'
+        launchConfigAgent:
+          type: string
+          description: Required (non-blank) with `launchConfigOverride` (400 otherwise).
     UpdateObjectiveBody:
       type: object
       description: Partial update; a body with no recognized member returns the objective unchanged.

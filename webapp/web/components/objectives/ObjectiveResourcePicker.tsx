@@ -18,6 +18,11 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip.tsx';
 
 type ObjectiveResourcePickerProps = {
+  /**
+   * Reports the popup opening and closing. Hosts that commit on leaving their
+   * card (GhostObjective) use it to ignore focus and clicks in the portal.
+   */
+  onOpenChange?: (open: boolean) => void;
   resources: ProjectResourceDto[];
   value: string | null;
   onChange: (resourceKey: string | null) => void;
@@ -34,9 +39,14 @@ export function ObjectiveResourcePicker({
   value,
   onChange,
   disabled = false,
-  className
+  className,
+  onOpenChange
 }: ObjectiveResourcePickerProps) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpenState] = useState(false);
+  const setOpen = (next: boolean) => {
+    setOpenState(next);
+    onOpenChange?.(next);
+  };
   const resourceKeys = distinctProjectResourceKeys(resources);
   if (resourceKeys.length <= 1) return null;
 

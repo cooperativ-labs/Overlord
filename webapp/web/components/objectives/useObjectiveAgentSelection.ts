@@ -112,10 +112,10 @@ export function useObjectiveAgentSelection(objective: SelectableObjective) {
   }, [effectiveConfigQ.data?.source]);
 
   const setSelection = useCallback(
-    // `targetId` defaults to the bound objective but can be overridden — the
-    // ghost composer resolves its selection against this hook before a real
-    // objective exists, then supplies the freshly-materialized id once one
-    // does (see GhostObjective).
+    // `targetId` defaults to the bound objective but can be overridden for a
+    // caller that resolves its selection before the objective exists. The
+    // ghost composer no longer does: it sends its selection with the create
+    // (see GhostObjective).
     (next: AgentModelSelection, targetId: string = objective.id) => {
       // Both persistence calls must succeed for the selector to treat the
       // change as committed; either failing should surface to the caller so

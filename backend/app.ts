@@ -99,7 +99,10 @@ import {
 import { listActivityFeed } from './activity-feed.ts';
 import { getAgentCatalog, refreshAgentCatalog, updateAgentCatalog } from './agent-catalog.ts';
 import {
+  AGENT_REQUEST_HUMAN_ROUTE_PREFIX,
   AGENT_SESSION_CHANNEL_ROUTE_PREFIX,
+  AGENT_SESSION_INPUT_HUMAN_ROUTE_PREFIX,
+  agentSessionRoutesOwnJsonBody,
   createAgentRequestHumanRouter,
   createAgentSessionChannelRouter,
   createAgentSessionInputHumanRouter,
@@ -519,8 +522,11 @@ function isRunnerCompletionRequest(req: Request): boolean {
   return req.method === 'POST' && /^\/api\/runner\/requests\/[^/]+\/completed$/.test(req.path);
 }
 
+// The agent-session routers parse their own bodies under tighter limits (32–64 KiB); the
+// app-level parser leaves them alone so those limits apply.
 app.use((req, res, next) => {
   if (isRawUploadRequest(req)) return next();
+  if (agentSessionRoutesOwnJsonBody(req.path)) return next();
   if (isRunnerCompletionRequest(req)) return runnerCompletionJsonBody(req, res, next);
   return jsonBody(req, res, next);
 });
@@ -1783,8 +1789,8 @@ app.post(
   '/api/missions/:id/terminal-sessions/forget',
   handle(req => forgetMissionLatchSession(req.params.id, req.body ?? {}), { mutates: true })
 );
-app.use('/api/agent-requests', createAgentRequestHumanRouter());
-app.use('/api/agent-session-inputs', createAgentSessionInputHumanRouter());
+app.use(AGENT_REQUEST_HUMAN_ROUTE_PREFIX, createAgentRequestHumanRouter());
+app.use(AGENT_SESSION_INPUT_HUMAN_ROUTE_PREFIX, createAgentSessionInputHumanRouter());
 app.get(
   '/api/missions/:id/events',
   handle(req => listMissionEvents(req.params.id))

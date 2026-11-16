@@ -125,11 +125,13 @@ not do.
 - **W4** (open). `WorkspaceMemberDto.isOperator` says "belongs to the local operator"; it
   marks the authenticated caller's membership. `OrganizationDto.isActive` is optional in
   packages/contract but always written. `getWorkspacesByIdMembers`, `getOrganizations`.
-- **W5** (open). The bootstrap recorded `postWorkspaces` as `workspace:create`. The route
-  evaluates it only when the request has an attributed workspace member, which session and
-  token requests never have; the effective gate is `canViewOrganizationSettings` (an active
-  `ADMIN` role in any live workspace of the organization). The permission is now
-  `workspace-admin`.
+- **W5** (resolved, contract 173.0.1). The bootstrap recorded `postWorkspaces` as
+  `workspace:create`; batch 2 changed it to `workspace-admin` on the reading that the route's
+  `workspace:create` check never runs. It runs for the loopback-trusted local operator (the only
+  request with an attributed workspace member), `createWorkspace` checks it for every token
+  request, and every caller must pass `canViewOrganizationSettings` (an active `ADMIN` role in
+  a live workspace of the organization). `ADMIN` is the only role that grants
+  `workspace:create`, so every path requires it. The permission is `workspace:create` again.
 - **W6** (open). `getWorkspacesByIdObjectivesCsv` checks `workspace:read` in any authorized
   workspace, then an `ADMIN` role in the target workspace (`requireWorkspaceAdmin`). The
   permission stays `workspace:read` with the role gate in the description.

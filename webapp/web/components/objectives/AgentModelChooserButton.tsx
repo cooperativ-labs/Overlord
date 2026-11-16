@@ -15,6 +15,11 @@ import {
 } from './AgentModelSelector.tsx';
 
 type AgentModelChooserButtonProps = {
+  /**
+   * Reports the popup opening and closing. Hosts that commit on leaving their
+   * card (GhostObjective) use it to ignore focus and clicks in the portal.
+   */
+  onOpenChange?: (open: boolean) => void;
   catalog: AgentCatalogDto | null;
   selection: AgentModelSelection;
   onChange: (selection: AgentModelSelection) => void;
@@ -41,9 +46,14 @@ export function AgentModelChooserButton({
   onUseInheritedDefault,
   launchConfigSourceHint,
   disabled = false,
-  compact = false
+  compact = false,
+  onOpenChange
 }: AgentModelChooserButtonProps) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpenState] = useState(false);
+  const setOpen = (next: boolean) => {
+    setOpenState(next);
+    onOpenChange?.(next);
+  };
   const isManual = selection.agent === MANUAL_AGENT_KEY;
   const agent = catalog?.agents.find(a => a.key === selection.agent);
   const model = agent?.models.find(m => m.id === selection.model);

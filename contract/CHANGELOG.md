@@ -5,6 +5,53 @@ is the current version and must equal [VERSION](VERSION); `yarn version:contract
 writes its skeleton. Dates use ISO 8601 and describe the contract change, not
 merely the files edited.
 
+## [173.1.0] - 2026-11-16
+
+Contract impact: minor. `POST /api/objectives` can carry the full launch
+selection, so a client can create a configured objective in one request instead
+of creating it and then patching it (coo:1280). Omitted members behave exactly as
+before. OpenAPI `info.version` 4.5.0.
+
+### Added
+
+- `CreateObjectiveBody` accepts optional `assignedAgent`, `model`,
+  `reasoningEffort`, `launchConfigAgent` and `launchConfigOverride`, with the
+  types and nullability of the matching `UpdateObjectiveBody` members.
+  `model` and `reasoningEffort` require a non-manual `assignedAgent` (400
+  `validation_error`, the rule every create surface already applies);
+  `launchConfigOverride` requires a non-blank `launchConfigAgent` (400) and is
+  stored as the same any-target override `PATCH /api/objectives/{id}` writes.
+- The launch selection and override are validated before any write and are
+  stored in the same transaction and insert as the objective; a rejected member
+  creates no objective.
+
+### Version
+
+- Minor contract version 173.1.0, from 173.0.1.
+
+## [173.0.1] - 2026-11-16
+
+Contract impact: patch. Two OpenAPI operations now declare the permission their
+route already enforces (coo:1279, drift found by the 2026-11-15 backend refactor
+review). No route, guard, status or message changes. OpenAPI `info.version` 4.4.1.
+
+### Changed
+
+- `postWorkspaces` declares `x-overlord-permission: workspace:create` instead of
+  `workspace-admin`. The route checks `workspace:create` for the loopback local
+  operator, `createWorkspace` checks it for every token request, and every caller
+  needs an `ADMIN` role in the organization, the only role that grants it. The
+  description names all three gates. Resolves schema disagreement W5.
+- `putProfileDefaultProject` declares `x-overlord-permission: profile:self:update`
+  instead of `unknown` and drops `x-overlord-permission-candidates`. The route
+  requires `profile:self:update`; `project:read` on the named project stays a
+  service check, as the description already says. Nine operations remain
+  `unknown`.
+
+### Version
+
+- Patch contract version 173.0.1, from 173.0.0.
+
 ## [173.0.0] - 2026-11-15
 
 Contract impact: major. Agent-authored mission summaries and live mission items

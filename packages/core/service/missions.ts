@@ -394,6 +394,7 @@ export async function insertObjective({
   model,
   reasoningEffort,
   resourceKey = null,
+  launchConfigJson = null,
   description
 }: {
   ctx: ServiceContext;
@@ -411,6 +412,12 @@ export async function insertObjective({
   model?: string | null;
   reasoningEffort?: string | null;
   resourceKey?: string | null;
+  /**
+   * Serialized `launch_config_json` written with the row. The REST create
+   * builds it with the same helper as `PATCH /api/objectives/{id}`, so the
+   * objective and its launch override commit in one insert.
+   */
+  launchConfigJson?: string | null;
 }): Promise<ObjectiveSummary> {
   const instruction = instructionText.trim();
 
@@ -488,10 +495,10 @@ export async function insertObjective({
     `INSERT INTO objectives
          (id, workspace_id, project_id, mission_id, position, title, instruction_text, state,
           assigned_agent, model, reasoning_effort, agent_flags_json, auto_advance,
-          execution_metadata_json, resource_key, display_key, created_by_workspace_user_id,
-          created_by_kind, created_by_agent, created_by_session_id,
+          execution_metadata_json, resource_key, launch_config_json, display_key,
+          created_by_workspace_user_id, created_by_kind, created_by_agent, created_by_session_id,
           created_at, updated_at, revision${briefColumns.columns.map(c => `, ${c}`).join('')})
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '{}', ?, '{}', ?, ?, ?, ?, ?, ?, ?, ?, 1${briefColumns.columns.map(() => ', ?').join('')})`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '{}', ?, '{}', ?, ?, ?, ?, ?, ?, ?, ?, ?, 1${briefColumns.columns.map(() => ', ?').join('')})`,
     [
       id,
       ctx.workspace.id,
@@ -506,6 +513,7 @@ export async function insertObjective({
       resolvedReasoningEffort,
       bindBool(ctx.db.dialect, autoAdvance),
       normalizedResourceKey,
+      launchConfigJson,
       displayKey,
       ctx.actorWorkspaceUserId,
       origin.kind,

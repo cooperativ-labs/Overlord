@@ -26,10 +26,21 @@ export function isAccountConnectionsQueryKey(queryKey: QueryKey): boolean {
 }
 
 export function invalidateNonEverhourQueries(queryClient: QueryInvalidator): void {
-  void queryClient.invalidateQueries({
-    predicate: query =>
-      !isEverhourQueryKey(query.queryKey) && !isAccountConnectionsQueryKey(query.queryKey)
-  });
+  void refetchNonEverhourQueries(queryClient);
+}
+
+/**
+ * {@link invalidateNonEverhourQueries}, but resolves once the active queries it
+ * invalidated have refetched. For callers that must not swap UI until the new
+ * data is on screen (the ghost objective composer's commit).
+ */
+export function refetchNonEverhourQueries(queryClient: QueryInvalidator): Promise<unknown> {
+  return Promise.resolve(
+    queryClient.invalidateQueries({
+      predicate: query =>
+        !isEverhourQueryKey(query.queryKey) && !isAccountConnectionsQueryKey(query.queryKey)
+    })
+  );
 }
 
 export function invalidateMissionEverhourQueries(queryClient: QueryInvalidator): void {

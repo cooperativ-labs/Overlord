@@ -44,6 +44,7 @@ import { answerApplicationStateFromResult } from '../packages/core/service/local
 import { getProjectExecutionTargetSelection } from '../packages/core/service/project-execution-target.ts';
 
 import { optionalString, queryString } from './http/query.ts';
+import { deferMalformedBody } from './http/request-validation.ts';
 import { asyncRoute } from './http/route-handler.ts';
 import { buildWebappServiceContextForWorkspace, requireDatabaseClient } from './db.ts';
 import { requireWorkspacePermission } from './rbac.ts';
@@ -184,7 +185,7 @@ const ADAPTER_RELEASE_REASONS = RELEASE_REASONS.filter(
 
 export function createAgentSessionChannelRouter(): Router {
   const router = Router();
-  router.use(express.json({ limit: MAX_ADAPTER_BODY_BYTES }));
+  router.use(deferMalformedBody(express.json({ limit: MAX_ADAPTER_BODY_BYTES })));
   router.use((req, res, next) => {
     void requireChannelCredential(req as ChannelRequest, res, next);
   });
@@ -732,7 +733,7 @@ async function missionScopedRequests(
 /** Ordinary-human request inbox. This router is mounted behind normal API authentication. */
 export function createAgentRequestHumanRouter(): Router {
   const router = Router();
-  router.use(express.json({ limit: '32kb' }));
+  router.use(deferMalformedBody(express.json({ limit: '32kb' })));
 
   router.get(
     '/',
@@ -897,7 +898,7 @@ function inputDto(input: Awaited<ReturnType<typeof getInput>>): Record<string, u
  */
 export function createAgentSessionInputHumanRouter(): Router {
   const router = Router();
-  router.use(express.json({ limit: '64kb' }));
+  router.use(deferMalformedBody(express.json({ limit: '64kb' })));
 
   router.get(
     '/',
@@ -1012,6 +1013,24 @@ const REQUEST_COLUMNS_FOR_ROUTE = `
 `;
 
 export const AGENT_SESSION_CHANNEL_ROUTE_PREFIX = '/api/agent-session-channels/v1';
+export const AGENT_REQUEST_HUMAN_ROUTE_PREFIX = '/api/agent-requests';
+export const AGENT_SESSION_INPUT_HUMAN_ROUTE_PREFIX = '/api/agent-session-inputs';
+
+const OWN_JSON_BODY_PREFIXES = [
+  AGENT_SESSION_CHANNEL_ROUTE_PREFIX,
+  AGENT_REQUEST_HUMAN_ROUTE_PREFIX,
+  AGENT_SESSION_INPUT_HUMAN_ROUTE_PREFIX
+] as const;
+
+/**
+ * Whether a path belongs to an agent-session router. Those routers parse their own JSON bodies
+ * under tighter limits (32–64 KiB) than the app-level 100 KB parser, so the app-level parser
+ * must skip them: body-parser never re-parses a body, so parsing it first makes those limits
+ * dead code.
+ */
+export function agentSessionRoutesOwnJsonBody(path: string): boolean {
+  return OWN_JSON_BODY_PREFIXES.some(prefix => path === prefix || path.startsWith(`${prefix}/`));
+}
 
 /**
  * Prepare a session channel for a manual `ovld launch`.
