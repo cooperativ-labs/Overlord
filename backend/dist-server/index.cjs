@@ -135488,7 +135488,7 @@ var generateCommitMessageResultDtoSchema = external_exports.object({ "message": 
 var branchPreparedBodySchema = external_exports.object({ "requestId": external_exports.exactOptional(external_exports.string().nullable()), "branchAutomation": external_exports.object({ "branchName": external_exports.string(), "baseBranch": external_exports.string(), "worktreePath": external_exports.string(), "resourceKey": external_exports.string(), "action": external_exports.enum(["create", "reuse", "new_cycle"]), "cycle": external_exports.exactOptional(external_exports.number()), "isolated": external_exports.exactOptional(external_exports.boolean()) }) });
 var forgetTerminalSessionBodySchema = external_exports.object({ "providerSessionId": external_exports.string(), "executionRequestId": external_exports.exactOptional(external_exports.string().nullable()) });
 var forgetTerminalSessionResultDtoSchema = external_exports.object({ "forgotten": external_exports.boolean(), "executionRequestId": external_exports.string().nullable() });
-var createObjectiveBodySchema = external_exports.object({ "missionId": external_exports.string(), "instructionText": external_exports.string(), "title": external_exports.exactOptional(external_exports.string().nullable()), "description": external_exports.exactOptional(objectiveDescriptionInputSchema), "state": external_exports.exactOptional(objectiveStateSchema), "autoAdvance": external_exports.exactOptional(external_exports.boolean()), "resourceKey": external_exports.exactOptional(external_exports.string().nullable()) });
+var createObjectiveBodySchema = external_exports.object({ "missionId": external_exports.string(), "instructionText": external_exports.string(), "title": external_exports.exactOptional(external_exports.string().nullable()), "description": external_exports.exactOptional(objectiveDescriptionInputSchema), "state": external_exports.exactOptional(objectiveStateSchema), "autoAdvance": external_exports.exactOptional(external_exports.boolean()), "resourceKey": external_exports.exactOptional(external_exports.string().nullable()), "assignedAgent": external_exports.exactOptional(external_exports.string().nullable()), "model": external_exports.exactOptional(external_exports.string().nullable()), "reasoningEffort": external_exports.exactOptional(external_exports.string().nullable()), "launchConfigOverride": external_exports.exactOptional(agentLaunchConfigInputSchema.nullable()), "launchConfigAgent": external_exports.exactOptional(external_exports.string()) });
 var updateObjectiveBodySchema = external_exports.object({ "instructionText": external_exports.exactOptional(external_exports.string()), "title": external_exports.exactOptional(external_exports.string().nullable()), "description": external_exports.exactOptional(objectiveDescriptionInputSchema), "expectedDescriptionRevision": external_exports.exactOptional(external_exports.int().min(0)), "state": external_exports.exactOptional(objectiveStateSchema), "autoAdvance": external_exports.exactOptional(external_exports.boolean()), "position": external_exports.exactOptional(external_exports.int().min(0)), "assignedAgent": external_exports.exactOptional(external_exports.string().nullable()), "model": external_exports.exactOptional(external_exports.string().nullable()), "reasoningEffort": external_exports.exactOptional(external_exports.string().nullable()), "resourceKey": external_exports.exactOptional(external_exports.string().nullable()), "launchConfigOverride": external_exports.exactOptional(agentLaunchConfigInputSchema.nullable()), "launchConfigAgent": external_exports.exactOptional(external_exports.string()) });
 var launchObjectiveBodySchema = external_exports.object({ "agent": external_exports.string(), "model": external_exports.exactOptional(external_exports.string().nullable()), "reasoningEffort": external_exports.exactOptional(external_exports.string().nullable()), "executionTargetId": external_exports.exactOptional(external_exports.string().nullable()), "launchConfigOverride": external_exports.exactOptional(agentLaunchConfigInputSchema.nullable()) });
 var objectivePromptDtoSchema = external_exports.object({ "objectiveId": external_exports.string(), "missionId": external_exports.string(), "prompt": external_exports.string() });
@@ -137320,7 +137320,7 @@ var apiOperations = {
     path: "/api/workspaces",
     tags: ["workspaces"],
     deprecated: false,
-    permission: "workspace-admin",
+    permission: "workspace:create",
     permissionCandidates: [],
     edition: "both",
     consumers: ["webapp"],
@@ -137757,8 +137757,8 @@ var apiOperations = {
     path: "/api/profile/default-project",
     tags: ["profile"],
     deprecated: false,
-    permission: "unknown",
-    permissionCandidates: ["profile:self:update", "project:read"],
+    permission: "profile:self:update",
+    permissionCandidates: [],
     edition: "both",
     consumers: ["mobile"],
     extension: null,
@@ -153488,6 +153488,7 @@ async function insertObjective({
   model,
   reasoningEffort,
   resourceKey = null,
+  launchConfigJson = null,
   description
 }) {
   const instruction = instructionText.trim();
@@ -153546,10 +153547,10 @@ async function insertObjective({
     `INSERT INTO objectives
          (id, workspace_id, project_id, mission_id, position, title, instruction_text, state,
           assigned_agent, model, reasoning_effort, agent_flags_json, auto_advance,
-          execution_metadata_json, resource_key, display_key, created_by_workspace_user_id,
-          created_by_kind, created_by_agent, created_by_session_id,
+          execution_metadata_json, resource_key, launch_config_json, display_key,
+          created_by_workspace_user_id, created_by_kind, created_by_agent, created_by_session_id,
           created_at, updated_at, revision${briefColumns.columns.map((c5) => `, ${c5}`).join("")})
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '{}', ?, '{}', ?, ?, ?, ?, ?, ?, ?, ?, 1${briefColumns.columns.map(() => ", ?").join("")})`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '{}', ?, '{}', ?, ?, ?, ?, ?, ?, ?, ?, ?, 1${briefColumns.columns.map(() => ", ?").join("")})`,
     [
       id2,
       ctx.workspace.id,
@@ -153564,6 +153565,7 @@ async function insertObjective({
       resolvedReasoningEffort,
       bindBool(ctx.db.dialect, autoAdvance),
       normalizedResourceKey,
+      launchConfigJson,
       displayKey,
       ctx.actorWorkspaceUserId,
       origin.kind,
@@ -171036,7 +171038,34 @@ async function reorderObjectives(missionId, body) {
   });
   return listObjectives2(missionId);
 }
+function applyLaunchConfigOverride(currentJson, body) {
+  if (body.launchConfigOverride === void 0) return void 0;
+  const agentKey = body.launchConfigAgent?.trim();
+  if (!agentKey) throw new ApiError(400, "launchConfigAgent is required");
+  let launchConfigs = {};
+  try {
+    const parsed = currentJson ? JSON.parse(currentJson) : {};
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      launchConfigs = parsed;
+    }
+  } catch {
+    launchConfigs = {};
+  }
+  const anyTarget = { ...launchConfigs["*"] ?? {} };
+  if (body.launchConfigOverride === null) {
+    delete anyTarget[agentKey];
+  } else {
+    anyTarget[agentKey] = {
+      preCommand: body.launchConfigOverride.preCommand?.trim() ?? "",
+      flags: normalizeAgentLaunchFlags(body.launchConfigOverride.flags)
+    };
+  }
+  if (Object.keys(anyTarget).length > 0) launchConfigs["*"] = anyTarget;
+  else delete launchConfigs["*"];
+  return Object.keys(launchConfigs).length > 0 ? JSON.stringify(launchConfigs) : null;
+}
 async function insertObjective2(db, ctx, body) {
+  const launchConfigJson = applyLaunchConfigOverride(null, body);
   const serviceCtx = await buildWebappServiceContextForWorkspace(
     ctx.workspaceId,
     db,
@@ -171051,7 +171080,10 @@ async function insertObjective2(db, ctx, body) {
     ...body.state !== void 0 ? { state: body.state } : {},
     autoAdvance: body.autoAdvance ?? false,
     ...body.assignedAgent !== void 0 ? { assignedAgent: body.assignedAgent } : {},
-    ...body.resourceKey !== void 0 ? { resourceKey: body.resourceKey } : {}
+    ...body.model !== void 0 ? { model: body.model } : {},
+    ...body.reasoningEffort !== void 0 ? { reasoningEffort: body.reasoningEffort } : {},
+    ...body.resourceKey !== void 0 ? { resourceKey: body.resourceKey } : {},
+    ...launchConfigJson !== void 0 ? { launchConfigJson } : {}
   });
   const row = await db.get(
     `SELECT o.*, m.display_id AS mission_display_id
@@ -171208,31 +171240,10 @@ async function updateObjectiveTx(idRef, body, options = {}) {
       setParams.push(nextResourceKey);
       changed.push("resource_key");
     }
-    if (body.launchConfigOverride !== void 0) {
-      const agentKey = body.launchConfigAgent?.trim();
-      if (!agentKey) throw new ApiError(400, "launchConfigAgent is required");
-      let launchConfigs = {};
-      try {
-        const parsed = existing.launch_config_json ? JSON.parse(existing.launch_config_json) : {};
-        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-          launchConfigs = parsed;
-        }
-      } catch {
-        launchConfigs = {};
-      }
-      const anyTarget = { ...launchConfigs["*"] ?? {} };
-      if (body.launchConfigOverride === null) {
-        delete anyTarget[agentKey];
-      } else {
-        anyTarget[agentKey] = {
-          preCommand: body.launchConfigOverride.preCommand?.trim() ?? "",
-          flags: normalizeAgentLaunchFlags(body.launchConfigOverride.flags)
-        };
-      }
-      if (Object.keys(anyTarget).length > 0) launchConfigs["*"] = anyTarget;
-      else delete launchConfigs["*"];
+    const nextLaunchConfigJson = applyLaunchConfigOverride(existing.launch_config_json, body);
+    if (nextLaunchConfigJson !== void 0) {
       fields.push("launch_config_json = ?");
-      setParams.push(Object.keys(launchConfigs).length > 0 ? JSON.stringify(launchConfigs) : null);
+      setParams.push(nextLaunchConfigJson);
       changed.push("launch_config_json");
     }
     if (fields.length === 0 && descriptionInput.kind === "omit") {
@@ -194781,7 +194792,7 @@ var ADAPTER_RELEASE_REASONS = RELEASE_REASONS.filter(
 );
 function createAgentSessionChannelRouter() {
   const router2 = (0, import_express5.Router)();
-  router2.use(import_express5.default.json({ limit: MAX_ADAPTER_BODY_BYTES }));
+  router2.use(deferMalformedBody(import_express5.default.json({ limit: MAX_ADAPTER_BODY_BYTES })));
   router2.use((req, res, next) => {
     void requireChannelCredential(req, res, next);
   });
@@ -195224,7 +195235,7 @@ async function missionScopedRequests(client, missionRef, objectiveRef = null) {
 }
 function createAgentRequestHumanRouter() {
   const router2 = (0, import_express5.Router)();
-  router2.use(import_express5.default.json({ limit: "32kb" }));
+  router2.use(deferMalformedBody(import_express5.default.json({ limit: "32kb" })));
   router2.get(
     "/",
     handle2(async (req) => {
@@ -195368,7 +195379,7 @@ function inputDto(input2) {
 }
 function createAgentSessionInputHumanRouter() {
   const router2 = (0, import_express5.Router)();
-  router2.use(import_express5.default.json({ limit: "64kb" }));
+  router2.use(deferMalformedBody(import_express5.default.json({ limit: "64kb" })));
   router2.get(
     "/",
     handle2(async (req) => {
@@ -195453,6 +195464,16 @@ var REQUEST_COLUMNS_FOR_ROUTE = `
   created_at, updated_at, revision
 `;
 var AGENT_SESSION_CHANNEL_ROUTE_PREFIX = "/api/agent-session-channels/v1";
+var AGENT_REQUEST_HUMAN_ROUTE_PREFIX = "/api/agent-requests";
+var AGENT_SESSION_INPUT_HUMAN_ROUTE_PREFIX = "/api/agent-session-inputs";
+var OWN_JSON_BODY_PREFIXES = [
+  AGENT_SESSION_CHANNEL_ROUTE_PREFIX,
+  AGENT_REQUEST_HUMAN_ROUTE_PREFIX,
+  AGENT_SESSION_INPUT_HUMAN_ROUTE_PREFIX
+];
+function agentSessionRoutesOwnJsonBody(path29) {
+  return OWN_JSON_BODY_PREFIXES.some((prefix) => path29 === prefix || path29.startsWith(`${prefix}/`));
+}
 async function prepareMissionSessionChannel(_missionRef, _body) {
   sessionControlsGone();
 }
@@ -201463,6 +201484,7 @@ function isRunnerCompletionRequest(req) {
 }
 app.use((req, res, next) => {
   if (isRawUploadRequest(req)) return next();
+  if (agentSessionRoutesOwnJsonBody(req.path)) return next();
   if (isRunnerCompletionRequest(req)) return runnerCompletionJsonBody(req, res, next);
   return jsonBody(req, res, next);
 });
@@ -202485,8 +202507,8 @@ app.post(
   "/api/missions/:id/terminal-sessions/forget",
   handle3((req) => forgetMissionLatchSession(req.params.id, req.body ?? {}), { mutates: true })
 );
-app.use("/api/agent-requests", createAgentRequestHumanRouter());
-app.use("/api/agent-session-inputs", createAgentSessionInputHumanRouter());
+app.use(AGENT_REQUEST_HUMAN_ROUTE_PREFIX, createAgentRequestHumanRouter());
+app.use(AGENT_SESSION_INPUT_HUMAN_ROUTE_PREFIX, createAgentSessionInputHumanRouter());
 app.get(
   "/api/missions/:id/events",
   handle3((req) => listMissionEvents2(req.params.id))
