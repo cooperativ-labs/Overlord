@@ -26792,13 +26792,13 @@ function resolveDatabaseTableIndexes({ fields, indexes, tableName }) {
       return field.fieldName || fieldName;
     };
     const [firstField, ...remainingFields] = index.fields;
-    const columns = [resolveFieldName(firstField), ...remainingFields.map(resolveFieldName)];
-    if (new Set(columns.map(getPortableDatabaseIdentifierKey)).size !== columns.length) throw new BetterAuthError(`Index on table "${tableName}" resolves more than one field to the same database column.`);
+    const columns2 = [resolveFieldName(firstField), ...remainingFields.map(resolveFieldName)];
+    if (new Set(columns2.map(getPortableDatabaseIdentifierKey)).size !== columns2.length) throw new BetterAuthError(`Index on table "${tableName}" resolves more than one field to the same database column.`);
     return {
-      columns,
+      columns: columns2,
       name: getDatabaseIndexName(tableName, {
         ...index,
-        fields: columns
+        fields: columns2
       }),
       unique: index.unique
     };
@@ -27314,7 +27314,7 @@ function formatSchemaFinding(finding, source) {
 }
 function formatSchemaMismatch(findings, source) {
   const tables = [];
-  const columns = [];
+  const columns2 = [];
   const required2 = [];
   const affectedTables = /* @__PURE__ */ new Set();
   let hasIssuer = false;
@@ -27323,7 +27323,7 @@ function formatSchemaMismatch(findings, source) {
       tables.push(finding.table);
       break;
     case "missing-column":
-      columns.push(`${finding.table}.${finding.column}`);
+      columns2.push(`${finding.table}.${finding.column}`);
       break;
     case "unexpected-required-column":
       required2.push(`${finding.table}.${finding.column}`);
@@ -27334,8 +27334,8 @@ function formatSchemaMismatch(findings, source) {
   const sections = [`${sourceLabel[source]} schema mismatch`];
   if (tables.length) sections.push(`  Missing tables
     ${tables.join(", ")}`);
-  if (columns.length) sections.push(`  Missing columns
-    ${columns.join("\n    ")}`);
+  if (columns2.length) sections.push(`  Missing columns
+    ${columns2.join("\n    ")}`);
   if (required2.length) {
     sections.push(`  Required columns Better Auth never writes
     ${required2.join("\n    ")}`);
@@ -27343,7 +27343,7 @@ function formatSchemaMismatch(findings, source) {
   }
   const help = [];
   if (required2.length) help.push(repairHint[source]);
-  if (tables.length || columns.length || required2.length && source !== "database") help.push(migrationHint[source]);
+  if (tables.length || columns2.length || required2.length && source !== "database") help.push(migrationHint[source]);
   if (help.length) sections.push(`  help: ${help.join("\n        ")}`);
   if (hasIssuer) sections.push("  note: If this column came from Better Auth 1.7.0 through 1.7.2,\n        follow the upgrade guide before removing it:\n        https://www.better-auth.com/docs/guides/1-7-upgrade-guide");
   return sections.join("\n\n");
@@ -29341,10 +29341,10 @@ var init_create_index_node = __esm({
           ...props
         });
       },
-      cloneWithColumns(node2, columns) {
+      cloneWithColumns(node2, columns2) {
         return freeze({
           ...node2,
-          columns: [...node2.columns || [], ...columns]
+          columns: [...node2.columns || [], ...columns2]
         });
       }
     });
@@ -31532,33 +31532,33 @@ function parseInsertExpression(arg) {
   return parseInsertColumnsAndValues(list2);
 }
 function parseInsertColumnsAndValues(rows) {
-  const columns = parseColumnNamesAndIndexes(rows);
+  const columns2 = parseColumnNamesAndIndexes(rows);
   return [
-    freeze([...columns.keys()].map(ColumnNode.create)),
-    ValuesNode.create(rows.map((row) => parseRowValues(row, columns)))
+    freeze([...columns2.keys()].map(ColumnNode.create)),
+    ValuesNode.create(rows.map((row) => parseRowValues(row, columns2)))
   ];
 }
 function parseColumnNamesAndIndexes(rows) {
-  const columns = /* @__PURE__ */ new Map();
+  const columns2 = /* @__PURE__ */ new Map();
   for (const row of rows) {
     const cols = Object.keys(row);
     for (const col of cols) {
-      if (!columns.has(col) && row[col] !== void 0) {
-        columns.set(col, columns.size);
+      if (!columns2.has(col) && row[col] !== void 0) {
+        columns2.set(col, columns2.size);
       }
     }
   }
-  return columns;
+  return columns2;
 }
-function parseRowValues(row, columns) {
+function parseRowValues(row, columns2) {
   const rowColumns = Object.keys(row);
   const rowValues = Array.from({
-    length: columns.size
+    length: columns2.size
   });
   let hasUndefinedOrComplexColumns = false;
   let indexedRowColumns = rowColumns.length;
   for (const col of rowColumns) {
-    const columnIdx = columns.get(col);
+    const columnIdx = columns2.get(col);
     if (isUndefined(columnIdx)) {
       indexedRowColumns--;
       continue;
@@ -31569,7 +31569,7 @@ function parseRowValues(row, columns) {
     }
     rowValues[columnIdx] = value2;
   }
-  const hasMissingColumns = indexedRowColumns < columns.size;
+  const hasMissingColumns = indexedRowColumns < columns2.size;
   if (hasMissingColumns || hasUndefinedOrComplexColumns) {
     const defaultValue = DefaultInsertValueNode.create();
     return ValueListNode.create(rowValues.map((it) => isUndefined(it) ? defaultValue : parseValueExpression(it)));
@@ -31800,8 +31800,8 @@ var init_on_conflict_builder = __esm({
        * Also see the {@link column}, {@link constraint} and {@link expression}
        * methods for alternative ways to specify the conflict target.
        */
-      columns(columns) {
-        const columnNodes = columns.map(ColumnNode.create);
+      columns(columns2) {
+        const columnNodes = columns2.map(ColumnNode.create);
         return new _OnConflictBuilder({
           ...this.#props,
           onConflictNode: OnConflictNode.cloneWith(this.#props.onConflictNode, {
@@ -32281,11 +32281,11 @@ var init_insert_query_builder = __esm({
        * ```
        */
       values(insert) {
-        const [columns, values] = parseInsertExpression(insert);
+        const [columns2, values] = parseInsertExpression(insert);
         return new _InsertQueryBuilder({
           ...this.#props,
           queryNode: InsertQueryNode.cloneWith(this.#props.queryNode, {
-            columns,
+            columns: columns2,
             values
           })
         });
@@ -32313,11 +32313,11 @@ var init_insert_query_builder = __esm({
        * select "pet"."name" from "pet"
        * ```
        */
-      columns(columns) {
+      columns(columns2) {
         return new _InsertQueryBuilder({
           ...this.#props,
           queryNode: InsertQueryNode.cloneWith(this.#props.queryNode, {
-            columns: freeze(columns.map(ColumnNode.create))
+            columns: freeze(columns2.map(ColumnNode.create))
           })
         });
       }
@@ -34403,8 +34403,8 @@ function parseCommonTableExpressionName(name2) {
   if (name2.includes("(")) {
     const parts = name2.split(/[\(\)]/);
     const table2 = parts[0];
-    const columns = parts[1].split(",").map((it) => it.trim());
-    return CommonTableExpressionNameNode.create(table2, columns);
+    const columns2 = parts[1].split(",").map((it) => it.trim());
+    return CommonTableExpressionNameNode.create(table2, columns2);
   } else {
     return CommonTableExpressionNameNode.create(name2);
   }
@@ -36681,11 +36681,11 @@ var init_merge_query_builder = __esm({
         });
       }
       thenInsertValues(insert) {
-        const [columns, values] = parseInsertExpression(insert);
+        const [columns2, values] = parseInsertExpression(insert);
         return new WheneableMergeQueryBuilder({
           ...this.#props,
           queryNode: MergeQueryNode.cloneWithThen(this.#props.queryNode, parseMergeThen(InsertQueryNode.cloneWith(InsertQueryNode.createWithoutInto(), {
-            columns,
+            columns: columns2,
             values
           })))
         });
@@ -39348,11 +39348,11 @@ var init_references_node = __esm({
       is(node2) {
         return node2.kind === "ReferencesNode";
       },
-      create(table2, columns) {
+      create(table2, columns2) {
         return freeze({
           kind: "ReferencesNode",
           table: table2,
-          columns: freeze([...columns])
+          columns: freeze([...columns2])
         });
       },
       cloneWithOnDelete(references, onDelete) {
@@ -40179,14 +40179,14 @@ var init_unique_constraint_node = __esm({
       is(node2) {
         return node2.kind === "UniqueConstraintNode";
       },
-      create(columns, constraintName, nullsNotDistinct) {
-        if (isString(columns.at(0))) {
+      create(columns2, constraintName, nullsNotDistinct) {
+        if (isString(columns2.at(0))) {
           logOnce("`UniqueConstraintNode.create(columns: string[], ...)` is deprecated - pass `ColumnNode[]` instead.");
-          columns = columns.map(ColumnNode.create);
+          columns2 = columns2.map(ColumnNode.create);
         }
         return freeze({
           kind: "UniqueConstraintNode",
-          columns: freeze(columns),
+          columns: freeze(columns2),
           name: constraintName ? IdentifierNode.create(constraintName) : void 0,
           nullsNotDistinct
         });
@@ -40458,10 +40458,10 @@ var init_primary_key_constraint_node = __esm({
       is(node2) {
         return node2.kind === "PrimaryKeyConstraintNode";
       },
-      create(columns, constraintName) {
+      create(columns2, constraintName) {
         return freeze({
           kind: "PrimaryKeyConstraintNode",
-          columns: freeze(columns.map(ColumnNode.create)),
+          columns: freeze(columns2.map(ColumnNode.create)),
           name: constraintName ? IdentifierNode.create(constraintName) : void 0
         });
       },
@@ -40494,10 +40494,10 @@ var init_add_index_node = __esm({
           ...props
         });
       },
-      cloneWithColumns(node2, columns) {
+      cloneWithColumns(node2, columns2) {
         return freeze({
           ...node2,
-          columns: [...node2.columns || [], ...columns]
+          columns: [...node2.columns || [], ...columns2]
         });
       }
     });
@@ -40587,11 +40587,11 @@ var init_alter_table_add_index_builder = __esm({
        * )
        * ```
        */
-      columns(columns) {
+      columns(columns2) {
         return new _AlterTableAddIndexBuilder({
           ...this.#props,
           node: AlterTableNode.cloneWithTableProps(this.#props.node, {
-            addIndex: AddIndexNode.cloneWithColumns(this.#props.node.addIndex, columns.map((item) => isString(item) ? parseOrderedColumnName(item) : item.toOperationNode()))
+            addIndex: AddIndexNode.cloneWithColumns(this.#props.node.addIndex, columns2.map((item) => isString(item) ? parseOrderedColumnName(item) : item.toOperationNode()))
           })
         });
       }
@@ -40909,8 +40909,8 @@ var init_alter_table_builder = __esm({
       /**
        * See {@link CreateTableBuilder.addUniqueConstraint}
        */
-      addUniqueConstraint(constraintName, columns, build2 = noop) {
-        const uniqueConstraintBuilder = build2(new UniqueConstraintNodeBuilder(UniqueConstraintNode.create(columns.map((column) => isString(column) ? ColumnNode.create(column) : parseExpression(column)), constraintName)));
+      addUniqueConstraint(constraintName, columns2, build2 = noop) {
+        const uniqueConstraintBuilder = build2(new UniqueConstraintNodeBuilder(UniqueConstraintNode.create(columns2.map((column) => isString(column) ? ColumnNode.create(column) : parseExpression(column)), constraintName)));
         return new AlterTableExecutor({
           ...this.#props,
           node: AlterTableNode.cloneWithTableProps(this.#props.node, {
@@ -40937,8 +40937,8 @@ var init_alter_table_builder = __esm({
        * the constraint builder and doesn't take a callback as the last argument. This
        * is because you can only add one column per `ALTER TABLE` query.
        */
-      addForeignKeyConstraint(constraintName, columns, targetTable, targetColumns, build2 = noop) {
-        const constraintBuilder = build2(new ForeignKeyConstraintBuilder(ForeignKeyConstraintNode.create(columns.map(ColumnNode.create), parseTable(targetTable), targetColumns.map(ColumnNode.create), constraintName)));
+      addForeignKeyConstraint(constraintName, columns2, targetTable, targetColumns, build2 = noop) {
+        const constraintBuilder = build2(new ForeignKeyConstraintBuilder(ForeignKeyConstraintNode.create(columns2.map(ColumnNode.create), parseTable(targetTable), targetColumns.map(ColumnNode.create), constraintName)));
         return new AlterTableAddForeignKeyConstraintBuilder({
           ...this.#props,
           constraintBuilder
@@ -40947,8 +40947,8 @@ var init_alter_table_builder = __esm({
       /**
        * See {@link CreateTableBuilder.addPrimaryKeyConstraint}
        */
-      addPrimaryKeyConstraint(constraintName, columns, build2 = noop) {
-        const constraintBuilder = build2(new PrimaryKeyConstraintBuilder(PrimaryKeyConstraintNode.create(columns, constraintName)));
+      addPrimaryKeyConstraint(constraintName, columns2, build2 = noop) {
+        const constraintBuilder = build2(new PrimaryKeyConstraintBuilder(PrimaryKeyConstraintNode.create(columns2, constraintName)));
         return new AlterTableExecutor({
           ...this.#props,
           node: AlterTableNode.cloneWithTableProps(this.#props.node, {
@@ -41217,10 +41217,10 @@ var init_create_index_builder = __esm({
        * on "person" ("first_name", left(lower("last_name"), 1), "age" desc)
        * ```
        */
-      columns(columns) {
+      columns(columns2) {
         return new _CreateIndexBuilder({
           ...this.#props,
-          node: CreateIndexNode.cloneWithColumns(this.#props.node, columns.map((item) => isString(item) ? parseOrderedColumnName(item) : item.toOperationNode()))
+          node: CreateIndexNode.cloneWithColumns(this.#props.node, columns2.map((item) => isString(item) ? parseOrderedColumnName(item) : item.toOperationNode()))
         });
       }
       /**
@@ -41518,8 +41518,8 @@ var init_create_table_builder = __esm({
        *   .execute()
        * ```
        */
-      addPrimaryKeyConstraint(constraintName, columns, build2 = noop) {
-        const constraintBuilder = build2(new PrimaryKeyConstraintBuilder(PrimaryKeyConstraintNode.create(columns, constraintName)));
+      addPrimaryKeyConstraint(constraintName, columns2, build2 = noop) {
+        const constraintBuilder = build2(new PrimaryKeyConstraintBuilder(PrimaryKeyConstraintNode.create(columns2, constraintName)));
         return new _CreateTableBuilder({
           ...this.#props,
           node: CreateTableNode.cloneWithConstraint(this.#props.node, constraintBuilder.toOperationNode())
@@ -41577,8 +41577,8 @@ var init_create_table_builder = __esm({
        *   .execute()
        * ```
        */
-      addUniqueConstraint(constraintName, columns, build2 = noop) {
-        const uniqueConstraintBuilder = build2(new UniqueConstraintNodeBuilder(UniqueConstraintNode.create(columns.map((column) => isString(column) ? ColumnNode.create(column) : parseExpression(column)), constraintName)));
+      addUniqueConstraint(constraintName, columns2, build2 = noop) {
+        const uniqueConstraintBuilder = build2(new UniqueConstraintNodeBuilder(UniqueConstraintNode.create(columns2.map((column) => isString(column) ? ColumnNode.create(column) : parseExpression(column)), constraintName)));
         return new _CreateTableBuilder({
           ...this.#props,
           node: CreateTableNode.cloneWithConstraint(this.#props.node, uniqueConstraintBuilder.toOperationNode())
@@ -41611,8 +41611,8 @@ var init_create_table_builder = __esm({
        * )
        * ```
        */
-      addIndex(indexName, columns, build2 = noop) {
-        const addIndexBuilder = build2(new CreateTableAddIndexBuilder(AddIndexNode.cloneWithColumns(AddIndexNode.create(indexName), columns.map((column) => isString(column) ? ColumnNode.create(column) : parseExpression(column)))));
+      addIndex(indexName, columns2, build2 = noop) {
+        const addIndexBuilder = build2(new CreateTableAddIndexBuilder(AddIndexNode.cloneWithColumns(AddIndexNode.create(indexName), columns2.map((column) => isString(column) ? ColumnNode.create(column) : parseExpression(column)))));
         return new _CreateTableBuilder({
           ...this.#props,
           node: CreateTableNode.cloneWithIndex(this.#props.node, addIndexBuilder.toOperationNode())
@@ -41681,8 +41681,8 @@ var init_create_table_builder = __esm({
        *   .execute()
        * ```
        */
-      addForeignKeyConstraint(constraintName, columns, targetTable, targetColumns, build2 = noop) {
-        const builder = build2(new ForeignKeyConstraintBuilder(ForeignKeyConstraintNode.create(columns.map(ColumnNode.create), parseTable(targetTable), targetColumns.map(ColumnNode.create), constraintName)));
+      addForeignKeyConstraint(constraintName, columns2, targetTable, targetColumns, build2 = noop) {
+        const builder = build2(new ForeignKeyConstraintBuilder(ForeignKeyConstraintNode.create(columns2.map(ColumnNode.create), parseTable(targetTable), targetColumns.map(ColumnNode.create), constraintName)));
         return new _CreateTableBuilder({
           ...this.#props,
           node: CreateTableNode.cloneWithConstraint(this.#props.node, builder.toOperationNode())
@@ -42099,11 +42099,11 @@ var init_create_view_builder = __esm({
           })
         });
       }
-      columns(columns) {
+      columns(columns2) {
         return new _CreateViewBuilder({
           ...this.#props,
           node: CreateViewNode.cloneWith(this.#props.node, {
-            columns: columns.map(parseColumnName)
+            columns: columns2.map(parseColumnName)
           })
         });
       }
@@ -46564,9 +46564,9 @@ var init_sqlite_introspector = __esm({
         }
         return tablesResult.map(({ name: name2, sql: sql2, type }) => {
           let autoIncrementCol = sql2?.split(/[\(\),]/)?.find((it) => it.toLowerCase().includes("autoincrement"))?.trimStart()?.split(/\s+/)?.[0]?.replace(/["`]/g, "");
-          const columns = columnsByTable[name2] ?? [];
+          const columns2 = columnsByTable[name2] ?? [];
           if (!autoIncrementCol) {
-            const pkCols = columns.filter((r5) => r5.pk > 0);
+            const pkCols = columns2.filter((r5) => r5.pk > 0);
             if (pkCols.length === 1 && pkCols[0].type.toLowerCase() === "integer") {
               autoIncrementCol = pkCols[0].name;
             }
@@ -46575,7 +46575,7 @@ var init_sqlite_introspector = __esm({
             name: name2,
             isView: type === "view",
             isForeign: false,
-            columns: columns.map((col) => ({
+            columns: columns2.map((col) => ({
               name: col.name,
               dataType: col.type,
               isNullable: !col.notnull,
@@ -47004,8 +47004,8 @@ var init_mysql_introspector = __esm({
         const rawColumns = await query.execute();
         return this.#parseTableMetadata(rawColumns);
       }
-      #parseTableMetadata(columns) {
-        return columns.reduce((tables, it) => {
+      #parseTableMetadata(columns2) {
+        return columns2.reduce((tables, it) => {
           let table2 = tables.find((tbl) => tbl.name === it.TABLE_NAME);
           if (!table2) {
             table2 = freeze({
@@ -47298,10 +47298,10 @@ var init_postgres_introspector = __esm({
         const rawColumns = await query.execute();
         return this.#parseTableMetadata(rawColumns);
       }
-      #parseTableMetadata(columns) {
+      #parseTableMetadata(columns2) {
         const tables = [];
         const schemas = /* @__PURE__ */ new Map();
-        for (const column of columns) {
+        for (const column of columns2) {
           let schema2 = schemas.get(column.schema);
           if (!schema2) {
             schema2 = /* @__PURE__ */ new Map();
@@ -47735,9 +47735,9 @@ var init_mssql_driver = __esm({
           }
         } : () => {
         };
-        const rowListener = (columns) => {
+        const rowListener = (columns2) => {
           const row = {};
-          for (const column of columns) {
+          for (const column of columns2) {
             row[column.metadata.colName] = column.value;
           }
           this.#rows.push(row);
@@ -48296,24 +48296,24 @@ var init_dist2 = __esm({
 });
 
 // ../node_modules/@better-auth/kysely-adapter/dist/sqlite-introspector-DSCAP82F.mjs
-function sqliteIntegerPrimaryKeyColumn(columns) {
-  const primaryKeys = columns.filter((column) => column.pk > 0);
+function sqliteIntegerPrimaryKeyColumn(columns2) {
+  const primaryKeys = columns2.filter((column) => column.pk > 0);
   const primaryKey = primaryKeys.length === 1 ? primaryKeys[0] : void 0;
   return primaryKey?.type.toLowerCase() === "integer" ? primaryKey.name : void 0;
 }
-async function sqliteGeneratedPrimaryKeyColumn(db, name2, columns) {
-  const column = sqliteIntegerPrimaryKeyColumn(columns);
+async function sqliteGeneratedPrimaryKeyColumn(db, name2, columns2) {
+  const column = sqliteIntegerPrimaryKeyColumn(columns2);
   if (!column) return;
   const { rows } = await sql`
 		PRAGMA index_list(${sql.id(name2)})
 	`.execute(db.withoutPlugins());
   return rows.some((index) => index.origin === "pk") ? void 0 : column;
 }
-function toSqliteTableMetadata(table2, columns, autoIncrementColumn) {
+function toSqliteTableMetadata(table2, columns2, autoIncrementColumn) {
   return {
     name: table2.name,
     isView: table2.type === "view",
-    columns: columns.map((column) => ({
+    columns: columns2.map((column) => ({
       name: column.name,
       dataType: column.type,
       isNullable: column.notnull === 0,
@@ -48323,12 +48323,12 @@ function toSqliteTableMetadata(table2, columns, autoIncrementColumn) {
   };
 }
 async function readTableMetadata(db, name2) {
-  const { rows: columns } = await sql`
+  const { rows: columns2 } = await sql`
 		PRAGMA table_info(${sql.id(name2)})
 	`.execute(db.withoutPlugins());
-  if (columns.length === 0) return;
-  const generatedColumn = await sqliteGeneratedPrimaryKeyColumn(db, name2, columns);
-  return toSqliteTableMetadata({ name: name2 }, columns, generatedColumn);
+  if (columns2.length === 0) return;
+  const generatedColumn = await sqliteGeneratedPrimaryKeyColumn(db, name2, columns2);
+  return toSqliteTableMetadata({ name: name2 }, columns2, generatedColumn);
 }
 async function introspectSqliteTables(db, tableNames) {
   if (tableNames.length === 0) return [];
@@ -48348,7 +48348,7 @@ function createSqliteIntrospector(db) {
     if (!options.withInternalKyselyTables) query = query.where("name", "!=", DEFAULT_MIGRATION_TABLE2).where("name", "!=", DEFAULT_MIGRATION_LOCK_TABLE2);
     const tables = await query.execute();
     return Promise.all(tables.map(async ({ name: name2 }) => {
-      const columns = await db.selectFrom(sql`pragma_table_info(${name2})`.as("table_info")).select([
+      const columns2 = await db.selectFrom(sql`pragma_table_info(${name2})`.as("table_info")).select([
         "cid",
         "name",
         "type",
@@ -48356,8 +48356,8 @@ function createSqliteIntrospector(db) {
         "dflt_value",
         "pk"
       ]).execute();
-      const generatedColumn = await sqliteGeneratedPrimaryKeyColumn(db, name2, columns);
-      return toSqliteTableMetadata({ name: name2 }, columns, generatedColumn);
+      const generatedColumn = await sqliteGeneratedPrimaryKeyColumn(db, name2, columns2);
+      return toSqliteTableMetadata({ name: name2 }, columns2, generatedColumn);
     }));
   }
   return {
@@ -48880,8 +48880,8 @@ function toPhysicalSchema(db, expected) {
   }
   return physical;
 }
-function sentIdentifiers(db, table2, columns) {
-  const { query } = db.selectFrom(table2).select(columns).compile();
+function sentIdentifiers(db, table2, columns2) {
+  const { query } = db.selectFrom(table2).select(columns2).compile();
   if (!SelectQueryNode.is(query)) return {
     table: table2,
     columns: []
@@ -105525,7 +105525,7 @@ var require_dist_cjs16 = __commonJS({
     var { setCredentialFeature: setCredentialFeature2 } = (init_client3(), __toCommonJS(client_exports2));
     var { CredentialsProviderError: CredentialsProviderError2, readFile: readFile4, parseKnownFiles: parseKnownFiles2, getProfileName: getProfileName2 } = (init_config2(), __toCommonJS(config_exports));
     var { HttpRequest: HttpRequest2 } = (init_protocols(), __toCommonJS(protocols_exports));
-    var { createHash: createHash29, createPrivateKey, createPublicKey, sign: sign2 } = require("node:crypto");
+    var { createHash: createHash30, createPrivateKey, createPublicKey, sign: sign2 } = require("node:crypto");
     var { promises } = require("node:fs");
     var { homedir: homedir2 } = require("node:os");
     var { dirname, join: join6 } = require("node:path");
@@ -105686,7 +105686,7 @@ var require_dist_cjs16 = __commonJS({
       getTokenFilePath() {
         const directory = process.env.AWS_LOGIN_CACHE_DIRECTORY ?? join6(homedir2(), ".aws", "login", "cache");
         const loginSessionBytes = Buffer.from(this.loginSession, "utf8");
-        const loginSessionSha256 = createHash29("sha256").update(loginSessionBytes).digest("hex");
+        const loginSessionSha256 = createHash30("sha256").update(loginSessionBytes).digest("hex");
         return join6(directory, `${loginSessionSha256}.json`);
       }
       derToRawSignature(derSignature) {
@@ -111731,8 +111731,8 @@ function isExtEverhourPersistenceMigration(migration) {
   return migration.version === EXT_EVERHOUR_MIGRATION_VERSION && migration.component === "ext:everhour";
 }
 function missionsHasEverhourTaskIdColumnSqlite(db) {
-  const columns = db.prepare(`PRAGMA table_info(missions)`).all();
-  return columns.some((column) => column.name === "everhour_task_id");
+  const columns2 = db.prepare(`PRAGMA table_info(missions)`).all();
+  return columns2.some((column) => column.name === "everhour_task_id");
 }
 async function missionsHasEverhourTaskIdColumnPostgres(client) {
   const row = await client.get(`SELECT 1 AS present
@@ -112893,10 +112893,10 @@ function rebuildTableWithNextType(db, name2) {
   if (sql2.includes(NEW_TYPES))
     return;
   const dependentSql = indexesAndTriggers(db, name2);
-  const columns = tableColumns(db, name2);
+  const columns2 = tableColumns(db, name2);
   db.exec(`ALTER TABLE ${name2} RENAME TO ${name2}_before_next`);
   db.exec(replacementTableSql(sql2, name2));
-  db.exec(`INSERT INTO ${name2} (${columns}) SELECT ${columns} FROM ${name2}_before_next`);
+  db.exec(`INSERT INTO ${name2} (${columns2}) SELECT ${columns2} FROM ${name2}_before_next`);
   db.exec(`DROP TABLE ${name2}_before_next`);
   for (const statement of dependentSql)
     db.exec(statement);
@@ -112988,8 +112988,8 @@ function allocateKey(used) {
   throw new Error("Could not allocate an objective display key during backfill");
 }
 function objectivesHasDisplayKeyColumn(db) {
-  const columns = db.prepare(`PRAGMA table_info(objectives)`).all();
-  return columns.some((column) => column.name === "display_key");
+  const columns2 = db.prepare(`PRAGMA table_info(objectives)`).all();
+  return columns2.some((column) => column.name === "display_key");
 }
 function finalizeObjectivesDisplayKeySqlite(db) {
   if (!objectivesHasDisplayKeyColumn(db))
@@ -113074,8 +113074,8 @@ function deriveProjectResourceKey({ label, directoryPath }) {
   return slugify2(import_node_path5.default.basename(import_node_path5.default.resolve(directoryPath)));
 }
 function projectResourcesHasResourceKeyColumn(db) {
-  const columns = db.prepare(`PRAGMA table_info(project_resources)`).all();
-  return columns.some((column) => column.name === "resource_key");
+  const columns2 = db.prepare(`PRAGMA table_info(project_resources)`).all();
+  return columns2.some((column) => column.name === "resource_key");
 }
 function finalizeProjectResourcesResourceKeySqlite(db) {
   if (!projectResourcesHasResourceKeyColumn(db))
@@ -130752,13 +130752,13 @@ function databaseValueIsTrue(value2) {
 }
 function toDatabaseIndexMap(indexes) {
   return new Map(indexes.map((index) => {
-    const columns = [...index.columns].sort((left, right) => left.position - right.position);
+    const columns2 = [...index.columns].sort((left, right) => left.position - right.position);
     return [createDatabaseIndexKey(index.table, index.name), {
-      columns: columns.flatMap((column) => column.name === null ? [] : [column.name]),
+      columns: columns2.flatMap((column) => column.name === null ? [] : [column.name]),
       name: index.name,
       table: index.table,
       unique: index.unique,
-      validFullColumns: index.valid && !index.partial && columns.length > 0 && columns.every((column) => column.name !== null && column.fullLength)
+      validFullColumns: index.valid && !index.partial && columns2.length > 0 && columns2.every((column) => column.name !== null && column.fullLength)
     }];
   }));
 }
@@ -135386,7 +135386,7 @@ var objectiveDtoSchema = external_exports.object({ "id": external_exports.string
 var missionDtoShape = { "id": external_exports.string(), "workspaceId": external_exports.string(), "projectId": external_exports.string(), "displayId": external_exports.string(), "sequenceNumber": external_exports.int().min(1), "title": external_exports.string(), "statusId": external_exports.string(), "statusType": statusTypeSchema, "boardPosition": external_exports.int(), "priority": missionPrioritySchema.nullable(), "assignedWorkspaceUserId": external_exports.string().nullable(), "notes": external_exports.string().nullable(), "scheduleId": external_exports.string().nullable(), "dueDatetime": dateTimeSchema.nullable(), "createdAt": dateTimeSchema, "updatedAt": dateTimeSchema, "revision": external_exports.int().min(1), "objectiveCount": external_exports.int().min(0), "completedObjectiveCount": external_exports.int().min(0), "hasExecutingObjective": external_exports.boolean(), "hasCompletedObjective": external_exports.boolean(), "hasPendingObjectiveWithInstructions": external_exports.boolean(), "hasUnseenBlockingQuestion": external_exports.boolean(), "hasUnseenReturnedToExecute": external_exports.boolean(), "allowParallelObjectives": external_exports.boolean(), "draftObjectiveResourceKey": external_exports.string().nullable(), "tags": external_exports.array(projectTagDtoSchema), "createdByKind": createdByKindSchema, "createdByAgent": external_exports.string().nullable(), "createdByWorkspaceUserId": external_exports.string().nullable(), "createdByToken": missionCreatorTokenDtoSchema.nullable(), "objectives": external_exports.exactOptional(external_exports.array(objectiveDtoSchema)) };
 var missionDtoSchema = external_exports.object(missionDtoShape);
 var executionRequestDtoSchema = external_exports.object({ "id": external_exports.string(), "workspaceId": external_exports.string(), "projectId": external_exports.string(), "missionId": external_exports.string().nullable(), "objectiveId": external_exports.string().nullable(), "executionTargetId": external_exports.string().nullable(), "requestedAgent": external_exports.string().nullable(), "requestedModel": external_exports.string().nullable(), "requestedReasoningEffort": external_exports.string().nullable(), "launchConfig": agentLaunchConfigDtoSchema, "status": external_exports.enum(["queued", "claimed", "launching", "launched", "failed", "cleared", "cancelled", "expired"]), "requestedSource": external_exports.string(), "localTargetMutationKind": external_exports.enum(["branch_action", "worktree_purge", "capability_call"]).nullable(), "lastError": external_exports.string().nullable(), "createdAt": dateTimeSchema, "updatedAt": dateTimeSchema });
-var terminalSessionDtoSchema = external_exports.object({ "executionRequestId": external_exports.string(), "objectiveId": external_exports.string(), "provider": external_exports.literal("latch"), "providerSessionId": external_exports.string(), "sessionName": external_exports.string(), "executionTargetId": external_exports.string().nullable(), "deviceLabel": external_exports.string().nullable(), "agentSessionId": external_exports.string().nullable(), "executable": external_exports.string(), "viewerKind": external_exports.string(), "viewerOpenAs": external_exports.enum(["window", "tab"]), "createdAt": dateTimeSchema, "lastObservedState": external_exports.enum(["running", "exited", "stopping", "lost"]) });
+var terminalSessionDtoSchema = external_exports.object({ "executionRequestId": external_exports.string(), "objectiveId": external_exports.string(), "provider": external_exports.literal("latch"), "providerSessionId": external_exports.string(), "sessionName": external_exports.string(), "executionTargetId": external_exports.string().nullable(), "deviceLabel": external_exports.string().nullable(), "agentSessionId": external_exports.string().nullable(), "executable": external_exports.string(), "viewerKind": external_exports.string(), "viewerOpenAs": external_exports.enum(["window", "tab"]), "createdAt": dateTimeSchema, "lastObservedState": external_exports.enum(["running", "exited", "stopping", "lost"]), "endedAt": external_exports.exactOptional(dateTimeSchema.nullable()), "endReason": external_exports.exactOptional(external_exports.string().nullable()) });
 var missionBranchStatusSchema = external_exports.enum(["pending", "created", "published", "merged_unpushed", "merged"]);
 var missionWorktreePreferenceSchema = external_exports.enum(["worktree", "branch"]);
 var missionBranchDtoSchema = external_exports.object({ "name": external_exports.string(), "baseBranch": external_exports.string().nullable(), "worktreePath": external_exports.string().nullable(), "status": missionBranchStatusSchema, "dirty": external_exports.boolean(), "hasUnpushedCommits": external_exports.exactOptional(external_exports.boolean()), "overrideBranch": external_exports.string().nullable(), "worktreeAutomationEnabled": external_exports.boolean(), "worktreePreference": missionWorktreePreferenceSchema.nullable(), "willPrepareBranch": external_exports.boolean(), "willUseWorktree": external_exports.boolean(), "observedAt": external_exports.exactOptional(dateTimeSchema), "observationSource": external_exports.exactOptional(external_exports.literal("client")) });
@@ -135703,9 +135703,10 @@ var createAgentRequestBodySchema = external_exports.object({ "kind": external_ex
 var createdAgentRequestDtoSchema = external_exports.object({ "requestId": external_exports.string(), "status": agentRequestStatusSchema, "revision": external_exports.int().min(1), "windowExpiresAt": external_exports.string().nullable() });
 var agentRequestDtoShape = { "id": external_exports.string(), "channelId": external_exports.string(), "missionId": external_exports.string().nullable(), "objectiveId": external_exports.string().nullable(), "kind": agentRequestKindSchema, "summary": external_exports.string(), "options": external_exports.array(agentRequestOptionSchema), "allowsFreeText": external_exports.boolean(), "status": agentRequestStatusSchema, "resolution": jsonValueSchema, "revision": external_exports.int().min(1), "windowExpiresAt": external_exports.string().nullable(), "releasedReason": external_exports.string().nullable(), "applicationState": external_exports.string(), "resolvedAt": dateTimeSchema.nullable(), "createdAt": dateTimeSchema };
 var agentRequestDtoSchema = external_exports.object(agentRequestDtoShape);
-var agentRequestDeliveryDtoSchema = external_exports.object({ "mode": external_exports.enum(["latch", "read_only"]), "reason": external_exports.enum(["no_latch_session", "latch_session_exited", "target_offline", "request_closed"]).nullable(), "state": external_exports.enum(["emitted", "applied", "not_applied", "unknown"]).nullable(), "observedAt": dateTimeSchema.nullable() });
-var humanAgentRequestDtoSchema = external_exports.object({ ...agentRequestDtoShape, "delivery": agentRequestDeliveryDtoSchema });
-var agentRequestListResponseSchema = external_exports.object({ "requests": external_exports.array(humanAgentRequestDtoSchema) });
+var agentRequestDeliveryDtoSchema = external_exports.object({ "mode": external_exports.enum(["latch", "read_only"]), "reason": external_exports.enum(["no_latch_session", "latch_session_exited", "target_offline", "request_closed"]).nullable(), "state": external_exports.enum(["emitted", "applied", "not_applied", "unknown"]).nullable(), "observedAt": dateTimeSchema.nullable(), "stage": external_exports.exactOptional(external_exports.string().nullable()), "attempt": external_exports.exactOptional(external_exports.int().min(1).nullable()), "failureCode": external_exports.exactOptional(external_exports.string().nullable()), "failureMessage": external_exports.exactOptional(external_exports.string().max(300).nullable()), "canRedeliver": external_exports.exactOptional(external_exports.boolean()), "confirmationRequired": external_exports.exactOptional(external_exports.boolean()), "sessionState": external_exports.exactOptional(external_exports.string().nullable()) });
+var humanAgentRequestDtoSchema = external_exports.object({ ...agentRequestDtoShape, "delivery": agentRequestDeliveryDtoSchema, "dismissed": external_exports.exactOptional(external_exports.boolean()), "dismissedAt": external_exports.exactOptional(dateTimeSchema.nullable()) });
+var agentRequestPageDtoSchema = external_exports.object({ "complete": external_exports.boolean(), "nextCursor": external_exports.string().nullable(), "limit": external_exports.int().min(1).max(200), "status": external_exports.enum(["open"]).nullable() });
+var agentRequestListResponseSchema = external_exports.object({ "requests": external_exports.array(humanAgentRequestDtoSchema), "page": external_exports.exactOptional(agentRequestPageDtoSchema) });
 var agentRequestLeaseBodySchema = external_exports.object({ "leaseId": external_exports.exactOptional(external_exports.string()) });
 var agentRequestLeaseDtoSchema = external_exports.object({ "leaseId": external_exports.string(), "leaseExpiresAt": dateTimeSchema, "status": agentRequestStatusSchema, "revision": external_exports.int().min(1), "resolution": jsonValueSchema });
 var releaseAgentRequestBodySchema = external_exports.object({ "reason": external_exports.exactOptional(external_exports.string()) });
@@ -135719,6 +135720,10 @@ var markAgentSessionInputEmittedBodySchema = external_exports.object({ "leaseId"
 var markAgentSessionInputFailedBodySchema = external_exports.object({ "errorCode": external_exports.exactOptional(external_exports.string()) });
 var endAgentSessionChannelBodySchema = external_exports.object({ "reason": external_exports.exactOptional(external_exports.string()), "exitCode": external_exports.exactOptional(external_exports.number().nullable()) });
 var resolveAgentRequestBodySchema = external_exports.object({ "expectedRevision": external_exports.int(), "resolution": external_exports.object({ "text": external_exports.exactOptional(external_exports.string()), "optionId": external_exports.exactOptional(external_exports.string()) }).catchall(jsonValueSchema) });
+var redeliverAgentRequestBodySchema = external_exports.object({ "expectedAttempt": external_exports.int().min(1), "confirmUnconfirmed": external_exports.exactOptional(external_exports.boolean()) });
+var redeliverAgentRequestResultDtoSchema = external_exports.object({ "redelivered": external_exports.boolean(), "request": humanAgentRequestDtoSchema });
+var agentRequestDismissalBodySchema = external_exports.object({ "expectedRevision": external_exports.exactOptional(external_exports.int()) });
+var agentRequestDismissalResultDtoSchema = external_exports.object({ "changed": external_exports.boolean(), "request": humanAgentRequestDtoSchema });
 var resolveAgentRequestResultDtoSchema = external_exports.object({ "resolved": external_exports.boolean(), "request": humanAgentRequestDtoSchema });
 var agentSessionInputDtoSchema = external_exports.object({ "id": external_exports.string(), "channelId": external_exports.string(), "missionId": external_exports.string().nullable(), "objectiveId": external_exports.string().nullable(), "sessionId": external_exports.string().nullable(), "kind": agentSessionInputKindSchema, "body": external_exports.string(), "status": agentSessionInputStatusSchema, "deliveryOutcome": external_exports.enum(["delivered", "queued_turn_boundary", "queued_next_turn", "unsupported"]).nullable(), "deliveryLabel": external_exports.string(), "attemptCount": external_exports.int().min(0), "lastErrorCode": external_exports.string().nullable(), "emittedAt": dateTimeSchema.nullable(), "acknowledgedAt": dateTimeSchema.nullable(), "createdAt": dateTimeSchema, "revision": external_exports.int().min(1) });
 var agentSessionChannelSnapshotDtoSchema = external_exports.object({ "id": external_exports.string(), "state": agentSessionChannelStateSchema, "agentIdentifier": external_exports.string().nullable(), "adapterKey": external_exports.string().nullable(), "capabilities": jsonValueSchema, "lastHeartbeatAt": dateTimeSchema.nullable(), "endedAt": dateTimeSchema.nullable(), "endReason": external_exports.string().nullable() });
@@ -135965,9 +135970,18 @@ var postMissionsByIdGenerateCommitMessagePathParamsSchema = external_exports.obj
 var getMissionsByIdObjectivesPathParamsSchema = external_exports.object({ "id": external_exports.string() });
 var patchMissionsByIdObjectivesReorderPathParamsSchema = external_exports.object({ "id": external_exports.string() });
 var postMissionsByIdSessionChannelPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var getMissionsByIdTerminalSessionsHistoryPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var getMissionsByIdTerminalSessionsHistoryQueryParamsSchema = external_exports.object({ "limit": external_exports.exactOptional(external_exports.string()), "cursor": external_exports.exactOptional(external_exports.string().min(1).max(128)) });
+var getMissionsByIdTerminalSessionsHistoryResponse200Schema = external_exports.strictObject({ "sessions": external_exports.array(terminalSessionDtoSchema), "nextCursor": external_exports.string().nullable() });
+var postMissionsByIdTerminalSessionsEndPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var postMissionsByIdTerminalSessionsEndRequestBodySchema = external_exports.strictObject({ "executionRequestId": external_exports.string().min(1).max(128) });
+var postMissionsByIdTerminalSessionsEndResponse200Schema = external_exports.strictObject({ "executionRequestId": external_exports.string(), "providerSessionId": external_exports.string(), "state": external_exports.enum(["ended", "unconfirmed"]), "lastObservedState": external_exports.enum(["running", "stopping", "lost", "exited"]), "reason": external_exports.enum(["target_offline", "session_unreachable", "stop_unconfirmed"]).nullable(), "message": external_exports.string() });
 var postMissionsByIdTerminalSessionsForgetPathParamsSchema = external_exports.object({ "id": external_exports.string() });
-var getAgentRequestsQueryParamsSchema = external_exports.object({ "missionId": external_exports.exactOptional(external_exports.string()), "objectiveId": external_exports.exactOptional(external_exports.string()) });
+var getAgentRequestsQueryParamsSchema = external_exports.object({ "missionId": external_exports.exactOptional(external_exports.string()), "objectiveId": external_exports.exactOptional(external_exports.string()), "status": external_exports.exactOptional(external_exports.enum(["open"])), "limit": external_exports.exactOptional(external_exports.string()), "cursor": external_exports.exactOptional(external_exports.string()) });
 var postAgentRequestsByIdResolvePathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var postAgentRequestsByIdRedeliverPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var postAgentRequestsByIdDismissalPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var deleteAgentRequestsByIdDismissalPathParamsSchema = external_exports.object({ "id": external_exports.string() });
 var getAgentSessionInputsQueryParamsSchema = external_exports.object({ "missionId": external_exports.exactOptional(external_exports.string()), "objectiveId": external_exports.exactOptional(external_exports.string()) });
 var getMissionsByIdEventsPathParamsSchema = external_exports.object({ "id": external_exports.string() });
 var getMissionsByIdDeliveriesPathParamsSchema = external_exports.object({ "id": external_exports.string() });
@@ -139953,6 +139967,44 @@ var apiOperations = {
     responses: { "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "410": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
   },
   /**
+   * GET /api/missions/{id}/terminal-sessions/history: Page confirmed ended terminal sessions for a mission
+   */
+  getMissionsByIdTerminalSessionsHistory: {
+    operationId: "getMissionsByIdTerminalSessionsHistory",
+    method: "GET",
+    path: "/api/missions/{id}/terminal-sessions/history",
+    tags: ["missions"],
+    deprecated: false,
+    permission: "mission:read",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["webapp", "desktop", "mobile"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: getMissionsByIdTerminalSessionsHistoryPathParamsSchema, query: getMissionsByIdTerminalSessionsHistoryQueryParamsSchema, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: getMissionsByIdTerminalSessionsHistoryResponse200Schema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * POST /api/missions/{id}/terminal-sessions/end: End a mission's mapped Latch terminal session
+   */
+  postMissionsByIdTerminalSessionsEnd: {
+    operationId: "postMissionsByIdTerminalSessionsEnd",
+    method: "POST",
+    path: "/api/missions/{id}/terminal-sessions/end",
+    tags: ["missions"],
+    deprecated: false,
+    permission: "mission:update",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["webapp", "desktop", "mobile"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }],
+    parameters: { path: postMissionsByIdTerminalSessionsEndPathParamsSchema, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: postMissionsByIdTerminalSessionsEndRequestBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: postMissionsByIdTerminalSessionsEndResponse200Schema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
    * POST /api/missions/{id}/terminal-sessions/forget: Forget a mission's mapped Latch terminal session
    */
   postMissionsByIdTerminalSessionsForget: {
@@ -140008,6 +140060,63 @@ var apiOperations = {
     parameters: { path: postAgentRequestsByIdResolvePathParamsSchema, query: null, header: null },
     requestBody: { required: true, content: { "application/json": { kind: "json", schema: resolveAgentRequestBodySchema } } },
     responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: resolveAgentRequestResultDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "410": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * POST /api/agent-requests/{id}/redeliver: Send a recorded answer to its agent again
+   */
+  postAgentRequestsByIdRedeliver: {
+    operationId: "postAgentRequestsByIdRedeliver",
+    method: "POST",
+    path: "/api/agent-requests/{id}/redeliver",
+    tags: ["agent-requests"],
+    deprecated: false,
+    permission: "session:attach",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["mobile", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: postAgentRequestsByIdRedeliverPathParamsSchema, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: redeliverAgentRequestBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: redeliverAgentRequestResultDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "410": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * POST /api/agent-requests/{id}/dismissal: Dismiss the caller's notification for an open agent request
+   */
+  postAgentRequestsByIdDismissal: {
+    operationId: "postAgentRequestsByIdDismissal",
+    method: "POST",
+    path: "/api/agent-requests/{id}/dismissal",
+    tags: ["agent-requests"],
+    deprecated: false,
+    permission: "session:read",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["mobile", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: postAgentRequestsByIdDismissalPathParamsSchema, query: null, header: null },
+    requestBody: { required: false, content: { "application/json": { kind: "json", schema: agentRequestDismissalBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: agentRequestDismissalResultDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * DELETE /api/agent-requests/{id}/dismissal: Restore the caller's notification for an agent request
+   */
+  deleteAgentRequestsByIdDismissal: {
+    operationId: "deleteAgentRequestsByIdDismissal",
+    method: "DELETE",
+    path: "/api/agent-requests/{id}/dismissal",
+    tags: ["agent-requests"],
+    deprecated: false,
+    permission: "session:read",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["mobile", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: deleteAgentRequestsByIdDismissalPathParamsSchema, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: agentRequestDismissalResultDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
   },
   /**
    * GET /api/agent-session-inputs: List a mission's session inputs and its latest channel
@@ -145678,15 +145787,15 @@ async function loadObjectiveBriefRow(db, objectiveId, {
 function objectiveBriefPatchAssignments(db, patch) {
   const assignments = [];
   const params = [];
-  const columns = [];
+  const columns2 = [];
   for (const column of OBJECTIVE_BRIEF_COLUMNS) {
     if (!(column in patch)) continue;
     const value2 = patch[column];
     assignments.push(`${column} = ?`);
-    columns.push(column);
+    columns2.push(column);
     params.push(column === "description_suppressed" ? bindBool(db.dialect, Boolean(value2)) : value2);
   }
-  return { assignments, params, columns };
+  return { assignments, params, columns: columns2 };
 }
 function objectiveBriefChangedFields(patch) {
   const fields = /* @__PURE__ */ new Set();
@@ -148036,17 +148145,15 @@ function isLoopbackHostname(hostname5) {
 function latchHomeDirectory(env3 = process.env) {
   return trimmed4(env3.LATCH_HOME) ?? import_node_path14.default.join(import_node_os7.default.homedir(), ".latch");
 }
-function resolveLatchGatewayConfig({
-  env: env3 = process.env,
-  readFile: readFile4 = (filePath) => (0, import_node_fs12.readFileSync)(filePath, "utf8"),
-  fileExists = import_node_fs12.existsSync
-} = {}) {
-  const rawUrl = trimmed4(env3.LATCH_GATEWAY_URL) ?? DEFAULT_LATCH_GATEWAY_URL;
+var LATCH_REMOTE_LINK_RUNTIME_PATH = ["remote-access", "runtime"];
+var LATCH_REMOTE_LINK_READY_FILENAME = "remote-link-gateway-ready.json";
+var LATCH_REMOTE_LINK_TOKEN_FILENAME = "remote-link-gateway.token";
+function loopbackOrigin(rawUrl, label) {
   let parsed;
   try {
     parsed = new URL(rawUrl);
   } catch {
-    throw new LatchGatewayError(`LATCH_GATEWAY_URL is not a URL: ${rawUrl}`);
+    throw new LatchGatewayError(`${label} is not a URL: ${rawUrl}`);
   }
   if (parsed.protocol !== "http:") {
     throw new LatchGatewayError("The Latch gateway must be reached over http on loopback.");
@@ -148056,22 +148163,69 @@ function resolveLatchGatewayConfig({
       `Refusing to reach the Latch gateway at a non-loopback host (${parsed.hostname}).`
     );
   }
-  const inlineToken = trimmed4(env3.LATCH_GATEWAY_TOKEN);
-  if (inlineToken) return { baseUrl: parsed.origin, token: inlineToken };
-  const tokenFile = trimmed4(env3.LATCH_SERVE_TOKEN_FILE) ?? import_node_path14.default.join(latchHomeDirectory(env3), LATCH_SERVE_TOKEN_FILENAME);
-  if (!fileExists(tokenFile)) {
+  return parsed.origin;
+}
+function readGatewayToken(tokenFile, files) {
+  if (!files.fileExists(tokenFile)) {
     throw new LatchGatewayError(
       `Latch's gateway token is missing (${tokenFile}). Start it with \`latch serve\`.`
     );
   }
   let token = null;
   try {
-    token = trimmed4(readFile4(tokenFile));
+    token = trimmed4(files.readFile(tokenFile));
   } catch {
     throw new LatchGatewayError(`Latch's gateway token could not be read (${tokenFile}).`);
   }
   if (!token) throw new LatchGatewayError(`Latch's gateway token is empty (${tokenFile}).`);
-  return { baseUrl: parsed.origin, token };
+  return token;
+}
+function remoteLinkGatewayConfig(env3, files) {
+  const runtime = import_node_path14.default.join(latchHomeDirectory(env3), ...LATCH_REMOTE_LINK_RUNTIME_PATH);
+  const readyFile = import_node_path14.default.join(runtime, LATCH_REMOTE_LINK_READY_FILENAME);
+  const tokenFile = import_node_path14.default.join(runtime, LATCH_REMOTE_LINK_TOKEN_FILENAME);
+  if (!files.fileExists(readyFile) || !files.fileExists(tokenFile)) return null;
+  try {
+    const ready = JSON.parse(files.readFile(readyFile));
+    if (!ready || typeof ready !== "object" || Array.isArray(ready)) return null;
+    const url2 = trimmed4(ready.url);
+    if (!url2) return null;
+    return {
+      baseUrl: loopbackOrigin(url2, "Latch's Remote Link gateway address"),
+      token: readGatewayToken(tokenFile, files)
+    };
+  } catch {
+    return null;
+  }
+}
+function resolveLatchGatewayCandidates({
+  env: env3 = process.env,
+  readFile: readFile4 = (filePath) => (0, import_node_fs12.readFileSync)(filePath, "utf8"),
+  fileExists = import_node_fs12.existsSync
+} = {}) {
+  const files = { readFile: readFile4, fileExists };
+  const explicitUrl = trimmed4(env3.LATCH_GATEWAY_URL);
+  const baseUrl = loopbackOrigin(explicitUrl ?? DEFAULT_LATCH_GATEWAY_URL, "LATCH_GATEWAY_URL");
+  const inlineToken = trimmed4(env3.LATCH_GATEWAY_TOKEN);
+  if (inlineToken) return [{ baseUrl, token: inlineToken }];
+  const explicitTokenFile = trimmed4(env3.LATCH_SERVE_TOKEN_FILE);
+  const tokenFile = explicitTokenFile ?? import_node_path14.default.join(latchHomeDirectory(env3), LATCH_SERVE_TOKEN_FILENAME);
+  if (explicitUrl || explicitTokenFile) {
+    return [{ baseUrl, token: readGatewayToken(tokenFile, files) }];
+  }
+  const candidates = [];
+  let standaloneError = null;
+  try {
+    candidates.push({ baseUrl, token: readGatewayToken(tokenFile, files) });
+  } catch (error64) {
+    standaloneError = error64 instanceof LatchGatewayError ? error64 : null;
+  }
+  const remoteLink = remoteLinkGatewayConfig(env3, files);
+  if (remoteLink) candidates.push(remoteLink);
+  if (candidates.length === 0) {
+    throw standaloneError ?? new LatchGatewayError("Latch's gateway is not running. Start it with `latch serve`.");
+  }
+  return candidates;
 }
 function parseEndpoints(value2) {
   if (!value2 || typeof value2 !== "object" || Array.isArray(value2)) return null;
@@ -148143,21 +148297,29 @@ async function requireLatchConversationGateway({
   fetchImpl,
   timeoutMs
 } = {}) {
-  const resolved = gateway ?? resolveLatchGatewayConfig({ env: env3 });
-  const capabilities2 = await readLatchGatewayCapabilities({
-    gateway: resolved,
-    fetchImpl,
-    timeoutMs
-  });
-  if (capabilities2.protocolVersion !== SUPPORTED_LATCH_PROTOCOL_VERSION) {
-    throw new LatchGatewayError(
-      `Latch gateway protocolVersion ${capabilities2.protocolVersion} is not supported (need ${SUPPORTED_LATCH_PROTOCOL_VERSION}).`
-    );
+  const candidates = gateway ? [gateway] : resolveLatchGatewayCandidates({ env: env3 });
+  let failure4 = null;
+  for (const candidate of candidates) {
+    try {
+      const capabilities2 = await readLatchGatewayCapabilities({
+        gateway: candidate,
+        fetchImpl,
+        timeoutMs
+      });
+      if (capabilities2.protocolVersion !== SUPPORTED_LATCH_PROTOCOL_VERSION) {
+        throw new LatchGatewayError(
+          `Latch gateway protocolVersion ${capabilities2.protocolVersion} is not supported (need ${SUPPORTED_LATCH_PROTOCOL_VERSION}).`
+        );
+      }
+      if (!capabilities2.endpoints.conversation) {
+        throw new LatchGatewayError("This Latch gateway does not serve the conversation endpoint.");
+      }
+      return { gateway: candidate, capabilities: capabilities2 };
+    } catch (error64) {
+      failure4 ??= error64 instanceof LatchGatewayError ? error64 : new LatchGatewayError("Latch's gateway could not be reached.");
+    }
   }
-  if (!capabilities2.endpoints.conversation) {
-    throw new LatchGatewayError("This Latch gateway does not serve the conversation endpoint.");
-  }
-  return { gateway: resolved, capabilities: capabilities2 };
+  throw failure4 ?? new LatchGatewayError("Latch's gateway could not be reached.");
 }
 function latchConversationSocketUrl({
   gateway,
@@ -148195,7 +148357,11 @@ function providerSessionFromMetadata(metadata) {
     executionTargetId: trimmed5(cast.executionTargetId),
     agentSessionId: trimmed5(cast.agentSessionId),
     createdAt: trimmed5(cast.createdAt) ?? "",
-    lastObservedState: trimmed5(cast.lastObservedState) ?? "running"
+    lastObservedState: trimmed5(cast.lastObservedState) ?? "running",
+    ...cast.endedAt !== void 0 ? { endedAt: trimmed5(cast.endedAt) } : {},
+    ...cast.endReason !== void 0 ? { endReason: trimmed5(cast.endReason) } : {},
+    ...cast.endRequestedAt !== void 0 ? { endRequestedAt: trimmed5(cast.endRequestedAt) } : {},
+    ...cast.lastObservedAt !== void 0 ? { lastObservedAt: trimmed5(cast.lastObservedAt) } : {}
   };
 }
 function mergeProviderSessionIntoMetadata({
@@ -148382,6 +148548,7 @@ async function inspectLatchSession({
     name: trimmed6(report2.name) ?? sessionId,
     state: state2,
     exitCode: typeof exit?.code === "number" && Number.isFinite(exit.code) ? exit.code : null,
+    endedAt: typeof exit?.exitedAt === "string" ? exit.exitedAt : typeof exit?.exited_at === "string" ? exit.exited_at : null,
     inspectedAt: (/* @__PURE__ */ new Date()).toISOString()
   };
 }
@@ -148447,6 +148614,7 @@ var DEFAULT_LATCH_SEND_WAIT_MS = 3e4;
 var LATCH_CONVERSATION_SNAPSHOT_TIMEOUT_MS = 1e4;
 var LATCH_OPERATION_RESULT_TIMEOUT_MS = 3e4;
 var LATCH_MESSAGE_MAX_LENGTH = 16384;
+var LATCH_OPERATION_STATUS_TIMEOUT_MS = 1e4;
 function defaultLatchConversationConnect({
   url: url2,
   subprotocol
@@ -148490,6 +148658,8 @@ async function sendLatchMessage({
   operationId,
   text,
   waitForIdleMs = DEFAULT_LATCH_SEND_WAIT_MS,
+  previousOperationId = null,
+  notAfter = null,
   gateway = null,
   env: env3,
   fetchImpl,
@@ -148508,6 +148678,17 @@ async function sendLatchMessage({
     );
   }
   const idleBudgetMs = typeof waitForIdleMs === "number" && Number.isFinite(waitForIdleMs) && waitForIdleMs >= 0 ? Math.trunc(waitForIdleMs) : DEFAULT_LATCH_SEND_WAIT_MS;
+  const previousOpId = trimmed6(previousOperationId);
+  const deadlineMs = trimmed6(notAfter) ? Date.parse(trimmed6(notAfter)) : Number.NaN;
+  if (!Number.isNaN(deadlineMs) && now2().getTime() > deadlineMs) {
+    return {
+      providerSessionId: sessionId,
+      operationId: opId,
+      status: "refused",
+      reason: "The delivery deadline passed before the answer could be sent.",
+      deliveredAt: now2().toISOString()
+    };
+  }
   let resolved;
   try {
     resolved = await requireLatchConversationGateway({ gateway, env: env3, fetchImpl });
@@ -148523,25 +148704,30 @@ async function sendLatchMessage({
     }),
     operationId: opId,
     text: body,
-    idleBudgetMs
+    idleBudgetMs,
+    previousOperationId: previousOpId && previousOpId !== opId ? previousOpId : null
   });
   return {
     providerSessionId: sessionId,
     operationId: opId,
     status: status.status,
     reason: status.reason,
-    deliveredAt: now2().toISOString()
+    deliveredAt: now2().toISOString(),
+    ...status.reconciled ? { reconciled: true } : {}
   };
 }
 function runConversationOperation({
   socket,
   operationId,
   text,
-  idleBudgetMs
+  idleBudgetMs,
+  previousOperationId = null
 }) {
   return new Promise((resolve, reject) => {
     let settled = false;
     let sent = false;
+    let awaitingReceipt = previousOperationId !== null;
+    let receiptTimer = null;
     let epoch2 = null;
     const timers = [];
     let idleTimer = null;
@@ -148601,7 +148787,7 @@ function runConversationOperation({
     };
     const applyState = (state2) => {
       lastState = state2;
-      if (sent || settled) return;
+      if (sent || settled || awaitingReceipt) return;
       if (state2.sendMessage.enabled) {
         deliver();
         return;
@@ -148638,6 +148824,21 @@ function runConversationOperation({
             abort("Latch returned an unsupported conversation state.");
             return;
           }
+          if (awaitingReceipt && receiptTimer === null) {
+            lastState = state2;
+            try {
+              socket.send(
+                JSON.stringify({ type: "operation_status", operationId: previousOperationId })
+              );
+            } catch {
+              abort("The earlier delivery could not be checked with Latch.");
+              return;
+            }
+            receiptTimer = arm(() => {
+              abort("Latch did not report on the earlier delivery in time.");
+            }, LATCH_OPERATION_STATUS_TIMEOUT_MS);
+            return;
+          }
           applyState(state2);
           return;
         }
@@ -148647,8 +148848,33 @@ function runConversationOperation({
           return;
         }
         case "operation_result": {
+          if (awaitingReceipt && trimmed6(message2.operationId) === previousOperationId) {
+            if (receiptTimer) clearTimeout(receiptTimer);
+            const receipt = trimmed6(message2.status);
+            if (receipt === "accepted" || receipt === "queued") {
+              finish({ status: "accepted", reason: null, reconciled: true });
+              return;
+            }
+            if (receipt === "ambiguous") {
+              finish({
+                status: "ambiguous",
+                reason: "Latch has not finished the earlier delivery; nothing was sent again."
+              });
+              return;
+            }
+            awaitingReceipt = false;
+            if (lastState) applyState(lastState);
+            return;
+          }
           if (trimmed6(message2.operationId) !== operationId) return;
           const status = trimmed6(message2.status);
+          if (status === "queued") {
+            finish({
+              status: "accepted",
+              reason: "Latch queued the answer behind the agent's current turn."
+            });
+            return;
+          }
           if (status !== "accepted" && status !== "refused" && status !== "ambiguous") {
             finish({ status: "ambiguous", reason: "Latch reported an unknown operation status." });
             return;
@@ -149231,7 +149457,17 @@ var InProcessProvider = class {
    */
   async sendLatchMessage(input2) {
     try {
-      return ok2(this.target, await sendLatchMessage(input2));
+      return ok2(
+        this.target,
+        await sendLatchMessage({
+          providerSessionId: input2.providerSessionId,
+          operationId: input2.operationId,
+          text: input2.text,
+          waitForIdleMs: input2.waitForIdleMs,
+          previousOperationId: input2.previousOperationId,
+          notAfter: input2.notAfter
+        })
+      );
     } catch (error64) {
       return failLatchCommand({
         target: this.target,
@@ -150312,6 +150548,365 @@ async function recordRequestApplication({
     [applicationState, now2, now2, requestId, ctx.workspace.id]
   );
 }
+function dismissalTimestamp(value2) {
+  return value2 instanceof Date ? value2.toISOString() : String(value2);
+}
+async function readRequestDismissals({
+  db,
+  workspaceUserIds,
+  requests
+}) {
+  const result2 = /* @__PURE__ */ new Map();
+  if (workspaceUserIds.length === 0 || requests.length === 0) return result2;
+  const revisionById = new Map(requests.map((request) => [request.id, request.revision]));
+  const ids = [...revisionById.keys()];
+  const rows = await db.all(
+    `SELECT agent_request_id, dismissed_revision, dismissed_at FROM agent_request_dismissals
+      WHERE workspace_user_id IN (${workspaceUserIds.map(() => "?").join(", ")})
+        AND agent_request_id IN (${ids.map(() => "?").join(", ")})`,
+    [...workspaceUserIds, ...ids]
+  );
+  for (const row of rows) {
+    if (Number(row.dismissed_revision) !== revisionById.get(row.agent_request_id)) continue;
+    result2.set(row.agent_request_id, {
+      dismissedRevision: Number(row.dismissed_revision),
+      dismissedAt: dismissalTimestamp(row.dismissed_at)
+    });
+  }
+  return result2;
+}
+async function setRequestDismissal({
+  ctx,
+  requestId,
+  dismissed,
+  expectedRevision: expectedRevision2
+}) {
+  const workspaceUserId = ctx.actorWorkspaceUserId;
+  if (!workspaceUserId) {
+    throw new ServiceError(
+      "Dismissing a request requires an identified workspace member",
+      "actor_required",
+      403
+    );
+  }
+  return await ctx.db.transaction(async (tx) => {
+    const txCtx = { ...ctx, db: tx };
+    const request = await getRequest2({ ctx: txCtx, requestId });
+    const current = await tx.get(
+      `SELECT dismissed_revision FROM agent_request_dismissals
+        WHERE agent_request_id = ? AND workspace_user_id = ?`,
+      [requestId, workspaceUserId]
+    );
+    let changed = false;
+    if (dismissed) {
+      if (request.status !== "open") {
+        throw new ServiceError(
+          "Only an open request can be dismissed",
+          "agent_request_not_open",
+          409
+        );
+      }
+      if (expectedRevision2 !== void 0 && expectedRevision2 !== request.revision) {
+        throw new ServiceError("Request changed since it was read", "agent_request_conflict", 409);
+      }
+      if (!current || Number(current.dismissed_revision) !== request.revision) {
+        await tx.run(
+          `INSERT INTO agent_request_dismissals
+               (agent_request_id, workspace_user_id, dismissed_revision, dismissed_at)
+             VALUES (?, ?, ?, ?)
+             ON CONFLICT (agent_request_id, workspace_user_id)
+             DO UPDATE SET dismissed_revision = excluded.dismissed_revision,
+                           dismissed_at = excluded.dismissed_at`,
+          [requestId, workspaceUserId, request.revision, nowIso()]
+        );
+        changed = true;
+      }
+    } else if (current) {
+      await tx.run(
+        `DELETE FROM agent_request_dismissals
+          WHERE agent_request_id = ? AND workspace_user_id = ?`,
+        [requestId, workspaceUserId]
+      );
+      changed = Number(current.dismissed_revision) === request.revision;
+    }
+    if (changed) {
+      await recordChange({
+        ctx: txCtx,
+        entityType: "agent_request",
+        entityId: requestId,
+        operation: "update",
+        entityRevision: request.revision,
+        projectId: request.project_id,
+        missionId: request.mission_id,
+        objectiveId: request.objective_id,
+        changedFields: ["dismissal"]
+      });
+    }
+    const dismissals = await readRequestDismissals({
+      db: tx,
+      workspaceUserIds: [workspaceUserId],
+      requests: [request]
+    });
+    return { changed, request, dismissal: dismissals.get(requestId) ?? null };
+  });
+}
+
+// ../packages/core/service/agent-session/answer-delivery.ts
+var MAX_DELIVERY_FAILURE_MESSAGE_LENGTH = 300;
+var ANSWER_DELIVERY_DEADLINE_MS = 5 * 6e4;
+function parseDetails(value2) {
+  try {
+    const parsed = JSON.parse(value2);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+function boundedMessage(value2) {
+  if (typeof value2 !== "string") return null;
+  const trimmed9 = value2.trim();
+  if (!trimmed9) return null;
+  return trimmed9.length <= MAX_DELIVERY_FAILURE_MESSAGE_LENGTH ? trimmed9 : `${trimmed9.slice(0, MAX_DELIVERY_FAILURE_MESSAGE_LENGTH - 1)}\u2026`;
+}
+function readAnswerDelivery(request) {
+  const raw = parseDetails(request.details_json).delivery;
+  const record2 = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
+  const attempt = typeof record2.attempt === "number" && Number.isInteger(record2.attempt) && record2.attempt >= 1 ? record2.attempt : 1;
+  return {
+    attempt,
+    failureCode: typeof record2.failureCode === "string" ? record2.failureCode : null,
+    failureMessage: boundedMessage(record2.failureMessage)
+  };
+}
+function detailsWithDelivery(request, record2) {
+  return JSON.stringify({ ...parseDetails(request.details_json), delivery: record2 });
+}
+var OPERATION_ATTEMPT_SEPARATOR = ".";
+function answerOperationId(requestId, attempt) {
+  return attempt <= 1 ? requestId : `${requestId}${OPERATION_ATTEMPT_SEPARATOR}${attempt}`;
+}
+function parseAnswerOperationId(operationId) {
+  const value2 = operationId.trim();
+  if (!value2) return null;
+  const separator = value2.lastIndexOf(OPERATION_ATTEMPT_SEPARATOR);
+  if (separator === -1) return { requestId: value2, attempt: 1 };
+  const suffix = value2.slice(separator + 1);
+  if (!/^[1-9]\d{0,3}$/.test(suffix)) return null;
+  return { requestId: value2.slice(0, separator), attempt: Number(suffix) };
+}
+function failureCodeFromMessage(code, message2) {
+  if (code === "LATCH_SESSION_ABSENT") return "session_absent";
+  if (/gateway|latch serve|not reachable|token/i.test(message2)) return "gateway_unavailable";
+  if (/deadline/i.test(message2)) return "deadline_passed";
+  return "delivery_failed";
+}
+function answerDeliveryOutcomeFromResult(result2) {
+  if (result2.ok) {
+    const status = result2.value?.status;
+    const reason = boundedMessage(result2.value?.reason);
+    if (status === "accepted") return { state: "applied", failureCode: null, failureMessage: null };
+    if (status === "refused") {
+      return {
+        state: "not_applied",
+        failureCode: /exited|unknown conversation|no such session/i.test(reason ?? "") ? "session_ended" : /deadline/i.test(reason ?? "") ? "deadline_passed" : "latch_refused",
+        failureMessage: reason ?? "Latch did not accept the answer for this session."
+      };
+    }
+    return {
+      state: "unknown",
+      failureCode: "unconfirmed",
+      failureMessage: reason ?? "Latch did not confirm that the answer was delivered."
+    };
+  }
+  if (result2.code === "LOCAL_TARGET_TIMEOUT") return null;
+  const details = result2.details && typeof result2.details === "object" && !Array.isArray(result2.details) ? result2.details : {};
+  if (typeof details.status === "string") {
+    if (details.status === "cancelled") {
+      return {
+        state: "not_applied",
+        failureCode: "not_dispatched",
+        failureMessage: "The execution machine did not pick up the answer. Check that its runner is online."
+      };
+    }
+    return {
+      state: "unknown",
+      failureCode: "runner_lost",
+      failureMessage: "The execution machine took the answer and did not report back. It may have been delivered."
+    };
+  }
+  return {
+    state: "not_applied",
+    failureCode: failureCodeFromMessage(result2.code, result2.message),
+    failureMessage: boundedMessage(result2.message) ?? "The answer could not be delivered."
+  };
+}
+async function recordAnswerDeliveryOutcome({
+  ctx,
+  requestId,
+  attempt,
+  outcome
+}) {
+  if (outcome.state === "emitted") return { changed: false };
+  const row = await ctx.db.get(
+    `SELECT id, workspace_id, project_id, mission_id, objective_id, details_json, revision,
+            application_state, status
+       FROM agent_requests WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
+    [requestId, ctx.workspace.id]
+  );
+  if (!row || row.status !== "resolved" || row.application_state !== "emitted") {
+    return { changed: false };
+  }
+  const current = readAnswerDelivery(row);
+  if (current.attempt !== attempt) return { changed: false };
+  const now2 = nowIso();
+  const updated = await ctx.db.run(
+    `UPDATE agent_requests
+        SET application_state = ?, application_observed_at = ?, details_json = ?, updated_at = ?
+      WHERE id = ? AND workspace_id = ? AND status = 'resolved'
+        AND application_state = 'emitted' AND revision = ?`,
+    [
+      outcome.state,
+      now2,
+      detailsWithDelivery(row, {
+        attempt,
+        failureCode: outcome.failureCode,
+        failureMessage: outcome.failureMessage
+      }),
+      now2,
+      requestId,
+      ctx.workspace.id,
+      row.revision
+    ]
+  );
+  if (updated.changes === 0) return { changed: false };
+  await recordChange({
+    ctx,
+    entityType: "agent_request",
+    entityId: requestId,
+    operation: "update",
+    entityRevision: row.revision,
+    projectId: row.project_id,
+    missionId: row.mission_id,
+    objectiveId: row.objective_id,
+    changedFields: ["application_state"]
+  });
+  return { changed: true };
+}
+async function recordAnswerDeliveryResult({
+  ctx,
+  operationId,
+  result: result2
+}) {
+  const parsed = parseAnswerOperationId(operationId);
+  const outcome = answerDeliveryOutcomeFromResult(result2);
+  if (!parsed || !outcome) return { changed: false };
+  return await recordAnswerDeliveryOutcome({
+    ctx,
+    requestId: parsed.requestId,
+    attempt: parsed.attempt,
+    outcome
+  });
+}
+async function beginAnswerRedelivery({
+  ctx,
+  requestId,
+  expectedAttempt,
+  confirmUnconfirmed = false
+}) {
+  const request = await getRequest2({ ctx, requestId });
+  if (request.kind !== "question" && request.kind !== "choice") {
+    throw new ServiceError("Only an answer can be redelivered", "request_not_deliverable", 409);
+  }
+  const current = readAnswerDelivery(request);
+  if (current.attempt !== expectedAttempt) {
+    throw new ServiceError(
+      "Delivery changed since it was read",
+      "agent_request_delivery_conflict",
+      409
+    );
+  }
+  if (request.status !== "resolved") {
+    throw new ServiceError("The request has no recorded answer", "request_not_deliverable", 409);
+  }
+  if (request.application_state === "unknown") {
+    if (!confirmUnconfirmed) {
+      throw new ServiceError(
+        "The previous delivery may have reached the agent. Check the session, then confirm.",
+        "delivery_confirmation_required",
+        409
+      );
+    }
+  } else if (request.application_state !== "not_applied") {
+    throw new ServiceError(
+      request.application_state === "applied" ? "The answer was already delivered" : "A delivery is already in progress",
+      "agent_request_delivery_conflict",
+      409
+    );
+  }
+  const attempt = current.attempt + 1;
+  if (attempt > 9999) {
+    throw new ServiceError("Too many delivery attempts", "request_not_deliverable", 409);
+  }
+  const now2 = nowIso();
+  const updated = await ctx.db.run(
+    `UPDATE agent_requests
+        SET application_state = 'emitted', application_observed_at = NULL, details_json = ?,
+            updated_at = ?, revision = ?
+      WHERE id = ? AND workspace_id = ? AND status = 'resolved'
+        AND application_state = ? AND revision = ?`,
+    [
+      detailsWithDelivery(request, { attempt, failureCode: null, failureMessage: null }),
+      now2,
+      request.revision + 1,
+      requestId,
+      ctx.workspace.id,
+      request.application_state,
+      request.revision
+    ]
+  );
+  if (updated.changes === 0) {
+    throw new ServiceError(
+      "Delivery changed since it was read",
+      "agent_request_delivery_conflict",
+      409
+    );
+  }
+  await recordChange({
+    ctx,
+    entityType: "agent_request",
+    entityId: requestId,
+    operation: "update",
+    entityRevision: request.revision + 1,
+    projectId: request.project_id,
+    missionId: request.mission_id,
+    objectiveId: request.objective_id,
+    changedFields: ["application_state"]
+  });
+  return {
+    request: await getRequest2({ ctx, requestId }),
+    attempt,
+    previousAttempt: current.attempt
+  };
+}
+function answerTextFromResolution(request) {
+  const resolution = request.resolution_json ? parseDetails(request.resolution_json) : {};
+  const text = typeof resolution.text === "string" ? resolution.text.trim() : "";
+  if (text) return text;
+  const optionId = typeof resolution.optionId === "string" ? resolution.optionId.trim() : "";
+  if (optionId) {
+    try {
+      const options = JSON.parse(request.options_json);
+      if (Array.isArray(options)) {
+        const match = options.find(
+          (option) => option !== null && typeof option === "object" && option.optionId === optionId
+        );
+        if (typeof match?.label === "string" && match.label.trim()) return match.label.trim();
+      }
+    } catch {
+    }
+  }
+  return "Answer received";
+}
 
 // ../packages/core/service/local-target/types.ts
 var LOCAL_TARGET_ERROR_CODES = [
@@ -150719,29 +151314,84 @@ async function completeLocalTargetMutationRequest({
         ]
       );
     }
-    await recordAnswerDeliveryOutcome({ ctx: txCtx, mutation, result: result2 });
+    await recordAnswerDeliveryOutcome2({ ctx: txCtx, mutation, result: result2 });
   });
   return parseLocalTargetMutation(JSON.stringify(metadata));
 }
-async function recordAnswerDeliveryOutcome({
+async function recordAnswerDeliveryOutcome2({
   ctx,
   mutation,
   result: result2
 }) {
   if (mutation.capability !== "sendLatchMessage") return;
-  const agentRequestId = typeof mutation.input.operationId === "string" ? mutation.input.operationId.trim() : "";
-  if (!agentRequestId) return;
-  const applicationState = answerApplicationStateFromResult(
-    result2
-  );
-  if (applicationState === "emitted") return;
-  await recordRequestApplication({ ctx, requestId: agentRequestId, applicationState });
+  const operationId = typeof mutation.input.operationId === "string" ? mutation.input.operationId.trim() : "";
+  if (!operationId) return;
+  await recordAnswerDeliveryResult({
+    ctx,
+    operationId,
+    result: result2
+  });
 }
-function answerApplicationStateFromResult(result2) {
-  if (!result2.ok) return result2.code === "LOCAL_TARGET_TIMEOUT" ? "emitted" : "not_applied";
-  if (result2.value?.status === "accepted") return "applied";
-  if (result2.value?.status === "refused") return "not_applied";
-  return "unknown";
+async function recordAnswerDeliveryForTerminalRequest({
+  ctx,
+  metadataJson,
+  status,
+  executionRequestId
+}) {
+  const mutation = metadataJson ? parseLocalTargetMutation(metadataJson) : null;
+  if (!mutation || mutation.result) return;
+  await recordAnswerDeliveryOutcome2({
+    ctx,
+    mutation,
+    result: fail(
+      { executionTargetId: null, deviceLabel: null, transport: "runner_queue" },
+      "TARGET_OPERATION_FAILED",
+      `The queued capability call ended as ${status} without a result.`,
+      { executionRequestId, status }
+    )
+  });
+}
+async function cancelQueuedLocalTargetMutation({
+  ctx,
+  requestId
+}) {
+  const now2 = nowIso();
+  return await ctx.db.transaction(async (tx) => {
+    const txCtx = { ...ctx, db: tx };
+    const row = await tx.get(
+      `SELECT id, project_id, mission_id, objective_id, revision, metadata_json
+         FROM execution_requests
+        WHERE id = ? AND workspace_id = ? AND requested_source = ?
+          AND status = 'queued' AND deleted_at IS NULL`,
+      [requestId, ctx.workspace.id, LOCAL_TARGET_MUTATION_REQUESTED_SOURCE]
+    );
+    if (!row) return { cancelled: false };
+    const updated = await tx.run(
+      `UPDATE execution_requests
+          SET status = 'cancelled', last_error = ?, updated_at = ?, revision = ?
+        WHERE id = ? AND status = 'queued' AND revision = ?`,
+      ["Withdrawn before any runner claimed it.", now2, row.revision + 1, row.id, row.revision]
+    );
+    if (updated.changes === 0) return { cancelled: false };
+    await recordChange({
+      ctx: txCtx,
+      entityType: "execution_request",
+      entityId: row.id,
+      operation: "update",
+      entityRevision: row.revision + 1,
+      projectId: row.project_id,
+      missionId: row.mission_id,
+      objectiveId: row.objective_id,
+      changedFields: ["status", "last_error"]
+    });
+    await recordAnswerDeliveryForTerminalRequest({
+      ctx: txCtx,
+      metadataJson: row.metadata_json,
+      status: "cancelled",
+      executionRequestId: row.id
+    });
+    return { cancelled: true };
+  });
 }
 
 // ../packages/core/service/local-target/runner-queue-provider.ts
@@ -154200,6 +154850,49 @@ async function getChannelForSession({
   );
   return row ?? null;
 }
+var PROTOCOL_CHANNEL_LAUNCH_KIND = "protocol";
+async function ensureProtocolChannelForSession({
+  ctx,
+  session,
+  projectId,
+  agentIdentifier = null
+}) {
+  const existing = await getChannelForSession({ ctx, sessionId: session.id });
+  if (existing) return LIVE_STATES.includes(existing.state) ? existing : null;
+  const now2 = nowIso();
+  const channelId = newId();
+  await ctx.db.run(
+    `INSERT INTO agent_session_channels (
+         id, workspace_id, project_id, mission_id, objective_id, session_id,
+         launch_kind, agent_identifier, capabilities_json, state,
+         created_by_workspace_user_id, created_at, updated_at, revision
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, '{}', 'online', ?, ?, ?, 1)`,
+    [
+      channelId,
+      ctx.workspace.id,
+      projectId,
+      session.mission_id,
+      session.objective_id,
+      session.id,
+      PROTOCOL_CHANNEL_LAUNCH_KIND,
+      agentIdentifier,
+      ctx.actorWorkspaceUserId,
+      now2,
+      now2
+    ]
+  );
+  await recordChange({
+    ctx,
+    entityType: "agent_session_channel",
+    entityId: channelId,
+    operation: "insert",
+    entityRevision: 1,
+    projectId,
+    missionId: session.mission_id,
+    objectiveId: session.objective_id
+  });
+  return await getChannel({ ctx, channelId });
+}
 async function authenticateChannelCredential({
   db,
   rawToken,
@@ -156992,6 +157685,18 @@ async function expireStaleExecutionRequests({
         now: now2,
         failureReason: message2
       });
+      const stored = await txCtx.db.get(
+        `SELECT metadata_json FROM execution_requests WHERE id = ? AND requested_source = ?`,
+        [row.id, LOCAL_TARGET_MUTATION_REQUESTED_SOURCE]
+      );
+      if (stored) {
+        await recordAnswerDeliveryForTerminalRequest({
+          ctx: txCtx,
+          metadataJson: stored.metadata_json,
+          status: "expired",
+          executionRequestId: row.id
+        });
+      }
     }
     return { expired: rows.length };
   });
@@ -157156,20 +157861,31 @@ async function forgetLatchProviderSession({
   }
   return ctx.db.transaction(async (tx) => {
     const rows = await tx.all(
-      executionRequestId ? `SELECT id, project_id, mission_id, objective_id, metadata_json, revision
+      executionRequestId ? `SELECT id, project_id, mission_id, objective_id, metadata_json, updated_at, revision
              FROM execution_requests
-            WHERE id = ? AND mission_id = ? AND workspace_id = ? AND deleted_at IS NULL` : `SELECT id, project_id, mission_id, objective_id, metadata_json, revision
+            WHERE id = ? AND mission_id = ? AND workspace_id = ? AND deleted_at IS NULL` : `SELECT id, project_id, mission_id, objective_id, metadata_json, updated_at, revision
              FROM execution_requests
             WHERE mission_id = ? AND workspace_id = ? AND deleted_at IS NULL
             ORDER BY updated_at DESC, created_at DESC`,
       executionRequestId ? [executionRequestId, missionId, ctx.workspace.id] : [missionId, ctx.workspace.id]
     );
     const row = rows.find((candidate) => {
-      const mapped = providerSessionFromMetadata(parseMetadata(candidate.metadata_json));
-      return mapped?.providerSessionId === sessionId;
+      const mapped2 = providerSessionFromMetadata(parseMetadata(candidate.metadata_json));
+      return mapped2?.providerSessionId === sessionId;
     });
     if (!row) return { forgotten: false, executionRequestId: executionRequestId ?? null };
-    const metadataJson = stripProviderSessionFromMetadata({ metadataJson: row.metadata_json });
+    const previous = parseMetadata(row.metadata_json);
+    const mapped = providerSessionFromMetadata(previous);
+    const stripped = parseMetadata(
+      stripProviderSessionFromMetadata({ metadataJson: row.metadata_json })
+    );
+    if (mapped?.lastObservedState === "exited")
+      stripped.endedTerminalSession = {
+        ...mapped,
+        endedAt: mapped.endedAt ?? row.updated_at,
+        endReason: mapped.endReason ?? "unknown"
+      };
+    const metadataJson = JSON.stringify(stripped);
     const revision3 = row.revision + 1;
     const updated = await tx.run(
       `UPDATE execution_requests SET metadata_json = ?, updated_at = ?, revision = ?
@@ -160302,7 +161018,11 @@ async function askQuestion({
       missionId: mission.id,
       objectiveId: session.objective_id
     });
-    const channel = await getChannelForSession({ ctx: txCtx, sessionId: session.id });
+    const channel = await ensureProtocolChannelForSession({
+      ctx: txCtx,
+      session,
+      projectId: mission.projectId
+    });
     if (channel) {
       const request = await createRequest({
         ctx: txCtx,
@@ -163128,6 +163848,99 @@ function launchSessionSnapshotFromMetadata2(metadata) {
   };
 }
 
+// ../packages/core/service/terminal-session-lifecycle.ts
+function terminalMetadataSql(dialect, field, archived = false) {
+  const key = archived ? "endedTerminalSession" : "providerSession";
+  return dialect === "postgres" ? `er.metadata_json->'${key}'->>'${field}'` : `json_extract(er.metadata_json, '$.${key}.${field}')`;
+}
+async function recordTerminalObservation({
+  ctx,
+  executionRequestId,
+  providerSessionId,
+  state: state2,
+  endedAt,
+  endReason,
+  requestEnd = false
+}) {
+  return ctx.db.transaction(async (tx) => {
+    const row = await tx.get(
+      `SELECT project_id, mission_id, objective_id, metadata_json, revision
+      FROM execution_requests WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
+      [executionRequestId, ctx.workspace.id]
+    );
+    const metadata = row && parseMetadataJson(row.metadata_json);
+    const mapping = metadata && providerSessionFromMetadata(metadata);
+    if (!row || !metadata || !mapping || mapping.providerSessionId !== providerSessionId)
+      throw new ServiceError("Terminal session changed", "terminal_session_conflict", 409);
+    if (mapping.lastObservedState === "exited") return "exited";
+    const now2 = nowIso();
+    const next = {
+      ...mapping,
+      lastObservedState: state2,
+      lastObservedAt: now2,
+      ...requestEnd ? { endRequestedAt: mapping.endRequestedAt ?? now2 } : {},
+      ...state2 === "exited" ? {
+        endedAt: endedAt && Number.isFinite(Date.parse(endedAt)) ? new Date(endedAt).toISOString() : now2,
+        endReason: mapping.endRequestedAt || requestEnd ? "ended_by_person" : endReason ?? "exited"
+      } : {}
+    };
+    metadata.providerSession = next;
+    const updated = await tx.run(
+      `UPDATE execution_requests SET metadata_json = ?,
+      updated_at = ?, revision = revision + 1 WHERE id = ? AND revision = ?`,
+      [JSON.stringify(metadata), now2, executionRequestId, row.revision]
+    );
+    if (!updated.changes)
+      throw new ServiceError("Terminal session changed; retry", "terminal_session_conflict", 409);
+    if (mapping.lastObservedState === state2) return state2;
+    await recordChange({
+      ctx: { ...ctx, db: tx },
+      entityType: "execution_request",
+      entityId: executionRequestId,
+      operation: "update",
+      entityRevision: row.revision + 1,
+      projectId: row.project_id,
+      missionId: row.mission_id,
+      objectiveId: row.objective_id,
+      changedFields: ["metadata_json"]
+    });
+    const eventId = newId();
+    await tx.run(
+      `INSERT INTO mission_events
+      (id, workspace_id, project_id, mission_id, objective_id, type, phase, summary,
+       payload_json, source, actor_workspace_user_id, created_at)
+      VALUES (?, ?, ?, ?, ?, 'status_change', NULL, ?, ?, ?, ?, ?)`,
+      [
+        eventId,
+        ctx.workspace.id,
+        row.project_id,
+        row.mission_id,
+        row.objective_id,
+        state2 === "exited" ? "Terminal session ended." : `Terminal session ${state2}.`,
+        JSON.stringify({
+          executionRequestId,
+          lastObservedState: state2,
+          endedAt: next.endedAt ?? null,
+          endReason: next.endReason ?? null
+        }),
+        ctx.source,
+        ctx.actorWorkspaceUserId,
+        now2
+      ]
+    );
+    await recordChange({
+      ctx: { ...ctx, db: tx },
+      entityType: "mission_event",
+      entityId: eventId,
+      operation: "insert",
+      projectId: row.project_id,
+      missionId: row.mission_id,
+      objectiveId: row.objective_id
+    });
+    return state2;
+  });
+}
+
 // execution/latch-sessions.ts
 function terminalSessionState(value2) {
   switch (value2) {
@@ -163141,41 +163954,92 @@ function terminalSessionState(value2) {
       return "running";
   }
 }
+var endedSql = () => `(COALESCE(${terminalMetadataSql(requireDatabaseClient().dialect, "lastObservedState")}, '') = 'exited' OR COALESCE(${terminalMetadataSql(requireDatabaseClient().dialect, "lastObservedState", true)}, '') = 'exited')`;
+var columns = `er.id AS execution_request_id, er.objective_id, er.metadata_json,
+  er.created_at, er.updated_at, et.label AS target_label, d.label AS device_label`;
+var joins = `FROM execution_requests er
+  LEFT JOIN execution_targets et ON et.id = COALESCE(er.claimed_by_execution_target_id, er.execution_target_id)
+  LEFT JOIN devices d ON d.id = et.device_id`;
+function projectSession(row, archived = false) {
+  const metadata = parseMetadataJson(row.metadata_json);
+  const providerSession = providerSessionFromMetadata(metadata) ?? (archived ? providerSessionFromMetadata({ providerSession: metadata.endedTerminalSession }) : null);
+  if (!providerSession) return [];
+  const snapshot = launchSessionSnapshotFromMetadata2(metadata);
+  const ended = providerSession.lastObservedState === "exited";
+  return [
+    {
+      executionRequestId: row.execution_request_id,
+      objectiveId: row.objective_id,
+      provider: "latch",
+      providerSessionId: providerSession.providerSessionId,
+      sessionName: providerSession.sessionName ?? providerSession.providerSessionId,
+      executionTargetId: providerSession.executionTargetId,
+      deviceLabel: row.device_label ?? row.target_label,
+      agentSessionId: providerSession.agentSessionId,
+      executable: snapshot?.executionProvider.executable ?? "latch",
+      viewerKind: snapshot?.viewer.kind ?? "iterm",
+      viewerOpenAs: snapshot?.viewer.openAs ?? "window",
+      createdAt: providerSession.createdAt,
+      lastObservedState: terminalSessionState(providerSession.lastObservedState),
+      endedAt: ended ? providerSession.endedAt ?? row.updated_at : null,
+      endReason: ended ? providerSession.endReason ?? "unknown" : null
+    }
+  ];
+}
 async function listMissionTerminalSessions(missionId) {
-  const rows = await requireDatabaseClient().all(
-    `SELECT er.id AS execution_request_id, er.objective_id, er.metadata_json,
-            et.label AS target_label, d.label AS device_label
-       FROM execution_requests er
-       LEFT JOIN execution_targets et
-         ON et.id = COALESCE(er.claimed_by_execution_target_id, er.execution_target_id)
-       LEFT JOIN devices d ON d.id = et.device_id
-      WHERE er.mission_id = ? AND er.deleted_at IS NULL
-      ORDER BY er.created_at DESC`,
-    [missionId]
-  );
-  return rows.flatMap((row) => {
-    const metadata = parseMetadataJson(row.metadata_json);
-    const providerSession = providerSessionFromMetadata(metadata);
-    if (!providerSession) return [];
-    const snapshot = launchSessionSnapshotFromMetadata2(metadata);
-    return [
-      {
-        executionRequestId: row.execution_request_id,
-        objectiveId: row.objective_id,
-        provider: "latch",
-        providerSessionId: providerSession.providerSessionId,
-        sessionName: providerSession.sessionName ?? providerSession.providerSessionId,
-        executionTargetId: providerSession.executionTargetId,
-        deviceLabel: row.device_label ?? row.target_label,
-        agentSessionId: providerSession.agentSessionId,
-        executable: snapshot?.executionProvider.executable ?? "latch",
-        viewerKind: snapshot?.viewer.kind ?? "iterm",
-        viewerOpenAs: snapshot?.viewer.openAs ?? "window",
-        createdAt: providerSession.createdAt,
-        lastObservedState: terminalSessionState(providerSession.lastObservedState)
-      }
-    ];
+  const db = requireDatabaseClient();
+  const [live, ended] = await Promise.all([
+    db.all(
+      `SELECT ${columns} ${joins}
+      WHERE er.mission_id = ? AND er.deleted_at IS NULL AND NOT (${endedSql()})
+      AND ${terminalMetadataSql(requireDatabaseClient().dialect, "provider")} = 'latch'
+      ORDER BY er.created_at DESC, er.id DESC`,
+      [missionId]
+    ),
+    db.all(
+      `SELECT ${columns} ${joins}
+      WHERE er.mission_id = ? AND er.deleted_at IS NULL AND ${terminalMetadataSql(requireDatabaseClient().dialect, "lastObservedState")} = 'exited'
+      ORDER BY er.created_at DESC, er.id DESC LIMIT 5`,
+      [missionId]
+    )
+  ]);
+  return [...live, ...ended].flatMap((row) => projectSession(row));
+}
+async function readMissionTerminalHistory(missionRef, query) {
+  const scope2 = await requireMissionPermission({
+    missionRef,
+    permission: PERMISSIONS.MISSION_READ
   });
+  const limit2 = query.limit === void 0 ? 20 : Number(query.limit);
+  if (!Number.isInteger(limit2) || limit2 < 1 || limit2 > 100)
+    throw new ApiError(400, "limit must be an integer between 1 and 100");
+  const db = requireDatabaseClient();
+  let cursor3;
+  if (query.cursor !== void 0) {
+    if (typeof query.cursor !== "string") throw new ApiError(400, "Invalid cursor");
+    cursor3 = await db.get(
+      `SELECT id, created_at FROM execution_requests er WHERE er.id = ? AND er.mission_id = ?
+        AND er.workspace_id = ? AND er.deleted_at IS NULL AND ${endedSql()}`,
+      [query.cursor, scope2.missionId, scope2.workspaceId]
+    );
+    if (!cursor3) throw new ApiError(400, "Invalid cursor");
+  }
+  const rows = await db.all(
+    `SELECT ${columns} ${joins}
+    WHERE er.mission_id = ? AND er.workspace_id = ? AND er.deleted_at IS NULL AND ${endedSql()}
+    ${cursor3 ? "AND (er.created_at < ? OR (er.created_at = ? AND er.id < ?))" : ""}
+    ORDER BY er.created_at DESC, er.id DESC LIMIT ?`,
+    [
+      scope2.missionId,
+      scope2.workspaceId,
+      ...cursor3 ? [cursor3.created_at, cursor3.created_at, cursor3.id] : [],
+      limit2 + 1
+    ]
+  );
+  return {
+    sessions: rows.slice(0, limit2).flatMap((row) => projectSession(row, true)),
+    nextCursor: rows.length > limit2 ? rows[limit2 - 1].execution_request_id : null
+  };
 }
 async function forgetMissionLatchSession(missionRef, body) {
   const scope2 = await requireMissionPermission({
@@ -163199,6 +164063,84 @@ async function forgetMissionLatchSession(missionRef, body) {
     executionRequestId,
     providerSessionId
   });
+}
+
+// ../packages/core/service/objective-dequeue.ts
+async function dequeueObjectiveAttempt({
+  objectiveId,
+  projectId,
+  missionId,
+  ctx,
+  reason,
+  newState,
+  now: now2
+}) {
+  const tx = ctx.db;
+  const workspaceId2 = ctx.workspace.id;
+  const workspaceUserId = ctx.actorWorkspaceUserId;
+  await removeRunQueueEntryForObjective(tx, projectId, objectiveId, {
+    pauseQueue: reason === "disconnected",
+    preserveObjectivePositions: true
+  });
+  const { cleared } = await clearExecutionRequests({
+    ctx,
+    objectiveId,
+    now: now2,
+    emitEvents: false,
+    includeLaunched: true
+  });
+  const sessionPhase = newState === "complete" ? "complete" : "blocked";
+  const openSessions = await tx.all(
+    `SELECT id, revision FROM agent_sessions
+        WHERE workspace_id = ? AND objective_id = ? AND deleted_at IS NULL
+          AND ended_at IS NULL`,
+    [workspaceId2, objectiveId]
+  );
+  for (const session of openSessions) {
+    const revision3 = session.revision + 1;
+    await tx.run(
+      `UPDATE agent_sessions
+         SET phase = ?, ended_at = ?, updated_at = ?, revision = ?
+       WHERE id = ? AND workspace_id = ?`,
+      [sessionPhase, now2, now2, revision3, session.id, workspaceId2]
+    );
+    await recordChange({
+      ctx,
+      entityType: "agent_session",
+      entityId: session.id,
+      operation: "update",
+      entityRevision: revision3,
+      projectId,
+      missionId,
+      objectiveId,
+      changedFields: ["phase", "ended_at"]
+    });
+  }
+  if (cleared > 0 || openSessions.length > 0) {
+    await tx.run(
+      `INSERT INTO mission_events
+         (id, workspace_id, project_id, mission_id, objective_id, type, phase, summary,
+          payload_json, source, actor_workspace_user_id, created_at)
+       VALUES (?, ?, ?, ?, ?, 'status_change', NULL, ?, ?, 'webapp', ?, ?)`,
+      [
+        newId(),
+        workspaceId2,
+        projectId,
+        missionId,
+        objectiveId,
+        `Objective ${reason}: cleared ${cleared} delegated execution request(s) and ended ${openSessions.length} active session(s).`,
+        JSON.stringify({
+          reason,
+          newState,
+          clearedRequests: cleared,
+          endedSessions: openSessions.length
+        }),
+        workspaceUserId,
+        now2
+      ]
+    );
+  }
+  return { clearedRequests: cleared, endedSessions: openSessions.length };
 }
 
 // execution/launch.ts
@@ -163251,76 +164193,15 @@ async function dequeueObjective({
   now: now2,
   tx = requireDatabaseClient()
 }) {
-  await removeRunQueueEntryForObjective(tx, projectId, objectiveId, {
-    pauseQueue: reason === "disconnected",
-    preserveObjectivePositions: true
-  });
-  const { cleared } = await clearExecutionRequests({
-    ctx: {
-      ...await buildWebappServiceContextForWorkspace(workspaceId2, tx, workspaceUserId),
-      db: tx
-    },
+  return dequeueObjectiveAttempt({
+    ctx: await buildWebappServiceContextForWorkspace(workspaceId2, tx, workspaceUserId),
     objectiveId,
-    now: now2,
-    emitEvents: false,
-    includeLaunched: true
+    projectId,
+    missionId,
+    reason,
+    newState,
+    now: now2
   });
-  const sessionPhase = newState === "complete" ? "complete" : "blocked";
-  const openSessions = await tx.all(
-    `SELECT id, revision FROM agent_sessions
-        WHERE workspace_id = ? AND objective_id = ? AND deleted_at IS NULL
-          AND ended_at IS NULL`,
-    [workspaceId2, objectiveId]
-  );
-  for (const session of openSessions) {
-    const revision3 = session.revision + 1;
-    await tx.run(
-      `UPDATE agent_sessions
-         SET phase = ?, ended_at = ?, updated_at = ?, revision = ?
-       WHERE id = ? AND workspace_id = ?`,
-      [sessionPhase, now2, now2, revision3, session.id, workspaceId2]
-    );
-    await recordChange2(
-      {
-        entityType: "agent_session",
-        entityId: session.id,
-        operation: "update",
-        entityRevision: revision3,
-        projectId,
-        missionId,
-        objectiveId,
-        changedFields: ["phase", "ended_at"],
-        workspaceId: workspaceId2,
-        actorWorkspaceUserId: workspaceUserId
-      },
-      tx
-    );
-  }
-  if (cleared > 0 || openSessions.length > 0) {
-    await tx.run(
-      `INSERT INTO mission_events
-         (id, workspace_id, project_id, mission_id, objective_id, type, phase, summary,
-          payload_json, source, actor_workspace_user_id, created_at)
-       VALUES (?, ?, ?, ?, ?, 'status_change', NULL, ?, ?, 'webapp', ?, ?)`,
-      [
-        newId2(),
-        workspaceId2,
-        projectId,
-        missionId,
-        objectiveId,
-        `Objective ${reason}: cleared ${cleared} delegated execution request(s) and ended ${openSessions.length} active session(s).`,
-        JSON.stringify({
-          reason,
-          newState,
-          clearedRequests: cleared,
-          endedSessions: openSessions.length
-        }),
-        workspaceUserId,
-        now2
-      ]
-    );
-  }
-  return { clearedRequests: cleared, endedSessions: openSessions.length };
 }
 async function launchObjective(objectiveRef, body) {
   const db = requireDatabaseClient();
@@ -179560,7 +180441,7 @@ async function exportWorkspaceObjectivesCsv(workspaceId2) {
   ];
   return {
     filename: `${workspace2.slug}-objectives-${(/* @__PURE__ */ new Date()).toISOString().slice(0, 10)}.csv`,
-    content: `${lines.map((columns) => columns.map((value2) => csvCell(value2)).join(",")).join("\n")}
+    content: `${lines.map((columns2) => columns2.map((value2) => csvCell(value2)).join(",")).join("\n")}
 `
   };
 }
@@ -188534,9 +189415,9 @@ async function eraseCredential(tx, id2, now2, options) {
 }
 function storeConnectionGrant(db, row, grant, options) {
   const { now: now2, leaseOwner } = options;
-  const columns = Object.entries(grant.columns ?? {});
-  const assignments = columns.map(([name2]) => `${name2} = ?, `).join("");
-  const values = columns.map(([, value2]) => value2);
+  const columns2 = Object.entries(grant.columns ?? {});
+  const assignments = columns2.map(([name2]) => `${name2} = ?, `).join("");
+  const values = columns2.map(([, value2]) => value2);
   if (leaseOwner === void 0)
     return db.run(
       `UPDATE account_connections SET state = 'connected', credential_ciphertext = ?, credential_key_id = ?, credential_revision = credential_revision + 1, access_expires_at = ?, refresh_expires_at = ?, ${assignments}refresh_lock_owner = NULL, refresh_lock_until = NULL, last_refreshed_at = ?, last_error_code = NULL, connected_at = ?, updated_at = ?, revision = revision + 1 WHERE id = ? AND state <> 'disconnected'`,
@@ -190652,6 +191533,198 @@ function createProfileConnectionCallbackHandler(options) {
       res.status(outcome.status === "connected" ? 200 : 400).type("html").send(profileCompletionPage(label, outcome.status));
     });
   };
+}
+
+// ../packages/core/service/end-latch-session.ts
+var import_node_crypto40 = require("node:crypto");
+async function endLatchSession({
+  ctx,
+  missionId,
+  executionRequestId
+}) {
+  const db = ctx.db;
+  const load = () => db.get(
+    `SELECT id, project_id, objective_id, metadata_json, revision,
+              claimed_by_execution_target_id, execution_target_id FROM execution_requests
+      WHERE id = ? AND mission_id = ? AND workspace_id = ? AND deleted_at IS NULL`,
+    [executionRequestId, missionId, ctx.workspace.id]
+  );
+  const row = await load();
+  const mapping = row && providerSessionFromMetadata(parseMetadataJson(row.metadata_json));
+  if (!row || !mapping) throw new ServiceError("Terminal session not found", "not_found", 404);
+  const now2 = nowIso();
+  const scope2 = "api.mission.terminal-session.end";
+  const requestHash = (0, import_node_crypto40.createHash)("sha256").update(JSON.stringify({ missionId, executionRequestId })).digest("hex");
+  await db.run(
+    `INSERT INTO idempotency_keys
+      (id, workspace_id, scope, key, request_hash, status, actor_workspace_user_id,
+       expires_at, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, 'in_progress', ?, ?, ?, ?)
+      ON CONFLICT (workspace_id, scope, key) DO NOTHING`,
+    [
+      newId(),
+      ctx.workspace.id,
+      scope2,
+      executionRequestId,
+      requestHash,
+      ctx.actorWorkspaceUserId,
+      new Date(Date.now() + 864e5).toISOString(),
+      now2,
+      now2
+    ]
+  );
+  const response = async (state3, reason = null) => {
+    const value2 = {
+      executionRequestId,
+      providerSessionId: mapping.providerSessionId,
+      state: state3 === "exited" ? "ended" : "unconfirmed",
+      lastObservedState: state3,
+      reason: state3 === "exited" ? null : reason,
+      message: state3 === "exited" ? "Session ended." : "Unable to confirm session ended. Reconnect the execution machine and retry."
+    };
+    await db.run(
+      `UPDATE idempotency_keys SET status = ?, response_json = ?, updated_at = ?
+        WHERE workspace_id = ? AND scope = ? AND key = ?
+          AND (status <> 'completed' OR ? = 'completed')`,
+      [
+        state3 === "exited" ? "completed" : "in_progress",
+        JSON.stringify(value2),
+        nowIso(),
+        ctx.workspace.id,
+        scope2,
+        executionRequestId,
+        state3 === "exited" ? "completed" : "in_progress"
+      ]
+    );
+    return value2;
+  };
+  if (mapping.lastObservedState === "exited") return response("exited");
+  await db.transaction(async (tx) => {
+    const objective = await tx.get(
+      `SELECT state, revision FROM objectives WHERE id = ? AND deleted_at IS NULL
+        AND NOT EXISTS (SELECT 1 FROM execution_requests newer
+          JOIN execution_requests original ON original.id = ?
+          WHERE newer.objective_id = objectives.id AND newer.deleted_at IS NULL
+            AND newer.requested_source <> 'local_target_mutation'
+            AND (newer.created_at > original.created_at
+              OR (newer.created_at = original.created_at AND newer.id > original.id)))`,
+      [row.objective_id, row.id]
+    );
+    if (!objective || !["launching", "executing", "pending_delivery"].includes(objective.state))
+      return;
+    const now3 = nowIso();
+    const updated = await tx.run(
+      `UPDATE objectives SET state = 'submitted', updated_at = ?, revision = revision + 1
+        WHERE id = ? AND revision = ?`,
+      [now3, row.objective_id, objective.revision]
+    );
+    if (!updated.changes)
+      throw new ServiceError(
+        "Objective changed; retry ending the session",
+        "terminal_session_conflict",
+        409
+      );
+    await dequeueObjectiveAttempt({
+      objectiveId: row.objective_id,
+      projectId: row.project_id,
+      missionId,
+      ctx: { ...ctx, db: tx },
+      reason: "disconnected",
+      newState: "submitted",
+      now: now3
+    });
+    await recordChange({
+      ctx: { ...ctx, db: tx },
+      entityType: "objective",
+      entityId: row.objective_id,
+      operation: "update",
+      entityRevision: objective.revision + 1,
+      projectId: row.project_id,
+      missionId,
+      objectiveId: row.objective_id,
+      changedFields: ["state"]
+    });
+  });
+  const persist = (state3) => recordTerminalObservation({
+    ctx,
+    executionRequestId,
+    providerSessionId: mapping.providerSessionId,
+    state: state3
+  });
+  const selection = await getProjectExecutionTargetSelection({ ctx, projectId: row.project_id });
+  const target = selection.eligibleTargets.find(
+    (t) => t.executionTargetId === (mapping.executionTargetId ?? row.claimed_by_execution_target_id ?? row.execution_target_id)
+  );
+  if (!target?.reachable) return response(await persist("lost"), "target_offline");
+  const provider = resolveDefaultLocalTargetProvider({
+    target: {
+      executionTargetId: target.executionTargetId,
+      type: target.type,
+      deviceLabel: target.deviceLabel,
+      reachable: target.reachable
+    },
+    options: {
+      callerExecutionTargetId: null,
+      runnerQueue: {
+        ctx,
+        projectId: row.project_id,
+        missionId,
+        operationId: `end-terminal:${row.id}`,
+        writeTimeoutMs: 3e4
+      }
+    }
+  });
+  const snapshot = launchSessionSnapshotFromMetadata(parseMetadataJson(row.metadata_json));
+  const input2 = {
+    providerSessionId: mapping.providerSessionId,
+    executable: snapshot?.executionProvider?.executable ?? "latch"
+  };
+  const inspectionProvider = resolveDefaultLocalTargetProvider({
+    target: { executionTargetId: target.executionTargetId, type: target.type, reachable: true },
+    options: {
+      callerExecutionTargetId: null,
+      runnerQueue: { ctx, projectId: row.project_id, missionId }
+    }
+  });
+  const inspection = await inspectionProvider.inspectLatchSession(input2);
+  if (inspection.ok && inspection.value.state === "exited")
+    return response(await persist("exited"));
+  if (!inspection.ok || inspection.value.state === "lost") {
+    return response(await persist("lost"), "session_unreachable");
+  }
+  await recordTerminalObservation({
+    ctx,
+    executionRequestId,
+    providerSessionId: mapping.providerSessionId,
+    state: inspection.value.state,
+    requestEnd: true
+  });
+  const stopped = await provider.stopLatchSession(input2);
+  const observed = stopped.ok ? stopped.value.state : "lost";
+  const state2 = await persist(observed);
+  return response(
+    state2,
+    state2 === "exited" ? null : stopped.ok ? "stop_unconfirmed" : "session_unreachable"
+  );
+}
+
+// execution/end-latch-session.ts
+async function endMissionLatchSession(missionRef, body) {
+  const scope2 = await requireMissionPermission({
+    missionRef,
+    permission: PERMISSIONS.MISSION_UPDATE
+  });
+  const executionRequestId = requiredString(
+    body?.executionRequestId,
+    "executionRequestId",
+    128
+  );
+  const ctx = await buildWebappServiceContextForWorkspace(
+    scope2.workspaceId,
+    requireDatabaseClient(),
+    scope2.workspaceUserId
+  );
+  return endLatchSession({ ctx, missionId: scope2.missionId, executionRequestId });
 }
 
 // ../packages/core/service/execution-target-migration.ts
@@ -195106,17 +196179,15 @@ function requestDto(request) {
     createdAt: request.created_at
   };
 }
-async function requestDelivery(ctx, request) {
-  const state2 = APPLICATION_STATES.includes(request.application_state) ? request.application_state : null;
-  const base = { state: state2, observedAt: request.application_observed_at };
-  if (request.status !== "open") return { mode: "read_only", reason: "request_closed", ...base };
+var answerDeliveryTiming = { waitMs: 25e3 };
+async function answerRoute(ctx, request) {
   if (!request.session_id || !request.project_id) {
-    return { mode: "read_only", reason: "no_latch_session", ...base };
+    return { ok: false, reason: "no_latch_session", sessionState: null };
   }
   const latch = await resolveLatchSessionForAgentSession({ ctx, sessionId: request.session_id });
-  if (!latch) return { mode: "read_only", reason: "no_latch_session", ...base };
+  if (!latch) return { ok: false, reason: "no_latch_session", sessionState: null };
   if (["exited", "unavailable"].includes(latch.lastObservedState)) {
-    return { mode: "read_only", reason: "latch_session_exited", ...base };
+    return { ok: false, reason: "latch_session_exited", sessionState: latch.lastObservedState };
   }
   const selection = await getProjectExecutionTargetSelection({
     ctx,
@@ -195125,11 +196196,103 @@ async function requestDelivery(ctx, request) {
   const target = selection.eligibleTargets.find(
     (candidate) => candidate.executionTargetId === latch.targetId
   );
-  if (!target?.reachable) return { mode: "read_only", reason: "target_offline", ...base };
-  return { mode: "latch", reason: null, ...base };
+  if (!target?.reachable) {
+    return { ok: false, reason: "target_offline", sessionState: latch.lastObservedState };
+  }
+  return { ok: true, latch, target };
 }
-async function humanRequestDto(ctx, request) {
-  return { ...requestDto(request), delivery: await requestDelivery(ctx, request) };
+var ROUTE_FAILURE_MESSAGES = {
+  no_latch_session: "This question has no terminal session that can receive an answer.",
+  latch_session_exited: "The terminal session has ended, so it cannot receive an answer. Restart the objective to continue.",
+  target_offline: "The execution machine is offline. Bring its runner back online, then send the answer again."
+};
+async function answerDeliveryStage(ctx, request, attempt) {
+  if (request.status !== "resolved") return null;
+  if (request.kind !== "question" && request.kind !== "choice") return null;
+  switch (request.application_state) {
+    case "applied":
+      return "confirmed";
+    case "unknown":
+      return "unconfirmed";
+    case "not_applied":
+      return "failed";
+    case "emitted": {
+      const job = await ctx.db.get(
+        `SELECT status FROM execution_requests
+          WHERE workspace_id = ? AND idempotency_key = ? AND deleted_at IS NULL`,
+        [ctx.workspace.id, answerOperationId(request.id, attempt)]
+      );
+      if (!job) return "recorded";
+      return job.status === "queued" ? "queued" : "dispatched";
+    }
+    default:
+      return null;
+  }
+}
+async function requestDelivery(ctx, request) {
+  const state2 = APPLICATION_STATES.includes(request.application_state) ? request.application_state : null;
+  const record2 = readAnswerDelivery(request);
+  const stage = await answerDeliveryStage(ctx, request, record2.attempt);
+  const base = {
+    state: state2,
+    observedAt: request.application_observed_at,
+    stage,
+    attempt: stage === null ? null : record2.attempt,
+    failureCode: stage === "failed" || stage === "unconfirmed" ? record2.failureCode : null,
+    failureMessage: stage === "failed" || stage === "unconfirmed" ? record2.failureMessage : null,
+    canRedeliver: false,
+    confirmationRequired: stage === "unconfirmed",
+    sessionState: null
+  };
+  if (request.status !== "open") {
+    if (stage !== "failed" && stage !== "unconfirmed") {
+      return { mode: "read_only", reason: "request_closed", ...base };
+    }
+    const route2 = await answerRoute(ctx, request);
+    return {
+      mode: "read_only",
+      reason: "request_closed",
+      ...base,
+      canRedeliver: route2.ok,
+      sessionState: route2.ok ? route2.latch.lastObservedState : route2.sessionState,
+      ...route2.ok || stage !== "failed" ? {} : {
+        failureCode: route2.reason === "latch_session_exited" ? "session_ended" : base.failureCode,
+        failureMessage: route2.reason === "latch_session_exited" ? ROUTE_FAILURE_MESSAGES.latch_session_exited : base.failureMessage
+      }
+    };
+  }
+  const route = await answerRoute(ctx, request);
+  if (!route.ok) {
+    return { mode: "read_only", reason: route.reason, ...base, sessionState: route.sessionState };
+  }
+  return { mode: "latch", reason: null, ...base, sessionState: route.latch.lastObservedState };
+}
+function dismissalDto(request, dismissals) {
+  const dismissal = dismissals.get(request.id);
+  return {
+    dismissed: dismissal !== void 0,
+    dismissedAt: dismissal?.dismissedAt ?? null
+  };
+}
+async function humanRequestDto(ctx, request, dismissals) {
+  const callerDismissals = dismissals ?? await readRequestDismissals({
+    db: ctx.db,
+    workspaceUserIds: ctx.actorWorkspaceUserId ? [ctx.actorWorkspaceUserId] : [],
+    requests: [request]
+  });
+  return {
+    ...requestDto(request),
+    ...dismissalDto(request, callerDismissals),
+    delivery: await requestDelivery(ctx, request)
+  };
+}
+async function humanRequestDtos(ctx, requests) {
+  const dismissals = await readRequestDismissals({
+    db: ctx.db,
+    workspaceUserIds: ctx.actorWorkspaceUserId ? [ctx.actorWorkspaceUserId] : [],
+    requests
+  });
+  return await Promise.all(requests.map((request) => humanRequestDto(ctx, request, dismissals)));
 }
 function requestOptions(request) {
   try {
@@ -195165,42 +196328,116 @@ function validateQuestionResolution({
 async function deliverQuestionAnswer({
   ctx,
   request,
-  text
+  attempt,
+  previousAttempt = null
 }) {
-  if (!request.session_id || !request.project_id) return;
-  const latch = await resolveLatchSessionForAgentSession({ ctx, sessionId: request.session_id });
-  if (!latch) return;
-  const selection = await getProjectExecutionTargetSelection({
-    ctx,
-    projectId: request.project_id
-  });
-  const target = selection.eligibleTargets.find(
-    (candidate) => candidate.executionTargetId === latch.targetId
-  );
-  if (!target) return;
+  const route = await answerRoute(ctx, request);
+  if (!route.ok || !request.project_id) {
+    const reason = route.ok ? "no_latch_session" : route.reason;
+    await recordAnswerDeliveryOutcome({
+      ctx,
+      requestId: request.id,
+      attempt,
+      outcome: {
+        state: "not_applied",
+        failureCode: reason === "latch_session_exited" ? "session_ended" : "not_dispatched",
+        failureMessage: ROUTE_FAILURE_MESSAGES[reason]
+      }
+    });
+    return;
+  }
   const provider = resolveDefaultLocalTargetProvider({
     target: {
-      executionTargetId: target.executionTargetId,
-      type: target.type,
-      deviceLabel: target.deviceLabel,
-      reachable: target.reachable
+      executionTargetId: route.target.executionTargetId,
+      type: route.target.type,
+      deviceLabel: route.target.deviceLabel,
+      reachable: route.target.reachable
     },
     options: {
       callerExecutionTargetId: null,
-      runnerQueue: { ctx, projectId: request.project_id, missionId: request.mission_id }
+      runnerQueue: {
+        ctx,
+        projectId: request.project_id,
+        missionId: request.mission_id,
+        writeTimeoutMs: answerDeliveryTiming.waitMs
+      }
     }
   });
   const result2 = await provider.sendLatchMessage({
-    providerSessionId: latch.providerSessionId,
-    operationId: request.id,
-    text
+    providerSessionId: route.latch.providerSessionId,
+    operationId: answerOperationId(request.id, attempt),
+    text: answerTextFromResolution(request),
+    notAfter: new Date(Date.now() + ANSWER_DELIVERY_DEADLINE_MS).toISOString(),
+    ...previousAttempt === null ? {} : { previousOperationId: answerOperationId(request.id, previousAttempt) }
   });
-  const applicationState = answerApplicationStateFromResult(result2);
-  if (applicationState !== "emitted") {
-    await recordRequestApplication({ ctx, requestId: request.id, applicationState });
+  const outcome = answerDeliveryOutcomeFromResult(result2);
+  if (outcome) {
+    await recordAnswerDeliveryOutcome({ ctx, requestId: request.id, attempt, outcome });
+    return;
+  }
+  const details = !result2.ok && result2.details && typeof result2.details === "object" ? result2.details : {};
+  if (typeof details.executionRequestId === "string") {
+    await cancelQueuedLocalTargetMutation({ ctx, requestId: details.executionRequestId });
   }
 }
-async function missionScopedRequests(client, missionRef, objectiveRef = null) {
+var PAGED_REQUEST_STATUSES = ["open"];
+var DEFAULT_REQUEST_PAGE_LIMIT = 100;
+var MAX_REQUEST_PAGE_LIMIT = 200;
+var MAX_REQUEST_CURSOR_LENGTH = 512;
+var ISO_CURSOR_TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3,6}Z$/;
+function invalidPageInput(message2) {
+  return new ServiceError(message2, "invalid_input", 400);
+}
+function parseAgentRequestPageQuery(input2) {
+  if (input2.status === null && input2.limit === null && input2.cursor === null) return null;
+  let status = null;
+  if (input2.status !== null) {
+    if (!PAGED_REQUEST_STATUSES.includes(input2.status)) {
+      throw invalidPageInput('status must be "open"');
+    }
+    status = input2.status;
+  }
+  let limit2 = DEFAULT_REQUEST_PAGE_LIMIT;
+  if (input2.limit !== null) {
+    if (!/^[1-9]\d{0,2}$/.test(input2.limit) || Number(input2.limit) > MAX_REQUEST_PAGE_LIMIT) {
+      throw invalidPageInput(`limit must be an integer from 1 to ${MAX_REQUEST_PAGE_LIMIT}`);
+    }
+    limit2 = Number(input2.limit);
+  }
+  if (input2.cursor !== null && (input2.cursor === "" || input2.cursor.length > MAX_REQUEST_CURSOR_LENGTH)) {
+    throw invalidPageInput("cursor is not a valid agent-request cursor");
+  }
+  return { status, limit: limit2, cursor: input2.cursor };
+}
+function timestampIso(value2) {
+  if (value2 instanceof Date) return value2.toISOString();
+  const text = String(value2);
+  if (ISO_CURSOR_TIMESTAMP.test(text)) return text;
+  const parsed = new Date(text);
+  return Number.isNaN(parsed.getTime()) ? text : parsed.toISOString();
+}
+function encodeAgentRequestCursor(cursor3) {
+  return Buffer.from(JSON.stringify(cursor3), "utf8").toString("base64url");
+}
+function decodeAgentRequestCursor(raw, scope2) {
+  const invalid4 = invalidPageInput("cursor is not a valid agent-request cursor");
+  let parsed;
+  try {
+    if (!/^[A-Za-z0-9_-]+$/.test(raw)) throw invalid4;
+    parsed = JSON.parse(Buffer.from(raw, "base64url").toString("utf8"));
+  } catch {
+    throw invalid4;
+  }
+  const value2 = asRecord(parsed);
+  if (value2.v !== 1 || typeof value2.m !== "string" || !(value2.o === null || typeof value2.o === "string") || !(value2.s === null || PAGED_REQUEST_STATUSES.includes(value2.s)) || typeof value2.t !== "string" || !ISO_CURSOR_TIMESTAMP.test(value2.t) || typeof value2.i !== "string" || value2.i.length === 0) {
+    throw invalid4;
+  }
+  if (value2.m !== scope2.missionId || value2.o !== scope2.objectiveId || value2.s !== scope2.status) {
+    throw invalidPageInput("cursor was issued for a different mission, objective or status");
+  }
+  return value2;
+}
+async function missionScopedRequests(client, missionRef, objectiveRef = null, page = null) {
   const memberships = await callerWorkspaceMemberships(client);
   if (memberships.length === 0)
     throw new ServiceError("Mission not found", "mission_not_found", 404);
@@ -195224,14 +196461,82 @@ async function missionScopedRequests(client, missionRef, objectiveRef = null) {
     workspaceUserId
   );
   const objective = objectiveRef ? await resolveObjectiveRef({ ctx, ref: objectiveRef, missionId: mission.id }) : null;
+  const scopeParams = [mission.id, mission.workspace_id, ...objective ? [objective.id] : []];
+  if (!page) {
+    const rows2 = await client.all(
+      `SELECT ${REQUEST_COLUMNS_FOR_ROUTE} FROM agent_requests
+        WHERE mission_id = ? AND workspace_id = ? AND deleted_at IS NULL
+          ${objective ? "AND objective_id = ?" : ""}
+        ORDER BY created_at DESC LIMIT 200`,
+      scopeParams
+    );
+    return { requests: await humanRequestDtos(ctx, rows2) };
+  }
+  const scope2 = { missionId: mission.id, objectiveId: objective?.id ?? null, status: page.status };
+  const after = page.cursor ? decodeAgentRequestCursor(page.cursor, scope2) : null;
+  const cursorTimestamp = client.dialect === "postgres" ? `to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')` : "created_at";
   const rows = await client.all(
-    `SELECT ${REQUEST_COLUMNS_FOR_ROUTE} FROM agent_requests
+    `SELECT ${REQUEST_COLUMNS_FOR_ROUTE}, ${cursorTimestamp} AS cursor_created_at FROM agent_requests
       WHERE mission_id = ? AND workspace_id = ? AND deleted_at IS NULL
         ${objective ? "AND objective_id = ?" : ""}
-      ORDER BY created_at DESC LIMIT 200`,
-    [mission.id, mission.workspace_id, ...objective ? [objective.id] : []]
+        ${page.status ? "AND status = ?" : ""}
+        ${after ? "AND (created_at > ? OR (created_at = ? AND id > ?))" : ""}
+      ORDER BY created_at ASC, id ASC LIMIT ?`,
+    [
+      ...scopeParams,
+      ...page.status ? [page.status] : [],
+      ...after ? [after.t, after.t, after.i] : [],
+      page.limit + 1
+    ]
   );
-  return await Promise.all(rows.map((request) => humanRequestDto(ctx, request)));
+  const hasMore = rows.length > page.limit;
+  const pageRows = hasMore ? rows.slice(0, page.limit) : rows;
+  const last = pageRows.at(-1);
+  const nextCursor2 = hasMore && last ? encodeAgentRequestCursor({
+    v: 1,
+    m: scope2.missionId,
+    o: scope2.objectiveId,
+    s: scope2.status,
+    t: timestampIso(last.cursor_created_at),
+    i: last.id
+  }) : null;
+  return {
+    requests: await humanRequestDtos(ctx, pageRows),
+    page: { complete: !hasMore, nextCursor: nextCursor2, limit: page.limit, status: page.status }
+  };
+}
+async function setAgentRequestDismissal(requestId, rawBody, dismissed) {
+  const client = requireDatabaseClient();
+  const row = await client.get(
+    `SELECT workspace_id FROM agent_requests WHERE id = ? AND deleted_at IS NULL`,
+    [requestId]
+  );
+  if (!row) throw new ServiceError("Request not found", "request_not_found", 404);
+  const workspaceUserId = await requireWorkspacePermission({
+    workspaceId: row.workspace_id,
+    permission: PERMISSIONS.SESSION_READ,
+    db: client,
+    notFoundMessage: "Request not found"
+  });
+  const ctx = await buildWebappServiceContextForWorkspace(
+    row.workspace_id,
+    client,
+    workspaceUserId
+  );
+  const body = asRecord(rawBody);
+  if (body.expectedRevision !== void 0 && typeof body.expectedRevision !== "number") {
+    throw new ServiceError("expectedRevision must be a number", "invalid_input", 400);
+  }
+  const result2 = await setRequestDismissal({
+    ctx,
+    requestId,
+    dismissed,
+    expectedRevision: body.expectedRevision
+  });
+  return {
+    changed: result2.changed,
+    request: await humanRequestDto(ctx, await getRequest2({ ctx, requestId }))
+  };
 }
 function createAgentRequestHumanRouter() {
   const router2 = (0, import_express5.Router)();
@@ -195242,8 +196547,20 @@ function createAgentRequestHumanRouter() {
       const client = requireDatabaseClient();
       const objectiveRef = queryString(req, "objectiveId", { trim: false, first: false });
       const missionRef = queryString(req, "missionId", { trim: false, first: false }) ?? missionDisplayIdFromObjectiveRef(objectiveRef);
+      const page = parseAgentRequestPageQuery({
+        status: queryString(req, "status", { trim: false, first: false }),
+        limit: queryString(req, "limit", { trim: false, first: false }),
+        cursor: queryString(req, "cursor", { trim: false, first: false })
+      });
       if (missionRef) {
-        return { requests: await missionScopedRequests(client, missionRef, objectiveRef) };
+        return await missionScopedRequests(client, missionRef, objectiveRef, page);
+      }
+      if (page) {
+        throw new ServiceError(
+          "status, limit and cursor require missionId or an objective display id",
+          "invalid_input",
+          400
+        );
       }
       if (objectiveRef) {
         throw new ServiceError(
@@ -195274,6 +196591,11 @@ function createAgentRequestHumanRouter() {
           ORDER BY created_at DESC LIMIT 200`,
         authorized.map((entry) => entry.workspaceId)
       );
+      const dismissals = await readRequestDismissals({
+        db: client,
+        workspaceUserIds: authorized.map((entry) => entry.workspaceUserId),
+        requests: rows
+      });
       const ctxByWorkspace = /* @__PURE__ */ new Map();
       for (const entry of authorized) {
         ctxByWorkspace.set(
@@ -195289,7 +196611,7 @@ function createAgentRequestHumanRouter() {
         requests: await Promise.all(
           rows.map(async (request) => {
             const ctx = ctxByWorkspace.get(request.workspace_id);
-            return ctx ? await humanRequestDto(ctx, request) : requestDto(request);
+            return ctx ? await humanRequestDto(ctx, request, dismissals) : { ...requestDto(request), ...dismissalDto(request, dismissals) };
           })
         )
       };
@@ -195330,8 +196652,7 @@ function createAgentRequestHumanRouter() {
         throw new ServiceError("expectedRevision is required", "agent_request_conflict", 409);
       }
       const resolution = body.resolution ? asRecord(body.resolution) : {};
-      const answer = validateQuestionResolution({ request, resolution });
-      const selected = answer.optionId ? requestOptions(request).find((option) => option.optionId === answer.optionId) : null;
+      validateQuestionResolution({ request, resolution });
       const result2 = await resolveRequest({
         ctx,
         requestId: request.id,
@@ -195339,17 +196660,78 @@ function createAgentRequestHumanRouter() {
         expectedRevision: body.expectedRevision
       });
       if (result2.resolved) {
-        await deliverQuestionAnswer({
-          ctx,
-          request: result2.request,
-          text: answer.text || selected?.label || "Answer received"
-        });
+        await deliverQuestionAnswer({ ctx, request: result2.request, attempt: 1 });
       }
       return {
         resolved: result2.resolved,
         request: await humanRequestDto(ctx, await getRequest2({ ctx, requestId: request.id }))
       };
     })
+  );
+  router2.post(
+    "/:id/redeliver",
+    handle2(async (req) => {
+      const client = requireDatabaseClient();
+      const row = await client.get(
+        `SELECT workspace_id FROM agent_requests WHERE id = ? AND deleted_at IS NULL`,
+        [req.params.id]
+      );
+      if (!row) throw new ServiceError("Request not found", "request_not_found", 404);
+      const workspaceUserId = await requireWorkspacePermission({
+        workspaceId: row.workspace_id,
+        permission: PERMISSIONS.SESSION_ATTACH,
+        db: client,
+        notFoundMessage: "Request not found"
+      });
+      const ctx = await buildWebappServiceContextForWorkspace(
+        row.workspace_id,
+        client,
+        workspaceUserId
+      );
+      const body = asRecord(req.body);
+      if (typeof body.expectedAttempt !== "number" || !Number.isInteger(body.expectedAttempt) || body.expectedAttempt < 1) {
+        throw new ServiceError(
+          "expectedAttempt is required",
+          "agent_request_delivery_conflict",
+          409
+        );
+      }
+      const request = await getRequest2({ ctx, requestId: req.params.id });
+      if (request.kind !== "question" && request.kind !== "choice") sessionControlsGone();
+      const wasUnconfirmed = request.application_state === "unknown";
+      const route = await answerRoute(ctx, request);
+      if (request.status === "resolved" && !route.ok) {
+        throw new ServiceError(
+          ROUTE_FAILURE_MESSAGES[route.reason],
+          "request_not_deliverable",
+          409
+        );
+      }
+      const begun = await beginAnswerRedelivery({
+        ctx,
+        requestId: request.id,
+        expectedAttempt: body.expectedAttempt,
+        confirmUnconfirmed: body.confirmUnconfirmed === true
+      });
+      await deliverQuestionAnswer({
+        ctx,
+        request: begun.request,
+        attempt: begun.attempt,
+        previousAttempt: wasUnconfirmed ? begun.previousAttempt : null
+      });
+      return {
+        redelivered: true,
+        request: await humanRequestDto(ctx, await getRequest2({ ctx, requestId: request.id }))
+      };
+    })
+  );
+  router2.post(
+    "/:id/dismissal",
+    handle2((req) => setAgentRequestDismissal(req.params.id, req.body, true))
+  );
+  router2.delete(
+    "/:id/dismissal",
+    handle2((req) => setAgentRequestDismissal(req.params.id, req.body, false))
   );
   return router2;
 }
@@ -196469,7 +197851,7 @@ function createChatRouter(options) {
 }
 
 // chat-notification-dispatcher.ts
-var import_node_crypto41 = require("node:crypto");
+var import_node_crypto42 = require("node:crypto");
 
 // ../packages/core/service/push-notification-jobs.ts
 var PUSH_NOTIFICATION_DISPATCH_JOB_TYPE = "overlord.push_notification.dispatch.v1";
@@ -196484,7 +197866,7 @@ function isPushNotificationMode(value2) {
 }
 
 // apns-client.ts
-var import_node_crypto40 = require("node:crypto");
+var import_node_crypto41 = require("node:crypto");
 var import_node_http2 = __toESM(require("node:http2"), 1);
 var SANDBOX_HOST = "https://api.sandbox.push.apple.com";
 var PRODUCTION_HOST = "https://api.push.apple.com";
@@ -196513,7 +197895,7 @@ function apnsJwt(config4) {
   const signingInput = `${b64url(JSON.stringify({ alg: "ES256", kid: config4.keyId }))}.${b64url(
     JSON.stringify({ iss: config4.teamId, iat: now2 })
   )}`;
-  const signer = (0, import_node_crypto40.createSign)("SHA256");
+  const signer = (0, import_node_crypto41.createSign)("SHA256");
   signer.update(signingInput);
   signer.end();
   const signature = signer.sign({ key: config4.privateKey, dsaEncoding: "ieee-p1363" });
@@ -197101,7 +198483,7 @@ var ChatNotificationDispatcher = class extends PollLoop {
   db;
   options;
   send;
-  workerId = `chat-notifications:${(0, import_node_crypto41.randomUUID)()}`;
+  workerId = `chat-notifications:${(0, import_node_crypto42.randomUUID)()}`;
   /** One claim/deliver pass. Returns how many candidates it processed. */
   async tick() {
     return await this.poll() ?? 0;
@@ -197764,7 +199146,7 @@ function boundComposeText(value2, maxChars) {
 var deliveryComposeWorker = new DeliveryComposeWorker();
 
 // desktop-oauth-handoff.ts
-var import_node_crypto42 = require("node:crypto");
+var import_node_crypto43 = require("node:crypto");
 var HANDOFF_TTL_MS = 6e4;
 var TICKET_PATTERN = /^[A-Za-z0-9_-]{32,128}$/;
 var handoffs = /* @__PURE__ */ new Map();
@@ -197775,7 +199157,7 @@ function discardExpiredHandoffs(now2 = Date.now()) {
 }
 function createOAuthHandoff(sessionToken, audience) {
   discardExpiredHandoffs();
-  const ticket = (0, import_node_crypto42.randomBytes)(32).toString("base64url");
+  const ticket = (0, import_node_crypto43.randomBytes)(32).toString("base64url");
   handoffs.set(ticket, { audience, sessionToken, expiresAt: Date.now() + HANDOFF_TTL_MS });
   return ticket;
 }
@@ -197821,7 +199203,7 @@ function beginDesktopGitHubOAuth(auth2, authBaseUrl2) {
 }
 
 // live-activities.ts
-var import_node_crypto43 = require("node:crypto");
+var import_node_crypto44 = require("node:crypto");
 var MAX_RUNNING = 2;
 var COMPLETION_HOLD_MS = 30 * 60 * 1e3;
 var START_TOKEN_MAX_LENGTH = 512;
@@ -198137,7 +199519,7 @@ async function buildLiveActivityContentState(db, profileId, now2 = /* @__PURE__ 
   };
 }
 function liveActivityContentHash(state2) {
-  return (0, import_node_crypto43.createHash)("sha256").update(
+  return (0, import_node_crypto44.createHash)("sha256").update(
     JSON.stringify(
       state2 && {
         running: state2.running,
@@ -198938,11 +200320,11 @@ var MissionSummaryComposeWorker = class extends WorkerJobPoller {
 var missionSummaryComposeWorker = new MissionSummaryComposeWorker();
 
 // native-github-oauth.ts
-var import_node_crypto44 = require("node:crypto");
+var import_node_crypto45 = require("node:crypto");
 var FLOW_TTL_MS = 10 * 6e4;
 var RECOVERY_TTL_MS = 6e4;
 var MAX_FLOWS = 256;
-var digest5 = (value2) => (0, import_node_crypto44.createHash)("sha256").update(value2).digest("hex");
+var digest5 = (value2) => (0, import_node_crypto45.createHash)("sha256").update(value2).digest("hex");
 function cookieValue(request, name2) {
   const values = (request.headers.get("cookie") ?? "").split(";").map((value2) => value2.trim()).filter((value2) => value2.startsWith(`${name2}=`));
   return values.length === 1 ? values[0].slice(name2.length + 1) : void 0;
@@ -199011,7 +200393,7 @@ function createNativeGitHubOAuth(auth2, baseUrl, options = {}) {
         if (typeof payload.url !== "string") throw new Error("Missing GitHub authorization URL");
         const state2 = new URL(payload.url).searchParams.get("state");
         if (!state2) throw new Error("Missing GitHub OAuth state");
-        const marker = (0, import_node_crypto44.randomBytes)(32).toString("base64url");
+        const marker = (0, import_node_crypto45.randomBytes)(32).toString("base64url");
         const stateCookie = response.headers.getSetCookie().map((value2) => /^((?:__Secure-)?better-auth\.state)=([^;]+)/.exec(value2)).find(Boolean);
         const flow = {
           expiresAt: now2() + FLOW_TTL_MS,
@@ -199311,7 +200693,7 @@ var NotificationDispatcher = class extends WorkerJobPoller {
 var notificationDispatcher = new NotificationDispatcher();
 
 // oauth.ts
-var import_node_crypto45 = require("node:crypto");
+var import_node_crypto46 = require("node:crypto");
 var CLIENT_ID_PREFIX = "ovlc_";
 var AUTH_CODE_PREFIX = "ovla_";
 var AUTH_CODE_TTL_MS = 5 * 60 * 1e3;
@@ -199345,12 +200727,12 @@ function oauthSigningSecret() {
   return process.env.OVERLORD_OAUTH_SIGNING_SECRET?.trim() || process.env.BETTER_AUTH_SECRET?.trim() || "overlord-local-oauth-development-secret";
 }
 function signPayload(payload) {
-  return (0, import_node_crypto45.createHmac)("sha256", oauthSigningSecret()).update(payload).digest("base64url");
+  return (0, import_node_crypto46.createHmac)("sha256", oauthSigningSecret()).update(payload).digest("base64url");
 }
 function fixedTimeEqual(a5, b5) {
   const left = Buffer.from(a5);
   const right = Buffer.from(b5);
-  return left.length === right.length && (0, import_node_crypto45.timingSafeEqual)(left, right);
+  return left.length === right.length && (0, import_node_crypto46.timingSafeEqual)(left, right);
 }
 function jsonError(res, status, error64, description) {
   res.status(status).json({ error: error64, error_description: description });
@@ -199671,7 +201053,7 @@ async function handleOAuthApprove(req, res) {
       issuanceWorkspaceUserId: consent.issuanceWorkspace.workspaceUserId
     }
   );
-  const code = `${AUTH_CODE_PREFIX}${(0, import_node_crypto45.randomBytes)(32).toString("base64url")}`;
+  const code = `${AUTH_CODE_PREFIX}${(0, import_node_crypto46.randomBytes)(32).toString("base64url")}`;
   authorizationCodes.set(code, {
     clientId: parsed.clientId,
     redirectUri: parsed.redirectUri,
@@ -199715,7 +201097,7 @@ async function handleOAuthToken(req, res) {
     jsonError(res, 400, "invalid_target", "OAuth resource does not match the authorization code.");
     return;
   }
-  const challenge = (0, import_node_crypto45.createHash)("sha256").update(codeVerifier).digest("base64url");
+  const challenge = (0, import_node_crypto46.createHash)("sha256").update(codeVerifier).digest("base64url");
   if (!codeVerifier || challenge !== entry.codeChallenge) {
     await revokeOrphanedAccessToken(entry.accessToken);
     jsonError(res, 400, "invalid_grant", "PKCE verification failed.");
@@ -200079,7 +201461,7 @@ async function readObjectiveTranscript({
   const direction = read.after ? "ASC" : "DESC";
   const limit2 = read.ids ? read.ids.length : read.limit;
   const lookahead = read.ids ? limit2 : limit2 + 1;
-  const joins = `JOIN missions m ON m.id = o.mission_id AND m.project_id = o.project_id
+  const joins2 = `JOIN missions m ON m.id = o.mission_id AND m.project_id = o.project_id
       AND m.workspace_id = o.workspace_id AND m.deleted_at IS NULL
     JOIN projects p ON p.id = o.project_id AND p.workspace_id = o.workspace_id
       AND p.deleted_at IS NULL AND p.status = 'active'
@@ -200087,7 +201469,7 @@ async function readObjectiveTranscript({
   const params = [];
   const scopes = workspaceIds.map((workspaceId2, index) => {
     params.push(workspaceId2, ...filterParams, lookahead);
-    return `SELECT id FROM (SELECT o.id FROM objectives o ${joins}
+    return `SELECT id FROM (SELECT o.id FROM objectives o ${joins2}
       WHERE o.deleted_at IS NULL AND o.workspace_id = ?${filter}
       ORDER BY o.created_at ${direction}, o.id ${direction} LIMIT ?) scope_${index}`;
   });
@@ -200104,7 +201486,7 @@ async function readObjectiveTranscript({
       o.created_by_kind AS "createdByKind", o.created_by_agent AS "createdByAgent",
       o.created_by_workspace_user_id AS "createdByWorkspaceUserId",
       o.created_at AS "createdAt", o.updated_at AS "updatedAt", o.revision
-    FROM candidates c JOIN objectives o ON o.id = c.id ${joins}
+    FROM candidates c JOIN objectives o ON o.id = c.id ${joins2}
     ORDER BY o.created_at ${direction}, o.id ${direction} LIMIT ?`,
     params
   );
@@ -200525,13 +201907,95 @@ var RunQueueDispatchWorker = class extends WorkerJobPoller {
 };
 var runQueueDispatchWorker = new RunQueueDispatchWorker();
 
+// terminal-session-observer.ts
+var TerminalSessionObserver = class extends PollLoop {
+  constructor() {
+    super({ intervalMs: 3e4, logPrefix: "terminal-sessions", runOnStart: true });
+  }
+  async runOnce() {
+    const db = requireDatabaseClient();
+    const field = (name2) => terminalMetadataSql(db.dialect, name2);
+    const rows = await db.all(`SELECT er.id, COALESCE(er.claimed_by_execution_target_id, er.execution_target_id) AS target_id, er.requested_by_workspace_user_id, er.workspace_id, er.project_id, er.mission_id, er.metadata_json
+      FROM execution_requests er JOIN missions m ON m.id = er.mission_id AND m.deleted_at IS NULL
+      JOIN projects p ON p.id = er.project_id AND p.deleted_at IS NULL
+      JOIN workspaces w ON w.id = er.workspace_id AND w.deleted_at IS NULL
+      WHERE er.deleted_at IS NULL AND ${field("provider")} = 'latch'
+        AND COALESCE(${field("lastObservedState")}, 'running') <> 'exited'
+      ORDER BY COALESCE(${field("lastObservedAt")}, CAST(er.created_at AS TEXT)), er.id LIMIT 20`);
+    const results = await Promise.allSettled(
+      rows.map(async (row) => {
+        const mapping = providerSessionFromMetadata(parseMetadataJson(row.metadata_json));
+        if (!mapping) return;
+        const ctx = {
+          ...await buildWebappServiceContextForWorkspace(
+            row.workspace_id,
+            db,
+            row.requested_by_workspace_user_id
+          ),
+          source: "runner"
+        };
+        const selection = await getProjectExecutionTargetSelection({
+          ctx,
+          projectId: row.project_id
+        });
+        const target = selection.eligibleTargets.find(
+          (t) => t.executionTargetId === (mapping.executionTargetId ?? row.target_id)
+        );
+        let state2 = "lost";
+        let endedAt = null;
+        if (target?.reachable) {
+          const provider = resolveDefaultLocalTargetProvider({
+            target: {
+              executionTargetId: target.executionTargetId,
+              type: target.type,
+              reachable: true
+            },
+            options: {
+              callerExecutionTargetId: null,
+              runnerQueue: {
+                ctx,
+                projectId: row.project_id,
+                missionId: row.mission_id,
+                readTimeoutMs: 1e4,
+                // Replicas in the same sweep share the read-only inspection job.
+                operationId: `terminal-observe:${row.id}:${Math.floor(Date.now() / 3e4)}`
+              }
+            }
+          });
+          const snapshot = launchSessionSnapshotFromMetadata(parseMetadataJson(row.metadata_json));
+          const result2 = await provider.inspectLatchSession({
+            providerSessionId: mapping.providerSessionId,
+            executable: snapshot?.executionProvider.executable ?? "latch"
+          });
+          if (result2.ok) {
+            state2 = result2.value.state;
+            endedAt = result2.value.endedAt ?? null;
+          }
+        }
+        await recordTerminalObservation({
+          ctx,
+          executionRequestId: row.id,
+          providerSessionId: mapping.providerSessionId,
+          state: state2,
+          endedAt
+        });
+      })
+    );
+    for (const result2 of results)
+      if (result2.status === "rejected") {
+        console.warn("[terminal-sessions] observation failed", result2.reason);
+      }
+  }
+};
+var terminalSessionObserver = new TerminalSessionObserver();
+
 // webhook-security.ts
-var import_node_crypto46 = require("node:crypto");
+var import_node_crypto47 = require("node:crypto");
 var import_promises6 = __toESM(require("node:dns/promises"), 1);
 var import_node_net = require("node:net");
 function signWebhookPayload(secret, rawBody) {
   const timestamp2 = Math.floor(Date.now() / 1e3);
-  const signature = (0, import_node_crypto46.createHmac)("sha256", secret).update(`${timestamp2}.${rawBody}`).digest("hex");
+  const signature = (0, import_node_crypto47.createHmac)("sha256", secret).update(`${timestamp2}.${rawBody}`).digest("hex");
   return { header: `t=${timestamp2},v1=${signature}`, timestamp: timestamp2 };
 }
 function internalHostPatterns() {
@@ -200868,7 +202332,7 @@ async function recordSubscriptionFailure(client, subscriptionId, currentConsecut
 var webhookDispatcher = new WebhookDispatcher();
 
 // webhooks.ts
-var import_node_crypto47 = require("node:crypto");
+var import_node_crypto48 = require("node:crypto");
 var WEBHOOK_SECRET_SCHEME = "whsec";
 var SUBSCRIPTION_COLUMNS = "id, workspace_id, project_id, name, endpoint_url, secret, event_types_json, payload_mode, created_by_workspace_user_id, enabled, disabled_reason, consecutive_failures, last_success_at, last_failure_at, created_at, updated_at, revision";
 function parseEventTypes(json2) {
@@ -200901,7 +202365,7 @@ function toSubscriptionDto(row) {
   };
 }
 function generateWebhookSecret() {
-  return { secret: `${WEBHOOK_SECRET_SCHEME}_${(0, import_node_crypto47.randomBytes)(24).toString("hex")}` };
+  return { secret: `${WEBHOOK_SECRET_SCHEME}_${(0, import_node_crypto48.randomBytes)(24).toString("hex")}` };
 }
 function normalizeEventTypes(input2) {
   if (!Array.isArray(input2) || input2.length === 0) {
@@ -202503,9 +203967,17 @@ app.post(
   "/api/missions/:id/session-channel",
   handle3((req) => prepareMissionSessionChannel(req.params.id, req.body ?? {}), { mutates: true })
 );
+app.get(
+  "/api/missions/:id/terminal-sessions/history",
+  handle3((req) => readMissionTerminalHistory(req.params.id, req.query))
+);
 app.post(
   "/api/missions/:id/terminal-sessions/forget",
   handle3((req) => forgetMissionLatchSession(req.params.id, req.body ?? {}), { mutates: true })
+);
+app.post(
+  "/api/missions/:id/terminal-sessions/end",
+  handle3((req) => endMissionLatchSession(req.params.id, req.body ?? {}), { mutates: true })
 );
 app.use(AGENT_REQUEST_HUMAN_ROUTE_PREFIX, createAgentRequestHumanRouter());
 app.use(AGENT_SESSION_INPUT_HUMAN_ROUTE_PREFIX, createAgentSessionInputHumanRouter());
@@ -202931,7 +204403,11 @@ async function start() {
   if (externalAutomations.length > 0) {
     console.log(`[webapp] loaded external automations: ${externalAutomations.join(", ")}`);
   }
-  const backgroundLoops = [...mutationPollLoops, runQueueDispatchWorker];
+  const backgroundLoops = [
+    ...mutationPollLoops,
+    runQueueDispatchWorker,
+    terminalSessionObserver
+  ];
   if (chatCloud()) {
     const chatWorker = new ChatWorker(
       () => new ChatRuns(requireDatabaseClient(), {
