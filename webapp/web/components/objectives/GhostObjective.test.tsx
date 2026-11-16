@@ -8,10 +8,9 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import assert from 'node:assert/strict';
 import { afterEach, beforeEach, describe, it } from 'node:test';
-import type { ReactNode } from 'react';
+import { type ReactNode, useState } from 'react';
 
 import { api } from '../../lib/api.ts';
-import { partitionMissionEvidence } from '../../lib/objective-evidence.ts';
 import { keys } from '../../lib/query-keys.ts';
 
 import { GhostObjective } from './GhostObjective.tsx';
@@ -366,6 +365,26 @@ describe('GhostObjective', () => {
   });
 });
 
+/** The mission panel's wiring: the composer reports the objective it is committing to the rows. */
+function PanelHarness({ mission }: { mission: MissionDetailDto }) {
+  const [committingObjectiveId, setCommittingObjectiveId] = useState<string | null>(null);
+  return (
+    <>
+      <MissionObjectivesSection
+        mission={mission}
+        committingObjectiveId={committingObjectiveId}
+        onOpenObjective={() => undefined}
+      />
+      <GhostObjective
+        missionId={mission.id}
+        projectId={mission.projectId}
+        onCommittingChange={setCommittingObjectiveId}
+      />
+      <button type="button">Outside</button>
+    </>
+  );
+}
+
 describe('MissionObjectivesSection with a committing composer', () => {
   it('does not render the committing objective while its uploads run', async () => {
     let releaseUpload: () => void = () => undefined;
@@ -376,23 +395,19 @@ describe('MissionObjectivesSection with a committing composer', () => {
     const mission = {
       id: MISSION_ID,
       projectId: PROJECT_ID,
+      workspaceId: 'ws-1',
       allowParallelObjectives: false,
       objectives: [],
       executionRequests: []
     } as unknown as MissionDetailDto;
-    const evidence = partitionMissionEvidence({ objectives: [] });
     const qc = makeClient();
     const view = (m: MissionDetailDto) => (
       <QueryClientProvider client={qc}>
-        <MissionObjectivesSection
-          mission={m}
-          evidence={evidence}
-          evidenceLoading={{ deliveries: false }}
-        />
-        <button type="button">Outside</button>
+        <PanelHarness mission={m} />
       </QueryClientProvider>
     );
     const { rerender } = render(view(mission));
+    const createdRow = () => document.querySelector('[data-objective-id="created-1"]');
 
     type('Brand new work');
     stageFile('notes.txt');
@@ -408,13 +423,15 @@ describe('MissionObjectivesSection with a committing composer', () => {
       })
     );
     await settle();
+    assert.equal(createdRow(), null, 'hidden from the rows while the composer commits it');
     assert.equal(screen.getAllByText('Brand new work').length, 1, 'shown once, in the composer');
-    assert.ok(screen.getByTestId('ghost-objective'));
 
     await act(async () => {
       releaseUpload();
     });
     await settle();
-    assert.equal(screen.queryAllByTestId('ghost-objective').length, 0, 'swapped exactly once');
+    assert.ok(createdRow(), 'handed over to the rows exactly once');
+    assert.equal(screen.getAllByText('Brand new work').length, 1, 'shown once, in its row');
+    assert.equal(textarea().value, '', 'the composer is empty again');
   });
 });

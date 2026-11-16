@@ -51,8 +51,6 @@ export function hasProtocolSubcommandHelp(subcommand: string): boolean {
   return (SUPPORTED_PROTOCOL_SUBCOMMANDS as readonly string[]).includes(subcommand);
 }
 
-const DEFAULT_TIMEOUT_MS = 30_000;
-
 export function printProtocolHelp({
   primaryCommand,
   subcommand
@@ -62,7 +60,7 @@ export function printProtocolHelp({
 }): void {
   const subcommands = SUPPORTED_PROTOCOL_SUBCOMMANDS.join(', ');
 
-  const fullHelp = `${primaryCommand} protocol [flags]
+  const fullHelp = `${primaryCommand} protocol <subcommand> [flags]
 
 Use this for mission lifecycle work from an agent runtime: create a standalone
 draft with \`${primaryCommand} protocol create\`, create-and-attach with
@@ -79,11 +77,12 @@ Backend and auth:
   ${primaryCommand} doctor                       Validate backend reachability and connector installs
 
   To check credentials machine-readably from a script, use
-  \`${primaryCommand} protocol auth-status\` (returns ok=true|false).
+  \`${primaryCommand} protocol auth-status\` (returns readiness and workspace metadata).
 
 Project discovery:
-  When prompting or creating missions, the CLI resolves the project from your
-  working directory when --project-id is omitted. Discover it explicitly with:
+  create, prompt, and record-work require an explicit --project-id. Discover
+  the intended project first, then pass its projectId to the creation command.
+  Only create accepts --unassigned-to-project for deliberate inbox capture:
 
   ${primaryCommand} protocol discover-project
   ${primaryCommand} protocol discover-project --project-id <id-or-name>
@@ -157,7 +156,8 @@ Runner queue (management commands, not protocol):
   ${primaryCommand} launch <agent> --mission-id <missionId> [--branch <name>] [--no-worktree]
 
 Environment fallback:
-  --session-key  <- SESSION_KEY printed on stderr after attach/connect/prompt/resume-follow-up
+  --session-key  <- local session cache for this working directory; or pass the
+                    SESSION_KEY printed on stderr after attach/connect/prompt/resume-follow-up
   --mission-id    <- mission display id (e.g. coo:8) or UUID
   --objective-id  <- OVERLORD_OBJECTIVE_ID (objective display id, e.g. coo:8.k7xm)
                      Read commands inherit it only with no explicit mission or a matching
@@ -176,14 +176,23 @@ Common flags:
                             once, and unpinned commands cannot tell them apart.
   --session-key <key>      Session key returned by attach/connect/prompt/resume-follow-up
   --agent <identifier>     Agent identifier sent to Overlord (default: unknown)
-  --model <identifier>     Model identifier to snapshot on executing objectives
-  --timeout <ms>           Request timeout in milliseconds (default: ${DEFAULT_TIMEOUT_MS})
+  --model <identifier>     On attach/resume-follow-up: snapshot the session model;
+                           on launch-objective: choose the execution model
+
+Help and file inputs:
+  ${primaryCommand} protocol help <subcommand>
+  ${primaryCommand} protocol <subcommand> --help   (also -h)
+  Protocol output is JSON by default; --json is unnecessary.
+  Each --*-file reads its own file. At most one may use - for stdin per call.
+  Inline --*-json values are limited to about 8 KB; use the paired file input
+  for larger values. File/stdin content is not interpreted by the shell.
 
 auth-status:
   Purpose:
-    Check whether the local runtime can reach the configured backend.
+    Read the authenticated backend workspace readiness and actor metadata.
   Returns:
-    JSON with ok=true|false plus backend URL metadata. Does not print secrets.
+    JSON with ready, workspaceId, workspaceName, authMode, and actorWorkspaceUserId.
+    Authentication or transport failures exit non-zero. Does not print secrets.
 
 discover-project:
   Purpose:
@@ -235,9 +244,12 @@ attach:
     --agent <identifier>
     --model <identifier>
     --execution-request-id <id> Link this attach to a runner execution request
+    --execution-target-id <id> Resolve project resource paths for this target
+    --session-channel-id <id>  Bind the channel prepared by the launcher
     --objective-id <id>         Pin attach to this objective (UUID or coo:756.k7xm)
     --external-session-id <id>  Native agent thread/session id for resume
   Notes:
+    --capture-binding is transport metadata computed by the CLI, not a user override.
     The CLI records the session's capture binding: bound when OVERLORD_OBJECTIVE_ID
     names the attached objective, unbound otherwise. Bound is configuration evidence
     only; it never claims the capture hook is installed or has run.
@@ -273,6 +285,7 @@ load-context:
   Required:
     --mission-id <id>            Or --objective-id with a display id
   Optional:
+    --execution-target-id <id> Resolve project resource paths for this target
     --objective-id <id>         Return this objective as the current one instead of
                                 rediscovering the mission's active objective. Required
                                 on a mission running objectives in parallel.
@@ -330,7 +343,7 @@ reorder-objectives:
     objectives. Launching, active, and complete objectives keep their positions.
   Required:
     --mission-id <uuid>
-    --ordered-objective-ids-json <json>
+    --ordered-objective-ids-json <json> or --ordered-objective-ids-file <path|->
   Returns:
     The mission's full ObjectiveDto[] list in its new order.
   Rules:
@@ -358,10 +371,9 @@ reorder-run-queue:
     execution target.
   Required:
     --queue <id|name>             Queue UUID or unambiguous name
-    --ordered-entries-json <json> Complete top-to-bottom entry order
+    --ordered-entries-json <json> or --ordered-entries-file <path|->
+                                Complete top-to-bottom entry order
   Optional:
-    --ordered-entries-file <path|->
-                                  Read the JSON order from a file or stdin
     --project-id <id|slug|name>   Project UUID, slug, or name
     --objective-id <id>           Derive the project from this objective
     --mission-id <id>             Derive the project from this mission
@@ -377,7 +389,7 @@ create-run-queue:
   Purpose:
     Create an additional Run Queue alongside the project's default queue.
   Required:
-    --project-id <id|slug|name> Project UUID, slug, or name
+    --project-id <id|slug|name> Project UUID, slug, or name; or derive via --objective-id/--mission-id
     --name <text>               Name for the new queue
   Optional:
     --objective-id <id>         Derive the project from this objective
@@ -433,11 +445,10 @@ reorder-project-run-queues:
     Reorder the project's Run Queue definitions without touching entry
     membership or entry order.
   Required:
-    --project-id <id|slug|name> Project UUID, slug, or name
-    --ordered-queues-json <json> Complete top-to-bottom queue order
+    --project-id <id|slug|name> Project UUID, slug, or name; or derive via --objective-id/--mission-id
+    --ordered-queues-json <json> or --ordered-queues-file <path|->
+                                Complete top-to-bottom queue order
   Optional:
-    --ordered-queues-file <path|->
-                                Read the JSON order from a file or stdin
     --objective-id <id>         Derive the project from this objective
     --mission-id <id>           Derive the project from this mission
   Returns:
@@ -459,9 +470,10 @@ queue-objective:
     --front                     Place first in the selected/default queue
     --position <n>              One-based insertion rank
   Rules:
-    Choose at most one of --after, --front, and --position. Without --queue,
-    --after selects its queue; otherwise the default queue is used. Re-running
-    without placement is idempotent.
+    Choose at most one of --after, --front, and --position. Queue selection prefers
+    --queue, then the predecessor's queue, then the objective's current queue.
+    Otherwise use the mission queue, falling back to the project default; if neither
+    exists, create the mission queue. Re-running without placement is idempotent.
     Queueing an objective also queues every not-yet-started objective after it
     in the mission, directly behind it. Queue order and mission objective order
     are one sequence: reordering either reorders the other.
@@ -549,7 +561,7 @@ statuses:
 
 discuss-objective:
   Purpose:
-    Mark the latest draft objective as submitted. Does not start execution — use attach.
+    Mark the selected draft objective (or first draft by position) as submitted. Does not start execution — use attach.
   Required:
     --mission-id <id>
   Optional:
@@ -661,6 +673,8 @@ create:
     --objective "<text>" or --objectives-json / --objectives-file <path|->
   Optional:
     --title <text>
+    --resource <key>           Resource key for the single --objective form;
+                               use resourceKey on each --objectives-json item
     --project-id <id>           Required for a project mission; never inferred
     --unassigned-to-project     Intentionally create an account-owned inbox item
     --assigned-to <id>          Workspace member to own the mission (meaningless on the inbox fallback)
@@ -693,8 +707,9 @@ prompt:
     --project-id <id>
   Optional:
     --title <text>
+    --resource <key>           Resource key for the single --objective form;
+                               use resourceKey on each --objectives-json item
     --agent <identifier>
-    --model <identifier>
     --external-session-id <id>
     --assigned-to <id>          Workspace member to own the mission
     --auto-advance / --no-auto-advance
@@ -723,7 +738,7 @@ record-work:
   Optional:
     --title <text>
     --assigned-to <id>          Workspace member to own the mission
-    --artifacts-json / --artifacts-file <path|->
+    --artifacts <json> / --artifacts-file <path|->
     --declared-paths-json / --declared-paths-file <path|->
                                 JSON array of repository-relative paths the work changed
     --payload-json / --payload-file <path|->   (single envelope; see Notes)
@@ -745,6 +760,8 @@ update:
     --mission-id <id>
     --summary or --summary-file <path|->
   Optional:
+    --declared-paths-json <json> / --declared-paths-file <path|->
+                                Repository-relative paths as a JSON string array
     --phase draft | execute | review | deliver | complete | blocked | cancelled
     --event-type update | user_follow_up | alert | discussion_summary | decision
     --begin-follow-up-work      Reopen a delivered/review mission for execution
@@ -754,6 +771,8 @@ update:
     --external-session-id <id|null>
     --paths <a,b,c> / --paths-file <path|->   Declare shell/script outputs (see deliver)
   Notes:
+    --options-json, --options-file, and --no-free-text are reserved contract flags
+    with no effect on update; use ask for structured choices.
     Pass --summary-file - to read the summary from stdin and avoid shell quoting issues.
     Inline --*-json values larger than ~8 KB are rejected; use the paired --*-file - flag.
     After delivery, pass --begin-follow-up-work before posting execution updates.
@@ -767,6 +786,9 @@ heartbeat:
   Optional:
     --phase <phase>
     --note <text>
+  Notes:
+    --percent is reserved in the contract but is not consumed by the handler.
+    Use --note for progress detail.
 
 ask:
   Purpose:
@@ -787,7 +809,7 @@ deliver:
     --session-key <key>
     --mission-id <id>
     --summary or --summary-file <path|->
-    or: --payload-json / --payload-file <path|-> with { summary, artifacts }
+    or: --payload-json / --payload-file <path|-> with { summary, artifacts? }
     The payload may also include deliveryReport: { schemaVersion: 1, agentReport: {
       humanActions, tradeoffsMade, knownRisks, deferredWork, assumptions } }. Use empty arrays
     when none apply. Human actions exclude Git operations and routine review/testing.
@@ -814,7 +836,9 @@ deliver:
     migrations, .env.example edits, dependency manifests, and CI workflow files on its own;
     report those yourself when you can supply the real command and verify step.
   Optional:
-    --artifacts-json / --artifacts-file <path|->
+    --declared-paths-json <json> / --declared-paths-file <path|->
+                                Repository-relative paths as a JSON string array
+    --artifacts <json> / --artifacts-file <path|->
     --paths <a,b,c>             Declare paths native capture missed (comma-separated)
     --paths-file <path|->       Same, as a JSON array of path strings (commas allowed)
     --verification-summary <text>
@@ -860,7 +884,7 @@ deliver:
     copy: repeat those declarations on update/deliver. objective-changes reads the
     synchronized server evidence; changes reads only this checkout's ledgers.
     Inline --*-json values larger than ~8 KB are rejected; use --payload-file - and
-    stream JSON on stdin. Keep --summary inline.
+    stream JSON on stdin; the envelope may carry summary too.
 
 capture-change:
   Purpose:
@@ -911,6 +935,9 @@ sync-changes:
     --objective-id <id>         Objective UUID or display id
     --changes-json <json> or --changes-file <path|->
                                 Explicit evidence batch; normally omitted so the CLI drains its ledger
+    --capture-json <json> or --capture-file <path|->
+                                Capture diagnostics: bindingState, callbackObservedAt,
+                                and health entries { code, at }; metadata only
   Returns:
     Per-item accepted, ignored, or warning results. Synchronization failures are
     advisory and never block update or delivery.
@@ -921,6 +948,7 @@ resume-follow-up:
   Required:
     --mission-id <id>
   Optional:
+    --execution-target-id <id> Resolve project resource paths for this target
     --objective-id <id>
     --agent <identifier>
     --model <identifier>
@@ -1045,5 +1073,8 @@ Run \`${primaryCommand} help\` for management commands and \`${primaryCommand} p
       : marker.length - 1 + nextSection;
   const section = (sectionEnd === -1 ? remaining : remaining.slice(0, sectionEnd)).trimEnd();
 
-  console.log(`${primaryCommand} protocol ${subcommand}\n\n${section}`);
+  const commonStart = fullHelp.indexOf('\nEnvironment fallback:');
+  const commonEnd = fullHelp.indexOf('\nauth-status:\n', commonStart);
+  const commonHelp = fullHelp.slice(commonStart, commonEnd).trim();
+  console.log(`${primaryCommand} protocol ${subcommand}\n\n${section}\n\n${commonHelp}`);
 }

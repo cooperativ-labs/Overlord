@@ -215,6 +215,20 @@ export const missionsApi = {
       }`
     ),
   /**
+   * One page of a mission's (or one objective's) open requests, oldest first. Status is filtered
+   * on the server before the page limit; follow `page.nextCursor` until `page.complete`.
+   */
+  listOpenAgentRequestsPage: (
+    missionId: string,
+    options: { objectiveId?: string | null; cursor?: string | null; limit?: number } = {}
+  ) => {
+    const params = new URLSearchParams({ missionId, status: 'open' });
+    if (options.objectiveId) params.set('objectiveId', options.objectiveId);
+    if (options.limit !== undefined) params.set('limit', String(options.limit));
+    if (options.cursor) params.set('cursor', options.cursor);
+    return request<AgentRequestListResponse>('GET', `/api/agent-requests?${params.toString()}`);
+  },
+  /**
    * Answer a request. `expectedRevision` is required by the server: a stale card must lose
    * rather than overwrite a decision someone else already made.
    */

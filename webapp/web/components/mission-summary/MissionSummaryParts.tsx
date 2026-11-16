@@ -1,8 +1,7 @@
-import { useNavigate, useRouterState } from '@tanstack/react-router';
 import { ChevronRight } from 'lucide-react';
-import { type ReactNode, useCallback } from 'react';
+import { type ReactNode } from 'react';
 
-import { objectiveSearchFromLocation } from '../../lib/mission-panel-search.ts';
+import { useObjectiveDetailNavigation } from '../../lib/hooks/use-objective-detail-navigation.ts';
 import { cn } from '../../lib/utils.ts';
 
 /** Shared focus ring for every control in the section (plan §11 item 14). */
@@ -44,34 +43,16 @@ export function NewDot() {
 }
 
 /**
- * Scrolls to, rings, and opens an objective row through the mission panel's
- * `?objective=` logic. Selecting the objective that is already focused only
- * scrolls, because the search value does not change.
+ * Opens an objective's detail through the shared objective navigation helper (plan §9.1), so a
+ * summary link behaves exactly like a row: from the mission it pushes one detail entry, with a
+ * detail already open it replaces it.
  */
 export function useFocusObjective(): (objectiveKey: string) => void {
-  const navigate = useNavigate();
-  const current = useRouterState({
-    select: state => objectiveSearchFromLocation(state.location.search)
-  });
-  return useCallback(
-    (objectiveKey: string) => {
-      if (current === objectiveKey) {
-        const node = document.querySelector(`[data-objective-ref="${CSS.escape(objectiveKey)}"]`);
-        node?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-        return;
-      }
-      void navigate({
-        to: '.',
-        search: (previous: Record<string, unknown>) => ({ ...previous, objective: objectiveKey }),
-        replace: true
-      });
-    },
-    [current, navigate]
-  );
+  return useObjectiveDetailNavigation().open;
 }
 
 /**
- * An objective key that scrolls to its row. A null key is a delivery whose
+ * An objective key that opens its detail. A null key is a delivery whose
  * objective was deleted (plan §5.5): it renders as plain `Delivery` text.
  */
 export function ObjectiveKeyLink({

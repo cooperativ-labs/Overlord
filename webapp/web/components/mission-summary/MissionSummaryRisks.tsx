@@ -61,41 +61,49 @@ function RiskRow({ row, missionId }: { row: SummaryRiskRow; missionId: string })
 export function MissionSummaryRisks({
   rows,
   missionId,
-  dimmed
+  dimmed,
+  headless = false
 }: {
   rows: readonly SummaryRiskRow[];
   missionId: string;
   /** Previous content under the updating strip. */
   dimmed: boolean;
+  /** Rendered inside a tab that already names it: no top border and no heading. */
+  headless?: boolean;
 }) {
   const headingId = useId();
   if (rows.length === 0) {
     return (
       <div
         className={cn(
-          'flex items-center gap-2.5 border-t border-(--color-border) px-5 py-2.5 text-xs text-(--color-ink-dim)',
+          'flex items-center gap-2.5 px-5 py-2.5 text-xs text-(--color-ink-dim)',
+          !headless && 'border-t border-(--color-border)',
           dimmed && 'opacity-55'
         )}
       >
-        <SummaryBlockHeading id={headingId} label="Risks" />
+        {headless ? null : <SummaryBlockHeading id={headingId} label="Risks" />}
         <span>None significant</span>
       </div>
     );
   }
   return (
     <section
-      aria-labelledby={headingId}
+      aria-labelledby={headless ? undefined : headingId}
+      aria-label={headless ? 'Risks' : undefined}
       className={cn(
-        'grid gap-1.5 border-t border-(--color-border) px-5 pb-2.5 pt-3',
+        'grid gap-1.5 px-5 pb-2.5 pt-3',
+        !headless && 'border-t border-(--color-border)',
         dimmed && 'opacity-55'
       )}
     >
-      <SummaryBlockHeading
-        id={headingId}
-        label="Risks"
-        count={rows.length}
-        countClassName="text-red-700 dark:text-red-300"
-      />
+      {headless ? null : (
+        <SummaryBlockHeading
+          id={headingId}
+          label="Risks"
+          count={rows.length}
+          countClassName="text-red-700 dark:text-red-300"
+        />
+      )}
       <ul className="grid">
         {rows.map(row => (
           <RiskRow key={row.key} row={row} missionId={missionId} />

@@ -703,3 +703,53 @@ export function watermarkNeedsAck(watermark: string | null, seenAt: string | nul
   if (seenAt === null) return true;
   return timeOf(watermark) > timeOf(seenAt);
 }
+
+// ---- Displayed-evidence coverage (mission-panel-redesign plan §6.1) ----
+
+/** The evidence-bearing tab groups whose items carry new-since-last-visit markers. */
+export type SummaryEvidenceGroup = 'for_you' | 'risks' | 'suggested';
+
+/** Group → signature of the content it shows now. Absent groups have nothing to show. */
+export type SummaryCoverageRequirements = Partial<Record<SummaryEvidenceGroup, string>>;
+
+/** A stable signature of a group's rows: changed or added evidence changes it. */
+export function summaryEvidenceSignature(parts: readonly string[]): string {
+  return [...parts].sort().join('\u0000');
+}
+
+/**
+ * What the current snapshot requires to have been displayed before its watermark may be
+ * acknowledged. A nonempty group must be covered with exactly this signature, so new or changed
+ * evidence invalidates earlier coverage. Groups without content require nothing.
+ */
+export function summaryCoverageRequirements({
+  actionRows,
+  riskRows,
+  suggestionRows
+}: {
+  actionRows: readonly Pick<SummaryActionRow, 'key' | 'introducedAt'>[];
+  riskRows: readonly Pick<SummaryRiskRow, 'key'>[];
+  suggestionRows: readonly Pick<SummarySuggestionRow, 'id'>[];
+}): SummaryCoverageRequirements {
+  const required: SummaryCoverageRequirements = {};
+  if (actionRows.length > 0) {
+    required.for_you = summaryEvidenceSignature(
+      actionRows.map(row => `${row.key}@${row.introducedAt}`)
+    );
+  }
+  if (riskRows.length > 0) required.risks = summaryEvidenceSignature(riskRows.map(row => row.key));
+  if (suggestionRows.length > 0) {
+    required.suggested = summaryEvidenceSignature(suggestionRows.map(row => row.id));
+  }
+  return required;
+}
+
+/** Every required group was covered with its current signature. */
+export function summaryCoverageComplete(
+  required: SummaryCoverageRequirements,
+  covered: Readonly<Record<string, string>>
+): boolean {
+  return (Object.entries(required) as Array<[SummaryEvidenceGroup, string]>).every(
+    ([group, signature]) => covered[group] === signature
+  );
+}

@@ -2,20 +2,12 @@ import type {
   ActivityFeedMissionItemDto,
   ActivityFeedMissionObjectiveDto
 } from '@overlord/contract';
-import {
-  CheckCircle2,
-  Circle,
-  Clock,
-  FolderOpen,
-  GitBranch,
-  ListOrdered,
-  RefreshCw,
-  Rocket
-} from 'lucide-react';
+import { CheckCircle2, Clock, FolderOpen, GitBranch, ListOrdered, Rocket } from 'lucide-react';
 
 import { formatAgentHarnessText } from '../../lib/agent-harness-text.ts';
 import { cn } from '../../lib/utils.ts';
 import { AgentIcon } from '../objectives/AgentIcon.tsx';
+import { ObjectiveStateIcon } from '../objectives/ObjectiveStateIcon.tsx';
 import { ExecutingShimmer, StatusSpinner } from '../StatusMotion.tsx';
 
 import { elapsedLabel, isInFlightObjectiveState, relativeTime } from './activity-feed-model.ts';
@@ -27,36 +19,22 @@ import {
 } from './ActivityFeedCardChrome.tsx';
 
 /**
- * The state mark for one objective row, matching the mission panel's own
- * vocabulary so the feed and the panel never disagree about what a mission is
- * doing. `pending_delivery` is a refresh mark, not a warning: the agent
- * re-attached after finishing a turn and nothing has gone wrong.
- */
-function ObjectiveStateIcon({ state }: { state: ActivityFeedMissionObjectiveDto['state'] }) {
-  if (state === 'executing') {
-    return <StatusSpinner className="text-(--color-ink-dim)" />;
-  }
-  if (state === 'pending_delivery') {
-    return <StatusSpinner icon={RefreshCw} slow className="text-(--color-ink-dim)" />;
-  }
-  if (state === 'complete') {
-    return <CheckCircle2 className="size-3.5 shrink-0 text-emerald-500" />;
-  }
-  if (state === 'launching') {
-    return <Rocket className="size-3.5 shrink-0 text-sky-500" />;
-  }
-  return <Circle className="size-3.5 shrink-0 text-(--color-ink-dim)/50" />;
-}
-
-/**
  * One objective under a mission card. Live work carries the same emerald
  * shimmer sweep the mission panel uses, so which step is running is visible
  * without reading a single word. A blocked objective (open question or choice)
- * swaps the shimmer for a solid yellow highlight.
+ * swaps the shimmer for a solid yellow highlight. The row is a button that opens
+ * the mission panel with this objective's detail (plan §9.1).
  */
-function MissionObjectiveRow({ objective }: { objective: ActivityFeedMissionObjectiveDto }) {
+function MissionObjectiveRow({
+  objective,
+  onOpen
+}: {
+  objective: ActivityFeedMissionObjectiveDto;
+  onOpen: () => void;
+}) {
   const blocked = objective.blocked === true;
   const inFlight = isInFlightObjectiveState(objective.state);
+  const title = objective.title ?? 'Untitled objective';
 
   return (
     <li
@@ -64,10 +42,14 @@ function MissionObjectiveRow({ objective }: { objective: ActivityFeedMissionObje
         'relative overflow-hidden rounded-md',
         blocked && 'bg-yellow-300/60 dark:bg-yellow-400/25'
       )}
-      aria-label={blocked ? 'Blocked: waiting on an answer' : undefined}
     >
       {inFlight && !blocked ? <ExecutingShimmer /> : null}
-      <div className="relative flex min-w-0 items-center gap-2 px-2 py-1 text-xs">
+      <button
+        type="button"
+        aria-label={blocked ? `${title} (blocked: waiting on an answer)` : title}
+        onClick={onOpen}
+        className="relative flex w-full min-w-0 items-center gap-2 rounded-md px-2 py-1 text-left text-xs outline-none hover:bg-(--color-surface-1)/60 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/50"
+      >
         <ObjectiveStateIcon state={objective.state} />
         <span
           className={cn(
@@ -76,7 +58,7 @@ function MissionObjectiveRow({ objective }: { objective: ActivityFeedMissionObje
             inFlight && 'font-medium'
           )}
         >
-          {objective.title ?? 'Untitled objective'}
+          {title}
         </span>
         {objective.autoAdvance ? (
           <ListOrdered className="size-3 shrink-0 text-(--color-ink-dim)" aria-label="Queued" />
@@ -87,7 +69,7 @@ function MissionObjectiveRow({ objective }: { objective: ActivityFeedMissionObje
         {objective.assignedAgent ? (
           <AgentIcon agentKey={objective.assignedAgent} size={12} />
         ) : null}
-      </div>
+      </button>
     </li>
   );
 }
@@ -95,8 +77,8 @@ function MissionObjectiveRow({ objective }: { objective: ActivityFeedMissionObje
 /**
  * A mission on the feed: live work, or a recent delivery. The card is the
  * mission and the rows beneath it are its whole plan. The whole header is the
- * button that opens the mission panel — the answer to "what is this agent doing"
- * lives there, not on a nested control.
+ * button that opens the mission panel (mission only); each objective row in the
+ * footer is a sibling button that opens that objective's detail.
  */
 export function MissionRunCard({
   item,
@@ -120,12 +102,8 @@ export function MissionRunCard({
       />
       <button
         type="button"
-        onClick={() =>
-          onOpenMission({
-            missionId: item.missionId,
-            objectiveDisplayId: item.objectiveDisplayId
-          })
-        }
+        // The card body opens the mission only; each objective row opens its own detail.
+        onClick={() => onOpenMission({ missionId: item.missionId })}
         className="flex w-full flex-col gap-2 p-3 pr-8 text-left"
       >
         <ActivityFeedCardMeta
@@ -198,7 +176,16 @@ export function MissionRunCard({
         <footer className="border-t border-(--color-border) bg-(--color-surface-2) px-2 py-1.5">
           <ol className="grid gap-0.5">
             {item.objectives.map(objective => (
-              <MissionObjectiveRow key={objective.objectiveId} objective={objective} />
+              <MissionObjectiveRow
+                key={objective.objectiveId}
+                objective={objective}
+                onOpen={() =>
+                  onOpenMission({
+                    missionId: item.missionId,
+                    objectiveDisplayId: objective.displayId || objective.objectiveId
+                  })
+                }
+              />
             ))}
           </ol>
         </footer>

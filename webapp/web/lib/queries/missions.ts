@@ -3,6 +3,7 @@ import type {
   BranchActionBody,
   CreateInboxItemBody,
   CreateMissionBody,
+  HumanAgentRequestDto,
   InboxItemDto,
   InboxMissionsResponse,
   MissionDeliveriesDto,
@@ -25,6 +26,7 @@ import {
   useQuery,
   useQueryClient
 } from '@tanstack/react-query';
+import { useMemo } from 'react';
 
 import { api, ApiRequestError } from '../api.ts';
 import {
@@ -45,6 +47,14 @@ import {
   isRemoteExecutionTargetSelected,
   useIsRemoteExecutionTargetForProject
 } from '../local-target-remote.ts';
+import {
+  blockingOpenRequests,
+  fetchCompleteOpenAgentRequests,
+  groupOpenRequestsByObjective,
+  OPEN_REQUEST_PAGE_LIMIT,
+  type OpenAgentRequestCollection,
+  openAgentRequestState
+} from '../open-agent-requests.ts';
 import { invalidateNonEverhourQueries as invalidateAll } from '../query-invalidation.ts';
 import { keys, type MissionBoardScope } from '../query-keys.ts';
 
@@ -203,6 +213,80 @@ export const useMissionAgentRequests = (id: string, objectiveId?: string | null,
       (objectiveId === undefined || objectiveId === null || Boolean(objectiveId)),
     refetchInterval: 5_000
   });
+
+/**
+ * The shared, complete open-request collection for a mission (or one objective).
+ *
+ * Every consumer — the mission's blocking-question slot, row tints and the objective detail —
+ * reads this one cache entry, so they never disagree. It reads every server page (status filtered
+ * before the limit), deduplicates, polls every 5s, and is refreshed by realtime `agent_request`
+ * / channel changes and by answering (both invalidate the `missionAgentRequests(id)` prefix it is
+ * nested under). A failed read keeps the last successful collection (`stale`) and reports
+ * `error` with `retry`; only `authoritative` (latest read succeeded and reached the last page)
+ * may justify treating absence as resolution.
+ */
+export function useMissionOpenAgentRequests(
+  missionId: string,
+  { objectiveId = null, enabled = true }: { objectiveId?: string | null; enabled?: boolean } = {}
+) {
+  const client = useQueryClient();
+  const queryKey = keys.missionOpenAgentRequests(missionId, objectiveId);
+  const query = useQuery({
+    queryKey,
+    queryFn: async ({ signal }) => {
+      const next = await fetchCompleteOpenAgentRequests(cursor => {
+        if (signal.aborted) throw signal.reason ?? new Error('aborted');
+        return api.listOpenAgentRequestsPage(missionId, {
+          objectiveId,
+          cursor,
+          limit: OPEN_REQUEST_PAGE_LIMIT
+        });
+      });
+      if (next.complete) return next;
+      // Missing rows in a bounded/legacy read are not evidence of resolution.
+      // Merge in the shared cache so mission and detail keep the same blocked state.
+      const previous = client.getQueryData<OpenAgentRequestCollection>(queryKey);
+      const byId = new Map(previous?.requests.map(request => [request.id, request]));
+      for (const request of next.requests) byId.set(request.id, request);
+      return {
+        ...next,
+        requests: [...byId.values()].sort(
+          (a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id)
+        )
+      };
+    },
+    enabled: enabled && Boolean(missionId),
+    refetchInterval: 5_000
+  });
+  const collection = query.data;
+  const requests = collection?.requests ?? EMPTY_OPEN_REQUESTS;
+  const state = openAgentRequestState({
+    hasData: collection !== undefined,
+    isError: query.isError,
+    complete: collection?.complete ?? false
+  });
+  return {
+    /** Open requests of every kind from the last successful read, oldest first. */
+    requests,
+    /** Open question/choice requests: the blocking subset. */
+    blocking: useMemo(() => blockingOpenRequests(requests), [requests]),
+    /** Blocking requests grouped by objective id. */
+    blockingByObjective: useMemo(
+      () => groupOpenRequestsByObjective(blockingOpenRequests(requests)),
+      [requests]
+    ),
+    state,
+    isLoading: state === 'loading',
+    /** The latest read succeeded and reached the last page. */
+    authoritative: state === 'complete',
+    /** Showing a previous collection because the latest read failed. */
+    stale: state === 'error' && collection !== undefined,
+    error: query.error,
+    retry: () => query.refetch()
+  };
+}
+
+const EMPTY_OPEN_REQUESTS: HumanAgentRequestDto[] = [];
 
 /**
  * Answer a request under revision CAS. A `resolved: false` response is not an error — it means

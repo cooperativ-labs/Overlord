@@ -67,6 +67,7 @@ export type {
   AgentRequestLeaseDto,
   AgentRequestListResponse,
   AgentRequestOption,
+  AgentRequestPageDto,
   AgentRequestResolvedElsewhereDto,
   AgentRequestStatus,
   AgentSessionChannelSelfDto,

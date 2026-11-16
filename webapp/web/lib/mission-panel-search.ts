@@ -42,13 +42,45 @@ export function parseDesktopMissionShellRoute(route: string): {
   return { missionId: match[1], objectiveDisplayId: match[2] ?? null };
 }
 
-export function objectiveMatchesFocus({
-  objective,
-  focusRef
-}: {
-  objective: { id: string; displayId?: string | null };
-  focusRef: string | undefined;
-}): boolean {
-  if (!focusRef) return false;
-  return objective.displayId === focusRef || objective.id === focusRef;
+/** The objective a `?objective=` ref names: display id first, then UUID (plan §9.1). */
+export function findObjectiveByRef<T extends { id: string; displayId?: string | null }>(
+  objectives: readonly T[],
+  ref: string | undefined | null
+): T | null {
+  if (!ref) return null;
+  return (
+    objectives.find(objective => objective.displayId === ref) ??
+    objectives.find(objective => objective.id === ref) ??
+    null
+  );
+}
+
+/** Search with the objective detail set to `ref`, keeping every other parameter. */
+export function withObjectiveSearch(
+  previous: Record<string, unknown>,
+  ref: string
+): Record<string, unknown> {
+  return { ...previous, objective: ref };
+}
+
+/** Search with the objective detail cleared, keeping every other parameter. */
+export function withoutObjectiveSearch(previous: Record<string, unknown>): Record<string, unknown> {
+  const next = { ...previous };
+  delete next.objective;
+  return next;
+}
+
+/**
+ * History-state marker on a detail entry this UI pushed on top of the mission-only entry. Only
+ * such an entry may be closed with `history.back()`; a direct, copied or feed link has no
+ * mission-only entry beneath it, so closing it replaces the URL instead (plan §9.1).
+ */
+export const OBJECTIVE_DETAIL_HISTORY_KEY = 'overlordObjectiveDetailPushed';
+
+export function isLocallyPushedObjectiveDetail(state: unknown): boolean {
+  return Boolean(
+    state &&
+    typeof state === 'object' &&
+    (state as Record<string, unknown>)[OBJECTIVE_DETAIL_HISTORY_KEY] === true
+  );
 }

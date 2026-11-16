@@ -1,5 +1,7 @@
 import type { ObjectiveState } from '@overlord/contract';
 import {
+  ArrowDown,
+  ArrowUp,
   Check,
   CheckCircle2,
   Copy,
@@ -8,12 +10,14 @@ import {
   MoreVertical,
   Pencil,
   RotateCcw,
-  Trash2
+  Trash2,
+  Unplug
 } from 'lucide-react';
 import { useState } from 'react';
 
 import { useCopyToClipboard } from '../../lib/hooks/use-copy-to-clipboard.ts';
 import { useDeleteObjective, useUpdateObjective } from '../../lib/queries.ts';
+import { cn } from '../../lib/utils.ts';
 import { Button } from '../ui/button.tsx';
 import {
   Dialog,
@@ -46,15 +50,27 @@ type ObjectiveMenuButtonProps = {
   resumeCommand?: string | null;
   /** Agent's native session id; when present the menu offers a copy action. */
   sessionId?: string | null;
-  onAddToQueue?: () => void;
-  addingToQueue?: boolean;
+  /** "Add to queue…": opens the Run Queue popover in its add view. */
+  onOpenAddToQueue?: () => void;
+  /** Keyboard reordering. Each item shows only when its handler is given. */
+  onMoveUp?: () => void;
+  onMoveDown?: () => void;
+  /** Offer "Force disconnect" (with its confirmation) for an executing objective. */
+  showForceDisconnect?: boolean;
+  /** Called after the objective was deleted, so a host can close its detail. */
+  onDeleted?: () => void;
+  /** Extra trigger classes (size on dense rows). */
+  triggerClassName?: string;
 };
 
 /**
- * Kebab menu of actions for a single objective. Replaces the inline state
- * badge that previously doubled as a state picker: state transitions are now
- * explicit menu items ("Mark complete" / "Mark draft") alongside delete, so the
- * objective row reads as a summary rather than an editable control.
+ * Kebab menu of actions for a single objective, in every state. Groups, in order: copy
+ * (objective ID, resume command, session ID); Edit title; Move up / Move down (keyboard
+ * reordering of not-started objectives); Add to queue…; Mark complete / Mark draft (with the
+ * executing and complete confirmations); Force disconnect (executing); Delete. Items whose
+ * handler is absent are hidden, so hosts opt into what their state allows.
+ *
+ * Every click inside stops propagation: the menu sits on rows that open on click.
  */
 export function ObjectiveMenuButton({
   objectiveId,
@@ -63,8 +79,12 @@ export function ObjectiveMenuButton({
   onEditTitle,
   resumeCommand = null,
   sessionId = null,
-  onAddToQueue,
-  addingToQueue = false
+  onOpenAddToQueue,
+  onMoveUp,
+  onMoveDown,
+  showForceDisconnect = false,
+  onDeleted,
+  triggerClassName
 }: ObjectiveMenuButtonProps) {
   const update = useUpdateObjective();
   const remove = useDeleteObjective();
@@ -73,11 +93,15 @@ export function ObjectiveMenuButton({
   const { copied: sessionCopied, copy: copySession } = useCopyToClipboard();
   const [confirmDisconnectOpen, setConfirmDisconnectOpen] = useState(false);
   const [confirmReopenOpen, setConfirmReopenOpen] = useState(false);
+  const [confirmForceDisconnectOpen, setConfirmForceDisconnectOpen] = useState(false);
 
   const pending = update.isPending || remove.isPending;
 
   const canShowMarkComplete = state !== 'complete';
   const canShowMarkDraft = state !== 'draft';
+  const canShowForceDisconnect = showForceDisconnect && state === 'executing';
+  const canShowMove = Boolean(onMoveUp || onMoveDown);
+  const canShowQueue = Boolean(onOpenAddToQueue);
 
   function setState(next: ObjectiveState) {
     update.mutate({ id: objectiveId, body: { state: next } });
@@ -107,8 +131,15 @@ export function ObjectiveMenuButton({
     setConfirmReopenOpen(false);
   }
 
+  async function confirmForceDisconnect() {
+    await update.mutateAsync({ id: objectiveId, body: { state: 'draft' } });
+    setConfirmForceDisconnectOpen(false);
+  }
+
   function handleDelete() {
-    if (confirm('Delete this objective?')) remove.mutate(objectiveId);
+    if (confirm('Delete this objective?')) {
+      remove.mutate(objectiveId, { onSuccess: () => onDeleted?.() });
+    }
   }
 
   async function handleCopyId() {
@@ -129,12 +160,19 @@ export function ObjectiveMenuButton({
         <DropdownMenuTrigger
           aria-label="Objective options"
           title="Objective options"
-          className="flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-full text-muted-foreground outline-none hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50"
+          className={cn(
+            'flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-full text-muted-foreground outline-none hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50',
+            triggerClassName
+          )}
           onClick={event => event.stopPropagation()}
         >
           <MoreVertical className="h-4 w-4" />
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="min-w-[160px]">
+        <DropdownMenuContent
+          align="end"
+          className="min-w-[160px]"
+          onClick={event => event.stopPropagation()}
+        >
           <DropdownMenuItem className="gap-2 text-xs" onClick={handleCopyId}>
             {copied ? (
               <Check className="h-3.5 w-3.5 text-green-600" />
@@ -171,16 +209,29 @@ export function ObjectiveMenuButton({
             </DropdownMenuItem>
           ) : null}
           {onEditTitle ? <DropdownMenuSeparator /> : null}
-          {onAddToQueue ? (
-            <DropdownMenuItem
-              className="gap-2 text-xs"
-              disabled={addingToQueue}
-              onClick={onAddToQueue}
-            >
+          {canShowMove ? (
+            <>
+              {onMoveUp ? (
+                <DropdownMenuItem className="gap-2 text-xs" onClick={onMoveUp}>
+                  <ArrowUp className="h-3.5 w-3.5" />
+                  Move up
+                </DropdownMenuItem>
+              ) : null}
+              {onMoveDown ? (
+                <DropdownMenuItem className="gap-2 text-xs" onClick={onMoveDown}>
+                  <ArrowDown className="h-3.5 w-3.5" />
+                  Move down
+                </DropdownMenuItem>
+              ) : null}
+            </>
+          ) : null}
+          {onOpenAddToQueue ? (
+            <DropdownMenuItem className="gap-2 text-xs" onClick={onOpenAddToQueue}>
               <ListOrdered className="h-3.5 w-3.5" />
-              {addingToQueue ? 'Adding to queue…' : 'Add to queue'}
+              Add to queue…
             </DropdownMenuItem>
           ) : null}
+          {canShowMove || canShowQueue ? <DropdownMenuSeparator /> : null}
           {canShowMarkComplete ? (
             <DropdownMenuItem
               className="gap-2 text-xs"
@@ -198,6 +249,20 @@ export function ObjectiveMenuButton({
             </DropdownMenuItem>
           ) : null}
           {canShowMarkComplete || canShowMarkDraft ? <DropdownMenuSeparator /> : null}
+          {canShowForceDisconnect ? (
+            <>
+              <DropdownMenuItem
+                className="gap-2 text-xs"
+                variant="destructive"
+                disabled={pending}
+                onClick={() => setConfirmForceDisconnectOpen(true)}
+              >
+                <Unplug className="h-3.5 w-3.5" />
+                Force disconnect
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+            </>
+          ) : null}
           <DropdownMenuItem
             className="gap-2 text-xs"
             variant="destructive"
@@ -210,7 +275,7 @@ export function ObjectiveMenuButton({
         </DropdownMenuContent>
       </DropdownMenu>
       <Dialog open={confirmDisconnectOpen} onOpenChange={setConfirmDisconnectOpen}>
-        <DialogContent>
+        <DialogContent onClick={event => event.stopPropagation()}>
           <DialogHeader>
             <DialogTitle>Disconnect this executing objective?</DialogTitle>
             <DialogDescription>
@@ -233,8 +298,32 @@ export function ObjectiveMenuButton({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <Dialog open={confirmForceDisconnectOpen} onOpenChange={setConfirmForceDisconnectOpen}>
+        <DialogContent onClick={event => event.stopPropagation()}>
+          <DialogHeader>
+            <DialogTitle>Force disconnect this objective?</DialogTitle>
+            <DialogDescription>
+              This ends Overlord&apos;s active session and clears its pending launch. The objective
+              returns to the top of the draft queue. Its deliveries, file changes, and terminal
+              session are kept as previous runs.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="secondary" onClick={() => setConfirmForceDisconnectOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={pending}
+              onClick={() => void confirmForceDisconnect()}
+            >
+              {update.isPending ? 'Disconnecting…' : 'Force disconnect'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <Dialog open={confirmReopenOpen} onOpenChange={setConfirmReopenOpen}>
-        <DialogContent>
+        <DialogContent onClick={event => event.stopPropagation()}>
           <DialogHeader>
             <DialogTitle>Mark this objective as draft?</DialogTitle>
             <DialogDescription>

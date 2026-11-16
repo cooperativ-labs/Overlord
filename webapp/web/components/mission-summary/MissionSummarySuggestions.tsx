@@ -168,20 +168,29 @@ function OpenSuggestionRow({
 export function MissionSummarySuggestions({
   rows,
   missionId,
-  now
+  now,
+  headless = false
 }: {
   rows: readonly SummarySuggestionRow[];
   missionId: string;
   now: string;
+  /** Rendered inside a tab that already names it: no top border and no heading. */
+  headless?: boolean;
 }) {
   const headingId = useId();
   if (rows.length === 0) return null;
   return (
     <section
-      aria-labelledby={headingId}
-      className="grid gap-1.5 border-t border-(--color-border) bg-violet-50/60 px-5 pb-2.5 pt-3 dark:bg-violet-500/5"
+      aria-labelledby={headless ? undefined : headingId}
+      aria-label={headless ? 'Suggested next' : undefined}
+      className={cn(
+        'grid gap-1.5 bg-violet-50/60 px-5 pb-2.5 pt-3 dark:bg-violet-500/5',
+        !headless && 'border-t border-(--color-border)'
+      )}
     >
-      <SummaryBlockHeading id={headingId} label="Suggested next" count={rows.length} />
+      {headless ? null : (
+        <SummaryBlockHeading id={headingId} label="Suggested next" count={rows.length} />
+      )}
       <ul className="grid">
         {rows.map(row => (
           <OpenSuggestionRow key={row.id} row={row} missionId={missionId} now={now} />

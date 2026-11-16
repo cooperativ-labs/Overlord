@@ -1,7 +1,8 @@
-import { type ReactNode } from 'react';
+import { type ReactNode, useEffect } from 'react';
 
 import { AuthScreen } from '@/components/auth/AuthScreen';
 import { authClient } from '@/lib/auth-client';
+import { setDismissalAccount } from '@/lib/dismissed-agent-requests';
 
 type AuthGateProps = {
   children: ReactNode;
@@ -9,6 +10,9 @@ type AuthGateProps = {
 
 export function AuthGate({ children }: AuthGateProps) {
   const session = authClient.useSession();
+  const accountId = session.data?.user?.id ?? null;
+  // Client-side dismissals are scoped per account (mission-panel-redesign plan §5).
+  useEffect(() => setDismissalAccount(accountId), [accountId]);
 
   if (session.isPending) {
     return (

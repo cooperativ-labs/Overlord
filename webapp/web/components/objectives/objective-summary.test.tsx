@@ -1,20 +1,17 @@
-import type { MissionDetailDto, ObjectiveDto } from '@overlord/contract';
+import type { ObjectiveDto } from '@overlord/contract';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, cleanup, fireEvent, render, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import assert from 'node:assert/strict';
 import { afterEach, beforeEach, describe, it } from 'node:test';
-import type { ReactNode } from 'react';
 
-import { partitionMissionEvidence } from '../../lib/objective-evidence.ts';
+import { resetObjectiveEditBuffers } from '../../lib/objective-edit-buffers.ts';
 import { resetSummaryBuffers } from '../../lib/objective-summary-buffers.ts';
-import { MissionLatchSessionProvider } from '../ObjectiveTerminalSessions.tsx';
-
-import { MissionObjectivesSection } from './MissionObjectivesSection.tsx';
+import { ObjectiveDetailTabs } from '../objective-detail/ObjectiveDetailTabs.tsx';
 
 /**
- * coo:1275 — objective summaries in the web/desktop mission panel. These render the real
- * panel (queue head, compact cards, launching and executed rows) against a stubbed REST
- * transport, so every assertion about what the panel *sends* is about real requests.
+ * coo:1275 — objective summaries, as the objective detail's Summary and Instructions tabs
+ * present them (coo:1281 plan §9.6). These render the real tabs against a stubbed REST
+ * transport, so every assertion about what the detail *sends* is about real requests.
  */
 
 const LONG_INSTRUCTION = `Implement the description UI in webapp/web/components/objectives. ${'Keep every queue rule. '.repeat(20)}`;
@@ -68,6 +65,7 @@ beforeEach(() => {
   requests = [];
   respond = () => null;
   resetSummaryBuffers();
+  resetObjectiveEditBuffers();
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(String(input), 'http://localhost');
     const method = (init?.method ?? 'GET').toUpperCase();
@@ -149,18 +147,7 @@ function withSummary(id: string, overrides: Partial<ObjectiveDto> = {}): Objecti
   });
 }
 
-function mission(objectives: ObjectiveDto[]): MissionDetailDto {
-  return {
-    id: 'mission-1',
-    projectId: 'project-1',
-    workspaceId: 'ws-1',
-    allowParallelObjectives: false,
-    executionRequests: [],
-    objectives
-  } as unknown as MissionDetailDto;
-}
-
-function setup(initial: ObjectiveDto[]) {
+function setup(initial: ObjectiveDto) {
   const qc = new QueryClient({
     // gcTime Infinity schedules no garbage-collection timers, so the test process can exit.
     defaultOptions: {
@@ -169,126 +156,83 @@ function setup(initial: ObjectiveDto[]) {
     }
   });
   clients.push(qc);
-  const wrap = (node: ReactNode) => (
+  const view = (current: ObjectiveDto) => (
     <QueryClientProvider client={qc}>
-      <MissionLatchSessionProvider missionId="mission-1" workspaceId="ws-1" sessions={[]}>
-        {node}
-      </MissionLatchSessionProvider>
+      <ObjectiveDetailTabs
+        // Keyed by objective id, as the detail mounts it.
+        key={current.id}
+        objective={current}
+        emptyDraftGuard={{ attachmentCount: 0, hasHistory: false }}
+        onObjectiveDeleted={() => undefined}
+      />
     </QueryClientProvider>
   );
-  const panel = (objectives: ObjectiveDto[]) =>
-    wrap(
-      <MissionObjectivesSection
-        mission={mission(objectives)}
-        evidence={partitionMissionEvidence({ objectives })}
-        evidenceLoading={{ deliveries: false }}
-      />
-    );
-  const utils = render(panel(initial));
-  return { ...utils, rerenderPanel: (next: ObjectiveDto[]) => utils.rerender(panel(next)) };
-}
-
-/** The queue card that owns a given objective (cards carry `data-objective-ref`). */
-function card(displayId: string): HTMLElement {
-  const anchor = document.querySelector(`[data-objective-ref="${displayId}"]`);
-  assert.ok(anchor, `card ${displayId} is rendered`);
-  return anchor as HTMLElement;
-}
-
-function bodyLayout(displayId: string): string | null {
-  return within(card(displayId)).getByTestId('objective-card-body').getAttribute('data-layout');
+  const utils = render(view(initial));
+  return { ...utils, rerenderTabs: (next: ObjectiveDto) => utils.rerender(view(next)) };
 }
 
 const descriptionRequests = () => requests.filter(r => r.path.endsWith('/description-requests'));
+const summaryEditor = () =>
+  screen.getByRole('textbox', { name: 'Objective summary' }) as HTMLTextAreaElement;
 
-describe('queue head and compact cards', () => {
-  it('shows the head in full: title, summary, provenance, actions and a closed instruction disclosure', () => {
-    setup([withSummary('a', { position: 0 }), withSummary('b', { position: 1 })]);
-    const head = within(card('coo:1.a'));
-    assert.equal(bodyLayout('coo:1.a'), 'full');
-    assert.ok(head.getByText('Title a'));
-    assert.ok(head.getByText(/Show a short summary on each objective card/));
-    assert.ok(head.getByText('AI summary'));
-    assert.ok(head.getByRole('button', { name: 'Edit summary' }));
-    assert.ok(head.getByRole('button', { name: 'Regenerate summary' }));
-    assert.ok(head.getByRole('button', { name: 'Remove summary' }));
+describe('Summary and Instructions tabs', () => {
+  it('opens on Summary: prose, provenance, mention labels and actions; instructions behind their tab', () => {
+    setup(withSummary('a'));
+    const summaryTab = screen.getByRole('tab', { name: 'Summary' });
+    assert.equal(summaryTab.getAttribute('aria-selected'), 'true');
+    assert.ok(screen.getByText(/Show a short summary on each objective card/));
+    assert.ok(screen.getByText('AI summary'));
+    assert.ok(screen.getByRole('img', { name: 'Summary mentions 1 decision' }));
+    assert.ok(screen.getByRole('img', { name: 'Summary mentions 1 caution' }));
+    assert.ok(screen.getByRole('button', { name: 'Edit summary' }));
+    assert.ok(screen.getByRole('button', { name: 'Regenerate summary' }));
+    assert.ok(screen.getByRole('button', { name: 'Remove summary' }));
 
-    const disclosure = head.getByRole('button', { name: /Instructions/ });
-    assert.equal(disclosure.getAttribute('aria-expanded'), 'false');
-    const instructions = document.getElementById(disclosure.getAttribute('aria-controls')!)!;
-    assert.equal(instructions.hidden, true);
-    fireEvent.click(disclosure);
-    assert.equal(disclosure.getAttribute('aria-expanded'), 'true');
-    assert.equal(instructions.hidden, false);
-    assert.match(instructions.textContent ?? '', /Implement the description UI/);
+    const instructionsTab = screen.getByRole('tab', { name: 'Instructions' });
+    const panel = document.getElementById(instructionsTab.getAttribute('aria-controls')!)!;
+    assert.equal(panel.hidden, true);
+    fireEvent.click(instructionsTab);
+    assert.equal(panel.hidden, false);
+    assert.match(panel.textContent ?? '', /Implement the description UI/);
     // Rendering never asks for a summary.
     assert.equal(descriptionRequests().length, 0);
   });
 
-  it('keeps decision and caution indicators visible and keyboard-operable on a collapsed compact card', () => {
-    setup([withSummary('a', { position: 0 }), withSummary('b', { position: 1 })]);
-    const compact = within(card('coo:1.b'));
-    assert.equal(bodyLayout('coo:1.b'), 'compact');
-    assert.ok(compact.getByText('Title b'));
-    // Read preview only: no controls, no instructions.
-    assert.equal(compact.queryByRole('button', { name: 'Edit summary' }), null);
-    const decision = compact.getByRole('button', {
-      name: 'Summary mentions 1 decision. Show the summary'
-    });
-    assert.ok(
-      compact.getByRole('button', { name: 'Summary mentions 1 caution. Show the summary' })
+  it('shows person-written and short instructions as today, with no tab row or summary controls', () => {
+    const { unmount } = setup(
+      objective({ id: 'a', instructionText: 'Fix the typo.', descriptionEligible: false })
     );
-    assert.equal(decision.getAttribute('aria-expanded'), 'false');
-    const expand = compact.getByRole('button', { name: 'Expand objective' });
-    assert.equal(expand.getAttribute('aria-expanded'), 'false');
-
-    fireEvent.click(decision);
-    assert.equal(bodyLayout('coo:1.b'), 'compact-expanded');
-    assert.ok(compact.getByRole('button', { name: 'Edit summary' }));
-    assert.equal(
-      compact.getByRole('button', { name: 'Collapse objective' }).getAttribute('aria-expanded'),
-      'true'
-    );
+    assert.ok(screen.getByText('Fix the typo.'));
+    assert.equal(screen.queryByRole('tablist'), null, 'no tabs without a summary');
+    assert.equal(screen.queryByRole('button', { name: 'Summarize instructions' }), null);
+    unmount();
+    setup(objective({ id: 'b', instructionText: '' }));
+    assert.equal(screen.queryByTestId('objective-summary-fallback'), null);
   });
 
-  it('shows person-written and short instructions as today, with no summary controls', () => {
-    setup([
-      objective({ id: 'a', instructionText: 'Fix the typo.', descriptionEligible: false }),
-      objective({ id: 'b', position: 1, instructionText: '' })
-    ]);
-    const head = within(card('coo:1.a'));
-    assert.ok(head.getByText('Fix the typo.'));
-    assert.equal(head.queryByText('Title a'), null, 'no summary layout without a summary');
-    assert.equal(head.queryByRole('button', { name: 'Summarize instructions' }), null);
-    const blank = within(card('coo:1.b'));
-    assert.equal(blank.queryByTestId('objective-summary-fallback'), null);
-  });
-
-  it('a blank head keeps its placeholder even when an old summary is stored', () => {
-    setup([withSummary('a', { instructionText: '' })]);
-    const head = within(card('coo:1.a'));
-    assert.ok(head.getByText(/Describe what the agent should do/));
-    assert.equal(head.queryByTestId('objective-summary-prose'), null);
+  it('a blank draft keeps its instruction editor even when an old summary is stored', () => {
+    setup(withSummary('a', { instructionText: '' }));
+    assert.equal(screen.queryByRole('tablist'), null);
+    assert.equal(screen.queryByTestId('objective-summary-prose'), null);
+    assert.ok(screen.getByRole('button', { name: 'Edit instructions' }));
   });
 });
 
 describe('summary states and actions', () => {
   it('Summarize asks the server, never waits for a model, and leaves the instructions readable', async () => {
-    setup([objective({ id: 'a' })]);
-    const head = within(card('coo:1.a'));
-    assert.ok(head.getByText(/Implement the description UI/));
-    fireEvent.click(head.getByRole('button', { name: 'Summarize instructions' }));
+    setup(objective({ id: 'a' }));
+    assert.ok(screen.getByText(/Implement the description UI/));
+    fireEvent.click(screen.getByRole('button', { name: 'Summarize instructions' }));
     await waitFor(() => assert.equal(descriptionRequests().length, 1));
     assert.deepEqual(descriptionRequests()[0]!.body, { mode: 'summarize' });
     assert.equal(descriptionRequests()[0]!.path, '/api/objectives/a/description-requests');
   });
 
   it('pending keeps the instructions with "Writing summary…", and Cancel removes durably', async () => {
-    setup([objective({ id: 'a', descriptionStatus: 'pending' })]);
-    const head = within(card('coo:1.a'));
-    assert.ok(head.getByText('Writing summary…'));
-    assert.ok(head.getByText(/Implement the description UI/));
-    fireEvent.click(head.getByRole('button', { name: 'Stop summary' }));
+    setup(objective({ id: 'a', descriptionStatus: 'pending' }));
+    assert.ok(screen.getByText('Writing summary…'));
+    assert.ok(screen.getByText(/Implement the description UI/));
+    fireEvent.click(screen.getByRole('button', { name: 'Stop summary' }));
     await waitFor(() => assert.ok(requests.some(r => r.method === 'PATCH')));
     const patch = requests.find(r => r.method === 'PATCH')!;
     assert.equal(patch.path, '/api/objectives/a');
@@ -296,168 +240,101 @@ describe('summary states and actions', () => {
   });
 
   it('failure shows a stable message and Retry', async () => {
-    setup([
+    setup(
       objective({
         id: 'a',
         descriptionStatus: 'failed',
         descriptionFailureCode: 'provider_unavailable'
       })
-    ]);
-    const head = within(card('coo:1.a'));
-    assert.ok(head.getByText('Summary unavailable: no model provider is configured.'));
-    fireEvent.click(head.getByRole('button', { name: 'Retry summary' }));
+    );
+    assert.ok(screen.getByText('Summary unavailable: no model provider is configured.'));
+    fireEvent.click(screen.getByRole('button', { name: 'Retry summary' }));
     await waitFor(() => assert.deepEqual(descriptionRequests()[0]?.body, { mode: 'retry' }));
   });
 
   it('regeneration keeps the prior summary with stale and pending lines', () => {
-    setup([withSummary('a', { descriptionStale: true, descriptionStatus: 'pending' })]);
-    const head = within(card('coo:1.a'));
-    assert.ok(head.getByText(/Show a short summary/));
-    assert.ok(head.getByText('Writing a new summary…'));
-    assert.equal(head.queryByRole('button', { name: 'Regenerate summary' }), null);
+    setup(withSummary('a', { descriptionStale: true, descriptionStatus: 'pending' }));
+    assert.ok(screen.getByText(/Show a short summary/));
+    assert.ok(screen.getByText('Writing a new summary…'));
+    assert.equal(screen.queryByRole('button', { name: 'Regenerate summary' }), null);
   });
 
   it('Remove keeps the summary absent until a person clicks Summarize, whatever arrives later', async () => {
-    const { rerenderPanel } = setup([withSummary('a')]);
-    fireEvent.click(within(card('coo:1.a')).getByRole('button', { name: 'Remove summary' }));
+    const { rerenderTabs } = setup(withSummary('a'));
+    fireEvent.click(screen.getByRole('button', { name: 'Remove summary' }));
     await waitFor(() => assert.ok(requests.some(r => r.method === 'PATCH')));
     assert.deepEqual(requests.find(r => r.method === 'PATCH')!.body, { description: null });
 
     // Server state after Remove, then after an instruction edit and a catch-up scan:
-    // still suppressed, still no summary. The panel shows instructions and Summarize.
-    rerenderPanel([objective({ id: 'a', descriptionSuppressed: true, descriptionRevision: 4 })]);
-    let head = within(card('coo:1.a'));
-    assert.ok(head.getByText('Summary removed'));
-    assert.ok(head.getByText(/Implement the description UI/));
-    assert.equal(head.queryByTestId('objective-summary-prose'), null);
-    rerenderPanel([
+    // still suppressed, still no summary. The detail shows instructions and Summarize.
+    rerenderTabs(objective({ id: 'a', descriptionSuppressed: true, descriptionRevision: 4 }));
+    assert.ok(screen.getByText('Summary removed'));
+    assert.ok(screen.getByText(/Implement the description UI/));
+    assert.equal(screen.queryByTestId('objective-summary-prose'), null);
+    rerenderTabs(
       objective({
         id: 'a',
         instructionText: `${LONG_INSTRUCTION} Edited.`,
         descriptionSuppressed: true,
         descriptionRevision: 4
       })
-    ]);
-    head = within(card('coo:1.a'));
-    assert.equal(head.queryByTestId('objective-summary-prose'), null);
+    );
+    assert.equal(screen.queryByTestId('objective-summary-prose'), null);
     assert.equal(descriptionRequests().length, 0, 'nothing re-enables it automatically');
 
-    fireEvent.click(head.getByRole('button', { name: 'Summarize instructions' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Summarize instructions' }));
     await waitFor(() => assert.deepEqual(descriptionRequests()[0]?.body, { mode: 'summarize' }));
   });
 
   it('attributes edits accurately: "Edited by you" only to the editor', async () => {
-    setup([
-      withSummary('a', { descriptionSource: 'user', descriptionAuthorWorkspaceUserId: 'wu-me' }),
-      withSummary('b', {
-        position: 1,
-        descriptionSource: 'user',
-        descriptionAuthorWorkspaceUserId: 'wu-ana'
-      }),
-      withSummary('c', {
-        position: 2,
-        descriptionSource: 'agent',
-        descriptionAuthorAgent: null
-      })
-    ]);
-    await waitFor(() => assert.ok(within(card('coo:1.a')).getByText('Edited by you')));
-    fireEvent.click(within(card('coo:1.b')).getByRole('button', { name: 'Expand objective' }));
-    await waitFor(() => assert.ok(within(card('coo:1.b')).getByText('Edited by Ana')));
-    fireEvent.click(within(card('coo:1.c')).getByRole('button', { name: 'Expand objective' }));
-    assert.ok(within(card('coo:1.c')).getByText('Written by agent'));
+    const mine = setup(
+      withSummary('a', { descriptionSource: 'user', descriptionAuthorWorkspaceUserId: 'wu-me' })
+    );
+    await waitFor(() => assert.ok(screen.getByText('Edited by you')));
+    mine.unmount();
+    const ana = setup(
+      withSummary('b', { descriptionSource: 'user', descriptionAuthorWorkspaceUserId: 'wu-ana' })
+    );
+    await waitFor(() => assert.ok(screen.getByText('Edited by Ana')));
+    ana.unmount();
+    setup(withSummary('c', { descriptionSource: 'agent', descriptionAuthorAgent: null }));
+    assert.ok(screen.getByText('Written by agent'));
   });
 });
 
-describe('editing through reorder, realtime results and launch', () => {
-  it('keeps the summary buffer, the instruction editor and expansion by objective id across a head change', () => {
-    const a = withSummary('a', { position: 0 });
-    const b = withSummary('b', { position: 1 });
-    const c = objective({ id: 'c', position: 2 });
-    const { rerenderPanel } = setup([a, b, c]);
-
-    // Open B's summary editor (compact → expand → Edit) and type.
-    fireEvent.click(within(card('coo:1.b')).getByRole('button', { name: 'Expand objective' }));
-    fireEvent.click(within(card('coo:1.b')).getByRole('button', { name: 'Edit summary' }));
-    const summaryEditor = within(card('coo:1.b')).getByRole('textbox', {
-      name: 'Objective summary'
-    }) as HTMLTextAreaElement;
-    fireEvent.change(summaryEditor, { target: { value: 'My unsaved summary.' } });
-
-    // Start an instruction edit on A (the head) and type without committing.
-    fireEvent.click(within(card('coo:1.a')).getByRole('button', { name: /Instructions/ }));
-    fireEvent.click(within(card('coo:1.a')).getByTitle('Click to edit'));
-    const instructionEditor = within(card('coo:1.a')).getByRole('textbox', {
-      name: 'Objective instruction'
-    }) as HTMLTextAreaElement;
-    fireEvent.focus(instructionEditor);
-    fireEvent.change(instructionEditor, { target: { value: 'My unsaved instruction.' } });
-
-    // Expand C.
-    fireEvent.click(within(card('coo:1.c')).getByRole('button', { name: 'Expand objective' }));
-
-    // A refetch brings a new order with B at the head (another client reordered).
-    rerenderPanel([
-      { ...b, position: 0 },
-      { ...a, position: 1 },
-      { ...c, position: 2 }
-    ]);
-
-    assert.equal(bodyLayout('coo:1.b'), 'full');
-    assert.equal(
-      (
-        within(card('coo:1.b')).getByRole('textbox', {
-          name: 'Objective summary'
-        }) as HTMLTextAreaElement
-      ).value,
-      'My unsaved summary.'
-    );
-    // A is compact now but its active editor is never clipped or remounted.
-    assert.notEqual(bodyLayout('coo:1.a'), 'compact');
-    const stillEditing = within(card('coo:1.a')).getByRole('textbox', {
-      name: 'Objective instruction'
-    }) as HTMLTextAreaElement;
-    assert.equal(stillEditing, instructionEditor, 'same element: no remount');
-    assert.equal(stillEditing.value, 'My unsaved instruction.');
-    assert.equal(bodyLayout('coo:1.c'), 'compact-expanded');
-    assert.equal(descriptionRequests().length, 0, 'reorder never generates');
-  });
-
-  it('a summary that arrives mid-edit does not replace the instruction editor', () => {
+describe('editing through realtime results and launch', () => {
+  it('a summary that arrives mid-edit keeps the instruction editor and selects Instructions', () => {
     const a = objective({ id: 'a', descriptionStatus: 'pending' });
-    const { rerenderPanel } = setup([a]);
-    fireEvent.click(within(card('coo:1.a')).getByTitle('Click to edit'));
-    const editor = within(card('coo:1.a')).getByRole('textbox', {
+    const { rerenderTabs } = setup(a);
+    fireEvent.click(screen.getByRole('button', { name: 'Edit instructions' }));
+    const editor = screen.getByRole('textbox', {
       name: 'Objective instruction'
     }) as HTMLTextAreaElement;
     fireEvent.focus(editor);
     fireEvent.change(editor, { target: { value: 'Still typing' } });
 
-    rerenderPanel([withSummary('a', { descriptionRevision: 1 })]);
+    rerenderTabs(withSummary('a', { descriptionRevision: 1 }));
 
-    const after = within(card('coo:1.a')).getByRole('textbox', { name: 'Objective instruction' });
-    assert.equal(after, editor);
+    const after = screen.getByRole('textbox', { name: 'Objective instruction' });
     assert.equal((after as HTMLTextAreaElement).value, 'Still typing');
-    const disclosure = within(card('coo:1.a')).getByRole('button', { name: /Instructions/ });
-    assert.equal(disclosure.getAttribute('aria-expanded'), 'true');
-    assert.ok(within(card('coo:1.a')).getByTestId('objective-summary-prose'));
+    assert.equal(
+      screen.getByRole('tab', { name: 'Instructions' }).getAttribute('aria-selected'),
+      'true'
+    );
+    assert.ok(screen.getByTestId('objective-summary-prose'));
   });
 
-  it('keeps an unsaved summary when the card launches and remounts in the launching group', () => {
+  it('keeps an unsaved summary when the objective launches, and across a remount', () => {
     const a = withSummary('a');
-    const { rerenderPanel } = setup([a]);
-    fireEvent.click(within(card('coo:1.a')).getByRole('button', { name: 'Edit summary' }));
-    fireEvent.change(within(card('coo:1.a')).getByRole('textbox', { name: 'Objective summary' }), {
-      target: { value: 'Edit across launch.' }
-    });
-    rerenderPanel([{ ...a, state: 'launching', launchedAt: '2026-11-14T10:05:00.000Z' }]);
-    assert.equal(
-      (
-        within(card('coo:1.a')).getByRole('textbox', {
-          name: 'Objective summary'
-        }) as HTMLTextAreaElement
-      ).value,
-      'Edit across launch.'
-    );
+    const { rerenderTabs, unmount } = setup(a);
+    fireEvent.click(screen.getByRole('button', { name: 'Edit summary' }));
+    fireEvent.change(summaryEditor(), { target: { value: 'Edit across launch.' } });
+    const launching = { ...a, state: 'launching' as const, launchedAt: '2026-11-14T10:05:00.000Z' };
+    rerenderTabs(launching);
+    assert.equal(summaryEditor().value, 'Edit across launch.');
+    unmount();
+    setup(launching);
+    assert.equal(summaryEditor().value, 'Edit across launch.');
   });
 
   it('saves with the starting revision and keeps the text on a 409 conflict', async () => {
@@ -471,78 +348,53 @@ describe('editing through reorder, realtime results and launch', () => {
             }
           }
         : null;
-    setup([withSummary('a', { descriptionRevision: 3 })]);
-    fireEvent.click(within(card('coo:1.a')).getByRole('button', { name: 'Edit summary' }));
-    const editor = within(card('coo:1.a')).getByRole('textbox', { name: 'Objective summary' });
-    fireEvent.change(editor, { target: { value: 'Mine.' } });
-    fireEvent.click(within(card('coo:1.a')).getByRole('button', { name: 'Save summary' }));
-    await waitFor(() =>
-      assert.ok(within(card('coo:1.a')).getByText(/changed while you were editing/))
-    );
+    setup(withSummary('a', { descriptionRevision: 3 }));
+    fireEvent.click(screen.getByRole('button', { name: 'Edit summary' }));
+    fireEvent.change(summaryEditor(), { target: { value: 'Mine.' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save summary' }));
+    await waitFor(() => assert.ok(screen.getByText(/changed while you were editing/)));
     assert.deepEqual(requests.find(r => r.method === 'PATCH')!.body, {
       description: 'Mine.',
       expectedDescriptionRevision: 3
     });
-    assert.equal(
-      (
-        within(card('coo:1.a')).getByRole('textbox', {
-          name: 'Objective summary'
-        }) as HTMLTextAreaElement
-      ).value,
-      'Mine.'
-    );
+    assert.equal(summaryEditor().value, 'Mine.');
   });
 
   it('Escape cancels the summary edit without a request', () => {
-    setup([withSummary('a')]);
-    fireEvent.click(within(card('coo:1.a')).getByRole('button', { name: 'Edit summary' }));
-    const editor = within(card('coo:1.a')).getByRole('textbox', { name: 'Objective summary' });
-    fireEvent.keyDown(editor, { key: 'Escape' });
-    assert.equal(
-      within(card('coo:1.a')).queryByRole('textbox', { name: 'Objective summary' }),
-      null
-    );
+    setup(withSummary('a'));
+    fireEvent.click(screen.getByRole('button', { name: 'Edit summary' }));
+    fireEvent.keyDown(summaryEditor(), { key: 'Escape' });
+    assert.equal(screen.queryByRole('textbox', { name: 'Objective summary' }), null);
     assert.equal(requests.filter(r => r.method === 'PATCH').length, 0);
   });
 });
 
-describe('executed rows', () => {
-  it('closed rows show the title and a decision badge; the summary appears only when open', async () => {
-    const done = withSummary('a', {
-      state: 'complete',
-      startedAt: '2026-11-14T10:00:00.000Z',
-      completedAt: '2026-11-14T11:00:00.000Z'
-    });
-    setup([done]);
-    const row = within(card('coo:1.a'));
-    assert.ok(row.getByText('Title a'));
-    assert.equal(row.queryByTestId('objective-summary-prose'), null);
-    const badge = row.getByRole('button', {
-      name: 'Summary mentions 1 decision. Show the summary'
-    });
-    assert.equal(row.queryByRole('button', { name: /caution/ }), null);
-    await act(async () => {
-      fireEvent.click(badge);
-    });
-    await waitFor(() => assert.ok(row.getByTestId('objective-summary-prose')));
-    // People can still edit a completed objective's summary; instructions sit behind a disclosure.
-    assert.ok(row.getByRole('button', { name: 'Edit summary' }));
-    assert.ok(row.getByRole('button', { name: /Instructions/ }));
+describe('executed objectives', () => {
+  it('a completed objective keeps an editable summary, with read-only instructions in their tab', () => {
+    setup(
+      withSummary('a', {
+        state: 'complete',
+        startedAt: '2026-11-14T10:00:00.000Z',
+        completedAt: '2026-11-14T11:00:00.000Z'
+      })
+    );
+    assert.ok(screen.getByTestId('objective-summary-prose'));
+    assert.ok(screen.getByRole('button', { name: 'Edit summary' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Instructions' }));
+    assert.equal(screen.queryByRole('button', { name: 'Edit instructions' }), null);
   });
 
-  it('open rows without a summary show the instructions and no empty SUMMARY section', async () => {
-    const done = objective({
-      id: 'a',
-      state: 'complete',
-      startedAt: '2026-11-14T10:00:00.000Z',
-      completedAt: '2026-11-14T11:00:00.000Z'
-    });
-    setup([done]);
-    fireEvent.click(within(card('coo:1.a')).getByRole('button', { name: /Title a/ }));
-    await waitFor(() =>
-      assert.ok(within(card('coo:1.a')).getByText(/Implement the description UI/))
+  it('without a summary shows the instructions and Summarize, never an empty Summary tab', () => {
+    setup(
+      objective({
+        id: 'a',
+        state: 'complete',
+        startedAt: '2026-11-14T10:00:00.000Z',
+        completedAt: '2026-11-14T11:00:00.000Z'
+      })
     );
-    assert.equal(within(card('coo:1.a')).queryByText('Summary'), null);
-    assert.ok(within(card('coo:1.a')).getByRole('button', { name: 'Summarize instructions' }));
+    assert.ok(screen.getByText(/Implement the description UI/));
+    assert.equal(screen.queryByRole('tab', { name: 'Summary' }), null);
+    assert.ok(screen.getByRole('button', { name: 'Summarize instructions' }));
   });
 });

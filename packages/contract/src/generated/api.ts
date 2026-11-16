@@ -5,10 +5,10 @@
 import { z } from 'zod';
 
 /** The contract version (contract/VERSION) this API description belongs to. */
-export const contractVersion = "173.1.0";
+export const contractVersion = "173.2.0";
 
 /** The API description's own version (OpenAPI `info.version`). */
-export const apiVersion = "4.5.0";
+export const apiVersion = "4.6.0";
 
 /** A non-JSON request or response body: raw bytes (G3). */
 export type BinaryBody = Uint8Array | ArrayBuffer | Blob;
@@ -4840,10 +4840,31 @@ export type HumanAgentRequestDto = AgentRequestDto & {
 };
 export const humanAgentRequestDtoSchema: z.ZodType<HumanAgentRequestDto> = z.object({ ...agentRequestDtoShape, "delivery": agentRequestDeliveryDtoSchema });
 
+export interface AgentRequestPageDto {
+  /**
+   * True only on the last page (`nextCursor` is null); absence is proven only then.
+   */
+  complete: boolean;
+  /**
+   * Pass as `cursor` with the same mission, objective and status to read the next page.
+   */
+  nextCursor: string | null;
+  limit: number;
+  /**
+   * The status filter applied before the limit, or null when unfiltered.
+   */
+  status: "open" | null;
+}
+export const agentRequestPageDtoSchema: z.ZodType<AgentRequestPageDto> = z.object({ "complete": z.boolean(), "nextCursor": z.string().nullable(), "limit": z.int().min(1).max(200), "status": z.enum(["open"]).nullable() });
+
 export interface AgentRequestListResponse {
   requests: HumanAgentRequestDto[];
+  /**
+   * Present only on a paged read (`status`, `limit` or `cursor` supplied).
+   */
+  page?: AgentRequestPageDto;
 }
-export const agentRequestListResponseSchema: z.ZodType<AgentRequestListResponse> = z.object({ "requests": z.array(humanAgentRequestDtoSchema) });
+export const agentRequestListResponseSchema: z.ZodType<AgentRequestListResponse> = z.object({ "requests": z.array(humanAgentRequestDtoSchema), "page": z.exactOptional(agentRequestPageDtoSchema) });
 
 export interface AgentRequestLeaseBody {
   /**
@@ -7535,8 +7556,20 @@ export interface GetAgentRequestsQueryParams {
    * Objective UUID (with `missionId`) or full display id.
    */
   objectiveId?: string;
+  /**
+   * `open` returns only open requests (every kind) and selects the paged read. The filter is applied before the page limit, so an old open request is never displaced by newer closed ones.
+   */
+  status?: "open";
+  /**
+   * Page size for the paged read: decimal 1-200 without leading zeros, default 100. Any other value answers 400 `invalid_input`. Selects the paged read.
+   */
+  limit?: string;
+  /**
+   * The opaque `page.nextCursor` of the previous page of the same read (at most 512 characters). Selects the paged read.
+   */
+  cursor?: string;
 }
-export const getAgentRequestsQueryParamsSchema: z.ZodType<GetAgentRequestsQueryParams> = z.object({ "missionId": z.exactOptional(z.string()), "objectiveId": z.exactOptional(z.string()) });
+export const getAgentRequestsQueryParamsSchema: z.ZodType<GetAgentRequestsQueryParams> = z.object({ "missionId": z.exactOptional(z.string()), "objectiveId": z.exactOptional(z.string()), "status": z.exactOptional(z.enum(["open"])), "limit": z.exactOptional(z.string()), "cursor": z.exactOptional(z.string()) });
 
 export interface PostAgentRequestsByIdResolvePathParams {
   /**

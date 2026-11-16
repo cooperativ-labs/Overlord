@@ -28,6 +28,8 @@ import {
   normaliseSummaryText,
   openSummaryQuestions,
   SUMMARY_FILE_CHIP_LIMIT,
+  summaryCoverageComplete,
+  summaryCoverageRequirements,
   type SummaryDeliveryStamp,
   type SummaryMember,
   type SummaryObjective,
@@ -415,4 +417,31 @@ test('a truncated file page is reported, and one resource hides the resource key
   );
   assert.equal(files.truncated, true);
   assert.equal(files.showResourceKey, false);
+});
+
+test('coverage requires every nonempty evidence group with its current content', () => {
+  const action = { key: 'request:q1', introducedAt: '2026-10-01T00:00:00.000Z' };
+  const required = summaryCoverageRequirements({
+    actionRows: [action],
+    riskRows: [{ key: 'risk:1' }],
+    suggestionRows: []
+  });
+  assert.deepEqual(Object.keys(required).sort(), ['for_you', 'risks']);
+  assert.equal(summaryCoverageComplete(required, {}), false);
+  assert.equal(summaryCoverageComplete(required, { for_you: required.for_you! }), false);
+  const all = { for_you: required.for_you!, risks: required.risks! };
+  assert.equal(summaryCoverageComplete(required, all), true);
+  const changed = summaryCoverageRequirements({
+    actionRows: [action, { key: 'request:q2', introducedAt: '2026-10-02T00:00:00.000Z' }],
+    riskRows: [{ key: 'risk:1' }],
+    suggestionRows: []
+  });
+  assert.equal(summaryCoverageComplete(changed, all), false, 'new evidence invalidates coverage');
+  assert.equal(
+    summaryCoverageComplete(
+      summaryCoverageRequirements({ actionRows: [], riskRows: [], suggestionRows: [] }),
+      {}
+    ),
+    true
+  );
 });

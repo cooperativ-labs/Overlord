@@ -55,10 +55,12 @@ export function useObjectiveAttachmentState(
   objectiveId: string,
   { dropDisabled = false, enabled = true }: { dropDisabled?: boolean; enabled?: boolean } = {}
 ) {
-  const { data: attachments = [], isLoading } = useObjectiveAttachments(objectiveId, { enabled });
+  const query = useObjectiveAttachments(objectiveId, { enabled });
+  const { data: attachments = [], isLoading } = query;
   const upload = useUploadObjectiveAttachment(objectiveId);
   const remove = useDeleteObjectiveAttachment(objectiveId);
-  return useAttachmentUploadState({ attachments, isLoading, upload, remove, dropDisabled });
+  const state = useAttachmentUploadState({ attachments, isLoading, upload, remove, dropDisabled });
+  return { ...state, attachmentsKnown: query.isSuccess && !query.isFetching };
 }
 
 /**

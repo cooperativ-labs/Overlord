@@ -6,6 +6,7 @@ import { CopyMissionIdentifierButton } from '@/components/CopyMissionIdentifierB
 import { DeleteMissionButton } from '@/components/DeleteMissionButton';
 import { MissionTimerPopover } from '@/components/everhour/MissionTimerPopover';
 import { MissionBranchControl } from '@/components/MissionBranchControl';
+import { MissionLatchChip } from '@/components/ObjectiveTerminalSessions.tsx';
 import { OriginSparklesIcon } from '@/components/OriginSparklesIcon.tsx';
 import { MissionDueDatePopover } from '@/components/scheduling/MissionDueDatePopover.tsx';
 import { Button } from '@/components/ui/button';
@@ -161,6 +162,8 @@ function MissionPanelHeaderBar({ mission, projectId, onClose }: MissionPanelHead
       </div>
 
       <div className="flex min-w-0 shrink items-center justify-end gap-2">
+        {/* One click to the Latch session from anywhere in the panel (coo:1281 plan §10). */}
+        <MissionLatchChip sessions={mission.terminalSessions} objectives={mission.objectives} />
         <MissionDueDatePopover mission={mission} />
         <MissionTimerPopover missionId={mission.id} />
         <MissionBranchControl mission={mission} />

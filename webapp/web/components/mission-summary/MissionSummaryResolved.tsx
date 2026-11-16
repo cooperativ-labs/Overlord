@@ -115,15 +115,32 @@ function ResolvedRow({
 export function MissionSummaryResolved({
   rows,
   missionId,
-  now
+  now,
+  headless = false
 }: {
   rows: readonly SummaryClosedItemRow[];
   missionId: string;
   now: string;
+  /**
+   * Rendered inside a tab that already names it: no top border, no collapsing heading, and the
+   * list is shown, since selecting the tab is the person's request to see it.
+   */
+  headless?: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
   const listId = useId();
   if (rows.length === 0) return null;
+  if (headless) {
+    return (
+      <section aria-label="Resolved items" className="grid gap-1.5 px-5 py-2.5">
+        <ul id={listId} className="grid">
+          {rows.map(row => (
+            <ResolvedRow key={row.id} row={row} missionId={missionId} now={now} />
+          ))}
+        </ul>
+      </section>
+    );
+  }
   return (
     <section
       aria-label="Resolved items"

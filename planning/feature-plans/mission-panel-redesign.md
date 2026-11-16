@@ -1,16 +1,16 @@
 # Mission panel redesign (web and desktop): implementation plan
 
-Date: 2026-11-16. Status: for review. This document makes no runtime changes.
+Date: 2026-11-16. Status: approved for ordered implementation on coo:1281. This document makes no runtime changes.
 
 Design source: the canvas "Mission Panel Redesign" (https://claude.ai/artifact/Rq4Ftbum7aF8yiBpfSh3wH), artboards *Desktop · mission panel (interactive)*, *Desktop · objective detail modal* and *Mobile · objective detail (full screen)*. Where this plan and the canvas differ, this plan wins; section 12 lists every known difference.
 
-Contract impact: none
+Contract impact: minor
 
-Why none: the change is confined to the web client's presentation (`webapp/web`). It consumes only routes that exist today (mission detail, mission summary, agent requests and their resolve route, objective update and delete, objective reorder, Run Queue entry routes, terminal session routes) with their current request and response shapes. It adds no endpoint, field, protocol command, vocabulary value, table or shared algorithm, and does not change what any existing field means. Section 3.1 lists the facts this rests on. Review direction (2026-11-16): the size of a contract change is not a constraint on this work. If implementation finds that a decided behaviour needs a new field or route (none is expected; see 3.1), add it, reclassify as `minor`, and land the contract edits and version bump in the same change, per `.claude/skills/component-contract/SKILL.md`.
+The implementation adds an opt-in, filtered and paginated agent-request read surface so every open question remains discoverable. Existing unfiltered callers retain newest-first, at-most-200 behavior. Update `contract/api/openapi.yaml`, generated API artifacts and any affected normative prose alongside the backend implementation; use `yarn version:contract minor`, update the OpenAPI version and changelog, and add an ADR where required by the contract. Never type a contract version by hand. CLI and mobile retain their current request behavior; the web client opts into the extension. No new objective vocabulary, protocol command, authorization rule or reinterpretation of stored summary-seen data is planned.
 
-Decisions taken in review on 2026-11-16 are folded into the sections below and listed in section 13.
+This document specifies the final agreed behavior. Plan editing itself changes no runtime contract. The source canvas was inaccessible during review; visual comparison remains part of final verification, with this plan authoritative where they differ.
 
-Rollout: one change, one release. There are no intermediate states to keep working, no feature flag, and the components this plan retires are deleted in the same change.
+Rollout: ordered implementation objectives, one final integrated release. Each objective leaves the tree compiling; temporary reuse of existing components is allowed until their replacements are integrated. No feature flag or separately released intermediate redesign is required. All retired components are removed before final verification. Deployment is not part of these objectives.
 
 ## 1. Product result
 
@@ -30,26 +30,31 @@ Objective rows no longer expand in place. Everything a row used to reveal (instr
 In scope:
 
 - `webapp/web`, which serves both the browser app and the desktop shell.
+- The additive backend agent-request query, contract and generated client changes in section 3.1.
+- Feed mission/objective navigation in section 9.1.
 - Viewports from 375px (the panel's existing minimum) upward. Below 768px only the objective detail changes shape (full screen); the panel itself keeps today's drawer behaviour.
 
 Out of scope:
 
 - The Swift app in the OverlordMobile repository. The mobile artboard is used here only for the web app's narrow-viewport objective detail.
 - Any change to how the mission drawer behaves on narrow viewports (it stays a side-by-side drawer with a 375px minimum).
-- Backend, contract, CLI, connectors, MCP.
-- The feed page, apart from sharing one small icon component with it (section 6.2).
+- CLI, connectors, MCP and native mobile UI changes. Existing consumers retain compatible behavior.
+- Feed changes other than the shared state icon and mission/objective navigation in section 9.1.
 
 ## 3. Preconditions and data sources
 
-### 3.1 Facts to confirm first
+### 3.1 API prerequisites and compatibility
 
 1. Confirmed: a person can edit an objective's title. `UpdateObjectiveBody.title` is `string | null` ("Blank or null clears it") in `packages/contract/src/generated/api.ts`. No contract change is needed for title editing.
-2. To confirm: `GET /api/agent-requests?missionId=` without `objectiveId` returns every open request on the mission, including for objectives that are `pending_delivery`. `MissionSummarySection.tsx:113` already calls it this way.
+2. The current mission-wide request query includes pending-delivery objectives, but returns only the newest 200 requests of all statuses (`backend/agent-session-routes.ts:723`; `contract/api/openapi.yaml`, `getAgentRequests`). Client-side filtering cannot recover old open questions displaced by newer resolved ones.
+3. Extend that read API with opt-in open-status filtering and cursor pagination plus explicit completion metadata. Apply status filtering before the limit; use a stable total order (timestamp and ID), bounded pages, scoped/validated cursors and existing mission/workspace authorization. Keep the current unfiltered default behavior and existing response members compatible. The implementation chooses exact parameter names and documents them in OpenAPI. Include both question and choice requests, pending-delivery objectives and optional objective filtering.
+4. Add a web query that consumes all open-request pages, deduplicates IDs, and exposes loading, partial/error and complete states. Poll/refetch a coherent collection, invalidate it after answers and realtime changes, and handle arrivals/resolutions during paging without treating a partial result as authoritative absence. Preserve the last successful view during transient failure, indicate stale/partial data with retry, and do not falsely claim that no questions remain. Never authorize dismissal pruning or acknowledgement from incomplete data.
+5. Title editing uses the existing update route. Summary eligibility stays unchanged: the feature migration disabled summaries for pre-existing missions; newly created missions default to eligible. No backfill or eligibility change is required for this redesign.
 ### 3.2 Data each new piece reads
 
 | Piece | Source (all existing) |
 | --- | --- |
-| Blocking question slot | `useMissionAgentRequests(missionId, undefined)` filtered with `isPendingBlockingRequest` (`lib/objective-blocking-requests.ts`) |
+| Blocking question slot | the complete mission-wide open-request query from 3.1, filtered with `isPendingBlockingRequest` (`lib/objective-blocking-requests.ts`) |
 | Blocked state per row | the same mission-wide request list, grouped by `objectiveId`; no per-objective query |
 | Summary card header | `useMissionSummary`, and the derivations already used by `MissionSummarySection` (`lib/mission-summary-derive.ts`) |
 | Objective list and order | `deriveObjectiveLifecycleView` from `@overlord/automations/objective-manager`, exactly as `MissionObjectivesSection` uses it today |
@@ -57,7 +62,7 @@ Out of scope:
 | Objective detail evidence | `partitionMissionEvidence` output already computed in `MissionPanel`, `useObjectiveFileChanges`, `useObjectiveAttachments` |
 | Latch chip and popover | `mission.terminalSessions` through the existing `MissionLatchSessionProvider` |
 
-One mission-wide agent-request query replaces the per-row `useAgentSessionFeed` polling that each in-flight `ObjectiveCollapsibleItem` runs today. `AgentSessionActivity` inside the objective detail keeps its own per-objective query (same query key family, 5s poll plus realtime invalidation).
+One mission-wide open-request collection replaces per-row `useAgentSessionFeed` polling. `ObjectiveBlockingQuestions` consumes that same collection grouped by objective; the detail has no `AgentSessionActivity`. Keep the 5s polling plus realtime invalidation behavior, with loading/completeness/error state shared by the top notifications, row tints and detail. Loading is independent of summary eligibility.
 
 ### 3.3 State vocabulary
 
@@ -106,7 +111,7 @@ New component `webapp/web/components/mission-panel/MissionBlockingQuestions.tsx`
   - the request stays open and answerable;
   - the objective's row keeps its yellow tint and blocked icon, and the overview card's badge still reads "waiting on you";
   - the request stays in the objective detail's Blocking questions list as a highlighted item that expands to the full question (9.7), and in the "For you" tab (6.2).
-- Dismissal is per request id, so a new question from the agent shows again without extra bookkeeping. Keep the ids in one small client store shared by the panel and the detail (`lib/dismissed-agent-requests.ts`), persisted in `localStorage` so a reload does not bring a dismissed card back. Prune ids whose request is no longer open. This replaces the per-row dismissal state in `ObjectiveCollapsibleItem`.
+- Dismissal is per request id, so a new question from the agent shows again without extra bookkeeping. Keep the ids in one small client store shared by the panel and the detail (`lib/dismissed-agent-requests.ts`), persisted in `localStorage` so a reload does not bring a dismissed card back. Namespace storage by backend, account, workspace and mission. Prune only on an authoritative complete successful result for that scope or an explicit terminal-status event; never prune on loading, query failure, partial pagination or navigation to another mission. Tolerate unavailable localStorage with an in-memory fallback. Clear/switch the active scope on account or backend changes. This replaces the per-row dismissal state in `ObjectiveCollapsibleItem`.
 - When the last open, undismissed request resolves or is dismissed, the slot unmounts. Use the mission-wide query's data directly so the card disappears on the same refetch that clears the row tint.
 
 `MissionSummarySection` currently receives open questions for its watermark and "Your actions" derivations. Keep feeding it the same list. A question therefore appears both in this slot and as a row in the "For you" tab; that is intended, since the tab is where a dismissed question is still listed at mission level. The row's link opens the objective detail.
@@ -132,13 +137,13 @@ Every state `MissionSummarySection` handles today must still be handled, because
 
 | Summary state | Header region shows |
 | --- | --- |
-| `hidden` (mission not summary-eligible) | context line and badge only; headline is the mission title; no summary text; the tab row has Objectives only |
+| `hidden` (mission not summary-eligible) | context line and badge only; headline is the mission title; no summary text; the tab row has Objectives and, when open questions exist, For you; summary-dependent tabs stay absent |
 | `awaiting` | context line, badge, and the existing "The summary appears after the first delivery" copy |
 | `error` | context line, badge, the existing error line |
 | `first_pending` / updating | the existing `UpdatingStrip` at the top of the card, content dimmed as today |
 | `summary` | everything in the table above |
 
-Keep `useAcknowledgeMissionSummary` with its `targetRef` on the header region, so "seen" still means the summary was actually displayed. Keep `key={mission.id}`.
+Keep `key={mission.id}` and the frozen visit baseline, but do not acknowledge the global watermark merely because the header is visible. Unopened For you or Risks content remains new on the next visit. Track evidence coverage during this visit: a nonempty evidence tab counts only after its content has actually been displayed for the existing two-second foreground visibility interval. Gate the existing monotonic global acknowledgement until all evidence-bearing tab groups represented by that snapshot have been displayed, plus the header/source evidence. This deliberately conservative gate keeps the existing persisted meaning; it adds no per-tab persistence. A new or changed evidence group invalidates its coverage; acknowledgement uses the covered response watermark, never wall-clock time. Do not count hidden tabs, loading/partial/error results, a background page, or the overview obscured by the objective dialog. Unmounting before the interval completes cancels it. Reuse the existing hook after making its visibility/coverage inputs explicit; a timestamp-only `summaryWatermarkIsDisplayed` check is insufficient once sections are tabs.
 
 ### 6.2 Tabs
 
@@ -163,7 +168,7 @@ Rules:
 - Markup: `role="tablist"` with `role="tab"` buttons and `aria-selected`, arrow-key movement, and the lower half as `role="tabpanel"`. The row wraps at narrow panel widths.
 - The five summary components are reused unchanged for their rows, mutations, truncation notices and item controls. Remove each one's own top border and `SummaryBlockHeading` when rendered in a tab (a `headless` prop), since the tab already names the section.
 - A new item arriving in a tab that is not selected shows the existing `NewDot` on that tab.
-- The selected tab is local UI state, not in the URL.
+- The selected tab is local UI state, not in the URL. For you is derived from open questions independently of summary eligibility, including older summary-ineligible missions; no summary is required to find a dismissed question here.
 - The sticky composer (section 8) is shown on every tab.
 
 ### 6.3 Shared state icon
@@ -317,25 +322,25 @@ New directory `webapp/web/components/objective-detail/`.
 
 ### 9.1 Opening, closing and the URL
 
-- Which objective is open is the existing `?objective=<displayId>` search parameter (`lib/mission-panel-search.ts`). Opening sets it with `navigate({ search, replace: false })`; closing removes it; previous and next replace it. The browser back button therefore closes the detail.
+- Which objective is open is the existing `?objective=<displayId>` search parameter (`lib/mission-panel-search.ts`); retain UUID compatibility. Use one navigation helper for rows, summary links, feed links and close actions. Opening from the mounted mission pushes a detail entry; previous/next replace that entry. Track that locally created entry in router history state. Explicit Close returns to the mission-only entry when it exists; for direct/copied/feed entry without that entry, replace with the mission-only URL. Closing must not leave an obsolete detail entry that Back reopens. Browser Back follows actual history: it reveals the mission for a locally opened detail and can return to the previous page for direct/feed entry. Do not synthesize a mission history entry for a direct link.
 - Any link that names an objective opens the mission with that objective's detail showing, in place of scrolling to a row and ringing it. Delete `ObjectiveFocusAnchor` and the auto-open effects in `MissionObjectivesSection` (deep link, start of execution, new request).
 - Feed cards (decided in review):
   - Clicking the main body of a mission card (`MissionRunCard`'s header button) opens the mission only. It must stop passing `objectiveDisplayId` to `onOpenMission`.
   - Clicking an individual objective row in the card's footer opens that objective: the mission panel with `?objective=<that row's display id>`. Each `MissionObjectiveRow` becomes a button (it is a plain list item today) with an accessible name of the objective title.
   - The feed's `BlockingQuestionCard` is about one objective, so its open action keeps passing the objective and lands on the detail, where the question is.
-- `useFocusObjective` / `ObjectiveKeyLink` in `MissionSummaryParts.tsx` (the objective links inside the summary tabs) change from "scroll to and ring the row" to "open the detail"; they already set the same search parameter, so only the scroll branch is removed.
-- An `?objective=` value that matches no objective on the mission is ignored and removed.
+- `useFocusObjective` / `ObjectiveKeyLink` in `MissionSummaryParts.tsx` (the objective links inside the summary tabs) change from "scroll to and ring the row" to "open the detail"; replace their current `replace: true` navigation and scroll branch with the shared navigation helper so all in-panel entry points have the same push behavior.
+- An `?objective=` value that matches no objective on the mission is removed with replace only after mission/objective loading succeeds; loading or request failure is not proof of an invalid link.
 - The desktop shell route parser (`parseDesktopMissionShellRoute`) is unchanged.
-- Closing: the close button, Escape, a click on the backdrop, and browser back. If a draft's instruction editor has unsaved text, closing commits it first (same rule as leaving a draft card today).
+- Closing: the close button, Escape, a click on the backdrop, and browser back, subject to edit handling in 9.8. Explicit Close always reveals the mission. Escape first dismisses the active popup or cancels the active editor's unsaved draft without closing the detail; a subsequent Escape closes the detail. Already acknowledged autosaves are not undone by cancellation.
 
 ### 9.2 Container
 
 `ObjectiveDetail.tsx` picks the container with the existing `useIsMobile()` hook (768px):
 
 - 768px and wider: `Dialog` from `components/ui/dialog.tsx` with a `className` override on `DialogContent`: width `min(960px, 100vw - 48px)`, height `calc(100dvh - 48px)`, `sm:max-w-none`, no padding, `flex flex-col overflow-hidden`, `showCloseButton={false}` (the header has its own). Add a named class constant for this size next to the component; do not add a size variant to the shared dialog for one caller.
-- Below 768px: the same `Dialog`, layered over the mission panel and covering it (`inset-0`, `h-dvh w-screen max-w-none rounded-none`), with the mobile header and bottom bar from 9.5. The mission panel stays mounted underneath and is unchanged; the detail's back button, Escape and browser back reveal it again with its scroll position and selected tab intact.
+- Below 768px: the same `Dialog`, layered over the mission panel and covering it (`inset-0 top-0 left-0`, `h-dvh w-screen max-w-none sm:max-w-none rounded-none translate-x-0 translate-y-0`), with the mobile header and bottom bar from 9.5. The mission panel stays mounted underneath and is unchanged; explicit Close/the detail's back button and dialog-level Escape reveal it again with its scroll position and selected tab intact. Browser Back follows section 9.1.
 
-It portals to the document body, so it is centred on the screen, not on the panel.
+It portals to the document body, so desktop positioning is relative to the screen. The mobile override must neutralize the shared dialog translations and responsive max width, not just set inset/size. Respect safe-area insets and the software keyboard; the content and fixed action bar must remain reachable at 375px, 640px and 767px.
 
 ### 9.3 Header
 
@@ -345,7 +350,7 @@ It portals to the document body, so it is centred on the screen, not on the pane
 - Previous / next objective buttons, following the row order, wrapping at the ends. Desktop uses up and down chevrons to match the vertical list.
 - The objective menu (the same `ObjectiveMenuButton`, minus "Edit title").
 - Close.
-- Title: `InlineEditField`, saving `title` through `useUpdateObjective` (subject to 3.1).
+- Title: `InlineEditField`, saving `title` through `useUpdateObjective` (subject to 3.1 and 9.8). Provide a keyboard-operable edit button/trigger; the current static clickable span is not sufficient. Give the dialog an accessible `DialogTitle` or equivalent labelled relationship.
 
 ### 9.4 Body, 768px and wider
 
@@ -367,7 +372,7 @@ Right column, in order:
 1. Agent and model. Not started: the full `AgentModelChooserButton`. Otherwise read-only.
 2. Resource. Not started: `ObjectiveResourcePicker`. Otherwise the label.
 3. Branch, timing (started, completed, or running duration), origin (`objectiveOriginLabel`).
-4. Run Queue: status line and a button that opens `ObjectiveQueuePopover`.
+4. Run Queue: status line and a button that opens `ObjectiveQueuePopover`, anchored to a trigger inside the detail. Menu-launched queue controls also use a detail-local anchor, never a row behind the modal.
 5. Terminal session, when the objective has one: state dot and label, "Open in Latch", "End session" (the controls from `TerminalSessionCard` / `ObjectiveTerminalSessions`).
 6. Primary action by state:
    - `draft`, `submitted`, `launching`: `AgentLaunchButton` (split Run with Copy prompt and Copy CLI command), with its existing parallel-launch guard. It needs `siblings`, `executionRequests` and `allowParallelObjectives`, which the detail receives from the mission.
@@ -389,7 +394,7 @@ One scrolling column, per the mobile artboard:
 - A hand-rolled `role="tablist"` (there is no Tabs primitive; follow `pages/MissionsViewToggle.tsx`), with arrow-key movement between the two tabs. Visually subtle: the labels use the existing small uppercase section-label style, the selected one in ink with a hairline underline, the other dimmed.
 - Order: Summary, then Instructions. Summary is selected whenever a detail opens or the objective changes.
 - Summary tab: `ObjectiveSummaryBody` (prose plus its edit, regenerate and remove controls), using the body text style the instructions use.
-- Instructions tab: not started: the `InlineEditField` instruction editor from `DraftObjective` (multiline, `@`/`#`/`$` mentions, emptying it deletes the objective per `shouldDiscardEmptiedObjective`, after which the detail closes). Otherwise read-only text.
+- Instructions tab: not started: the `InlineEditField` instruction editor from `DraftObjective` (multiline, `@`/`#`/`$` mentions, emptying it deletes only when `shouldDiscardEmptiedObjective` permits it, preserving draft-only empty commits and attachment/history guards; close only after deletion succeeds). Otherwise read-only text.
 - When `objective.description` is null there is no tab row: show the instructions, followed by `ObjectiveSummaryFallback` (Summarize, pending and failed states) where it applies today.
 - `descriptionStale`, `descriptionStatus` and `descriptionSuppressed` are presented by the reused summary components exactly as today.
 
@@ -398,12 +403,20 @@ One scrolling column, per the mobile artboard:
 New `ObjectiveBlockingQuestions.tsx` in the detail directory.
 
 - Rendered only when this objective has at least one open `question` or `choice` request (`isPendingBlockingRequest`). With none, the section and its heading are absent; answered, expired and cancelled requests are not listed.
-- Source: `useMissionAgentRequests(missionId, objectiveId)`, the query `AgentSessionActivity` already uses. No new data.
+- Source: the shared complete open-request collection from 3.1/3.2, grouped by objective ID. Preserve its loading/error/completeness state; no independent polling cache should disagree with the mission view.
 - Heading "Blocking questions". One row per open request, oldest first: relative time, the first line of the question, and an "Answer" label on the right. Each row is a `<button aria-expanded>` with the same solid yellow as a blocked objective row.
-- Clicking a row expands it in place into the full blocking panel: the existing `BlockingQuestionCard` / choice card with its answer form, countdown, read-only reason and delivery state. Clicking again collapses it. Expanded state is local to the detail.
+- Clicking the disclosure button reveals a sibling body (never nest answer controls inside the button) containing the full blocking panel: the existing `BlockingQuestionCard` / choice card with its answer form, countdown, read-only reason and delivery state. Clicking again collapses it. Expanded state is local to the detail.
 - A row is shown whether or not that request's top card was dismissed. While the top card is still showing, the row starts collapsed, so the form is not on screen twice.
 - When the detail opens on an objective whose only open requests have all been dismissed, the list is scrolled into view and its first row starts expanded.
 - When a request is answered or expires, its row is removed; when the last one goes, the section disappears.
+
+### 9.8 Edit lifecycle, failures and focus
+
+- Keep title, instruction and existing summary drafts keyed by objective ID. Never reuse an active editor's buffer for a different objective. Switching tabs, previous/next, closing, browser navigation, Run and realtime state transitions must not lose keystrokes or pending uploads. A summary arriving mid-edit must not unmount or obscure that editor.
+- Centralize an awaitable flush/save boundary before intentional navigation and Run; launching uses the saved instruction and current launch guards. The existing `InlineEditField` unmount cleanup only cancels its timer, and its void `onSave` does not establish completion. Adapt the editor/controller API rather than relying on blur or debounce to complete before navigation.
+- On save/delete failure retain the correct objective's text, show the error and a retry affordance, and keep the detail open for intentional UI close/navigation. Intercept in-app history navigation where supported; if the surface must unmount, retain the keyed pending draft for restoration. Handle a concurrent state change/delete explicitly; do not save an old buffer against a new objective or silently discard it.
+- Initial focus goes to the requested title editor for Edit title, otherwise a stable dialog heading/control. Return focus to the invoking row/link on close, or the objective-list heading when that row was deleted. Preserve mission scroll and selected tab. Nested menus, confirmation dialogs and popovers own their focus and first Escape before the outer dialog.
+- Tabs have linked tab/tabpanel IDs, roving keyboard focus and arrow-key behavior. Expanding a blocking question leaves its form outside the trigger button. Test keyboard title editing, form submission, modal-local queue actions and desktop-shell entry/return.
 
 ## 10. Latch access in the header
 
@@ -416,14 +429,25 @@ New `ObjectiveBlockingQuestions.tsx` in the detail directory.
 
 ## 11. Work breakdown
 
-One change. Suggested build order, each step leaving the tree compiling:
+Six ordered objectives on coo:1281, all assigned to Claude Code / Opus 5.5 (`claude-opus-5-5`). Execute sequentially. Earlier objectives run focused checks needed for their changes and mandatory contract checks when applicable; the final objective owns comprehensive automated and interactive verification of the whole plan.
 
-1. Confirm 3.1. Extract `ObjectiveStateIcon` (6.2) and `ObjectiveQueuePopover` (7.2 #4) with no behaviour change; unify the two objective menus into `ObjectiveMenuButton` (7.2 #7).
-2. Build `ObjectiveDetail` (section 9) against the existing panel, opened from the `?objective=` parameter, with `ObjectiveEvidenceSections layout="detail"`.
-3. Build `ObjectiveRow` and rewrite `MissionObjectivesSection` (section 7), including the new drag sensors.
-4. Build `MissionOverviewCard` and `MissionBlockingQuestions` (sections 5 and 6); restructure `MissionPanel` (section 4); make the composer sticky (section 8).
-5. Add `MissionLatchChip` and remove the terminal sessions section (section 10).
-6. Delete retired code, update tests, run the checks in section 14.
+| Order | Objective | Scope |
+| --- | --- | --- |
+| 1 | `coo:1281.rxzn` | Complete open-request API and client collection |
+| 2 | `coo:1281.ar07` | Shared controls and compact rows |
+| 3 | `coo:1281.qwdx` | Objective detail, editing and navigation |
+| 4 | `coo:1281.w8zz` | Overview, questions and composer |
+| 5 | `coo:1281.b77g` | Latch header and integration cleanup |
+| 6 | `coo:1281.8xx9` | Comprehensive verification and fixes |
+
+These objectives are created as drafts with auto-advance off; creating them does not launch execution.
+
+1. **Complete open-request API and client collection** — section 3.1: compatible filtered pagination, authorization, contract/OpenAPI/generated artifacts, coherent client collection and focused boundary checks. Code and contract land together. Contract impact: minor.
+2. **Shared objective controls and compact rows** — sections 6.3 and 7: icon, queue popover, unified menus, agent trigger variant, row ordering, optimistic reorder, drag/touch/keyboard behavior. Keep existing callers usable until integration. Contract impact: none; client presentation uses existing interfaces.
+3. **Objective detail and navigation** — all of section 9 and feed/summary links: responsive modal, evidence/attachments, launch/session controls, safe edit lifecycle, shared navigation/history and accessibility. Reuse the complete request collection. Contract impact: none; preserve API and data semantics.
+4. **Overview, blocking questions and sticky composer** — sections 4–6 and 8: panel integration, scoped persistent dismissal, eligibility-independent For you, visibility/coverage-gated acknowledgement, tab counts and composer persistence. Contract impact: none; retain existing seen-data meaning.
+5. **Latch header and final integration cleanup** — section 10 and remaining integration: provider placement, header sizing, mobile controls, retire replaced components/helpers, reconcile all callers and finish the complete design. Contract impact: none; no new session interfaces.
+6. **Comprehensive verification and fixes** — all of section 14, across the complete implementation. Run full automated checks and real browser/desktop interaction passes, fix defects found, record exact evidence and any unavailable environments. Expected contract impact: none for verification; classify any fix that changes the contract and land code/contract together. No publishing or deployment.
 
 ### 11.1 Files
 
@@ -448,9 +472,17 @@ Changed:
 - `webapp/web/components/objectives/AgentModelChooserButton.tsx` (icon-only trigger variant)
 - `webapp/web/components/objectives/ObjectiveEvidenceSections.tsx` (`layout="detail"`)
 - `webapp/web/components/objectives/GhostObjective.tsx` (border and shadow; no dashed outline)
-- `webapp/web/components/activity-feed/MissionRunCard.tsx` (import the shared state icon)
+- `webapp/web/components/activity-feed/MissionRunCard.tsx` (shared state icon and separate mission/objective navigation)
 - `webapp/web/components/mission-summary/MissionSummarySection.tsx` (logic moves into the overview card; keep the file only if the split stays clean, otherwise fold it in)
-- `webapp/web/lib/mission-panel-search.ts` (helpers to set and clear the parameter)
+- `webapp/web/lib/mission-panel-search.ts` and `components/mission-summary/MissionSummaryParts.tsx` (shared navigation/history)
+- `webapp/web/lib/dismissed-agent-requests.ts` (new scoped persistence store)
+- `webapp/web/components/objective-detail/ObjectiveBlockingQuestions.tsx` and objective-keyed edit controller/buffer helpers
+- `webapp/web/components/InlineEditField.tsx` (awaitable edit lifecycle and keyboard trigger where shared)
+- `webapp/web/lib/hooks/use-mission-summary-seen.ts`, `lib/mission-summary-derive.ts`, summary tab child components and shared tone map
+- `webapp/web/lib/queries/missions.ts`, request API client and query keys (complete filtered pagination and invalidation)
+- `backend/agent-session-routes.ts` and focused route/boundary tests
+- `contract/api/openapi.yaml`, affected contract prose/ADR and version/changelog files through the version command; generated API types/validators/operation artifacts
+- SQLite/PostgreSQL test fixtures as needed; no eligibility migration is planned
 
 Deleted:
 
@@ -459,7 +491,7 @@ Deleted:
 - `SortableQueuedObjective`, `ObjectiveFocusAnchor` and the "+ Add objective" button inside `MissionObjectivesSection.tsx`
 - per-row dismissal state for blocking requests; `selectObjectiveBlockingRequests`' `dismissedIds` input becomes unused (keep the pure helpers that are still called, delete the rest with their tests)
 
-The working tree currently has uncommitted contract and backend edits unrelated to this plan. This change must not touch them.
+Preserve unrelated concurrent edits, including contract/backend changes and Overlord-managed `.overlord/project.json`. Modify only the scoped implementation and its required contract artifacts.
 
 ## 12. Differences from the canvas
 
@@ -477,7 +509,7 @@ The working tree currently has uncommitted contract and backend edits unrelated 
 | Menu lacks Move up / Move down and Force disconnect | added (keyboard reordering; replaces the removed row icon) |
 | Mobile bar uses up and down arrows | left and right chevrons |
 
-## 13. Review decisions and remaining questions
+## 13. Product decisions
 
 Decided on 2026-11-16:
 
@@ -492,7 +524,14 @@ Decided on 2026-11-16:
 9. **Tab labels.** "For you", "Suggested" and "Files" (6.2).
 10. **Composer.** Shown on every tab; the layout guarantees the bottom of the selected tab can always be scrolled into view above it (section 8).
 
-Nothing is open. One fact remains to confirm during implementation (3.1 item 2).
+11. **Complete questions.** Add filtered pagination rather than accept the current 200-request blind spot; preserve existing callers.
+12. **Unread evidence.** Hidden evidence remains new on the next visit. Use the conservative displayed-coverage gate in 6.1, preserving existing seen-data semantics.
+13. **Eligibility.** Open questions appear in For you even for older summary-ineligible missions. Summary eligibility itself is unchanged.
+14. **History.** Explicit Close reveals the mission; browser Back follows actual history, including returning to the previous page on direct/feed entry.
+15. **Editing and accessibility.** Preserve keyed drafts and surface save failures; first Escape cancels the editor/popup, subsequent Escape closes the detail. Provide keyboard editing and predictable focus return.
+16. **Execution.** Use six ordered Opus 5.5 objectives with comprehensive testing in the final objective.
+
+No PM questions remain open.
 
 ## 14. Tests and verification
 
@@ -507,21 +546,31 @@ Update:
 
 Add:
 
-- `ObjectiveRow`: each state renders the right icon; the queue button appears only with a queue entry and is amber when blocked; the identifier button copies the full id and shows "Copied"; the agent icon is a button only when not started; none of the row's buttons opens the detail; the menu shows the right items per state (table in 7.2 #7).
+- `ObjectiveRow`: each state renders the right icon; the queued button is always visible and amber when queue-blocked, while an unqueued not-started objective has the hover/focus add button; the identifier button copies the full id and shows "Copied"; the agent icon is a button only when not started; none of the row's buttons opens the detail; the menu shows the right items per state (table in 7.2 #7).
 - `MissionObjectivesSection`: order across groups; Move up / Move down send the complete not-started set; a failed reorder rolls back; executed and launching rows are not sortable.
 - `MissionBlockingQuestions`: renders per open request, oldest first; collapses beyond two; disappears when resolved; the objective id opens the detail; dismissing hides the card but leaves the row tint and the "For you" row; a new request id shows again; dismissal survives a remount.
-- `MissionOverviewCard`: badge selection; Objectives selected by default; zero-count tabs hidden; selecting a tab swaps the lower half; selection returns to Objectives when its count reaches zero; the composer is present on every tab and keeps its text across a tab change; ineligible missions show only the Objectives tab and still list objectives.
+- `MissionOverviewCard`: badge selection; Objectives selected by default; zero-count tabs hidden; selecting a tab swaps the lower half; selection returns to Objectives when its count reaches zero; the composer is present on every tab and keeps its text across a tab change; ineligible missions still list objectives and show For you when open questions exist, including after their notification is dismissed.
 - `ObjectiveBlockingQuestions`: absent with no open request; one highlighted button per open request that expands to the answer form; present when the top card was dismissed; a row disappears once answered and the section with the last row.
 - Feed (`MissionRunCard`): the header opens the mission without an objective; an objective row opens it with that objective.
 - `ObjectiveRow` queue button: emerald and always visible when queued; present but hidden until hover or focus when not started and not queued; absent otherwise.
-- `ObjectiveDetail`: opens from `?objective=`; unknown value is cleared; previous and next follow row order; Summary is selected on open and on objective change; no tab row when there is no summary; instruction editing only when not started; emptying the instruction deletes and closes; the primary action per state; Escape and close remove the parameter.
+- `ObjectiveDetail`: opens from `?objective=`; unknown value is cleared; previous and next follow row order; Summary is selected on open and on objective change; no tab row when there is no summary; instruction editing only when not started; emptying only an eligible empty draft deletes and closes after success; attachments/history prevent unintended deletion; the primary action per state; editor/popup Escape does not close the detail, dialog-level Escape and explicit close remove the parameter with correct history semantics.
 - `MissionLatchChip`: hidden without a current session; popover holds the current card and previous sessions.
 - `lib/mission-panel-search.test.ts`: the new set and clear helpers.
 
-Checks before review:
+Comprehensive regression coverage in the final objective:
+
+- Request API in both database editions: an old open request behind more than 200 newer resolved requests; more than one page of open requests; identical timestamps; arrivals/resolutions during pagination; pending-delivery objectives; optional objective filtering; workspace authorization and cursor scope; unchanged legacy unfiltered callers.
+- Shared request query: complete/partial/error/retry states, answer invalidation and simultaneous mission/detail consistency; failures do not falsely clear blocked state or authorize pruning.
+- Dismissal: mission A → B → A, reload while loading, failed and truncated queries, account/backend switching, unavailable storage and new request IDs.
+- Seen markers: never open For you/Risks and revisit; foreground two-second display, new evidence while reading, covered versus uncovered snapshots, modal occlusion, partial/error states and summary-ineligible missions. No acknowledgement of hidden evidence.
+- Editors: type then immediately switch tab/objective, close, Back or Run; rejected save/delete; realtime summary/state changes; attachments/history on empty draft; correct objective IDs; buffers and pending uploads survive; no duplicate mutation or launch with stale instructions.
+- Navigation: direct/copy/feed/summary/row entry, UUID compatibility, close-then-Back, previous/next replacement, Back/Forward, invalid parameter after successful loading, loading/error preservation, deleted-objective fallback and desktop-shell navigation.
+- Accessibility: keyboard title editing, linked tabs, nested confirmation/queue popovers, no nested form-in-button, Escape precedence, initial/return focus, deleted trigger and screen-reader names.
+
+Full checks in the final objective:
 
 - `yarn lint`, `yarn typecheck:webapp`, `yarn test:webapp`, `yarn webapp:build:prod`.
-- `yarn check` is not required for a `Contract impact: none` change but must still pass, since the contract checks run in CI.
+- `yarn check`, `yarn contract:check`, `yarn contract:test`, `yarn api:generate:check`, `yarn contract:parity`, `yarn check:conformance-versions`, and the relevant complete backend/database suites (`yarn test:backend` plus the repository-supported SQLite/PostgreSQL coverage). Run required checks once after the integrated implementation and repeat affected checks after fixes. Report environment failures separately from defects; do not claim unavailable checks passed.
 
 Manual pass, in the running app, light and dark, at 375px, 420px and 640px panel widths and with the window under 768px:
 
@@ -529,7 +578,14 @@ Manual pass, in the running app, light and dark, at 375px, 420px and 640px panel
 2. A mission with more objectives than fit: the composer floats, then settles at the end of the list; its popups open upward.
 3. Quick click opens the detail; hold and drag reorders with mouse and with touch (a real touch device or emulation); releasing a drag does not open the detail; a swipe on a row scrolls the panel.
 4. Each row control in each state, per section 7.2.
-5. Detail for a not-started, launching, executing, blocked, pending-delivery and complete objective; Run launches from the detail; browser back closes it.
+5. Detail for a not-started, launching, executing, blocked, pending-delivery and complete objective; Run launches saved instructions from the detail; Back and explicit Close follow 9.1, with drafts preserved.
 6. Latch chip and popover with a running session, a stopped session, and none; the header does not overflow at 375px.
 7. A mission that is not summary-eligible, a mission before its first delivery, and a mission with no objectives.
 8. A feed card link and a copied `?objective=` link.
+
+9. Browser and native desktop shell entry/return, keyboard-only navigation and nested menus/dialogs; check initial/return focus and Latch actions.
+10. Full-screen detail at 375px, 640px and 767px, including software keyboard and safe-area insets; no inherited translation/max-width clipping. Verify 768px switches to desktop layout.
+11. Every overview tab with short and long content and a tall composer; the last item remains reachable.
+12. Compare against the design canvas if accessible; otherwise record that visual-source limitation explicitly while checking every specified layout and interaction.
+
+The final delivery distinguishes automated, browser/touch, native desktop and visual-source evidence. Fix discovered regressions before delivery where possible; report any concrete environment blocker and unverified acceptance case. Implementation and local verification do not imply deployment.

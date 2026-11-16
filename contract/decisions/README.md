@@ -95,3 +95,4 @@ record and the index disagree.
 - [0058 — Durable objective brief worker and the objective writing profile](0058-objective-brief-worker.md)
 - [0059 — Objective descriptions on the REST, protocol, MCP and connector surfaces](0059-objective-description-surfaces.md)
 - [0060 — Mission items hold live risks, human actions and suggestions; agents may edit the mission summary](0060-mission-items-and-agent-authored-summary.md)
+- [0061 — A paged, status-filtered read of a mission's agent requests](0061-paged-open-agent-request-read.md)

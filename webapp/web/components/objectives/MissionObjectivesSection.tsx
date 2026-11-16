@@ -6,199 +6,71 @@ import {
   verticalListSortingStrategy
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import {
-  deriveObjectiveLifecycleView,
-  objectiveHasInstructionText
-} from '@overlord/automations/objective-manager';
-import type { ExecutionRequestDto, MissionDetailDto, ObjectiveDto } from '@overlord/contract';
-import { GripVertical } from 'lucide-react';
-import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
+import { deriveObjectiveLifecycleView } from '@overlord/automations/objective-manager';
+import type { MissionDetailDto, ObjectiveDto } from '@overlord/contract';
+import { useEffect, useMemo, useState } from 'react';
 
-import { objectiveMatchesFocus } from '../../lib/mission-panel-search.ts';
-import {
-  evidenceForObjective,
-  type MissionEvidencePartition,
-  NO_EVIDENCE_TRUNCATION,
-  type ObjectiveEvidenceTruncation
-} from '../../lib/objective-evidence.ts';
-import { useReorderObjectives } from '../../lib/queries.ts';
-import { cn } from '../../lib/utils.ts';
-import { KANBAN_TOUCH_DRAGGABLE_CLASS, useKanbanSensors } from '../../pages/kanban-dnd.ts';
-import { Button } from '../ui.tsx';
+import { useMissionOpenAgentRequests, useReorderObjectives } from '../../lib/queries.ts';
 
-import { DraftObjective } from './DraftObjective.tsx';
-import { GhostObjective } from './GhostObjective.tsx';
-import { ObjectiveCollapsibleItem } from './ObjectiveCollapsibleItem.tsx';
-import type { ObjectiveEvidenceLoading } from './ObjectiveEvidenceSections.tsx';
+import {
+  moveObjectiveIdBy,
+  OBJECTIVE_ROW_DND_MODIFIERS,
+  suppressNextClick,
+  useObjectiveRowSensors
+} from './objective-row-dnd.ts';
+import { isInFlightObjective, ObjectiveRow, type ObjectiveRowProps } from './ObjectiveRow.tsx';
 import { mergeQueuedObjectiveOrder } from './queued-objective-order.ts';
 
-/**
- * A draft-queue objective (draft or submitted) wrapped for drag-and-drop
- * reordering. Mirrors the kanban board's `useSortable` setup: the grip handle
- * owns the drag listeners so the objective card's own inline editing stays
- * fully interactive. On touch the handle needs a press-and-hold (same sensors
- * as the board), so a swipe that starts on it scrolls the panel instead of
- * reordering. The card is the existing {@link DraftObjective}: the queue head
- * renders full, every other card compact. React keys this by objective id, so
- * a drag that changes which card is the head keeps each card's editor state.
- */
-function SortableQueuedObjective({
-  objective,
-  isHead,
-  siblings,
-  executionRequests,
-  focusObjectiveRef,
-  allowParallelObjectives,
-  evidence,
-  evidenceLoading,
-  evidenceTruncation
-}: {
-  objective: ObjectiveDto;
-  isHead: boolean;
-  siblings: ObjectiveDto[];
-  executionRequests: ExecutionRequestDto[];
-  focusObjectiveRef: string | undefined;
-  allowParallelObjectives: boolean;
-  evidence: MissionEvidencePartition;
-  evidenceLoading: ObjectiveEvidenceLoading;
-  evidenceTruncation: ObjectiveEvidenceTruncation;
-}) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-    id: objective.id
-  });
+type RowCallbacks = Pick<ObjectiveRowProps, 'onOpen' | 'onEditTitle' | 'onDeleted'>;
 
-  return (
-    <div
-      ref={setNodeRef}
-      style={{ transform: CSS.Transform.toString(transform), transition }}
-      className={cn('relative flex items-stretch gap-2', isDragging && 'z-10 opacity-70')}
-    >
-      <button
-        type="button"
-        aria-label="Reorder objective"
-        className={cn(
-          'flex w-5 shrink-0 cursor-grab items-center justify-center self-stretch rounded text-muted-foreground/40 hover:text-muted-foreground active:cursor-grabbing',
-          KANBAN_TOUCH_DRAGGABLE_CLASS
-        )}
-        {...attributes}
-        {...listeners}
-      >
-        <GripVertical className="h-4 w-4" />
-      </button>
-      <div className="min-w-0 flex-1">
-        <ObjectiveFocusAnchor objective={objective} focusRef={focusObjectiveRef}>
-          <DraftObjective
-            objective={objective}
-            siblings={siblings}
-            executionRequests={executionRequests}
-            allowParallelObjectives={allowParallelObjectives}
-            evidence={evidenceForObjective(evidence, objective.id)}
-            evidenceLoading={evidenceLoading}
-            evidenceTruncation={evidenceTruncation}
-            compact={!isHead}
-          />
-        </ObjectiveFocusAnchor>
-      </div>
-    </div>
-  );
-}
+export type MissionObjectivesSectionProps = {
+  mission: MissionDetailDto;
+  /**
+   * The objective the composer is still committing. It is hidden from every group until the
+   * composer hands it over, so a realtime refetch never shows it twice.
+   */
+  committingObjectiveId?: string | null;
+  /** The objective whose detail is open; its row carries a subtle wash. */
+  openObjectiveId?: string | null;
+  /** Open an objective's detail. `trigger` is the row button, for focus return on close. */
+  onOpenObjective: RowCallbacks['onOpen'];
+  /** Open the detail with the title in edit mode ("Edit title" in the row menu). */
+  onEditObjectiveTitle?: RowCallbacks['onEditTitle'];
+  /** An objective was deleted from its row menu; close its detail if it is open. */
+  onObjectiveDeleted?: RowCallbacks['onDeleted'];
+  /**
+   * The order rows are displayed in, reported whenever it changes (including optimistic
+   * reorders), so the detail's "n of m" and previous/next follow the list.
+   */
+  onRowOrderChange?: (orderedObjectiveIds: string[]) => void;
+};
 
 /**
- * Scrolls the named objective into view and rings it when a deep link or feed
- * card opened this panel with `?objective=`.
+ * The mission panel's compact objective list (plan §7): one {@link ObjectiveRow} per objective,
+ * in every state.
  *
- * `radiusClass` must match the corner radius of the card being wrapped so the
- * ring hugs it instead of bowing away from its corners: {@link DraftObjective}
- * cards are `rounded-xl`, while {@link ObjectiveCollapsibleItem} rows run
- * edge to edge with no radius, so they pass `rounded-none` and the ring is
- * drawn inset so it is not clipped by the panel's edges.
- */
-function ObjectiveFocusAnchor({
-  objective,
-  focusRef,
-  radiusClass = 'rounded-xl',
-  children
-}: {
-  objective: ObjectiveDto;
-  focusRef: string | undefined;
-  radiusClass?: string;
-  children: ReactNode;
-}) {
-  const focused = objectiveMatchesFocus({ objective, focusRef });
-  const nodeRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!focused) return;
-    nodeRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-  }, [focused, objective.id]);
-
-  return (
-    <div
-      ref={nodeRef}
-      id={objective.displayId ? `objective-${objective.displayId}` : undefined}
-      data-objective-ref={objective.displayId ?? objective.id}
-      className={
-        focused
-          ? cn(radiusClass, 'ring-2 ring-ring/60', radiusClass === 'rounded-none' && 'ring-inset')
-          : undefined
-      }
-    >
-      {children}
-    </div>
-  );
-}
-
-/**
- * The mission panel's objective list, split into three groups:
+ * Order is unchanged from the lifecycle view: executed objectives in history order, then
+ * launching ones, then not-started (draft and submitted) objectives in queue order. Only the
+ * not-started group is sortable; it reorders by press-and-hold drag or the row menu's Move up /
+ * Move down. Every reorder sends the complete not-started set, is applied optimistically and
+ * rolls back when the server rejects it (including a 409 for a stale set).
  *
- * 1. **Executed** (complete, then executing / pending delivery) — read-first
- *    {@link ObjectiveCollapsibleItem}s that run edge to edge across the panel,
- *    divided by full-width rules, each holding its own evidence (coo:879).
- *    One is open at a time by default; shift-click opens more.
- * 2. **Launching** — full {@link DraftObjective} cards, not draggable: a launch
- *    in flight keeps its position.
- * 3. **Draft queue** (draft and submitted, coo:1274) — one sortable list. The
- *    queue head renders as the full launch card and the rest as compact cards,
- *    so dragging a card to the top expands it. Every card launches directly;
- *    there is no promote step. Reorders send the complete queued set and are
- *    persisted optimistically; a stale-set conflict rolls back and refetches.
- *
- * Order inside the first two groups is the mission's history, not its queue:
- * `deriveObjectiveLifecycleView` sorts completed objectives by completion time,
- * executing ones by start time, and launching ones by launch time, all oldest
- * first. Only work that has not started yet is still ordered by position, which
- * is why drag-to-reorder applies to the draft queue alone.
- *
- * Plus one {@link GhostObjective} composer at the end of the queue, which is
- * *not* an objective: it buffers text, settings and staged files client-side and
- * writes one objective only when the user leaves the card, so "Add objective"
- * never creates empty or half-configured work. While it commits, the new
- * objective's id is hidden here (`committingObjectiveId`) — from the queue and
- * from the `showComposer` / `hasBlankSlot` decisions — so a realtime refetch
- * that delivers the row before the composer's uploads finish never shows the
- * objective twice. The composer reports the id cleared once the refetched row
- * can replace it, which makes the swap happen exactly once.
+ * Blocked rows come from the shared mission-wide open-request collection; a failed read keeps
+ * the last successful data, so a transient failure never clears a blocked tint.
  */
 export function MissionObjectivesSection({
   mission,
-  focusObjectiveRef,
-  evidence,
-  evidenceLoading,
-  evidenceTruncation = NO_EVIDENCE_TRUNCATION
-}: {
-  mission: MissionDetailDto;
-  /** Display id or UUID from `?objective=`, when a live surface named one. */
-  focusObjectiveRef?: string;
-  /** Deliveries, file changes, and sessions partitioned by objective. */
-  evidence: MissionEvidencePartition;
-  evidenceLoading: ObjectiveEvidenceLoading;
-  evidenceTruncation?: ObjectiveEvidenceTruncation;
-}) {
+  committingObjectiveId = null,
+  openObjectiveId = null,
+  onOpenObjective,
+  onEditObjectiveTitle,
+  onObjectiveDeleted,
+  onRowOrderChange
+}: MissionObjectivesSectionProps) {
   const reorder = useReorderObjectives();
-  /** Whether the user asked for the end-of-queue composer via "+ Add objective". */
-  const [extraSlotRequested, setExtraSlotRequested] = useState(false);
-  /** The objective the composer is still committing; hidden until it hands over. */
-  const [committingObjectiveId, setCommittingObjectiveId] = useState<string | null>(null);
+  const openRequests = useMissionOpenAgentRequests(mission.id);
+  const blockingByObjective = openRequests.blockingByObjective;
+
   const visibleObjectives = useMemo(
     () =>
       committingObjectiveId === null
@@ -206,63 +78,6 @@ export function MissionObjectivesSection({
         : mission.objectives.filter(objective => objective.id !== committingObjectiveId),
     [committingObjectiveId, mission.objectives]
   );
-  // Executed rows behave as an accordion: one open at a time keeps the timeline
-  // scannable now that each row holds its whole evidence stack. Shift-click adds
-  // a row instead of replacing the open one, and a `?objective=` deep link
-  // opens its target without closing anything the user already had open.
-  const [openObjectiveIds, setOpenObjectiveIds] = useState<ReadonlySet<string>>(() => new Set());
-  // Opens a row without closing anything else. Used by the deep link, the
-  // start-of-execution auto-open, and a row that just received a blocking
-  // agent request.
-  const openExecutedObjective = (objectiveId: string) =>
-    setOpenObjectiveIds(current =>
-      current.has(objectiveId) ? current : new Set([...current, objectiveId])
-    );
-  const toggleExecutedObjective = (objectiveId: string, { additive }: { additive: boolean }) => {
-    setOpenObjectiveIds(current => {
-      const isOpen = current.has(objectiveId);
-      if (!additive) return isOpen ? new Set() : new Set([objectiveId]);
-      const next = new Set(current);
-      if (isOpen) next.delete(objectiveId);
-      else next.add(objectiveId);
-      return next;
-    });
-  };
-  const focusedObjectiveId = useMemo(
-    () =>
-      focusObjectiveRef
-        ? (mission.objectives.find(objective =>
-            objectiveMatchesFocus({ objective, focusRef: focusObjectiveRef })
-          )?.id ?? null)
-        : null,
-    [focusObjectiveRef, mission.objectives]
-  );
-  useEffect(() => {
-    if (!focusedObjectiveId) return;
-    setOpenObjectiveIds(current =>
-      current.has(focusedObjectiveId) ? current : new Set([...current, focusedObjectiveId])
-    );
-  }, [focusedObjectiveId]);
-  // An objective that starts running opens itself once: its body now carries
-  // the live terminal session and any blocking question the agent asks, which
-  // used to sit in the mission-wide Activity section where nothing hid them.
-  // Only the transition opens it, so a user who collapses a running row is not
-  // fought on every refetch.
-  const inFlightKey = mission.objectives
-    .filter(objective => objective.state === 'executing' || objective.state === 'pending_delivery')
-    .map(objective => objective.id)
-    .sort()
-    .join(',');
-  const autoOpenedRef = useRef<Set<string>>(new Set());
-  useEffect(() => {
-    const fresh = inFlightKey
-      .split(',')
-      .filter(id => id.length > 0 && !autoOpenedRef.current.has(id));
-    if (fresh.length === 0) return;
-    for (const id of fresh) autoOpenedRef.current.add(id);
-    setOpenObjectiveIds(current => new Set([...current, ...fresh]));
-  }, [inFlightKey]);
-
   const lifecycleView = useMemo(
     () =>
       deriveObjectiveLifecycleView(visibleObjectives, {
@@ -270,15 +85,13 @@ export function MissionObjectivesSection({
       }),
     [mission.allowParallelObjectives, visibleObjectives]
   );
-  const objectives = lifecycleView.orderedObjectives;
   const executedObjectives = lifecycleView.executedObjectives;
   const launchingObjectives = lifecycleView.launchingObjectives;
   const queuedObjectivesFromServer = lifecycleView.queuedObjectives;
 
-  // Locally-mirrored order for optimistic drag-and-drop. While our own reorder
-  // is in flight the local order wins, so a dragged item does not jump back
-  // before it lands. Otherwise the server order wins, because the Run Queue
-  // also reorders objectives (queue reorder, dequeue-to-end).
+  // Locally-mirrored order for optimistic reordering. While our own reorder is in flight the
+  // local order wins, so a moved row does not jump back before it lands. Otherwise the server
+  // order wins, because the Run Queue also reorders objectives (queue reorder, dequeue-to-end).
   const [queueOrder, setQueueOrder] = useState<string[]>(() =>
     queuedObjectivesFromServer.map(o => o.id)
   );
@@ -298,144 +111,128 @@ export function MissionObjectivesSection({
     return queueOrder.map(id => byId.get(id)).filter((o): o is ObjectiveDto => Boolean(o));
   }, [queuedObjectivesFromServer, queueOrder]);
 
-  const sensors = useKanbanSensors(true);
+  const rowOrderKey = [
+    ...executedObjectives.map(o => o.id),
+    ...launchingObjectives.map(o => o.id),
+    ...orderedQueuedObjectives.map(o => o.id)
+  ].join(',');
+  useEffect(() => {
+    onRowOrderChange?.(rowOrderKey.length > 0 ? rowOrderKey.split(',') : []);
+  }, [onRowOrderChange, rowOrderKey]);
 
-  function handleDragEnd(event: DragEndEvent) {
-    const { active, over } = event;
-    if (!over || active.id === over.id) return;
-    // One ordering surface: the server carries this mission order into the Run
-    // Queue, so queued and unqueued cards reorder the same way and a drag never
-    // changes queue membership. The request names the complete queued set.
-    const oldIndex = queueOrder.indexOf(String(active.id));
-    const newIndex = queueOrder.indexOf(String(over.id));
-    if (oldIndex === -1 || newIndex === -1) return;
+  const sensors = useObjectiveRowSensors(orderedQueuedObjectives.length > 1);
+
+  /** Persist a new not-started order: optimistic, complete set, rollback on rejection. */
+  function commitOrder(nextOrder: string[]) {
+    // The request must name the complete not-started set; a partial local view (a row that
+    // arrived but has not merged yet) would be rejected, so send nothing until it is whole.
     if (queueOrder.length !== queuedObjectivesFromServer.length) return;
-
-    const nextOrder = arrayMove(queueOrder, oldIndex, newIndex);
     setQueueOrder(nextOrder);
     reorder.mutate(
       { missionId: mission.id, orderedObjectiveIds: nextOrder },
       {
-        // A rejected reorder (including a 409 for a stale queued set) rolls the
-        // cache back; the settled invalidation refetches the current queue.
+        // A rejected reorder (including a 409 for a stale set) rolls the cache back; the
+        // settled invalidation refetches the current order.
         onError: () => setQueueOrder(queuedObjectivesFromServer.map(o => o.id))
       }
     );
   }
 
-  // One composer, at the end of the queue: always shown when nothing is
-  // launching or queued, otherwise only when the user asks for another slot.
-  const showComposer =
-    (launchingObjectives.length === 0 && orderedQueuedObjectives.length === 0) ||
-    extraSlotRequested;
-  const hasBlankSlot =
-    showComposer ||
-    [...launchingObjectives, ...orderedQueuedObjectives].some(
-      objective => !objectiveHasInstructionText(objective)
-    );
+  function handleDragEnd(event: DragEndEvent) {
+    // The pointer release after a drag fires a click on the row button; never open on drop.
+    suppressNextClick();
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIndex = queueOrder.indexOf(String(active.id));
+    const newIndex = queueOrder.indexOf(String(over.id));
+    if (oldIndex === -1 || newIndex === -1) return;
+    commitOrder(arrayMove(queueOrder, oldIndex, newIndex));
+  }
+
+  function moveBy(objectiveId: string, delta: -1 | 1) {
+    const next = moveObjectiveIdBy(queueOrder, objectiveId, delta);
+    if (next) commitOrder(next);
+  }
+
+  const rowCallbacks = {
+    onOpen: onOpenObjective,
+    onEditTitle: onEditObjectiveTitle,
+    onDeleted: onObjectiveDeleted
+  };
+  const isBlocked = (objective: ObjectiveDto) =>
+    isInFlightObjective(objective.state) &&
+    (blockingByObjective.get(objective.id)?.length ?? 0) > 0;
+
+  const fixedRows = [...executedObjectives, ...launchingObjectives];
+  if (fixedRows.length === 0 && orderedQueuedObjectives.length === 0) {
+    return <p className="px-3 py-3 text-sm text-(--color-ink-dim)">No objectives yet</p>;
+  }
 
   return (
-    <div className="space-y-3">
-      {/*
-        Executed rows run edge to edge (§4.1.1): no gutter, no rounded frame,
-        no side borders. Straight full-width rules divide them — one above the
-        first, one between each pair, one below the last.
-      */}
-      {executedObjectives.length > 0 ? (
-        <div className="divide-y divide-[var(--color-border)] border-y border-[var(--color-border)] bg-[var(--color-surface-1)]">
-          {executedObjectives.map((objective, index) => (
-            <ObjectiveFocusAnchor
+    <div className="min-w-0" data-mission-objective-list="">
+      {fixedRows.length > 0 ? (
+        <ol aria-label="Started objectives" className="min-w-0">
+          {fixedRows.map(objective => (
+            <ObjectiveRow
               key={objective.id}
               objective={objective}
-              focusRef={focusObjectiveRef}
-              radiusClass="rounded-none"
-            >
-              <ObjectiveCollapsibleItem
-                objective={objective}
-                index={index}
-                evidence={evidenceForObjective(evidence, objective.id)}
-                loading={evidenceLoading}
-                truncation={evidenceTruncation}
-                open={openObjectiveIds.has(objective.id)}
-                onToggle={options => toggleExecutedObjective(objective.id, options)}
-                onOpenForRequest={() => openExecutedObjective(objective.id)}
-              />
-            </ObjectiveFocusAnchor>
+              blocked={isBlocked(objective)}
+              selected={objective.id === openObjectiveId}
+              {...rowCallbacks}
+            />
           ))}
-        </div>
+        </ol>
       ) : null}
 
-      {/* Launching, queued, and composer cards keep the panel gutter: they are cards, not history rows. */}
-      <div className="space-y-3 px-5">
-        {launchingObjectives.map(objective => (
-          <ObjectiveFocusAnchor
-            key={objective.id}
-            objective={objective}
-            focusRef={focusObjectiveRef}
+      {orderedQueuedObjectives.length > 0 ? (
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          modifiers={OBJECTIVE_ROW_DND_MODIFIERS}
+          onDragEnd={handleDragEnd}
+          onDragCancel={() => suppressNextClick()}
+        >
+          <SortableContext
+            items={orderedQueuedObjectives.map(o => o.id)}
+            strategy={verticalListSortingStrategy}
           >
-            <DraftObjective
-              objective={objective}
-              siblings={objectives}
-              executionRequests={mission.executionRequests}
-              allowParallelObjectives={mission.allowParallelObjectives}
-              evidence={evidenceForObjective(evidence, objective.id)}
-              evidenceLoading={evidenceLoading}
-              evidenceTruncation={evidenceTruncation}
-            />
-          </ObjectiveFocusAnchor>
-        ))}
-
-        {orderedQueuedObjectives.length > 0 ? (
-          <DndContext
-            sensors={sensors}
-            collisionDetection={closestCenter}
-            onDragEnd={handleDragEnd}
-          >
-            <SortableContext
-              items={orderedQueuedObjectives.map(o => o.id)}
-              strategy={verticalListSortingStrategy}
-            >
-              <div className="space-y-3">
-                {orderedQueuedObjectives.map((objective, index) => (
-                  <SortableQueuedObjective
-                    key={objective.id}
-                    objective={objective}
-                    isHead={index === 0}
-                    siblings={objectives}
-                    executionRequests={mission.executionRequests}
-                    focusObjectiveRef={focusObjectiveRef}
-                    allowParallelObjectives={mission.allowParallelObjectives}
-                    evidence={evidence}
-                    evidenceLoading={evidenceLoading}
-                    evidenceTruncation={evidenceTruncation}
-                  />
-                ))}
-              </div>
-            </SortableContext>
-          </DndContext>
-        ) : null}
-
-        {showComposer ? (
-          <GhostObjective
-            missionId={mission.id}
-            projectId={mission.projectId}
-            autoFocus={extraSlotRequested}
-            onMaterialized={() => setExtraSlotRequested(false)}
-            onDismissEmpty={() => setExtraSlotRequested(false)}
-            onCommittingChange={setCommittingObjectiveId}
-          />
-        ) : null}
-
-        <div>
-          <Button
-            variant="secondary"
-            onClick={() => setExtraSlotRequested(true)}
-            disabled={hasBlankSlot}
-          >
-            + Add objective
-          </Button>
-        </div>
-      </div>
+            <ol aria-label="Objectives not started" className="relative min-w-0">
+              {orderedQueuedObjectives.map((objective, index) => (
+                <SortableObjectiveRow
+                  key={objective.id}
+                  objective={objective}
+                  selected={objective.id === openObjectiveId}
+                  onMoveUp={index > 0 ? () => moveBy(objective.id, -1) : undefined}
+                  onMoveDown={
+                    index < orderedQueuedObjectives.length - 1
+                      ? () => moveBy(objective.id, 1)
+                      : undefined
+                  }
+                  {...rowCallbacks}
+                />
+              ))}
+            </ol>
+          </SortableContext>
+        </DndContext>
+      ) : null}
     </div>
+  );
+}
+
+/** A not-started row wired to the sortable list. The row button carries the drag listeners. */
+function SortableObjectiveRow(props: Omit<ObjectiveRowProps, 'drag'>) {
+  const { setNodeRef, listeners, transform, transition, isDragging } = useSortable({
+    id: props.objective.id
+  });
+  return (
+    <ObjectiveRow
+      {...props}
+      drag={{
+        setNodeRef,
+        listeners,
+        style: { transform: CSS.Translate.toString(transform), transition },
+        isDragging
+      }}
+    />
   );
 }

@@ -414,8 +414,9 @@ export function GhostObjective({
         onDrop={addFiles}
         disabled={readOnly}
         className={cn(
-          'w-full overflow-hidden rounded-xl border border-dashed border-muted-foreground/25',
-          'transition-all focus-within:border-solid focus-within:border-muted-foreground/20',
+          // Solid border and its own soft shadow: it floats over the list while sticky (plan §8).
+          'w-full overflow-hidden rounded-xl border border-(--color-border) bg-(--color-surface-1)',
+          'shadow-[0_4px_16px_-6px_rgba(0,0,0,0.18)] transition-all dark:shadow-[0_4px_16px_-6px_rgba(0,0,0,0.6)]',
           'focus-within:shadow-md focus-within:ring-1 focus-within:ring-ring/50 md:min-w-[350px]',
           phase === 'saving' && 'opacity-80'
         )}

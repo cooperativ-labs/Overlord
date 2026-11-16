@@ -141,18 +141,26 @@ export function MissionSummaryActions({
   rows,
   missionId,
   totalActions,
-  truncated
+  truncated,
+  headless = false
 }: {
   rows: readonly SummaryActionRow[];
   missionId: string;
   /** Pre-cap count of delivery actions, when the evidence list was cut. */
   totalActions: number;
   truncated: boolean;
+  /** Rendered inside a tab that already names it: no top border and no heading. */
+  headless?: boolean;
 }) {
   const headingId = useId();
   if (rows.length === 0) {
     return (
-      <div className="flex items-center gap-2.5 border-t border-(--color-border) bg-sky-50/60 px-5 py-3 text-sm text-(--color-ink-dim) dark:bg-sky-500/5">
+      <div
+        className={cn(
+          'flex items-center gap-2.5 bg-sky-50/60 px-5 py-3 text-sm text-(--color-ink-dim) dark:bg-sky-500/5',
+          !headless && 'border-t border-(--color-border)'
+        )}
+      >
         <Check className="size-3.5 text-emerald-600" strokeWidth={3} aria-hidden="true" />
         <span>No open actions</span>
       </div>
@@ -160,15 +168,21 @@ export function MissionSummaryActions({
   }
   return (
     <section
-      aria-labelledby={headingId}
-      className="grid gap-1.5 border-t border-(--color-border) bg-sky-50/60 px-5 pb-2.5 pt-3 dark:bg-sky-500/5"
+      aria-labelledby={headless ? undefined : headingId}
+      aria-label={headless ? 'Your actions' : undefined}
+      className={cn(
+        'grid gap-1.5 bg-sky-50/60 px-5 pb-2.5 pt-3 dark:bg-sky-500/5',
+        !headless && 'border-t border-(--color-border)'
+      )}
     >
-      <SummaryBlockHeading
-        id={headingId}
-        label="Your actions"
-        count={rows.length}
-        countClassName="text-sky-700 dark:text-sky-300"
-      />
+      {headless ? null : (
+        <SummaryBlockHeading
+          id={headingId}
+          label="Your actions"
+          count={rows.length}
+          countClassName="text-sky-700 dark:text-sky-300"
+        />
+      )}
       <ul className="grid">
         {rows.map(row => (
           <ActionRow key={row.key} row={row} missionId={missionId} />

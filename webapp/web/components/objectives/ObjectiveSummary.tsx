@@ -16,6 +16,7 @@ import {
   summaryProvenanceLabel,
   summaryWordCount
 } from '../../lib/objective-brief.ts';
+import { markEscapeConsumed } from '../../lib/objective-edit-buffers.ts';
 import {
   clearSummaryBuffer,
   setSummaryBuffer,
@@ -435,7 +436,10 @@ export function ObjectiveSummaryEditor({ objective }: { objective: ObjectiveDto 
 
   const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key === 'Escape') {
+      // Cancels the edit only; an enclosing objective dialog stays open (plan §9.1).
       event.preventDefault();
+      event.stopPropagation();
+      markEscapeConsumed(event);
       clearSummaryBuffer(objective.id);
       return;
     }

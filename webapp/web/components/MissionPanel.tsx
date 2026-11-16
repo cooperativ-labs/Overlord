@@ -1,9 +1,11 @@
 import type { MissionDetailDto } from '@overlord/contract';
-import { useNavigate, useRouterState } from '@tanstack/react-router';
+import type { ObjectiveDto } from '@overlord/contract';
+import { useNavigate } from '@tanstack/react-router';
 import { ArrowRightToLine, Loader2, Sparkles, Unplug } from 'lucide-react';
-import { useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 
-import { objectiveSearchFromLocation } from '../lib/mission-panel-search.ts';
+import { useObjectiveDetailNavigation } from '../lib/hooks/use-objective-detail-navigation.ts';
+import { findObjectiveByRef } from '../lib/mission-panel-search.ts';
 import {
   evidenceTruncationFromPages,
   partitionMissionEvidence
@@ -13,13 +15,17 @@ import {
   useMission,
   useMissionDeliveries,
   useMissionFileChanges,
+  useMissionOpenAgentRequests,
   useMissionSummary,
   useUpdateMission,
   useUpdateObjective
 } from '../lib/queries.ts';
 import { cn } from '../lib/utils.ts';
 
-import { MissionSummarySection } from './mission-summary/MissionSummarySection.tsx';
+import { MissionBlockingQuestions } from './mission-panel/MissionBlockingQuestions.tsx';
+import { MissionOverviewCard } from './mission-panel/MissionOverviewCard.tsx';
+import { ObjectiveDetail } from './objective-detail/ObjectiveDetail.tsx';
+import { GhostObjective } from './objectives/GhostObjective.tsx';
 import { MissionObjectivesSection } from './objectives/MissionObjectivesSection.tsx';
 import { Button as IconButton } from './ui/button.tsx';
 import {
@@ -47,10 +53,7 @@ import { MissionProjectSelect } from './MissionProjectSelect.tsx';
 import { MissionSharedStateFooter } from './MissionSharedStateFooter.tsx';
 import { MissionStatusSelect } from './MissionStatusSelect.tsx';
 import { MissionTagSelect } from './MissionTagSelect.tsx';
-import {
-  MissionLatchSessionProvider,
-  MissionTerminalSessionsSection
-} from './ObjectiveTerminalSessions.tsx';
+import { MissionLatchSessionProvider } from './ObjectiveTerminalSessions.tsx';
 import { Button, Spinner } from './ui.tsx';
 import { UnassignedEvidenceSection } from './UnassignedEvidenceSection.tsx';
 
@@ -236,9 +239,6 @@ export function MissionPanel({
   onProjectChanged?: (nextProjectId: string) => void;
 }) {
   const navigate = useNavigate();
-  const focusObjectiveRef = useRouterState({
-    select: state => objectiveSearchFromLocation(state.location.search)
-  });
   const missionQ = useMission(missionId, { refetchBranchState: true });
   // Deliveries are fetched once per mission and partitioned by objective
   // (coo:879); terminal sessions ride on the mission detail itself. File
@@ -274,9 +274,56 @@ export function MissionPanel({
     [deliveriesQ.data, fileChangesQ.data]
   );
   const evidenceLoading = useMemo(
-    () => ({ deliveries: deliveriesQ.isLoading }),
-    [deliveriesQ.isLoading]
+    () => ({
+      deliveries: deliveriesQ.isLoading,
+      deliveriesUnavailable: !deliveriesQ.isSuccess || deliveriesQ.isFetching
+    }),
+    [deliveriesQ.isLoading, deliveriesQ.isSuccess, deliveriesQ.isFetching]
   );
+  // One complete open-request collection shared by the question slot, the overview badge and
+  // For you, the row tints and the detail (plan §3.2); loading ignores summary eligibility.
+  const openRequests = useMissionOpenAgentRequests(missionId);
+  const objectiveNav = useObjectiveDetailNavigation();
+  /** The objective the composer is still committing; hidden from the rows until it hands over. */
+  const [committingObjectiveId, setCommittingObjectiveId] = useState<string | null>(null);
+  /** Row order for the detail's "n of m" and previous/next. */
+  const [rowOrder, setRowOrder] = useState<string[]>([]);
+  /** "Edit title" from a row menu: the detail opens with that objective's title editor. */
+  const [titleEditObjectiveId, setTitleEditObjectiveId] = useState<string | null>(null);
+  /** The row button or link that opened the detail, for focus return on close. */
+  const detailOpenerRef = useRef<HTMLElement | null>(null);
+  const lastOpenObjectiveIdRef = useRef<string | null>(null);
+  const openObjectiveId =
+    findObjectiveByRef(missionQ.data?.objectives ?? [], objectiveNav.currentRef)?.id ?? null;
+  if (openObjectiveId) lastOpenObjectiveIdRef.current = openObjectiveId;
+
+  const openObjective = useCallback(
+    (objective: ObjectiveDto, options?: { trigger: HTMLElement | null }) => {
+      detailOpenerRef.current = options?.trigger ?? null;
+      objectiveNav.open(objective.displayId || objective.id);
+    },
+    [objectiveNav]
+  );
+  const openObjectiveByRef = useCallback(
+    (objectiveRef: string, trigger: HTMLElement | null) => {
+      detailOpenerRef.current = trigger;
+      objectiveNav.open(objectiveRef);
+    },
+    [objectiveNav]
+  );
+  const getReturnFocusTarget = useCallback((): HTMLElement | null => {
+    const opener = detailOpenerRef.current;
+    if (opener?.isConnected) return opener;
+    const lastId = lastOpenObjectiveIdRef.current;
+    const row = lastId
+      ? document.querySelector<HTMLElement>(`[data-objective-id="${CSS.escape(lastId)}"] button`)
+      : null;
+    if (row) return row;
+    // The row was deleted: return to the objective list itself.
+    return document.querySelector<HTMLElement>('[data-mission-objective-list]');
+  }, []);
+  const clearTitleEdit = useCallback(() => setTitleEditObjectiveId(null), []);
+
   const [isScrolling, setIsScrolling] = useState(false);
   const scrollIdleTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
@@ -335,71 +382,103 @@ export function MissionPanel({
   const mission = missionQ.data;
 
   return (
-    <div className="flex h-full min-h-0 min-w-[375px] flex-col bg-(--color-surface-1)">
-      <MissionPanelHeader
-        mission={mission}
-        projectId={mission.projectId}
-        onClose={() => closeToProject(mission.projectId)}
-      />
-      <MissionTitle mission={mission} />
+    // Both providers wrap the header as well as the body: the Latch chip lives in the header
+    // (plan §4, §10).
+    <MissionLatchSessionProvider
+      missionId={mission.id}
+      workspaceId={mission.workspaceId}
+      sessions={mission.terminalSessions}
+    >
+      <MissionDeliveryVariantProvider value={deliveryVariant}>
+        {/* Container for the header's narrow-panel sizing (plan §10). */}
+        <div className="@container/mission-panel flex h-full min-h-0 min-w-[375px] flex-col bg-(--color-surface-1)">
+          <MissionPanelHeader
+            mission={mission}
+            projectId={mission.projectId}
+            onClose={() => closeToProject(mission.projectId)}
+          />
+          <MissionTitle mission={mission} />
 
-      <MissionSettingsBar
-        mission={mission}
-        projectId={mission.projectId}
-        onProjectChanged={handleProjectChanged}
-      />
-      <section className="px-5 py-1.5 pt-2">
-        <MissionTagSelect
-          missionId={mission.id}
-          projectId={mission.projectId}
-          assignedTags={mission.tags}
-        />
-      </section>
-      <div
-        className={cn(
-          'scrollbar-auto-hide min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-muted',
-          isScrolling && 'is-scrolling'
-        )}
-        onScroll={handleScroll}
-      >
-        {/*
-          Card section — primary work surface: objectives. The section itself
-          carries no horizontal gutter: executed objective rows run edge to edge
-          (§4.1.1) and the objectives section applies the gutter only around the
-          editable cards below them.
-        */}
-        <MissionLatchSessionProvider
-          missionId={mission.id}
-          workspaceId={mission.workspaceId}
-          sessions={mission.terminalSessions}
-        >
-          <MissionDeliveryVariantProvider value={deliveryVariant}>
-            <section className="border-b border-(--color-border) bg-(--color-surface-1) pb-5 pt-2">
-              <MissionObjectivesSection
+          <MissionSettingsBar
+            mission={mission}
+            projectId={mission.projectId}
+            onProjectChanged={handleProjectChanged}
+          />
+          <section className="px-5 py-1.5 pt-2">
+            <MissionTagSelect
+              missionId={mission.id}
+              projectId={mission.projectId}
+              assignedTags={mission.tags}
+            />
+          </section>
+          <div
+            className={cn(
+              'scrollbar-auto-hide min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-muted',
+              isScrolling && 'is-scrolling'
+            )}
+            onScroll={handleScroll}
+          >
+            {/* Open blocking questions, directly under the title (plan §5). */}
+            <MissionBlockingQuestions
+              mission={mission}
+              openRequests={openRequests}
+              onOpenObjective={openObjectiveByRef}
+            />
+            {/*
+              The overview card and the sticky composer share one wrapper (plan §4, §8). The
+              wrapper has no height and no overflow of its own, so the composer sticks to the
+              bottom of the scroll viewport only while the card extends below it, then settles
+              beneath the card: the end of every tab stays reachable.
+            */}
+            <div className="px-3 pt-3" data-mission-overview-wrapper="">
+              <MissionOverviewCard
+                key={mission.id}
                 mission={mission}
-                focusObjectiveRef={focusObjectiveRef}
-                evidence={evidence}
-                evidenceLoading={evidenceLoading}
-                evidenceTruncation={evidenceTruncation}
+                openRequests={openRequests}
+                occluded={openObjectiveId !== null}
+                objectiveList={
+                  <MissionObjectivesSection
+                    mission={mission}
+                    committingObjectiveId={committingObjectiveId}
+                    openObjectiveId={openObjectiveId}
+                    onOpenObjective={openObjective}
+                    onEditObjectiveTitle={objective => {
+                      setTitleEditObjectiveId(objective.id);
+                      openObjective(objective);
+                    }}
+                    onObjectiveDeleted={objective => {
+                      if (objective.id === openObjectiveId) objectiveNav.close();
+                    }}
+                    onRowOrderChange={setRowOrder}
+                  />
+                }
               />
-            </section>
+              {/* The composer: present on every tab, never remounted by a tab change (plan §8). */}
+              <div className="sticky bottom-0 z-10 py-3" data-mission-composer="">
+                <GhostObjective
+                  missionId={mission.id}
+                  projectId={mission.projectId}
+                  onCommittingChange={setCommittingObjectiveId}
+                />
+              </div>
+            </div>
+            {/* The objective detail, mounted once at panel level (plan §4, §9). */}
+            <ObjectiveDetail
+              mission={mission}
+              rowOrder={rowOrder}
+              evidence={evidence}
+              evidenceLoading={evidenceLoading}
+              evidenceTruncation={evidenceTruncation}
+              titleEditObjectiveId={titleEditObjectiveId}
+              onTitleEditHandled={clearTitleEdit}
+              getReturnFocusTarget={getReturnFocusTarget}
+            />
 
             {/* Subtle section — supporting context: notes, artifacts, and activity */}
             <section className="flex flex-col px-5 pt-5 bg-muted h-full pb-10">
               <MissionNotes missionId={mission.id} notes={mission.notes} />
               <Separator />
               <div className="flex flex-col gap-6 mt-8">
-                {/*
-                The current Latch session as a full card above the artifacts,
-                with previous sessions collapsed in an accordion (coo:990).
-                Objective rows keep only a minimal attach/end line.
-              */}
-                <MissionTerminalSessionsSection
-                  sessions={mission.terminalSessions}
-                  objectives={mission.objectives}
-                />
-                {/* Agent-maintained mission summary (plan §5); hidden on ineligible missions. */}
-                <MissionSummarySection key={mission.id} mission={mission} />
                 <div className="space-y-3">
                   <h2 className="text-xs font-semibold uppercase tracking-wide text-(--color-ink-dim)">
                     Artifacts
@@ -434,10 +513,10 @@ export function MissionPanel({
                 </div>
               </div>
             </section>
-          </MissionDeliveryVariantProvider>
-        </MissionLatchSessionProvider>
-      </div>
-      <MissionSharedStateFooter missionId={mission.id} />
-    </div>
+          </div>
+          <MissionSharedStateFooter missionId={mission.id} />
+        </div>
+      </MissionDeliveryVariantProvider>
+    </MissionLatchSessionProvider>
   );
 }

@@ -1,8 +1,7 @@
-import type { DeliveryDto, ObjectiveAttachmentDto, ObjectiveDto } from '@overlord/contract';
-import { ChevronDown, GitBranch, History } from 'lucide-react';
+import type { DeliveryDto, ObjectiveDto } from '@overlord/contract';
+import { ChevronDown, History } from 'lucide-react';
 import { useState } from 'react';
 
-import { instructionLengthLabel } from '../../lib/objective-brief.ts';
 import {
   groupEvidenceByRun,
   NO_EVIDENCE_TRUNCATION,
@@ -12,49 +11,39 @@ import {
   objectiveRunLabel
 } from '../../lib/objective-evidence.ts';
 import { cn } from '../../lib/utils.ts';
-import { AgentSessionActivity } from '../agent-session/AgentSessionActivity.tsx';
 import { MissionDeliveryCard, useMissionDeliveryVariant } from '../DeliverySummaryCard.tsx';
-import { InlineEditField } from '../InlineEditField.tsx';
 import { ObjectiveTerminalSessions } from '../ObjectiveTerminalSessions.tsx';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible.tsx';
 
-import { ObjectiveAttachmentList } from './ObjectiveAttachments.tsx';
 import {
   ObjectiveEvidenceEmpty,
   ObjectiveEvidenceRule,
-  ObjectiveEvidenceSection,
   ObjectiveEvidenceTruncationNotice
 } from './ObjectiveEvidenceRule.tsx';
 import { ObjectiveFileChanges } from './ObjectiveFileChanges.tsx';
-import {
-  ObjectiveSummaryBody,
-  ObjectiveSummaryFallback,
-  useObjectiveSummary
-} from './ObjectiveSummary.tsx';
 
 /**
- * Which arrangement of the evidence stack to draw (coo:879 §4.2 / §4.3 / §4.5):
+ * Which arrangement of an objective's evidence the objective detail draws
+ * (mission-panel-redesign plan §9.4). The detail renders the instruction,
+ * blocking requests, the current terminal session and attachments elsewhere, so
+ * every mode draws only deliveries, file changes and earlier runs:
  *
- * - `complete` — instruction → deliveries → files changed during this
- *   objective → terminal session (only when one exists) → earlier runs →
- *   attachments.
- * - `active` — instruction → agent activity → prior deliveries (only on a
- *   pending-delivery re-attach) → files changed (live) → terminal session
- *   (only when one exists) → earlier runs → attachments.
- * - `history` — the reverted draft's previous runs, then the objective's
- *   cumulative file list, with no instruction (the draft's editable field
- *   already shows it) and no attachments (the draft's own footer lists them).
+ * - `complete` — deliveries (each latest-run delivery open, so its summary and
+ *   assumptions show) → files changed during this objective → earlier runs.
+ * - `active` — prior deliveries (only when the run already delivered, e.g. a
+ *   pending-delivery re-attach) → files changed (live) → earlier runs.
+ * - `history` — a reverted draft's previous runs, then the objective's
+ *   cumulative file list.
  *
  * The file list is cumulative per objective, so it appears once and never
  * inside a run; runs split only deliveries and terminal sessions.
- *
- * In `complete` and `active`, the instruction is the first thing under the
- * row's trigger, drawn flat with no rule or disclosure of its own (coo:1041).
  */
 export type ObjectiveEvidenceMode = 'complete' | 'active' | 'history';
 
 export type ObjectiveEvidenceLoading = {
   deliveries: boolean;
+  /** A failed/missing response cannot authorize deleting an apparently empty draft. */
+  deliveriesUnavailable?: boolean;
 };
 
 function deliveryLabel(index: number, total: number): string {
@@ -78,10 +67,13 @@ function countLabel(count: number, singular: string, plural: string): string {
  */
 function RunDeliveries({
   deliveries,
-  expandLatest
+  expandLatest,
+  expandAll = false
 }: {
   deliveries: readonly DeliveryDto[];
   expandLatest: boolean;
+  /** Open every delivery card, so each one's summary and assumptions are on screen. */
+  expandAll?: boolean;
 }) {
   // `objective` only on summary-eligible missions; the mission summary carries
   // their actions and deferred work instead (plan §3.1).
@@ -93,87 +85,10 @@ function RunDeliveries({
           key={delivery.id}
           delivery={delivery}
           objectiveTitle={deliveryLabel(index, deliveries.length)}
-          defaultExpanded={expandLatest && index === 0}
+          defaultExpanded={expandAll || (expandLatest && index === 0)}
           variant={variant}
         />
       ))}
-    </div>
-  );
-}
-
-/**
- * The instruction text, read-only. `wrap-anywhere` (not just `break-words`):
- * instruction text routinely carries an unbroken token with no break
- * opportunity at all — a long absolute path, a URL, a base64 blob — and
- * without it that single word sets the row's min-content width and pushes the
- * panel past the viewport edge.
- */
-function InstructionText({ objective }: { objective: ObjectiveDto }) {
-  return (
-    <div className="min-w-0 text-sm leading-relaxed text-muted-foreground">
-      <InlineEditField
-        multiline
-        disabled
-        value={objective.instructionText}
-        className="block whitespace-pre-wrap wrap-anywhere"
-        ariaLabel="Objective instruction"
-        onSave={() => undefined}
-      />
-    </div>
-  );
-}
-
-/**
- * The head of an open executed row (coo:1275 plan §4.12). With a summary:
- * SUMMARY (prose, provenance, Edit / Regenerate / Remove), then a closed
- * INSTRUCTIONS disclosure with the instruction length. Without one: the
- * instructions flat, as before, with Summarize / pending / failure under them
- * — never an empty SUMMARY section. People can edit the summary after launch
- * and completion; that is presentation only and leaves the instructions and
- * every piece of evidence below untouched.
- */
-function ObjectiveInstruction({ objective }: { objective: ObjectiveDto }) {
-  const summary = useObjectiveSummary(objective);
-  const summaryLayout = summary.view.summary !== null || summary.editing;
-  return (
-    <div className="min-w-0">
-      {objective.branch ? (
-        <p className="mb-2 flex items-center gap-1 truncate font-mono text-[11px] text-muted-foreground/80">
-          <GitBranch className="h-3 w-3 shrink-0" />
-          <span className="truncate">{objective.branch}</span>
-        </p>
-      ) : null}
-      {objective.externalSessionId ? (
-        <p className="mb-2 truncate font-mono text-[11px] text-muted-foreground/80">
-          Agent session: {objective.externalSessionId}
-        </p>
-      ) : null}
-      {summaryLayout ? (
-        <div className="grid min-w-0 gap-2">
-          <ObjectiveEvidenceRule label="Summary" />
-          <ObjectiveSummaryBody
-            objective={objective}
-            view={summary.view}
-            provenance={summary.provenance}
-            editing={summary.editing}
-          />
-          <ObjectiveEvidenceSection
-            label="Instructions"
-            trailing={
-              <span className="font-mono font-normal normal-case tracking-normal">
-                · {instructionLengthLabel(objective.instructionText)}
-              </span>
-            }
-          >
-            <InstructionText objective={objective} />
-          </ObjectiveEvidenceSection>
-        </div>
-      ) : (
-        <>
-          <InstructionText objective={objective} />
-          <ObjectiveSummaryFallback objective={objective} view={summary.view} />
-        </>
-      )}
     </div>
   );
 }
@@ -191,18 +106,24 @@ function LiveTag() {
 function buildRunSections({
   run,
   loading,
-  expandLatestDelivery
+  expandLatestDelivery,
+  expandAllDeliveries = false
 }: {
   run: ObjectiveRun;
   loading: ObjectiveEvidenceLoading;
   expandLatestDelivery: boolean;
+  expandAllDeliveries?: boolean;
 }) {
   const deliveries = loading.deliveries ? (
     <ObjectiveEvidenceEmpty>Loading deliveries…</ObjectiveEvidenceEmpty>
   ) : run.deliveries.length === 0 ? (
     <ObjectiveEvidenceEmpty>No delivery recorded</ObjectiveEvidenceEmpty>
   ) : (
-    <RunDeliveries deliveries={run.deliveries} expandLatest={expandLatestDelivery} />
+    <RunDeliveries
+      deliveries={run.deliveries}
+      expandLatest={expandLatestDelivery}
+      expandAll={expandAllDeliveries}
+    />
   );
 
   // A run without a (visible) terminal session draws nothing for it — no rule, no empty state.
@@ -322,38 +243,29 @@ function EarlierRuns({
 }
 
 /**
- * The flat, full-width stack of everything one objective produced, rendered
- * inside its accordion (coo:879 §4.2). The instruction leads, flat and
- * unlabeled, directly under the row's trigger (coo:1041); the sections after
- * it are separated by thin labeled rules. The files-changed rule is also a
- * disclosure trigger that starts closed (chevron left of the label), because
- * its body is unbounded; deliveries and the terminal session stay flat and
- * always visible, and the terminal session is omitted entirely when the run
- * has none. Beyond those, only secondary rows (earlier runs, capture details)
- * fold. Empty states are one-line muted italics so "nothing captured" and
- * "tracking unavailable" read distinctly from "still loading".
+ * Everything one objective produced, for the objective detail (plan §9.4).
+ * Sections are separated by thin labeled rules; the files-changed rule is also a
+ * disclosure that starts closed, because its body is unbounded. Earlier runs
+ * fold into compact rows. Empty states are one-line muted italics so "nothing
+ * captured" and "tracking unavailable" read distinctly from "still loading".
  *
- * Every stack container is `min-w-0` and the row's panel forces
- * `overflow-wrap: anywhere`, so a single unbroken token in an instruction, a
- * delivery summary, or a path can never set the min-content width and drag the
- * mission panel past the viewport edge.
+ * Every container is `min-w-0`, so a single unbroken token in a delivery
+ * summary or a path can never set the min-content width and drag the dialog
+ * past the viewport edge.
  *
  * Evidence is split into runs by `objective.reopenedAt` (contract v133), with
  * delivery-order inference as the fallback for objectives that predate the
- * column; see `groupEvidenceByRun`. The latest run is the flat stack; earlier
- * runs are collapsed "Run 1 of 2" rows. The file list spans every run.
+ * column; see `groupEvidenceByRun`.
  */
 export function ObjectiveEvidenceSections({
   objective,
   evidence,
-  attachments = [],
   mode,
   loading,
   truncation = NO_EVIDENCE_TRUNCATION
 }: {
   objective: ObjectiveDto;
   evidence: ObjectiveEvidence;
-  attachments?: readonly ObjectiveAttachmentDto[];
   mode: ObjectiveEvidenceMode;
   loading: ObjectiveEvidenceLoading;
   truncation?: ObjectiveEvidenceTruncation;
@@ -390,49 +302,26 @@ export function ObjectiveEvidenceSections({
   const sections = buildRunSections({
     run: latest,
     loading,
-    expandLatestDelivery: mode !== 'active'
+    expandLatestDelivery: mode !== 'active',
+    expandAllDeliveries: true
   });
-
-  if (mode === 'active') {
-    return (
-      <div className="grid min-w-0 gap-2">
-        <ObjectiveInstruction objective={objective} />
-        <AgentSessionActivity missionId={objective.missionId} objectiveId={objective.id} />
-        {latest.deliveries.length > 0 ? (
-          <>
-            <ObjectiveEvidenceRule label="Deliveries" count={sections.deliveryCount} />
-            {sections.deliveries}
-            <TruncationNotice notice={truncation.deliveries} />
-          </>
-        ) : null}
-        <ObjectiveFileChanges objective={objective} trailing={<LiveTag />} />
-        {sections.terminalSessions}
-        <EarlierRuns runs={earlier} loading={loading} truncation={truncation} />
-        {attachments.length > 0 ? (
-          <>
-            <ObjectiveEvidenceRule label="Attachments" count={attachments.length} />
-            <ObjectiveAttachmentList attachments={[...attachments]} readOnly className="-ml-2" />
-          </>
-        ) : null}
-      </div>
-    );
-  }
+  // While in flight, a run with no delivery yet draws no empty Deliveries rule.
+  const showDeliveries = mode !== 'active' || latest.deliveries.length > 0 || loading.deliveries;
 
   return (
     <div className="grid min-w-0 gap-2">
-      <ObjectiveInstruction objective={objective} />
-      <ObjectiveEvidenceRule label="Deliveries" count={sections.deliveryCount} />
-      {sections.deliveries}
-      <TruncationNotice notice={truncation.deliveries} />
-      <ObjectiveFileChanges objective={objective} />
-      {sections.terminalSessions}
-      <EarlierRuns runs={earlier} loading={loading} truncation={truncation} />
-      {attachments.length > 0 ? (
+      {showDeliveries ? (
         <>
-          <ObjectiveEvidenceRule label="Attachments" count={attachments.length} />
-          <ObjectiveAttachmentList attachments={[...attachments]} readOnly className="-ml-2" />
+          <ObjectiveEvidenceRule label="Deliveries" count={sections.deliveryCount} />
+          {sections.deliveries}
+          <TruncationNotice notice={truncation.deliveries} />
         </>
       ) : null}
+      <ObjectiveFileChanges
+        objective={objective}
+        trailing={mode === 'active' ? <LiveTag /> : undefined}
+      />
+      <EarlierRuns runs={earlier} loading={loading} truncation={truncation} />
     </div>
   );
 }

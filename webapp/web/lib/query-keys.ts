@@ -85,6 +85,13 @@ export const keys = {
     objectiveId
       ? (['mission', id, 'agent-requests', objectiveId] as const)
       : (['mission', id, 'agent-requests'] as const),
+  /**
+   * The complete open-request collection (every page) for a mission, or one objective. Nested
+   * under `missionAgentRequests(id)` so realtime and answer invalidation of the mission prefix
+   * refresh it with the legacy reads.
+   */
+  missionOpenAgentRequests: (id: string, objectiveId?: string | null) =>
+    ['mission', id, 'agent-requests', 'open-collection', objectiveId ?? null] as const,
   /** Inbound instructions queued from Overlord into a mission's live session. */
   missionAgentSessionInputs: (id: string) => ['mission', id, 'agent-session-inputs'] as const,
   objectiveAttachments: (objectiveId: string) => ['objective', objectiveId, 'attachments'] as const,

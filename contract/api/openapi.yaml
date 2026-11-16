@@ -3,10 +3,10 @@ info:
   title: Overlord API
   # info.version is the API description's own Semantic Version; it changes when
   # this document changes and is never compared with the contract version.
-  version: 4.5.0
+  version: 4.6.0
   # The contract version (contract/VERSION) this document belongs to. Written
   # only by `yarn version:contract`.
-  x-overlord-contract-version: 173.1.0
+  x-overlord-contract-version: 173.2.0
   description: >-
     Normative description of Overlord's REST surface (ADR 0006): one operation for every
     method and path the backend registers, at the path it is served (ADR 0007), excluding
@@ -8416,9 +8416,17 @@ paths:
         among the caller's active memberships (404 `mission_not_found`) and `session:read` is required in
         its workspace (403 without it). An objective UUID without `missionId` answers 400 `invalid_input`.
         Without either: the requests of every workspace where the caller holds `session:read`, silently
-        skipping the others. Newest first, at most 200. Each request carries its `delivery` mode: `latch`
-        when it is open and its Latch session is alive on a reachable eligible target, else `read_only`
-        with the reason.
+        skipping the others. Without `status`, `limit` or `cursor`: newest first, at most 200, and no
+        `page` member (unchanged legacy shape). With any of `status`, `limit` or `cursor` the read is paged
+        and mission-scoped (400 `invalid_input` without a mission): `status` is applied before the page
+        limit, rows are ordered oldest first by `createdAt` then `id`, and the response carries `page`.
+        Oldest-first keyset order means a request created while a client is paging appears on a later page
+        instead of being skipped; a request resolved while paging is absent from later pages. A collection
+        is complete only after following `nextCursor` to a page whose `page.complete` is true. A cursor is
+        bound to the mission, objective and status of the read that issued it; one that does not decode or
+        names another scope answers 400 `invalid_input`. Authorization is evaluated on every page. Each
+        request carries its `delivery` mode: `latch` when it is open and its Latch session is alive on a
+        reachable eligible target, else `read_only` with the reason.
       security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
       parameters:
         - name: missionId
@@ -8430,6 +8438,27 @@ paths:
           in: query
           required: false
           description: Objective UUID (with `missionId`) or full display id.
+          schema: { type: string }
+        - name: status
+          in: query
+          required: false
+          description: >-
+            `open` returns only open requests (every kind) and selects the paged read. The filter is applied
+            before the page limit, so an old open request is never displaced by newer closed ones.
+          schema: { type: string, enum: [ open ] }
+        - name: limit
+          in: query
+          required: false
+          description: >-
+            Page size for the paged read: decimal 1-200 without leading zeros, default 100. Any other value
+            answers 400 `invalid_input`. Selects the paged read.
+          schema: { type: string }
+        - name: cursor
+          in: query
+          required: false
+          description: >-
+            The opaque `page.nextCursor` of the previous page of the same read (at most 512 characters).
+            Selects the paged read.
           schema: { type: string }
       responses:
         '200':
@@ -17656,6 +17685,23 @@ components:
         requests:
           type: array
           items: { $ref: '#/components/schemas/HumanAgentRequestDto' }
+        page:
+          $ref: '#/components/schemas/AgentRequestPageDto'
+          description: Present only on a paged read (`status`, `limit` or `cursor` supplied).
+    AgentRequestPageDto:
+      type: object
+      required: [ complete, nextCursor, limit, status ]
+      properties:
+        complete:
+          type: boolean
+          description: True only on the last page (`nextCursor` is null); absence is proven only then.
+        nextCursor:
+          description: Pass as `cursor` with the same mission, objective and status to read the next page.
+          oneOf: [ { type: string }, { type: 'null' } ]
+        limit: { type: integer, minimum: 1, maximum: 200 }
+        status:
+          description: The status filter applied before the limit, or null when unfiltered.
+          oneOf: [ { type: string, enum: [ open ] }, { type: 'null' } ]
     AgentRequestLeaseBody:
       type: object
       properties:

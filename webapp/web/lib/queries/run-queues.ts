@@ -15,11 +15,11 @@ export const useRunnerStatus = (options?: { enabled?: boolean; refetchInterval?:
   });
 
 /** Project-scoped Run Queue state. Poll while a queue is live so held/running rows stay current. */
-export const useProjectRunQueues = (projectId: string) =>
+export const useProjectRunQueues = (projectId: string, options?: { enabled?: boolean }) =>
   useQuery<ProjectRunQueuesDto>({
     queryKey: keys.runQueues(projectId),
     queryFn: () => api.getProjectRunQueues(projectId),
-    enabled: Boolean(projectId),
+    enabled: Boolean(projectId) && (options?.enabled ?? true),
     refetchInterval: 10_000
   });
 

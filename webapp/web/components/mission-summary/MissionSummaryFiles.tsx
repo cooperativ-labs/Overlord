@@ -148,10 +148,13 @@ function FileChip({
  */
 export function MissionSummaryFiles({
   files,
-  projectId
+  projectId,
+  headless = false
 }: {
   files: SummaryFiles;
   projectId: string;
+  /** Rendered inside a tab that already names it: no top border and no heading. */
+  headless?: boolean;
 }) {
   const resources = useProjectResources(projectId).data ?? [];
   const editorScheme = useProfile().data?.editorScheme ?? null;
@@ -165,11 +168,17 @@ export function MissionSummaryFiles({
 
   return (
     <section
-      aria-labelledby={headingId}
-      className="grid gap-1.5 border-t border-(--color-border) px-5 pb-2.5 pt-3"
+      aria-labelledby={headless ? undefined : headingId}
+      aria-label={headless ? 'Files changed' : undefined}
+      className={cn(
+        'grid gap-1.5 px-5 pb-2.5 pt-3',
+        !headless && 'border-t border-(--color-border)'
+      )}
     >
-      <div className="flex items-center justify-between gap-3">
-        <SummaryBlockHeading id={headingId} label="Files changed" count={countLabel} />
+      <div className={cn('flex items-center gap-3', headless ? 'justify-end' : 'justify-between')}>
+        {headless ? null : (
+          <SummaryBlockHeading id={headingId} label="Files changed" count={countLabel} />
+        )}
         <span className="text-xs text-(--color-ink-dim)" title={CUMULATIVE_CAVEAT}>
           <span className="sr-only">{CUMULATIVE_CAVEAT} </span>
           cumulative

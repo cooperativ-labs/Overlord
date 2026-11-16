@@ -1,6 +1,6 @@
 import type { ObjectiveDto, TerminalSessionDto } from '@overlord/contract';
 import { useQueryClient } from '@tanstack/react-query';
-import { Check, Copy, ExternalLink, Loader2, Monitor, Octagon } from 'lucide-react';
+import { Check, Copy, ExternalLink, Loader2, Monitor, Octagon, SquareTerminal } from 'lucide-react';
 import {
   createContext,
   type ReactNode,
@@ -33,6 +33,7 @@ import {
   DialogHeader,
   DialogTitle
 } from './ui/dialog.tsx';
+import { Popover, PopoverContent, PopoverTrigger } from './ui/popover.tsx';
 
 const stateTone: Record<TerminalSessionDto['lastObservedState'], string> = {
   running: 'bg-emerald-500',
@@ -402,11 +403,11 @@ function useLatchSessionContext(): LatchSessionContextValue {
 /**
  * Mission-wide Latch bookkeeping for the mission panel (coo:879, coo:990).
  *
- * The full controls render once per mission in
- * {@link MissionTerminalSessionsSection}, and each objective row keeps a
- * minimal line — but a running session must stay under observation whether or
- * not either is on screen, otherwise collapsing a row would silently stop
- * detecting a session Latch has reclaimed. The provider mounts a
+ * The full controls render once per mission in the {@link MissionLatchChip}
+ * popover, and the objective detail keeps a minimal line — but a running
+ * session must stay under observation whether or not either is on screen,
+ * otherwise closing the popover would silently stop detecting a session Latch
+ * has reclaimed. The provider mounts a
  * {@link LatchSessionTracker} for every running session on the mission
  * regardless of what is drawn; rendered cards share the same query keys, so an
  * expanded objective never doubles the polling. It also owns the set of
@@ -528,43 +529,37 @@ function PreviousLatchSessionsAccordion({
   );
 }
 
+/** True when a press landed in a dialog (or its backdrop) opened from inside the popover. */
+function isInsideNestedDialog(event: Event | undefined): boolean {
+  const target = event?.target;
+  if (!(target instanceof Element)) return false;
+  return Boolean(target.closest('[data-slot="dialog-content"], [data-slot="dialog-overlay"]'));
+}
+
 /**
- * The mission-wide Latch controls (coo:990): every session the mission
- * launched, drawn together above the artifacts rather than scattered across the
- * objective rows that produced them. This is where the full controls live —
- * open in a viewer, copy the attach command, end the session — because the
- * reader wants "what terminals does this mission have open" answered in one
- * place.
- *
- * One current session gets the full card; previous sessions collapse into an
- * accordion below its controls, the same pattern the mission-level section used
- * before coo:879. Each one names its objective, since the card no longer sits
- * inside it.
+ * The mission-wide Latch controls (coo:990), opened from {@link MissionLatchChip}
+ * in the panel header (coo:1281 plan §10): the current session's full card
+ * (open in a viewer, copy the attach command, end the session, reachability
+ * and errors) with previous sessions collapsed beneath it. Each one names its
+ * objective, since the card does not sit inside it.
  */
-export function MissionTerminalSessionsSection({
-  sessions,
+function MissionLatchSessionsContent({
+  current,
+  others,
+  runningOtherCount,
   objectives
 }: {
-  /** Every session on the mission, newest first. */
-  sessions: readonly TerminalSessionDto[];
-  /** The mission's objectives, used to label each session with what it ran. */
+  current: TerminalSessionDto;
+  others: readonly TerminalSessionDto[];
+  runningOtherCount: number;
   objectives: readonly ObjectiveDto[];
 }) {
-  const { missionId, localExecutionTargetId, onAbsent, isAbsent } = useLatchSessionContext();
-  const visible = sessions.filter(session => !isAbsent(session.providerSessionId));
-  const { current, others, runningOtherCount } = selectLatchSessionDisplay(visible);
-  if (!current) return null;
-
+  const { missionId, localExecutionTargetId, onAbsent } = useLatchSessionContext();
   return (
-    <div className="space-y-3">
-      <div>
-        <h2 className="text-xs font-semibold uppercase tracking-wide text-(--color-ink-dim)">
-          Terminal sessions
-        </h2>
-        <p className="mt-1 text-xs text-muted-foreground">
-          Terminal state is independent from mission and agent-session status.
-        </p>
-      </div>
+    <div className="space-y-2">
+      <p className="text-xs text-muted-foreground">
+        Terminal state is independent from mission and agent-session status.
+      </p>
       <TerminalSessionCard
         missionId={missionId}
         session={current}
@@ -582,6 +577,109 @@ export function MissionTerminalSessionsSection({
         }
       />
     </div>
+  );
+}
+
+function MissionLatchChipButton({
+  current,
+  others,
+  runningOtherCount,
+  objectives
+}: {
+  current: TerminalSessionDto;
+  others: readonly TerminalSessionDto[];
+  runningOtherCount: number;
+  objectives: readonly ObjectiveDto[];
+}) {
+  const { missionId, localExecutionTargetId, onAbsent } = useLatchSessionContext();
+  // Shares the probe's query key with the card and the provider's tracker: no extra polling.
+  const { state } = useLatchSessionTracking({
+    session: current,
+    missionId,
+    localExecutionTargetId,
+    onAbsent
+  });
+  const [open, setOpen] = useState(false);
+
+  return (
+    <Popover
+      open={open}
+      onOpenChange={(next, details) => {
+        // The End session confirmation is a dialog opened from inside the popover; pressing
+        // it must not dismiss the popover (which would unmount the confirmation).
+        if (!next && details.reason === 'outside-press' && isInsideNestedDialog(details.event)) {
+          return;
+        }
+        setOpen(next);
+      }}
+    >
+      <PopoverTrigger
+        render={
+          <button
+            type="button"
+            aria-label={`Latch session, ${state}`}
+            data-latch-chip=""
+            className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded-full border border-border bg-background px-2 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring data-[popup-open]:bg-accent data-[popup-open]:text-foreground"
+          />
+        }
+      >
+        <span
+          className={cn('h-2 w-2 shrink-0 rounded-full', stateTone[state])}
+          aria-hidden="true"
+        />
+        <SquareTerminal className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+        {/* Narrow panels keep only the dot and the icon (plan §10). */}
+        <span
+          className="whitespace-nowrap @max-[480px]/mission-panel:hidden"
+          data-latch-chip-label=""
+        >
+          Latch · <span className="capitalize">{state}</span>
+        </span>
+      </PopoverTrigger>
+      <PopoverContent
+        align="end"
+        aria-label="Latch terminal sessions"
+        className="max-h-[min(32rem,calc(100dvh-6rem))] w-[min(24rem,calc(100vw-2rem))] overflow-y-auto p-3"
+      >
+        <MissionLatchSessionsContent
+          current={current}
+          others={others}
+          runningOtherCount={runningOtherCount}
+          objectives={objectives}
+        />
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+/**
+ * The header chip for the mission's current Latch session (coo:1281 plan §10).
+ * Renders only when the mission has a current session, after the provider's
+ * absent-session filtering. Tracking does not depend on the popover: the
+ * provider keeps every running session under observation while it is closed.
+ */
+export function MissionLatchChip({
+  sessions,
+  objectives
+}: {
+  /** Every session on the mission, newest first. */
+  sessions: readonly TerminalSessionDto[];
+  /** The mission's objectives, used to label each session with what it ran. */
+  objectives: readonly ObjectiveDto[];
+}) {
+  const { isAbsent } = useLatchSessionContext();
+  const visible = sessions.filter(session => !isAbsent(session.providerSessionId));
+  const { current, others, runningOtherCount } = selectLatchSessionDisplay(visible);
+  if (!current) return null;
+  return (
+    <MissionLatchChipButton
+      // A different current session starts from a closed popover and fresh tracking state.
+      key={sessionRowKey(current)}
+      current={current}
+      others={others}
+      runningOtherCount={runningOtherCount}
+      objectives={objectives}
+    />
   );
 }
 
@@ -648,10 +746,10 @@ function ObjectiveSessionLine({
 
 /**
  * The Latch sessions one objective launched, rendered inside that objective's
- * accordion. `sessions` must be newest first.
+ * detail. `sessions` must be newest first.
  *
- * Deliberately minimal (coo:990): the full controls now live in the
- * mission-level {@link MissionTerminalSessionsSection}, so an objective row
+ * Deliberately minimal (coo:990): the full controls live in the header
+ * {@link MissionLatchChip} popover, so the objective detail
  * keeps only what is worth acting on without leaving it — one line per session
  * with an open-in-terminal button, a "Latch attach" copy button, and an
  * end-session button.

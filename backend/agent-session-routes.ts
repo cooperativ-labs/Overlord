@@ -690,11 +690,129 @@ async function deliverQuestionAnswer({
  * one would check the wrong tenant. `session:read` is then required in the mission's own
  * workspace before a single row is read.
  */
+/** The only status filter a paged read accepts today. */
+const PAGED_REQUEST_STATUSES = ['open'] as const;
+type PagedRequestStatus = (typeof PAGED_REQUEST_STATUSES)[number];
+const DEFAULT_REQUEST_PAGE_LIMIT = 100;
+const MAX_REQUEST_PAGE_LIMIT = 200;
+const MAX_REQUEST_CURSOR_LENGTH = 512;
+const ISO_CURSOR_TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3,6}Z$/;
+
+/**
+ * A paged read of a mission's requests (`status`, `limit` or `cursor` supplied).
+ *
+ * Absent (`null`) means the legacy read: newest first, at most 200, no `page` member.
+ */
+export type AgentRequestPageQuery = {
+  status: PagedRequestStatus | null;
+  limit: number;
+  cursor: string | null;
+};
+
+type AgentRequestCursor = {
+  v: 1;
+  /** Resolved mission UUID the cursor was issued for. */
+  m: string;
+  /** Resolved objective UUID, or null for the whole mission. */
+  o: string | null;
+  s: PagedRequestStatus | null;
+  /** `created_at` of the last row returned (ISO-8601, native database precision, UTC). */
+  t: string;
+  /** `id` of the last row returned, the tie-breaker for identical timestamps. */
+  i: string;
+};
+
+function invalidPageInput(message: string): ServiceError {
+  return new ServiceError(message, 'invalid_input', 400);
+}
+
+/** Parse the opt-in paging parameters. Returns null for the legacy unpaged read. */
+export function parseAgentRequestPageQuery(input: {
+  status: string | null;
+  limit: string | null;
+  cursor: string | null;
+}): AgentRequestPageQuery | null {
+  if (input.status === null && input.limit === null && input.cursor === null) return null;
+  let status: PagedRequestStatus | null = null;
+  if (input.status !== null) {
+    if (!PAGED_REQUEST_STATUSES.includes(input.status as PagedRequestStatus)) {
+      throw invalidPageInput('status must be "open"');
+    }
+    status = input.status as PagedRequestStatus;
+  }
+  let limit = DEFAULT_REQUEST_PAGE_LIMIT;
+  if (input.limit !== null) {
+    if (!/^[1-9]\d{0,2}$/.test(input.limit) || Number(input.limit) > MAX_REQUEST_PAGE_LIMIT) {
+      throw invalidPageInput(`limit must be an integer from 1 to ${MAX_REQUEST_PAGE_LIMIT}`);
+    }
+    limit = Number(input.limit);
+  }
+  if (
+    input.cursor !== null &&
+    (input.cursor === '' || input.cursor.length > MAX_REQUEST_CURSOR_LENGTH)
+  ) {
+    throw invalidPageInput('cursor is not a valid agent-request cursor');
+  }
+  return { status, limit, cursor: input.cursor };
+}
+
+function timestampIso(value: unknown): string {
+  if (value instanceof Date) return value.toISOString();
+  const text = String(value);
+  if (ISO_CURSOR_TIMESTAMP.test(text)) return text;
+  const parsed = new Date(text);
+  return Number.isNaN(parsed.getTime()) ? text : parsed.toISOString();
+}
+
+export function encodeAgentRequestCursor(cursor: AgentRequestCursor): string {
+  return Buffer.from(JSON.stringify(cursor), 'utf8').toString('base64url');
+}
+
+/** Decode a cursor and require it to name exactly the scope of the current read. */
+export function decodeAgentRequestCursor(
+  raw: string,
+  scope: { missionId: string; objectiveId: string | null; status: PagedRequestStatus | null }
+): AgentRequestCursor {
+  const invalid = invalidPageInput('cursor is not a valid agent-request cursor');
+  let parsed: unknown;
+  try {
+    if (!/^[A-Za-z0-9_-]+$/.test(raw)) throw invalid;
+    parsed = JSON.parse(Buffer.from(raw, 'base64url').toString('utf8'));
+  } catch {
+    throw invalid;
+  }
+  const value = asRecord(parsed);
+  if (
+    value.v !== 1 ||
+    typeof value.m !== 'string' ||
+    !(value.o === null || typeof value.o === 'string') ||
+    !(value.s === null || PAGED_REQUEST_STATUSES.includes(value.s as PagedRequestStatus)) ||
+    typeof value.t !== 'string' ||
+    !ISO_CURSOR_TIMESTAMP.test(value.t) ||
+    typeof value.i !== 'string' ||
+    value.i.length === 0
+  ) {
+    throw invalid;
+  }
+  if (value.m !== scope.missionId || value.o !== scope.objectiveId || value.s !== scope.status) {
+    throw invalidPageInput('cursor was issued for a different mission, objective or status');
+  }
+  return value as AgentRequestCursor;
+}
+
+type AgentRequestPageDto = {
+  complete: boolean;
+  nextCursor: string | null;
+  limit: number;
+  status: PagedRequestStatus | null;
+};
+
 async function missionScopedRequests(
   client: ReturnType<typeof requireDatabaseClient>,
   missionRef: string,
-  objectiveRef: string | null = null
-): Promise<Record<string, unknown>[]> {
+  objectiveRef: string | null = null,
+  page: AgentRequestPageQuery | null = null
+): Promise<{ requests: Record<string, unknown>[]; page?: AgentRequestPageDto }> {
   const memberships = await callerWorkspaceMemberships(client);
   if (memberships.length === 0)
     throw new ServiceError('Mission not found', 'mission_not_found', 404);
@@ -720,14 +838,62 @@ async function missionScopedRequests(
   const objective = objectiveRef
     ? await resolveObjectiveRef({ ctx, ref: objectiveRef, missionId: mission.id })
     : null;
-  const rows = await client.all<Awaited<ReturnType<typeof getRequest>>>(
-    `SELECT ${REQUEST_COLUMNS_FOR_ROUTE} FROM agent_requests
+  const scopeParams = [mission.id, mission.workspace_id, ...(objective ? [objective.id] : [])];
+  if (!page) {
+    // Legacy read: unchanged for existing CLI, mobile and web consumers.
+    const rows = await client.all<Awaited<ReturnType<typeof getRequest>>>(
+      `SELECT ${REQUEST_COLUMNS_FOR_ROUTE} FROM agent_requests
+        WHERE mission_id = ? AND workspace_id = ? AND deleted_at IS NULL
+          ${objective ? 'AND objective_id = ?' : ''}
+        ORDER BY created_at DESC LIMIT 200`,
+      scopeParams
+    );
+    return { requests: await Promise.all(rows.map(request => humanRequestDto(ctx, request))) };
+  }
+  const scope = { missionId: mission.id, objectiveId: objective?.id ?? null, status: page.status };
+  const after = page.cursor ? decodeAgentRequestCursor(page.cursor, scope) : null;
+  // Filter before the limit, then keyset-page oldest first on (created_at, id): a request created
+  // while a client pages sorts after the cursor and is reached on a later page, not skipped.
+  // A JS Date drops PostgreSQL microseconds. Select a separate text key for the opaque
+  // cursor so its comparison uses the same precision as the database ordering.
+  const cursorTimestamp =
+    client.dialect === 'postgres'
+      ? `to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`
+      : 'created_at';
+  const rows = await client.all<
+    Awaited<ReturnType<typeof getRequest>> & { cursor_created_at: string }
+  >(
+    `SELECT ${REQUEST_COLUMNS_FOR_ROUTE}, ${cursorTimestamp} AS cursor_created_at FROM agent_requests
       WHERE mission_id = ? AND workspace_id = ? AND deleted_at IS NULL
         ${objective ? 'AND objective_id = ?' : ''}
-      ORDER BY created_at DESC LIMIT 200`,
-    [mission.id, mission.workspace_id, ...(objective ? [objective.id] : [])]
+        ${page.status ? 'AND status = ?' : ''}
+        ${after ? 'AND (created_at > ? OR (created_at = ? AND id > ?))' : ''}
+      ORDER BY created_at ASC, id ASC LIMIT ?`,
+    [
+      ...scopeParams,
+      ...(page.status ? [page.status] : []),
+      ...(after ? [after.t, after.t, after.i] : []),
+      page.limit + 1
+    ]
   );
-  return await Promise.all(rows.map(request => humanRequestDto(ctx, request)));
+  const hasMore = rows.length > page.limit;
+  const pageRows = hasMore ? rows.slice(0, page.limit) : rows;
+  const last = pageRows.at(-1);
+  const nextCursor =
+    hasMore && last
+      ? encodeAgentRequestCursor({
+          v: 1,
+          m: scope.missionId,
+          o: scope.objectiveId,
+          s: scope.status,
+          t: timestampIso(last.cursor_created_at),
+          i: last.id
+        })
+      : null;
+  return {
+    requests: await Promise.all(pageRows.map(request => humanRequestDto(ctx, request))),
+    page: { complete: !hasMore, nextCursor, limit: page.limit, status: page.status }
+  };
 }
 
 /** Ordinary-human request inbox. This router is mounted behind normal API authentication. */
@@ -747,8 +913,20 @@ export function createAgentRequestHumanRouter(): Router {
       // authorizes against the mission's *own* workspace, the same way every other
       // resource-scoped mission route does. The unfiltered inbox below is a different query
       // with a different authorization shape, so the two do not share a code path.
+      const page = parseAgentRequestPageQuery({
+        status: queryString(req, 'status', { trim: false, first: false }),
+        limit: queryString(req, 'limit', { trim: false, first: false }),
+        cursor: queryString(req, 'cursor', { trim: false, first: false })
+      });
       if (missionRef) {
-        return { requests: await missionScopedRequests(client, missionRef, objectiveRef) };
+        return await missionScopedRequests(client, missionRef, objectiveRef, page);
+      }
+      if (page) {
+        throw new ServiceError(
+          'status, limit and cursor require missionId or an objective display id',
+          'invalid_input',
+          400
+        );
       }
       if (objectiveRef) {
         throw new ServiceError(

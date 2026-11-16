@@ -5,6 +5,33 @@ is the current version and must equal [VERSION](VERSION); `yarn version:contract
 writes its skeleton. Dates use ISO 8601 and describe the contract change, not
 merely the files edited.
 
+## [173.2.0] - 2026-11-16
+
+Contract impact: minor. `GET /api/agent-requests` gains an opt-in, mission-scoped
+paged read so every open request stays reachable (coo:1281, ADR 0061). Without
+the new parameters the response is unchanged. OpenAPI `info.version` 4.6.0.
+
+### Added
+
+- `getAgentRequests` query parameters `status` (`open`), `limit` (1–200, default
+  100) and `cursor`. Any of them selects the paged read, which requires mission
+  scope (400 `invalid_input` otherwise), applies the status filter before the
+  limit, and orders oldest first by `createdAt` then `id`.
+- `AgentRequestListResponse.page` (`AgentRequestPageDto`: `complete`,
+  `nextCursor`, `limit`, `status`), present only on a paged read. A cursor is
+  bound to the mission, objective and status that issued it; a malformed or
+  foreign cursor answers 400 `invalid_input`. Authorization is evaluated on every
+  page.
+
+### Unchanged
+
+- The unpaged read: newest first, at most 200 rows, no `page` member. CLI and
+  mobile consumers are unaffected.
+
+### Version
+
+- Minor contract version 173.2.0, from 173.1.0.
+
 ## [173.1.0] - 2026-11-16
 
 Contract impact: minor. `POST /api/objectives` can carry the full launch

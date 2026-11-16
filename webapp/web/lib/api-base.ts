@@ -55,6 +55,11 @@ export function getApiBaseUrl(): string {
   return trimTrailingSlash(activeBackend.apiBaseUrl);
 }
 
+/** Stable id of the active backend, for scoping client-side storage; `default` before init. */
+export function getActiveBackendId(): string {
+  return activeBackend?.id ?? 'default';
+}
+
 function hasDesktopBridge(): boolean {
   return Boolean(getDesktopBridge());
 }

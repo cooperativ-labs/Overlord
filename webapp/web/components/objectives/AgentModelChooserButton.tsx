@@ -30,6 +30,11 @@ type AgentModelChooserButtonProps = {
   disabled?: boolean;
   /** Icon-only trigger for dense surfaces such as the quick task bar. */
   compact?: boolean;
+  /**
+   * Bare agent icon with no border or chevron, for the compact objective row. Agents without
+   * an icon (and Manual) show the person mark. Clicks never reach the host row.
+   */
+  iconOnly?: boolean;
 };
 
 /**
@@ -47,6 +52,7 @@ export function AgentModelChooserButton({
   launchConfigSourceHint,
   disabled = false,
   compact = false,
+  iconOnly = false,
   onOpenChange
 }: AgentModelChooserButtonProps) {
   const [open, setOpenState] = useState(false);
@@ -63,6 +69,50 @@ export function AgentModelChooserButton({
   const triggerLabel = `Choose agent and model: ${fullLabel}`;
   const agentIconKey = agent?.key ?? selection.agent;
   const hasAgentIcon = getAgentIcon(agentIconKey) !== null;
+
+  if (iconOnly) {
+    const iconLabel = `Change agent, currently ${fullLabel}`;
+    return (
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger
+          disabled={disabled || !catalog}
+          className={cn(
+            'inline-flex size-7 shrink-0 items-center justify-center rounded-md outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/50',
+            disabled || !catalog
+              ? 'cursor-not-allowed opacity-60'
+              : 'cursor-pointer hover:bg-accent'
+          )}
+          aria-label={iconLabel}
+          title={iconLabel}
+          onClick={event => event.stopPropagation()}
+          onPointerDown={event => event.stopPropagation()}
+        >
+          {!isManual && hasAgentIcon ? (
+            <AgentIcon agentKey={agentIconKey} size={14} alt="" className="h-3.5 w-3.5 shrink-0" />
+          ) : (
+            <User className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+          )}
+        </PopoverTrigger>
+        <PopoverContent
+          align="end"
+          className="w-auto min-w-[360px]"
+          onClick={event => event.stopPropagation()}
+        >
+          {catalog ? (
+            <AgentModelSelector
+              catalog={catalog}
+              value={selection}
+              onChange={onChange}
+              agentConfigs={agentConfigs}
+              onLaunchConfigCommit={onLaunchConfigCommit}
+              onUseInheritedDefault={onUseInheritedDefault}
+              launchConfigSourceHint={launchConfigSourceHint}
+            />
+          ) : null}
+        </PopoverContent>
+      </Popover>
+    );
+  }
 
   return (
     <Popover open={open} onOpenChange={setOpen}>

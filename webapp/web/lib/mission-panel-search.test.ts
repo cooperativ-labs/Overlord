@@ -2,10 +2,14 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import {
-  objectiveMatchesFocus,
+  findObjectiveByRef,
+  isLocallyPushedObjectiveDetail,
+  OBJECTIVE_DETAIL_HISTORY_KEY,
   objectiveSearchFromLocation,
   parseDesktopMissionShellRoute,
-  parseMissionPanelSearch
+  parseMissionPanelSearch,
+  withObjectiveSearch,
+  withoutObjectiveSearch
 } from './mission-panel-search.ts';
 
 test('objectiveSearchFromLocation accepts a query string or a parsed search object', () => {
@@ -40,10 +44,28 @@ test('parseDesktopMissionShellRoute preserves the objective query the parser use
   assert.equal(parseDesktopMissionShellRoute('/inbox/missions/coo:756'), null);
 });
 
-test('objectiveMatchesFocus accepts a display id or a UUID', () => {
-  const objective = { id: 'obj-uuid', displayId: 'coo:756.k7xm' };
-  assert.equal(objectiveMatchesFocus({ objective, focusRef: 'coo:756.k7xm' }), true);
-  assert.equal(objectiveMatchesFocus({ objective, focusRef: 'obj-uuid' }), true);
-  assert.equal(objectiveMatchesFocus({ objective, focusRef: 'coo:756.zzzz' }), false);
-  assert.equal(objectiveMatchesFocus({ objective, focusRef: undefined }), false);
+test('findObjectiveByRef accepts a display id or a UUID', () => {
+  const objectives = [
+    { id: 'uuid-1', displayId: 'coo:1.aaaa' },
+    { id: 'uuid-2', displayId: 'coo:1.bbbb' }
+  ];
+  assert.equal(findObjectiveByRef(objectives, 'coo:1.bbbb')?.id, 'uuid-2');
+  assert.equal(findObjectiveByRef(objectives, 'uuid-1')?.id, 'uuid-1');
+  assert.equal(findObjectiveByRef(objectives, 'nope'), null);
+  assert.equal(findObjectiveByRef(objectives, undefined), null);
+});
+
+test('withObjectiveSearch / withoutObjectiveSearch keep the other parameters', () => {
+  assert.deepEqual(withObjectiveSearch({ tab: 'x' }, 'coo:1.aaaa'), {
+    tab: 'x',
+    objective: 'coo:1.aaaa'
+  });
+  assert.deepEqual(withoutObjectiveSearch({ tab: 'x', objective: 'coo:1.aaaa' }), { tab: 'x' });
+});
+
+test('isLocallyPushedObjectiveDetail reads only the explicit history marker', () => {
+  assert.equal(isLocallyPushedObjectiveDetail({ [OBJECTIVE_DETAIL_HISTORY_KEY]: true }), true);
+  assert.equal(isLocallyPushedObjectiveDetail({ [OBJECTIVE_DETAIL_HISTORY_KEY]: false }), false);
+  assert.equal(isLocallyPushedObjectiveDetail({}), false);
+  assert.equal(isLocallyPushedObjectiveDetail(null), false);
 });

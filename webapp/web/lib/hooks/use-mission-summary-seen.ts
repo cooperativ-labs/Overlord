@@ -25,8 +25,15 @@ export function useMissionSummaryVisitBaseline(
   return baselineRef.current?.value;
 }
 
-function useElementVisible(targetRef: RefObject<HTMLElement | null>, enabled: boolean): boolean {
-  const [inViewport, setInViewport] = useState(true);
+/**
+ * Whether `targetRef` is in the viewport (at least a quarter of it) and the page is in the
+ * foreground. A background tab, a minimised window or a scrolled-away element is not visible.
+ */
+export function useForegroundVisible(
+  targetRef: RefObject<HTMLElement | null>,
+  enabled: boolean
+): boolean {
+  const [inViewport, setInViewport] = useState(() => typeof IntersectionObserver === 'undefined');
   const [pageVisible, setPageVisible] = useState(
     () => typeof document === 'undefined' || document.visibilityState !== 'hidden'
   );
@@ -44,7 +51,7 @@ function useElementVisible(targetRef: RefObject<HTMLElement | null>, enabled: bo
     const observer = new IntersectionObserver(
       entries => {
         const entry = entries[entries.length - 1];
-        if (entry) setInViewport(entry.isIntersecting);
+        if (entry) setInViewport(entry.isIntersecting && entry.intersectionRatio >= 0.25);
       },
       { threshold: 0.25 }
     );
@@ -52,36 +59,70 @@ function useElementVisible(targetRef: RefObject<HTMLElement | null>, enabled: bo
     return () => observer.disconnect();
   }, [enabled, targetRef]);
 
-  return inViewport && pageVisible;
+  return enabled && inViewport && pageVisible;
 }
 
 /**
- * Acknowledges the watermark of the evidence on screen once it has stayed
- * visible for two seconds (plan §4.2a, §5.2). A new watermark starts its own
- * period; leaving the viewport, hiding the page, or unmounting cancels an
- * unfinished one. Never sends the wall-clock time, only the response's
- * `watermark`, and only when it is newer than the stored `seenAt`.
+ * Records that one evidence group was displayed (mission-panel-redesign plan §6.1): once `active`
+ * has held for the two-second interval with the same `signature`, `onCovered(group, signature)`
+ * runs. `active` must already fold in everything that makes the content truly on screen: its tab
+ * is selected, its panel is in the foreground viewport, no dialog covers it, and its data is
+ * complete. A changed signature, losing `active`, or unmounting cancels an unfinished interval.
+ */
+export function useEvidenceGroupCoverage({
+  group,
+  signature,
+  active,
+  onCovered
+}: {
+  group: string | null;
+  signature: string | null;
+  active: boolean;
+  onCovered: (group: string, signature: string) => void;
+}) {
+  const onCoveredRef = useRef(onCovered);
+  onCoveredRef.current = onCovered;
+  useEffect(() => {
+    if (!active || group === null || signature === null) return;
+    const timer = setTimeout(
+      () => onCoveredRef.current(group, signature),
+      MISSION_SUMMARY_SEEN_DELAY_MS
+    );
+    return () => clearTimeout(timer);
+  }, [active, group, signature]);
+}
+
+/**
+ * Acknowledges the watermark of the evidence on screen once it has stayed visible for two
+ * seconds (plan §4.2a, §5.2), and only when every evidence group of that snapshot has been
+ * displayed (`coverageComplete`, mission-panel-redesign plan §6.1). A new watermark starts its
+ * own period; losing visibility, losing coverage, hiding the page, or unmounting cancels an
+ * unfinished one. Never sends the wall-clock time, only the response's `watermark`, and only when
+ * it is newer than the stored `seenAt`, so the stored meaning of `seenAt` is unchanged.
  */
 export function useAcknowledgeMissionSummary({
   missionId,
   response,
   displayed,
-  targetRef
+  visible,
+  coverageComplete
 }: {
   missionId: string;
   response: MissionSummaryResponse | undefined;
-  /** The section is rendering this response's evidence. */
+  /** The card is rendering this response's evidence (not loading, partial or failed). */
   displayed: boolean;
-  targetRef: RefObject<HTMLElement | null>;
+  /** The header/source evidence is on screen in the foreground and not covered by a dialog. */
+  visible: boolean;
+  /** Every nonempty evidence group of this snapshot has been displayed during this visit. */
+  coverageComplete: boolean;
 }) {
   const markSeen = useMarkMissionSummarySeen(missionId);
   const mutateRef = useRef(markSeen.mutate);
   mutateRef.current = markSeen.mutate;
-  const visible = useElementVisible(targetRef, displayed);
 
   const watermark = response?.eligible ? response.watermark : null;
   const seenAt = response?.eligible ? response.seenAt : null;
-  const due = displayed && visible && watermarkNeedsAck(watermark, seenAt);
+  const due = displayed && visible && coverageComplete && watermarkNeedsAck(watermark, seenAt);
 
   useEffect(() => {
     if (!due || watermark === null) return;

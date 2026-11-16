@@ -1,9 +1,17 @@
 import { createSqliteClient, openInMemoryDatabase } from '@overlord/database';
 import assert from 'node:assert/strict';
-import { it } from 'node:test';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { after, it } from 'node:test';
 
-import { createChatEngine } from './chat/engine.ts';
-import { instanceAgentCatalog, resolveWorkspaceAgentCatalog } from './agent-catalog.ts';
+// agent-catalog imports the REST database at module load. Give that ambient
+// database its own file before importing, even though this test passes an in-memory client.
+const directory = mkdtempSync(path.join(tmpdir(), 'ovld-agent-catalog-'));
+process.env.OVERLORD_SQLITE_PATH = path.join(directory, 'ambient.sqlite');
+const { instanceAgentCatalog, resolveWorkspaceAgentCatalog } = await import('./agent-catalog.ts');
+const { createChatEngine } = await import('./chat/engine.ts');
+after(() => rmSync(directory, { recursive: true, force: true }));
 
 it('chat and launch resolve the same stored or instance catalog without seeding', async () => {
   const raw = openInMemoryDatabase();

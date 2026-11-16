@@ -38,6 +38,11 @@ type AgentLaunchButtonProps = {
   /** Active execution request already delegated for this objective, if any. */
   activeRequest?: ExecutionRequestDto | null;
   size?: AgentLaunchButtonSize;
+  /**
+   * Awaited before any launch or Run Queue add. Resolve `false` to abort (the objective detail
+   * flushes unsaved instructions here, so a launch never uses stale text; plan §9.8).
+   */
+  beforeLaunch?: () => Promise<boolean>;
 };
 
 const sizeStyles: Record<
@@ -77,7 +82,8 @@ export function AgentLaunchButton({
   hasActiveSibling = false,
   activeSiblingId = null,
   activeRequest = null,
-  size = 'sm'
+  size = 'sm',
+  beforeLaunch
 }: AgentLaunchButtonProps) {
   const launch = useLaunchObjective();
   const updateObjective = useUpdateObjective();
@@ -108,7 +114,15 @@ export function AgentLaunchButton({
     !selectionLoaded || isLaunching || !primaryConnection.connected || !hasInstruction;
   const styles = sizeStyles[size];
 
-  function queueLaunch() {
+  async function confirmSaved(): Promise<boolean> {
+    if (!beforeLaunch) return true;
+    const ready = await beforeLaunch();
+    if (!ready) setError('Save your instruction edits before running.');
+    return ready;
+  }
+
+  async function queueLaunch() {
+    if (!(await confirmSaved())) return;
     if (isManual) {
       setError('Please select an agent to launch this task');
       return;
@@ -139,7 +153,8 @@ export function AgentLaunchButton({
    * resolves this objective's mission queue and creates it only if the mission
    * does not have one yet.
    */
-  function queueAfterActiveSibling() {
+  async function queueAfterActiveSibling() {
+    if (!(await confirmSaved())) return;
     setError(null);
     enqueue.mutate(
       { objectiveId: objective.id },
@@ -153,7 +168,7 @@ export function AgentLaunchButton({
   function disconnectActiveSiblingAndLaunch() {
     if (!activeSiblingId) {
       setShowActiveConfirm(false);
-      queueLaunch();
+      void queueLaunch();
       return;
     }
     setError(null);
@@ -162,7 +177,7 @@ export function AgentLaunchButton({
       {
         onSuccess: () => {
           setShowActiveConfirm(false);
-          queueLaunch();
+          void queueLaunch();
         },
         onError: err =>
           setError(err instanceof Error ? err.message : 'Failed to disconnect current job')
@@ -188,10 +203,11 @@ export function AgentLaunchButton({
       setShowActiveConfirm(true);
       return;
     }
-    queueLaunch();
+    void queueLaunch();
   }
 
   async function handleCopyPrompt() {
+    if (!(await confirmSaved())) return;
     setError(null);
     try {
       const { prompt } = await api.getObjectivePrompt(objective.id);
@@ -203,6 +219,7 @@ export function AgentLaunchButton({
 
   async function handleCopyCliCommand() {
     if (isManual) return;
+    if (!(await confirmSaved())) return;
     setError(null);
     try {
       const { command } = await api.getObjectiveLaunchCommand({
@@ -288,7 +305,7 @@ export function AgentLaunchButton({
             className="rounded-md px-3 py-1.5 text-xs text-muted-foreground hover:bg-accent"
             onClick={() => {
               setShowActiveConfirm(false);
-              queueLaunch();
+              void queueLaunch();
             }}
           >
             Run now
@@ -298,7 +315,7 @@ export function AgentLaunchButton({
             className="rounded-md bg-primary px-3 py-1.5 text-xs text-primary-foreground hover:bg-primary/90"
             onClick={() => {
               setShowActiveConfirm(false);
-              queueAfterActiveSibling();
+              void queueAfterActiveSibling();
             }}
           >
             Add to queue
