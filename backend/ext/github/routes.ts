@@ -1,9 +1,10 @@
-import { type Permission, PERMISSIONS } from '@overlord/auth';
-import { type NextFunction, type Request, type Response, Router } from 'express';
+import { PERMISSIONS } from '@overlord/auth';
+import { type Request, Router } from 'express';
 
 import type { ProfileConnections } from '../../connections/profile.ts';
 import { ApiError } from '../../errors.ts';
 import { queryString } from '../../http/query.ts';
+import type { RouteHandler } from '../../http/route-handler.ts';
 import { missionRoute, projectRoute } from '../resource-routes.ts';
 
 import {
@@ -18,11 +19,6 @@ import {
   listGitHubRepos
 } from './service.ts';
 import { createGitHubUserOAuth } from './user-oauth.ts';
-
-type RouteHandler = (
-  fn: (req: Request, res: Response) => unknown,
-  options?: { mutates?: boolean; requires?: Permission }
-) => (req: Request, res: Response, next: NextFunction) => void;
 
 function workspaceId(req: Request): string {
   const value = queryString(req, 'workspaceId', { first: false }) ?? '';

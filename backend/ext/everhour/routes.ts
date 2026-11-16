@@ -1,15 +1,11 @@
-import { type Permission, PERMISSIONS } from '@overlord/auth';
-import { type NextFunction, type Request, type Response, Router } from 'express';
+import { PERMISSIONS } from '@overlord/auth';
+import { Router } from 'express';
 
 import type { ProfileConnections } from '../../connections/profile.ts';
+import type { RouteHandler } from '../../http/route-handler.ts';
 import { missionRoute, projectRoute } from '../resource-routes.ts';
 
 import { createEverhourService } from './service.ts';
-
-type RouteHandler = (
-  fn: (req: Request, res: Response) => unknown,
-  options?: { mutates?: boolean; requires?: Permission }
-) => (req: Request, res: Response, next: NextFunction) => void;
 
 export function createEverhourExtensionRouter(
   handle: RouteHandler,

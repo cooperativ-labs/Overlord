@@ -1,14 +1,11 @@
 import { type DatabaseClient } from '@overlord/database';
-import express from 'express';
 import assert from 'node:assert/strict';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
-import { once } from 'node:events';
 import { readFileSync } from 'node:fs';
-import type { AddressInfo } from 'node:net';
 import { after, before, describe, it } from 'node:test';
 
-import { apiErrorHandler } from '../errors.ts';
 import { githubConnectionProvider } from '../ext/github/connection-provider.ts';
+import { listenForTest, routerTestApp } from '../http/test-app-fixture.ts';
 import {
   conformanceAdapters,
   createConformanceDatabase,
@@ -580,29 +577,27 @@ for (const adapter of adapters) {
           publicBaseUrl: 'https://backend.test',
           webReturnOrigin: 'https://app.test'
         });
-        const app = express();
-        app.use(express.json());
-        // Mounted exactly as backend/app.ts does: the provider callback before the wildcard.
-        app.get(
-          '/api/auth/callback/github/repository',
-          createProfileConnectionCallbackHandler({ provider: 'github', runtime: () => runtime })
-        );
-        app.all('/api/auth/*', (_req, res) => {
-          res.status(418).send('better-auth');
+        const app = routerTestApp(app => {
+          // Mounted exactly as backend/app.ts does: the provider callback before the wildcard.
+          app.get(
+            '/api/auth/callback/github/repository',
+            createProfileConnectionCallbackHandler({ provider: 'github', runtime: () => runtime })
+          );
+          app.all('/api/auth/*', (_req, res) => {
+            res.status(418).send('better-auth');
+          });
+          app.use(
+            '/api/connections',
+            createConnectionsRouter({
+              cloud: () => false,
+              runtime: () => runtime,
+              owner: () => null,
+              profile: () => 'other'
+            })
+          );
         });
-        app.use(
-          '/api/connections',
-          createConnectionsRouter({
-            cloud: () => false,
-            runtime: () => runtime,
-            owner: () => null,
-            profile: () => 'other'
-          })
-        );
-        app.use(apiErrorHandler);
-        const server = app.listen(0, '127.0.0.1');
-        await once(server, 'listening');
-        const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+        const server = await listenForTest(app);
+        const base = server.baseUrl;
         const bodies: string[] = [];
         const call = async (method: string, path: string, body?: unknown) => {
           const response = await originalFetch(`${base}${path}`, {
@@ -703,7 +698,7 @@ for (const adapter of adapters) {
           );
           assert.ok(start.text.includes(state));
         } finally {
-          server.close();
+          await server.close();
         }
       } finally {
         Object.assign(console, originals);

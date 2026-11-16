@@ -12,7 +12,7 @@ import { z } from 'zod';
 
 import { type ApiOperation, matchOperation } from './api-operations.ts';
 import { conformanceReportPath, recordConformance } from './conformance-report.ts';
-import { OPERATION_ID_LOCAL } from './request-validation.ts';
+import { issuePath, OPERATION_ID_LOCAL } from './request-validation.ts';
 
 type AnyZod = z.ZodType;
 type Def = Record<string, unknown> & { type: string };
@@ -80,14 +80,6 @@ export function closedSchema(schema: AnyZod): AnyZod {
   return result;
 }
 
-function memberPath(path: readonly PropertyKey[]): string {
-  let out = 'body';
-  for (const segment of path) {
-    out += typeof segment === 'number' ? `[${segment}]` : `.${String(segment)}`;
-  }
-  return out;
-}
-
 export function mediaTypeOf(header: unknown): string | null {
   const value = Array.isArray(header) ? header[0] : header;
   if (typeof value !== 'string' || value.trim() === '') return null;
@@ -134,7 +126,7 @@ export function checkResponse(
   if (result.success) return [];
   return result.error.issues
     .slice(0, 20)
-    .map(issue => `${memberPath(issue.path)}: ${issue.message}`);
+    .map(issue => `${issuePath(issue.path, 'body')}: ${issue.message}`);
 }
 
 const MAX_CAPTURE_BYTES = 8 * 1024 * 1024;

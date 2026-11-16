@@ -1,12 +1,11 @@
 import express, { type NextFunction, type Request, type Response } from 'express';
 import assert from 'node:assert/strict';
-import { once } from 'node:events';
-import type { AddressInfo } from 'node:net';
 import { it } from 'node:test';
 
 import { ChatError } from '../../packages/core/service/chat/store.ts';
 import { ServiceError } from '../../packages/core/service/errors.ts';
 import { ApiError, apiErrorHandler } from '../errors.ts';
+import { listenForTest } from '../http/test-app-fixture.ts';
 
 import { chatOwnerGate, chatRoute } from './router-support.ts';
 
@@ -117,9 +116,8 @@ it('the app error handler renders chatRoute failures as { error, code } and a ba
     )
   );
   app.use(apiErrorHandler);
-  const server = app.listen(0, '127.0.0.1');
-  await once(server, 'listening');
-  const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  const server = await listenForTest(app);
+  const base = server.baseUrl;
   try {
     const chat = await fetch(`${base}/chat`);
     assert.equal(chat.status, 429);
@@ -128,7 +126,6 @@ it('the app error handler renders chatRoute failures as { error, code } and a ba
     assert.equal(boom.status, 500);
     assert.deepEqual(await boom.json(), { error: 'Chat request failed' });
   } finally {
-    server.close();
-    await once(server, 'close');
+    await server.close();
   }
 });

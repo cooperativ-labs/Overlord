@@ -19,8 +19,28 @@ export function operationFor(method: string, openapiPath: string): ApiOperation 
 
 type Template = { operation: ApiOperation; segments: string[]; literals: number };
 
-function templateSegments(path: string): string[] {
+export function templateSegments(path: string): string[] {
   return path.split('/').slice(1);
+}
+
+/** Bind OpenAPI `{parameter}` segments from a concrete request path. */
+export function bindPathParameters(
+  operation: ApiOperation,
+  requestPath: string
+): Record<string, string> {
+  const template = templateSegments(operation.path);
+  const actual = templateSegments(requestPath);
+  const params: Record<string, string> = {};
+  template.forEach((segment, index) => {
+    const match = /^\{(.+)\}$/.exec(segment);
+    if (!match || actual[index] === undefined) return;
+    try {
+      params[match[1]!] = decodeURIComponent(actual[index]!);
+    } catch {
+      params[match[1]!] = actual[index]!;
+    }
+  });
+  return params;
 }
 
 const templates: Template[] = operations

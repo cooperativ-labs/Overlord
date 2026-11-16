@@ -1,9 +1,7 @@
 import { apiOperations } from '@overlord/contract/api';
 import express from 'express';
 import assert from 'node:assert/strict';
-import { once } from 'node:events';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
-import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, it } from 'node:test';
@@ -11,6 +9,7 @@ import { z } from 'zod';
 
 import { CONFORMANCE_REPORT_ENV } from './conformance-report.ts';
 import { apiResponseConformance, checkResponse, closedSchema } from './response-conformance.ts';
+import { listenForTest } from './test-app-fixture.ts';
 
 describe('closedSchema', () => {
   it('refuses undocumented members at every depth and keeps declared catch-alls', () => {
@@ -113,9 +112,8 @@ describe('apiResponseConformance', () => {
       return res.json({ ok: true, extra: 1 });
     });
     app.get('/not-an-operation', (_req, res) => res.json({}));
-    const server = app.listen(0, '127.0.0.1');
-    await once(server, 'listening');
-    const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+    const server = await listenForTest(app);
+    const base = server.baseUrl;
     try {
       delete process.env[CONFORMANCE_REPORT_ENV];
       await (await fetch(`${base}/api/health`)).text();
@@ -144,7 +142,7 @@ describe('apiResponseConformance', () => {
     } finally {
       if (previous === undefined) delete process.env[CONFORMANCE_REPORT_ENV];
       else process.env[CONFORMANCE_REPORT_ENV] = previous;
-      await new Promise<void>(resolve => server.close(() => resolve()));
+      await server.close();
       rmSync(directory, { recursive: true, force: true });
     }
   });

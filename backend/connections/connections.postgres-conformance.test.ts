@@ -1,15 +1,12 @@
 import { type DatabaseClient } from '@overlord/database';
-import express from 'express';
 import assert from 'node:assert/strict';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { randomBytes, randomUUID } from 'node:crypto';
-import { once } from 'node:events';
-import type { AddressInfo } from 'node:net';
 import { describe, it } from 'node:test';
 
 import { type ChatOwner, Conversations } from '../../packages/core/service/chat/conversations.ts';
 import { ChatRuns } from '../../packages/core/service/chat/runs.ts';
-import { apiErrorHandler } from '../errors.ts';
+import { listenForTest, routerTestApp } from '../http/test-app-fixture.ts';
 import {
   type ConformanceAdapter,
   conformanceAdapters,
@@ -1121,28 +1118,26 @@ describe('connections module boundaries', () => {
     const context = new AsyncLocalStorage<ChatOwner>();
     let cloud = true;
     const rt = runtime(db, kb);
-    const app = express();
-    app.use(express.json());
-    app.use(createConnectionsPublicRouter({ cloud: () => cloud, runtime: () => rt }));
-    app.use((req, res, next) => {
-      if (!req.headers.authorization) {
-        res.sendStatus(401);
-        return;
-      }
-      context.run(req.headers.authorization === 'Bearer owner' ? owner : other, next);
+    const app = routerTestApp(app => {
+      app.use(createConnectionsPublicRouter({ cloud: () => cloud, runtime: () => rt }));
+      app.use((req, res, next) => {
+        if (!req.headers.authorization) {
+          res.sendStatus(401);
+          return;
+        }
+        context.run(req.headers.authorization === 'Bearer owner' ? owner : other, next);
+      });
+      app.use(
+        '/api/connections',
+        createConnectionsRouter({
+          cloud: () => cloud,
+          runtime: () => rt,
+          owner: () => context.getStore() ?? null
+        })
+      );
     });
-    app.use(
-      '/api/connections',
-      createConnectionsRouter({
-        cloud: () => cloud,
-        runtime: () => rt,
-        owner: () => context.getStore() ?? null
-      })
-    );
-    app.use(apiErrorHandler);
-    const server = app.listen(0);
-    await once(server, 'listening');
-    const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+    const server = await listenForTest(app);
+    const base = server.baseUrl;
     const as = (who: string) => ({
       authorization: `Bearer ${who}`,
       'content-type': 'application/json'
@@ -1219,7 +1214,7 @@ describe('connections module boundaries', () => {
       );
       assert.equal((await fetch(`${base}/oauth/clients/knowledgebase.json`)).status, 404);
     } finally {
-      server.close();
+      await server.close();
       await cleanup();
     }
   });
@@ -1479,17 +1474,15 @@ describe('zero-setup Knowledgebase over HTTP (contract v156)', () => {
     const { db, cleanup } = await createConformanceDatabase('sqlite', 'connections');
     const kb = new FakeKnowledgebase({ origin: STANDARD_ORIGIN });
     const rt = freshRuntime(db, kb);
-    const app = express();
-    app.use(express.json());
-    app.use(createConnectionsPublicRouter({ cloud: () => true, runtime: () => rt }));
-    app.use(
-      '/api/connections',
-      createConnectionsRouter({ cloud: () => true, runtime: () => rt, owner: () => owner })
-    );
-    app.use(apiErrorHandler);
-    const server = app.listen(0);
-    await once(server, 'listening');
-    const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+    const app = routerTestApp(app => {
+      app.use(createConnectionsPublicRouter({ cloud: () => true, runtime: () => rt }));
+      app.use(
+        '/api/connections',
+        createConnectionsRouter({ cloud: () => true, runtime: () => rt, owner: () => owner })
+      );
+    });
+    const server = await listenForTest(app);
+    const base = server.baseUrl;
     try {
       await seed(db);
       const before = (await (await fetch(`${base}/api/connections?scope=all`)).json()) as {
@@ -1544,7 +1537,7 @@ describe('zero-setup Knowledgebase over HTTP (contract v156)', () => {
       assert.equal(JSON.parse(listing).items[0].state, 'connected');
       assert.ok(!kb.leaks(listing));
     } finally {
-      server.close();
+      await server.close();
       await cleanup();
     }
   });

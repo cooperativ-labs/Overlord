@@ -1,8 +1,9 @@
 import { apiOperations } from '@overlord/contract/api';
 import assert from 'node:assert/strict';
 import { rmSync } from 'node:fs';
-import type { Server } from 'node:http';
 import { after, before, describe, it } from 'node:test';
+
+import { listenForTest, type TestServer } from './http/test-app-fixture.ts';
 
 /**
  * Response conformance for the read surface (ADR 0051): every GET operation of the
@@ -36,7 +37,7 @@ const SKIPPED = new Set([
   'getChatThreadsByIdEvents'
 ]);
 
-let server: Server;
+let server: TestServer;
 let baseUrl = '';
 let secret = '';
 const ids: Record<string, string> = {};
@@ -54,11 +55,8 @@ before(async () => {
   ids.objectives = mission.objectives[0]?.id ?? 'unknown-objective';
   ids.workspaces = project.workspaceId;
   ids.organizations = DEFAULT_TEST_ORGANIZATION_ID;
-  await new Promise<void>(resolve => {
-    server = app.listen(0, '127.0.0.1', () => resolve());
-  });
-  const address = server.address();
-  baseUrl = `http://127.0.0.1:${typeof address === 'object' && address ? address.port : 0}`;
+  server = await listenForTest(app);
+  baseUrl = server.baseUrl;
 });
 
 const QUERY: Record<string, string> = { after: '0', agent: 'codex' };
@@ -156,6 +154,6 @@ describe('read surface conformance', () => {
 });
 
 after(async () => {
-  await new Promise<void>(resolve => server.close(() => resolve()));
+  await server.close();
   rmSync(tempDir, { recursive: true, force: true });
 });

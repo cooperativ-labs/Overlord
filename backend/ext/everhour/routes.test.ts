@@ -1,51 +1,21 @@
-import type { Permission } from '@overlord/auth';
-import express, { type NextFunction, type Request, type Response } from 'express';
 import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
+import { listenForTest, routerTestApp } from '../../http/test-app-fixture.ts';
+
 process.env.EVERHOUR_API_KEY_ENCRYPTION_KEY ??= Buffer.alloc(32, 11).toString('base64url');
 const tempDir = mkdtempSync(path.join(tmpdir(), 'overlord-everhour-routes-'));
 const { bootstrapIntegrationTestDb } = await import('../../test-helpers.ts');
 await bootstrapIntegrationTestDb({ sqlitePath: path.join(tempDir, 'everhour-routes.sqlite') });
 
-const { getActorWorkspaceUserId, setActiveTokenAuth, setActiveWorkspaceUser } =
-  await import('../../db.ts');
-const { createTestWorkspaceContext } = await import('../../test-helpers.ts');
-const { getActiveWorkspaceId } = createTestWorkspaceContext(await import('../../db.ts'));
-const { apiErrorHandler } = await import('../../errors.ts');
-const { installRequestValidation } = await import('../../http/request-validation.ts');
-const { apiResponseConformance } = await import('../../http/response-conformance.ts');
-const { requirePermission } = await import('../../rbac.ts');
+const { setActiveTokenAuth, setActiveWorkspaceUser } = await import('../../db.ts');
 const { createMission, createProject } = await import('../../repository.ts');
 const { createEverhourExtensionRouter } = await import('./routes.ts');
 
 const operatorWorkspaceUserId = (await import('../../db.ts')).getActorWorkspaceUserId();
-
-function makeHandle() {
-  return (
-    fn: (req: Request, res: Response) => unknown,
-    options: { mutates?: boolean; requires?: Permission } = {}
-  ) => {
-    return (req: Request, res: Response, next: NextFunction) => {
-      void (async () => {
-        try {
-          if (options.requires)
-            await requirePermission(options.requires, {
-              workspaceId: getActiveWorkspaceId(),
-              workspaceUserId: getActorWorkspaceUserId()
-            });
-          const result = await Promise.resolve(fn(req, res));
-          if (!res.headersSent) res.json(result ?? { ok: true });
-        } catch (err) {
-          next(err);
-        }
-      })();
-    };
-  };
-}
 
 async function withEverhourServer(run: (baseUrl: string) => Promise<void>): Promise<void> {
   const { profileConnections } = await import('../../connections/profile.ts');
@@ -55,28 +25,18 @@ async function withEverhourServer(run: (baseUrl: string) => Promise<void>): Prom
   const profiles = profileConnections(requireDatabaseClient(), [
     everhourConnectionProvider(validateEverhourApiKey)
   ]);
-  const app = express();
-  app.use(apiResponseConformance());
-  app.use(express.json());
-  app.use(
-    '/ext/everhour',
-    createEverhourExtensionRouter(makeHandle(), () => profiles)
-  );
-  installRequestValidation(app);
-  app.use(apiErrorHandler);
+  const app = routerTestApp((app, handle) => {
+    app.use(
+      '/ext/everhour',
+      createEverhourExtensionRouter(handle, () => profiles)
+    );
+  });
 
-  const server = app.listen(0, '127.0.0.1');
-  await new Promise<void>(resolve => server.once('listening', resolve));
-  const address = server.address();
-  assert.ok(address && typeof address === 'object');
-  const baseUrl = `http://127.0.0.1:${address.port}`;
-
+  const server = await listenForTest(app);
   try {
-    await run(baseUrl);
+    await run(server.baseUrl);
   } finally {
-    await new Promise<void>((resolve, reject) => {
-      server.close(error => (error ? reject(error) : resolve()));
-    });
+    await server.close();
   }
 }
 

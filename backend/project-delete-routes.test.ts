@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { rmSync } from 'node:fs';
-import type { Server } from 'node:http';
 import { after, before, describe, it } from 'node:test';
+
+import { listenForTest, type TestServer } from './http/test-app-fixture.ts';
 
 /**
  * The project tag and resource DELETE routes answer only after the deletion
@@ -19,17 +20,14 @@ const { app } = await import('./app.ts');
 
 const UNKNOWN_PROJECT = '00000000-0000-4000-8000-000000000000';
 
-let server: Server;
+let server: TestServer;
 let baseUrl = '';
 let secret = '';
 
 before(async () => {
   secret = (await createUserToken({ label: 'delete-routes' })).secret;
-  await new Promise<void>(resolve => {
-    server = app.listen(0, '127.0.0.1', () => resolve());
-  });
-  const address = server.address();
-  baseUrl = `http://127.0.0.1:${typeof address === 'object' && address ? address.port : 0}`;
+  server = await listenForTest(app);
+  baseUrl = server.baseUrl;
 });
 
 function del(path: string): Promise<Response> {
@@ -58,6 +56,6 @@ describe('project delete routes', () => {
 });
 
 after(async () => {
-  await new Promise<void>(resolve => server.close(() => resolve()));
+  await server.close();
   rmSync(tempDir, { recursive: true, force: true });
 });

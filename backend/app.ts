@@ -1,12 +1,12 @@
 import './bootstrap-env.ts';
 
-import { githubOAuthConfigFromEnv, type Permission, PERMISSIONS } from '@overlord/auth';
+import { PERMISSIONS } from '@overlord/auth';
 import { loadExternalAutomations } from '@overlord/automations';
 import type { ProjectListLifecycle, StorageBucketKey, StoredImageDto } from '@overlord/contract';
 import { projectListLifecycleSchema } from '@overlord/contract/api';
 import { fromNodeHeaders, toNodeHandler } from 'better-auth/node';
 import cors from 'cors';
-import express, { type NextFunction, type Request, type Response } from 'express';
+import express, { type Request } from 'express';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -48,7 +48,6 @@ import {
   updateTerminalProfile,
   updateWorktreeBranchAutomation
 } from './execution/launch-settings.ts';
-import { resolveLocalTargetServerCapability } from './execution/local-target-capability.ts';
 import { invokeLocalTargetOnServer } from './execution/local-target-invoke.ts';
 import {
   getProjectExecutionTarget,
@@ -79,7 +78,7 @@ import { createGitHubExtensionRouter } from './ext/github/routes.ts';
 import { createGitHubUserOAuth } from './ext/github/user-oauth.ts';
 import { isAllowedBrowserOrigin } from './http/browser-origins.ts';
 import { runnerRegistrationFromBody } from './http/client-device.ts';
-import { buildMeta } from './http/meta.ts';
+import { authProviders, buildMeta, buildServerMeta, effectiveBackendMode } from './http/meta.ts';
 import { resolveAuthBaseUrl } from './http/public-backend-url.ts';
 import { parseSeqCursor, queryCursor, queryEnum, queryFlag, queryString } from './http/query.ts';
 import {
@@ -91,9 +90,9 @@ import {
 } from './http/raw-upload.ts';
 import { deferMalformedBody, installRequestValidation } from './http/request-validation.ts';
 import { apiResponseConformance } from './http/response-conformance.ts';
+import { asyncRoute, createRouteHandler } from './http/route-handler.ts';
 import { resolveServeSpa } from './http/serve-spa.ts';
 import {
-  getSqlStudioState,
   initSqlStudioManager,
   syncSqlStudioForWorkspace
 } from './sql-studio/sql-studio-manager.ts';
@@ -424,8 +423,9 @@ app.use(
 const nativeOAuthHandler = toNodeHandler(createNativeGitHubOAuth(auth, resolveAuthBaseUrl()));
 app.get('/api/auth/desktop/github', nativeOAuthHandler);
 
-app.get('/api/auth/desktop/callback', async (req, res, next) => {
-  try {
+app.get(
+  '/api/auth/desktop/callback',
+  asyncRoute(async (req, res) => {
     if ('error' in req.query) {
       await nativeOAuthHandler(req, res);
       return;
@@ -440,10 +440,8 @@ app.get('/api/auth/desktop/callback', async (req, res, next) => {
       302,
       desktopOAuthCallbackUrl(createDesktopOAuthHandoff(browserSession.session.token))
     );
-  } catch (error) {
-    next(error);
-  }
-});
+  })
+);
 
 function browserOAuthReturnOrigin(value: unknown): string | null {
   if (typeof value !== 'string') return null;
@@ -455,8 +453,9 @@ function browserOAuthReturnOrigin(value: unknown): string | null {
   }
 }
 
-app.get('/api/auth/browser/callback', async (req, res, next) => {
-  try {
+app.get(
+  '/api/auth/browser/callback',
+  asyncRoute(async (req, res) => {
     const returnOrigin = browserOAuthReturnOrigin(req.query.returnTo);
     if (!returnOrigin) {
       res.status(400).send('The requested sign-in return origin is not allowed.');
@@ -473,10 +472,8 @@ app.get('/api/auth/browser/callback', async (req, res, next) => {
       302,
       browserOAuthCallbackUrl(returnOrigin, createBrowserOAuthHandoff(browserSession.session.token))
     );
-  } catch (error) {
-    next(error);
-  }
-});
+  })
+);
 
 app.post('/api/auth/desktop/exchange', express.json(), (req, res) => {
   const ticket = typeof req.body?.ticket === 'string' ? req.body.ticket : '';
@@ -532,10 +529,10 @@ app.use((req, res, next) => {
 // authentication guard because the login screen renders pre-authentication and
 // must know whether to show "Continue with GitHub" without a session. Carries
 // no secrets — only which providers are configured. `/api/meta` echoes the same
-// shape for authenticated surfaces (e.g. account linking); both derive from
-// `githubOAuthConfigFromEnv` so they cannot drift.
+// shape for authenticated surfaces (e.g. account linking); both call
+// `authProviders()` so they cannot drift.
 app.get('/api/auth-providers', (_req, res) => {
-  res.json({ email: true, github: githubOAuthConfigFromEnv() !== null });
+  res.json(authProviders());
 });
 
 // Loops nudged right after a mutation so its echo, webhooks, and notifications
@@ -555,30 +552,10 @@ function pollAfterMutation(): void {
   for (const loop of mutationPollLoops) void loop.pollNow();
 }
 
-// Small wrapper so handlers can throw ApiError / Error and get a clean response.
-// Also triggers an immediate realtime poll after mutations for snappy echoes.
-// `requires` declares the RBAC permission the route needs; it is enforced (role
-// grants ∩ token scope) before the handler runs, so a scoped USER_TOKEN — or any
-// under-privileged actor — is rejected uniformly with a 403.
-function handle(
-  fn: (req: Request, res: Response) => unknown,
-  options: { mutates?: boolean; requires?: Permission } = {}
-) {
-  return (req: Request, res: Response, next: NextFunction) => {
-    void (async () => {
-      try {
-        if (options.requires) await requireAnyWorkspacePermission(options.requires);
-        const result = await Promise.resolve(fn(req, res));
-        if (options.mutates) {
-          pollAfterMutation();
-        }
-        if (!res.headersSent) res.json(result ?? { ok: true });
-      } catch (err) {
-        next(err);
-      }
-    })();
-  };
-}
+// `handle()` lets handlers throw ApiError / Error and get a clean response,
+// enforces a route's `requires` permission before it runs, and nudges the poll
+// loops after a successful mutation for snappy echoes (see http/route-handler.ts).
+const handle = createRouteHandler({ onMutation: pollAfterMutation });
 
 // ---- Meta / health -------------------------------------------------------
 
@@ -617,12 +594,15 @@ if (mcpEnabled) {
   app.get('/mcp', requireAuthenticatedSession, projectAutomationRouteGuard, (req, res) => {
     res.json(mcpServerInfo(req));
   });
-  app.post('/mcp', requireAuthenticatedSession, projectAutomationRouteGuard, (req, res, next) => {
-    void (async () => {
+  app.post(
+    '/mcp',
+    requireAuthenticatedSession,
+    projectAutomationRouteGuard,
+    asyncRoute(async (req, res, next) => {
       await handleMcpPost(req, res, next);
       pollAfterMutation();
-    })().catch(next);
-  });
+    })
+  );
 }
 
 // ---- Agent session channel adapter surface -------------------------------
@@ -639,7 +619,7 @@ if (mcpEnabled) {
 app.use(AGENT_SESSION_CHANNEL_ROUTE_PREFIX, createAgentSessionChannelRouter());
 
 // ---- Assistant chat and account connections (contract v152; profile-scoped v153 on both editions) ----
-const chatCloud = () => DATABASE_DIALECT === 'postgres' || config.backendMode === 'cloud';
+const chatCloud = () => effectiveBackendMode(config) === 'cloud';
 /**
  * Operator-tunable conversation limits and notification timing; unset or invalid values
  * keep the contracted defaults (see `backend/chat/limits.ts`).
@@ -722,44 +702,7 @@ app.use(
 
 app.get(
   '/api/meta',
-  handle(
-    async () => ({
-      ...(await buildMeta()),
-      databasePath: DATABASE_PATH,
-      // Hosted Postgres deployments have no overlord.toml, so config.backendMode
-      // defaults to local. Infer cloud for the SPA and other API consumers.
-      backendMode: DATABASE_DIALECT === 'postgres' ? 'cloud' : config.backendMode,
-      web: {
-        host: bindHost,
-        port: bindPort,
-        url: `http://${bindHost === '0.0.0.0' ? '127.0.0.1' : bindHost}:${bindPort}`
-      },
-      sqlStudio: getSqlStudioState(),
-      // Which interactive login providers this build offers, so the auth UI can
-      // show/hide the "Continue with GitHub" button without hardcoding cloud vs
-      // local. `email` is always available; `github` only when OAuth creds are
-      // configured (see `githubOAuthConfigFromEnv`).
-      authProviders: {
-        email: true,
-        github: githubOAuthConfigFromEnv() !== null
-      },
-      // Capabilities scoped to what this build supports. Launching queues
-      // execution requests for a runner; execution-target management remains
-      // CLI-only.
-      capabilities: {
-        projects: true,
-        missions: true,
-        objectives: true,
-        realtime: true,
-        sqlStudio: getSqlStudioState().enabled,
-        launchAgents: true,
-        executionTargets: false,
-        localTarget: resolveLocalTargetServerCapability({ dialect: DATABASE_DIALECT }),
-        mcp: mcpEnabled
-      }
-    }),
-    {}
-  )
+  handle(() => buildServerMeta({ config, bindHost, bindPort, mcpEnabled }), {})
 );
 
 app.get(
@@ -1229,39 +1172,33 @@ app.post(
 // `nosniff` to prevent the browser from rendering them inline (e.g. HTML/SVG).
 app.get(
   '/api/storage/:bucketKey/:storageKey',
-  (req: Request, res: Response, next: NextFunction) => {
-    void (async () => {
-      try {
-        const bucketKey = req.params.bucketKey;
-        if (!isStorageBucketKey(bucketKey)) {
-          throw new ApiError(404, `Serving is not configured for bucket '${bucketKey}'`);
-        }
-        const resolved = await resolveStoredObject(
-          bucketKey,
-          req.params.storageKey,
-          STORAGE_BUCKETS[bucketKey].readPermission
+  asyncRoute(async (req, res) => {
+    const bucketKey = req.params.bucketKey;
+    if (!isStorageBucketKey(bucketKey)) {
+      throw new ApiError(404, `Serving is not configured for bucket '${bucketKey}'`);
+    }
+    const resolved = await resolveStoredObject(
+      bucketKey,
+      req.params.storageKey,
+      STORAGE_BUCKETS[bucketKey].readPermission
+    );
+    res.type(resolved.contentType);
+    if (resolved.presignedRedirectUrl) {
+      res.setHeader('Cache-Control', 'private, no-store');
+    } else {
+      res.setHeader('Cache-Control', 'private, max-age=31536000, immutable');
+    }
+    if (resolved.forceDownload) {
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+      if (!resolved.presignedRedirectUrl) {
+        res.setHeader(
+          'Content-Disposition',
+          `attachment; filename="${encodeURIComponent(resolved.filename)}"`
         );
-        res.type(resolved.contentType);
-        if (resolved.presignedRedirectUrl) {
-          res.setHeader('Cache-Control', 'private, no-store');
-        } else {
-          res.setHeader('Cache-Control', 'private, max-age=31536000, immutable');
-        }
-        if (resolved.forceDownload) {
-          res.setHeader('X-Content-Type-Options', 'nosniff');
-          if (!resolved.presignedRedirectUrl) {
-            res.setHeader(
-              'Content-Disposition',
-              `attachment; filename="${encodeURIComponent(resolved.filename)}"`
-            );
-          }
-        }
-        serveStoredObject(res, resolved);
-      } catch (err) {
-        next(err);
       }
-    })();
-  }
+    }
+    serveStoredObject(res, resolved);
+  })
 );
 
 const projectListLifecycles = (
@@ -1272,27 +1209,21 @@ const projectListLifecycles = (
 
 // ---- Realtime ------------------------------------------------------------
 
-function streamRealtime(req: Request, res: Response, next: NextFunction): void {
-  void (async () => {
-    try {
-      const workspaceIds = await readableChangeFeedWorkspaceIds();
-      if (workspaceIds.length === 0) {
-        res.status(403).json({ error: 'Permission denied: realtime stream' });
-        return;
-      }
-      const afterSeq =
-        queryCursor(req, 'after') ?? parseSeqCursor(req.headers['last-event-id']) ?? undefined;
-      realtime.addClient(res, {
-        afterSeq,
-        workspaceIds,
-        projectIds: getActiveTokenProjectIds()
-      });
-      req.on('close', () => realtime.removeClient(res));
-    } catch (err) {
-      next(err);
-    }
-  })();
-}
+const streamRealtime = asyncRoute(async (req, res) => {
+  const workspaceIds = await readableChangeFeedWorkspaceIds();
+  if (workspaceIds.length === 0) {
+    res.status(403).json({ error: 'Permission denied: realtime stream' });
+    return;
+  }
+  const afterSeq =
+    queryCursor(req, 'after') ?? parseSeqCursor(req.headers['last-event-id']) ?? undefined;
+  realtime.addClient(res, {
+    afterSeq,
+    workspaceIds,
+    projectIds: getActiveTokenProjectIds()
+  });
+  req.on('close', () => realtime.removeClient(res));
+});
 
 app.get('/api/stream', streamRealtime);
 app.get('/realtime', requireAuthenticatedSession, projectAutomationRouteGuard, streamRealtime);
@@ -1300,25 +1231,19 @@ app.get(
   '/sync/changes',
   requireAuthenticatedSession,
   projectAutomationRouteGuard,
-  (req: Request, res: Response, next: NextFunction) => {
-    void (async () => {
-      try {
-        const workspaceIds = await readableChangeFeedWorkspaceIds();
-        if (workspaceIds.length === 0) {
-          res.status(403).json({ error: 'Permission denied: realtime catch-up' });
-          return;
-        }
-        const afterSeq = queryCursor(req, 'after');
-        if (afterSeq === null) {
-          res.status(400).json({ error: 'Query parameter "after" must be a non-negative integer' });
-          return;
-        }
-        res.json(await readChangesAfter(afterSeq, workspaceIds));
-      } catch (err) {
-        next(err);
-      }
-    })();
-  }
+  asyncRoute(async (req, res) => {
+    const workspaceIds = await readableChangeFeedWorkspaceIds();
+    if (workspaceIds.length === 0) {
+      res.status(403).json({ error: 'Permission denied: realtime catch-up' });
+      return;
+    }
+    const afterSeq = queryCursor(req, 'after');
+    if (afterSeq === null) {
+      res.status(400).json({ error: 'Query parameter "after" must be a non-negative integer' });
+      return;
+    }
+    res.json(await readChangesAfter(afterSeq, workspaceIds));
+  })
 );
 
 // ---- Projects ------------------------------------------------------------

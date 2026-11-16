@@ -1,6 +1,12 @@
 import { PERMISSIONS } from '@overlord/auth';
 import { type AgentRequestDeliveryDto, missionDisplayIdFromObjectiveRef } from '@overlord/contract';
-import express, { type NextFunction, type Request, type Response, Router } from 'express';
+import express, {
+  type NextFunction,
+  type Request,
+  type RequestHandler,
+  type Response,
+  Router
+} from 'express';
 
 import {
   acquireWaiterLease,
@@ -37,8 +43,9 @@ import { resolveDefaultLocalTargetProvider } from '../packages/core/service/loca
 import { answerApplicationStateFromResult } from '../packages/core/service/local-target-mutations.ts';
 import { getProjectExecutionTargetSelection } from '../packages/core/service/project-execution-target.ts';
 
-import { buildWebappServiceContextForWorkspace, requireDatabaseClient } from './db.ts';
 import { optionalString, queryString } from './http/query.ts';
+import { asyncRoute } from './http/route-handler.ts';
+import { buildWebappServiceContextForWorkspace, requireDatabaseClient } from './db.ts';
 import { requireWorkspacePermission } from './rbac.ts';
 import { callerWorkspaceMemberships } from './repository.ts';
 
@@ -154,23 +161,16 @@ function channelScope(req: ChannelRequest): {
   return { ctx: req.channelContext, channel: req.channel };
 }
 
-function handle(
-  fn: (req: ChannelRequest, res: Response) => Promise<unknown>
-): (req: Request, res: Response, next: NextFunction) => void {
-  return (req, res, next) => {
-    void (async () => {
-      try {
-        const payload = await fn(req as ChannelRequest, res);
-        if (!res.headersSent) res.json(payload ?? { ok: true });
-      } catch (err) {
-        if (err instanceof ServiceError) {
-          res.status(err.status).json({ error: err.message, code: err.code });
-          return;
-        }
-        next(err);
-      }
-    })();
-  };
+/**
+ * Every error, `ServiceError` included, is forwarded to the app's error handler
+ * so this surface renders the same envelope (including `details`) as every other
+ * route.
+ */
+function handle(fn: (req: ChannelRequest, res: Response) => Promise<unknown>): RequestHandler {
+  return asyncRoute(async (req, res) => {
+    const payload = await fn(req as ChannelRequest, res);
+    if (!res.headersSent) res.json(payload ?? { ok: true });
+  });
 }
 
 function isAllowedValue<T extends string>(value: string, allowed: readonly T[]): value is T {

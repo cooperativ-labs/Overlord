@@ -1,7 +1,8 @@
-import express from 'express';
 import assert from 'node:assert/strict';
 import { rmSync } from 'node:fs';
 import { after, before, describe, it } from 'node:test';
+
+import { listenForTest, routerTestApp, type TestServer } from './http/test-app-fixture.ts';
 
 process.env.BETTER_AUTH_SECRET = 'test-better-auth-secret-32-chars-min';
 process.env.BETTER_AUTH_URL = 'http://127.0.0.1:4319';
@@ -22,8 +23,6 @@ const { createProject } = await import('../packages/core/service/projects.ts');
 const { protocolCreate } = await import('../packages/core/service/protocol.ts');
 const { seedServiceOperator } = await import('../packages/core/service/test-helpers.ts');
 const { createServiceContext } = await import('../packages/core/service/context.ts');
-const { installRequestValidation } = await import('./http/request-validation.ts');
-const { apiResponseConformance } = await import('./http/response-conformance.ts');
 
 /**
  * The adapter route family, exercised over real HTTP.
@@ -36,7 +35,7 @@ const { apiResponseConformance } = await import('./http/response-conformance.ts'
  */
 
 let baseUrl = '';
-let server: ReturnType<express.Express['listen']>;
+let server: TestServer;
 let channelToken = '';
 let channelId = '';
 let otherToken = '';
@@ -46,21 +45,21 @@ let fixtureObjectiveDisplayId = '';
 let fixtureProjectId = '';
 
 before(async () => {
-  const app = express();
-  app.use(apiResponseConformance());
-  app.use(AGENT_SESSION_CHANNEL_ROUTE_PREFIX, createAgentSessionChannelRouter());
-  app.use('/api/agent-requests', createAgentRequestHumanRouter());
-  app.use('/api/agent-session-inputs', createAgentSessionInputHumanRouter());
-  // Everything else demands a human. A channel credential must never reach it.
-  app.use('/api', (_req, res) => res.status(401).json({ error: 'Authentication required' }));
-  installRequestValidation(app);
+  // The routers parse their own (size-limited) bodies. Production mounts the app's error
+  // handler last, and routes forward every error to it; the fixture does the same.
+  const app = routerTestApp(
+    app => {
+      app.use(AGENT_SESSION_CHANNEL_ROUTE_PREFIX, createAgentSessionChannelRouter());
+      app.use('/api/agent-requests', createAgentRequestHumanRouter());
+      app.use('/api/agent-session-inputs', createAgentSessionInputHumanRouter());
+      // Everything else demands a human. A channel credential must never reach it.
+      app.use('/api', (_req, res) => res.status(401).json({ error: 'Authentication required' }));
+    },
+    { json: false }
+  );
 
-  await new Promise<void>(resolve => {
-    server = app.listen(0, '127.0.0.1', () => resolve());
-  });
-  const address = server.address();
-  const port = typeof address === 'object' && address ? address.port : 0;
-  baseUrl = `http://127.0.0.1:${port}`;
+  server = await listenForTest(app);
+  baseUrl = server.baseUrl;
 
   await seedServiceOperator({ db: client });
   await dbModule.setActiveWorkspace('local-workspace');
@@ -223,7 +222,7 @@ describe('human objective scoping', () => {
 });
 
 after(async () => {
-  await new Promise<void>(resolve => server.close(() => resolve()));
+  await server.close();
   rmSync(tempDir, { recursive: true, force: true });
 });
 

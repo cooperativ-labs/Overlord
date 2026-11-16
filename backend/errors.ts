@@ -43,6 +43,18 @@ type BodyParserErrorLike = {
   type?: string;
 };
 
+/** The shared API error for malformed JSON request bodies. */
+export function invalidJsonError(): ApiError {
+  return new ApiError(400, 'Request body is not valid JSON.', undefined, 'invalid_json');
+}
+
+/** Whether an unknown value is a body-parser error of the requested type. */
+export function isBodyParserError(error: unknown, type: string): boolean {
+  return (
+    typeof error === 'object' && error !== null && (error as BodyParserErrorLike).type === type
+  );
+}
+
 /**
  * Map Express/body-parser `PayloadTooLargeError` (413) and JSON parse failures
  * (400) onto the same JSON error envelope as `ApiError`. Without this, the generic handler returns 500 with
@@ -51,16 +63,12 @@ type BodyParserErrorLike = {
  * too large" string on the Latch mission widget.
  */
 export function apiErrorFromBodyParser(error: unknown): ApiError | null {
-  if (!error || typeof error !== 'object') return null;
-  const { type } = error as BodyParserErrorLike;
-  if (type === 'entity.too.large') {
+  if (isBodyParserError(error, 'entity.too.large')) {
     return new ApiError(413, 'Request body is too large.', undefined, 'body_too_large');
   }
   // A body that is not valid JSON (the request-validation layer answers the same
   // after authentication; this covers route-level parsers and validation `off`).
-  if (type === 'entity.parse.failed') {
-    return new ApiError(400, 'Request body is not valid JSON.', undefined, 'invalid_json');
-  }
+  if (isBodyParserError(error, 'entity.parse.failed')) return invalidJsonError();
   return null;
 }
 

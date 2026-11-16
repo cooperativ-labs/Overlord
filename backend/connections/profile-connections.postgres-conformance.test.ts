@@ -1,13 +1,10 @@
 import { type DatabaseClient } from '@overlord/database';
-import express from 'express';
 import assert from 'node:assert/strict';
 import { randomBytes, randomUUID } from 'node:crypto';
-import { once } from 'node:events';
 import { readFileSync } from 'node:fs';
-import type { AddressInfo } from 'node:net';
 import { describe, it } from 'node:test';
 
-import { apiErrorHandler } from '../errors.ts';
+import { listenForTest, routerTestApp } from '../http/test-app-fixture.ts';
 import {
   conformanceAdapters,
   createConformanceDatabase,
@@ -543,21 +540,19 @@ for (const adapter of adapters) {
           publicBaseUrl: 'https://backend.test',
           webReturnOrigin: null
         });
-        const app = express();
-        app.use(express.json());
-        app.use(
-          '/api/connections',
-          createConnectionsRouter({
-            cloud: () => false,
-            runtime: () => runtime,
-            owner: () => null,
-            profile: () => 'other'
-          })
-        );
-        app.use(apiErrorHandler);
-        const server = app.listen(0, '127.0.0.1');
-        await once(server, 'listening');
-        const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}/api/connections`;
+        const app = routerTestApp(app => {
+          app.use(
+            '/api/connections',
+            createConnectionsRouter({
+              cloud: () => false,
+              runtime: () => runtime,
+              owner: () => null,
+              profile: () => 'other'
+            })
+          );
+        });
+        const server = await listenForTest(app);
+        const base = `${server.baseUrl}/api/connections`;
         const bodies: string[] = [];
         const call = async (method: string, path: string, body?: unknown) => {
           const response = await fetch(`${base}${path}`, {
@@ -635,7 +630,7 @@ for (const adapter of adapters) {
           ].join('\n');
           for (const plaintext of [secret, API_KEY]) assert.ok(!exposures.includes(plaintext));
         } finally {
-          server.close();
+          await server.close();
         }
       } finally {
         Object.assign(console, originals);

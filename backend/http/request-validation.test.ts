@@ -1,7 +1,5 @@
 import express, { type NextFunction, type Request, type Response } from 'express';
 import assert from 'node:assert/strict';
-import { once } from 'node:events';
-import type { AddressInfo } from 'node:net';
 import { after, afterEach, before, describe, it, mock } from 'node:test';
 
 import { ApiError, apiErrorHandler } from '../errors.ts';
@@ -13,6 +11,7 @@ import {
   REQUEST_VALIDATION_ENV,
   requestValidationMode
 } from './request-validation.ts';
+import { listenForTest } from './test-app-fixture.ts';
 
 type Behaviour = 'ok' | 'crash' | 'refuse' | 'missing';
 
@@ -58,13 +57,8 @@ async function serve(behaviour: Behaviour) {
   });
   assert.equal(installRequestValidation(app as never), 2);
   app.use(apiErrorHandler);
-  const server = app.listen(0, '127.0.0.1');
-  await once(server, 'listening');
-  const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
-  return {
-    base,
-    close: () => new Promise<void>(resolve => server.close(() => resolve()))
-  };
+  const server = await listenForTest(app);
+  return { base: server.baseUrl, close: server.close };
 }
 
 function post(base: string, body: string, auth = true) {

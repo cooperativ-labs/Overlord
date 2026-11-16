@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { rmSync } from 'node:fs';
-import type { Server } from 'node:http';
 import { after, before, describe, it } from 'node:test';
+
+import { listenForTest, type TestServer } from './http/test-app-fixture.ts';
 
 /**
  * The objective description REST surface through the real app (ADR 0059):
@@ -21,7 +22,7 @@ const { app } = await import('./app.ts');
 const LONG =
   `Rebuild the objective summary surfaces. ${'Keep every prohibition and file path exact. '.repeat(9)}`.trim();
 
-let server: Server;
+let server: TestServer;
 let baseUrl = '';
 let secret = '';
 
@@ -36,11 +37,8 @@ async function call(method: string, path: string, body?: unknown) {
 
 before(async () => {
   secret = (await createUserToken({ label: 'objective-description-http' })).secret;
-  await new Promise<void>(resolve => {
-    server = app.listen(0, '127.0.0.1', () => resolve());
-  });
-  const address = server.address();
-  baseUrl = `http://127.0.0.1:${typeof address === 'object' && address ? address.port : 0}`;
+  server = await listenForTest(app);
+  baseUrl = server.baseUrl;
 });
 
 describe('objective description REST surface', () => {
@@ -115,6 +113,6 @@ describe('objective description REST surface', () => {
 });
 
 after(async () => {
-  await new Promise<void>(resolve => server.close(() => resolve()));
+  await server.close();
   rmSync(tempDir, { recursive: true, force: true });
 });

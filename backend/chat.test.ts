@@ -1,19 +1,15 @@
 import { createSqliteClient, openInMemoryDatabase } from '@overlord/database';
-import express from 'express';
 import assert from 'node:assert/strict';
 import { AsyncLocalStorage } from 'node:async_hooks';
-import { once } from 'node:events';
 import { it } from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
 
 import { type ChatOwner, Conversations } from '../packages/core/service/chat/conversations.ts';
 import { ChatRuns } from '../packages/core/service/chat/runs.ts';
 
-import { installRequestValidation } from './http/request-validation.ts';
-import { apiResponseConformance } from './http/response-conformance.ts';
+import { listenForTest, routerTestApp } from './http/test-app-fixture.ts';
 import { createChatRouter } from './chat.ts';
 import { type ChatRuntime, ChatRuntimeFailure, ChatWorker } from './chat-worker.ts';
-import { apiErrorHandler } from './errors.ts';
 
 async function setup() {
   const raw = openInMemoryDatabase(),
@@ -42,37 +38,31 @@ async function setup() {
 }
 it('authenticated chat JSON/poll/SSE replay, live append, conflicts and Local guard', async () => {
   const f = await setup(),
-    context = new AsyncLocalStorage<ChatOwner>(),
-    app = express();
+    context = new AsyncLocalStorage<ChatOwner>();
   let cloud = true;
-  app.use(apiResponseConformance());
-  app.use(express.json());
-  app.use((req, res, next) => {
-    if (!req.headers.authorization) {
-      res.status(401).json({ error: 'Authentication required' });
-      return;
-    }
-    context.run(
-      req.headers.authorization === 'Bearer owner' ? f.owner : { ...f.owner, profileId: 'other' },
-      next
+  const app = routerTestApp(app => {
+    app.use((req, res, next) => {
+      if (!req.headers.authorization) {
+        res.status(401).json({ error: 'Authentication required' });
+        return;
+      }
+      context.run(
+        req.headers.authorization === 'Bearer owner' ? f.owner : { ...f.owner, profileId: 'other' },
+        next
+      );
+    });
+    app.use(
+      '/api/chat',
+      createChatRouter({
+        cloud: () => cloud,
+        service: () => f.c,
+        owner: () => context.getStore() ?? null,
+        streamPollMs: 10
+      })
     );
   });
-  app.use(
-    '/api/chat',
-    createChatRouter({
-      cloud: () => cloud,
-      service: () => f.c,
-      owner: () => context.getStore() ?? null,
-      streamPollMs: 10
-    })
-  );
-  installRequestValidation(app);
-  app.use(apiErrorHandler);
-  const server = app.listen(0, '127.0.0.1');
-  await once(server, 'listening');
-  const address = server.address();
-  assert.ok(address && typeof address === 'object');
-  const url = `http://127.0.0.1:${address.port}/api/chat`;
+  const server = await listenForTest(app);
+  const url = `${server.baseUrl}/api/chat`;
   const request = (path: string, method = 'GET', body?: unknown, auth = 'owner') =>
     fetch(url + path, {
       method,
@@ -153,8 +143,7 @@ it('authenticated chat JSON/poll/SSE replay, live append, conflicts and Local gu
     }
   } finally {
     controller.abort();
-    server.closeAllConnections();
-    await new Promise<void>(resolve => server.close(() => resolve()));
+    await server.close();
     f.close();
   }
 });
@@ -193,38 +182,38 @@ it('fake runtime is scheduled durably and typed failures never expose provider e
   }
 });
 it('GET /api/chat/providers reports engine readiness and the caller connections, Cloud only', async () => {
-  const f = await setup(),
-    app = express();
+  const f = await setup();
   let cloud = true;
   const seen: ChatOwner[] = [];
-  app.use(apiResponseConformance());
-  app.use(
-    '/api/chat',
-    createChatRouter({
-      cloud: () => cloud,
-      service: () => f.c,
-      owner: () => f.owner,
-      providers: async owner => {
-        seen.push(owner);
-        return {
-          providers: [
-            {
-              provider: 'gemini',
-              model: 'gemini-3.8-flash',
-              state: 'not_configured',
-              checkedAt: '2026-10-04T12:00:00.000Z'
-            }
-          ],
-          connections: []
-        };
-      }
-    })
+  const app = routerTestApp(
+    app => {
+      app.use(
+        '/api/chat',
+        createChatRouter({
+          cloud: () => cloud,
+          service: () => f.c,
+          owner: () => f.owner,
+          providers: async owner => {
+            seen.push(owner);
+            return {
+              providers: [
+                {
+                  provider: 'gemini',
+                  model: 'gemini-3.8-flash',
+                  state: 'not_configured',
+                  checkedAt: '2026-10-04T12:00:00.000Z'
+                }
+              ],
+              connections: []
+            };
+          }
+        })
+      );
+    },
+    { json: false }
   );
-  installRequestValidation(app);
-  app.use(apiErrorHandler);
-  const server = app.listen(0);
-  await once(server, 'listening');
-  const base = `http://127.0.0.1:${(server.address() as { port: number }).port}/api/chat`;
+  const server = await listenForTest(app);
+  const base = `${server.baseUrl}/api/chat`;
   try {
     const ok = await fetch(`${base}/providers`);
     assert.equal(ok.status, 200);
@@ -236,7 +225,7 @@ it('GET /api/chat/providers reports engine readiness and the caller connections,
     assert.equal(local.status, 404);
     assert.equal((await local.json()).code, 'chat_unavailable');
   } finally {
-    server.close();
+    await server.close();
     f.close();
   }
 });
@@ -277,36 +266,30 @@ it('Create HTTP endpoint enforces caller, revision, Local guard, and receipt rep
     });
     const context = new AsyncLocalStorage<ChatOwner>();
     let cloud = true;
-    const app = express();
-    app.use(apiResponseConformance());
-    app.use(express.json());
-    app.use((req, res, next) => {
-      if (!req.headers.authorization) {
-        res.status(401).json({ error: 'Authentication required' });
-        return;
-      }
-      context.run(
-        req.headers.authorization === 'Bearer owner'
-          ? proposalOwner
-          : { ...proposalOwner, profileId: 'stranger' },
-        next
+    const app = routerTestApp(app => {
+      app.use((req, res, next) => {
+        if (!req.headers.authorization) {
+          res.status(401).json({ error: 'Authentication required' });
+          return;
+        }
+        context.run(
+          req.headers.authorization === 'Bearer owner'
+            ? proposalOwner
+            : { ...proposalOwner, profileId: 'stranger' },
+          next
+        );
+      });
+      app.use(
+        '/api/chat',
+        createChatRouter({
+          cloud: () => cloud,
+          service: () => c,
+          owner: () => context.getStore() ?? null
+        })
       );
     });
-    app.use(
-      '/api/chat',
-      createChatRouter({
-        cloud: () => cloud,
-        service: () => c,
-        owner: () => context.getStore() ?? null
-      })
-    );
-    installRequestValidation(app);
-    app.use(apiErrorHandler);
-    const server = app.listen(0, '127.0.0.1');
-    await once(server, 'listening');
-    const address = server.address();
-    assert.ok(address && typeof address === 'object');
-    const url = `http://127.0.0.1:${address.port}/api/chat/proposals/${card.id}/create`;
+    const server = await listenForTest(app);
+    const url = `${server.baseUrl}/api/chat/proposals/${card.id}/create`;
     const request = (body: unknown, auth = 'owner') =>
       fetch(url, {
         method: 'POST',
@@ -339,40 +322,32 @@ it('Create HTTP endpoint enforces caller, revision, Local guard, and receipt rep
       );
       assert.equal((await c.snapshot(proposalOwner, t.thread.id)).openProposals.length, 0);
     } finally {
-      server.closeAllConnections();
-      server.close();
-      await once(server, 'close');
+      await server.close();
     }
   }));
 
 it('presence, acknowledgement and notification history routes are owner-scoped and Cloud only', async () => {
   const f = await setup(),
-    context = new AsyncLocalStorage<ChatOwner>(),
-    app = express();
+    context = new AsyncLocalStorage<ChatOwner>();
   let cloud = true;
-  app.use(apiResponseConformance());
-  app.use(express.json());
-  app.use((req, _res, next) => {
-    context.run(
-      req.headers.authorization === 'Bearer owner' ? f.owner : { ...f.owner, profileId: 'other' },
-      next
+  const app = routerTestApp(app => {
+    app.use((req, _res, next) => {
+      context.run(
+        req.headers.authorization === 'Bearer owner' ? f.owner : { ...f.owner, profileId: 'other' },
+        next
+      );
+    });
+    app.use(
+      '/api/chat',
+      createChatRouter({
+        cloud: () => cloud,
+        service: () => f.c,
+        owner: () => context.getStore() ?? null
+      })
     );
   });
-  app.use(
-    '/api/chat',
-    createChatRouter({
-      cloud: () => cloud,
-      service: () => f.c,
-      owner: () => context.getStore() ?? null
-    })
-  );
-  installRequestValidation(app);
-  app.use(apiErrorHandler);
-  const server = app.listen(0, '127.0.0.1');
-  await once(server, 'listening');
-  const address = server.address();
-  assert.ok(address && typeof address === 'object');
-  const url = `http://127.0.0.1:${address.port}/api/chat`;
+  const server = await listenForTest(app);
+  const url = `${server.baseUrl}/api/chat`;
   const request = (path: string, method = 'GET', body?: unknown, auth = 'owner') =>
     fetch(url + path, {
       method,
@@ -429,8 +404,7 @@ it('presence, acknowledgement and notification history routes are owner-scoped a
       assert.equal(((await local.json()) as { code: string }).code, 'chat_unavailable');
     }
   } finally {
-    server.closeAllConnections();
-    await new Promise<void>(resolve => server.close(() => resolve()));
+    await server.close();
     f.close();
   }
 });

@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { rmSync } from 'node:fs';
 import { after, describe, it } from 'node:test';
 
+import { listenForTest } from './http/test-app-fixture.ts';
+
 /**
  * Regression: desktop/hosted web authenticate `/api/runner/*` with a Better Auth
  * bearer session token. Those routes are also a non-browser (CLI/loopback) surface,
@@ -37,17 +39,11 @@ async function withApiServer(run: (baseUrl: string) => Promise<void>): Promise<v
     next(error);
   });
 
-  const server = app.listen(0, '127.0.0.1');
-  await new Promise<void>(resolve => server.once('listening', resolve));
-  const address = server.address();
-  assert.ok(address && typeof address === 'object');
-
+  const server = await listenForTest(app);
   try {
-    await run(`http://127.0.0.1:${address.port}`);
+    await run(server.baseUrl);
   } finally {
-    await new Promise<void>((resolve, reject) => {
-      server.close(error => (error ? reject(error) : resolve()));
-    });
+    await server.close();
   }
 }
 

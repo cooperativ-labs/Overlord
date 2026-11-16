@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { rmSync } from 'node:fs';
-import type { Server } from 'node:http';
 import { after, before, describe, it } from 'node:test';
+
+import { listenForTest, type TestServer } from './http/test-app-fixture.ts';
 
 /**
  * The REST boundary of the real app (ADR 0051): every registered route with an
@@ -20,17 +21,14 @@ const { app } = await import('./app.ts');
 const { registeredRoutes, toOpenapiPath } = await import('./http/express-routes.ts');
 const { operationFor } = await import('./http/api-operations.ts');
 
-let server: Server;
+let server: TestServer;
 let baseUrl = '';
 let secret = '';
 
 before(async () => {
   secret = (await createUserToken({ label: 'api-boundary' })).secret;
-  await new Promise<void>(resolve => {
-    server = app.listen(0, '127.0.0.1', () => resolve());
-  });
-  const address = server.address();
-  baseUrl = `http://127.0.0.1:${typeof address === 'object' && address ? address.port : 0}`;
+  server = await listenForTest(app);
+  baseUrl = server.baseUrl;
 });
 
 describe('REST boundary', () => {
@@ -98,6 +96,6 @@ describe('REST boundary', () => {
 });
 
 after(async () => {
-  await new Promise<void>(resolve => server.close(() => resolve()));
+  await server.close();
   rmSync(tempDir, { recursive: true, force: true });
 });

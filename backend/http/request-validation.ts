@@ -20,7 +20,9 @@
 import type { NextFunction, Request, RequestHandler, Response } from 'express';
 import type { z } from 'zod';
 
-import { type ApiOperation, operationFor } from './api-operations.ts';
+import { invalidJsonError, isBodyParserError } from '../errors.ts';
+
+import { type ApiOperation, bindPathParameters, operationFor } from './api-operations.ts';
 import { recordConformance } from './conformance-report.ts';
 import { type ExpressLayer, registeredRoutes, toOpenapiPath } from './express-routes.ts';
 
@@ -58,14 +60,6 @@ const MAX_ISSUES = 20;
 
 type Locals = Record<string | symbol, unknown>;
 
-function isMalformedJson(error: unknown): boolean {
-  return (
-    typeof error === 'object' &&
-    error !== null &&
-    (error as { type?: unknown }).type === 'entity.parse.failed'
-  );
-}
-
 /**
  * Wraps a JSON body parser so a body that is not valid JSON is answered by the
  * validation layer, after the route's authentication, instead of before it. With
@@ -74,7 +68,11 @@ function isMalformedJson(error: unknown): boolean {
 export function deferMalformedBody(parser: RequestHandler): RequestHandler {
   return function deferredJsonBody(req, res, next) {
     parser(req, res, (error?: unknown) => {
-      if (error && isMalformedJson(error) && requestValidationMode() !== 'off') {
+      if (
+        error &&
+        isBodyParserError(error, 'entity.parse.failed') &&
+        requestValidationMode() !== 'off'
+      ) {
         (res.locals as Locals)[MALFORMED_BODY] = true;
         req.body = {};
         next();
@@ -85,8 +83,8 @@ export function deferMalformedBody(parser: RequestHandler): RequestHandler {
   };
 }
 
-function memberPath(path: readonly PropertyKey[]): string {
-  let out = '';
+export function issuePath(path: readonly PropertyKey[], prefix = ''): string {
+  let out = prefix;
   for (const segment of path) {
     if (typeof segment === 'number') out += `[${segment}]`;
     else out += out ? `.${String(segment)}` : String(segment);
@@ -106,27 +104,11 @@ function check(
   for (const issue of result.error.issues) {
     issues.push({
       in: location,
-      path: memberPath(issue.path),
+      path: issuePath(issue.path),
       code: issue.code,
       message: issue.message
     });
   }
-}
-
-function pathParameters(operation: ApiOperation, requestPath: string): Record<string, string> {
-  const template = operation.path.split('/');
-  const actual = requestPath.split('/');
-  const params: Record<string, string> = {};
-  template.forEach((segment, index) => {
-    const match = /^\{(.+)\}$/.exec(segment);
-    if (!match || actual[index] === undefined) return;
-    try {
-      params[match[1]!] = decodeURIComponent(actual[index]!);
-    } catch {
-      params[match[1]!] = actual[index]!;
-    }
-  });
-  return params;
 }
 
 function requestPathname(req: Request): string {
@@ -136,7 +118,12 @@ function requestPathname(req: Request): string {
 /** Validates one request against its operation; empty when it conforms. */
 function validateRequest(operation: ApiOperation, req: Request): RequestIssue[] {
   const issues: RequestIssue[] = [];
-  check(operation.parameters.path, pathParameters(operation, requestPathname(req)), 'path', issues);
+  check(
+    operation.parameters.path,
+    bindPathParameters(operation, requestPathname(req)),
+    'path',
+    issues
+  );
   check(operation.parameters.query, req.query, 'query', issues);
   check(operation.parameters.header, req.headers, 'header', issues);
   const body = operation.requestBody;
@@ -194,11 +181,6 @@ function validationErrorBody(issues: readonly RequestIssue[]) {
     details: { issues }
   };
 }
-
-const MALFORMED_JSON_ERROR = {
-  error: 'Request body is not valid JSON.',
-  code: 'invalid_json'
-} as const;
 
 type Outcome = 'accepted' | 'rejected' | 'would_reject' | 'answered_by_handler';
 
@@ -271,7 +253,8 @@ function validationLayer(byMethod: ReadonlyMap<string, ApiOperation>): RequestHa
     if (!operation) return next();
     res.locals[OPERATION_ID_LOCAL] = operation.operationId;
     if ((res.locals as Locals)[MALFORMED_BODY]) {
-      res.status(400).json(MALFORMED_JSON_ERROR);
+      const error = invalidJsonError();
+      res.status(error.status).json({ error: error.message, code: error.code });
       return;
     }
     const mode = requestValidationMode();

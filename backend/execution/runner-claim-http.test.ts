@@ -1,9 +1,9 @@
 import express from 'express';
 import assert from 'node:assert/strict';
-import http from 'node:http';
-import type { AddressInfo } from 'node:net';
 import net from 'node:net';
 import test from 'node:test';
+
+import { listenForTest } from '../http/test-app-fixture.ts';
 
 import {
   flushRunnerClaimHeaders,
@@ -56,7 +56,7 @@ test('fetch JSON.parse of an empty long-poll body has no preamble', async () => 
       }
     });
   });
-  const server = await listen(app);
+  const server = await listenForTest(app);
   try {
     const response = await fetch(`${server.baseUrl}/claim`, { method: 'POST' });
     const text = await response.text();
@@ -84,7 +84,7 @@ test('long-poll flushes HTTP headers before the JSON body', async () => {
       }
     });
   });
-  const server = await listen(app);
+  const server = await listenForTest(app);
   try {
     const port = Number(new URL(server.baseUrl).port);
     const raw = await new Promise<string>((resolve, reject) => {
@@ -114,21 +114,3 @@ test('long-poll flushes HTTP headers before the JSON body', async () => {
     await server.close();
   }
 });
-
-async function listen(
-  app: express.Express
-): Promise<{ baseUrl: string; close: () => Promise<void> }> {
-  const server = http.createServer(app);
-  await new Promise<void>((resolve, reject) => {
-    server.listen(0, '127.0.0.1', () => resolve());
-    server.once('error', reject);
-  });
-  const address = server.address() as AddressInfo;
-  return {
-    baseUrl: `http://127.0.0.1:${address.port}`,
-    close: () =>
-      new Promise((resolve, reject) => {
-        server.close(error => (error ? reject(error) : resolve()));
-      })
-  };
-}

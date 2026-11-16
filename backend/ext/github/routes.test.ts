@@ -1,10 +1,10 @@
-import { type Permission } from '@overlord/auth';
-import express, { type NextFunction, type Request, type Response } from 'express';
 import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
+
+import { listenForTest, routerTestApp } from '../../http/test-app-fixture.ts';
 
 const tempDir = mkdtempSync(path.join(tmpdir(), 'overlord-github-routes-'));
 const { bootstrapIntegrationTestDb, DEFAULT_TEST_ORGANIZATION_ID } =
@@ -20,68 +20,26 @@ const {
   setActiveWorkspace,
   setActiveWorkspaceUser
 } = await import('../../db.ts');
-const { createTestWorkspaceContext } = await import('../../test-helpers.ts');
-const { getActiveWorkspaceId } = createTestWorkspaceContext(await import('../../db.ts'));
-const { apiErrorHandler } = await import('../../errors.ts');
-const { installRequestValidation } = await import('../../http/request-validation.ts');
-const { apiResponseConformance } = await import('../../http/response-conformance.ts');
-const { requirePermission } = await import('../../rbac.ts');
 const { createProject } = await import('../../repository.ts');
 const { createWorkspace } = await import('../../workspaces.ts');
 const { createGitHubExtensionRouter } = await import('./routes.ts');
 
 const workspaceAActorId = getActorWorkspaceUserId();
 
-function makeHandle() {
-  return (
-    fn: (req: Request, res: Response) => unknown,
-    options: { mutates?: boolean; requires?: Permission } = {}
-  ) => {
-    return (req: Request, res: Response, next: NextFunction) => {
-      void (async () => {
-        try {
-          if (options.requires) {
-            await requirePermission(options.requires, {
-              workspaceId: getActiveWorkspaceId(),
-              workspaceUserId: getActorWorkspaceUserId()
-            });
-          }
-          const result = await Promise.resolve(fn(req, res));
-          if (!res.headersSent) res.json(result ?? { ok: true });
-        } catch (error) {
-          next(error);
-        }
-      })();
-    };
-  };
-}
-
 async function withGitHubServer(run: (baseUrl: string) => Promise<void>): Promise<void> {
   const { profileConnections } = await import('../../connections/profile.ts');
   const { requireDatabaseClient } = await import('../../db.ts');
   const { githubConnectionProvider } = await import('./connection-provider.ts');
   const profiles = profileConnections(requireDatabaseClient(), [githubConnectionProvider()]);
-  const app = express();
-  app.use(apiResponseConformance());
-  app.use(express.json());
-  app.use(
-    '/ext/github',
-    createGitHubExtensionRouter(makeHandle(), { connections: () => profiles })
-  );
-  installRequestValidation(app);
-  app.use(apiErrorHandler);
+  const app = routerTestApp((app, handle) => {
+    app.use('/ext/github', createGitHubExtensionRouter(handle, { connections: () => profiles }));
+  });
 
-  const server = app.listen(0, '127.0.0.1');
-  await new Promise<void>(resolve => server.once('listening', resolve));
-  const address = server.address();
-  assert.ok(address && typeof address === 'object');
-
+  const server = await listenForTest(app);
   try {
-    await run(`http://127.0.0.1:${address.port}`);
+    await run(server.baseUrl);
   } finally {
-    await new Promise<void>((resolve, reject) => {
-      server.close(error => (error ? reject(error) : resolve()));
-    });
+    await server.close();
   }
 }
 
