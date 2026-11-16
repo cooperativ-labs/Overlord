@@ -150953,6 +150953,153 @@ function isQueueableCapabilityName(value2) {
   return typeof value2 === "string" && value2 !== "launchAgent" && LOCAL_TARGET_CAPABILITY_NAMES.includes(value2);
 }
 
+// ../packages/core/service/latch-provider-session.ts
+function parseMetadata(value2) {
+  if (!value2?.trim()) return {};
+  try {
+    const parsed = JSON.parse(value2);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+async function bindProviderSessionAgentSession({
+  ctx,
+  executionRequestId,
+  agentSessionId
+}) {
+  const row = await ctx.db.get(
+    `SELECT metadata_json FROM execution_requests WHERE id = ? AND deleted_at IS NULL`,
+    [executionRequestId]
+  );
+  if (!row) return;
+  const providerSession = providerSessionFromMetadata(parseMetadata(row.metadata_json));
+  if (!providerSession || providerSession.agentSessionId === agentSessionId) return;
+  await ctx.db.run(
+    `UPDATE execution_requests SET metadata_json = ?, updated_at = ?, revision = revision + 1
+      WHERE id = ? AND deleted_at IS NULL`,
+    [
+      mergeProviderSessionIntoMetadata({
+        metadataJson: row.metadata_json,
+        providerSession: { ...providerSession, agentSessionId }
+      }),
+      nowIso(),
+      executionRequestId
+    ]
+  );
+}
+async function resolveLatchSessionForAgentSession({
+  ctx,
+  sessionId
+}) {
+  const rows = await ctx.db.all(
+    `SELECT metadata_json, claimed_by_execution_target_id, execution_target_id
+       FROM execution_requests
+      WHERE workspace_id = ? AND launched_session_id = ? AND deleted_at IS NULL
+      ORDER BY updated_at DESC, created_at DESC`,
+    [ctx.workspace.id, sessionId]
+  );
+  for (const row of rows) {
+    const providerSession = providerSessionFromMetadata(parseMetadata(row.metadata_json));
+    const targetId = providerSession?.executionTargetId ?? row.claimed_by_execution_target_id ?? row.execution_target_id;
+    if (!providerSession || !targetId) continue;
+    return {
+      targetId,
+      providerSessionId: providerSession.providerSessionId,
+      lastObservedState: providerSession.lastObservedState
+    };
+  }
+  return null;
+}
+async function forgetLatchProviderSession({
+  ctx,
+  missionId,
+  executionRequestId,
+  providerSessionId
+}) {
+  const sessionId = providerSessionId.trim();
+  if (!sessionId) {
+    throw new ServiceError("A Latch session id is required.", "validation_error");
+  }
+  return ctx.db.transaction(async (tx) => {
+    const rows = await tx.all(
+      executionRequestId ? `SELECT id, project_id, mission_id, objective_id, metadata_json, updated_at, revision
+             FROM execution_requests
+            WHERE id = ? AND mission_id = ? AND workspace_id = ? AND deleted_at IS NULL` : `SELECT id, project_id, mission_id, objective_id, metadata_json, updated_at, revision
+             FROM execution_requests
+            WHERE mission_id = ? AND workspace_id = ? AND deleted_at IS NULL
+            ORDER BY updated_at DESC, created_at DESC`,
+      executionRequestId ? [executionRequestId, missionId, ctx.workspace.id] : [missionId, ctx.workspace.id]
+    );
+    const row = rows.find((candidate) => {
+      const mapped2 = providerSessionFromMetadata(parseMetadata(candidate.metadata_json));
+      return mapped2?.providerSessionId === sessionId;
+    });
+    if (!row) return { forgotten: false, executionRequestId: executionRequestId ?? null };
+    const previous = parseMetadata(row.metadata_json);
+    const mapped = providerSessionFromMetadata(previous);
+    const stripped = parseMetadata(
+      stripProviderSessionFromMetadata({ metadataJson: row.metadata_json })
+    );
+    if (mapped?.lastObservedState === "exited")
+      stripped.endedTerminalSession = {
+        ...mapped,
+        endedAt: mapped.endedAt ?? row.updated_at,
+        endReason: mapped.endReason ?? "unknown"
+      };
+    const metadataJson = JSON.stringify(stripped);
+    const revision3 = row.revision + 1;
+    const updated = await tx.run(
+      `UPDATE execution_requests SET metadata_json = ?, updated_at = ?, revision = ?
+        WHERE id = ? AND revision = ? AND deleted_at IS NULL`,
+      [metadataJson, nowIso(), revision3, row.id, row.revision]
+    );
+    if (updated.changes === 0) {
+      throw new ServiceError(
+        "Execution request changed while forgetting the Latch session",
+        "execution_request_conflict",
+        409
+      );
+    }
+    await recordChange({
+      ctx: { ...ctx, db: tx },
+      entityType: "execution_request",
+      entityId: row.id,
+      operation: "update",
+      entityRevision: revision3,
+      projectId: row.project_id,
+      missionId: row.mission_id,
+      objectiveId: row.objective_id,
+      changedFields: ["metadata_json"]
+    });
+    return { forgotten: true, executionRequestId: row.id };
+  });
+}
+async function forgetAbsentLatchProviderSessions({
+  ctx,
+  projectId,
+  executionTargetId,
+  providerSessionId
+}) {
+  const rows = await ctx.db.all(
+    `SELECT id, mission_id, metadata_json FROM execution_requests
+     WHERE workspace_id = ? AND project_id = ? AND mission_id IS NOT NULL
+       AND COALESCE(claimed_by_execution_target_id, execution_target_id) = ?
+       AND deleted_at IS NULL`,
+    [ctx.workspace.id, projectId, executionTargetId]
+  );
+  for (const row of rows) {
+    if (providerSessionFromMetadata(parseMetadata(row.metadata_json))?.providerSessionId !== providerSessionId)
+      continue;
+    await forgetLatchProviderSession({
+      ctx,
+      missionId: row.mission_id,
+      executionRequestId: row.id,
+      providerSessionId
+    });
+  }
+}
+
 // ../packages/core/service/local-target-mutations.ts
 var LOCAL_TARGET_MUTATION_METADATA_KEY = "overlord.localTargetMutation";
 var LOCAL_TARGET_MUTATION_REQUESTED_SOURCE = "local_target_mutation";
@@ -151210,7 +151357,7 @@ async function completeLocalTargetMutationRequest({
 }) {
   const row = await ctx.db.get(
     `SELECT id, workspace_id, project_id, mission_id, objective_id, status, revision, metadata_json,
-            requested_source
+            requested_source, COALESCE(claimed_by_execution_target_id, execution_target_id) AS target_id
        FROM execution_requests
       WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
     [requestId, ctx.workspace.id]
@@ -151313,6 +151460,14 @@ async function completeLocalTargetMutationRequest({
           now2
         ]
       );
+    }
+    if (mutation.capability === "inspectLatchSession" && !result2.ok && result2.code === "LATCH_SESSION_ABSENT" && row.target_id && typeof mutation.input.providerSessionId === "string") {
+      await forgetAbsentLatchProviderSessions({
+        ctx: txCtx,
+        projectId: row.project_id,
+        executionTargetId: row.target_id,
+        providerSessionId: mutation.input.providerSessionId
+      });
     }
     await recordAnswerDeliveryOutcome2({ ctx: txCtx, mutation, result: result2 });
   });
@@ -157788,129 +157943,6 @@ async function linkExecutionRequestToSession({
       now: now2
     });
     return await getExecutionRequest({ ctx: txCtx, id: row.id });
-  });
-}
-
-// ../packages/core/service/latch-provider-session.ts
-function parseMetadata(value2) {
-  if (!value2?.trim()) return {};
-  try {
-    const parsed = JSON.parse(value2);
-    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
-  } catch {
-    return {};
-  }
-}
-async function bindProviderSessionAgentSession({
-  ctx,
-  executionRequestId,
-  agentSessionId
-}) {
-  const row = await ctx.db.get(
-    `SELECT metadata_json FROM execution_requests WHERE id = ? AND deleted_at IS NULL`,
-    [executionRequestId]
-  );
-  if (!row) return;
-  const providerSession = providerSessionFromMetadata(parseMetadata(row.metadata_json));
-  if (!providerSession || providerSession.agentSessionId === agentSessionId) return;
-  await ctx.db.run(
-    `UPDATE execution_requests SET metadata_json = ?, updated_at = ?, revision = revision + 1
-      WHERE id = ? AND deleted_at IS NULL`,
-    [
-      mergeProviderSessionIntoMetadata({
-        metadataJson: row.metadata_json,
-        providerSession: { ...providerSession, agentSessionId }
-      }),
-      nowIso(),
-      executionRequestId
-    ]
-  );
-}
-async function resolveLatchSessionForAgentSession({
-  ctx,
-  sessionId
-}) {
-  const rows = await ctx.db.all(
-    `SELECT metadata_json, claimed_by_execution_target_id, execution_target_id
-       FROM execution_requests
-      WHERE workspace_id = ? AND launched_session_id = ? AND deleted_at IS NULL
-      ORDER BY updated_at DESC, created_at DESC`,
-    [ctx.workspace.id, sessionId]
-  );
-  for (const row of rows) {
-    const providerSession = providerSessionFromMetadata(parseMetadata(row.metadata_json));
-    const targetId = providerSession?.executionTargetId ?? row.claimed_by_execution_target_id ?? row.execution_target_id;
-    if (!providerSession || !targetId) continue;
-    return {
-      targetId,
-      providerSessionId: providerSession.providerSessionId,
-      lastObservedState: providerSession.lastObservedState
-    };
-  }
-  return null;
-}
-async function forgetLatchProviderSession({
-  ctx,
-  missionId,
-  executionRequestId,
-  providerSessionId
-}) {
-  const sessionId = providerSessionId.trim();
-  if (!sessionId) {
-    throw new ServiceError("A Latch session id is required.", "validation_error");
-  }
-  return ctx.db.transaction(async (tx) => {
-    const rows = await tx.all(
-      executionRequestId ? `SELECT id, project_id, mission_id, objective_id, metadata_json, updated_at, revision
-             FROM execution_requests
-            WHERE id = ? AND mission_id = ? AND workspace_id = ? AND deleted_at IS NULL` : `SELECT id, project_id, mission_id, objective_id, metadata_json, updated_at, revision
-             FROM execution_requests
-            WHERE mission_id = ? AND workspace_id = ? AND deleted_at IS NULL
-            ORDER BY updated_at DESC, created_at DESC`,
-      executionRequestId ? [executionRequestId, missionId, ctx.workspace.id] : [missionId, ctx.workspace.id]
-    );
-    const row = rows.find((candidate) => {
-      const mapped2 = providerSessionFromMetadata(parseMetadata(candidate.metadata_json));
-      return mapped2?.providerSessionId === sessionId;
-    });
-    if (!row) return { forgotten: false, executionRequestId: executionRequestId ?? null };
-    const previous = parseMetadata(row.metadata_json);
-    const mapped = providerSessionFromMetadata(previous);
-    const stripped = parseMetadata(
-      stripProviderSessionFromMetadata({ metadataJson: row.metadata_json })
-    );
-    if (mapped?.lastObservedState === "exited")
-      stripped.endedTerminalSession = {
-        ...mapped,
-        endedAt: mapped.endedAt ?? row.updated_at,
-        endReason: mapped.endReason ?? "unknown"
-      };
-    const metadataJson = JSON.stringify(stripped);
-    const revision3 = row.revision + 1;
-    const updated = await tx.run(
-      `UPDATE execution_requests SET metadata_json = ?, updated_at = ?, revision = ?
-        WHERE id = ? AND revision = ? AND deleted_at IS NULL`,
-      [metadataJson, nowIso(), revision3, row.id, row.revision]
-    );
-    if (updated.changes === 0) {
-      throw new ServiceError(
-        "Execution request changed while forgetting the Latch session",
-        "execution_request_conflict",
-        409
-      );
-    }
-    await recordChange({
-      ctx: { ...ctx, db: tx },
-      entityType: "execution_request",
-      entityId: row.id,
-      operation: "update",
-      entityRevision: revision3,
-      projectId: row.project_id,
-      missionId: row.mission_id,
-      objectiveId: row.objective_id,
-      changedFields: ["metadata_json"]
-    });
-    return { forgotten: true, executionRequestId: row.id };
   });
 }
 
@@ -201967,6 +201999,15 @@ var TerminalSessionObserver = class extends PollLoop {
             providerSessionId: mapping.providerSessionId,
             executable: snapshot?.executionProvider.executable ?? "latch"
           });
+          if (!result2.ok && result2.code === "LATCH_SESSION_ABSENT") {
+            await forgetLatchProviderSession({
+              ctx,
+              missionId: row.mission_id,
+              executionRequestId: row.id,
+              providerSessionId: mapping.providerSessionId
+            });
+            return;
+          }
           if (result2.ok) {
             state2 = result2.value.state;
             endedAt = result2.value.endedAt ?? null;
