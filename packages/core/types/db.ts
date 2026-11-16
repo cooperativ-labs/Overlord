@@ -70,6 +70,13 @@ export interface AccountConnections {
   updated_at: string;
 }
 
+export interface AgentRequestDismissals {
+  agent_request_id: string;
+  dismissed_at: string;
+  dismissed_revision: number;
+  workspace_user_id: string;
+}
+
 export interface AgentRequests {
   allows_free_text: Generated<number>;
   application_observed_at: string | null;
@@ -1804,6 +1811,7 @@ export interface DB {
   account: Account;
   account_connection_authorizations: AccountConnectionAuthorizations;
   account_connections: AccountConnections;
+  agent_request_dismissals: AgentRequestDismissals;
   agent_requests: AgentRequests;
   agent_session_channels: AgentSessionChannels;
   agent_session_events: AgentSessionEvents;

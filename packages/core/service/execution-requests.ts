@@ -20,7 +20,8 @@ import type { ClientDeviceIdentity } from './execution-targets.js';
 import { type ExecutionProviderSession, mergeProviderSessionIntoMetadata } from './latch-launch.js';
 import {
   LOCAL_TARGET_MUTATION_REQUESTED_SOURCE,
-  parseLocalTargetMutation
+  parseLocalTargetMutation,
+  recordAnswerDeliveryForTerminalRequest
 } from './local-target-mutations.ts';
 import {
   findConflictingActiveSibling,
@@ -1305,6 +1306,20 @@ export async function expireStaleExecutionRequests({
         now,
         failureReason: message
       });
+      // An answer job a runner claimed and never completed may have been sent:
+      // close its delivery record as unconfirmed instead of leaving it "sending".
+      const stored = (await txCtx.db.get(
+        `SELECT metadata_json FROM execution_requests WHERE id = ? AND requested_source = ?`,
+        [row.id, LOCAL_TARGET_MUTATION_REQUESTED_SOURCE]
+      )) as { metadata_json: string | null } | undefined;
+      if (stored) {
+        await recordAnswerDeliveryForTerminalRequest({
+          ctx: txCtx,
+          metadataJson: stored.metadata_json,
+          status: 'expired',
+          executionRequestId: row.id
+        });
+      }
     }
 
     return { expired: rows.length };

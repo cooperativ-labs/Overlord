@@ -422,7 +422,19 @@ export class InProcessProvider implements LocalTargetCapabilities {
    */
   async sendLatchMessage(input: SendLatchMessageInput) {
     try {
-      return ok(this.target, await sendLatchMessage(input));
+      // Named fields only: a queued job's input is data, and must not be able to
+      // choose the gateway, the environment or the socket this body uses.
+      return ok(
+        this.target,
+        await sendLatchMessage({
+          providerSessionId: input.providerSessionId,
+          operationId: input.operationId,
+          text: input.text,
+          waitForIdleMs: input.waitForIdleMs,
+          previousOperationId: input.previousOperationId,
+          notAfter: input.notAfter
+        })
+      );
     } catch (error) {
       return failLatchCommand({
         target: this.target,

@@ -5,10 +5,10 @@
 import { z } from 'zod';
 
 /** The contract version (contract/VERSION) this API description belongs to. */
-export const contractVersion = "173.2.0";
+export const contractVersion = "173.6.0";
 
 /** The API description's own version (OpenAPI `info.version`). */
-export const apiVersion = "4.6.0";
+export const apiVersion = "4.10.0";
 
 /** A non-JSON request or response body: raw bytes (G3). */
 export type BinaryBody = Uint8Array | ArrayBuffer | Blob;
@@ -477,8 +477,16 @@ export interface TerminalSessionDto {
   viewerOpenAs: "window" | "tab";
   createdAt: DateTime;
   lastObservedState: "running" | "exited" | "stopping" | "lost";
+  /**
+   * Confirmed process exit time, or first confirmation time on older runners. Legacy exited mappings use their last update time.
+   */
+  endedAt?: DateTime | null;
+  /**
+   * Open vocabulary; ended_by_person, exited, objective_delivered, machine_went_away or unknown. Null unless confirmed ended. Objective delivery or lost contact alone never proves exit.
+   */
+  endReason?: string | null;
 }
-export const terminalSessionDtoSchema: z.ZodType<TerminalSessionDto> = z.object({ "executionRequestId": z.string(), "objectiveId": z.string(), "provider": z.literal("latch"), "providerSessionId": z.string(), "sessionName": z.string(), "executionTargetId": z.string().nullable(), "deviceLabel": z.string().nullable(), "agentSessionId": z.string().nullable(), "executable": z.string(), "viewerKind": z.string(), "viewerOpenAs": z.enum(["window", "tab"]), "createdAt": dateTimeSchema, "lastObservedState": z.enum(["running", "exited", "stopping", "lost"]) });
+export const terminalSessionDtoSchema: z.ZodType<TerminalSessionDto> = z.object({ "executionRequestId": z.string(), "objectiveId": z.string(), "provider": z.literal("latch"), "providerSessionId": z.string(), "sessionName": z.string(), "executionTargetId": z.string().nullable(), "deviceLabel": z.string().nullable(), "agentSessionId": z.string().nullable(), "executable": z.string(), "viewerKind": z.string(), "viewerOpenAs": z.enum(["window", "tab"]), "createdAt": dateTimeSchema, "lastObservedState": z.enum(["running", "exited", "stopping", "lost"]), "endedAt": z.exactOptional(dateTimeSchema.nullable()), "endReason": z.exactOptional(z.string().nullable()) });
 
 /**
  * `pending`: no branch prepared yet (the planner-predicted name is shown). `created`: cut from the base, not pushed. `published`: pushed to `origin`, not merged. `merged_unpushed`: merged into the local base, which has not been pushed yet. `merged`: the branch's commits are in the remote base (`origin/<base>`).
@@ -4829,16 +4837,52 @@ export interface AgentRequestDeliveryDto {
   reason: ("no_latch_session" | "latch_session_exited" | "target_offline" | "request_closed") | null;
   state: ("emitted" | "applied" | "not_applied" | "unknown") | null;
   observedAt: DateTime | null;
+  /**
+   * What became of the recorded answer (ADR 0065); null when the request holds no answer to deliver. `recorded`: saved, nothing sent yet. `queued`: waiting for the execution target's runner. `dispatched`: the runner has it and has not reported. `confirmed`: Latch accepted it as a user turn. `unconfirmed`: it was sent and no receipt came back, so it may have arrived. `failed`: it did not reach the agent. Open vocabulary; sent on every human read, optional only so older clients and fixtures stay valid.
+   */
+  stage?: string | null;
+  /**
+   * The delivery attempt `stage` describes, from 1; null when `stage` is null.
+   */
+  attempt?: number | null;
+  /**
+   * Why the delivery is `failed` or `unconfirmed`; null otherwise. Open vocabulary, currently `latch_refused`, `gateway_unavailable`, `session_absent`, `session_ended`, `not_dispatched`, `unconfirmed`, `runner_lost`, `deadline_passed`, `delivery_failed`.
+   */
+  failureCode?: string | null;
+  /**
+   * A message of at most 300 characters a client may show for `failureCode`.
+   */
+  failureMessage?: string | null;
+  /**
+   * Whether `POST /api/agent-requests/:id/redeliver` can start another attempt now: the delivery is `failed` or `unconfirmed` and its terminal session can still receive an answer.
+   */
+  canRedeliver?: boolean;
+  /**
+   * True when the delivery is `unconfirmed`: a redelivery needs `confirmUnconfirmed: true`.
+   */
+  confirmationRequired?: boolean;
+  /**
+   * Last observed state of the terminal session an answer would go to (`running`, `stopping`, `lost`, `exited`), or null when unknown. `lost` means contact is missing, not that the session ended (ADR 0064).
+   */
+  sessionState?: string | null;
 }
-export const agentRequestDeliveryDtoSchema: z.ZodType<AgentRequestDeliveryDto> = z.object({ "mode": z.enum(["latch", "read_only"]), "reason": z.enum(["no_latch_session", "latch_session_exited", "target_offline", "request_closed"]).nullable(), "state": z.enum(["emitted", "applied", "not_applied", "unknown"]).nullable(), "observedAt": dateTimeSchema.nullable() });
+export const agentRequestDeliveryDtoSchema: z.ZodType<AgentRequestDeliveryDto> = z.object({ "mode": z.enum(["latch", "read_only"]), "reason": z.enum(["no_latch_session", "latch_session_exited", "target_offline", "request_closed"]).nullable(), "state": z.enum(["emitted", "applied", "not_applied", "unknown"]).nullable(), "observedAt": dateTimeSchema.nullable(), "stage": z.exactOptional(z.string().nullable()), "attempt": z.exactOptional(z.int().min(1).nullable()), "failureCode": z.exactOptional(z.string().nullable()), "failureMessage": z.exactOptional(z.string().max(300).nullable()), "canRedeliver": z.exactOptional(z.boolean()), "confirmationRequired": z.exactOptional(z.boolean()), "sessionState": z.exactOptional(z.string().nullable()) });
 
 /**
  * A request with its delivery mode, as the human routes return it.
  */
 export type HumanAgentRequestDto = AgentRequestDto & {
   delivery: AgentRequestDeliveryDto;
+  /**
+   * Whether the calling workspace member dismissed this request's notification at its current `revision` (ADR 0063). Per member: other members are unaffected. A dismissed request keeps its status and stays answerable and listed. Sent on every human read; optional only so older clients and fixtures stay valid.
+   */
+  dismissed?: boolean;
+  /**
+   * When the caller dismissed the current revision; null when not dismissed.
+   */
+  dismissedAt?: DateTime | null;
 };
-export const humanAgentRequestDtoSchema: z.ZodType<HumanAgentRequestDto> = z.object({ ...agentRequestDtoShape, "delivery": agentRequestDeliveryDtoSchema });
+export const humanAgentRequestDtoSchema: z.ZodType<HumanAgentRequestDto> = z.object({ ...agentRequestDtoShape, "delivery": agentRequestDeliveryDtoSchema, "dismissed": z.exactOptional(z.boolean()), "dismissedAt": z.exactOptional(dateTimeSchema.nullable()) });
 
 export interface AgentRequestPageDto {
   /**
@@ -4979,6 +5023,41 @@ export interface ResolveAgentRequestBody {
   } & { [key: string]: JsonValue };
 }
 export const resolveAgentRequestBodySchema: z.ZodType<ResolveAgentRequestBody> = z.object({ "expectedRevision": z.int(), "resolution": z.object({ "text": z.exactOptional(z.string()), "optionId": z.exactOptional(z.string()) }).catchall(jsonValueSchema) });
+
+export interface RedeliverAgentRequestBody {
+  /**
+   * The `delivery.attempt` the caller read.
+   */
+  expectedAttempt: number;
+  /**
+   * Required and true to redeliver an `unconfirmed` delivery: a person checked the session and the answer is not there.
+   */
+  confirmUnconfirmed?: boolean;
+}
+export const redeliverAgentRequestBodySchema: z.ZodType<RedeliverAgentRequestBody> = z.object({ "expectedAttempt": z.int().min(1), "confirmUnconfirmed": z.exactOptional(z.boolean()) });
+
+export interface RedeliverAgentRequestResultDto {
+  redelivered: boolean;
+  request: HumanAgentRequestDto;
+}
+export const redeliverAgentRequestResultDtoSchema: z.ZodType<RedeliverAgentRequestResultDto> = z.object({ "redelivered": z.boolean(), "request": humanAgentRequestDtoSchema });
+
+export interface AgentRequestDismissalBody {
+  /**
+   * Optional. The request revision the caller is dismissing; a different current revision answers 409 `agent_request_conflict`.
+   */
+  expectedRevision?: number;
+}
+export const agentRequestDismissalBodySchema: z.ZodType<AgentRequestDismissalBody> = z.object({ "expectedRevision": z.exactOptional(z.int()) });
+
+export interface AgentRequestDismissalResultDto {
+  /**
+   * False when the stored dismissal state was already as requested.
+   */
+  changed: boolean;
+  request: HumanAgentRequestDto;
+}
+export const agentRequestDismissalResultDtoSchema: z.ZodType<AgentRequestDismissalResultDto> = z.object({ "changed": z.boolean(), "request": humanAgentRequestDtoSchema });
 
 export interface ResolveAgentRequestResultDto {
   resolved: boolean;
@@ -7539,6 +7618,46 @@ export interface PostMissionsByIdSessionChannelPathParams {
 }
 export const postMissionsByIdSessionChannelPathParamsSchema: z.ZodType<PostMissionsByIdSessionChannelPathParams> = z.object({ "id": z.string() });
 
+export interface GetMissionsByIdTerminalSessionsHistoryPathParams {
+  id: string;
+}
+export const getMissionsByIdTerminalSessionsHistoryPathParamsSchema: z.ZodType<GetMissionsByIdTerminalSessionsHistoryPathParams> = z.object({ "id": z.string() });
+
+export interface GetMissionsByIdTerminalSessionsHistoryQueryParams {
+  /**
+   * Page size, default 20; integer from 1 through 100.
+   */
+  limit?: string;
+  cursor?: string;
+}
+export const getMissionsByIdTerminalSessionsHistoryQueryParamsSchema: z.ZodType<GetMissionsByIdTerminalSessionsHistoryQueryParams> = z.object({ "limit": z.exactOptional(z.string()), "cursor": z.exactOptional(z.string().min(1).max(128)) });
+
+export interface GetMissionsByIdTerminalSessionsHistoryResponse200 {
+  sessions: TerminalSessionDto[];
+  nextCursor: string | null;
+}
+export const getMissionsByIdTerminalSessionsHistoryResponse200Schema: z.ZodType<GetMissionsByIdTerminalSessionsHistoryResponse200> = z.strictObject({ "sessions": z.array(terminalSessionDtoSchema), "nextCursor": z.string().nullable() });
+
+export interface PostMissionsByIdTerminalSessionsEndPathParams {
+  id: string;
+}
+export const postMissionsByIdTerminalSessionsEndPathParamsSchema: z.ZodType<PostMissionsByIdTerminalSessionsEndPathParams> = z.object({ "id": z.string() });
+
+export interface PostMissionsByIdTerminalSessionsEndRequestBody {
+  executionRequestId: string;
+}
+export const postMissionsByIdTerminalSessionsEndRequestBodySchema: z.ZodType<PostMissionsByIdTerminalSessionsEndRequestBody> = z.strictObject({ "executionRequestId": z.string().min(1).max(128) });
+
+export interface PostMissionsByIdTerminalSessionsEndResponse200 {
+  executionRequestId: string;
+  providerSessionId: string;
+  state: "ended" | "unconfirmed";
+  lastObservedState: "running" | "stopping" | "lost" | "exited";
+  reason: ("target_offline" | "session_unreachable" | "stop_unconfirmed") | null;
+  message: string;
+}
+export const postMissionsByIdTerminalSessionsEndResponse200Schema: z.ZodType<PostMissionsByIdTerminalSessionsEndResponse200> = z.strictObject({ "executionRequestId": z.string(), "providerSessionId": z.string(), "state": z.enum(["ended", "unconfirmed"]), "lastObservedState": z.enum(["running", "stopping", "lost", "exited"]), "reason": z.enum(["target_offline", "session_unreachable", "stop_unconfirmed"]).nullable(), "message": z.string() });
+
 export interface PostMissionsByIdTerminalSessionsForgetPathParams {
   /**
    * Mission UUID, or display id (`coo:756`) resolved within the caller's organization; an ambiguous display id answers 409.
@@ -7578,6 +7697,30 @@ export interface PostAgentRequestsByIdResolvePathParams {
   id: string;
 }
 export const postAgentRequestsByIdResolvePathParamsSchema: z.ZodType<PostAgentRequestsByIdResolvePathParams> = z.object({ "id": z.string() });
+
+export interface PostAgentRequestsByIdRedeliverPathParams {
+  /**
+   * Agent request UUID; an unknown or deleted request, or one in a workspace the caller is not an active member of, answers 404.
+   */
+  id: string;
+}
+export const postAgentRequestsByIdRedeliverPathParamsSchema: z.ZodType<PostAgentRequestsByIdRedeliverPathParams> = z.object({ "id": z.string() });
+
+export interface PostAgentRequestsByIdDismissalPathParams {
+  /**
+   * Agent request UUID; an unknown or deleted request, or one in a workspace the caller is not an active member of, answers 404.
+   */
+  id: string;
+}
+export const postAgentRequestsByIdDismissalPathParamsSchema: z.ZodType<PostAgentRequestsByIdDismissalPathParams> = z.object({ "id": z.string() });
+
+export interface DeleteAgentRequestsByIdDismissalPathParams {
+  /**
+   * Agent request UUID; an unknown or deleted request, or one in a workspace the caller is not an active member of, answers 404.
+   */
+  id: string;
+}
+export const deleteAgentRequestsByIdDismissalPathParamsSchema: z.ZodType<DeleteAgentRequestsByIdDismissalPathParams> = z.object({ "id": z.string() });
 
 export interface GetAgentSessionInputsQueryParams {
   /**
@@ -12126,6 +12269,44 @@ export const apiOperations = {
     responses: { "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "410": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
   },
   /**
+   * GET /api/missions/{id}/terminal-sessions/history: Page confirmed ended terminal sessions for a mission
+   */
+  getMissionsByIdTerminalSessionsHistory: {
+    operationId: "getMissionsByIdTerminalSessionsHistory",
+    method: "GET",
+    path: "/api/missions/{id}/terminal-sessions/history",
+    tags: ["missions"],
+    deprecated: false,
+    permission: "mission:read",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["webapp","desktop","mobile"],
+    extension: null,
+    security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
+    parameters: { path: getMissionsByIdTerminalSessionsHistoryPathParamsSchema, query: getMissionsByIdTerminalSessionsHistoryQueryParamsSchema, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: getMissionsByIdTerminalSessionsHistoryResponse200Schema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * POST /api/missions/{id}/terminal-sessions/end: End a mission's mapped Latch terminal session
+   */
+  postMissionsByIdTerminalSessionsEnd: {
+    operationId: "postMissionsByIdTerminalSessionsEnd",
+    method: "POST",
+    path: "/api/missions/{id}/terminal-sessions/end",
+    tags: ["missions"],
+    deprecated: false,
+    permission: "mission:update",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["webapp","desktop","mobile"],
+    extension: null,
+    security: [{"sessionCookie":[]},{"sessionBearer":[]}],
+    parameters: { path: postMissionsByIdTerminalSessionsEndPathParamsSchema, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: postMissionsByIdTerminalSessionsEndRequestBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: postMissionsByIdTerminalSessionsEndResponse200Schema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
    * POST /api/missions/{id}/terminal-sessions/forget: Forget a mission's mapped Latch terminal session
    */
   postMissionsByIdTerminalSessionsForget: {
@@ -12181,6 +12362,63 @@ export const apiOperations = {
     parameters: { path: postAgentRequestsByIdResolvePathParamsSchema, query: null, header: null },
     requestBody: { required: true, content: { "application/json": { kind: "json", schema: resolveAgentRequestBodySchema } } },
     responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: resolveAgentRequestResultDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "410": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * POST /api/agent-requests/{id}/redeliver: Send a recorded answer to its agent again
+   */
+  postAgentRequestsByIdRedeliver: {
+    operationId: "postAgentRequestsByIdRedeliver",
+    method: "POST",
+    path: "/api/agent-requests/{id}/redeliver",
+    tags: ["agent-requests"],
+    deprecated: false,
+    permission: "session:attach",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["mobile","webapp"],
+    extension: null,
+    security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
+    parameters: { path: postAgentRequestsByIdRedeliverPathParamsSchema, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: redeliverAgentRequestBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: redeliverAgentRequestResultDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "410": { headers: [], content: { "application/json": { kind: "json", schema: errorEnvelopeSchema } } }, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * POST /api/agent-requests/{id}/dismissal: Dismiss the caller's notification for an open agent request
+   */
+  postAgentRequestsByIdDismissal: {
+    operationId: "postAgentRequestsByIdDismissal",
+    method: "POST",
+    path: "/api/agent-requests/{id}/dismissal",
+    tags: ["agent-requests"],
+    deprecated: false,
+    permission: "session:read",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["mobile","webapp"],
+    extension: null,
+    security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
+    parameters: { path: postAgentRequestsByIdDismissalPathParamsSchema, query: null, header: null },
+    requestBody: { required: false, content: { "application/json": { kind: "json", schema: agentRequestDismissalBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: agentRequestDismissalResultDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * DELETE /api/agent-requests/{id}/dismissal: Restore the caller's notification for an agent request
+   */
+  deleteAgentRequestsByIdDismissal: {
+    operationId: "deleteAgentRequestsByIdDismissal",
+    method: "DELETE",
+    path: "/api/agent-requests/{id}/dismissal",
+    tags: ["agent-requests"],
+    deprecated: false,
+    permission: "session:read",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["mobile","webapp"],
+    extension: null,
+    security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
+    parameters: { path: deleteAgentRequestsByIdDismissalPathParamsSchema, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: agentRequestDismissalResultDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
   },
   /**
    * GET /api/agent-session-inputs: List a mission's session inputs and its latest channel

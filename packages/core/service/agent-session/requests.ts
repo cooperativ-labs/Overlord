@@ -697,3 +697,151 @@ export async function cancelRequest({
     return { cancelled: updated.changes > 0 };
   });
 }
+
+/** One member's dismissal of a request's notification (ADR 0063). */
+export type AgentRequestDismissal = {
+  dismissedRevision: number;
+  dismissedAt: string;
+};
+
+function dismissalTimestamp(value: unknown): string {
+  return value instanceof Date ? value.toISOString() : String(value);
+}
+
+/**
+ * Read the caller's dismissals for a set of requests, keyed by request id.
+ *
+ * Dismissal is per workspace member: one person dismissing a card never hides the question from
+ * anyone else. A dismissal applies only to the revision it was made at, so a request whose
+ * revision moved on is returned without one and its card appears again. A caller that is not an
+ * identified member (no `actorWorkspaceUserId`) has no dismissals.
+ */
+export async function readRequestDismissals({
+  db,
+  workspaceUserIds,
+  requests
+}: {
+  db: ServiceContext['db'];
+  workspaceUserIds: readonly string[];
+  requests: ReadonlyArray<Pick<AgentRequestRow, 'id' | 'revision'>>;
+}): Promise<Map<string, AgentRequestDismissal>> {
+  const result = new Map<string, AgentRequestDismissal>();
+  if (workspaceUserIds.length === 0 || requests.length === 0) return result;
+  const revisionById = new Map(requests.map(request => [request.id, request.revision]));
+  const ids = [...revisionById.keys()];
+  const rows = await db.all<{
+    agent_request_id: string;
+    dismissed_revision: number;
+    dismissed_at: unknown;
+  }>(
+    `SELECT agent_request_id, dismissed_revision, dismissed_at FROM agent_request_dismissals
+      WHERE workspace_user_id IN (${workspaceUserIds.map(() => '?').join(', ')})
+        AND agent_request_id IN (${ids.map(() => '?').join(', ')})`,
+    [...workspaceUserIds, ...ids]
+  );
+  for (const row of rows) {
+    if (Number(row.dismissed_revision) !== revisionById.get(row.agent_request_id)) continue;
+    result.set(row.agent_request_id, {
+      dismissedRevision: Number(row.dismissed_revision),
+      dismissedAt: dismissalTimestamp(row.dismissed_at)
+    });
+  }
+  return result;
+}
+
+/**
+ * Dismiss or restore the calling member's notification for a request.
+ *
+ * This is a view preference, not a decision: it never touches the request row, so status,
+ * revision, waiter lease, delivery and answerability are exactly as they were. Only an open
+ * request can be dismissed (409 `agent_request_not_open`); restoring is always allowed and is a
+ * no-op when nothing is dismissed. Dismissing records the request's current revision; when
+ * `expectedRevision` is given and differs, the caller is dismissing something it has not seen
+ * and gets 409 `agent_request_conflict`. Both writes are idempotent and append one
+ * `agent_request` change only when the stored state changed, so open clients reload requests.
+ */
+export async function setRequestDismissal({
+  ctx,
+  requestId,
+  dismissed,
+  expectedRevision
+}: {
+  ctx: ServiceContext;
+  requestId: string;
+  dismissed: boolean;
+  expectedRevision?: number;
+}): Promise<{
+  changed: boolean;
+  request: AgentRequestRow;
+  dismissal: AgentRequestDismissal | null;
+}> {
+  const workspaceUserId = ctx.actorWorkspaceUserId;
+  if (!workspaceUserId) {
+    throw new ServiceError(
+      'Dismissing a request requires an identified workspace member',
+      'actor_required',
+      403
+    );
+  }
+  return await ctx.db.transaction(async tx => {
+    const txCtx = { ...ctx, db: tx };
+    const request = await getRequest({ ctx: txCtx, requestId });
+    const current = await tx.get<{ dismissed_revision: number }>(
+      `SELECT dismissed_revision FROM agent_request_dismissals
+        WHERE agent_request_id = ? AND workspace_user_id = ?`,
+      [requestId, workspaceUserId]
+    );
+    let changed = false;
+    if (dismissed) {
+      if (request.status !== 'open') {
+        throw new ServiceError(
+          'Only an open request can be dismissed',
+          'agent_request_not_open',
+          409
+        );
+      }
+      if (expectedRevision !== undefined && expectedRevision !== request.revision) {
+        throw new ServiceError('Request changed since it was read', 'agent_request_conflict', 409);
+      }
+      if (!current || Number(current.dismissed_revision) !== request.revision) {
+        await tx.run(
+          `INSERT INTO agent_request_dismissals
+               (agent_request_id, workspace_user_id, dismissed_revision, dismissed_at)
+             VALUES (?, ?, ?, ?)
+             ON CONFLICT (agent_request_id, workspace_user_id)
+             DO UPDATE SET dismissed_revision = excluded.dismissed_revision,
+                           dismissed_at = excluded.dismissed_at`,
+          [requestId, workspaceUserId, request.revision, nowIso()]
+        );
+        changed = true;
+      }
+    } else if (current) {
+      await tx.run(
+        `DELETE FROM agent_request_dismissals
+          WHERE agent_request_id = ? AND workspace_user_id = ?`,
+        [requestId, workspaceUserId]
+      );
+      // Removing a dismissal of an older revision changes nothing a client shows.
+      changed = Number(current.dismissed_revision) === request.revision;
+    }
+    if (changed) {
+      await recordChange({
+        ctx: txCtx,
+        entityType: 'agent_request',
+        entityId: requestId,
+        operation: 'update',
+        entityRevision: request.revision,
+        projectId: request.project_id,
+        missionId: request.mission_id,
+        objectiveId: request.objective_id,
+        changedFields: ['dismissal']
+      });
+    }
+    const dismissals = await readRequestDismissals({
+      db: tx,
+      workspaceUserIds: [workspaceUserId],
+      requests: [request]
+    });
+    return { changed, request, dismissal: dismissals.get(requestId) ?? null };
+  });
+}

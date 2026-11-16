@@ -436,6 +436,8 @@ export interface InspectLatchSessionResult {
   state: 'running' | 'exited' | 'stopping' | 'lost';
   exitCode: number | null;
   inspectedAt: string;
+  /** Latch-confirmed process exit time; absent on older runners. */
+  endedAt?: string | null;
 }
 
 export interface OpenLatchSessionInput extends LatchSessionInput {
@@ -484,6 +486,13 @@ export interface SendLatchMessageInput extends LatchSessionInput {
    * accept a message before refusing. Defaults to 30s in the provider body.
    */
   waitForIdleMs?: number;
+  /**
+   * An earlier attempt whose outcome is unconfirmed. The body asks Latch for
+   * its receipt before sending and sends nothing when it was delivered.
+   */
+  previousOperationId?: string;
+  /** ISO-8601 deadline; past it the body refuses without contacting Latch. */
+  notAfter?: string;
 }
 
 export interface SendLatchMessageResult {
@@ -496,6 +505,8 @@ export interface SendLatchMessageResult {
   status: 'accepted' | 'refused' | 'ambiguous';
   /** Latch's `state.sendMessage.reason` when refused; null otherwise. */
   reason: string | null;
+  /** True when an earlier attempt's receipt proved delivery and nothing was sent. */
+  reconciled?: boolean;
   deliveredAt: string;
 }
 

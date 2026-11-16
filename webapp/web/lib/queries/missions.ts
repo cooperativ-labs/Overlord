@@ -315,6 +315,34 @@ export function useResolveAgentRequest(missionId: string) {
   });
 }
 
+/**
+ * Send a recorded answer again after a failed or unconfirmed delivery (ADR 0065). The server's
+ * attempt compare-and-set admits one redelivery however many clients press "Send again"; a
+ * losing call answers 409 `agent_request_delivery_conflict` and the card refreshes.
+ */
+export function useRedeliverAgentRequest(missionId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      requestId,
+      expectedAttempt,
+      confirmUnconfirmed
+    }: {
+      requestId: string;
+      expectedAttempt: number;
+      confirmUnconfirmed?: boolean;
+    }) =>
+      api.redeliverAgentRequest(requestId, {
+        expectedAttempt,
+        ...(confirmUnconfirmed ? { confirmUnconfirmed: true } : {})
+      }),
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: keys.missionAgentRequests(missionId) });
+      void qc.invalidateQueries({ queryKey: keys.activityFeed });
+    }
+  });
+}
+
 export const useMissionArtifacts = (id: string) =>
   useQuery({ queryKey: keys.missionArtifacts(id), queryFn: () => api.listMissionArtifacts(id) });
 

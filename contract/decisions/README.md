@@ -96,3 +96,7 @@ record and the index disagree.
 - [0059 — Objective descriptions on the REST, protocol, MCP and connector surfaces](0059-objective-description-surfaces.md)
 - [0060 — Mission items hold live risks, human actions and suggestions; agents may edit the mission summary](0060-mission-items-and-agent-authored-summary.md)
 - [0061 — A paged, status-filtered read of a mission's agent requests](0061-paged-open-agent-request-read.md)
+- [0062 — End a mission terminal through its execution request](0062-end-mission-terminal-session.md)
+- [0063 — Per-member dismissal of an agent request's notification](0063-per-member-agent-request-dismissal.md)
+- [0064 — Confirmed terminal lifecycle and retained history](0064-terminal-session-history.md)
+- [0065 — An answer is recorded, then delivered, and the two are reported separately](0065-answer-delivery-outcomes.md)

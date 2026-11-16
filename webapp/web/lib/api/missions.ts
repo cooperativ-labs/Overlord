@@ -28,6 +28,7 @@ import type {
   PreviewScheduleBody,
   PurgeMergedWorktreesBody,
   PurgeWorktreesResultDto,
+  RedeliverAgentRequestResultDto,
   RemoveWorktreeBody,
   ReorderBoardColumnBody,
   ResolveAgentRequestResultDto,
@@ -239,6 +240,20 @@ export const missionsApi = {
     request<ResolveAgentRequestResultDto>(
       'POST',
       `/api/agent-requests/${encodeURIComponent(requestId)}/resolve`,
+      body
+    ),
+  /**
+   * Send a recorded answer again after a failed or unconfirmed delivery (ADR 0065).
+   * `expectedAttempt` is the `delivery.attempt` the card read, so two clients start one attempt.
+   * An unconfirmed delivery needs `confirmUnconfirmed: true` after the person checked the session.
+   */
+  redeliverAgentRequest: (
+    requestId: string,
+    body: { expectedAttempt: number; confirmUnconfirmed?: boolean }
+  ) =>
+    request<RedeliverAgentRequestResultDto>(
+      'POST',
+      `/api/agent-requests/${encodeURIComponent(requestId)}/redeliver`,
       body
     )
 };

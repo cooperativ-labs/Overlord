@@ -9,6 +9,7 @@ import { launchSessionSnapshotFromMetadata } from '@overlord/core/service/termin
 import { asRecord, parseMetadataJson } from '../../packages/core/service/execution-requests.ts';
 import { providerSessionFromMetadata } from '../../packages/core/service/latch-launch.ts';
 import { forgetLatchProviderSession } from '../../packages/core/service/latch-provider-session.ts';
+import { terminalMetadataSql } from '../../packages/core/service/terminal-session-lifecycle.ts';
 import { buildWebappServiceContextForWorkspace, requireDatabaseClient } from '../db.ts';
 import { ApiError } from '../errors.ts';
 import { requireMissionPermission } from '../rbac.ts';
@@ -17,6 +18,8 @@ type TerminalSessionRow = {
   execution_request_id: string;
   objective_id: string;
   metadata_json: string;
+  created_at: string;
+  updated_at: string;
   target_label: string | null;
   device_label: string | null;
 };
@@ -34,44 +37,107 @@ function terminalSessionState(value: string): TerminalSessionDto['lastObservedSt
   }
 }
 
-/** Every persistent terminal mapped to a mission, including completed objectives. */
+const endedSql = () =>
+  `(COALESCE(${terminalMetadataSql(requireDatabaseClient().dialect, 'lastObservedState')}, '') = 'exited' OR COALESCE(${terminalMetadataSql(requireDatabaseClient().dialect, 'lastObservedState', true)}, '') = 'exited')`;
+const columns = `er.id AS execution_request_id, er.objective_id, er.metadata_json,
+  er.created_at, er.updated_at, et.label AS target_label, d.label AS device_label`;
+const joins = `FROM execution_requests er
+  LEFT JOIN execution_targets et ON et.id = COALESCE(er.claimed_by_execution_target_id, er.execution_target_id)
+  LEFT JOIN devices d ON d.id = et.device_id`;
+
+function projectSession(row: TerminalSessionRow, archived = false): TerminalSessionDto[] {
+  const metadata = parseMetadataJson(row.metadata_json);
+  const providerSession =
+    providerSessionFromMetadata(metadata) ??
+    (archived
+      ? providerSessionFromMetadata({ providerSession: metadata.endedTerminalSession })
+      : null);
+  if (!providerSession) return [];
+  const snapshot = launchSessionSnapshotFromMetadata(metadata);
+  const ended = providerSession.lastObservedState === 'exited';
+  return [
+    {
+      executionRequestId: row.execution_request_id,
+      objectiveId: row.objective_id,
+      provider: 'latch',
+      providerSessionId: providerSession.providerSessionId,
+      sessionName: providerSession.sessionName ?? providerSession.providerSessionId,
+      executionTargetId: providerSession.executionTargetId,
+      deviceLabel: row.device_label ?? row.target_label,
+      agentSessionId: providerSession.agentSessionId,
+      executable: snapshot?.executionProvider.executable ?? 'latch',
+      viewerKind: snapshot?.viewer.kind ?? 'iterm',
+      viewerOpenAs: snapshot?.viewer.openAs ?? 'window',
+      createdAt: providerSession.createdAt,
+      lastObservedState: terminalSessionState(providerSession.lastObservedState),
+      endedAt: ended ? (providerSession.endedAt ?? row.updated_at) : null,
+      endReason: ended ? (providerSession.endReason ?? 'unknown') : null
+    }
+  ];
+}
+
+/** Existing live list plus at most five recent ended terminals. */
 export async function listMissionTerminalSessions(
   missionId: string
 ): Promise<TerminalSessionDto[]> {
-  const rows = await requireDatabaseClient().all<TerminalSessionRow>(
-    `SELECT er.id AS execution_request_id, er.objective_id, er.metadata_json,
-            et.label AS target_label, d.label AS device_label
-       FROM execution_requests er
-       LEFT JOIN execution_targets et
-         ON et.id = COALESCE(er.claimed_by_execution_target_id, er.execution_target_id)
-       LEFT JOIN devices d ON d.id = et.device_id
-      WHERE er.mission_id = ? AND er.deleted_at IS NULL
-      ORDER BY er.created_at DESC`,
-    [missionId]
-  );
-  return rows.flatMap(row => {
-    const metadata = parseMetadataJson(row.metadata_json);
-    const providerSession = providerSessionFromMetadata(metadata);
-    if (!providerSession) return [];
-    const snapshot = launchSessionSnapshotFromMetadata(metadata);
-    return [
-      {
-        executionRequestId: row.execution_request_id,
-        objectiveId: row.objective_id,
-        provider: 'latch',
-        providerSessionId: providerSession.providerSessionId,
-        sessionName: providerSession.sessionName ?? providerSession.providerSessionId,
-        executionTargetId: providerSession.executionTargetId,
-        deviceLabel: row.device_label ?? row.target_label,
-        agentSessionId: providerSession.agentSessionId,
-        executable: snapshot?.executionProvider.executable ?? 'latch',
-        viewerKind: snapshot?.viewer.kind ?? 'iterm',
-        viewerOpenAs: snapshot?.viewer.openAs ?? 'window',
-        createdAt: providerSession.createdAt,
-        lastObservedState: terminalSessionState(providerSession.lastObservedState)
-      }
-    ];
+  const db = requireDatabaseClient();
+  const [live, ended] = await Promise.all([
+    db.all<TerminalSessionRow>(
+      `SELECT ${columns} ${joins}
+      WHERE er.mission_id = ? AND er.deleted_at IS NULL AND NOT (${endedSql()})
+      AND ${terminalMetadataSql(requireDatabaseClient().dialect, 'provider')} = 'latch'
+      ORDER BY er.created_at DESC, er.id DESC`,
+      [missionId]
+    ),
+    db.all<TerminalSessionRow>(
+      `SELECT ${columns} ${joins}
+      WHERE er.mission_id = ? AND er.deleted_at IS NULL AND ${terminalMetadataSql(requireDatabaseClient().dialect, 'lastObservedState')} = 'exited'
+      ORDER BY er.created_at DESC, er.id DESC LIMIT 5`,
+      [missionId]
+    )
+  ]);
+  return [...live, ...ended].flatMap(row => projectSession(row));
+}
+
+/** Ended-only history, newest launch first, with a mission-scoped keyset cursor. */
+export async function readMissionTerminalHistory(
+  missionRef: string,
+  query: Record<string, unknown>
+) {
+  const scope = await requireMissionPermission({
+    missionRef,
+    permission: PERMISSIONS.MISSION_READ
   });
+  const limit = query.limit === undefined ? 20 : Number(query.limit);
+  if (!Number.isInteger(limit) || limit < 1 || limit > 100)
+    throw new ApiError(400, 'limit must be an integer between 1 and 100');
+  const db = requireDatabaseClient();
+  let cursor: { created_at: string; id: string } | undefined;
+  if (query.cursor !== undefined) {
+    if (typeof query.cursor !== 'string') throw new ApiError(400, 'Invalid cursor');
+    cursor = await db.get<{ created_at: string; id: string }>(
+      `SELECT id, created_at FROM execution_requests er WHERE er.id = ? AND er.mission_id = ?
+        AND er.workspace_id = ? AND er.deleted_at IS NULL AND ${endedSql()}`,
+      [query.cursor, scope.missionId, scope.workspaceId]
+    );
+    if (!cursor) throw new ApiError(400, 'Invalid cursor');
+  }
+  const rows = await db.all<TerminalSessionRow>(
+    `SELECT ${columns} ${joins}
+    WHERE er.mission_id = ? AND er.workspace_id = ? AND er.deleted_at IS NULL AND ${endedSql()}
+    ${cursor ? 'AND (er.created_at < ? OR (er.created_at = ? AND er.id < ?))' : ''}
+    ORDER BY er.created_at DESC, er.id DESC LIMIT ?`,
+    [
+      scope.missionId,
+      scope.workspaceId,
+      ...(cursor ? [cursor.created_at, cursor.created_at, cursor.id] : []),
+      limit + 1
+    ]
+  );
+  return {
+    sessions: rows.slice(0, limit).flatMap(row => projectSession(row, true)),
+    nextCursor: rows.length > limit ? rows[limit - 1]!.execution_request_id : null
+  };
 }
 
 export async function forgetMissionLatchSession(

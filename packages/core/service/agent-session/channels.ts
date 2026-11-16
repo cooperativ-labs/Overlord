@@ -123,6 +123,72 @@ export async function getChannelForSession({
   return row ?? null;
 }
 
+/** `launch_kind` of a channel opened by `ovld protocol ask` rather than by a launch. */
+export const PROTOCOL_CHANNEL_LAUNCH_KIND = 'protocol';
+
+/**
+ * The channel an attached session's blocking questions hang off, created on first need (ADR 0065).
+ *
+ * Launch stopped minting channels in contract 76, but `agent_requests.channel_id` is required, so
+ * an ask from a launched session had no row to attach an answerable request to and every question
+ * was read-only. This opens a correlation-only channel for the session instead: it carries **no
+ * credential** (nothing can authenticate as it on the adapter route family) and **no lease** (the
+ * lost-channel sweep, which exists for adapter processes that stop heartbeating, never ends it).
+ * It is a place to hang the request and nothing else; answerability is still decided per read
+ * from the Latch session, never from this row.
+ *
+ * A session that already has a channel — a virtual gateway that realized one, or an earlier ask —
+ * keeps it. A channel that ended is not revived: its session is gone, and so is its question.
+ */
+export async function ensureProtocolChannelForSession({
+  ctx,
+  session,
+  projectId,
+  agentIdentifier = null
+}: {
+  ctx: ServiceContext;
+  session: { id: string; mission_id: string; objective_id: string | null };
+  projectId: string | null;
+  agentIdentifier?: string | null;
+}): Promise<AgentSessionChannelRow | null> {
+  const existing = await getChannelForSession({ ctx, sessionId: session.id });
+  if (existing) return LIVE_STATES.includes(existing.state) ? existing : null;
+
+  const now = nowIso();
+  const channelId = newId();
+  await ctx.db.run(
+    `INSERT INTO agent_session_channels (
+         id, workspace_id, project_id, mission_id, objective_id, session_id,
+         launch_kind, agent_identifier, capabilities_json, state,
+         created_by_workspace_user_id, created_at, updated_at, revision
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, '{}', 'online', ?, ?, ?, 1)`,
+    [
+      channelId,
+      ctx.workspace.id,
+      projectId,
+      session.mission_id,
+      session.objective_id,
+      session.id,
+      PROTOCOL_CHANNEL_LAUNCH_KIND,
+      agentIdentifier,
+      ctx.actorWorkspaceUserId,
+      now,
+      now
+    ]
+  );
+  await recordChange({
+    ctx,
+    entityType: 'agent_session_channel',
+    entityId: channelId,
+    operation: 'insert',
+    entityRevision: 1,
+    projectId,
+    missionId: session.mission_id,
+    objectiveId: session.objective_id
+  });
+  return await getChannel({ ctx, channelId });
+}
+
 export async function createSessionChannel({
   ctx,
   missionId,

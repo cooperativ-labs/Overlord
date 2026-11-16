@@ -10,8 +10,8 @@ import { createHash } from 'node:crypto';
 
 import {
   bindChannelToSession,
-  findBindableChannelForMission,
-  getChannelForSession
+  ensureProtocolChannelForSession,
+  findBindableChannelForMission
 } from './agent-session/channels.js';
 import {
   hasControlCharacters,
@@ -2405,7 +2405,14 @@ export async function askQuestion({
       missionId: mission.id,
       objectiveId: session.objective_id
     });
-    const channel = await getChannelForSession({ ctx: txCtx, sessionId: session.id });
+    // A launched session has no adapter channel (launch stopped minting them), so the ask
+    // opens the session's correlation-only channel on first need. Without it there is no
+    // `agent_requests` row, and the question can be read but never answered (ADR 0065).
+    const channel = await ensureProtocolChannelForSession({
+      ctx: txCtx,
+      session,
+      projectId: mission.projectId
+    });
     if (channel) {
       const request = await createRequest({
         ctx: txCtx,

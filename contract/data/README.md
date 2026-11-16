@@ -1823,6 +1823,13 @@ not connected or is marked unusable for that target, services fail launch with
 `objective_resource_not_connected`; null objective keys continue to resolve to
 the target's primary project resource.
 
+Explicit terminal end (ADR 0062) updates `metadata_json.providerSession.lastObservedState`
+through the shared service. `exited` is confirmed termination and is monotonic;
+`lost` is inability to confirm contact, not evidence that the process ended. The
+mapping remains readable through `terminalSessions`. The unfinished current
+attempt is parked `submitted` with queue paused before stop dispatch. No terminal
+history retention policy or schema column changes are introduced by this operation.
+
 Claiming must happen in one transaction:
 
 1. Select the oldest compatible active request.
@@ -2277,6 +2284,8 @@ simply abandoned.
 
 They are core rather than `ext_` tables because they drive authorization, audit, presence, and
 UI gating.
+`agent_request_dismissals` (contract 173.4.0, ADR 0063) is a fifth, per-member table that stores
+only a notification preference.
 
 | Table                    | Role                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -2284,9 +2293,20 @@ UI gating.
 | `agent_session_events`   | Append-only normalized session events, idempotent by producer id, with a monotonic per-channel sequence. Stores reduced, redacted content only.                                                                                                                                                                                                                                                                                                                                                  |
 | `agent_requests`         | Answerable requests — permissions, blocking questions, structured choices — with their decision window, waiter lease, resolution attribution, and revision CAS. A permission is one kind of request, not its own table.                                                                                                                                                                                                                                                                          |
 | `agent_session_inputs`   | Durable queue of user-authored instructions with enqueue/lease/emit/acknowledge/fail states. An emitted input is never automatically retried. Additive `delivery_outcome` (`delivered`, `queued_turn_boundary`, `queued_next_turn`, `unsupported`) records what the adapter honestly reported at emit time so the UI can say "Queued (turn boundary)" for Cursor `followup_message` rather than inventing Delivered.                                                                             |
+| `agent_request_dismissals` | Per-member dismissal of a request's notification (ADR 0063): primary key `(agent_request_id, workspace_user_id)`, both cascading, with `dismissed_revision` and `dismissed_at`. A view preference only — it never changes the request, its delivery or who may answer it — and it applies only while the request still has `dismissed_revision`. A change appends an `agent_request` entity change with `changedFields: ["dismissal"]`. |
 
 Rules that are contract, not implementation detail:
 
+- **A protocol channel is correlation only (ADR 0065).** `ovld protocol ask` opens a channel with
+  `launch_kind = 'protocol'`, state `online`, and null credential and lease columns when its
+  session has none, so the question has a request row. Nothing can authenticate as it and the
+  lease sweep never ends it. It grants and proves nothing about the session.
+- **`agent_requests.details_json.delivery` is the answer's delivery record (ADR 0065)**:
+  `{ attempt, failureCode, failureMessage }`. `attempt` starts at 1 and is the compare-and-set
+  token of a redelivery; absent means attempt 1. `application_state` keeps the closed part
+  (`pending`, `emitted`, `applied`, `not_applied`, `unknown`); a delivery outcome is written only
+  for the current attempt while the state is `emitted`, and does not change `revision`. Starting
+  a redelivery increments `revision`.
 - **The scoped channel credential is stored hash-only**, scoped to exactly one channel. It may
   create events/requests, await resolutions, claim and acknowledge inputs, and heartbeat. It may
   not read other mission data, resolve a human decision, or perform normal mission mutations.
@@ -3453,8 +3473,9 @@ Data rules of individual routes:
   changes no mutation, instruction text or ownership.
 - `getMissionsById` projects `terminalSessions` from bounded
   `execution_requests.metadata_json.providerSession` mappings across all objective states.
-  Reachability is a client-side local-target capability condition, not a persisted session
-  state. The projection never includes launch environment, terminal output, credentials, socket
+  The existing running/stopping/lost/exited states distinguish unconfirmed lost contact from
+  confirmed terminal exit. Mission detail includes at most five recent ended mappings; the
+  mission-scoped terminal-sessions/history read pages the rest (ADR 0064). The projection never includes launch environment, terminal output, credentials, socket
   tokens or attachment grants.
 - The Inbox (`/api/inbox*`) is the account-owned unassigned-capture surface: it reads and writes
   only items the caller owns, and its changes do not enter workspace `entity_changes`.
@@ -3599,3 +3620,13 @@ To keep this contract up to date:
 - Leased independent execution targets (coo:528, contract `43`): additive `execution_targets.lifecycle_kind`, `lease_seconds`, `lease_grace_seconds`, and `lease_expires_at`; existing rows backfill as persistent. The durable `overlord.execution_target.lease_cleanup.v1` worker rechecks a target's policy/revision and active requests before it may use the ordinary target-deletion cascade. Lease expiry itself is offline-only and never deletes target-owned links, preferences, or access.
 - Execution-target type vocabulary cleanup (coo:528, contract `44`): removes the unused core `ssh` value from `execution_targets.type` (legacy rows rewrite to `virtual`) and drops the dead `execution_requests.target_kind` column.
 - `0`: Initial public release baseline (portable SQLite/Postgres schema, extensions, vocabularies, and conformance requirements).
+
+### Terminal lifecycle metadata (ADR 0064)
+
+execution_requests.metadata_json.providerSession additionally stores optional endedAt,
+endReason, endRequestedAt and lastObservedAt. Confirmed exited mappings are monotonic;
+lost contact and objective delivery alone cannot establish terminal exit. Open endReason
+core values are ended_by_person, exited, objective_delivered, machine_went_away and unknown.
+No new execution request or objective status is introduced. Forget archives an ended mapping
+as metadata_json.endedTerminalSession so the history read retains it until mission deletion
+under the existing deletion policy; no recordings or credentials are retained.

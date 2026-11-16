@@ -281,7 +281,8 @@ answering a decision it is blocked on, and injecting an instruction into it.
   authenticated session/token auth plus resource-derived RBAC. A channel credential can never
   present itself as a human actor, and a human credential can never impersonate an adapter
 - **Answerable questions and answer delivery**: `ovld protocol ask` creates an answerable
-  `agent_requests` row when the attached session has a bound channel, links its id from the
+  `agent_requests` row for the attached session, opening the session's correlation-only channel
+  when it has none (ADR 0065; a session whose channel already ended gets no row), links its id from the
   `ask` event payload, and supports bounded structured options plus an explicit no-free-text
   choice mode. `AgentRequestDto.delivery` is the sole answerability projection: `latch` when
   a live Latch provider session on a reachable target can receive the answer, otherwise
@@ -293,8 +294,26 @@ answering a decision it is blocked on, and injecting an instruction into it.
   `latch`. Resolving a deliverable question records an `answer` mission event, returns its
   agent session to `execute`, clears the blocking-question seen marker, enqueues
   `mission.unblocked`, marks delivery `emitted`, and uses `sendLatchMessage` on the resolved
-  target. Answer delivery queues it with `operationId = agent_requests.id`, which is both
-  Latch's idempotency key and the row a completion post-hook records against
-  (`accepted → applied`, `refused → not_applied`, `ambiguous → unknown`; a timeout leaves
-  `emitted`). Feed question items additively expose `agentRequestId` and delivery mode; an
+  target. Answer delivery queues it with `operationId = agent_requests.id` for the first attempt
+  and `<id>.<attempt>` for a redelivery, which is both Latch's idempotency key and the row a
+  completion post-hook records against (`accepted → applied`, `refused → not_applied`,
+  `ambiguous → unknown`). Recording an answer and delivering it are separate facts (ADR 0065):
+  `resolved: true` means recorded, and `delivery.stage` (`recorded`, `queued`, `dispatched`,
+  `confirmed`, `unconfirmed`, `failed`) with `attempt`, `failureCode`, `failureMessage`,
+  `canRedeliver`, `confirmationRequired` and `sessionState` reports the rest. Resolve waits at
+  most about 25 seconds: a job no runner has claimed is then withdrawn and is `failed`
+  (`not_dispatched`), a job a runner holds stays `dispatched` and its outcome arrives as an
+  `agent_request` entity change (`changedFields: ['application_state']`, `revision` unchanged).
+  A claimed job that expires without a report is `unconfirmed`, never `failed`. Every delivery
+  carries a five-minute deadline. `POST /api/agent-requests/:id/redeliver` (`session:attach`)
+  starts another attempt for the recorded answer under an `expectedAttempt` compare-and-set: after
+  `failed` always, after `unconfirmed` only with `confirmUnconfirmed: true`, and then only after
+  the runner has asked Latch for the earlier attempt's receipt. Overlord never resends on its
+  own. A session last observed `exited` never receives an answer; a `lost` session on a reachable
+  target is attempted and Latch's reply decides. Feed question items additively expose `agentRequestId` and delivery mode; an
   ask with a later matching answer is no longer unseen.
+  A person may dismiss an open request's notification with
+  `POST /api/agent-requests/:id/dismissal` and restore it with `DELETE` on the same path
+  (`session:read`, ADR 0063). Dismissal is per workspace member, bound to the request
+  revision, and exposed as additive `dismissed`/`dismissedAt` on human reads; it never
+  changes the request, its delivery, the blocking-question seen marker, or answerability.

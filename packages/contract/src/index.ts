@@ -267,6 +267,8 @@ export type {
   RealtimeStreamEvent,
   RecordAgentRequestApplicationBody,
   RecordedObservationsDto,
+  RedeliverAgentRequestBody,
+  RedeliverAgentRequestResultDto,
   RegisterDevicePushTokenBody,
   RegisterExecutionTargetBody,
   RegisterLiveActivityPushTokenBody,

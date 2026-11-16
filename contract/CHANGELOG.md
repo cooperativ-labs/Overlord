@@ -5,6 +5,91 @@ is the current version and must equal [VERSION](VERSION); `yarn version:contract
 writes its skeleton. Dates use ISO 8601 and describe the contract change, not
 merely the files edited.
 
+## [173.6.0] - 2026-11-16
+
+Contract impact: minor. Answers to blocking questions now reach the waiting
+agent, and recording an answer is reported separately from delivering it
+(coo:1283, ADR 0065). OpenAPI `info.version` 4.10.0. No database migration.
+
+### Added
+
+- `POST /api/agent-requests/:id/redeliver`, authorized by `session:attach`:
+  starts another delivery attempt for a recorded answer after a `failed`
+  delivery, or after an `unconfirmed` one with `confirmUnconfirmed: true`.
+  `expectedAttempt` is the compare-and-set token (409
+  `agent_request_delivery_conflict`, 409 `delivery_confirmation_required`).
+- Additive `stage`, `attempt`, `failureCode`, `failureMessage`,
+  `canRedeliver`, `confirmationRequired` and `sessionState` on
+  `AgentRequestDeliveryDto`. Optional in the schema; sent on every human read.
+- Optional `previousOperationId` and `notAfter` inputs and a `reconciled`
+  result flag on the `sendLatchMessage` capability.
+- Gateway discovery also offers the gateway Latch's Remote Link supervisor
+  runs.
+
+### Changed
+
+- `ovld protocol ask` opens an answerable request for any attached session,
+  creating a correlation-only session channel (`launch_kind = 'protocol'`)
+  when the session has none. Before, launched sessions had no channel and
+  their questions could not be answered.
+- Resolve waits at most about 25 seconds for the execution target and
+  withdraws a delivery no runner claimed. A claimed delivery that never
+  reports is `unconfirmed` instead of failed. Latch's `queued` receipt is a
+  confirmed delivery.
+- Delivery outcomes append an `agent_request` entity change.
+
+### Compatibility
+
+- Existing clients keep working: the request status vocabulary, the
+  `delivery.mode`, `reason` and `state` vocabularies and the resolve request
+  and response shapes are unchanged.
+- A runner older than this version ignores the new inputs.
+
+### Version
+
+- Minor contract version 173.6.0, from 173.5.0.
+
+## [173.5.0] - 2026-11-16
+
+Contract impact: minor. Added optional terminal endedAt/endReason fields,
+mission-scoped paged history and independent runner-backed exit observation
+(ADR 0064, OpenAPI 4.9.0). Confirmed human stops retain ended_by_person; lost
+contact stays unconfirmed. Metadata survives forget until mission deletion.
+Existing wire states and older runners remain compatible. No database migration.
+
+## [173.4.0] - 2026-11-16
+
+Contract impact: minor. A person can dismiss the notification for an open agent
+request without answering it, per workspace member and visible on every device
+(coo:1283, ADR 0063). OpenAPI `info.version` 4.8.0.
+
+### Added
+
+- `POST /api/agent-requests/:id/dismissal` (dismiss) and
+  `DELETE /api/agent-requests/:id/dismissal` (restore), authorized by
+  `session:read` in the request's workspace. Idempotent, returning
+  `{ changed, request }`. Only an open request can be dismissed (409
+  `agent_request_not_open`); optional `expectedRevision` answers 409
+  `agent_request_conflict` when the request moved on.
+- Additive `dismissed` and `dismissedAt` on `HumanAgentRequestDto`, for the
+  calling member, on every human agent-request read. A dismissed open request
+  keeps its status, stays answerable and is still returned by `status=open`.
+- Core table `agent_request_dismissals` (both dialects, migration
+  `20261116150000_agent_request_dismissals.sql`). A dismissal applies only to the
+  request revision it was made at, so a request that changes is shown again.
+- A changed dismissal appends an `agent_request` entity change with
+  `changedFields: ["dismissal"]` so open clients reload agent requests.
+
+## [173.3.0] - 2026-11-16
+
+### Added
+
+- Mission-write-authorized `POST /api/missions/:id/terminal-sessions/end`, addressed
+  by execution request ID. Reuses existing runner inspect/stop capabilities, returns
+  confirmed ended versus unconfirmed termination, and retains the observed state on
+  mission reads. Unfinished current attempts return to submitted with their queue
+  paused; completed objectives and newer attempts are preserved (ADR 0062).
+
 ## [173.2.0] - 2026-11-16
 
 Contract impact: minor. `GET /api/agent-requests` gains an opt-in, mission-scoped

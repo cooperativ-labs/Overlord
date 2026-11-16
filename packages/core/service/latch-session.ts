@@ -21,6 +21,8 @@ export type LatchSessionInspection = {
   state: LatchSessionState;
   exitCode: number | null;
   inspectedAt: string;
+  /** Latch-confirmed process exit time; absent on older runners. */
+  endedAt?: string | null;
 };
 
 export type LatchSessionOpenResult = {
@@ -150,6 +152,12 @@ export async function inspectLatchSession({
     name: trimmed(report.name) ?? sessionId,
     state,
     exitCode: typeof exit?.code === 'number' && Number.isFinite(exit.code) ? exit.code : null,
+    endedAt:
+      typeof exit?.exitedAt === 'string'
+        ? exit.exitedAt
+        : typeof exit?.exited_at === 'string'
+          ? exit.exited_at
+          : null,
     inspectedAt: new Date().toISOString()
   };
 }
@@ -268,7 +276,15 @@ export type LatchSendMessageOutcome = {
   status: LatchSendMessageStatus;
   reason: string | null;
   deliveredAt: string;
+  /**
+   * True when nothing was sent because Latch's receipt for `previousOperationId`
+   * showed the earlier attempt had already been delivered.
+   */
+  reconciled?: boolean;
 };
+
+/** How long Latch may take to answer an `operation_status` receipt lookup. */
+export const LATCH_OPERATION_STATUS_TIMEOUT_MS = 10_000;
 
 /**
  * The slice of the platform `WebSocket` this client uses. Structural so a test
@@ -356,12 +372,26 @@ function refusalReason(state: ConversationState): string {
  * outcome is **never** retried; `operationId` is the caller's idempotency key
  * both here and in the queue that carried the job, so a retry of the whole job
  * cannot double-deliver either.
+ *
+ * Two guards exist for a delivery that is not the first (ADR 0065):
+ *
+ * - `notAfter` is a deadline. A job that sat in a queue past it is refused here
+ *   without contacting Latch, so a runner that comes back online hours later
+ *   does not type a stale answer into whatever the agent is doing by then.
+ * - `previousOperationId` names an earlier attempt whose outcome is unconfirmed.
+ *   Before sending, Latch is asked for that attempt's retained receipt (a lookup
+ *   that never dispatches). If it was delivered, nothing is sent and the result
+ *   is `accepted` with `reconciled`. If it is still in flight, the result is
+ *   `ambiguous` and nothing is sent. Only a refused attempt, or one Latch holds
+ *   no receipt for, lets the new message go.
  */
 export async function sendLatchMessage({
   providerSessionId,
   operationId,
   text,
   waitForIdleMs = DEFAULT_LATCH_SEND_WAIT_MS,
+  previousOperationId = null,
+  notAfter = null,
   gateway = null,
   env,
   fetchImpl,
@@ -372,6 +402,8 @@ export async function sendLatchMessage({
   operationId: string;
   text: string;
   waitForIdleMs?: number | null;
+  previousOperationId?: string | null;
+  notAfter?: string | null;
   gateway?: LatchGatewayConfig | null;
   env?: NodeJS.ProcessEnv;
   fetchImpl?: typeof fetch;
@@ -394,6 +426,18 @@ export async function sendLatchMessage({
       ? Math.trunc(waitForIdleMs)
       : DEFAULT_LATCH_SEND_WAIT_MS;
 
+  const previousOpId = trimmed(previousOperationId);
+  const deadlineMs = trimmed(notAfter) ? Date.parse(trimmed(notAfter)!) : Number.NaN;
+  if (!Number.isNaN(deadlineMs) && now().getTime() > deadlineMs) {
+    return {
+      providerSessionId: sessionId,
+      operationId: opId,
+      status: 'refused',
+      reason: 'The delivery deadline passed before the answer could be sent.',
+      deliveredAt: now().toISOString()
+    };
+  }
+
   let resolved: { gateway: LatchGatewayConfig };
   try {
     resolved = await requireLatchConversationGateway({ gateway, env, fetchImpl });
@@ -410,7 +454,8 @@ export async function sendLatchMessage({
     }),
     operationId: opId,
     text: body,
-    idleBudgetMs
+    idleBudgetMs,
+    previousOperationId: previousOpId && previousOpId !== opId ? previousOpId : null
   });
 
   return {
@@ -418,7 +463,8 @@ export async function sendLatchMessage({
     operationId: opId,
     status: status.status,
     reason: status.reason,
-    deliveredAt: now().toISOString()
+    deliveredAt: now().toISOString(),
+    ...(status.reconciled ? { reconciled: true } : {})
   };
 }
 
@@ -433,16 +479,21 @@ function runConversationOperation({
   socket,
   operationId,
   text,
-  idleBudgetMs
+  idleBudgetMs,
+  previousOperationId = null
 }: {
   socket: LatchConversationSocket;
   operationId: string;
   text: string;
   idleBudgetMs: number;
-}): Promise<{ status: LatchSendMessageStatus; reason: string | null }> {
+  previousOperationId?: string | null;
+}): Promise<{ status: LatchSendMessageStatus; reason: string | null; reconciled?: boolean }> {
   return new Promise((resolve, reject) => {
     let settled = false;
     let sent = false;
+    // While an earlier attempt's receipt is outstanding, nothing may be sent.
+    let awaitingReceipt = previousOperationId !== null;
+    let receiptTimer: NodeJS.Timeout | null = null;
     let epoch: string | null = null;
     const timers: NodeJS.Timeout[] = [];
     let idleTimer: NodeJS.Timeout | null = null;
@@ -459,7 +510,11 @@ function runConversationOperation({
       timers.push(timer);
       return timer;
     };
-    const finish = (outcome: { status: LatchSendMessageStatus; reason: string | null }) => {
+    const finish = (outcome: {
+      status: LatchSendMessageStatus;
+      reason: string | null;
+      reconciled?: boolean;
+    }) => {
       if (settled) return;
       settled = true;
       clearTimers();
@@ -510,7 +565,7 @@ function runConversationOperation({
 
     const applyState = (state: ConversationState) => {
       lastState = state;
-      if (sent || settled) return;
+      if (sent || settled || awaitingReceipt) return;
       if (state.sendMessage.enabled) {
         deliver();
         return;
@@ -549,6 +604,21 @@ function runConversationOperation({
             abort('Latch returned an unsupported conversation state.');
             return;
           }
+          if (awaitingReceipt && receiptTimer === null) {
+            lastState = state;
+            try {
+              socket.send(
+                JSON.stringify({ type: 'operation_status', operationId: previousOperationId })
+              );
+            } catch {
+              abort('The earlier delivery could not be checked with Latch.');
+              return;
+            }
+            receiptTimer = arm(() => {
+              abort('Latch did not report on the earlier delivery in time.');
+            }, LATCH_OPERATION_STATUS_TIMEOUT_MS);
+            return;
+          }
           applyState(state);
           return;
         }
@@ -558,8 +628,37 @@ function runConversationOperation({
           return;
         }
         case 'operation_result': {
+          if (awaitingReceipt && trimmed(message.operationId) === previousOperationId) {
+            if (receiptTimer) clearTimeout(receiptTimer);
+            const receipt = trimmed(message.status);
+            if (receipt === 'accepted' || receipt === 'queued') {
+              finish({ status: 'accepted', reason: null, reconciled: true });
+              return;
+            }
+            if (receipt === 'ambiguous') {
+              finish({
+                status: 'ambiguous',
+                reason: 'Latch has not finished the earlier delivery; nothing was sent again.'
+              });
+              return;
+            }
+            // `refused`: the earlier attempt never reached the agent. `unknown`:
+            // Latch keeps no receipt, and the person has confirmed the resend.
+            awaitingReceipt = false;
+            if (lastState) applyState(lastState);
+            return;
+          }
           if (trimmed(message.operationId) !== operationId) return;
           const status = trimmed(message.status);
+          if (status === 'queued') {
+            // Latch took the message and holds it behind the agent's current
+            // turn. It is delivered: Latch owns it from here.
+            finish({
+              status: 'accepted',
+              reason: "Latch queued the answer behind the agent's current turn."
+            });
+            return;
+          }
           if (status !== 'accepted' && status !== 'refused' && status !== 'ambiguous') {
             finish({ status: 'ambiguous', reason: 'Latch reported an unknown operation status.' });
             return;

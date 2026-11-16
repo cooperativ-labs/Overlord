@@ -3,10 +3,10 @@ info:
   title: Overlord API
   # info.version is the API description's own Semantic Version; it changes when
   # this document changes and is never compared with the contract version.
-  version: 4.6.0
+  version: 4.10.0
   # The contract version (contract/VERSION) this document belongs to. Written
   # only by `yarn version:contract`.
-  x-overlord-contract-version: 173.2.0
+  x-overlord-contract-version: 173.6.0
   description: >-
     Normative description of Overlord's REST surface (ADR 0006): one operation for every
     method and path the backend registers, at the path it is served (ADR 0007), excluding
@@ -8363,6 +8363,118 @@ paths:
               schema: { $ref: '#/components/schemas/ErrorEnvelope' }
         '413': { $ref: '#/components/responses/PayloadTooLarge' }
         '500': { $ref: '#/components/responses/InternalError' }
+  "/api/missions/{id}/terminal-sessions/history":
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: getMissionsByIdTerminalSessionsHistory
+      tags: [missions]
+      x-overlord-permission: mission:read
+      x-overlord-edition: both
+      x-overlord-consumers: [webapp, desktop, mobile]
+      summary: Page confirmed ended terminal sessions for a mission
+      description: >-
+        Newest launch first, ordered by execution request created_at and id descending.
+        The default mission read includes all unended mapped sessions and at most five recent
+        ended sessions. This read includes forgotten ended mappings too. Metadata is retained
+        until mission deletion under its deletion policy; no terminal output is retained.
+        Cursor is the last executionRequestId from the previous page and must belong to this
+        mission. Lost sessions are unconfirmed and excluded. See ADR 0064.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      parameters:
+        - name: limit
+          in: query
+          description: Page size, default 20; integer from 1 through 100.
+          schema: { type: string }
+        - name: cursor
+          in: query
+          schema: { type: string, minLength: 1, maxLength: 128 }
+      responses:
+        '200':
+          description: A bounded page of ended sessions.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [sessions, nextCursor]
+                properties:
+                  sessions:
+                    type: array
+                    items: { $ref: '#/components/schemas/TerminalSessionDto' }
+                  nextCursor:
+                    oneOf:
+                      - { type: string }
+                      - { type: 'null' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
+  "/api/missions/{id}/terminal-sessions/end":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      operationId: postMissionsByIdTerminalSessionsEnd
+      tags: [missions]
+      x-overlord-permission: mission:update
+      x-overlord-edition: both
+      x-overlord-consumers: [webapp, desktop, mobile]
+      summary: End a mission's mapped Latch terminal session
+      description: >-
+        Addresses terminalSessions.executionRequestId within this mission. Requires mission:update
+        in the mission workspace. Parks the unfinished current attempt in submitted and pauses its
+        Run Queue before contacting the target; requires explicit restart and never completes an
+        objective. Historical sessions do not stop newer attempts; complete objectives stay complete.
+        Reuses the runner's Latch inspect/stop capabilities. Only confirmed exited returns ended.
+        An offline target, absent/lost session, timeout or stopping response returns unconfirmed
+        with a reason; this does not prove process termination. Repeated requests reuse the stop job
+        and inspect again for confirmation. Ended mappings remain visible on mission reads with
+        lastObservedState exited and additive endedAt/endReason. Human stop intent is retained
+        before dispatch; an already ended session keeps its original reason. State transitions
+        emit the existing mission status_change event and execution_request change feed.
+        See ADRs 0062 and 0064.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [executionRequestId]
+              properties:
+                executionRequestId: { type: string, minLength: 1, maxLength: 128 }
+      responses:
+        '200':
+          description: Confirmed end or explicit unconfirmed termination result.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [executionRequestId, providerSessionId, state, lastObservedState, reason, message]
+                properties:
+                  executionRequestId: { type: string }
+                  providerSessionId: { type: string }
+                  state: { type: string, enum: [ended, unconfirmed] }
+                  lastObservedState: { type: string, enum: [running, stopping, lost, exited] }
+                  reason:
+                    oneOf:
+                      - { type: string, enum: [target_offline, session_unreachable, stop_unconfirmed] }
+                      - { type: 'null' }
+                  message: { type: string }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
   "/api/missions/{id}/terminal-sessions/forget":
     parameters:
       - name: id
@@ -8494,7 +8606,11 @@ paths:
         (409 `agent_request_conflict` otherwise, and when the request changed since), and the resolution
         needs a `text` (only when free text is allowed) or a known `optionId` (400 `invalid_resolution`).
         A resolved answer is sent to the agent's Latch session (the text, else the option label);
-        `resolved` is false when the request was no longer open.
+        `resolved` is false when the request was no longer open. `resolved: true` means the answer was
+        recorded, not that the agent received it: read `request.delivery.stage` (ADR 0065). The call
+        waits at most about 25 seconds for the execution target. A delivery the target's runner has not
+        taken by then is withdrawn and reported `failed` (`not_dispatched`); one the runner already holds
+        is reported `dispatched`, and its outcome arrives later as an `agent_request` entity change.
       security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
       requestBody:
         required: true
@@ -8520,6 +8636,132 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/ErrorEnvelope' }
         '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
+  "/api/agent-requests/{id}/redeliver":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: >-
+          Agent request UUID; an unknown or deleted request, or one in a workspace the caller is not an
+          active member of, answers 404.
+        schema: { type: string }
+    post:
+      operationId: postAgentRequestsByIdRedeliver
+      tags: [agent-requests]
+      x-overlord-permission: session:attach
+      x-overlord-edition: both
+      x-overlord-consumers: [mobile, webapp]
+      summary: Send a recorded answer to its agent again
+      description: >-
+        Requires `session:attach` in the request's workspace (ADR 0065). Starts one more delivery attempt
+        for the answer already recorded on a resolved `question` or `choice` request; the answer itself
+        cannot be changed. Other kinds answer 410 `session_controls_gone`. Allowed only when
+        `delivery.stage` is `failed`, or `unconfirmed` with `confirmUnconfirmed: true`, which states that
+        a person checked the session; without it an unconfirmed delivery answers 409
+        `delivery_confirmation_required`. For an unconfirmed delivery the execution target first asks
+        Latch for the earlier attempt's receipt and sends nothing when that attempt was delivered.
+        `expectedAttempt` must equal `delivery.attempt`; a different value, a delivery still in progress,
+        or one already confirmed answers 409 `agent_request_delivery_conflict`, so concurrent calls start
+        one attempt. A request whose session ended, is unknown, or whose execution target is offline
+        answers 409 `request_not_deliverable` with the reason as the message, and no attempt starts.
+        Starting an attempt increments the request's `revision`. Waits and reports like resolve.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RedeliverAgentRequestBody' }
+      responses:
+        '200':
+          description: The attempt was started; `request.delivery` holds its outcome so far.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RedeliverAgentRequestResultDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '410':
+          description: >-
+            Always: `{ error: 'There are no active session-input controls. Permission and question prompts
+            remain with the native agent harness.', code: 'session_controls_gone' }`.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
+  "/api/agent-requests/{id}/dismissal":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: >-
+          Agent request UUID; an unknown or deleted request, or one in a workspace the caller is not an
+          active member of, answers 404.
+        schema: { type: string }
+    post:
+      operationId: postAgentRequestsByIdDismissal
+      tags: [agent-requests]
+      x-overlord-permission: session:read
+      x-overlord-edition: both
+      x-overlord-consumers: [mobile, webapp]
+      summary: Dismiss the caller's notification for an open agent request
+      description: >-
+        Requires `session:read` in the request's workspace (ADR 0063). Records that the calling
+        workspace member dismissed the request's top-of-mission notification at its current
+        `revision`. Dismissal is per member and is a view preference only: it does not change the
+        request's status, revision, resolution, waiter lease, delivery or who may answer it, and other
+        members still see the notification. Only an open request can be dismissed (409
+        `agent_request_not_open`). With `expectedRevision`, a request whose revision moved on answers
+        409 `agent_request_conflict`. Idempotent: dismissing an already dismissed revision answers 200
+        with `changed` false. A dismissal applies only while the request keeps the dismissed revision,
+        so a request that changes is shown again. A change appends an `agent_request` entity change so
+        open clients reload requests.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AgentRequestDismissalBody' }
+      responses:
+        '200':
+          description: Whether the stored state changed, and the request as the caller now sees it.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AgentRequestDismissalResultDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
+    delete:
+      operationId: deleteAgentRequestsByIdDismissal
+      tags: [agent-requests]
+      x-overlord-permission: session:read
+      x-overlord-edition: both
+      x-overlord-consumers: [mobile, webapp]
+      summary: Restore the caller's notification for an agent request
+      description: >-
+        Requires `session:read` in the request's workspace (ADR 0063). Removes the calling member's
+        dismissal so the notification is shown again. Allowed in any request status and idempotent:
+        restoring a request that is not dismissed answers 200 with `changed` false. Never changes the
+        request itself. A change appends an `agent_request` entity change so open clients reload
+        requests.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      responses:
+        '200':
+          description: Whether the stored state changed, and the request as the caller now sees it.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AgentRequestDismissalResultDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
         '500': { $ref: '#/components/responses/InternalError' }
   /api/agent-session-inputs:
     get:
@@ -11867,6 +12109,16 @@ components:
         lastObservedState:
           type: string
           enum: [ running, exited, stopping, lost ]
+        endedAt:
+          description: Confirmed process exit time, or first confirmation time on older runners. Legacy exited mappings use their last update time.
+          oneOf:
+            - { $ref: '#/components/schemas/DateTime' }
+            - { type: 'null' }
+        endReason:
+          description: Open vocabulary; ended_by_person, exited, objective_delivered, machine_went_away or unknown. Null unless confirmed ended. Objective delivery or lost contact alone never proves exit.
+          oneOf:
+            - { type: string }
+            - { type: 'null' }
     MissionBranchStatus:
       type: string
       description: >-
@@ -17670,6 +17922,52 @@ components:
           oneOf:
             - { $ref: '#/components/schemas/DateTime' }
             - type: 'null'
+        stage:
+          description: >-
+            What became of the recorded answer (ADR 0065); null when the request holds no answer to
+            deliver. `recorded`: saved, nothing sent yet. `queued`: waiting for the execution target's
+            runner. `dispatched`: the runner has it and has not reported. `confirmed`: Latch accepted it
+            as a user turn. `unconfirmed`: it was sent and no receipt came back, so it may have arrived.
+            `failed`: it did not reach the agent. Open vocabulary; sent on every human read, optional
+            only so older clients and fixtures stay valid.
+          oneOf:
+            - type: string
+            - type: 'null'
+        attempt:
+          description: The delivery attempt `stage` describes, from 1; null when `stage` is null.
+          oneOf:
+            - { type: integer, minimum: 1 }
+            - type: 'null'
+        failureCode:
+          description: >-
+            Why the delivery is `failed` or `unconfirmed`; null otherwise. Open vocabulary, currently
+            `latch_refused`, `gateway_unavailable`, `session_absent`, `session_ended`, `not_dispatched`,
+            `unconfirmed`, `runner_lost`, `deadline_passed`, `delivery_failed`.
+          oneOf:
+            - type: string
+            - type: 'null'
+        failureMessage:
+          description: A message of at most 300 characters a client may show for `failureCode`.
+          oneOf:
+            - { type: string, maxLength: 300 }
+            - type: 'null'
+        canRedeliver:
+          type: boolean
+          description: >-
+            Whether `POST /api/agent-requests/:id/redeliver` can start another attempt now: the delivery
+            is `failed` or `unconfirmed` and its terminal session can still receive an answer.
+        confirmationRequired:
+          type: boolean
+          description: >-
+            True when the delivery is `unconfirmed`: a redelivery needs `confirmUnconfirmed: true`.
+        sessionState:
+          description: >-
+            Last observed state of the terminal session an answer would go to (`running`, `stopping`,
+            `lost`, `exited`), or null when unknown. `lost` means contact is missing, not that the
+            session ended (ADR 0064).
+          oneOf:
+            - type: string
+            - type: 'null'
     HumanAgentRequestDto:
       description: A request with its delivery mode, as the human routes return it.
       allOf:
@@ -17678,6 +17976,18 @@ components:
           required: [ delivery ]
           properties:
             delivery: { $ref: '#/components/schemas/AgentRequestDeliveryDto' }
+            dismissed:
+              type: boolean
+              description: >-
+                Whether the calling workspace member dismissed this request's notification at its
+                current `revision` (ADR 0063). Per member: other members are unaffected. A dismissed
+                request keeps its status and stays answerable and listed. Sent on every human read;
+                optional only so older clients and fixtures stay valid.
+            dismissedAt:
+              description: When the caller dismissed the current revision; null when not dismissed.
+              oneOf:
+                - { $ref: '#/components/schemas/DateTime' }
+                - type: 'null'
     AgentRequestListResponse:
       type: object
       required: [ requests ]
@@ -17806,6 +18116,39 @@ components:
             text: { type: string, description: Trimmed; refused unless the request allows free text. }
             optionId: { type: string, description: Trimmed; must name one of the request's options. }
           additionalProperties: { $ref: '#/components/schemas/JsonValue' }
+    RedeliverAgentRequestBody:
+      type: object
+      required: [ expectedAttempt ]
+      properties:
+        expectedAttempt:
+          type: integer
+          minimum: 1
+          description: The `delivery.attempt` the caller read.
+        confirmUnconfirmed:
+          type: boolean
+          description: >-
+            Required and true to redeliver an `unconfirmed` delivery: a person checked the session and
+            the answer is not there.
+    RedeliverAgentRequestResultDto:
+      type: object
+      required: [ redelivered, request ]
+      properties:
+        redelivered: { type: boolean }
+        request: { $ref: '#/components/schemas/HumanAgentRequestDto' }
+    AgentRequestDismissalBody:
+      type: object
+      properties:
+        expectedRevision:
+          type: integer
+          description: >-
+            Optional. The request revision the caller is dismissing; a different current revision answers
+            409 `agent_request_conflict`.
+    AgentRequestDismissalResultDto:
+      type: object
+      required: [ changed, request ]
+      properties:
+        changed: { type: boolean, description: False when the stored dismissal state was already as requested. }
+        request: { $ref: '#/components/schemas/HumanAgentRequestDto' }
     ResolveAgentRequestResultDto:
       type: object
       required: [ resolved, request ]

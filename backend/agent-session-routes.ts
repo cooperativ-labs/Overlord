@@ -12,9 +12,15 @@ import {
   acquireWaiterLease,
   AGENT_REQUEST_KINDS,
   type AgentSessionChannelRow,
+  ANSWER_DELIVERY_DEADLINE_MS,
+  answerDeliveryOutcomeFromResult,
+  type AnswerDeliveryStage,
+  answerOperationId,
+  answerTextFromResolution,
   appendSessionEvent,
   APPLICATION_STATES,
   authenticateChannelCredential,
+  beginAnswerRedelivery,
   createRequest,
   DELIVERY_OUTCOMES,
   describeDeliveryOutcome,
@@ -29,18 +35,22 @@ import {
   markInputEmitted,
   markInputFailed,
   markRequestResolvedElsewhere,
+  readAnswerDelivery,
+  readRequestDismissals,
+  recordAnswerDeliveryOutcome,
   recordRequestApplication,
   RELEASE_REASONS,
   type ReleaseReason,
   releaseRequestToTerminal,
-  resolveRequest
+  resolveRequest,
+  setRequestDismissal
 } from '../packages/core/service/agent-session/index.ts';
 import { resolveObjectiveRef, type ServiceContext } from '../packages/core/service/context.ts';
 import { ServiceError } from '../packages/core/service/errors.ts';
 import { asRecord } from '../packages/core/service/execution-requests.ts';
 import { resolveLatchSessionForAgentSession } from '../packages/core/service/latch-provider-session.ts';
 import { resolveDefaultLocalTargetProvider } from '../packages/core/service/local-target/default-registry.ts';
-import { answerApplicationStateFromResult } from '../packages/core/service/local-target-mutations.ts';
+import { cancelQueuedLocalTargetMutation } from '../packages/core/service/local-target-mutations.ts';
 import { getProjectExecutionTargetSelection } from '../packages/core/service/project-execution-target.ts';
 
 import { optionalString, queryString } from './http/query.ts';
@@ -557,22 +567,42 @@ function requestDto(request: Awaited<ReturnType<typeof getRequest>>): Record<str
   };
 }
 
-async function requestDelivery(
-  ctx: ServiceContext,
-  request: Awaited<ReturnType<typeof getRequest>>
-): Promise<AgentRequestDeliveryDto> {
-  const state = APPLICATION_STATES.includes(request.application_state as never)
-    ? (request.application_state as AgentRequestDeliveryDto['state'])
-    : null;
-  const base = { state, observedAt: request.application_observed_at };
-  if (request.status !== 'open') return { mode: 'read_only', reason: 'request_closed', ...base };
+type RequestRow = Awaited<ReturnType<typeof getRequest>>;
+
+/**
+ * How long a resolve or redelivery call waits for the runner before answering "still sending".
+ * An object so a test can shorten the wait; production never writes it.
+ */
+export const answerDeliveryTiming = { waitMs: 25_000 };
+
+type AnswerRoute =
+  | {
+      ok: true;
+      latch: NonNullable<Awaited<ReturnType<typeof resolveLatchSessionForAgentSession>>>;
+      target: Awaited<
+        ReturnType<typeof getProjectExecutionTargetSelection>
+      >['eligibleTargets'][number];
+    }
+  | {
+      ok: false;
+      reason: 'no_latch_session' | 'latch_session_exited' | 'target_offline';
+      sessionState: string | null;
+    };
+
+/**
+ * Where an answer for this request would go right now: the Latch session recorded for the
+ * agent session that asked, on a reachable execution target. `exited` is a confirmed end
+ * (ADR 0064) and never receives an answer. `lost` is only missing contact, so it is still
+ * routable when its target is reachable: Latch then gives the definitive answer.
+ */
+async function answerRoute(ctx: ServiceContext, request: RequestRow): Promise<AnswerRoute> {
   if (!request.session_id || !request.project_id) {
-    return { mode: 'read_only', reason: 'no_latch_session', ...base };
+    return { ok: false, reason: 'no_latch_session', sessionState: null };
   }
   const latch = await resolveLatchSessionForAgentSession({ ctx, sessionId: request.session_id });
-  if (!latch) return { mode: 'read_only', reason: 'no_latch_session', ...base };
+  if (!latch) return { ok: false, reason: 'no_latch_session', sessionState: null };
   if (['exited', 'unavailable'].includes(latch.lastObservedState)) {
-    return { mode: 'read_only', reason: 'latch_session_exited', ...base };
+    return { ok: false, reason: 'latch_session_exited', sessionState: latch.lastObservedState };
   }
   const selection = await getProjectExecutionTargetSelection({
     ctx,
@@ -581,15 +611,147 @@ async function requestDelivery(
   const target = selection.eligibleTargets.find(
     candidate => candidate.executionTargetId === latch.targetId
   );
-  if (!target?.reachable) return { mode: 'read_only', reason: 'target_offline', ...base };
-  return { mode: 'latch', reason: null, ...base };
+  if (!target?.reachable) {
+    return { ok: false, reason: 'target_offline', sessionState: latch.lastObservedState };
+  }
+  return { ok: true, latch, target };
+}
+
+const ROUTE_FAILURE_MESSAGES: Record<Exclude<AnswerRoute, { ok: true }>['reason'], string> = {
+  no_latch_session: 'This question has no terminal session that can receive an answer.',
+  latch_session_exited:
+    'The terminal session has ended, so it cannot receive an answer. Restart the objective to continue.',
+  target_offline:
+    'The execution machine is offline. Bring its runner back online, then send the answer again.'
+};
+
+/** The stage of a recorded answer's delivery (ADR 0065). Null when no answer is recorded. */
+async function answerDeliveryStage(
+  ctx: ServiceContext,
+  request: RequestRow,
+  attempt: number
+): Promise<AnswerDeliveryStage | null> {
+  if (request.status !== 'resolved') return null;
+  if (request.kind !== 'question' && request.kind !== 'choice') return null;
+  switch (request.application_state) {
+    case 'applied':
+      return 'confirmed';
+    case 'unknown':
+      return 'unconfirmed';
+    case 'not_applied':
+      return 'failed';
+    case 'emitted': {
+      const job = await ctx.db.get<{ status: string }>(
+        `SELECT status FROM execution_requests
+          WHERE workspace_id = ? AND idempotency_key = ? AND deleted_at IS NULL`,
+        [ctx.workspace.id, answerOperationId(request.id, attempt)]
+      );
+      if (!job) return 'recorded';
+      return job.status === 'queued' ? 'queued' : 'dispatched';
+    }
+    default:
+      return null;
+  }
+}
+
+async function requestDelivery(
+  ctx: ServiceContext,
+  request: RequestRow
+): Promise<AgentRequestDeliveryDto> {
+  const state = APPLICATION_STATES.includes(request.application_state as never)
+    ? (request.application_state as AgentRequestDeliveryDto['state'])
+    : null;
+  const record = readAnswerDelivery(request);
+  const stage = await answerDeliveryStage(ctx, request, record.attempt);
+  const base = {
+    state,
+    observedAt: request.application_observed_at,
+    stage,
+    attempt: stage === null ? null : record.attempt,
+    failureCode: stage === 'failed' || stage === 'unconfirmed' ? record.failureCode : null,
+    failureMessage: stage === 'failed' || stage === 'unconfirmed' ? record.failureMessage : null,
+    canRedeliver: false,
+    confirmationRequired: stage === 'unconfirmed',
+    sessionState: null as string | null
+  };
+  if (request.status !== 'open') {
+    if (stage !== 'failed' && stage !== 'unconfirmed') {
+      return { mode: 'read_only', reason: 'request_closed', ...base };
+    }
+    // A failed or unconfirmed answer can be sent again only while its session can still
+    // receive one; otherwise the client is told why not instead of offering a dead button.
+    const route = await answerRoute(ctx, request);
+    return {
+      mode: 'read_only',
+      reason: 'request_closed',
+      ...base,
+      canRedeliver: route.ok,
+      sessionState: route.ok ? route.latch.lastObservedState : route.sessionState,
+      ...(route.ok || stage !== 'failed'
+        ? {}
+        : {
+            failureCode:
+              route.reason === 'latch_session_exited' ? 'session_ended' : base.failureCode,
+            failureMessage:
+              route.reason === 'latch_session_exited'
+                ? ROUTE_FAILURE_MESSAGES.latch_session_exited
+                : base.failureMessage
+          })
+    };
+  }
+  const route = await answerRoute(ctx, request);
+  if (!route.ok) {
+    return { mode: 'read_only', reason: route.reason, ...base, sessionState: route.sessionState };
+  }
+  return { mode: 'latch', reason: null, ...base, sessionState: route.latch.lastObservedState };
+}
+
+type RequestDismissals = Awaited<ReturnType<typeof readRequestDismissals>>;
+
+/**
+ * The calling member's dismissal of the request's current revision (ADR 0063). Always present on
+ * human reads: `dismissed` false with null fields when the caller has not dismissed it.
+ */
+function dismissalDto(
+  request: Awaited<ReturnType<typeof getRequest>>,
+  dismissals: RequestDismissals
+): Record<string, unknown> {
+  const dismissal = dismissals.get(request.id);
+  return {
+    dismissed: dismissal !== undefined,
+    dismissedAt: dismissal?.dismissedAt ?? null
+  };
 }
 
 async function humanRequestDto(
   ctx: ServiceContext,
-  request: Awaited<ReturnType<typeof getRequest>>
+  request: Awaited<ReturnType<typeof getRequest>>,
+  dismissals?: RequestDismissals
 ): Promise<Record<string, unknown>> {
-  return { ...requestDto(request), delivery: await requestDelivery(ctx, request) };
+  const callerDismissals =
+    dismissals ??
+    (await readRequestDismissals({
+      db: ctx.db,
+      workspaceUserIds: ctx.actorWorkspaceUserId ? [ctx.actorWorkspaceUserId] : [],
+      requests: [request]
+    }));
+  return {
+    ...requestDto(request),
+    ...dismissalDto(request, callerDismissals),
+    delivery: await requestDelivery(ctx, request)
+  };
+}
+
+async function humanRequestDtos(
+  ctx: ServiceContext,
+  requests: Array<Awaited<ReturnType<typeof getRequest>>>
+): Promise<Record<string, unknown>[]> {
+  const dismissals = await readRequestDismissals({
+    db: ctx.db,
+    workspaceUserIds: ctx.actorWorkspaceUserId ? [ctx.actorWorkspaceUserId] : [],
+    requests
+  });
+  return await Promise.all(requests.map(request => humanRequestDto(ctx, request, dismissals)));
 }
 
 function requestOptions(request: Awaited<ReturnType<typeof getRequest>>): Array<{
@@ -639,46 +801,79 @@ function validateQuestionResolution({
   return { text, optionId: optionId || null };
 }
 
+/**
+ * Send one delivery attempt of a recorded answer through the execution target's runner and
+ * record what became of it (ADR 0065).
+ *
+ * The call waits a bounded time. A job no runner has taken by then is withdrawn, which makes
+ * "the machine did not pick it up" a definitive failure instead of an answer that arrives
+ * whenever the runner next wakes. A job a runner already holds is left alone: its report
+ * arrives through the queue's completion hook and reaches open clients as an entity change.
+ */
 async function deliverQuestionAnswer({
   ctx,
   request,
-  text
+  attempt,
+  previousAttempt = null
 }: {
   ctx: ServiceContext;
-  request: Awaited<ReturnType<typeof getRequest>>;
-  text: string;
+  request: RequestRow;
+  attempt: number;
+  /** An earlier attempt left unconfirmed; the runner checks its Latch receipt before sending. */
+  previousAttempt?: number | null;
 }): Promise<void> {
-  if (!request.session_id || !request.project_id) return;
-  const latch = await resolveLatchSessionForAgentSession({ ctx, sessionId: request.session_id });
-  if (!latch) return;
-  const selection = await getProjectExecutionTargetSelection({
-    ctx,
-    projectId: request.project_id
-  });
-  const target = selection.eligibleTargets.find(
-    candidate => candidate.executionTargetId === latch.targetId
-  );
-  if (!target) return;
+  const route = await answerRoute(ctx, request);
+  if (!route.ok || !request.project_id) {
+    const reason = route.ok ? 'no_latch_session' : route.reason;
+    await recordAnswerDeliveryOutcome({
+      ctx,
+      requestId: request.id,
+      attempt,
+      outcome: {
+        state: 'not_applied',
+        failureCode: reason === 'latch_session_exited' ? 'session_ended' : 'not_dispatched',
+        failureMessage: ROUTE_FAILURE_MESSAGES[reason]
+      }
+    });
+    return;
+  }
   const provider = resolveDefaultLocalTargetProvider({
     target: {
-      executionTargetId: target.executionTargetId,
-      type: target.type,
-      deviceLabel: target.deviceLabel,
-      reachable: target.reachable
+      executionTargetId: route.target.executionTargetId,
+      type: route.target.type,
+      deviceLabel: route.target.deviceLabel,
+      reachable: route.target.reachable
     },
     options: {
       callerExecutionTargetId: null,
-      runnerQueue: { ctx, projectId: request.project_id, missionId: request.mission_id }
+      runnerQueue: {
+        ctx,
+        projectId: request.project_id,
+        missionId: request.mission_id,
+        writeTimeoutMs: answerDeliveryTiming.waitMs
+      }
     }
   });
   const result = await provider.sendLatchMessage({
-    providerSessionId: latch.providerSessionId,
-    operationId: request.id,
-    text
+    providerSessionId: route.latch.providerSessionId,
+    operationId: answerOperationId(request.id, attempt),
+    text: answerTextFromResolution(request),
+    notAfter: new Date(Date.now() + ANSWER_DELIVERY_DEADLINE_MS).toISOString(),
+    ...(previousAttempt === null
+      ? {}
+      : { previousOperationId: answerOperationId(request.id, previousAttempt) })
   });
-  const applicationState = answerApplicationStateFromResult(result);
-  if (applicationState !== 'emitted') {
-    await recordRequestApplication({ ctx, requestId: request.id, applicationState });
+  const outcome = answerDeliveryOutcomeFromResult(result);
+  if (outcome) {
+    await recordAnswerDeliveryOutcome({ ctx, requestId: request.id, attempt, outcome });
+    return;
+  }
+  const details =
+    !result.ok && result.details && typeof result.details === 'object'
+      ? (result.details as Record<string, unknown>)
+      : {};
+  if (typeof details.executionRequestId === 'string') {
+    await cancelQueuedLocalTargetMutation({ ctx, requestId: details.executionRequestId });
   }
 }
 
@@ -848,7 +1043,7 @@ async function missionScopedRequests(
         ORDER BY created_at DESC LIMIT 200`,
       scopeParams
     );
-    return { requests: await Promise.all(rows.map(request => humanRequestDto(ctx, request))) };
+    return { requests: await humanRequestDtos(ctx, rows) };
   }
   const scope = { missionId: mission.id, objectiveId: objective?.id ?? null, status: page.status };
   const after = page.cursor ? decodeAgentRequestCursor(page.cursor, scope) : null;
@@ -891,8 +1086,52 @@ async function missionScopedRequests(
         })
       : null;
   return {
-    requests: await Promise.all(pageRows.map(request => humanRequestDto(ctx, request))),
+    requests: await humanRequestDtos(ctx, pageRows),
     page: { complete: !hasMore, nextCursor, limit: page.limit, status: page.status }
+  };
+}
+
+/**
+ * Dismiss (`dismissed` true) or restore the caller's notification for a request (ADR 0063).
+ *
+ * A per-member view preference: it requires only `session:read`, the permission that lets the
+ * caller see the card, and never changes the request, its delivery or who may answer it.
+ */
+export async function setAgentRequestDismissal(
+  requestId: string,
+  rawBody: unknown,
+  dismissed: boolean
+): Promise<{ changed: boolean; request: Record<string, unknown> }> {
+  const client = requireDatabaseClient();
+  const row = await client.get<{ workspace_id: string }>(
+    `SELECT workspace_id FROM agent_requests WHERE id = ? AND deleted_at IS NULL`,
+    [requestId]
+  );
+  if (!row) throw new ServiceError('Request not found', 'request_not_found', 404);
+  const workspaceUserId = await requireWorkspacePermission({
+    workspaceId: row.workspace_id,
+    permission: PERMISSIONS.SESSION_READ,
+    db: client,
+    notFoundMessage: 'Request not found'
+  });
+  const ctx = await buildWebappServiceContextForWorkspace(
+    row.workspace_id,
+    client,
+    workspaceUserId
+  );
+  const body = asRecord(rawBody);
+  if (body.expectedRevision !== undefined && typeof body.expectedRevision !== 'number') {
+    throw new ServiceError('expectedRevision must be a number', 'invalid_input', 400);
+  }
+  const result = await setRequestDismissal({
+    ctx,
+    requestId,
+    dismissed,
+    expectedRevision: body.expectedRevision as number | undefined
+  });
+  return {
+    changed: result.changed,
+    request: await humanRequestDto(ctx, await getRequest({ ctx, requestId }))
   };
 }
 
@@ -958,6 +1197,11 @@ export function createAgentRequestHumanRouter(): Router {
           ORDER BY created_at DESC LIMIT 200`,
         authorized.map(entry => entry.workspaceId)
       );
+      const dismissals = await readRequestDismissals({
+        db: client,
+        workspaceUserIds: authorized.map(entry => entry.workspaceUserId),
+        requests: rows
+      });
       const ctxByWorkspace = new Map<string, ServiceContext>();
       for (const entry of authorized) {
         ctxByWorkspace.set(
@@ -973,7 +1217,9 @@ export function createAgentRequestHumanRouter(): Router {
         requests: await Promise.all(
           rows.map(async request => {
             const ctx = ctxByWorkspace.get(request.workspace_id);
-            return ctx ? await humanRequestDto(ctx, request) : requestDto(request);
+            return ctx
+              ? await humanRequestDto(ctx, request, dismissals)
+              : { ...requestDto(request), ...dismissalDto(request, dismissals) };
           })
         )
       };
@@ -1015,10 +1261,7 @@ export function createAgentRequestHumanRouter(): Router {
         throw new ServiceError('expectedRevision is required', 'agent_request_conflict', 409);
       }
       const resolution = body.resolution ? asRecord(body.resolution) : {};
-      const answer = validateQuestionResolution({ request, resolution });
-      const selected = answer.optionId
-        ? requestOptions(request).find(option => option.optionId === answer.optionId)
-        : null;
+      validateQuestionResolution({ request, resolution });
       const result = await resolveRequest({
         ctx,
         requestId: request.id,
@@ -1026,17 +1269,91 @@ export function createAgentRequestHumanRouter(): Router {
         expectedRevision: body.expectedRevision
       });
       if (result.resolved) {
-        await deliverQuestionAnswer({
-          ctx,
-          request: result.request,
-          text: answer.text || selected?.label || 'Answer received'
-        });
+        await deliverQuestionAnswer({ ctx, request: result.request, attempt: 1 });
       }
       return {
         resolved: result.resolved,
         request: await humanRequestDto(ctx, await getRequest({ ctx, requestId: request.id }))
       };
     })
+  );
+
+  /**
+   * Send a recorded answer again after it failed, or after an unconfirmed delivery the person
+   * has checked (ADR 0065). Same permission as resolve. The attempt counter is the
+   * compare-and-set token, so two clients pressing "send again" start one attempt.
+   */
+  router.post(
+    '/:id/redeliver',
+    handle(async req => {
+      const client = requireDatabaseClient();
+      const row = await client.get<{ workspace_id: string }>(
+        `SELECT workspace_id FROM agent_requests WHERE id = ? AND deleted_at IS NULL`,
+        [req.params.id]
+      );
+      if (!row) throw new ServiceError('Request not found', 'request_not_found', 404);
+      const workspaceUserId = await requireWorkspacePermission({
+        workspaceId: row.workspace_id,
+        permission: PERMISSIONS.SESSION_ATTACH,
+        db: client,
+        notFoundMessage: 'Request not found'
+      });
+      const ctx = await buildWebappServiceContextForWorkspace(
+        row.workspace_id,
+        client,
+        workspaceUserId
+      );
+      const body = asRecord(req.body);
+      if (
+        typeof body.expectedAttempt !== 'number' ||
+        !Number.isInteger(body.expectedAttempt) ||
+        body.expectedAttempt < 1
+      ) {
+        throw new ServiceError(
+          'expectedAttempt is required',
+          'agent_request_delivery_conflict',
+          409
+        );
+      }
+      const request = await getRequest({ ctx, requestId: req.params.id });
+      if (request.kind !== 'question' && request.kind !== 'choice') sessionControlsGone();
+      const wasUnconfirmed = request.application_state === 'unknown';
+      // Checked before the attempt starts: an answer that cannot be routed is refused with the
+      // reason, and the delivery record keeps the failure the person already saw.
+      const route = await answerRoute(ctx, request);
+      if (request.status === 'resolved' && !route.ok) {
+        throw new ServiceError(
+          ROUTE_FAILURE_MESSAGES[route.reason],
+          'request_not_deliverable',
+          409
+        );
+      }
+      const begun = await beginAnswerRedelivery({
+        ctx,
+        requestId: request.id,
+        expectedAttempt: body.expectedAttempt,
+        confirmUnconfirmed: body.confirmUnconfirmed === true
+      });
+      await deliverQuestionAnswer({
+        ctx,
+        request: begun.request,
+        attempt: begun.attempt,
+        previousAttempt: wasUnconfirmed ? begun.previousAttempt : null
+      });
+      return {
+        redelivered: true,
+        request: await humanRequestDto(ctx, await getRequest({ ctx, requestId: request.id }))
+      };
+    })
+  );
+
+  router.post(
+    '/:id/dismissal',
+    handle(req => setAgentRequestDismissal(req.params.id, req.body, true))
+  );
+  router.delete(
+    '/:id/dismissal',
+    handle(req => setAgentRequestDismissal(req.params.id, req.body, false))
   );
 
   return router;

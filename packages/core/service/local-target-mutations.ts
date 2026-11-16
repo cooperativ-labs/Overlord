@@ -10,7 +10,7 @@
 // stored result so `RunnerQueueProvider` can present the whole round trip as an
 // ordinary `LocalTargetCapabilities` call.
 
-import { type ApplicationState, recordRequestApplication } from './agent-session/requests.ts';
+import { recordAnswerDeliveryResult } from './agent-session/answer-delivery.ts';
 import { fail } from './local-target/result.ts';
 import type {
   CapabilityFailure,
@@ -570,14 +570,14 @@ export async function completeLocalTargetMutationRequest({
 }
 
 /**
- * Completion post-hook for answer delivery (coo:833).
+ * Completion post-hook for answer delivery (coo:833, ADR 0065).
  *
- * A `sendLatchMessage` job is queued with `operationId = agent_requests.id` —
- * one value that is both Latch's idempotency key and the row whose
- * `application_state` records what became of the answer. `accepted` → `applied`,
- * `refused` → `not_applied`, `ambiguous` → `unknown`; a failed job is
- * `not_applied` except a timeout, which leaves the row `emitted` because the
- * delivery may still land.
+ * A `sendLatchMessage` job is queued with `operationId` naming the request and
+ * the delivery attempt — one value that is Latch's idempotency key, the queue's,
+ * and the row whose delivery record says what became of the answer. `accepted` →
+ * `applied`, `refused` → `not_applied`, `ambiguous` → `unknown`; a failed job is
+ * `not_applied` when nothing was sent and `unknown` when a runner held it and
+ * went quiet. A report for a superseded attempt changes nothing.
  */
 async function recordAnswerDeliveryOutcome({
   ctx,
@@ -589,29 +589,106 @@ async function recordAnswerDeliveryOutcome({
   result: LocalTargetMutationResult;
 }): Promise<void> {
   if (mutation.capability !== 'sendLatchMessage') return;
-  const agentRequestId =
+  const operationId =
     typeof mutation.input.operationId === 'string' ? mutation.input.operationId.trim() : '';
-  if (!agentRequestId) return;
-  const applicationState = answerApplicationStateFromResult(
-    result as CapabilityResult<SendLatchMessageResult>
-  );
-  // `emitted` is the state the row already holds while delivery is outstanding;
-  // rewriting it would only move the observed-at timestamp.
-  if (applicationState === 'emitted') return;
-  await recordRequestApplication({ ctx, requestId: agentRequestId, applicationState });
+  if (!operationId) return;
+  await recordAnswerDeliveryResult({
+    ctx,
+    operationId,
+    result: result as CapabilityResult<SendLatchMessageResult>
+  });
 }
 
 /**
- * Map a completed `sendLatchMessage` envelope onto an `agent_requests`
- * application state. The one place that mapping lives: the completion post-hook
- * uses it here, and the resolve path (Phase A) uses it for a delivery it awaited
- * itself. A timeout stays `emitted` — the send may still land.
+ * Close the delivery record of answer jobs that reached a terminal status with
+ * no result (the expiry sweep, a cleared queue). Without this the answer stays
+ * `emitted` forever and the person is told it is still being sent.
  */
-export function answerApplicationStateFromResult(
-  result: CapabilityResult<SendLatchMessageResult>
-): ApplicationState {
-  if (!result.ok) return result.code === 'LOCAL_TARGET_TIMEOUT' ? 'emitted' : 'not_applied';
-  if (result.value?.status === 'accepted') return 'applied';
-  if (result.value?.status === 'refused') return 'not_applied';
-  return 'unknown';
+export async function recordAnswerDeliveryForTerminalRequest({
+  ctx,
+  metadataJson,
+  status,
+  executionRequestId
+}: {
+  ctx: ServiceContext;
+  metadataJson: string | null;
+  status: string;
+  executionRequestId: string;
+}): Promise<void> {
+  const mutation = metadataJson ? parseLocalTargetMutation(metadataJson) : null;
+  if (!mutation || mutation.result) return;
+  await recordAnswerDeliveryOutcome({
+    ctx,
+    mutation,
+    result: fail(
+      { executionTargetId: null, deviceLabel: null, transport: 'runner_queue' },
+      'TARGET_OPERATION_FAILED',
+      `The queued capability call ended as ${status} without a result.`,
+      { executionRequestId, status }
+    )
+  });
+}
+
+/**
+ * Withdraw an answer job no runner has taken yet.
+ *
+ * A job left `queued` after the caller stopped waiting would otherwise be
+ * delivered whenever the runner next comes online — minutes or hours after the
+ * person was told the answer did not go. The compare-and-set on `queued` is the
+ * guarantee: either this withdraws it and nothing is ever sent, or a runner
+ * already holds it and its own report decides the outcome.
+ */
+export async function cancelQueuedLocalTargetMutation({
+  ctx,
+  requestId
+}: {
+  ctx: ServiceContext;
+  requestId: string;
+}): Promise<{ cancelled: boolean }> {
+  const now = nowIso();
+  return await ctx.db.transaction(async tx => {
+    const txCtx = { ...ctx, db: tx };
+    const row = (await tx.get(
+      `SELECT id, project_id, mission_id, objective_id, revision, metadata_json
+         FROM execution_requests
+        WHERE id = ? AND workspace_id = ? AND requested_source = ?
+          AND status = 'queued' AND deleted_at IS NULL`,
+      [requestId, ctx.workspace.id, LOCAL_TARGET_MUTATION_REQUESTED_SOURCE]
+    )) as
+      | {
+          id: string;
+          project_id: string;
+          mission_id: string | null;
+          objective_id: string | null;
+          revision: number;
+          metadata_json: string;
+        }
+      | undefined;
+    if (!row) return { cancelled: false };
+    const updated = await tx.run(
+      `UPDATE execution_requests
+          SET status = 'cancelled', last_error = ?, updated_at = ?, revision = ?
+        WHERE id = ? AND status = 'queued' AND revision = ?`,
+      ['Withdrawn before any runner claimed it.', now, row.revision + 1, row.id, row.revision]
+    );
+    if (updated.changes === 0) return { cancelled: false };
+    await recordChange({
+      ctx: txCtx,
+      entityType: 'execution_request',
+      entityId: row.id,
+      operation: 'update',
+      entityRevision: row.revision + 1,
+      projectId: row.project_id,
+      missionId: row.mission_id,
+      objectiveId: row.objective_id,
+      changedFields: ['status', 'last_error']
+    });
+    await recordAnswerDeliveryForTerminalRequest({
+      ctx: txCtx,
+      metadataJson: row.metadata_json,
+      status: 'cancelled',
+      executionRequestId: row.id
+    });
+    return { cancelled: true };
+  });
 }

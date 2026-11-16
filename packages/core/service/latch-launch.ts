@@ -111,6 +111,10 @@ export type ExecutionProviderSession = {
   agentSessionId: string | null;
   createdAt: string;
   lastObservedState: string;
+  endedAt?: string | null;
+  endReason?: string | null;
+  endRequestedAt?: string | null;
+  lastObservedAt?: string | null;
 };
 
 function trimmed(value: unknown): string | null {
@@ -304,6 +308,10 @@ export function providerSessionFromMetadata(
     agentSessionId?: unknown;
     createdAt?: unknown;
     lastObservedState?: unknown;
+    endedAt?: unknown;
+    endReason?: unknown;
+    endRequestedAt?: unknown;
+    lastObservedAt?: unknown;
   };
   if (trimmed(cast.provider)?.toLowerCase() !== 'latch') return null;
   const providerSessionId = trimmed(cast.providerSessionId);
@@ -315,7 +323,11 @@ export function providerSessionFromMetadata(
     executionTargetId: trimmed(cast.executionTargetId),
     agentSessionId: trimmed(cast.agentSessionId),
     createdAt: trimmed(cast.createdAt) ?? '',
-    lastObservedState: trimmed(cast.lastObservedState) ?? 'running'
+    lastObservedState: trimmed(cast.lastObservedState) ?? 'running',
+    ...(cast.endedAt !== undefined ? { endedAt: trimmed(cast.endedAt) } : {}),
+    ...(cast.endReason !== undefined ? { endReason: trimmed(cast.endReason) } : {}),
+    ...(cast.endRequestedAt !== undefined ? { endRequestedAt: trimmed(cast.endRequestedAt) } : {}),
+    ...(cast.lastObservedAt !== undefined ? { lastObservedAt: trimmed(cast.lastObservedAt) } : {})
   };
 }
 

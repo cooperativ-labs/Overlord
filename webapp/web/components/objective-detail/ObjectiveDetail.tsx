@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { type ReactNode, type RefObject, useCallback, useEffect, useRef, useState } from 'react';
 
+import { useAnswerFollowUps } from '../../lib/answered-agent-requests.ts';
 import { useDismissedAgentRequests } from '../../lib/dismissed-agent-requests.ts';
 import { buildAgentResumeCommand } from '../../lib/helpers/agent-resume-command.ts';
 import { useCopyToClipboard } from '../../lib/hooks/use-copy-to-clipboard.ts';
@@ -57,7 +58,7 @@ import { useObjectiveAgentSelection } from '../objectives/useObjectiveAgentSelec
 import { Dialog, DialogContent, DialogTitle } from '../ui/dialog.tsx';
 import { FileDropZone } from '../ui/file-drop-zone.tsx';
 
-import { DismissibleAgentRequestCard } from './AgentRequestCards.tsx';
+import { AnsweredAgentRequestCard, DismissibleAgentRequestCard } from './AgentRequestCards.tsx';
 import {
   adjacentObjectiveId,
   detailPrimaryAction,
@@ -633,14 +634,26 @@ function DetailMainColumn(props: LayoutProps) {
       ? null
       : { attachmentCount: attachmentState.attachments.length, hasHistory };
   const topCards = inFlight ? requests.filter(request => !dismissedIds.has(request.id)) : [];
+  const answerFollowUps = useAnswerFollowUps(mission.id, objective.id);
+  const openIds = new Set(openRequests.requests.map(request => request.id));
+  const answeredCards = inFlight
+    ? answerFollowUps.followUps.filter(request => !openIds.has(request.id))
+    : [];
   const evidenceMode = inFlight ? 'active' : objective.state === 'complete' ? 'complete' : null;
 
   return (
     <div className="grid min-w-0 gap-5">
-      {topCards.length > 0 ? (
+      {topCards.length > 0 || answeredCards.length > 0 ? (
         <div className="grid min-w-0 gap-2">
           {topCards.map(request => (
             <DismissibleAgentRequestCard key={request.id} request={request} onDismiss={dismiss} />
+          ))}
+          {answeredCards.map(request => (
+            <AnsweredAgentRequestCard
+              key={request.id}
+              request={request}
+              onClose={answerFollowUps.close}
+            />
           ))}
         </div>
       ) : null}

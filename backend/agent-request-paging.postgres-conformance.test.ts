@@ -450,5 +450,45 @@ for (const adapter of conformanceAdapters()) {
         }
       });
     });
+
+    describe('dismissed requests in the paged open read (ADR 0063)', () => {
+      it('returns a dismissed open request with the caller dismissal on every page read', async () => {
+        const dismissedId = await insertRequest({ id: 'dismissed-open', createdAt: at(900) });
+        const response = await fetch(`${baseUrl}/api/agent-requests/${dismissedId}/dismissal`, {
+          method: 'POST'
+        });
+        const text = await response.text();
+        assert.equal(response.status, 200, text);
+        const result = JSON.parse(text) as {
+          changed: boolean;
+          request: { dismissed: boolean; dismissedAt: string; status: string };
+        };
+        assert.equal(result.changed, true);
+        assert.equal(result.request.status, 'open');
+        assert.ok(!Number.isNaN(Date.parse(result.request.dismissedAt)));
+
+        const { ids } = await readAll(`missionId=${encodeURIComponent(missionId)}&status=open`);
+        assert.ok(ids.includes(dismissedId), 'a dismissed open request stays in status=open');
+        const { body } = await get(
+          `missionId=${encodeURIComponent(missionId)}&status=open&limit=200`
+        );
+        const row = (
+          body as {
+            requests: Array<{ id: string; dismissed: boolean; dismissedAt: string | null }>;
+          }
+        ).requests.find(request => request.id === dismissedId);
+        assert.equal(row?.dismissed, true);
+        assert.equal(row?.dismissedAt, result.request.dismissedAt);
+
+        const restored = await fetch(`${baseUrl}/api/agent-requests/${dismissedId}/dismissal`, {
+          method: 'DELETE'
+        });
+        assert.equal(restored.status, 200);
+        assert.equal(
+          ((await restored.json()) as { request: { dismissed: boolean } }).request.dismissed,
+          false
+        );
+      });
+    });
   });
 }

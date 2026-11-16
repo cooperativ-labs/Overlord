@@ -147,8 +147,8 @@ describe('RunnerQueueProvider round trip', () => {
     await db.run(
       `INSERT INTO agent_requests
          (id, workspace_id, project_id, mission_id, channel_id, kind, summary,
-          application_state, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, 'question', 'Which branch?', 'emitted', ?, ?)`,
+          status, application_state, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, 'question', 'Which branch?', 'resolved', 'emitted', ?, ?)`,
       [agentRequestId, ctx.workspace.id, projectId, missionId, channelId, now, now]
     );
 
@@ -194,8 +194,8 @@ describe('RunnerQueueProvider round trip', () => {
     await db.run(
       `INSERT INTO agent_requests
          (id, workspace_id, project_id, mission_id, channel_id, kind, summary,
-          application_state, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, 'question', 'Which branch?', 'emitted', ?, ?)`,
+          status, application_state, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, 'question', 'Which branch?', 'resolved', 'emitted', ?, ?)`,
       [agentRequestId, ctx.workspace.id, projectId, missionId, channelId, now, now]
     );
 

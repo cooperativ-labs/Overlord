@@ -127,13 +127,14 @@ export async function forgetLatchProviderSession({
       mission_id: string;
       objective_id: string;
       metadata_json: string | null;
+      updated_at: string;
       revision: number;
     }>(
       executionRequestId
-        ? `SELECT id, project_id, mission_id, objective_id, metadata_json, revision
+        ? `SELECT id, project_id, mission_id, objective_id, metadata_json, updated_at, revision
              FROM execution_requests
             WHERE id = ? AND mission_id = ? AND workspace_id = ? AND deleted_at IS NULL`
-        : `SELECT id, project_id, mission_id, objective_id, metadata_json, revision
+        : `SELECT id, project_id, mission_id, objective_id, metadata_json, updated_at, revision
              FROM execution_requests
             WHERE mission_id = ? AND workspace_id = ? AND deleted_at IS NULL
             ORDER BY updated_at DESC, created_at DESC`,
@@ -147,7 +148,18 @@ export async function forgetLatchProviderSession({
     });
     if (!row) return { forgotten: false, executionRequestId: executionRequestId ?? null };
 
-    const metadataJson = stripProviderSessionFromMetadata({ metadataJson: row.metadata_json });
+    const previous = parseMetadata(row.metadata_json);
+    const mapped = providerSessionFromMetadata(previous);
+    const stripped = parseMetadata(
+      stripProviderSessionFromMetadata({ metadataJson: row.metadata_json })
+    );
+    if (mapped?.lastObservedState === 'exited')
+      stripped.endedTerminalSession = {
+        ...mapped,
+        endedAt: mapped.endedAt ?? row.updated_at,
+        endReason: mapped.endReason ?? 'unknown'
+      };
+    const metadataJson = JSON.stringify(stripped);
     const revision = row.revision + 1;
     const updated = await tx.run(
       `UPDATE execution_requests SET metadata_json = ?, updated_at = ?, revision = ?

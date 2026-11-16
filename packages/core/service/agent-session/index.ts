@@ -7,6 +7,7 @@
  * disagree about what `released_to_terminal` means.
  */
 
+export * from './answer-delivery.js';
 export * from './channels.js';
 export * from './credential.js';
 export * from './events.js';

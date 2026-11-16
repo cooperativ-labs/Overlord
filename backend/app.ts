@@ -31,8 +31,12 @@ import {
   createConnectionsRouter,
   createProfileConnectionCallbackHandler
 } from './connections/routes.ts';
+import { endMissionLatchSession } from './execution/end-latch-session.ts';
 import { getExecutionTargetMigrationDiagnostics } from './execution/execution-target-migration.ts';
-import { forgetMissionLatchSession } from './execution/latch-sessions.ts';
+import {
+  forgetMissionLatchSession,
+  readMissionTerminalHistory
+} from './execution/latch-sessions.ts';
 import {
   getObjectiveEffectiveLaunchConfig,
   getObjectiveLaunchCommand,
@@ -291,6 +295,7 @@ import {
   uploadWorkspaceImage
 } from './storage.ts';
 import { isStorageBucketKey, STORAGE_BUCKETS } from './storage-buckets.ts';
+import { terminalSessionObserver } from './terminal-session-observer.ts';
 import { webhookDispatcher } from './webhook-dispatcher.ts';
 import {
   createWebhookSubscription,
@@ -1785,9 +1790,17 @@ app.post(
   '/api/missions/:id/session-channel',
   handle(req => prepareMissionSessionChannel(req.params.id, req.body ?? {}), { mutates: true })
 );
+app.get(
+  '/api/missions/:id/terminal-sessions/history',
+  handle(req => readMissionTerminalHistory(req.params.id, req.query))
+);
 app.post(
   '/api/missions/:id/terminal-sessions/forget',
   handle(req => forgetMissionLatchSession(req.params.id, req.body ?? {}), { mutates: true })
+);
+app.post(
+  '/api/missions/:id/terminal-sessions/end',
+  handle(req => endMissionLatchSession(req.params.id, req.body ?? {}), { mutates: true })
 );
 app.use(AGENT_REQUEST_HUMAN_ROUTE_PREFIX, createAgentRequestHumanRouter());
 app.use(AGENT_SESSION_INPUT_HUMAN_ROUTE_PREFIX, createAgentSessionInputHumanRouter());
@@ -2308,7 +2321,11 @@ export async function start(): Promise<void> {
 
   // Every background loop starts here and stops on SIGTERM/SIGINT before the
   // process terminates with that signal.
-  const backgroundLoops: PollLoop<unknown>[] = [...mutationPollLoops, runQueueDispatchWorker];
+  const backgroundLoops: PollLoop<unknown>[] = [
+    ...mutationPollLoops,
+    runQueueDispatchWorker,
+    terminalSessionObserver
+  ];
   if (chatCloud()) {
     const chatWorker = new ChatWorker(
       () =>

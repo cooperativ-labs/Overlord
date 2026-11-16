@@ -88,26 +88,24 @@ export function latchHomeDirectory(env: NodeJS.ProcessEnv = process.env): string
   return trimmed(env.LATCH_HOME) ?? path.join(os.homedir(), '.latch');
 }
 
-/**
- * Resolve where the gateway lives and which token opens it. Environment
- * overrides exist for an operator who moved the bind or the token file; the
- * defaults match `latch serve` with no flags.
- */
-export function resolveLatchGatewayConfig({
-  env = process.env,
-  readFile = (filePath: string) => readFileSync(filePath, 'utf8'),
-  fileExists = existsSync
-}: {
-  env?: NodeJS.ProcessEnv;
-  readFile?: (filePath: string) => string;
-  fileExists?: (filePath: string) => boolean;
-} = {}): LatchGatewayConfig {
-  const rawUrl = trimmed(env.LATCH_GATEWAY_URL) ?? DEFAULT_LATCH_GATEWAY_URL;
+/** Latch's Remote Link runtime directory, relative to its state root. */
+const LATCH_REMOTE_LINK_RUNTIME_PATH = ['remote-access', 'runtime'] as const;
+/** Readiness document the Remote Link supervisor's gateway writes once bound. */
+export const LATCH_REMOTE_LINK_READY_FILENAME = 'remote-link-gateway-ready.json';
+/** Bearer token of the Remote Link supervisor's gateway. */
+export const LATCH_REMOTE_LINK_TOKEN_FILENAME = 'remote-link-gateway.token';
+
+type GatewayFileAccess = {
+  readFile: (filePath: string) => string;
+  fileExists: (filePath: string) => boolean;
+};
+
+function loopbackOrigin(rawUrl: string, label: string): string {
   let parsed: URL;
   try {
     parsed = new URL(rawUrl);
   } catch {
-    throw new LatchGatewayError(`LATCH_GATEWAY_URL is not a URL: ${rawUrl}`);
+    throw new LatchGatewayError(`${label} is not a URL: ${rawUrl}`);
   }
   if (parsed.protocol !== 'http:') {
     throw new LatchGatewayError('The Latch gateway must be reached over http on loopback.');
@@ -117,26 +115,120 @@ export function resolveLatchGatewayConfig({
       `Refusing to reach the Latch gateway at a non-loopback host (${parsed.hostname}).`
     );
   }
+  return parsed.origin;
+}
 
-  const inlineToken = trimmed(env.LATCH_GATEWAY_TOKEN);
-  if (inlineToken) return { baseUrl: parsed.origin, token: inlineToken };
-
-  const tokenFile =
-    trimmed(env.LATCH_SERVE_TOKEN_FILE) ??
-    path.join(latchHomeDirectory(env), LATCH_SERVE_TOKEN_FILENAME);
-  if (!fileExists(tokenFile)) {
+function readGatewayToken(tokenFile: string, files: GatewayFileAccess): string {
+  if (!files.fileExists(tokenFile)) {
     throw new LatchGatewayError(
       `Latch's gateway token is missing (${tokenFile}). Start it with \`latch serve\`.`
     );
   }
   let token: string | null = null;
   try {
-    token = trimmed(readFile(tokenFile));
+    token = trimmed(files.readFile(tokenFile));
   } catch {
     throw new LatchGatewayError(`Latch's gateway token could not be read (${tokenFile}).`);
   }
   if (!token) throw new LatchGatewayError(`Latch's gateway token is empty (${tokenFile}).`);
-  return { baseUrl: parsed.origin, token };
+  return token;
+}
+
+/**
+ * The gateway Latch's Remote Link supervisor runs (ADR 0065).
+ *
+ * With Remote Access enabled, Latch's own supervisor starts `latch serve` on an
+ * ephemeral loopback port with its own token and readiness document, and that
+ * process holds the single Conversation Hub lock: a second `latch serve` on the
+ * default port cannot carry conversations. So on such a machine this is the only
+ * gateway an answer can go through. The readiness document names the port; it is
+ * rejected unless it is loopback, because the token is safe nowhere else. Returns
+ * null when Remote Link has no gateway running.
+ */
+function remoteLinkGatewayConfig(
+  env: NodeJS.ProcessEnv,
+  files: GatewayFileAccess
+): LatchGatewayConfig | null {
+  const runtime = path.join(latchHomeDirectory(env), ...LATCH_REMOTE_LINK_RUNTIME_PATH);
+  const readyFile = path.join(runtime, LATCH_REMOTE_LINK_READY_FILENAME);
+  const tokenFile = path.join(runtime, LATCH_REMOTE_LINK_TOKEN_FILENAME);
+  if (!files.fileExists(readyFile) || !files.fileExists(tokenFile)) return null;
+  try {
+    const ready = JSON.parse(files.readFile(readyFile)) as unknown;
+    if (!ready || typeof ready !== 'object' || Array.isArray(ready)) return null;
+    const url = trimmed((ready as Record<string, unknown>).url);
+    if (!url) return null;
+    return {
+      baseUrl: loopbackOrigin(url, "Latch's Remote Link gateway address"),
+      token: readGatewayToken(tokenFile, files)
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Every gateway that may carry a conversation on this machine, most specific
+ * first. An explicit environment override is the only candidate when present.
+ * Otherwise the standalone `latch serve` (default bind, `serve.token`) and the
+ * Remote Link supervisor's gateway are both offered, and the caller uses the
+ * first one that answers and serves the conversation endpoint.
+ */
+export function resolveLatchGatewayCandidates({
+  env = process.env,
+  readFile = (filePath: string) => readFileSync(filePath, 'utf8'),
+  fileExists = existsSync
+}: {
+  env?: NodeJS.ProcessEnv;
+  readFile?: (filePath: string) => string;
+  fileExists?: (filePath: string) => boolean;
+} = {}): LatchGatewayConfig[] {
+  const files = { readFile, fileExists };
+  const explicitUrl = trimmed(env.LATCH_GATEWAY_URL);
+  const baseUrl = loopbackOrigin(explicitUrl ?? DEFAULT_LATCH_GATEWAY_URL, 'LATCH_GATEWAY_URL');
+
+  const inlineToken = trimmed(env.LATCH_GATEWAY_TOKEN);
+  if (inlineToken) return [{ baseUrl, token: inlineToken }];
+
+  const explicitTokenFile = trimmed(env.LATCH_SERVE_TOKEN_FILE);
+  const tokenFile =
+    explicitTokenFile ?? path.join(latchHomeDirectory(env), LATCH_SERVE_TOKEN_FILENAME);
+  if (explicitUrl || explicitTokenFile) {
+    return [{ baseUrl, token: readGatewayToken(tokenFile, files) }];
+  }
+
+  const candidates: LatchGatewayConfig[] = [];
+  let standaloneError: LatchGatewayError | null = null;
+  try {
+    candidates.push({ baseUrl, token: readGatewayToken(tokenFile, files) });
+  } catch (error) {
+    standaloneError = error instanceof LatchGatewayError ? error : null;
+  }
+  const remoteLink = remoteLinkGatewayConfig(env, files);
+  if (remoteLink) candidates.push(remoteLink);
+  if (candidates.length === 0) {
+    throw (
+      standaloneError ??
+      new LatchGatewayError("Latch's gateway is not running. Start it with `latch serve`.")
+    );
+  }
+  return candidates;
+}
+
+/**
+ * Resolve where the gateway lives and which token opens it: the first of
+ * {@link resolveLatchGatewayCandidates}. Environment overrides exist for an
+ * operator who moved the bind or the token file; the defaults match
+ * `latch serve` with no flags.
+ */
+export function resolveLatchGatewayConfig(
+  options: {
+    env?: NodeJS.ProcessEnv;
+    readFile?: (filePath: string) => string;
+    fileExists?: (filePath: string) => boolean;
+  } = {}
+): LatchGatewayConfig {
+  return resolveLatchGatewayCandidates(options)[0]!;
 }
 
 function parseEndpoints(value: unknown): LatchGatewayEndpoints | null {
@@ -238,21 +330,34 @@ export async function requireLatchConversationGateway({
   fetchImpl?: typeof fetch;
   timeoutMs?: number;
 } = {}): Promise<{ gateway: LatchGatewayConfig; capabilities: LatchGatewayCapabilities }> {
-  const resolved = gateway ?? resolveLatchGatewayConfig({ env });
-  const capabilities = await readLatchGatewayCapabilities({
-    gateway: resolved,
-    fetchImpl,
-    timeoutMs
-  });
-  if (capabilities.protocolVersion !== SUPPORTED_LATCH_PROTOCOL_VERSION) {
-    throw new LatchGatewayError(
-      `Latch gateway protocolVersion ${capabilities.protocolVersion} is not supported (need ${SUPPORTED_LATCH_PROTOCOL_VERSION}).`
-    );
+  const candidates = gateway ? [gateway] : resolveLatchGatewayCandidates({ env });
+  let failure: LatchGatewayError | null = null;
+  for (const candidate of candidates) {
+    try {
+      const capabilities = await readLatchGatewayCapabilities({
+        gateway: candidate,
+        fetchImpl,
+        timeoutMs
+      });
+      if (capabilities.protocolVersion !== SUPPORTED_LATCH_PROTOCOL_VERSION) {
+        throw new LatchGatewayError(
+          `Latch gateway protocolVersion ${capabilities.protocolVersion} is not supported (need ${SUPPORTED_LATCH_PROTOCOL_VERSION}).`
+        );
+      }
+      if (!capabilities.endpoints.conversation) {
+        throw new LatchGatewayError('This Latch gateway does not serve the conversation endpoint.');
+      }
+      return { gateway: candidate, capabilities };
+    } catch (error) {
+      // Keep the first candidate's reason: it is the gateway the operator
+      // configured or expects, and a later candidate failing is less telling.
+      failure ??=
+        error instanceof LatchGatewayError
+          ? error
+          : new LatchGatewayError("Latch's gateway could not be reached.");
+    }
   }
-  if (!capabilities.endpoints.conversation) {
-    throw new LatchGatewayError('This Latch gateway does not serve the conversation endpoint.');
-  }
-  return { gateway: resolved, capabilities };
+  throw failure ?? new LatchGatewayError("Latch's gateway could not be reached.");
 }
 
 /** WebSocket URL for one session's Conversation Hub channel. */
