@@ -1,14 +1,17 @@
-import type { ObjectiveState } from '@overlord/contract';
+import type { ObjectiveState, ProjectResourceDto } from '@overlord/contract';
 import {
   ArrowDown,
   ArrowUp,
   Check,
   CheckCircle2,
   Copy,
+  FolderOpen,
   ListOrdered,
+  Loader2,
   MessageSquare,
   MoreVertical,
   Pencil,
+  Play,
   RotateCcw,
   Trash2,
   Unplug
@@ -31,9 +34,34 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger
 } from '../ui/dropdown-menu.tsx';
+
+import { objectiveResourceOptions } from './ObjectiveResourcePicker.tsx';
+
+/** "Run" at the top of the menu (coo:1289). */
+export type ObjectiveMenuRunAction = {
+  label: string;
+  onRun: () => void;
+  /** Shown under the label of a disabled item, so the person knows why. */
+  disabledReason?: string | null;
+  pending?: boolean;
+};
+
+/** "Resource" submenu: which project resource the objective runs against (coo:1289). */
+export type ObjectiveMenuResourceAction = {
+  resources: ProjectResourceDto[];
+  /** The objective's resource key; null inherits the project primary. */
+  value: string | null;
+  onChange: (resourceKey: string | null) => void;
+  disabled?: boolean;
+};
 
 type ObjectiveMenuButtonProps = {
   objectiveId: string;
@@ -59,12 +87,17 @@ type ObjectiveMenuButtonProps = {
   showForceDisconnect?: boolean;
   /** Called after the objective was deleted, so a host can close its detail. */
   onDeleted?: () => void;
+  /** Offer "Run" first. Hosts pass it for objectives that have not started. */
+  run?: ObjectiveMenuRunAction;
+  /** Offer the "Resource" submenu. Hidden when the project has one logical resource. */
+  resource?: ObjectiveMenuResourceAction;
   /** Extra trigger classes (size on dense rows). */
   triggerClassName?: string;
 };
 
 /**
- * Kebab menu of actions for a single objective, in every state. Groups, in order: copy
+ * Kebab menu of actions for a single objective, in every state. Groups, in order: Run and the
+ * Resource submenu (not-started rows, coo:1289); copy
  * (objective ID, resume command, session ID); Edit title; Move up / Move down (keyboard
  * reordering of not-started objectives); Add to queue…; Mark complete / Mark draft (with the
  * executing and complete confirmations); Force disconnect (executing); Delete. Items whose
@@ -84,6 +117,8 @@ export function ObjectiveMenuButton({
   onMoveDown,
   showForceDisconnect = false,
   onDeleted,
+  run,
+  resource,
   triggerClassName
 }: ObjectiveMenuButtonProps) {
   const update = useUpdateObjective();
@@ -102,6 +137,10 @@ export function ObjectiveMenuButton({
   const canShowForceDisconnect = showForceDisconnect && state === 'executing';
   const canShowMove = Boolean(onMoveUp || onMoveDown);
   const canShowQueue = Boolean(onOpenAddToQueue);
+  const resourceOptions = resource
+    ? objectiveResourceOptions(resource.resources, resource.value)
+    : null;
+  const runDisabled = Boolean(run?.disabledReason) || Boolean(run?.pending);
 
   function setState(next: ObjectiveState) {
     update.mutate({ id: objectiveId, body: { state: next } });
@@ -173,6 +212,66 @@ export function ObjectiveMenuButton({
           className="min-w-[160px]"
           onClick={event => event.stopPropagation()}
         >
+          {run ? (
+            <DropdownMenuItem
+              className="items-start gap-2 text-xs"
+              disabled={runDisabled}
+              title={run.disabledReason ?? undefined}
+              onClick={run.onRun}
+            >
+              {run.pending ? (
+                <Loader2 className="mt-px h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Play
+                  className={cn(
+                    'mt-px h-3.5 w-3.5',
+                    !runDisabled && 'fill-current text-emerald-600 dark:text-emerald-400'
+                  )}
+                />
+              )}
+              <span className="flex min-w-0 flex-col">
+                <span className={cn(!runDisabled && 'text-emerald-600 dark:text-emerald-400')}>
+                  {run.label}
+                </span>
+                {run.disabledReason ? (
+                  <span className="max-w-[220px] text-[11px] text-muted-foreground">
+                    {run.disabledReason}
+                  </span>
+                ) : null}
+              </span>
+            </DropdownMenuItem>
+          ) : null}
+          {resource && resourceOptions ? (
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger
+                className="gap-2 text-xs"
+                disabled={resource.disabled}
+                aria-label={`Resource: ${resourceOptions.currentLabel}`}
+              >
+                <FolderOpen className="h-3.5 w-3.5" />
+                <span className="min-w-0 truncate">
+                  Resource
+                  <span className="text-muted-foreground"> · {resourceOptions.currentLabel}</span>
+                </span>
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent className="min-w-[180px]">
+                <DropdownMenuRadioGroup
+                  value={resourceOptions.effectiveKey}
+                  onValueChange={(key: string) => {
+                    if (key === resourceOptions.effectiveKey) return;
+                    resource.onChange(key === resourceOptions.primaryKey ? null : key);
+                  }}
+                >
+                  {resourceOptions.choices.map(choice => (
+                    <DropdownMenuRadioItem key={choice.key} value={choice.key} className="text-xs">
+                      <span className="truncate">{choice.label}</span>
+                    </DropdownMenuRadioItem>
+                  ))}
+                </DropdownMenuRadioGroup>
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
+          ) : null}
+          {run || (resource && resourceOptions) ? <DropdownMenuSeparator /> : null}
           <DropdownMenuItem className="gap-2 text-xs" onClick={handleCopyId}>
             {copied ? (
               <Check className="h-3.5 w-3.5 text-green-600" />

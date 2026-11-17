@@ -220,6 +220,7 @@ it('renders updating evidence, expandable actions, compact promoted suggestions,
   // A promoted suggestion is a resolved item; it is listed in the Resolved tab.
   selectTab(/Resolved/);
   assert.ok(screen.getByText(/Add derivation tests on iOS/));
+  selectTab(/Summary/);
   const dots = screen.getAllByRole('img', { name: 'New since your last visit' }).length;
   await act(async () =>
     client.setQueryData(keys.missionSummary(fixture.mission.id), {
@@ -274,6 +275,7 @@ it('shows first-compose evidence without an empty post and shows all-clear after
 
 it('names the authoring objective, and shows no provenance for automatic summaries', async () => {
   await mount();
+  selectTab(/Summary/);
   assert.ok(screen.getByText('Updated by'));
   assert.ok(
     screen.getByRole('button', { name: 'Open objective coo:900.cccc, which wrote this summary' })
@@ -283,6 +285,7 @@ it('names the authoring objective, and shows no provenance for automatic summari
   fallback.summary.author = { kind: 'gemini', objectiveId: null, deliveryId: null };
   fallback.summary.generatedBy = 'gemini';
   await mount(fallback);
+  selectTab(/Summary/);
   assert.equal(screen.queryByText('Written automatically from deliveries') === null, true);
   assert.equal(screen.queryByText('Updated by') === null, true);
 });
@@ -471,6 +474,10 @@ it('is a tablist with arrow-key movement and a linked tab panel', async () => {
   const objectives = screen.getByRole('tab', { name: /Objectives/ });
   objectives.focus();
   fireEvent.keyDown(objectives, { key: 'ArrowRight' });
+  // Summary sits directly right of Objectives.
+  const summaryTab = screen.getByRole('tab', { name: /Summary/ });
+  assert.equal(summaryTab.getAttribute('aria-selected'), 'true');
+  fireEvent.keyDown(summaryTab, { key: 'ArrowRight' });
   const forYou = screen.getByRole('tab', { name: /For you/ });
   assert.equal(forYou.getAttribute('aria-selected'), 'true');
   assert.equal(document.activeElement, forYou);

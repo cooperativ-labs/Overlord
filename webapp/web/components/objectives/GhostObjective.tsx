@@ -1,6 +1,6 @@
 import type { AgentLaunchConfigDto, CreateObjectiveBody, ObjectiveDto } from '@overlord/contract';
 import { useQueryClient } from '@tanstack/react-query';
-import { Loader2, Play } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import {
   type FocusEvent,
   type KeyboardEvent,
@@ -19,7 +19,6 @@ import { cn } from '../../lib/utils.ts';
 import { MentionableTextarea } from '../MentionableTextarea.tsx';
 import { Button } from '../ui/button.tsx';
 import { FileDropZone } from '../ui/file-drop-zone.tsx';
-import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip.tsx';
 
 import { AgentModelChooserButton } from './AgentModelChooserButton.tsx';
 import { type AgentModelSelection } from './AgentModelSelector.tsx';
@@ -30,13 +29,17 @@ import {
   usePendingAttachments
 } from './ObjectiveAttachments.tsx';
 import { ObjectiveResourcePicker } from './ObjectiveResourcePicker.tsx';
+import { ObjectiveSaveButton } from './ObjectiveSaveButton.tsx';
 import { useObjectiveAgentSelection } from './useObjectiveAgentSelection.ts';
 
 type GhostObjectiveProps = {
   missionId: string;
   projectId: string;
-  /** Called once the composer has persisted a real objective and the list shows it. */
-  onMaterialized?: () => void;
+  /**
+   * Called once the composer has persisted a real objective (create, uploads, refetch). The
+   * mission panel's {@link ObjectiveComposer} keeps showing it as the saved composer card.
+   */
+  onMaterialized?: (objective: ObjectiveDto) => void;
   /** Called when the user leaves (or Escapes) an empty composer and it should disappear. */
   onDismissEmpty?: () => void;
   /**
@@ -88,14 +91,15 @@ const REFETCH_WAIT_CAP_MS = 8000;
  * the agent/model/launch-config selection (the server validates and writes it
  * atomically), then the staged uploads to the new id, then one refetch, and
  * only then {@link GhostObjectiveProps.onMaterialized} — so the card is swapped
- * for the real {@link DraftObjective} exactly once. Meanwhile the card stays in
+ * for the saved composer card exactly once. Meanwhile the card stays in
  * place, read-only, showing "Saving…". A failed create returns the card to
  * editing with everything intact; a failed upload keeps the card with the error
  * and retries only the failed files against the objective that already exists.
  *
  * Leaving with no text and no files writes nothing (settings alone are not
- * work); Escape discards the whole buffer. Run stays disabled: it needs a real
- * objective id. Creating with `state: 'draft'` lets the server append behind an
+ * work); Escape discards the whole buffer. The toolbar's primary slot is Save
+ * (coo:1289): it commits the same way leaving does, and the saved card that
+ * replaces this one shows Run in its place. Creating with `state: 'draft'` lets the server append behind an
  * existing draft, so the queue keeps exactly one next-up objective.
  */
 export function GhostObjective({
@@ -117,8 +121,7 @@ export function GhostObjective({
   const {
     catalog,
     agentConfigs: inheritedAgentConfigs,
-    selection: defaultSelection,
-    loaded: selectionLoaded
+    selection: defaultSelection
   } = useObjectiveAgentSelection({
     id: '',
     projectId,
@@ -225,10 +228,11 @@ export function GhostObjective({
         })
       ]);
       clearTimeout(capTimer);
+      const created = createdRef.current;
       resetBuffer();
       setPhase('editing');
       callbacksRef.current.onCommittingChange?.(null);
-      callbacksRef.current.onMaterialized?.();
+      if (created) callbacksRef.current.onMaterialized?.(created);
     },
     [qc, resetBuffer]
   );
@@ -395,6 +399,7 @@ export function GhostObjective({
   };
 
   const readOnly = phase !== 'editing';
+  const hasWork = text.trim().length > 0 || pending.files.length > 0;
   const errorMessage = commitError ?? pending.error;
 
   return (
@@ -504,28 +509,18 @@ export function GhostObjective({
               onOpenChange={open => setPopupOpen('agent', open)}
             />
 
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  <span className="inline-flex shrink-0 cursor-not-allowed">
-                    <span
-                      className={cn(
-                        'inline-flex h-8 items-center gap-1.5 rounded-md border border-input',
-                        'bg-background px-3 text-xs font-medium text-foreground opacity-60 shadow-sm'
-                      )}
-                    >
-                      <Play className="h-3.5 w-3.5" />
-                      Run
-                    </span>
-                  </span>
-                }
-              />
-              <TooltipContent side="top">
-                {selectionLoaded
-                  ? 'This objective saves when you leave the card. Run is available once it is saved.'
-                  : 'Loading your agent model selection.'}
-              </TooltipContent>
-            </Tooltip>
+            {/* Save → Run (coo:1289): this slot saves the objective; once it is saved the
+                composer shows the same card with the green Run button in this place. */}
+            <ObjectiveSaveButton
+              onSave={() => void commit()}
+              saving={phase === 'saving'}
+              disabled={!hasWork || phase !== 'editing'}
+              title={
+                hasWork
+                  ? 'Save this objective. It also saves when you leave the card.'
+                  : 'Write an instruction to save this objective.'
+              }
+            />
           </ObjectiveAttachmentUploadTrigger>
         </div>
       </FileDropZone>

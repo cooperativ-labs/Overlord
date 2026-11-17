@@ -2,13 +2,16 @@ import type {
   MissionDetailDto,
   ObjectiveDto,
   ObjectiveRunQueueEntryDto,
-  ObjectiveState
+  ObjectiveState,
+  ProjectResourceDto
 } from '@overlord/contract';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, fireEvent, render, waitFor, within } from '@testing-library/react';
 import assert from 'node:assert/strict';
 import { afterEach, beforeEach, describe, it } from 'node:test';
 import type { ReactNode } from 'react';
+
+import { keys } from '../../lib/query-keys.ts';
 
 import { MissionObjectivesSection } from './MissionObjectivesSection.tsx';
 import {
@@ -590,5 +593,184 @@ describe('objective row drag helpers', () => {
     button.click();
     assert.equal(clicks, 1, 'later clicks open normally');
     button.remove();
+  });
+});
+
+describe('ObjectiveRow menu Run and Resource (coo:1289)', () => {
+  function resource(key: string, isPrimary: boolean): ProjectResourceDto {
+    return {
+      id: `res-${key}`,
+      workspaceId: 'ws-1',
+      projectId: 'project-1',
+      executionTargetId: null,
+      resourceKey: key,
+      type: 'local_directory',
+      label: key,
+      path: `/tmp/${key}`,
+      isPrimary,
+      accessMode: 'read_write',
+      status: 'active',
+      observedAt: null,
+      observationSource: null,
+      createdAt: '2026-11-16T00:00:00.000Z',
+      updatedAt: '2026-11-16T00:00:00.000Z',
+      revision: 1,
+      sources: []
+    } as ProjectResourceDto;
+  }
+
+  function seededClient(resources: ProjectResourceDto[]) {
+    const qc = client();
+    qc.setQueryData(keys.projectResources('project-1'), resources);
+    qc.setQueryData(keys.launchPreference('project-1'), null);
+    qc.setQueryData(keys.project('project-1'), { id: 'project-1', workspaceId: 'ws-1' });
+    qc.setQueryData(keys.projectExecutionTarget('project-1'), {
+      selectedExecutionTargetId: null,
+      eligibleTargets: []
+    });
+    qc.setQueryData(keys.agentCatalog('ws-1'), {
+      agents: [
+        {
+          key: 'claude',
+          label: 'Claude',
+          availableByDefault: true,
+          models: [{ id: 'opus', displayName: 'Opus' }],
+          defaultModel: 'opus',
+          defaultReasoningEffort: null,
+          reasoningLabel: 'Thinking'
+        }
+      ],
+      defaultAgent: 'claude',
+      defaultModel: 'opus'
+    });
+    return qc;
+  }
+
+  function renderSeeded(
+    o: ObjectiveDto,
+    options: { resources?: ProjectResourceDto[]; siblings?: ObjectiveDto[] } = {}
+  ) {
+    const qc = seededClient(
+      options.resources ?? [resource('primary', true), resource('docs', false)]
+    );
+    const utils = render(
+      wrap(
+        qc,
+        <ul>
+          <ObjectiveRow
+            objective={o}
+            mission={mission([o, ...(options.siblings ?? [])])}
+            onOpen={() => {}}
+          />
+        </ul>
+      )
+    );
+    return { ...utils, row: utils.container.querySelector('li') as HTMLElement };
+  }
+
+  function item(menu: HTMLElement, label: string): HTMLElement {
+    const found = [...menu.querySelectorAll('[role="menuitem"]')].find(el =>
+      el.textContent?.trim().startsWith(label)
+    );
+    assert.ok(found, `menu item ${label}`);
+    return found as HTMLElement;
+  }
+
+  it('offers Run and Resource on not-started rows only', async () => {
+    const draft = renderSeeded(objective({ id: 'r1', assignedAgent: 'claude', model: 'opus' }));
+    const labels = menuLabels(await openMenu(draft.row));
+    assert.equal(labels[0], 'Run');
+    assert.ok(labels.some(label => label.startsWith('Resource')));
+    draft.unmount();
+    cleanup();
+
+    const executing = renderSeeded(objective({ id: 'r2', state: 'executing' }));
+    const executingLabels = menuLabels(await openMenu(executing.row));
+    assert.ok(!executingLabels.includes('Run'));
+    assert.ok(!executingLabels.some(label => label.startsWith('Resource')));
+  });
+
+  it('hides Resource when the project has a single resource', async () => {
+    const { row } = renderSeeded(objective({ id: 'r3', assignedAgent: 'claude' }), {
+      resources: [resource('primary', true)]
+    });
+    const labels = menuLabels(await openMenu(row));
+    assert.ok(labels.includes('Run'));
+    assert.ok(!labels.some(label => label.startsWith('Resource')));
+  });
+
+  it('Run launches with the row selection', async () => {
+    respond = req =>
+      req.method === 'POST' && req.path === '/api/objectives/r4/launch'
+        ? { status: 200, body: { id: 'req-1', objectiveId: 'r4', status: 'queued' } }
+        : null;
+    const { row } = renderSeeded(objective({ id: 'r4', assignedAgent: 'claude', model: 'opus' }));
+    const menu = await openMenu(row);
+    await act(async () => {
+      fireEvent.click(item(menu, 'Run'));
+    });
+    await waitFor(() => {
+      const launch = requests.find(r => r.path === '/api/objectives/r4/launch');
+      assert.ok(launch, 'launch sent');
+      assert.deepEqual(launch.body, { agent: 'claude', model: 'opus', reasoningEffort: null });
+    });
+  });
+
+  it('Run queues behind an active sibling instead of launching', async () => {
+    respond = req =>
+      req.method === 'POST' && req.path === '/api/projects/project-1/run-queues/entries'
+        ? { status: 200, body: { id: 'entry-1' } }
+        : null;
+    const { row } = renderSeeded(objective({ id: 'r5', assignedAgent: 'claude' }), {
+      siblings: [objective({ id: 'busy', state: 'executing' })]
+    });
+    const menu = await openMenu(row);
+    await act(async () => {
+      fireEvent.click(item(menu, 'Run after current work'));
+    });
+    await waitFor(() => {
+      const enqueue = requests.find(r => r.path === '/api/projects/project-1/run-queues/entries');
+      assert.ok(enqueue, 'enqueue sent');
+      assert.deepEqual(enqueue.body, { objectiveId: 'r5' });
+    });
+    assert.ok(!requests.some(r => r.path.endsWith('/launch')));
+  });
+
+  it('disables Run with a reason when there is no instruction', async () => {
+    const { row } = renderSeeded(
+      objective({ id: 'r6', assignedAgent: 'claude', instructionText: '  ' })
+    );
+    const run = item(await openMenu(row), 'Run');
+    assert.ok(run.hasAttribute('data-disabled'));
+    assert.match(run.textContent ?? '', /Write an instruction/);
+  });
+
+  it('Resource stores the chosen resource key', async () => {
+    respond = req =>
+      req.method === 'PATCH' && req.path === '/api/objectives/r7'
+        ? { status: 200, body: objective({ id: 'r7', resourceKey: 'docs' }) }
+        : null;
+    const { row } = renderSeeded(objective({ id: 'r7', assignedAgent: 'claude' }));
+    const menu = await openMenu(row);
+    const trigger = item(menu, 'Resource');
+    assert.match(trigger.textContent ?? '', /primary/);
+    await act(async () => {
+      fireEvent.click(trigger);
+    });
+    const docs = await waitFor(() => {
+      const option = [...document.querySelectorAll('[role="menuitemradio"]')].find(
+        el => el.textContent?.trim() === 'docs'
+      );
+      assert.ok(option, 'docs option');
+      return option as HTMLElement;
+    });
+    await act(async () => {
+      fireEvent.click(docs);
+    });
+    await waitFor(() => {
+      const patch = requests.find(r => r.method === 'PATCH' && r.path === '/api/objectives/r7');
+      assert.ok(patch, 'patch sent');
+      assert.deepEqual(patch.body, { resourceKey: 'docs' });
+    });
   });
 });

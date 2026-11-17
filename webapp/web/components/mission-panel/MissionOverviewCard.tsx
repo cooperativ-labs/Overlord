@@ -66,7 +66,14 @@ import { OVERVIEW_TAB_TONES, type OverviewTabTone } from './overview-tab-tones.t
 
 type OpenRequests = ReturnType<typeof useMissionOpenAgentRequests>;
 
-export type OverviewTabId = 'objectives' | 'for_you' | 'risks' | 'suggested' | 'resolved' | 'files';
+export type OverviewTabId =
+  | 'objectives'
+  | 'summary'
+  | 'for_you'
+  | 'risks'
+  | 'suggested'
+  | 'resolved'
+  | 'files';
 
 type OverviewTab = {
   id: OverviewTabId;
@@ -271,7 +278,7 @@ function OverviewTabs({
           >
             {tab.hasNew && !isSelected ? <NewDot /> : null}
             <span>{tab.label}</span>
-            <span className="tabular-nums opacity-90">{tab.count}</span>
+            {tab.count ? <span className="tabular-nums opacity-90">{tab.count}</span> : null}
           </button>
         );
       })}
@@ -384,6 +391,9 @@ export function MissionOverviewCard({
       hasNew: false
     }
   ];
+  if (state.kind === 'summary') {
+    tabs.push({ id: 'summary', label: 'Summary', count: '', tone: 'grey', hasNew: false });
+  }
   if (actionRows.length > 0) {
     tabs.push({
       id: 'for_you',
@@ -517,50 +527,12 @@ export function MissionOverviewCard({
       aria-label="Mission summary"
       aria-busy={updating}
       data-mission-overview=""
-      className="flex min-w-0 flex-col overflow-hidden rounded-xl border border-(--color-border) bg-(--color-surface-1)"
+      className="flex min-w-0 flex-col overflow-hidden rounded-xl border border-(--color-border) bg-background"
     >
       <div role="status" aria-live="polite">
         {updating ? <UpdatingStrip label={stripLabel} /> : null}
       </div>
-      <div ref={headerRef} className="grid min-w-0 gap-2 p-4">
-        {state.kind === 'summary' ? (
-          <>
-            {generatedAt ? (
-              <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs text-(--color-ink-dim)">
-                <span
-                  className="inline-flex items-center gap-1"
-                  title={formatTimestamp(generatedAt)}
-                >
-                  <Clock className="size-3" aria-hidden="true" />
-                  Summary updated {relativeTime(generatedAt, now, { immediate: 'just now' })}
-                </span>
-              </div>
-            ) : null}
-            <div className="flex min-w-0 items-center gap-2">
-              <OverviewKindBadge badge={badge} />
-              <h2
-                id={`mission-summary-headline-${mission.id}`}
-                className={cn(
-                  'min-w-0 flex-1 truncate text-base font-semibold text-(--color-ink)',
-                  state.updating && 'opacity-55'
-                )}
-                title={headline}
-              >
-                {headline}
-              </h2>
-            </div>
-            <ClampedSummary dimmed={state.updating}>
-              {state.summary.summary.trim() ? <Markdown text={state.summary.summary} /> : null}
-              {runningSentences.length > 0 ? <p>{runningSentences.join(' ')}</p> : null}
-            </ClampedSummary>
-            <MissionSummaryProvenanceLine provenance={provenance ?? { kind: 'automatic' }} />
-          </>
-        ) : state.kind === 'error' ? (
-          <p className="text-sm text-red-600 dark:text-red-400">
-            Could not load the mission summary:{' '}
-            {(summaryQ.error as Error)?.message ?? 'unknown error'}
-          </p>
-        ) : null}
+      <div className="grid min-w-0 gap-2 px-4 pt-4">
         {openRequests.state === 'error' || openRequests.state === 'partial' ? (
           // Never imply questions are gone: the last successful list stays, with a retry.
           <p
@@ -584,10 +556,7 @@ export function MissionOverviewCard({
         <OverviewTabs tabs={tabs} selected={selectedTab} onSelect={setRequestedTab} idFor={idFor} />
       </div>
 
-      <div
-        ref={lowerRef}
-        className="min-w-0 border-t border-(--color-border) bg-(--color-surface-2)"
-      >
+      <div ref={lowerRef} className="min-w-0 bg-background">
         {/* Objectives stays mounted on every tab: its rows own reorder state and row order. */}
         <div
           role="tabpanel"
@@ -606,7 +575,53 @@ export function MissionOverviewCard({
             tabIndex={0}
             className="min-w-0 outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
-            {selectedTab === 'for_you' ? (
+            {selectedTab === 'summary' ? (
+              <div ref={headerRef} className="grid min-w-0 gap-2 p-4">
+                {state.kind === 'summary' ? (
+                  <>
+                    {generatedAt ? (
+                      <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs text-(--color-ink-dim)">
+                        <span
+                          className="inline-flex items-center gap-1"
+                          title={formatTimestamp(generatedAt)}
+                        >
+                          <Clock className="size-3" aria-hidden="true" />
+                          Summary updated{' '}
+                          {relativeTime(generatedAt, now, { immediate: 'just now' })}
+                        </span>
+                      </div>
+                    ) : null}
+                    <div className="flex min-w-0 items-center gap-2">
+                      <OverviewKindBadge badge={badge} />
+                      <h2
+                        id={`mission-summary-headline-${mission.id}`}
+                        className={cn(
+                          'min-w-0 flex-1 truncate text-base font-semibold text-(--color-ink)',
+                          state.updating && 'opacity-55'
+                        )}
+                        title={headline}
+                      >
+                        {headline}
+                      </h2>
+                    </div>
+                    <ClampedSummary dimmed={state.updating}>
+                      {state.summary.summary.trim() ? (
+                        <Markdown text={state.summary.summary} />
+                      ) : null}
+                      {runningSentences.length > 0 ? <p>{runningSentences.join(' ')}</p> : null}
+                    </ClampedSummary>
+                    <MissionSummaryProvenanceLine
+                      provenance={provenance ?? { kind: 'automatic' }}
+                    />
+                  </>
+                ) : state.kind === 'error' ? (
+                  <p className="text-sm text-red-600 dark:text-red-400">
+                    Could not load the mission summary:{' '}
+                    {(summaryQ.error as Error)?.message ?? 'unknown error'}
+                  </p>
+                ) : null}
+              </div>
+            ) : selectedTab === 'for_you' ? (
               <MissionSummaryActions
                 headless
                 rows={actionRows}

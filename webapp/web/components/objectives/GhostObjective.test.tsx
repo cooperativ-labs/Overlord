@@ -15,6 +15,7 @@ import { keys } from '../../lib/query-keys.ts';
 
 import { GhostObjective } from './GhostObjective.tsx';
 import { MissionObjectivesSection } from './MissionObjectivesSection.tsx';
+import { ObjectiveComposer } from './ObjectiveComposer.tsx';
 
 const PROJECT_ID = 'project-1';
 const MISSION_ID = 'mission-1';
@@ -365,49 +366,74 @@ describe('GhostObjective', () => {
   });
 });
 
-/** The mission panel's wiring: the composer reports the objective it is committing to the rows. */
+/** The mission panel's wiring: the composer reports the objective it holds to the rows. */
 function PanelHarness({ mission }: { mission: MissionDetailDto }) {
-  const [committingObjectiveId, setCommittingObjectiveId] = useState<string | null>(null);
+  const [heldObjectiveId, setHeldObjectiveId] = useState<string | null>(null);
   return (
     <>
       <MissionObjectivesSection
         mission={mission}
-        committingObjectiveId={committingObjectiveId}
+        committingObjectiveId={heldObjectiveId}
         onOpenObjective={() => undefined}
       />
-      <GhostObjective
-        missionId={mission.id}
-        projectId={mission.projectId}
-        onCommittingChange={setCommittingObjectiveId}
-      />
+      <ObjectiveComposer mission={mission} onHeldObjectiveChange={setHeldObjectiveId} />
       <button type="button">Outside</button>
     </>
   );
 }
 
-describe('MissionObjectivesSection with a committing composer', () => {
-  it('does not render the committing objective while its uploads run', async () => {
+const EMPTY_MISSION = {
+  id: MISSION_ID,
+  projectId: PROJECT_ID,
+  workspaceId: 'ws-1',
+  allowParallelObjectives: false,
+  objectives: [],
+  executionRequests: []
+} as unknown as MissionDetailDto;
+
+function renderPanel(mission: MissionDetailDto = EMPTY_MISSION) {
+  const qc = makeClient();
+  const view = (m: MissionDetailDto) => (
+    <QueryClientProvider client={qc}>
+      <PanelHarness mission={m} />
+    </QueryClientProvider>
+  );
+  const result = render(view(mission));
+  return { ...result, rerenderMission: (m: MissionDetailDto) => result.rerender(view(m)) };
+}
+
+const createdRow = () => document.querySelector('[data-objective-id="created-1"]');
+const savedCard = () => screen.queryByTestId('composer-saved-objective');
+const saveButton = () => screen.getByTestId('objective-save-button') as HTMLButtonElement;
+
+describe('GhostObjective Save button', () => {
+  it('is disabled while the composer is empty and saves the objective when clicked', async () => {
+    const { events } = renderGhost();
+    assert.equal(saveButton().disabled, true, 'nothing to save yet');
+    assert.equal(screen.queryByText('Run'), null, 'the unsaved composer offers Save, not Run');
+
+    type('Write the migration');
+    assert.equal(saveButton().disabled, false);
+    await act(async () => {
+      fireEvent.pointerDown(saveButton());
+      fireEvent.click(saveButton());
+    });
+    await settle();
+
+    assert.equal(createCalls.length, 1, 'Save creates exactly once');
+    assert.equal(createCalls[0]?.instructionText, 'Write the migration');
+    assert.equal(events.materialized, 1);
+  });
+});
+
+describe('ObjectiveComposer', () => {
+  it('keeps a saved objective in the composer, hidden from the rows, until it is released', async () => {
     let releaseUpload: () => void = () => undefined;
     uploadImpl = () =>
       new Promise(resolve => {
         releaseUpload = () => resolve({});
       });
-    const mission = {
-      id: MISSION_ID,
-      projectId: PROJECT_ID,
-      workspaceId: 'ws-1',
-      allowParallelObjectives: false,
-      objectives: [],
-      executionRequests: []
-    } as unknown as MissionDetailDto;
-    const qc = makeClient();
-    const view = (m: MissionDetailDto) => (
-      <QueryClientProvider client={qc}>
-        <PanelHarness mission={m} />
-      </QueryClientProvider>
-    );
-    const { rerender } = render(view(mission));
-    const createdRow = () => document.querySelector('[data-objective-id="created-1"]');
+    const { rerenderMission } = renderPanel();
 
     type('Brand new work');
     stageFile('notes.txt');
@@ -416,22 +442,69 @@ describe('MissionObjectivesSection with a committing composer', () => {
     assert.equal(createCalls.length, 1);
 
     // A realtime refetch delivers the new row while the upload is still running.
-    rerender(
-      view({
-        ...mission,
-        objectives: [objective({ id: 'created-1', instructionText: 'Brand new work' })]
-      })
-    );
+    const withCreated = {
+      ...EMPTY_MISSION,
+      objectives: [objective({ id: 'created-1', instructionText: 'Brand new work' })]
+    } as MissionDetailDto;
+    rerenderMission(withCreated);
     await settle();
     assert.equal(createdRow(), null, 'hidden from the rows while the composer commits it');
-    assert.equal(screen.getAllByText('Brand new work').length, 1, 'shown once, in the composer');
+    assert.equal(screen.queryByText('No objectives yet'), null);
 
     await act(async () => {
       releaseUpload();
     });
     await settle();
-    assert.ok(createdRow(), 'handed over to the rows exactly once');
-    assert.equal(screen.getAllByText('Brand new work').length, 1, 'shown once, in its row');
-    assert.equal(textarea().value, '', 'the composer is empty again');
+    assert.ok(savedCard(), 'the saved objective stays in the composer');
+    assert.equal(createdRow(), null, 'not added to the list yet');
+    assert.equal(
+      (screen.getByLabelText('Objective instruction') as HTMLTextAreaElement).value,
+      'Brand new work'
+    );
+    assert.ok(screen.getByText('coo:1.created-1'), 'the saved toolbar shows the objective id');
+    assert.ok(screen.getByText('Run'), 'saved text offers Run');
+    assert.equal(screen.queryByTestId('objective-save-button'), null);
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /Add objective/ }));
+    });
+    await settle();
+    assert.ok(createdRow(), 'Add objective hands the objective to the rows');
+    assert.equal(savedCard(), null);
+    assert.equal(textarea().value, '', 'a fresh composer is presented');
+  });
+
+  it('shows Save while the saved instruction is edited, and Run again once it is saved', async () => {
+    const updateCalls: Array<{ id: string; body: unknown }> = [];
+    apiRecord.updateObjective = (id: string, body: unknown) => {
+      updateCalls.push({ id, body });
+      return Promise.resolve(objective({ id }));
+    };
+    const { rerenderMission } = renderPanel();
+    type('First draft');
+    await pointerDownOutside();
+    await settle();
+    rerenderMission({
+      ...EMPTY_MISSION,
+      objectives: [objective({ id: 'created-1', instructionText: 'First draft' })]
+    } as MissionDetailDto);
+    await settle();
+    assert.ok(savedCard());
+
+    const instruction = screen.getByLabelText('Objective instruction') as HTMLTextAreaElement;
+    fireEvent.focus(instruction);
+    fireEvent.change(instruction, { target: { value: 'Second draft' } });
+    assert.equal(screen.queryByText('Run'), null, 'unsaved edits replace Run with Save');
+    assert.equal(saveButton().disabled, false);
+
+    fireEvent.change(instruction, { target: { value: '   ' } });
+    assert.equal(saveButton().disabled, true, 'an emptied instruction is never saved');
+    fireEvent.change(instruction, { target: { value: 'Second draft' } });
+
+    await pointerDownOutside();
+    await settle();
+    assert.deepEqual(updateCalls, [{ id: 'created-1', body: { instructionText: 'Second draft' } }]);
+    assert.ok(screen.getByText('Run'), 'saved again: Run is back');
+    assert.equal(createdRow(), null, 'leaving the card does not move it into the list');
   });
 });

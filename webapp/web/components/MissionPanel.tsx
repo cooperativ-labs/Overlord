@@ -25,8 +25,8 @@ import { cn } from '../lib/utils.ts';
 import { MissionBlockingQuestions } from './mission-panel/MissionBlockingQuestions.tsx';
 import { MissionOverviewCard } from './mission-panel/MissionOverviewCard.tsx';
 import { ObjectiveDetail } from './objective-detail/ObjectiveDetail.tsx';
-import { GhostObjective } from './objectives/GhostObjective.tsx';
 import { MissionObjectivesSection } from './objectives/MissionObjectivesSection.tsx';
+import { ObjectiveComposer } from './objectives/ObjectiveComposer.tsx';
 import { Button as IconButton } from './ui/button.tsx';
 import {
   Dialog,
@@ -221,11 +221,7 @@ function MissionSettingsBar({
         currentStatusId={mission.statusId}
         statuses={mission.statuses}
       />
-      <MissionTagSelect
-        missionId={mission.id}
-        projectId={projectId}
-        assignedTags={mission.tags}
-      />
+      <MissionTagSelect missionId={mission.id} projectId={projectId} assignedTags={mission.tags} />
     </section>
   );
 }
@@ -289,8 +285,11 @@ export function MissionPanel({
   // For you, the row tints and the detail (plan §3.2); loading ignores summary eligibility.
   const openRequests = useMissionOpenAgentRequests(missionId);
   const objectiveNav = useObjectiveDetailNavigation();
-  /** The objective the composer is still committing; hidden from the rows until it hands over. */
-  const [committingObjectiveId, setCommittingObjectiveId] = useState<string | null>(null);
+  /**
+   * The objective the composer holds (being created, then saved in the composer; coo:1289). It
+   * is hidden from the rows until the composer releases it: "+ Add objective" or leaving the panel.
+   */
+  const [composerObjectiveId, setComposerObjectiveId] = useState<string | null>(null);
   /** Row order for the detail's "n of m" and previous/next. */
   const [rowOrder, setRowOrder] = useState<string[]>([]);
   /** "Edit title" from a row menu: the detail opens with that objective's title editor. */
@@ -437,7 +436,7 @@ export function MissionPanel({
                 objectiveList={
                   <MissionObjectivesSection
                     mission={mission}
-                    committingObjectiveId={committingObjectiveId}
+                    committingObjectiveId={composerObjectiveId}
                     openObjectiveId={openObjectiveId}
                     onOpenObjective={openObjective}
                     onEditObjectiveTitle={objective => {
@@ -453,10 +452,10 @@ export function MissionPanel({
               />
               {/* The composer: present on every tab, never remounted by a tab change (plan §8). */}
               <div className="sticky bottom-0 z-10 py-3" data-mission-composer="">
-                <GhostObjective
-                  missionId={mission.id}
-                  projectId={mission.projectId}
-                  onCommittingChange={setCommittingObjectiveId}
+                <ObjectiveComposer
+                  key={mission.id}
+                  mission={mission}
+                  onHeldObjectiveChange={setComposerObjectiveId}
                 />
               </div>
             </div>

@@ -172,9 +172,11 @@ function EndSessionButton({
     <>
       <Button
         type="button"
-        size="sm"
+        size={compact && !label ? 'icon-sm' : 'sm'}
         variant={compact ? 'ghost' : 'destructive'}
         className={cn(compact && 'text-destructive hover:text-destructive')}
+        aria-label={compact && !label ? 'End session' : undefined}
+        title={compact && !label ? 'End session' : undefined}
         disabled={disabled || stopSession.isPending}
         onClick={() => setConfirmStop(true)}
       >
@@ -708,31 +710,51 @@ function ObjectiveSessionLine({
 
   if (absent) return null;
 
+  const openLabel = `Open ${name} in ${viewer}`;
+  const copyLabel = copied ? 'Copied attach command' : 'Copy Latch attach command';
+
+  // One non-wrapping row: status on the left (truncates), icon-only actions on the right.
   return (
-    <div className="flex flex-wrap items-center gap-1.5">
-      <span className={cn('h-2 w-2 shrink-0 rounded-full', stateTone[state])} aria-hidden="true" />
-      <Button
-        type="button"
-        size="sm"
-        variant="ghost"
-        title={`Open ${name} in ${viewer}`}
-        disabled={!reachable || openSession.isPending}
-        onClick={() => openSession.mutate()}
-      >
-        {openSession.isPending ? <Loader2 className="animate-spin" /> : <ExternalLink />}
-        Open session
-      </Button>
-      <Button type="button" size="sm" variant="ghost" onClick={() => void copy(attachCommand)}>
-        {copied ? <Check /> : <Copy />}
-        {copied ? 'Copied' : 'Latch attach'}
-      </Button>
-      <EndSessionButton
-        session={session}
-        name={name}
-        disabled={!reachable || state !== 'running'}
-        compact
-        label="End session"
-      />
+    <div className="flex flex-wrap items-center gap-x-1">
+      <div className="flex min-w-0 flex-1 items-center gap-1.5">
+        <span
+          className={cn('h-2 w-2 shrink-0 rounded-full', stateTone[state])}
+          aria-hidden="true"
+        />
+        <span className="truncate text-xs text-(--color-ink-dim)" title={name}>
+          <span className="capitalize">{state}</span>
+          {session.deviceLabel ? ` · ${session.deviceLabel}` : ''}
+        </span>
+      </div>
+      <div className="flex shrink-0 items-center">
+        <Button
+          type="button"
+          size="icon-sm"
+          variant="ghost"
+          aria-label={openLabel}
+          title={openLabel}
+          disabled={!reachable || openSession.isPending}
+          onClick={() => openSession.mutate()}
+        >
+          {openSession.isPending ? <Loader2 className="animate-spin" /> : <ExternalLink />}
+        </Button>
+        <Button
+          type="button"
+          size="icon-sm"
+          variant="ghost"
+          aria-label={copyLabel}
+          title={copyLabel}
+          onClick={() => void copy(attachCommand)}
+        >
+          {copied ? <Check /> : <Copy />}
+        </Button>
+        <EndSessionButton
+          session={session}
+          name={name}
+          disabled={!reachable || state !== 'running'}
+          compact
+        />
+      </div>
       {openSession.isError ? (
         <p className="w-full text-xs text-destructive">
           {openSession.error instanceof Error

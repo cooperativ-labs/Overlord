@@ -113,6 +113,9 @@ export function AgentLaunchButton({
   const isDisabled =
     !selectionLoaded || isLaunching || !primaryConnection.connected || !hasInstruction;
   const styles = sizeStyles[size];
+  // Saved and runnable: green label and a filled play icon, so Run never reads like the
+  // composer's Save step that precedes it (coo:1289).
+  const isReady = !isDisabled && !hasActiveRequest;
 
   async function confirmSaved(): Promise<boolean> {
     if (!beforeLaunch) return true;
@@ -252,13 +255,20 @@ export function AgentLaunchButton({
       ) : hasActiveRequest ? (
         <Check className={cn(styles.icon, 'text-sky-500')} />
       ) : (
-        <Play className={styles.icon} />
+        <Play
+          className={cn(
+            styles.icon,
+            isReady && 'fill-current text-emerald-600 dark:text-emerald-400'
+          )}
+          data-filled={isReady ? '' : undefined}
+        />
       )}
       <span
         className={cn(
           'whitespace-nowrap transition-colors',
           styles.label,
-          hasActiveRequest && 'text-sky-600 dark:text-sky-400'
+          hasActiveRequest && 'text-sky-600 dark:text-sky-400',
+          isReady && 'text-emerald-600 dark:text-emerald-400'
         )}
       >
         {hasActiveRequest ? 'Launching' : 'Run'}

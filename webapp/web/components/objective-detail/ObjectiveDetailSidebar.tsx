@@ -103,10 +103,13 @@ export function useObjectiveResourceLabel(objective: ObjectiveDto): string | nul
 /** Force disconnect with the existing confirmation copy (plan §9.4 primary action). */
 export function ForceDisconnectButton({
   objective,
-  className
+  className,
+  iconOnly = false
 }: {
   objective: ObjectiveDto;
   className?: string;
+  /** Icon-only trigger for the tight sidebar action row; the label moves to aria-label/title. */
+  iconOnly?: boolean;
 }) {
   const update = useUpdateObjective();
   const [open, setOpen] = useState(false);
@@ -115,12 +118,14 @@ export function ForceDisconnectButton({
       <Button
         type="button"
         variant="destructive"
-        size="sm"
+        size={iconOnly ? 'icon' : 'sm'}
         className={className}
+        aria-label={iconOnly ? 'Force disconnect' : undefined}
+        title={iconOnly ? 'Force disconnect' : undefined}
         onClick={() => setOpen(true)}
       >
         <Unplug aria-hidden="true" />
-        Force disconnect
+        {iconOnly ? null : 'Force disconnect'}
       </Button>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>
@@ -306,7 +311,7 @@ export function ObjectiveDetailSidebar({
         </SidebarBlock>
       ) : null}
 
-      {showQueue || (showPrimaryAction && primary === 'run') ? (
+      {showQueue || (showPrimaryAction && primary !== null) ? (
         <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
           {showQueue ? (
             /* The popover's own trigger lives here, inside the detail: every queue control the
@@ -335,10 +340,10 @@ export function ObjectiveDetailSidebar({
               beforeLaunch={beforeLaunch}
             />
           ) : null}
+          {showPrimaryAction && primary === 'force-disconnect' ? (
+            <ForceDisconnectButton objective={objective} iconOnly />
+          ) : null}
         </div>
-      ) : null}
-      {showPrimaryAction && primary === 'force-disconnect' ? (
-        <ForceDisconnectButton objective={objective} className="justify-self-start" />
       ) : null}
     </div>
   );

@@ -26,8 +26,9 @@ type RowCallbacks = Pick<ObjectiveRowProps, 'onOpen' | 'onEditTitle' | 'onDelete
 export type MissionObjectivesSectionProps = {
   mission: MissionDetailDto;
   /**
-   * The objective the composer is still committing. It is hidden from every group until the
-   * composer hands it over, so a realtime refetch never shows it twice.
+   * The objective the composer holds — while it is committing and while it is shown saved in the
+   * composer (coo:1289). It is hidden from every group until the composer releases it, so a
+   * realtime refetch never shows it twice.
    */
   committingObjectiveId?: string | null;
   /** The objective whose detail is open; its row carries a subtle wash. */
@@ -155,6 +156,7 @@ export function MissionObjectivesSection({
   }
 
   const rowCallbacks = {
+    mission,
     onOpen: onOpenObjective,
     onEditTitle: onEditObjectiveTitle,
     onDeleted: onObjectiveDeleted
@@ -165,6 +167,8 @@ export function MissionObjectivesSection({
 
   const fixedRows = [...executedObjectives, ...launchingObjectives];
   if (fixedRows.length === 0 && orderedQueuedObjectives.length === 0) {
+    // The mission's only objective is still in the composer: no "No objectives yet" above it.
+    if (committingObjectiveId !== null) return null;
     return <p className="px-3 py-3 text-sm text-(--color-ink-dim)">No objectives yet</p>;
   }
 

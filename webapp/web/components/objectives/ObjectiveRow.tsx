@@ -1,6 +1,7 @@
-import type { ObjectiveDto, ObjectiveState } from '@overlord/contract';
+import type { MissionDetailDto, ObjectiveDto, ObjectiveState } from '@overlord/contract';
 import { User } from 'lucide-react';
 import {
+  type ComponentProps,
   type CSSProperties,
   type HTMLAttributes,
   type MouseEvent,
@@ -12,7 +13,12 @@ import {
 import { getAgentIcon } from '../../lib/helpers/agent-icons.ts';
 import { buildAgentResumeCommand } from '../../lib/helpers/agent-resume-command.ts';
 import { useCopyToClipboard } from '../../lib/hooks/use-copy-to-clipboard.ts';
-import { useAgentCatalog, useProject } from '../../lib/queries.ts';
+import {
+  useAgentCatalog,
+  useProject,
+  useProjectResources,
+  useUpdateObjective
+} from '../../lib/queries.ts';
 import { cn } from '../../lib/utils.ts';
 import { KANBAN_TOUCH_DRAGGABLE_CLASS } from '../../pages/kanban-dnd.ts';
 import { ExecutingShimmer } from '../StatusMotion.tsx';
@@ -24,6 +30,7 @@ import { ObjectiveMenuButton } from './ObjectiveMenuButton.tsx';
 import { ObjectiveQueuePopover } from './ObjectiveQueuePopover.tsx';
 import { ObjectiveStateIcon } from './ObjectiveStateIcon.tsx';
 import { useObjectiveAgentSelection } from './useObjectiveAgentSelection.ts';
+import { useObjectiveQuickRun } from './useObjectiveQuickRun.ts';
 
 /** Not started: the reorderable set (plan §3.3). */
 export function isNotStartedObjective(state: ObjectiveState): boolean {
@@ -87,6 +94,11 @@ export type ObjectiveRowDragProps = {
 
 export type ObjectiveRowProps = {
   objective: ObjectiveDto;
+  /**
+   * The objective's mission. Not-started rows use it for the menu's Run, which applies the same
+   * parallel-launch guard as the Run button.
+   */
+  mission?: MissionDetailDto | null;
   /** In flight with at least one open question or choice. */
   blocked?: boolean;
   /** This objective's detail is open. */
@@ -107,12 +119,14 @@ export type ObjectiveRowProps = {
 /**
  * One objective in the mission panel's compact list (plan §7.2): state icon and title inside an
  * invisible row button that opens the objective detail (and, when not started, reorders on
- * press-and-hold), then sibling controls — Run Queue, identifier copy, agent, menu. The
+ * press-and-hold), then sibling controls — Run Queue, identifier copy, agent, menu (with Run and
+ * Resource while not started). The
  * controls are siblings of the row button, never children, so nothing interactive nests, and
  * each stops propagation so it never opens the detail.
  */
 export function ObjectiveRow({
   objective,
+  mission = null,
   blocked = false,
   selected = false,
   onOpen,
@@ -129,6 +143,8 @@ export function ObjectiveRow({
   /** Opened from the menu: anchor to the row, since the queue icon may be hidden or absent. */
   const [queueFromMenu, setQueueFromMenu] = useState(false);
   const { copied, copy } = useCopyToClipboard({ resetMs: 1200 });
+  /** A Run or resource change from the menu failed. Shown under the row until the next try. */
+  const [menuError, setMenuError] = useState<string | null>(null);
 
   const notStarted = isNotStartedObjective(objective.state);
   const inFlight = isInFlightObjective(objective.state);
@@ -167,6 +183,20 @@ export function ObjectiveRow({
     else if (buttonRef) (buttonRef as { current: HTMLButtonElement | null }).current = node;
   };
 
+  const menuProps: ComponentProps<typeof ObjectiveMenuButton> = {
+    objectiveId: objective.id,
+    displayId: objective.displayId,
+    state: objective.state,
+    resumeCommand,
+    sessionId: objective.externalSessionId,
+    onEditTitle: onEditTitle ? () => onEditTitle(objective) : undefined,
+    onMoveUp: notStarted ? onMoveUp : undefined,
+    onMoveDown: notStarted ? onMoveDown : undefined,
+    onOpenAddToQueue: canAddToQueue ? openQueueFromMenu : undefined,
+    showForceDisconnect: true,
+    onDeleted: onDeleted ? () => onDeleted(objective) : undefined
+  };
+
   return (
     <li
       ref={setRowRef}
@@ -175,7 +205,7 @@ export function ObjectiveRow({
       data-objective-ref={objective.displayId || objective.id}
       data-blocked={isBlocked ? 'true' : undefined}
       className={cn(
-        'group/row relative flex min-h-9 min-w-0 items-center gap-1 overflow-hidden pr-2 transition-colors',
+        'group/row relative flex min-h-9 min-w-0 flex-wrap items-center gap-x-1 overflow-hidden pr-2 transition-colors',
         isBlocked && 'bg-yellow-300/60 dark:bg-yellow-400/25',
         !isBlocked && selected && 'bg-muted',
         !isBlocked && !selected && 'hover:bg-muted/40',
@@ -252,31 +282,48 @@ export function ObjectiveRow({
         ) : null}
 
         {notStarted ? (
-          <RowAgentChooser objective={objective} />
+          <NotStartedRowTail
+            objective={objective}
+            mission={mission}
+            menuProps={menuProps}
+            onMenuError={setMenuError}
+          />
         ) : (
-          <RowAgentStatic objective={objective} />
+          <>
+            <RowAgentStatic objective={objective} />
+            <ObjectiveMenuButton {...menuProps} />
+          </>
         )}
-
-        <ObjectiveMenuButton
-          objectiveId={objective.id}
-          displayId={objective.displayId}
-          state={objective.state}
-          resumeCommand={resumeCommand}
-          sessionId={objective.externalSessionId}
-          onEditTitle={onEditTitle ? () => onEditTitle(objective) : undefined}
-          onMoveUp={notStarted ? onMoveUp : undefined}
-          onMoveDown={notStarted ? onMoveDown : undefined}
-          onOpenAddToQueue={canAddToQueue ? openQueueFromMenu : undefined}
-          showForceDisconnect
-          onDeleted={onDeleted ? () => onDeleted(objective) : undefined}
-        />
       </div>
+      {menuError ? (
+        <p
+          role="alert"
+          className="relative z-[1] basis-full truncate pb-1.5 pl-9 text-[11px] text-destructive"
+          title={menuError}
+        >
+          {menuError}
+        </p>
+      ) : null}
     </li>
   );
 }
 
-/** Not started: the agent icon opens the agent/model selector. */
-function RowAgentChooser({ objective }: { objective: ObjectiveDto }) {
+/**
+ * Not started: the agent icon opens the agent/model selector, and the menu adds Run and the
+ * Resource submenu (coo:1289). Both share one agent selection, so Run launches with the agent the
+ * icon shows.
+ */
+function NotStartedRowTail({
+  objective,
+  mission,
+  menuProps,
+  onMenuError
+}: {
+  objective: ObjectiveDto;
+  mission: MissionDetailDto | null;
+  menuProps: ComponentProps<typeof ObjectiveMenuButton>;
+  onMenuError: (message: string | null) => void;
+}) {
   const {
     catalog,
     agentConfigs,
@@ -284,19 +331,56 @@ function RowAgentChooser({ objective }: { objective: ObjectiveDto }) {
     setSelection,
     commitLaunchConfig,
     useInheritedLaunchConfig,
-    launchConfigSourceHint
+    launchConfigSourceHint,
+    loaded
   } = useObjectiveAgentSelection(objective);
+  const quickRun = useObjectiveQuickRun({
+    objective,
+    mission,
+    selection,
+    selectionLoaded: loaded,
+    onError: onMenuError
+  });
+  const resourcesQ = useProjectResources(objective.projectId);
+  const updateObjective = useUpdateObjective();
+
   return (
-    <AgentModelChooserButton
-      iconOnly
-      catalog={catalog}
-      selection={selection}
-      onChange={setSelection}
-      agentConfigs={agentConfigs}
-      onLaunchConfigCommit={commitLaunchConfig}
-      onUseInheritedDefault={useInheritedLaunchConfig}
-      launchConfigSourceHint={launchConfigSourceHint}
-    />
+    <>
+      <AgentModelChooserButton
+        iconOnly
+        catalog={catalog}
+        selection={selection}
+        onChange={setSelection}
+        agentConfigs={agentConfigs}
+        onLaunchConfigCommit={commitLaunchConfig}
+        onUseInheritedDefault={useInheritedLaunchConfig}
+        launchConfigSourceHint={launchConfigSourceHint}
+      />
+      <ObjectiveMenuButton
+        {...menuProps}
+        run={{
+          label: quickRun.label,
+          onRun: quickRun.run,
+          disabledReason: quickRun.disabledReason,
+          pending: quickRun.pending
+        }}
+        resource={{
+          resources: resourcesQ.data ?? [],
+          value: objective.resourceKey,
+          disabled: updateObjective.isPending,
+          onChange: resourceKey => {
+            onMenuError(null);
+            updateObjective.mutate(
+              { id: objective.id, body: { resourceKey } },
+              {
+                onError: err =>
+                  onMenuError(err instanceof Error ? err.message : 'Failed to change the resource')
+              }
+            );
+          }
+        }}
+      />
+    </>
   );
 }
 
