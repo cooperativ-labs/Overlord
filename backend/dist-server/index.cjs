@@ -112465,6 +112465,25 @@ var CAPTURE_GAP_CODES = [
   "shell_activity_unverified"
 ];
 var MAX_CAPTURE_HEALTH_CODES = 16;
+function captureGapInstruction(style, warnings) {
+  const gap = warnings.some((code) => code !== "sync_pending" && code !== "sync_failed");
+  const syncFailed = warnings.includes("sync_failed");
+  if (!gap && !syncFailed)
+    return null;
+  const parts = [];
+  if (gap && style === "mcp") {
+    parts.push("Capture may have missed files you changed. Declare only the paths you know you changed that this list misses (all of them when no local connector captured your edits; also script and generator outputs, deletes, both rename endpoints) in `declaredPaths` on your next `overlord_update_session` or `overlord_deliver_session`; they are labelled Declared. If unsure, state the coverage gap in the delivery summary instead of guessing.");
+  } else if (gap) {
+    parts.push("Capture may have missed files you changed. Declare only the paths you know you changed that this list misses (script and generator outputs, deletes, both rename endpoints) with `--paths a,b` (quote lists with spaces) or `--paths-file <file>` (a JSON string array) on your next `ovld protocol update` or `ovld protocol deliver`; they are labelled Declared. If unsure, state the coverage gap in the delivery summary instead of guessing.");
+    if (warnings.includes("unbound") || warnings.includes("unknown_binding")) {
+      parts.push("If this checkout has no local binding, also pass --session-key and --objective-id; re-run attach in this checkout to restore automatic capture.");
+    }
+  }
+  if (syncFailed && style === "cli") {
+    parts.push("Some paths did not synchronize: repeat any paths you declared without a local binding on a later update or deliver, because no local retry copy exists.");
+  }
+  return parts.length > 0 ? parts.join(" ") : null;
+}
 var OBJECTIVE_FILE_CHANGES_LIMIT = 200;
 
 // ../packages/contract/dist/delivery-report.js
@@ -133841,7 +133860,6 @@ var COMPOSE_DELIVERY_RESPONSE_SCHEMA = {
         required: ["sourceId", "decision", "rationale"]
       }
     },
-    knownRisks: { type: "array", items: { type: "string" } },
     assumptions: { type: "array", items: { type: "string" } },
     reviewHighlights: { type: "array", items: { type: "string" } }
   },
@@ -133857,8 +133875,9 @@ Rules:
 - Carry each action's command, verify, and link fields through unchanged when the evidence supplies them; never fabricate a command, URL, or path that is not in the evidence.
 - File paths (a candidate action's link or sourceRef) are context only. Never describe what a file does or why it changed, and never infer behavior, impact, tests, or verification from a file or path name; only the agent summary and the supplied report facts state those.
 - Never include git commit/push/PR actions or routine "review/test the code" actions.
+- Known risks are read-only evidence: mention them in markdown if useful, but never return them; the agent's wording is kept as is.
 - Prefer concise, scannable Markdown. Do not include secrets, tokens, or raw diffs.
-Apply the WRITING rules below to markdown, humanActions action and reason, tradeoffsMade text, knownRisks, and assumptions. They do not apply to command, verify, link, file paths, identifiers, or quoted agent text; copy those exactly.
+Apply the WRITING rules below to markdown, humanActions action and reason, tradeoffsMade text, and assumptions. They do not apply to command, verify, link, file paths, identifiers, or quoted agent text; copy those exactly.
 ${WRITING_RULES}`;
 function buildComposeDeliveryPrompt(input2) {
   return [
@@ -133877,7 +133896,7 @@ ${JSON.stringify(input2.plannedObjectives)}` : null,
 ${JSON.stringify(input2.humanActions)}`,
     `Tradeoffs evidence:
 ${JSON.stringify(input2.tradeoffsMade)}`,
-    `Known risks:
+    `Known risks (read-only):
 ${JSON.stringify(input2.knownRisks)}`,
     `Assumptions:
 ${JSON.stringify(input2.assumptions)}`,
@@ -135357,6 +135376,9 @@ var binaryBodySchema = external_exports.custom(isBinaryBody, {
 });
 var jsonValueSchema = external_exports.unknown();
 var errorEnvelopeSchema = external_exports.object({ "error": external_exports.string(), "code": external_exports.exactOptional(external_exports.string()), "detail": external_exports.exactOptional(external_exports.string()), "details": external_exports.exactOptional(jsonValueSchema) });
+var protocolAttachObjectiveSchema = external_exports.strictObject({ "displayId": external_exports.string(), "state": external_exports.string(), "objective": external_exports.string() });
+var protocolAttachDirectiveSchema = external_exports.strictObject({ "id": external_exports.string(), "type": external_exports.enum(["user_follow_up", "decision", "discussion_summary"]), "phase": external_exports.union([external_exports.string(), external_exports.null()]), "summary": external_exports.string(), "createdAt": external_exports.string(), "objectiveId": external_exports.string() });
+var protocolAttachResponseSchema = external_exports.object({ "agentInstructions": external_exports.string(), "mission": jsonValueSchema, "objective": jsonValueSchema, "objectives": external_exports.array(protocolAttachObjectiveSchema), "directives": external_exports.array(protocolAttachDirectiveSchema).max(10), "session": jsonValueSchema, "sessionKey": external_exports.exactOptional(external_exports.string()), "artifacts": external_exports.array(jsonValueSchema), "attachments": external_exports.array(jsonValueSchema), "sharedState": external_exports.array(jsonValueSchema), "projectResources": external_exports.exactOptional(external_exports.array(jsonValueSchema)), "missionSummary": external_exports.exactOptional(jsonValueSchema) });
 var okResponseSchema = external_exports.object({ "ok": external_exports.literal(true) });
 var dateTimeSchema = external_exports.string();
 var statusTypeSchema = external_exports.enum(["draft", "next", "execute", "review", "complete", "blocked", "cancelled"]);
@@ -135453,8 +135475,9 @@ var deliveryDeferredWorkItemDtoSchema = external_exports.object({ "actionId": ex
 var deliveryDtoSchema = external_exports.object({ "id": external_exports.string(), "missionId": external_exports.string(), "objectiveId": external_exports.string(), "sessionId": external_exports.string().nullable(), "summary": external_exports.string(), "verificationSummary": external_exports.string().nullable(), "followUpNotes": external_exports.string().nullable(), "report": deliveryReportPayloadV1Schema, "deliveredAt": dateTimeSchema, "agentIdentifier": external_exports.string().nullable(), "modelIdentifier": external_exports.string().nullable(), "deferredWorkItems": external_exports.array(deliveryDeferredWorkItemDtoSchema) });
 var missionDeliveriesDtoSchema = external_exports.object({ "items": external_exports.array(deliveryDtoSchema).max(200), "total": external_exports.int().min(0), "limit": external_exports.int() });
 var missionSummaryStatusSchema = external_exports.enum(["pending", "composed", "fallback"]);
-var missionSummaryRiskDtoSchema = external_exports.object({ "id": external_exports.string(), "deliveryId": external_exports.string(), "objectiveId": external_exports.string(), "deliveredAt": dateTimeSchema, "text": external_exports.string() });
-var missionSummarySuggestionDtoSchema = external_exports.object({ "id": external_exports.string(), "deliveryId": external_exports.string(), "objectiveId": external_exports.string(), "deliveredAt": dateTimeSchema, "actionId": external_exports.string(), "title": external_exports.string(), "state": external_exports.literal("open"), "change": external_exports.string(), "location": external_exports.string(), "doneWhen": external_exports.string(), "resolution": external_exports.null() });
+var missionSummaryDuplicateDtoSchema = external_exports.object({ "id": external_exports.string(), "deliveryId": external_exports.string(), "objectiveId": external_exports.string(), "deliveredAt": dateTimeSchema });
+var missionSummaryRiskDtoSchema = external_exports.object({ "id": external_exports.string(), "deliveryId": external_exports.string(), "objectiveId": external_exports.string(), "deliveredAt": dateTimeSchema, "text": external_exports.string(), "duplicates": external_exports.exactOptional(external_exports.array(missionSummaryDuplicateDtoSchema)) });
+var missionSummarySuggestionDtoSchema = external_exports.object({ "id": external_exports.string(), "deliveryId": external_exports.string(), "objectiveId": external_exports.string(), "deliveredAt": dateTimeSchema, "actionId": external_exports.string(), "title": external_exports.string(), "state": external_exports.literal("open"), "change": external_exports.string(), "location": external_exports.string(), "doneWhen": external_exports.string(), "resolution": external_exports.null(), "duplicates": external_exports.exactOptional(external_exports.array(missionSummaryDuplicateDtoSchema)) });
 var missionSummaryClosedItemDtoSchema = external_exports.object({ "id": external_exports.string(), "kind": external_exports.enum(["risk", "human_action", "suggestion"]), "text": external_exports.string(), "objectiveId": external_exports.string(), "status": external_exports.enum(["done", "dismissed"]), "reason": external_exports.string().nullable(), "outcome": external_exports.enum(["mission_created", "objective_added"]).nullable(), "outcomeRef": external_exports.string().nullable(), "resolvedBy": missionItemResolverDtoSchema.nullable(), "resolvedAt": dateTimeSchema.nullable() });
 var missionSummaryDtoSchema = external_exports.object({ "missionId": external_exports.string(), "revision": external_exports.int().min(1), "contentRevision": external_exports.int().min(0), "author": external_exports.object({ "kind": external_exports.enum(["deterministic", "gemini", "agent"]), "objectiveId": external_exports.string().nullable(), "deliveryId": external_exports.string().nullable() }), "closedItems": external_exports.array(missionSummaryClosedItemDtoSchema).max(100), "status": missionSummaryStatusSchema, "headline": external_exports.string(), "summary": external_exports.string(), "risks": external_exports.array(missionSummaryRiskDtoSchema), "suggestions": external_exports.array(missionSummarySuggestionDtoSchema), "sourceDeliveryId": external_exports.string().nullable(), "generatedBy": external_exports.enum(["deterministic", "gemini", "agent"]), "generatedAt": dateTimeSchema.nullable(), "model": external_exports.string().nullable() });
 var missionSummaryActionDtoSchema = external_exports.object({ "id": external_exports.string(), "deliveryId": external_exports.string(), "objectiveId": external_exports.string(), "actionId": external_exports.string(), "deliveredAt": dateTimeSchema, "action": external_exports.string(), "reason": external_exports.exactOptional(external_exports.string()), "category": humanActionCategorySchema2, "blocking": external_exports.exactOptional(external_exports.boolean()), "command": external_exports.exactOptional(external_exports.string()), "verify": external_exports.exactOptional(external_exports.string()), "link": external_exports.exactOptional(external_exports.string()), "source": external_exports.enum(["agent", "deterministic_rule"]), "sourceRef": external_exports.exactOptional(external_exports.string()) });
@@ -135474,7 +135497,7 @@ var fileChangeDtoSchema = external_exports.object({ "id": external_exports.strin
 var missionFileChangesDtoSchema = external_exports.strictObject({ "items": external_exports.array(fileChangeDtoSchema).max(200), "total": external_exports.int().min(0), "limit": external_exports.int() });
 var captureHealthEntryDtoSchema = external_exports.object({ "code": external_exports.string(), "firstAt": dateTimeSchema, "lastAt": dateTimeSchema });
 var captureSessionDtoSchema = external_exports.object({ "sessionId": external_exports.string(), "startedAt": dateTimeSchema, "bindingState": external_exports.enum(["bound", "unbound", "unknown"]), "callbackObservedAt": dateTimeSchema.nullable(), "health": external_exports.array(captureHealthEntryDtoSchema).max(16) });
-var objectiveFileChangesDtoSchema = external_exports.object({ "scope": external_exports.literal("server_objective"), "missionId": external_exports.string(), "objectiveId": external_exports.string(), "items": external_exports.array(fileChangeDtoSchema).max(200), "total": external_exports.int().min(0), "limit": external_exports.int(), "truncated": external_exports.boolean(), "capture": external_exports.object({ "sessions": external_exports.array(captureSessionDtoSchema), "warnings": external_exports.array(external_exports.enum(["unbound", "bound_no_callback", "unknown_binding", "tool_activity_uncaptured"])) }) });
+var objectiveFileChangesDtoSchema = external_exports.object({ "scope": external_exports.literal("server_objective"), "missionId": external_exports.string(), "objectiveId": external_exports.string(), "items": external_exports.array(fileChangeDtoSchema).max(200), "total": external_exports.int().min(0), "limit": external_exports.int(), "truncated": external_exports.boolean(), "capture": external_exports.object({ "sessions": external_exports.array(captureSessionDtoSchema), "warnings": external_exports.array(external_exports.enum(["unbound", "bound_no_callback", "unknown_binding", "tool_activity_uncaptured"])) }), "instruction": external_exports.exactOptional(external_exports.string()) });
 var scheduleWeekDayDtoSchema = external_exports.object({ "dayNum": external_exports.int().min(0).max(6), "times": external_exports.array(external_exports.string()) });
 var scheduleDtoSchema = external_exports.object({ "id": external_exports.string(), "workspaceId": external_exports.string(), "name": external_exports.string().nullable(), "periodType": external_exports.enum(["d", "w", "m"]), "periodInterval": external_exports.int().min(1), "weeksOfMonth": external_exports.array(external_exports.int().min(1).max(5)), "daysOfMonth": external_exports.array(external_exports.int().min(1).max(32)), "daysOfWeek": external_exports.array(scheduleWeekDayDtoSchema), "timezone": external_exports.string(), "startDate": external_exports.string().nullable(), "nextStatusKey": external_exports.string().nullable(), "createdAt": dateTimeSchema, "updatedAt": dateTimeSchema, "revision": external_exports.int().min(1) });
 var scheduleInputSchema2 = external_exports.object({ "name": external_exports.exactOptional(external_exports.string().nullable()), "periodType": external_exports.enum(["d", "w", "m"]), "periodInterval": external_exports.int().min(1), "weeksOfMonth": external_exports.exactOptional(external_exports.array(external_exports.int())), "daysOfMonth": external_exports.exactOptional(external_exports.array(external_exports.int())), "daysOfWeek": external_exports.exactOptional(external_exports.array(scheduleWeekDayDtoSchema)), "timezone": external_exports.string(), "startDate": external_exports.exactOptional(external_exports.string().nullable()), "nextStatusKey": external_exports.exactOptional(external_exports.string().nullable()) });
@@ -145086,8 +145109,8 @@ async function enqueueMissionSummaryComposeJob({
          source_delivery_id = excluded.source_delivery_id,
          updated_at = excluded.updated_at
        WHERE mission_summaries.narrative_delivery_id IS NULL
-          OR mission_summaries.narrative_delivery_id IS DISTINCT FROM (SELECT id FROM deliveries
-               WHERE mission_id = ? AND deleted_at IS NULL ORDER BY delivered_at DESC, id DESC LIMIT 1)
+          OR NOT EXISTS (SELECT 1 FROM deliveries
+               WHERE id = mission_summaries.narrative_delivery_id AND mission_id = ? AND deleted_at IS NULL)
        RETURNING revision, requested_generation`,
     [missionId, workspaceId2, mission.project_id, sourceDeliveryId, now2, now2, missionId]
   );
@@ -145155,11 +145178,11 @@ async function lockMissionSummaryRow(tx, missionId) {
 }
 async function hasCurrentNarrative(db, missionId, narrativeDeliveryId) {
   if (narrativeDeliveryId === null) return false;
-  const latest = await db.get(
-    `SELECT id FROM deliveries WHERE mission_id = ? AND deleted_at IS NULL ORDER BY delivered_at DESC, id DESC LIMIT 1`,
-    [missionId]
+  const source = await db.get(
+    `SELECT id FROM deliveries WHERE id = ? AND mission_id = ? AND deleted_at IS NULL`,
+    [narrativeDeliveryId, missionId]
   );
-  return latest?.id === narrativeDeliveryId;
+  return source !== void 0 && source !== null;
 }
 async function publishMissionSummary({
   db,
@@ -155763,6 +155786,8 @@ function reconcileDeliveryComposeDraft({
       actions: report2.presentation.humanActions,
       candidates
     }),
+    // Risks keep the agent's text: mission-item identity is a digest of it.
+    knownRisks: report2.agentReport.knownRisks,
     deferredWork: eligibleAgentItems,
     generatedBy: "deterministic",
     generatedAt,
@@ -155827,8 +155852,10 @@ function reconcileDeliveryComposeDraft({
     markdown: markdown || report2.presentation.markdown,
     humanActions: resolvedActions,
     tradeoffsMade: resolvedTradeoffs,
-    knownRisks: clampStringList(draft.knownRisks).length > 0 ? clampStringList(draft.knownRisks) : report2.presentation.knownRisks,
-    // Deferred work is the agent's own objects, never sent to or rewritten by the model.
+    // Risks and deferred work are the agent's own items, never rewritten by the model.
+    // A risk's mission-item identity is a digest of its text (missionItemRef), so a
+    // reworded risk would be deleted and reinserted as a new open item.
+    knownRisks: report2.agentReport.knownRisks,
     deferredWork: eligibleAgentItems,
     assumptions: clampStringList(draft.assumptions).length > 0 ? clampStringList(draft.assumptions) : report2.presentation.assumptions,
     generatedBy: "gemini",
@@ -158350,7 +158377,7 @@ var MISSION_ITEMS_MAX_LIMIT = 1e3;
 async function listMissionItems(db, scope2) {
   const kinds = scope2.kinds ?? MISSION_ITEM_KINDS;
   const statuses = scope2.statuses ?? ["open"];
-  if (kinds.length === 0 || statuses.length === 0) return { items: [], truncated: false };
+  if (kinds.length === 0 || statuses.length === 0) return { items: [], truncated: false, total: 0 };
   for (const kind of kinds) {
     if (!MISSION_ITEM_KINDS.includes(kind)) {
       throw invalidInput(`Unknown mission item kind '${kind}'`);
@@ -158382,12 +158409,19 @@ async function listMissionItems(db, scope2) {
     where.push("mission_items.workspace_id = ?");
     params.push(scope2.workspaceId);
   }
+  const count = await db.get(
+    `SELECT COUNT(*) AS total FROM mission_items
+       JOIN deliveries d ON d.id = mission_items.delivery_id AND d.deleted_at IS NULL
+      WHERE ${where.join(" AND ")}`,
+    params
+  );
   const rows = await db.all(
     `SELECT ${ITEM_COLUMNS}
        FROM mission_items
        JOIN deliveries d ON d.id = mission_items.delivery_id AND d.deleted_at IS NULL
       WHERE ${where.join(" AND ")}
-      ORDER BY ${scope2.order === "resolved" ? "mission_items.resolved_at DESC, mission_items.id DESC," : ""}
+      ORDER BY ${scope2.order === "blocking" ? `CASE WHEN mission_items.kind = 'human_action' AND ${db.dialect === "postgres" ? "(mission_items.detail_json::jsonb ->> 'blocking') = 'true'" : "json_extract(mission_items.detail_json, '$.blocking') = 1"} THEN 0 ELSE 1 END,` : ""}
+               ${scope2.order === "resolved" ? "mission_items.resolved_at DESC, mission_items.id DESC," : ""}
                d.delivered_at DESC, mission_items.delivery_id DESC,
                mission_items.kind ASC, mission_items.position ASC, mission_items.id ASC
       LIMIT ? OFFSET ?`,
@@ -158395,6 +158429,7 @@ async function listMissionItems(db, scope2) {
   );
   return {
     items: rows.slice(0, limit2).map(toMissionItem),
+    total: Number(count?.total ?? 0),
     truncated: rows.length > limit2
   };
 }
@@ -158576,9 +158611,10 @@ async function readMissionSummaryBaseline(db, missionId) {
        FROM mission_summaries WHERE mission_id = ?`,
     [missionId]
   );
-  const { items, truncated } = await listMissionItems(db, {
+  const { items, truncated, total } = await listMissionItems(db, {
     missionId,
-    limit: MISSION_SUMMARY_BASELINE_ITEM_LIMIT
+    limit: MISSION_SUMMARY_BASELINE_ITEM_LIMIT,
+    order: "blocking"
   });
   const objectiveIds = [...new Set(items.map((item) => item.objectiveId))];
   const keys = /* @__PURE__ */ new Map();
@@ -158610,6 +158646,7 @@ async function readMissionSummaryBaseline(db, missionId) {
       text: cut(item.text, MISSION_SUMMARY_BASELINE_ITEM_TEXT_MAX),
       ...item.kind === "human_action" ? { blocking: item.detail.blocking === true } : {}
     })),
+    totalOpenItems: total,
     truncated
   };
 }
@@ -158727,7 +158764,7 @@ var MissionSummaryConflict = class extends Error {
 async function missionSummaryConflictError(db, conflict) {
   const baseline = await readMissionSummaryBaseline(db, conflict.missionId);
   return new ServiceError(
-    `The mission summary changed since you attached (base content revision ${conflict.baseContentRevision}, current ${conflict.currentContentRevision}). Nothing was delivered. Rewrite the headline and summary from details.missionSummary and deliver again with its contentRevision as baseContentRevision; if this happens twice, deliver without headline and summary.`,
+    `The mission summary changed since you attached (base content revision ${conflict.baseContentRevision}, current ${conflict.currentContentRevision}). Nothing was delivered. Rewrite the headline and summary from details.missionSummary and deliver again with its contentRevision as baseContentRevision; if this happens twice, deliver without headline and summary and say so in the delivery summary.`,
     "mission_summary_conflict",
     409,
     {
@@ -158777,6 +158814,14 @@ var SKIP_MESSAGES = {
   superseded: "the item was superseded by a later delivery of its objective",
   duplicate: "the id is listed more than once"
 };
+var STAYS_OPEN = "Say in your final message which item stays open and why.";
+var SKIP_ACTIONS = {
+  not_found: `If you meant an open item of this mission, it stays open. ${STAYS_OPEN}`,
+  other_mission: `If you meant an open item of this mission, it stays open. ${STAYS_OPEN}`,
+  not_open: "No action is needed.",
+  superseded: `Its replacement from the later delivery may still be open. ${STAYS_OPEN}`,
+  duplicate: "The first entry applies; no action is needed."
+};
 async function applyMissionSummaryWrite(tx, {
   prepared,
   mission,
@@ -158812,7 +158857,7 @@ async function applyMissionSummaryWrite(tx, {
       warnings.push({
         code: "mission_summary_item_skipped",
         itemId: cut(entry.id, 80),
-        message: `Item ${cut(entry.id, 80)} was not closed: ${SKIP_MESSAGES[problem]}.`
+        message: `Item ${cut(entry.id, 80)} was not closed: ${SKIP_MESSAGES[problem]}. ${SKIP_ACTIONS[problem]}`
       });
     }
   }
@@ -159323,38 +159368,16 @@ async function resolveAgentMissionAssignee({
 }
 
 // ../packages/core/service/protocol.ts
-var PROTOCOL_WORKFLOW = `
-
-1. Read the current objective from the top-level \`objective\` field in this JSON response, then immediately begin executing it. This is an execution session: do not wait for more instructions or ask for confirmation.
-2. Post progress with \`ovld protocol update\` or liveness with \`ovld protocol heartbeat\`.
-3. Ask blocking questions with \`ovld protocol ask\` and stop work only when no safe progress remains.
-4. Deliver with \`ovld protocol deliver\` when work is complete. A summary is the only required
-   delivery input; explain the outcome by behavior or component, not file by file.
-5. Do not stage or commit changes unless explicitly instructed to do so.
-6. Do not continue implementation after delivery without \`--begin-follow-up-work\`.
-
-Changed files:
-  Overlord keeps a cumulative list of the files changed during this objective from native
-  connector callbacks plus any paths you declare. It is not a Git diff and needs no exhaustive
-  enumeration. Before delivering, read it once with \`ovld protocol changes --objective-id <id>\`
-  (this checkout's sessions) or the server \`objective-changes\` read (synchronized history).
-  Never diff or status-scan the shared worktree, and never send changed-file,
-  observed-dirty-path, or no-file-change inputs. When capture reports shell, unsupported, or
-  partial tool activity, declare only the files you know you changed that it missed (script and
-  generator outputs, deletes, both rename endpoints) with \`--paths a,b\` or \`--paths-file\`
-  (a JSON string array) on the same update or deliver call; they are labelled Declared. When
-  unsure, state the coverage gap in the summary instead of guessing. Quote inline path lists
-  containing spaces. If the local binding or ledger is unavailable, keep the path flags and
-  pass --session-key and --objective-id explicitly: the CLI warns and submits Declared evidence
-  through the authenticated session. Use objective-changes to read that synchronized evidence.
-  Failed fallback sync needs the declarations repeated on a later update/deliver because no
-  local retry copy exists. Re-run attach in this checkout to restore native capture.
-
-Delivery evidence:
-  Every delivery should also provide a \`deliveryReport.agentReport\` in \`--payload-json\` or
-  \`--payload-file\`: \`humanActions\`, \`tradeoffsMade\`, \`knownRisks\`, \`deferredWork\`, and
-  \`assumptions\`. Use empty arrays when none apply.   Human actions are only concrete work a
-  human must perform outside completed agent work; never include Git actions or routine review/testing.
+var COMPLETED_INSTRUCTION_LIMIT = 600;
+var TRUNCATION_MARKER = "\u2026 [truncated]";
+var ATTACH_CONNECTION_METHODS = ["cli", "mcp"];
+function instructionStyleFor(connectionMethod) {
+  return connectionMethod === "mcp" ? "mcp" : "cli";
+}
+var INSTRUCTIONS_PRECEDENCE = "These instructions are authoritative for this session. Where an installed Overlord skill or plugin says otherwise, follow these.";
+var DELIVERY_EVIDENCE_RULES = `
+  Human actions are only concrete work a human must perform outside completed agent work; never
+  include Git actions or routine review/testing.
   Tradeoffs must describe an implementation decision, alternatives considered, and why it was chosen.
   Deferred work is only a recommended new objective that is not part of this mission (for
   example an out-of-scope bug). Each item is an object { title, change, location, doneWhen }:
@@ -159363,6 +159386,59 @@ Delivery evidence:
   work already in this mission's future objectives, leftover slices of the current
   objective, or human follow-up such as deploy, secrets, or migrations (those belong in
   humanActions).`;
+var CLI_PROTOCOL_WORKFLOW = `
+1. Read the current objective from the top-level \`objective\` field in this JSON response, then immediately begin executing it. This is an execution session: do not wait for more instructions or ask for confirmation.
+2. Post progress with \`ovld protocol update\` or liveness with \`ovld protocol heartbeat\`.
+3. Ask blocking questions with \`ovld protocol ask\` and stop work only when no safe progress remains.
+4. Deliver with \`ovld protocol deliver\` when work is complete. A summary is the only required
+   delivery input; explain the outcome by behavior or component, not file by file.
+5. Do not stage or commit changes unless explicitly instructed to do so.
+6. Do not continue implementation after delivery; the deliver response says how to begin
+   follow-up work.
+
+Changed files:
+  Overlord records the files you change; the list is not a Git diff. Before delivering, read it
+  once with \`ovld protocol changes --objective-id <id>\` and follow its \`instruction\` if
+  present. Never diff or status-scan the shared worktree, and never send changed-file,
+  observed-dirty-path, or no-file-change inputs.
+
+Delivery evidence:
+  Every delivery should also provide a \`deliveryReport.agentReport\` in \`--payload-json\` or
+  \`--payload-file\`: \`humanActions\`, \`tradeoffsMade\`, \`knownRisks\`, \`deferredWork\`, and
+  \`assumptions\`. Use empty arrays when none apply.${DELIVERY_EVIDENCE_RULES}`;
+var MCP_PROTOCOL_WORKFLOW = `
+1. Read the current objective from the top-level \`objective\` field in this response, then immediately begin executing it. This is an execution session: do not wait for more instructions or ask for confirmation.
+2. Pass \`session.sessionKey\` from this response as \`sessionKey\` on every session tool call.
+3. Post progress with \`overlord_update_session\`.
+4. If you are blocked, ask the user in this conversation, and stop work only when no safe progress remains.
+5. Deliver with \`overlord_deliver_session\` when work is complete. \`summary\` is the only required
+   field; explain the outcome by behavior or component, not file by file.
+6. Do not stage or commit changes unless explicitly instructed to do so.
+7. Do not continue implementation after delivery; the deliver response says what to do if more
+   work is needed.
+
+Changed files:
+  Overlord records the files you change; the list is not a Git diff. Before delivering, read it
+  once with \`overlord_changes\` (\`objectiveId\`) and follow its \`instruction\` if present.
+  Never diff or status-scan a shared worktree.
+
+Delivery evidence:
+  Every delivery should also send \`humanActions\`, \`tradeoffsMade\`, \`knownRisks\`,
+  \`deferredWork\`, and \`assumptions\` on \`overlord_deliver_session\`. Use empty arrays when
+  none apply.${DELIVERY_EVIDENCE_RULES}`;
+function postDeliveryInstruction({
+  style,
+  missionDisplayId,
+  objectiveDisplayId: objectiveDisplayId2
+}) {
+  if (style === "mcp") {
+    return "Delivered; this session has ended. Do not continue implementation. These tools cannot begin follow-up work: if the user asks for more work on this objective, ask them to start follow-up work from Overlord.";
+  }
+  return `Delivered; this session has ended. Do not continue implementation. If the user asks for more work on this objective, first run \`ovld protocol resume-follow-up --mission-id ${missionDisplayId} --objective-id ${objectiveDisplayId2} --summary "<what you will do>"\`, use the session key it returns, and deliver again when done.`;
+}
+function protocolWorkflow(style) {
+  return style === "mcp" ? MCP_PROTOCOL_WORKFLOW : CLI_PROTOCOL_WORKFLOW;
+}
 function resolveActiveObjective(objectives) {
   const rankedStates = ["executing", "launching", "pending_delivery"];
   for (const state2 of rankedStates) {
@@ -159444,7 +159520,8 @@ async function getSessionByKeyMaybeEnded(ctx, sessionKey, options = {}) {
   const hash2 = hashSessionKey(sessionKey);
   const endedFilter = options.includeEnded ? "" : "AND ended_at IS NULL";
   return await ctx.db.get(
-    `SELECT id, mission_id, objective_id, phase, delivery_state, ended_at, external_session_id
+    `SELECT id, mission_id, objective_id, phase, delivery_state, ended_at, external_session_id,
+            connection_method
        FROM agent_sessions
        WHERE workspace_id = ? AND session_key_hash = ? AND deleted_at IS NULL ${endedFilter}
        ORDER BY started_at DESC LIMIT 1`,
@@ -159464,7 +159541,8 @@ async function getLatestSessionByExternalId({
   externalSessionId: externalSessionId2
 }) {
   return await ctx.db.get(
-    `SELECT id, mission_id, objective_id, phase, delivery_state, ended_at, external_session_id
+    `SELECT id, mission_id, objective_id, phase, delivery_state, ended_at, external_session_id,
+            connection_method
        FROM agent_sessions
        WHERE workspace_id = ? AND mission_id = ? AND external_session_id = ? AND deleted_at IS NULL
        ORDER BY started_at DESC LIMIT 1`,
@@ -159478,7 +159556,8 @@ async function getLatestSessionForObjective({
 }) {
   const endedFilter = openOnly ? "AND ended_at IS NULL" : "";
   return await ctx.db.get(
-    `SELECT id, mission_id, objective_id, phase, delivery_state, ended_at, external_session_id
+    `SELECT id, mission_id, objective_id, phase, delivery_state, ended_at, external_session_id,
+            connection_method
        FROM agent_sessions
        WHERE workspace_id = ? AND objective_id = ? AND deleted_at IS NULL ${endedFilter}
        ORDER BY started_at DESC LIMIT 1`,
@@ -159529,58 +159608,97 @@ function splitObjectivesAroundCurrent({
   );
   return { previousObjectives, futureObjectives };
 }
-var MISSION_SUMMARY_INSTRUCTIONS = `People read the mission summary to learn what the mission has produced, what still limits it,
-and what they must do. You have seen the repository, so you write it when you deliver. The
+function missionSummaryInstructions(style) {
+  const send = style === "mcp" ? "Send them as `missionSummary` on `overlord_deliver_session`:" : "Send them as `missionSummary` in the delivery payload (`--payload-file` or `--mission-summary-file`):";
+  return `At delivery, update the mission summary for the whole mission, not only this objective. The
 current text, its \`contentRevision\` and the open items with their ids are in the top-level
 \`missionSummary\` field of this response.
 
-When you deliver, add \`missionSummary\` to the delivery payload (\`--payload-file\` or
-\`--mission-summary-file\`):
-  { "baseContentRevision": <missionSummary.contentRevision>, "headline": "...", "summary": "...",
-    "closeItems": [{ "id": "<item id>", "status": "done" | "dismissed", "reason": "..." }] }
-- Headline: one sentence, at most 140 characters. Summary: Markdown, at most 1,200 characters.
-- State what the mission now provides and why it matters, then current limits, then what a
-  person must do.
-- Say whether a claim is implemented, tested or deployed. Do not merge them.
-- Rewrite the whole summary to be true now. Do not append to the previous text.
-- Do not restate open actions or suggestions in prose; they are shown as their own lists.
-- Close an item only after you checked it in the code or the mission history. Give the reason
-  (at most 280 characters). Use done when the item was addressed and dismissed when it no longer
-  applies. closeItems may be sent without headline and summary, and the reverse.
-- If delivery fails with mission_summary_conflict, another objective changed the summary since
-  you attached. Nothing was delivered. Rewrite the headline and summary from the fresh baseline
-  in the error (details.missionSummary) and deliver again once with its contentRevision. If it
-  conflicts again, deliver without headline and summary and say so in the delivery summary.`;
+1. Check every item in \`missionSummary.openItems\` against the work you verified. Close it as
+   \`done\` if the work is complete, or \`dismissed\` if it no longer applies, with a reason of at
+   most 280 characters. Leave it open if you are not sure. Objective instructions state intent;
+   they do not prove completion.
+2. Do not report a risk or suggestion that is already open or that you closed.
+3. Rewrite \`headline\` (one sentence, 140 characters) and \`summary\` (Markdown, 1,200 characters)
+   so they are true now. Organise by what the mission provides, not by objective. Keep earlier
+   outcomes that still hold and remove claims that later work replaced. Say whether each claim is
+   implemented, tested or deployed. State only durable limits; do not repeat open items.
+4. ${send}
+   { "baseContentRevision": <missionSummary.contentRevision>, "headline": "...", "summary": "...",
+     "closeItems": [{ "id": "<item id>", "status": "done" | "dismissed", "reason": "..." }] }
+   \`closeItems\` (at most 50) may be sent alone.
+
+For full detail or overflow, ${style === "mcp" ? "call `overlord_mission_items` with `missionId`, `sessionKey`, `limit` and `offset`; follow `nextOffset` until null. Close verified items with `overlord_close_items` (`missionId`, `sessionKey`, `closeItems`)." : "run `ovld protocol mission-items --mission-id <id> --limit 60 --offset 0`; follow `nextOffset` until null. Close verified items with `ovld protocol close-items --mission-id <id> --close-items-file <path|->`."}
+If delivery returns a mission-summary error or warning, follow the steps in its message.`;
+}
+function shellArg(value2) {
+  return /^[\w@%+=:,./-]+$/.test(value2) ? value2 : `'${value2.replace(/'/g, `'\\''`)}'`;
+}
+function attachmentsInstructions({
+  mission,
+  objective,
+  attachments,
+  style
+}) {
+  if (attachments.length === 0) return null;
+  if (style === "mcp") {
+    return [
+      "The user attached files to this objective; they are listed in `attachments`. No Overlord MCP",
+      "tool downloads them. If you need a file to do the work, say so in a session update."
+    ].join("\n");
+  }
+  const lines = attachments.map((attachment) => {
+    const base = attachment.filename.split(/[\\/]/).pop() || "attachment";
+    const output2 = `./.overlord/tmp/attachment-${attachment.id}-${base}`;
+    return `- ${attachment.filename}: \`ovld protocol attachment-download-url --mission-id ${shellArg(mission.displayId)} --objective-id ${shellArg(objective.displayId)} --attachment-id ${shellArg(attachment.id)} --output ${shellArg(output2)}\``;
+  });
+  return [
+    "The user attached files to this objective (listed in `attachments`). Their URLs need Overlord",
+    "authentication; download with these commands, which use the CLI credentials:",
+    ...lines,
+    `Files attached to other objectives: \`ovld protocol attachment-list --mission-id ${shellArg(mission.displayId)}\`.`
+  ].join("\n");
+}
+var MISSION_SUMMARY_INSTRUCTIONS = missionSummaryInstructions("cli");
 function assembleAgentInstructions({
   mission,
   objective,
   projectName,
   agentInstructions,
   projectResourcesSection = null,
-  missionSummary = false
+  missionSummary = false,
+  attachments = [],
+  style = "cli",
+  compactContext = false
 }) {
   const objectiveLabel2 = objective.title?.trim() || `Objective ${objective.position + 1}`;
+  const mcp = style === "mcp";
+  const attachmentsSection = attachmentsInstructions({ mission, objective, attachments, style });
   return [
     `# Overlord Agent Instructions`,
     `You are attached to mission **${mission.displayId}** via Overlord.`,
+    INSTRUCTIONS_PRECEDENCE,
     ``,
-    `Mission ID: ${mission.displayId}  <- pass this to every \`ovld protocol ... --mission-id\` call`,
-    `Objective ID: ${objective.displayId}  <- pass as --objective-id on attach; never as --mission-id`,
+    mcp ? `Mission ID: ${mission.displayId}  <- pass as \`missionId\` on Overlord tool calls` : `Mission ID: ${mission.displayId}  <- pass this to every \`ovld protocol ... --mission-id\` call`,
+    mcp ? `Objective ID: ${objective.displayId}  <- pass as \`objectiveId\`; never as \`missionId\`` : `Objective ID: ${objective.displayId}  <- pass as --objective-id on attach; never as --mission-id`,
     `Objective: ${objectiveLabel2}`,
     `Project: ${projectName}`,
     "",
     "## Context Location",
     "- The current task body is in the top-level `objective.objective` field.",
-    "- Previous and future work are in `previousObjectives` and `futureObjectives`.",
-    "- History, attachments, artifacts, and shared context are in their structured top-level fields.",
+    compactContext ? "- Sibling work is in `objectives` in mission order; check each state. Completed instructions may be truncated." : "- Previous and future work are in `previousObjectives` and `futureObjectives`.",
+    compactContext ? "- Current-objective user directions and decisions are in `directives` (newest 10). Attachments, artifacts and shared context have their own fields." : "- History, attachments, artifacts, and shared context are in their structured top-level fields.",
     "",
     projectResourcesSection ? "" : null,
     projectResourcesSection,
+    attachmentsSection ? "## Attachments" : null,
+    attachmentsSection,
+    attachmentsSection ? "" : null,
     `## Required Protocol Workflow`,
-    PROTOCOL_WORKFLOW,
+    protocolWorkflow(style),
     "",
     missionSummary ? "## Mission summary" : null,
-    missionSummary ? MISSION_SUMMARY_INSTRUCTIONS : null,
+    missionSummary ? missionSummaryInstructions(style) : null,
     missionSummary ? "" : null,
     "## Important Notes",
     `- Other agents may be working on the same branch as you, so you may notice file changes that are not yours. EXCLUDE THESE FROM THE FILE CHANGES YOU REPORT.`,
@@ -159678,10 +159796,18 @@ async function contextForObjective({
   mission,
   objective,
   executionTargetId = null,
-  includeMissionSummary = false
+  includeMissionSummary = false,
+  style = "cli"
 }) {
   const objectives = await listObjectives({ ctx, missionId: mission.id });
-  const history = await listMissionEvents({ ctx, missionId: mission.id });
+  const directives = includeMissionSummary ? await ctx.db.all(
+    `SELECT id, type, phase, summary, created_at AS "createdAt", objective_id AS "objectiveId"
+       FROM mission_events WHERE mission_id = ? AND objective_id = ?
+       AND type IN ('user_follow_up', 'decision', 'discussion_summary')
+       ORDER BY created_at DESC, id DESC LIMIT 10`,
+    [mission.id, objective.id]
+  ) : [];
+  const history = includeMissionSummary ? [] : await listMissionEvents({ ctx, missionId: mission.id });
   const artifacts = await listArtifacts({ ctx, missionId: mission.id });
   const attachments = await listAttachments({
     ctx,
@@ -159709,24 +159835,32 @@ async function contextForObjective({
   const projectResourcesSection = formatProjectResourcesInstructions(projectResources);
   const missionSummary = includeMissionSummary ? await readMissionSummaryBaseline(ctx.db, mission.id) : null;
   return {
-    mission,
-    objective,
-    previousObjectives,
-    futureObjectives,
-    history,
-    artifacts,
-    attachments,
-    sharedState,
-    ...projectResources.length > 0 ? { projectResources } : {},
-    ...missionSummary ? { missionSummary } : {},
     agentInstructions: assembleAgentInstructions({
       mission,
       objective,
       projectName: project.name,
       agentInstructions,
       projectResourcesSection,
-      missionSummary: missionSummary !== null
-    })
+      missionSummary: missionSummary !== null,
+      attachments,
+      style,
+      compactContext: includeMissionSummary
+    }),
+    mission,
+    objective,
+    ...includeMissionSummary ? {
+      objectives: objectives.filter((candidate) => candidate.id !== objective.id && hasInstruction(candidate)).map(({ displayId, state: state2, objective: text }) => ({
+        displayId,
+        state: state2,
+        objective: state2 === "complete" && text.length > COMPLETED_INSTRUCTION_LIMIT ? text.slice(0, COMPLETED_INSTRUCTION_LIMIT - TRUNCATION_MARKER.length) + TRUNCATION_MARKER : text
+      })),
+      directives
+    } : { previousObjectives, futureObjectives, history },
+    artifacts,
+    attachments,
+    sharedState,
+    ...projectResources.length > 0 ? { projectResources } : {},
+    ...missionSummary ? { missionSummary } : {}
   };
 }
 async function loadMissionContext({
@@ -159800,12 +159934,7 @@ async function attachSession({
     missionId: mission.id,
     objectiveId: objective.id
   });
-  const context = await contextForObjective({
-    ctx,
-    mission,
-    objective,
-    executionTargetId: resolvedTargetId
-  });
+  const context = { mission, objective };
   if (existingSessionKey) {
     const existing = await getSessionByKey(ctx, existingSessionKey);
     if (existing.mission_id !== context.mission.id) {
@@ -159858,7 +159987,8 @@ async function attachSession({
       mission: context.mission,
       objective: refreshedObjective2,
       executionTargetId: resolvedTargetId,
-      includeMissionSummary: true
+      includeMissionSummary: true,
+      style: instructionStyleFor(connectionMethod)
     });
     const resolvedChannelId2 = sessionChannelId ?? await findBindableChannelForMission({
       ctx,
@@ -160014,23 +160144,18 @@ async function attachSession({
     ...objective,
     state: "executing"
   };
-  const refreshedSplit = splitObjectivesAroundCurrent({
-    objectives: refreshedObjectives,
-    currentObjective: refreshedObjective
-  });
   const refreshedContext = await contextForObjective({
     ctx,
     mission: refreshedMission,
     objective: refreshedObjective,
     executionTargetId: resolvedTargetId,
-    includeMissionSummary: true
+    includeMissionSummary: true,
+    style: instructionStyleFor(connectionMethod)
   });
   return {
     ...refreshedContext,
     mission: refreshedMission,
     objective: refreshedObjective,
-    previousObjectives: refreshedSplit.previousObjectives,
-    futureObjectives: refreshedSplit.futureObjectives,
     session: {
       id: sessionId,
       sessionKey: rawKey2,
@@ -160324,7 +160449,8 @@ async function resumeFollowUp({
       missionId: mission.id,
       objectiveId: selectedObjective.id
     }),
-    includeMissionSummary: true
+    includeMissionSummary: true,
+    style: instructionStyleFor(connectionMethod)
   });
   return {
     ...context,
@@ -161492,7 +161618,16 @@ async function deliverSession({
       objectiveId: session.objective_id
     });
   }
-  return { deliveryId, eventId, ...summaryResult ? { missionSummary: summaryResult } : {} };
+  return {
+    deliveryId,
+    eventId,
+    ...summaryResult ? { missionSummary: summaryResult } : {},
+    instruction: postDeliveryInstruction({
+      style: instructionStyleFor(session.connection_method),
+      missionDisplayId: mission.displayId,
+      objectiveDisplayId: currentObjectiveRow?.displayId ?? session.objective_id
+    })
+  };
 }
 async function protocolCreate({
   ctx,
@@ -161750,6 +161885,80 @@ function authStatus({ ctx }) {
     actorWorkspaceUserId: ctx.actorWorkspaceUserId
   };
 }
+async function readAgentMissionItems({
+  ctx,
+  missionId,
+  sessionKey,
+  limit: limit2 = 60,
+  offset = 0
+}) {
+  const mission = await resolveMissionId(ctx, missionId);
+  const session = await getSessionByKey(ctx, sessionKey);
+  if (session.mission_id !== mission.id) {
+    throw new ServiceError("Session key does not match mission", "invalid_session", 401);
+  }
+  if (!Number.isInteger(limit2) || limit2 < 1 || limit2 > 200 || !Number.isInteger(offset) || offset < 0) {
+    throw new ServiceError(
+      "limit must be 1..200 and offset a non-negative integer",
+      "invalid_input",
+      400
+    );
+  }
+  return ctx.db.transaction(async (tx) => {
+    const page = await listMissionItems(tx, {
+      missionId: mission.id,
+      workspaceId: ctx.workspace.id,
+      limit: limit2,
+      offset,
+      order: "blocking"
+    });
+    return {
+      missionId: mission.id,
+      ...page,
+      limit: limit2,
+      offset,
+      nextOffset: page.truncated ? offset + page.items.length : null
+    };
+  });
+}
+async function closeAgentMissionItems({
+  ctx,
+  missionId,
+  sessionKey,
+  closeItems
+}) {
+  const input2 = parseMissionSummaryInput({ closeItems }, { requireBase: true });
+  if (!input2) throw new ServiceError("closeItems must contain 1..50 entries", "invalid_input", 400);
+  return ctx.db.transaction(async (tx) => {
+    const txCtx = { ...ctx, db: tx };
+    const mission = await resolveMissionId(txCtx, missionId);
+    const session = await getSessionByKey(txCtx, sessionKey);
+    if (session.mission_id !== mission.id) {
+      throw new ServiceError("Session key does not match mission", "invalid_session", 401);
+    }
+    if (session.delivery_state === "delivered") {
+      throw new ServiceError(
+        "Resume follow-up work before closing items",
+        "delivery_boundary",
+        409
+      );
+    }
+    const scope2 = { ...mission, workspaceId: ctx.workspace.id };
+    const prepared = await prepareMissionSummaryWrite(tx, {
+      mission: scope2,
+      input: input2,
+      checkBase: false
+    });
+    return applyMissionSummaryWrite(tx, {
+      prepared,
+      mission: scope2,
+      objectiveId: session.objective_id,
+      deliveryId: null,
+      model: null,
+      attribution: missionItemAttribution(ctx)
+    });
+  });
+}
 
 // errors.ts
 var ApiError = class extends Error {
@@ -161922,7 +162131,8 @@ async function resolveObjectiveInMission({
 async function listObjectiveFileChanges({
   ctx,
   missionId,
-  objectiveId
+  objectiveId,
+  instructionStyle = null
 }) {
   const mission = await resolveMissionId(ctx, missionId);
   if (!objectiveId?.trim()) {
@@ -161975,6 +162185,8 @@ async function listObjectiveFileChanges({
     observedAt: toIso(row.last_observed_at),
     hookHealth: row.hook_health
   }));
+  const warnings = deriveCaptureWarnings(sessions);
+  const instruction = instructionStyle ? captureGapInstruction(instructionStyle, warnings) : null;
   return {
     scope: "server_objective",
     missionId: mission.id,
@@ -161983,7 +162195,8 @@ async function listObjectiveFileChanges({
     total,
     limit: OBJECTIVE_FILE_CHANGES_LIMIT,
     truncated: total > items.length,
-    capture: { sessions, warnings: deriveCaptureWarnings(sessions) }
+    capture: { sessions, warnings },
+    ...instruction ? { instruction } : {}
   };
 }
 
@@ -173424,6 +173637,213 @@ async function resolveProjectRefChoices({
   return narrowed.length > 0 ? narrowed : matches;
 }
 
+// protocol/session.ts
+function captureBindingFlag(body) {
+  const value2 = strFlag(body, "--capture-binding");
+  return value2 === void 0 ? void 0 : value2;
+}
+function connectionMethodFlag(body) {
+  const value2 = strFlag(body, "--connection-method");
+  if (value2 === void 0) return void 0;
+  if (!ATTACH_CONNECTION_METHODS.includes(value2)) {
+    throw new ApiError(
+      400,
+      `--connection-method must be one of: ${ATTACH_CONNECTION_METHODS.join(", ")}`,
+      void 0,
+      "invalid_input"
+    );
+  }
+  return value2;
+}
+function declaredPathsInput(body) {
+  return parseJsonArrayInput(
+    body,
+    "--declared-paths-json",
+    "--declared-paths-file",
+    "declaredPaths"
+  );
+}
+var sessionSubcommands = {
+  "mission-items": {
+    permission: PERMISSIONS.MISSION_READ,
+    handler: (ctx, body) => readAgentMissionItems({
+      ctx,
+      missionId: missionRefFlag(body),
+      sessionKey: requireFlag(body, "--session-key"),
+      limit: Number(strFlag(body, "--limit") ?? 60),
+      offset: Number(strFlag(body, "--offset") ?? 0)
+    })
+  },
+  "close-items": {
+    permission: PERMISSIONS.EVENT_CREATE,
+    handler: (ctx, body) => closeAgentMissionItems({
+      ctx,
+      missionId: missionRefFlag(body),
+      sessionKey: requireFlag(body, "--session-key"),
+      closeItems: parseJsonArrayInput(
+        body,
+        "--close-items-json",
+        "--close-items-file",
+        "closeItems"
+      )
+    })
+  },
+  // Session lifecycle ------------------------------------------------------
+  attach: {
+    permission: PERMISSIONS.SESSION_ATTACH,
+    handler: (ctx, body) => attachSession({
+      ctx,
+      missionId: missionRefFlag(body),
+      agentIdentifier: strFlag(body, "--agent") ?? "unknown",
+      modelIdentifier: strFlag(body, "--model") ?? null,
+      connectionMethod: connectionMethodFlag(body),
+      existingSessionKey: strFlag(body, "--session-key") ?? null,
+      externalSessionId: externalSessionId(body),
+      executionRequestId: strFlag(body, "--execution-request-id") ?? null,
+      executionTargetId: strFlag(body, "--execution-target-id") ?? null,
+      // The channel id only. Its credential never travels in a protocol flag — it reaches the
+      // backend solely as an Authorization header on the adapter route family.
+      sessionChannelId: strFlag(body, "--session-channel-id") ?? null,
+      objectiveId: objectiveRefFlag(body),
+      captureBindingState: captureBindingFlag(body)
+    })
+  },
+  connect: {
+    permission: PERMISSIONS.SESSION_ATTACH,
+    handler: (ctx, body) => connectSession({
+      ctx,
+      missionId: missionRefFlag(body),
+      objectiveId: objectiveRefFlag(body),
+      agentIdentifier: strFlag(body, "--agent") ?? "unknown",
+      externalSessionId: externalSessionId(body)
+    })
+  },
+  update: {
+    permission: PERMISSIONS.EVENT_CREATE,
+    handler: (ctx, body) => {
+      rejectRemovedProtocolFlags(body, RETIRED_CHANGE_TRACKING_FLAGS);
+      const payloadJson = parseJsonObjectInput(
+        body,
+        "--payload-json",
+        "--payload-file",
+        "update payload"
+      );
+      rejectRemovedProtocolPayloadFields(payloadJson, "update");
+      return updateSession2({
+        ctx,
+        missionId: missionRefFlag(body),
+        sessionKey: requireFlag(body, "--session-key"),
+        summary: resolveInput(body, "--summary", "--summary-file") ?? "",
+        phase: strFlag(body, "--phase") ?? null,
+        eventType: strFlag(body, "--event-type") ?? "update",
+        payloadJson,
+        externalUrl: strFlag(body, "--external-url") ?? null,
+        externalSessionId: externalSessionId(body),
+        beginFollowUpWork: boolFlag(body, "--begin-follow-up-work"),
+        followUpIntent: strFlag(body, "--follow-up-intent") ?? null,
+        declaredPaths: declaredPathsInput(body)
+      });
+    }
+  },
+  "sync-changes": {
+    permission: PERMISSIONS.EVENT_CREATE,
+    handler: (ctx, body) => {
+      const changes = parseJsonArrayInput(
+        body,
+        "--changes-json",
+        "--changes-file",
+        "sync-changes input"
+      ) ?? [];
+      const capture = parseJsonObjectInput(
+        body,
+        "--capture-json",
+        "--capture-file",
+        "sync-changes capture"
+      );
+      return syncChanges({
+        ctx,
+        missionId: missionRefFlag(body),
+        sessionKey: requireFlag(body, "--session-key"),
+        changes,
+        ...capture !== void 0 ? { capture } : {}
+      });
+    }
+  },
+  heartbeat: {
+    permission: PERMISSIONS.EVENT_CREATE,
+    handler: (ctx, body) => heartbeatSession({
+      ctx,
+      missionId: missionRefFlag(body),
+      sessionKey: requireFlag(body, "--session-key"),
+      phase: strFlag(body, "--phase") ?? null,
+      note: strFlag(body, "--note") ?? null
+    })
+  },
+  ask: {
+    permission: PERMISSIONS.EVENT_CREATE,
+    handler: (ctx, body) => askQuestion({
+      ctx,
+      missionId: missionRefFlag(body),
+      sessionKey: requireFlag(body, "--session-key"),
+      question: resolveInput(body, "--question", "--question-file") ?? "",
+      options: parseJsonArrayInput(body, "--options-json", "--options-file", "ask options") ?? [],
+      allowsFreeText: !boolFlag(body, "--no-free-text")
+    })
+  },
+  deliver: {
+    permission: PERMISSIONS.EVENT_CREATE,
+    handler: (ctx, body) => {
+      rejectRemovedProtocolFlags(body, RETIRED_CHANGE_TRACKING_FLAGS);
+      const envelope2 = parseDeliveryPayloadEnvelope(body);
+      rejectRemovedProtocolPayloadFields(envelope2.payloadJson, "delivery");
+      const artifacts = parseJsonArrayInput(
+        body,
+        "--artifacts",
+        "--artifacts-file",
+        "artifacts"
+      );
+      return deliverSession({
+        ctx,
+        missionId: missionRefFlag(body),
+        sessionKey: requireFlag(body, "--session-key"),
+        summary: resolveInput(body, "--summary", "--summary-file") ?? envelope2.summary ?? "",
+        artifacts: artifacts ?? envelope2.artifacts ?? [],
+        declaredPaths: declaredPathsInput(body) ?? envelope2.declaredPaths,
+        payloadJson: envelope2.payloadJson,
+        verificationSummary: strFlag(body, "--verification-summary") ?? envelope2.verificationSummary ?? null,
+        followUpNotes: strFlag(body, "--follow-up-notes") ?? envelope2.followUpNotes ?? null,
+        missionSummary: envelope2.missionSummary
+      });
+    }
+  },
+  "hook-event": {
+    permission: PERMISSIONS.EVENT_CREATE,
+    handler: (ctx, body) => recordHookEvent({
+      ctx,
+      missionId: missionRefFlag(body),
+      hookType: requireFlag(body, "--hook-type"),
+      prompt: resolveInput(body, "--prompt", "--prompt-file") ?? "",
+      sessionKey: strFlag(body, "--session-key") ?? null,
+      externalSessionId: externalSessionId(body) ?? null,
+      turnIndex: strFlag(body, "--turn-index") ?? null
+    })
+  },
+  "resume-follow-up": {
+    permission: PERMISSIONS.SESSION_ATTACH,
+    handler: (ctx, body) => resumeFollowUp({
+      ctx,
+      missionId: missionRefFlag(body),
+      objectiveId: objectiveRefFlag(body),
+      agentIdentifier: strFlag(body, "--agent") ?? "unknown",
+      modelIdentifier: strFlag(body, "--model") ?? null,
+      connectionMethod: connectionMethodFlag(body),
+      externalSessionId: externalSessionId(body),
+      summary: resolveInput(body, "--summary", "--summary-file") ?? null,
+      executionTargetId: strFlag(body, "--execution-target-id") ?? null
+    })
+  }
+};
+
 // protocol/missions.ts
 function optionalAutoAdvanceFlag(body) {
   return optionalBoolFlag({
@@ -173820,7 +174240,12 @@ var missionSubcommands = {
     handler: (ctx, body) => {
       const objectiveId = objectiveRefFlag(body);
       if (!objectiveId) throw new ApiError(400, "objective-changes requires --objective-id");
-      return listObjectiveFileChanges({ ctx, missionId: missionRefFlag(body), objectiveId });
+      return listObjectiveFileChanges({
+        ctx,
+        missionId: missionRefFlag(body),
+        objectiveId,
+        instructionStyle: instructionStyleFor(connectionMethodFlag(body))
+      });
     }
   },
   "launch-objective": {
@@ -181381,174 +181806,6 @@ var runQueueSubcommands = {
   }
 };
 
-// protocol/session.ts
-function captureBindingFlag(body) {
-  const value2 = strFlag(body, "--capture-binding");
-  return value2 === void 0 ? void 0 : value2;
-}
-function declaredPathsInput(body) {
-  return parseJsonArrayInput(
-    body,
-    "--declared-paths-json",
-    "--declared-paths-file",
-    "declaredPaths"
-  );
-}
-var sessionSubcommands = {
-  // Session lifecycle ------------------------------------------------------
-  attach: {
-    permission: PERMISSIONS.SESSION_ATTACH,
-    handler: (ctx, body) => attachSession({
-      ctx,
-      missionId: missionRefFlag(body),
-      agentIdentifier: strFlag(body, "--agent") ?? "unknown",
-      modelIdentifier: strFlag(body, "--model") ?? null,
-      existingSessionKey: strFlag(body, "--session-key") ?? null,
-      externalSessionId: externalSessionId(body),
-      executionRequestId: strFlag(body, "--execution-request-id") ?? null,
-      executionTargetId: strFlag(body, "--execution-target-id") ?? null,
-      // The channel id only. Its credential never travels in a protocol flag — it reaches the
-      // backend solely as an Authorization header on the adapter route family.
-      sessionChannelId: strFlag(body, "--session-channel-id") ?? null,
-      objectiveId: objectiveRefFlag(body),
-      captureBindingState: captureBindingFlag(body)
-    })
-  },
-  connect: {
-    permission: PERMISSIONS.SESSION_ATTACH,
-    handler: (ctx, body) => connectSession({
-      ctx,
-      missionId: missionRefFlag(body),
-      objectiveId: objectiveRefFlag(body),
-      agentIdentifier: strFlag(body, "--agent") ?? "unknown",
-      externalSessionId: externalSessionId(body)
-    })
-  },
-  update: {
-    permission: PERMISSIONS.EVENT_CREATE,
-    handler: (ctx, body) => {
-      rejectRemovedProtocolFlags(body, RETIRED_CHANGE_TRACKING_FLAGS);
-      const payloadJson = parseJsonObjectInput(
-        body,
-        "--payload-json",
-        "--payload-file",
-        "update payload"
-      );
-      rejectRemovedProtocolPayloadFields(payloadJson, "update");
-      return updateSession2({
-        ctx,
-        missionId: missionRefFlag(body),
-        sessionKey: requireFlag(body, "--session-key"),
-        summary: resolveInput(body, "--summary", "--summary-file") ?? "",
-        phase: strFlag(body, "--phase") ?? null,
-        eventType: strFlag(body, "--event-type") ?? "update",
-        payloadJson,
-        externalUrl: strFlag(body, "--external-url") ?? null,
-        externalSessionId: externalSessionId(body),
-        beginFollowUpWork: boolFlag(body, "--begin-follow-up-work"),
-        followUpIntent: strFlag(body, "--follow-up-intent") ?? null,
-        declaredPaths: declaredPathsInput(body)
-      });
-    }
-  },
-  "sync-changes": {
-    permission: PERMISSIONS.EVENT_CREATE,
-    handler: (ctx, body) => {
-      const changes = parseJsonArrayInput(
-        body,
-        "--changes-json",
-        "--changes-file",
-        "sync-changes input"
-      ) ?? [];
-      const capture = parseJsonObjectInput(
-        body,
-        "--capture-json",
-        "--capture-file",
-        "sync-changes capture"
-      );
-      return syncChanges({
-        ctx,
-        missionId: missionRefFlag(body),
-        sessionKey: requireFlag(body, "--session-key"),
-        changes,
-        ...capture !== void 0 ? { capture } : {}
-      });
-    }
-  },
-  heartbeat: {
-    permission: PERMISSIONS.EVENT_CREATE,
-    handler: (ctx, body) => heartbeatSession({
-      ctx,
-      missionId: missionRefFlag(body),
-      sessionKey: requireFlag(body, "--session-key"),
-      phase: strFlag(body, "--phase") ?? null,
-      note: strFlag(body, "--note") ?? null
-    })
-  },
-  ask: {
-    permission: PERMISSIONS.EVENT_CREATE,
-    handler: (ctx, body) => askQuestion({
-      ctx,
-      missionId: missionRefFlag(body),
-      sessionKey: requireFlag(body, "--session-key"),
-      question: resolveInput(body, "--question", "--question-file") ?? "",
-      options: parseJsonArrayInput(body, "--options-json", "--options-file", "ask options") ?? [],
-      allowsFreeText: !boolFlag(body, "--no-free-text")
-    })
-  },
-  deliver: {
-    permission: PERMISSIONS.EVENT_CREATE,
-    handler: (ctx, body) => {
-      rejectRemovedProtocolFlags(body, RETIRED_CHANGE_TRACKING_FLAGS);
-      const envelope2 = parseDeliveryPayloadEnvelope(body);
-      rejectRemovedProtocolPayloadFields(envelope2.payloadJson, "delivery");
-      const artifacts = parseJsonArrayInput(
-        body,
-        "--artifacts",
-        "--artifacts-file",
-        "artifacts"
-      );
-      return deliverSession({
-        ctx,
-        missionId: missionRefFlag(body),
-        sessionKey: requireFlag(body, "--session-key"),
-        summary: resolveInput(body, "--summary", "--summary-file") ?? envelope2.summary ?? "",
-        artifacts: artifacts ?? envelope2.artifacts ?? [],
-        declaredPaths: declaredPathsInput(body) ?? envelope2.declaredPaths,
-        payloadJson: envelope2.payloadJson,
-        verificationSummary: strFlag(body, "--verification-summary") ?? envelope2.verificationSummary ?? null,
-        followUpNotes: strFlag(body, "--follow-up-notes") ?? envelope2.followUpNotes ?? null,
-        missionSummary: envelope2.missionSummary
-      });
-    }
-  },
-  "hook-event": {
-    permission: PERMISSIONS.EVENT_CREATE,
-    handler: (ctx, body) => recordHookEvent({
-      ctx,
-      missionId: missionRefFlag(body),
-      hookType: requireFlag(body, "--hook-type"),
-      prompt: resolveInput(body, "--prompt", "--prompt-file") ?? "",
-      sessionKey: strFlag(body, "--session-key") ?? null,
-      externalSessionId: externalSessionId(body) ?? null,
-      turnIndex: strFlag(body, "--turn-index") ?? null
-    })
-  },
-  "resume-follow-up": {
-    permission: PERMISSIONS.SESSION_ATTACH,
-    handler: (ctx, body) => resumeFollowUp({
-      ctx,
-      missionId: missionRefFlag(body),
-      objectiveId: objectiveRefFlag(body),
-      agentIdentifier: strFlag(body, "--agent") ?? "unknown",
-      modelIdentifier: strFlag(body, "--model") ?? null,
-      externalSessionId: externalSessionId(body),
-      summary: resolveInput(body, "--summary", "--summary-file") ?? null,
-      executionTargetId: strFlag(body, "--execution-target-id") ?? null
-    })
-  }
-};
-
 // protocol.ts
 async function protocolWorkspaceId(body) {
   const scopes = await callerWorkspaceMemberships();
@@ -181964,14 +182221,50 @@ function overlordMcpToolDefinitions({ defaultAgent }) {
       annotations: readOnly
     },
     {
+      name: "overlord_mission_items",
+      title: "Read full mission items",
+      description: "Use this to read all open items of an attached session\u2019s mission with full text and detail (suggestion change, location, doneWhen; action command and verify). Blocking human actions come first. Returns items, total, limit, offset, truncated and nextOffset; page until nextOffset is null. If items change while paging, restart at offset 0; do not close items while paging.",
+      inputSchema: objectSchema({
+        missionId: stringProperty("Mission UUID or display id; optional with an objective display id."),
+        objectiveId: stringProperty("Objective UUID or display id."),
+        sessionKey: stringProperty("Attached live session key for this mission."),
+        limit: { type: "integer", minimum: 1, maximum: 200 },
+        offset: { type: "integer", minimum: 0 }
+      }, ["sessionKey"]),
+      outputSchema: protocolOutputSchema("Full open mission items page with total and nextOffset."),
+      annotations: readOnly
+    },
+    {
+      name: "overlord_close_items",
+      title: "Close verified mission items",
+      description: "Use this to close verified open items of the attached session\u2019s mission as done or dismissed, with a reason, without delivering. Uses delivery closeItems rules and warnings. Returns closedItemIds and warnings; skipped entries carry recovery instructions. Repeat for more than 50 closures.",
+      inputSchema: objectSchema({
+        missionId: stringProperty("Mission UUID or display id; optional with an objective display id."),
+        objectiveId: stringProperty("Objective UUID or display id."),
+        sessionKey: stringProperty("Attached live session key for this mission."),
+        closeItems: {
+          type: "array",
+          minItems: 1,
+          maxItems: 50,
+          items: objectSchema({
+            id: stringProperty("Open item id from attach or the mission-items read."),
+            status: { type: "string", enum: ["done", "dismissed"] },
+            reason: { type: "string", minLength: 1, maxLength: 280 }
+          }, ["id", "status", "reason"])
+        }
+      }, ["sessionKey", "closeItems"]),
+      outputSchema: protocolOutputSchema("Mission summary write result: closedItemIds, warnings, contentRevision and narrativeWritten false."),
+      annotations: writeAction
+    },
+    {
       name: "overlord_changes",
       title: "List objective file changes",
-      description: 'Use this to read the synchronized changed-file evidence of one objective across every session, resource, and device. Returns ObjectiveFileChangesDto { scope: "server_objective", items, total, limit, truncated, capture }: compact rows (resourceKey, filePath, source declared_edit | agent_declared | null for unknown, observedAt, hookHealth) ordered by resource then path and capped at 200, total as the pre-cap count, and persisted capture diagnostics with warnings. It never includes unsynchronized local evidence, needs no attached session, and does not mutate anything.',
+      description: 'Use this to read the synchronized changed-file evidence of one objective across every session, resource, and device. Returns ObjectiveFileChangesDto { scope: "server_objective", items, total, limit, truncated, capture }: compact rows (resourceKey, filePath, source declared_edit | agent_declared | null for unknown, observedAt, hookHealth) ordered by resource then path and capped at 200, total as the pre-cap count, and persisted capture diagnostics with warnings, plus instruction (how to declare missed paths) when a warning needs action. It never includes unsynchronized local evidence, needs no attached session, and does not mutate anything.',
       inputSchema: objectSchema({
         missionId: stringProperty("Mission UUID or workspace display id. Optional when objectiveId is a display id such as coo:756.k7xm, which already names its mission."),
         objectiveId: stringProperty("Required objective UUID or display id such as coo:756.k7xm. An objective that does not belong to missionId is rejected.")
       }),
-      outputSchema: protocolOutputSchema("ObjectiveFileChangesDto: scope server_objective, missionId, objectiveId, items (FileChangeDto, capped at 200), total, limit, truncated, and capture { sessions, warnings }."),
+      outputSchema: protocolOutputSchema("ObjectiveFileChangesDto: scope server_objective, missionId, objectiveId, items (FileChangeDto, capped at 200), total, limit, truncated, capture { sessions, warnings }, and instruction when a capture warning needs action."),
       annotations: readOnly
     },
     {
@@ -182160,7 +182453,7 @@ function overlordMcpToolDefinitions({ defaultAgent }) {
     {
       name: "overlord_attach_session",
       title: "Attach to mission",
-      description: "Use this only after the user asks the connected agent to begin work on a mission. It opens an MCP-hosted session for later updates and delivery. Pass objectiveId when the caller already knows which objective to execute so attach does not rediscover another one.",
+      description: "Use this only after the user asks the connected agent to begin work on a mission. It opens an MCP-hosted session for later updates and delivery. Returns compact objectives and current-objective directives (newest 10); full history is available through load mission context. Pass objectiveId when the caller already knows which objective to execute so attach does not rediscover another one.",
       inputSchema: objectSchema({
         missionId: stringProperty("Mission UUID or workspace display id. Optional when objectiveId is a display id such as coo:756.k7xm, which already names its mission."),
         objectiveId: stringProperty("Objective UUID or display id such as coo:756.k7xm. Pins attach to that objective, and supplies missionId when it is omitted."),
@@ -182168,7 +182461,7 @@ function overlordMcpToolDefinitions({ defaultAgent }) {
         model: stringProperty("Optional model identifier."),
         executionTargetId: stringProperty("Optional local execution target id for resolving sibling project resource paths.")
       }, []),
-      outputSchema: protocolOutputSchema("Attached session context, including the session key required for lifecycle calls. For a mission with a summary it also carries missionSummary { contentRevision, headline, summary, author, openItems [{ id, kind, objective, text, blocking? }], truncated }: the baseline to rewrite when delivering."),
+      outputSchema: protocolOutputSchema("Compact attach-response-v4 context: agentInstructions first, objectives [{ displayId, state, objective }] in mission order (completed instructions capped at 600 characters), and directives (current objective only, newest 10 user_follow_up, decision and discussion_summary events). No history or previous/future arrays; load mission context for full inspection. Includes the session key required for lifecycle calls. For a mission with a summary it also carries missionSummary { contentRevision, headline, summary, author, openItems [{ id, kind, objective, text, blocking? }], truncated }: the baseline to rewrite when delivering."),
       annotations: writeAction
     },
     {
@@ -182253,7 +182546,7 @@ function overlordMcpToolDefinitions({ defaultAgent }) {
         },
         missionSummary: missionSummaryProperty({ requireBase: true })
       }, ["sessionKey", "summary"]),
-      outputSchema: protocolOutputSchema("The completed delivery record and any recorded file changes, plus missionSummary { contentRevision, narrativeWritten, closedItemIds, warnings } when a summary was sent."),
+      outputSchema: protocolOutputSchema("The completed delivery record and any recorded file changes, instruction (what to do after delivery), plus missionSummary { contentRevision, narrativeWritten, closedItemIds, warnings } when a summary was sent."),
       annotations: writeAction
     },
     {
@@ -182791,7 +183084,27 @@ var toolHandlers = {
     })
   ),
   overlord_list_deliveries: (args) => runProtocolSubcommand("list-deliveries", protocolBody(missionScopeFlags(args))),
-  overlord_changes: (args) => runProtocolSubcommand("objective-changes", protocolBody(missionScopeFlags(args))),
+  overlord_mission_items: (args) => runProtocolSubcommand(
+    "mission-items",
+    protocolBody({
+      ...missionScopeFlags(args),
+      "--session-key": requiredString2(args, "sessionKey"),
+      ...args.limit !== void 0 ? { "--limit": String(args.limit) } : {},
+      ...args.offset !== void 0 ? { "--offset": String(args.offset) } : {}
+    })
+  ),
+  overlord_close_items: (args) => runProtocolSubcommand(
+    "close-items",
+    protocolBody({
+      ...missionScopeFlags(args),
+      "--session-key": requiredString2(args, "sessionKey"),
+      "--close-items-json": JSON.stringify(args.closeItems)
+    })
+  ),
+  overlord_changes: (args) => runProtocolSubcommand(
+    "objective-changes",
+    protocolBody({ ...missionScopeFlags(args), "--connection-method": "mcp" })
+  ),
   overlord_launch_objective: (args) => runProtocolSubcommand(
     "launch-objective",
     protocolBody({
@@ -182876,6 +183189,8 @@ var toolHandlers = {
     "attach",
     protocolBody({
       ...missionScopeFlags(args),
+      // Attach rules then name MCP tools and payload fields, not CLI flags.
+      "--connection-method": "mcp",
       "--agent": optionalString(args, "agent") ?? HOSTED_MCP_DEFAULT_AGENT,
       ...optionalString(args, "model") ? { "--model": requiredString2(args, "model") } : {},
       ...optionalString(args, "executionTargetId") ? { "--execution-target-id": requiredString2(args, "executionTargetId") } : {}
@@ -199932,15 +200247,40 @@ function latestTimestamp(...values) {
   }
   return latest === null ? null : new Date(latest).toISOString();
 }
-function dedupe(items, kind, limit2) {
-  const seen = /* @__PURE__ */ new Set();
-  return items.filter((item) => {
-    if (item.kind !== kind) return false;
-    const key = item.text.trim().replace(/\s+/g, " ").toLowerCase();
-    if (!key || seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  }).slice(0, limit2);
+function normalizeText(text) {
+  return text.trim().replace(/\s+/g, " ").toLowerCase();
+}
+function groupKey(item) {
+  const text = normalizeText(item.text);
+  if (item.kind !== "suggestion") return text;
+  return JSON.stringify(
+    [text, item.detail.change, item.detail.location, item.detail.doneWhen].map(
+      (part) => normalizeText(String(part ?? ""))
+    )
+  );
+}
+function groupOpenItems(items, kind, limit2) {
+  const groups = /* @__PURE__ */ new Map();
+  for (const item of items) {
+    if (item.kind !== kind) continue;
+    if (!normalizeText(item.text)) continue;
+    const key = groupKey(item);
+    const existing = groups.get(key);
+    if (existing) existing.duplicates.push(item);
+    else groups.set(key, { item, duplicates: [] });
+  }
+  return [...groups.values()].slice(0, limit2);
+}
+function duplicateRefs(group4) {
+  if (group4.duplicates.length === 0) return {};
+  return {
+    duplicates: group4.duplicates.map((duplicate) => ({
+      id: duplicate.id,
+      deliveryId: duplicate.deliveryId,
+      objectiveId: duplicate.objectiveId,
+      deliveredAt: duplicate.reportedAt
+    }))
+  };
 }
 function actionDto(item) {
   return {
@@ -199977,31 +200317,35 @@ function buildEvidence(runs, items) {
   };
 }
 function projectSummary(row, items, closed) {
-  const risks = dedupe(items, "risk", MISSION_SUMMARY_LIMITS.risks).map(
-    (item) => ({
-      id: item.id,
-      deliveryId: item.deliveryId,
-      objectiveId: item.objectiveId,
-      deliveredAt: item.reportedAt,
-      text: item.text
-    })
-  );
-  const suggestions = dedupe(
+  const risks = groupOpenItems(
+    items,
+    "risk",
+    MISSION_SUMMARY_LIMITS.risks
+  ).map((group4) => ({
+    id: group4.item.id,
+    deliveryId: group4.item.deliveryId,
+    objectiveId: group4.item.objectiveId,
+    deliveredAt: group4.item.reportedAt,
+    text: group4.item.text,
+    ...duplicateRefs(group4)
+  }));
+  const suggestions = groupOpenItems(
     items,
     "suggestion",
     MISSION_SUMMARY_LIMITS.suggestions
-  ).map((item) => ({
-    id: item.id,
-    deliveryId: item.deliveryId,
-    objectiveId: item.objectiveId,
-    deliveredAt: item.reportedAt,
-    actionId: item.itemRef,
-    title: item.text,
+  ).map((group4) => ({
+    id: group4.item.id,
+    deliveryId: group4.item.deliveryId,
+    objectiveId: group4.item.objectiveId,
+    deliveredAt: group4.item.reportedAt,
+    actionId: group4.item.itemRef,
+    title: group4.item.text,
     state: "open",
-    change: String(item.detail.change ?? ""),
-    location: String(item.detail.location ?? ""),
-    doneWhen: String(item.detail.doneWhen ?? ""),
-    resolution: null
+    change: String(group4.item.detail.change ?? ""),
+    location: String(group4.item.detail.location ?? ""),
+    doneWhen: String(group4.item.detail.doneWhen ?? ""),
+    resolution: null,
+    ...duplicateRefs(group4)
   }));
   const generatedBy = row.generated_by;
   return {
