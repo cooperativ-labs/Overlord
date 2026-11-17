@@ -238,9 +238,15 @@ As of the Latch v2 cutover, no shipped launch path currently supplies the sessio
 credential this mechanism depends on (`createSessionChannel` has no production callers), so
 "blocks the harness's tool call until answered" does not happen end-to-end for any existing
 adapter today — do not assume a new connector can exercise this path against a real Overlord
-deployment without first restoring that wiring. The one decision kind that is still remotely
-answerable — a blocking **question** — goes through the mission protocol's `ask`/resolve flow
-and a live Latch terminal session, not through this session-channel mechanism.
+deployment without first restoring that wiring. The decision kinds that are still remotely
+answerable — a blocking **question** or fixed **choice** — go through the mission protocol's
+`ask`/resolve flow and a live Latch terminal session, not through this session-channel
+mechanism. `ovld protocol ask` opens the request (creating a credential-free, correlation-only
+channel with `launch_kind = 'protocol'` when needed), and the runner delivers the answer into the
+agent's Latch conversation with `sendLatchMessage`. Delivery is reported separately from
+resolution (`delivery.stage`) and reaches harnesses whose Latch conversation connector accepts
+`send_message` (Claude Code, Codex and Cursor). A connector needs no hook for this path. See
+ADR 0065 and `docs/src/content/docs/agent-sessions.mdx`.
 
 ### Stop Hook
 
