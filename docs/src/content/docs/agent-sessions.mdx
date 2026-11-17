@@ -10,14 +10,15 @@ the harness is running.
 
 :::caution
 As of the Latch v2 cutover, no launch path (manual `ovld launch` or a runner-dispatched launch)
-currently creates the session channel this page describes, so `OVERLORD_SESSION_CHANNEL_ID`
+creates the credentialed session channel this page describes, so `OVERLORD_SESSION_CHANNEL_ID`
 is not set in a launched agent's environment and the connector hooks exit immediately without
 reaching Overlord. **Observe** activity events and **Inject**ed instructions are effectively
 inactive today. Of the four **Decide** request kinds, only a blocking **question** or a fixed
-**choice** can still be answered remotely, and only while the mission's attached objective has
-a live [Latch](https://latch.sh) terminal session Overlord can reach — see
-`AgentRequestDto.delivery` in the contract changelog (`contract/CHANGELOG.md`). **Permission** and **retry** requests can no
-longer be answered remotely at all; they fall back to native harness behavior.
+**choice** can be answered remotely. Since contract 173.6.0 (ADR 0065), `ovld protocol ask`
+opens that answerable request for any attached session, and the answer is delivered to the
+agent through the mission's live [Latch](https://latch.sh) terminal session — see
+[Answering a held question](#answering-a-held-question). **Permission** and **retry** requests
+cannot be answered remotely; they fall back to native harness behavior.
 :::
 
 ## The three live paths
@@ -65,24 +66,92 @@ runner/manual launch
 ```
 
 As the caution above notes, this creation step is not currently called from either launch
-path, so a launched session today runs without a channel — the diagram describes the intended
+path, so a launched session today runs without a credentialed channel (an `ask` may later add a
+credential-free, correlation-only one) — the diagram describes the intended
 shape, not current behavior. The native harness session id is only a correlation label in any
 case. Neither it nor the checkout path grants access. This matters when several missions,
 worktrees, or agents are active on the same machine.
 
 ## Answering a held question
 
-Use `ovld requests` to list a decision that a live adapter has already opened, then answer it
-with the request ID and revision shown. Only **question** and **choice** requests are
-answerable this way, and only while `ovld requests` reports a `latch` delivery mode for that
-request; a request reporting `read_only` (no reachable Latch session) cannot be answered
-remotely — resolve it in the native harness instead. The static capability catalog is
-diagnostic evidence; it does not manufacture a request when the live harness never opened one.
+When an attached agent runs `ovld protocol ask`, Overlord opens an answerable **question** (or a
+**choice** when the agent passed fixed options with `--no-free-text`). If the session has no
+channel, the ask creates a correlation-only channel for it (`launch_kind = 'protocol'`). That
+channel has no credential and no lease: nothing can authenticate as it, and it exists only so the
+request has somewhere to live. Launch still mints no channel.
+
+The question appears at the top of the mission panel and in its objective. Answer it there, or
+from a terminal:
+
+```bash
+ovld requests --mission-id coo:312        # id, status, kind, summary, revision
+ovld requests resolve <id> --revision <n> --decision allow --text "Block only the panel."
+```
+
+Whether a request can be answered is decided each time it is read, from the mission's Latch
+terminal session (`AgentRequestDto.delivery`). A request whose delivery mode is `read_only` (no
+reachable Latch session) cannot be answered remotely — resolve it in the native harness instead.
+Answers reach agents whose Latch conversation connector accepts messages: Claude Code, Codex and
+Cursor. Latch refuses other harnesses and the delivery is reported `failed`.
+
+### Recorded is not delivered
+
+Recording your answer and delivering it to the agent are reported separately. Do not treat
+`resolved: true` as proof that the agent received the answer; read `delivery.stage` instead:
+
+| Stage         | Meaning                                                                                  |
+| ------------- | ---------------------------------------------------------------------------------------- |
+| `recorded`    | The answer is stored; delivery has not started.                                          |
+| `queued`      | A delivery job waits for the execution target's runner.                                  |
+| `dispatched`  | A runner holds the job; its outcome arrives later.                                       |
+| `confirmed`   | Latch accepted the message, or queued it behind the agent's current turn.                |
+| `unconfirmed` | The send may have happened (ambiguous reply, lost socket, or a claimed job that expired). |
+| `failed`      | The answer did not reach the agent (refused, unreachable gateway, absent session, or a job no runner claimed). |
+
+Resolve waits about 25 seconds. A job that no runner claimed in that time is withdrawn and reported
+`failed` / `not_dispatched`, so nothing is sent later when the runner comes back online. Every
+delivery also has a five-minute deadline the runner enforces before it contacts Latch. An offline
+target refuses the answer before anything is recorded. A session whose terminal has confirmed exit
+never receives an answer (409 `request_not_deliverable`); a `lost` session is still attempted.
+
+After a `failed` delivery, the mission panel's **Send again** action (REST
+`POST /api/agent-requests/:id/redeliver`, `session:attach`) resends the recorded answer. The
+answer cannot be edited and the request stays resolved. Overlord never resends an `unconfirmed`
+delivery on its own: check the session first, then confirm. Overlord asks Latch for the earlier
+attempt's receipt and sends again only when that attempt was refused or no receipt was kept.
+`ovld requests` does not yet expose redelivery.
+
+### Dismissing a question card
+
+The dismiss (X) control on a question card hides the card from the top of the mission for you
+only. The question stays open, stays listed in its objective, and can still be answered. Other
+members still see it, and the card returns if the request changes. REST:
+`POST` / `DELETE /api/agent-requests/:id/dismissal` (`session:read`).
+
+The static capability catalog is diagnostic evidence; it does not manufacture a request when the
+live harness never opened one.
 
 Sending an arbitrary instruction into a running session (`ovld inputs send`) and the mission
 panel's session-instructions control are retired along with the session channel above; the
 backend now rejects both with `session_controls_gone`. `ovld inputs list` still reads historical
 rows for a mission but cannot be used to queue a new one.
+
+## Mission terminal sessions
+
+A mission lists the Latch terminal sessions its execution requests started. A session reads
+`running`, `stopping`, `lost` (no reliable contact — it can recover and is never treated as
+ended), or `exited` (process termination confirmed). Overlord inspects open sessions in the
+background about every 30 seconds through the execution target's runner, so an exit can take a
+little while to appear, and longer when a runner is offline. A session that Latch no longer knows
+is removed from the list without being recorded as ended.
+
+**End session** (`POST /api/missions/:id/terminal-sessions/end`, `mission:update`) stops the
+terminal for one execution request. An unfinished current attempt returns to `submitted` and its
+Run Queue is paused; completed work stays complete. Only a confirmed exit reports `ended`; an
+offline target, an unreachable session, or an unconfirmed stop reports `unconfirmed`, and
+retrying inspects again rather than sending a second stop. Ended sessions keep their end time and
+reason (`ended_by_person`, `exited`, or `unknown`). The mission shows up to five recent ones, and
+`GET /api/missions/:id/terminal-sessions/history` pages the rest.
 
 ## Conflicts with hooks outside Overlord
 
@@ -161,7 +230,9 @@ After an Overlord upgrade, refresh the connector with `ovld agent-setup <agent>`
 
 Given the caution at the top of this page, expect `OVERLORD_SESSION_CHANNEL_ID` to be absent
 from every launched session's environment today — that reflects the current, unwired state of
-launch, not a misconfigured connector.
+launch, not a misconfigured connector. A question that stays `read_only` points at the Latch
+terminal session (is it still running, and is its execution target online?), not at the
+connector hooks.
 
 Related: [Agents and connectors](/agents/) · [Data boundaries](/data-boundaries/) ·
 [Troubleshooting](/troubleshooting/)

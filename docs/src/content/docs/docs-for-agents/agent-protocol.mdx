@@ -226,6 +226,14 @@ ovld protocol ask --session-key <sessionKey> --mission-id coo:312 \
 Do not guess past a genuine fork in requirements. Asking is cheaper than
 delivering the wrong thing.
 
+Pass `--options-json` (or `--options-file`) with `[{ optionId, label, kind }]`
+to offer fixed answers, and add `--no-free-text` to make the request a choice.
+The ask opens an answerable request. A person answers it in the mission panel or
+with `ovld requests resolve`, and Overlord delivers the answer into your Latch
+terminal session as a new message. That works for Claude Code, Codex and Cursor
+sessions while the session is running. Do not poll for the answer after you
+stop; it arrives as your next turn.
+
 ## Deliver
 
 Delivery is the concluding step. It stores the summary and any optional

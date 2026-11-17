@@ -190,6 +190,16 @@ practice, a launched agent's environment does not carry `OVERLORD_SESSION_CHANNE
 invocation. Treat the table below as the intended design this module retains, not live
 behavior — do not build against it assuming a channel exists at launch.
 
+One channel kind is created today, and it is not for adapters. Since contract 173.6.0
+(ADR 0065), `ovld protocol ask` calls `ensureProtocolChannelForSession`
+(`packages/core/service/agent-session/channels.ts`) when the asking session has no channel. It
+opens a correlation-only channel (`launch_kind = 'protocol'`, state `online`) with **no
+credential and no lease**, so a blocking question has an `agent_requests` row to hang off.
+Nothing can authenticate as it on `/api/agent-session-channels/v1/*`, the lost-channel sweep never
+ends it, and its id is never exported to the harness. Its existence is not evidence that hooks can
+reach Overlord. The answer to that question is delivered by the runner through Latch
+(`sendLatchMessage`), not through any adapter command.
+
 The credential your adapter's CLI call presents is not something the adapter finds or derives:
 
 | Launch                 | Channel created at                       | Credential reaches the process via                  |

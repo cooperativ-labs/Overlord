@@ -25,7 +25,10 @@ not be edited.
    `ovld launch` nor a runner-dispatched launch currently calls `createSessionChannel`, so
    expect this variable to be absent for every session today — that is the current state of
    launch wiring, not evidence of a broken adapter. Do not spend time debugging a specific
-   connector on this signal alone.
+   connector on this signal alone. A channel with `launch_kind = 'protocol'` is not a launch
+   channel: `ovld protocol ask` creates it, without a credential or lease, so a blocking
+   question has a request to hang off (ADR 0065). Its existence does not mean hooks can
+   authenticate.
 2. Run `ovld doctor` and repair stale managed files with `ovld agent-setup <agent>`.
 3. Read the adapter's static capability maximum, then verify the installed descriptor and live
    binding separately. The catalog alone does not prove that the installed harness invoked a
@@ -35,6 +38,40 @@ not be edited.
    (`ovld agent-session`). The former can work while the latter is intentionally unbound.
 6. For a decision failure, verify exact native stdout and timeout before investigating REST. A
    malformed or timed-out callback must emit nothing.
+
+## Blocking questions and answer delivery
+
+The blocking-question path does not depend on any connector hook. It works the same for every
+harness and is the only Decide path live today:
+
+1. The attached agent runs `ovld protocol ask` (`--options-json` plus `--no-free-text` makes it a
+   **choice**). The ask opens an answerable request, creating a correlation-only channel when the
+   session has none.
+2. A person answers in the mission panel or with `ovld requests resolve`. Answerability is decided
+   per read from the mission's Latch terminal session: `AgentRequestDto.delivery.mode` is `latch`
+   or `read_only`.
+3. The backend queues a `sendLatchMessage` job for the execution target's runner, which posts the
+   answer into the agent's Latch conversation. Latch must have a conversation connector for the
+   harness that accepts `send_message`: Claude Code, Codex and Cursor do; other harnesses are
+   refused and the delivery reports `failed`.
+
+Diagnose a missing answer from `delivery`, not from `resolved`:
+
+- `stage` is `recorded`, `queued`, `dispatched`, `confirmed`, `unconfirmed` or `failed`;
+  `failureCode`, `failureMessage`, `attempt`, `canRedeliver`, `confirmationRequired` and
+  `sessionState` explain it. Resolve waits about 25 seconds; a job no runner claimed by then is
+  withdrawn as `failed` / `not_dispatched`.
+- `failed` with an unreachable gateway: the runner tries the standalone `latch serve` gateway and
+  the Remote Link supervisor's gateway
+  (`$LATCH_HOME/remote-access/runtime/remote-link-gateway-ready.json`), loopback only. An explicit
+  environment override is then the only candidate.
+- `sessionState: exited` returns 409 `request_not_deliverable`; `lost` is still attempted. An
+  offline target refuses before anything is recorded.
+- Recovery is `POST /api/agent-requests/:id/redeliver` with `expectedAttempt`; an `unconfirmed`
+  attempt also needs `confirmUnconfirmed: true` and is resent only if Latch kept no delivered
+  receipt for the earlier attempt. Overlord never resends on its own.
+- A dismissed card (`dismissed: true`) is a per-member view preference. It does not close,
+  answer, or hide the request from `status=open` reads.
 
 ## Claude Code
 

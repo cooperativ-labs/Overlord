@@ -106,15 +106,18 @@ Repeat `--flag <value>` to pass supported options through to the agent, and use
 
 These commands cover the [agent-session](/agent-sessions/) surface — the live observe/decide/inject
 channel between a running agent harness and Overlord, separate from the durable mission protocol.
-As of the Latch v2 cutover, no launch path currently creates the session channel this surface
-needs, so `requests resolve` only works for a **question** or **choice** request while the
-mission's attached objective has a live Latch terminal session, and `inputs send` always fails.
-See [Live agent sessions](/agent-sessions/) for the current state.
+As of the Latch v2 cutover, no launch path creates the credentialed session channel the hook
+commands below need, and `inputs send` always fails. Blocking questions still work: an attached
+agent's `ovld protocol ask` opens the request, and `requests resolve` answers a **question** or
+**choice** while the mission's attached objective has a live Latch terminal session. A resolved
+request reports delivery separately (`delivery.stage`: `queued`, `dispatched`, `confirmed`,
+`unconfirmed`, or `failed`); recorded is not the same as delivered. See
+[Live agent sessions](/agent-sessions/#answering-a-held-question) for the current state.
 
 | Command                                                                                                    | What it does                                                                                                                    |
 | ---------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
 | `ovld requests [--mission-id <id>] [--objective-id <id>] [--json]`                                         | List open and recent agent decisions, optionally restricted to one mission or objective.                                        |
-| `ovld requests resolve <id> --revision <n> --decision allow\|deny\|ask [--text <text>]`                    | Answer a held decision.                                                                                                         |
+| `ovld requests resolve <id> --revision <n> --decision allow\|deny\|ask [--text <text>]`                    | Answer a held decision; `--text` carries a question's answer. Redelivery after a failed delivery is in the web app only.        |
 | `ovld inputs list --mission-id <id> [--objective-id <id>] [--json]`                                        | List session instructions and the effective channel for one mission or objective; an objective display id supplies the mission. |
 | `ovld inputs send --channel-id <id> --body <text> [--kind <kind>] [--json]`                                | Retired: the backend rejects every call with `session_controls_gone` (410 error). No launch path currently creates a live session channel to address. |
 | `ovld agent-session capabilities [<agent>] [--json]`                                                       | Print the fixture-backed capability descriptor for a harness — offline, authoritative.                                          |
@@ -168,7 +171,7 @@ Every command below is available from `ovld protocol help`.
 | `record-work`                      | Record completed chat work as a review mission.                                                           |
 | `update`                           | Post progress and activity; `--paths`/`--paths-file` declare uncaptured paths.                            |
 | `heartbeat`                        | Send liveness information without creating a feed event.                                                  |
-| `ask`                              | Raise a blocking question for a human reviewer.                                                           |
+| `ask`                              | Raise a blocking question for a human reviewer and open an answerable request (`--options-json` + `--no-free-text` for a fixed choice). |
 | `deliver`                          | Finish the session with summary, artifacts, optional declared paths, and an optional mission summary write (`--mission-summary-file`; see [Agent protocol](/docs-for-agents/agent-protocol/#mission-summary)). |
 | `resume-follow-up`                 | Reopen completed work for a follow-up.                                                                    |
 | `hook-event`                       | Record a connector lifecycle event.                                                                       |
@@ -183,9 +186,11 @@ Every command below is available from `ovld protocol help`.
 | `attachment-download-url`          | Retrieve one attachment's download URL.                                                                   |
 
 Common protocol flags are `--mission-id <id>`, `--objective-id <id>`,
-`--session-key <key>`, `--agent <identifier>`, `--model <identifier>`, and
-`--timeout <ms>`. Most payload fields accept either inline JSON or a matching
-`--*-file`; use standard input (`-`) for larger payloads.
+`--session-key <key>`, `--agent <identifier>`, and `--model <identifier>`. Most
+payload fields accept either inline JSON or a matching `--*-file`; inline
+`--*-json` values are limited to about 8 KB, and at most one file input per call
+may read standard input (`-`). Run `ovld protocol help <subcommand>` (or
+`ovld protocol <subcommand> --help`) for one command's flags.
 
 `load-context`, `read-context`, `attachment-list`, and `attachment-download-url`
 treat an explicit mission as authoritative: an inherited `OVERLORD_OBJECTIVE_ID`
