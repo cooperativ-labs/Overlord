@@ -48,11 +48,14 @@ export function useResolveDisclosure(): ResolveDisclosure {
 export function ResolveItemButton({
   disclosure,
   noun,
-  itemText
+  itemText,
+  count = 1
 }: {
   disclosure: ResolveDisclosure;
   noun: ResolvableItemNoun;
   itemText: string;
+  /** Stored records the row stands for; more than one closes them all. */
+  count?: number;
 }) {
   return (
     <button
@@ -60,7 +63,11 @@ export function ResolveItemButton({
       type="button"
       aria-expanded={disclosure.open}
       aria-controls={disclosure.open ? disclosure.formId : undefined}
-      aria-label={`Resolve ${noun}: ${itemText}`}
+      aria-label={
+        count > 1
+          ? `Resolve all ${count} matching ${noun} records: ${itemText}`
+          : `Resolve ${noun}: ${itemText}`
+      }
       onClick={() => (disclosure.open ? disclosure.hide() : disclosure.show())}
       className={cn(
         'inline-flex items-center gap-1 whitespace-nowrap px-1 text-xs font-medium text-(--color-ink-dim) hover:text-(--color-ink)',
@@ -68,7 +75,7 @@ export function ResolveItemButton({
       )}
     >
       <CircleCheck className="size-3" aria-hidden="true" />
-      Resolve
+      {count > 1 ? `Resolve all ${count}` : 'Resolve'}
     </button>
   );
 }
@@ -87,13 +94,14 @@ function errorMessage(cause: unknown): string {
  */
 export function ResolveItemForm({
   disclosure,
-  itemId,
+  itemIds,
   missionId,
   noun,
   itemText
 }: {
   disclosure: ResolveDisclosure;
-  itemId: string;
+  /** The stored records to close, the displayed (newest) one first. Several close together. */
+  itemIds: readonly string[];
   missionId: string;
   noun: ResolvableItemNoun;
   itemText: string;
@@ -117,17 +125,25 @@ export function ResolveItemForm({
     }
   }
 
+  const total = itemIds.length;
+
   async function submit() {
     setError(null);
+    // Oldest first, the displayed record last: the row stays put until the whole group is closed,
+    // and a failure leaves the row open with what remains.
+    const ids = [...itemIds].reverse();
+    let closed = 0;
     try {
-      await resolve.mutateAsync({
-        id: itemId,
-        missionId,
-        status,
-        reason: reason.trim() || null
-      });
+      for (const id of ids) {
+        await resolve.mutateAsync({ id, missionId, status, reason: reason.trim() || null });
+        closed += 1;
+      }
     } catch (cause) {
-      setError(errorMessage(cause));
+      setError(
+        total > 1
+          ? `Closed ${closed} of ${total} records. ${errorMessage(cause)}`
+          : errorMessage(cause)
+      );
     }
   }
 
@@ -150,7 +166,11 @@ export function ResolveItemForm({
   return (
     <form
       id={disclosure.formId}
-      aria-label={`Resolve ${noun}: ${itemText}`}
+      aria-label={
+        total > 1
+          ? `Resolve all ${total} matching ${noun} records: ${itemText}`
+          : `Resolve ${noun}: ${itemText}`
+      }
       onKeyDown={onKeyDown}
       onSubmit={event => {
         event.preventDefault();
@@ -158,6 +178,12 @@ export function ResolveItemForm({
       }}
       className="grid gap-2 rounded-md border border-(--color-border) bg-(--color-surface-1) p-2.5"
     >
+      {total > 1 ? (
+        <p className="text-xs text-(--color-ink)">
+          This closes all {total} matching {noun} records, one per objective report. Each keeps its
+          own history.
+        </p>
+      ) : null}
       <fieldset className="grid gap-1">
         <legend className="mb-1 text-xs font-semibold text-(--color-ink)">Resolve as</legend>
         {option('done', 'Done', 'it was addressed', true)}
@@ -178,7 +204,11 @@ export function ResolveItemForm({
       </div>
       <div className="flex flex-wrap items-center gap-1.5">
         <Button type="submit" size="xs" disabled={resolve.isPending}>
-          {resolve.isPending ? 'Resolving…' : `Resolve ${noun}`}
+          {resolve.isPending
+            ? 'Resolving…'
+            : total > 1
+              ? `Resolve all ${total}`
+              : `Resolve ${noun}`}
         </Button>
         <Button
           type="button"

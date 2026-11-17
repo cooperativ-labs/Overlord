@@ -170,12 +170,14 @@ export const ATTACH_CONTEXT_FIELDS: readonly {
     description: 'Current objective (id, title, instruction text, state, resourceKey).'
   },
   {
-    name: 'previousObjectives / futureObjectives',
-    description: 'Ordered sibling objectives for mission context.'
+    name: 'objectives',
+    description:
+      'Sibling displayId, state and instructions in mission order; completed instructions capped at 600 characters.'
   },
   {
-    name: 'history',
-    description: 'Recent mission events (updates, deliveries, asks, decisions).'
+    name: 'directives',
+    description:
+      'Newest 10 user follow-ups, decisions and discussion summaries for the current objective.'
   },
   {
     name: 'artifacts / attachments / sharedState',

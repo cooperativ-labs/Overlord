@@ -30,7 +30,6 @@ export type ComposeDeliveryDraft = {
   markdown?: unknown;
   humanActions?: unknown;
   tradeoffsMade?: unknown;
-  knownRisks?: unknown;
   assumptions?: unknown;
   reviewHighlights?: unknown;
 };
@@ -523,6 +522,8 @@ export function reconcileDeliveryComposeDraft({
       actions: report.presentation.humanActions,
       candidates
     }),
+    // Risks keep the agent's text: mission-item identity is a digest of it.
+    knownRisks: report.agentReport.knownRisks,
     deferredWork: eligibleAgentItems,
     generatedBy: 'deterministic',
     generatedAt,
@@ -612,11 +613,10 @@ export function reconcileDeliveryComposeDraft({
     markdown: markdown || report.presentation.markdown,
     humanActions: resolvedActions,
     tradeoffsMade: resolvedTradeoffs,
-    knownRisks:
-      clampStringList(draft.knownRisks).length > 0
-        ? clampStringList(draft.knownRisks)
-        : report.presentation.knownRisks,
-    // Deferred work is the agent's own objects, never sent to or rewritten by the model.
+    // Risks and deferred work are the agent's own items, never rewritten by the model.
+    // A risk's mission-item identity is a digest of its text (missionItemRef), so a
+    // reworded risk would be deleted and reinserted as a new open item.
+    knownRisks: report.agentReport.knownRisks,
     deferredWork: eligibleAgentItems,
     assumptions:
       clampStringList(draft.assumptions).length > 0

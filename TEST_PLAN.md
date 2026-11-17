@@ -235,7 +235,7 @@ Asserts the live CLI matches `contract/protocol-commands.yaml`:
 
 - Each declared command exists and rejects a call missing a `requiredFlags` entry.
 - Commands marked `requiresSessionKey` fail clearly without a session key.
-- `attach` output satisfies `attach-response-v3`: all `requiredTopLevelFields`
+- `attach` output satisfies `attach-response-v4`: all `requiredTopLevelFields`
   present, `session` has `sessionKey`+`state`, objective arrays have
   `id/objective/state/position`, and `agentInstructions` contains every
   `agentInstructionsRequiredContent` item (mission ID, objective ID, objective
@@ -290,7 +290,7 @@ checklist for "rigorous about contract adherence."
 | components.yaml `authToDatabase` | Auth never writes core tables; auth tables private | L3 | `conformance/boundaries` |
 | components.yaml `connectorToProtocol` | Hooks use protocol only, no DB | L3 | `conformance/boundaries` |
 | protocol-commands.yaml | Required flags / session-key / phases / event types | L3+L4 | `conformance/protocol`, `cli/test/e2e` |
-| protocol-commands.yaml `attach-response-v3` | Response shape + agentInstructions content | L3 | `conformance/protocol` |
+| protocol-commands.yaml `attach-response-v4` | Response shape + agentInstructions content | L3 | `conformance/protocol` |
 | protocol-commands.yaml `heartbeat` | No `mission_events` row created | L2 | `cli` |
 | extension-points.yaml closed vocab | DB CHECK == contract list | L3 | `conformance/vocab` |
 | extension-points.yaml transitions | Objective/exec/status state machines | L3 | `conformance/state` |

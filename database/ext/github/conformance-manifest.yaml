@@ -1,4 +1,4 @@
-contractVersion: 173.0.0
+contractVersion: "174.0.0"
 componentType: extension
 componentKey: github
 label: 'GitHub Database Extension'

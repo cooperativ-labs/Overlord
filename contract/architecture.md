@@ -368,14 +368,18 @@ Owns:
   `content_revision` in the delivery transaction. Evidence is selected in
   the database before limits and capped at `MISSION_SUMMARY_EVIDENCE_LIMIT` with pre-cap totals
   and truncation flags. Risks, suggestions and evidence actions come only from open
-  `mission_items` rows and carry their stable item `id`; risks and suggestions keep newest-first
-  display dedupe by normalized text/title. Sources remain the latest current-run delivery per
+  `mission_items` rows and carry their stable item `id`; open risks with the same normalized text,
+  and open suggestions with the same title, change, location and done-when, collapse to one
+  newest-first row that lists the other records in `duplicates` (id, delivery, objective, time;
+  absent when none). Grouping is display only: every record keeps its stored identity and is
+  closed through its own id, and a same-title suggestion with different scope is its own row
+  (ADR 0074). Sources remain the latest current-run delivery per
   objective, deleted objectives included. `MissionSummaryDto` includes `contentRevision`,
   `author: { kind, objectiveId, deliveryId }` and up to 100 `closedItems` (`done` or `dismissed`,
   newest resolution first), including reason and resolver provenance. Closed suggestions leave
   the open list; delivery cards retain their resolution. The composer writes only headline and
   summary prose, increments `content_revision` and clears narrative author references. Triggers
-  leave the row and job queue unchanged when the newest live delivery is `narrative_delivery_id`;
+  leave the row and job queue unchanged while `narrative_delivery_id` names a live delivery of the mission (a later delivery without prose does not lift the guard);
   publication checks the same guard under the summary row lock. Legacy resolution storage and
   summary item-reference columns are dropped after the backfill (ADR 0060). `deliveredAt` on
   risks and suggestions is the source delivery timestamp copied to `mission_items.reported_at`

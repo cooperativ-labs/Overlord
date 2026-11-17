@@ -349,10 +349,63 @@ export function overlordMcpToolDefinitions({
       annotations: readOnly
     },
     {
+      name: 'overlord_mission_items',
+      title: 'Read full mission items',
+      description:
+        'Use this to read all open items of an attached session’s mission with full text and detail (suggestion change, location, doneWhen; action command and verify). Blocking human actions come first. Returns items, total, limit, offset, truncated and nextOffset; page until nextOffset is null. If items change while paging, restart at offset 0; do not close items while paging.',
+      inputSchema: objectSchema(
+        {
+          missionId: stringProperty(
+            'Mission UUID or display id; optional with an objective display id.'
+          ),
+          objectiveId: stringProperty('Objective UUID or display id.'),
+          sessionKey: stringProperty('Attached live session key for this mission.'),
+          limit: { type: 'integer', minimum: 1, maximum: 200 },
+          offset: { type: 'integer', minimum: 0 }
+        },
+        ['sessionKey']
+      ),
+      outputSchema: protocolOutputSchema('Full open mission items page with total and nextOffset.'),
+      annotations: readOnly
+    },
+    {
+      name: 'overlord_close_items',
+      title: 'Close verified mission items',
+      description:
+        'Use this to close verified open items of the attached session’s mission as done or dismissed, with a reason, without delivering. Uses delivery closeItems rules and warnings. Returns closedItemIds and warnings; skipped entries carry recovery instructions. Repeat for more than 50 closures.',
+      inputSchema: objectSchema(
+        {
+          missionId: stringProperty(
+            'Mission UUID or display id; optional with an objective display id.'
+          ),
+          objectiveId: stringProperty('Objective UUID or display id.'),
+          sessionKey: stringProperty('Attached live session key for this mission.'),
+          closeItems: {
+            type: 'array',
+            minItems: 1,
+            maxItems: 50,
+            items: objectSchema(
+              {
+                id: stringProperty('Open item id from attach or the mission-items read.'),
+                status: { type: 'string', enum: ['done', 'dismissed'] },
+                reason: { type: 'string', minLength: 1, maxLength: 280 }
+              },
+              ['id', 'status', 'reason']
+            )
+          }
+        },
+        ['sessionKey', 'closeItems']
+      ),
+      outputSchema: protocolOutputSchema(
+        'Mission summary write result: closedItemIds, warnings, contentRevision and narrativeWritten false.'
+      ),
+      annotations: writeAction
+    },
+    {
       name: 'overlord_changes',
       title: 'List objective file changes',
       description:
-        'Use this to read the synchronized changed-file evidence of one objective across every session, resource, and device. Returns ObjectiveFileChangesDto { scope: "server_objective", items, total, limit, truncated, capture }: compact rows (resourceKey, filePath, source declared_edit | agent_declared | null for unknown, observedAt, hookHealth) ordered by resource then path and capped at 200, total as the pre-cap count, and persisted capture diagnostics with warnings. It never includes unsynchronized local evidence, needs no attached session, and does not mutate anything.',
+        'Use this to read the synchronized changed-file evidence of one objective across every session, resource, and device. Returns ObjectiveFileChangesDto { scope: "server_objective", items, total, limit, truncated, capture }: compact rows (resourceKey, filePath, source declared_edit | agent_declared | null for unknown, observedAt, hookHealth) ordered by resource then path and capped at 200, total as the pre-cap count, and persisted capture diagnostics with warnings, plus instruction (how to declare missed paths) when a warning needs action. It never includes unsynchronized local evidence, needs no attached session, and does not mutate anything.',
       inputSchema: objectSchema({
         missionId: stringProperty(
           'Mission UUID or workspace display id. Optional when objectiveId is a display id such as coo:756.k7xm, which already names its mission.'
@@ -362,7 +415,7 @@ export function overlordMcpToolDefinitions({
         )
       }),
       outputSchema: protocolOutputSchema(
-        'ObjectiveFileChangesDto: scope server_objective, missionId, objectiveId, items (FileChangeDto, capped at 200), total, limit, truncated, and capture { sessions, warnings }.'
+        'ObjectiveFileChangesDto: scope server_objective, missionId, objectiveId, items (FileChangeDto, capped at 200), total, limit, truncated, capture { sessions, warnings }, and instruction when a capture warning needs action.'
       ),
       annotations: readOnly
     },
@@ -669,7 +722,7 @@ export function overlordMcpToolDefinitions({
       name: 'overlord_attach_session',
       title: 'Attach to mission',
       description:
-        'Use this only after the user asks the connected agent to begin work on a mission. It opens an MCP-hosted session for later updates and delivery. Pass objectiveId when the caller already knows which objective to execute so attach does not rediscover another one.',
+        'Use this only after the user asks the connected agent to begin work on a mission. It opens an MCP-hosted session for later updates and delivery. Returns compact objectives and current-objective directives (newest 10); full history is available through load mission context. Pass objectiveId when the caller already knows which objective to execute so attach does not rediscover another one.',
       inputSchema: objectSchema(
         {
           missionId: stringProperty(
@@ -687,7 +740,7 @@ export function overlordMcpToolDefinitions({
         []
       ),
       outputSchema: protocolOutputSchema(
-        'Attached session context, including the session key required for lifecycle calls. For a mission with a summary it also carries missionSummary { contentRevision, headline, summary, author, openItems [{ id, kind, objective, text, blocking? }], truncated }: the baseline to rewrite when delivering.'
+        'Compact attach-response-v4 context: agentInstructions first, objectives [{ displayId, state, objective }] in mission order (completed instructions capped at 600 characters), and directives (current objective only, newest 10 user_follow_up, decision and discussion_summary events). No history or previous/future arrays; load mission context for full inspection. Includes the session key required for lifecycle calls. For a mission with a summary it also carries missionSummary { contentRevision, headline, summary, author, openItems [{ id, kind, objective, text, blocking? }], truncated }: the baseline to rewrite when delivering.'
       ),
       annotations: writeAction
     },
@@ -832,7 +885,7 @@ export function overlordMcpToolDefinitions({
         ['sessionKey', 'summary']
       ),
       outputSchema: protocolOutputSchema(
-        'The completed delivery record and any recorded file changes, plus missionSummary { contentRevision, narrativeWritten, closedItemIds, warnings } when a summary was sent.'
+        'The completed delivery record and any recorded file changes, instruction (what to do after delivery), plus missionSummary { contentRevision, narrativeWritten, closedItemIds, warnings } when a summary was sent.'
       ),
       annotations: writeAction
     },

@@ -15,6 +15,7 @@ import {
   deliverSession,
   loadMissionContext,
   MISSION_SUMMARY_INSTRUCTIONS,
+  missionSummaryInstructions,
   recordWork,
   resumeFollowUp
 } from './protocol.js';
@@ -196,6 +197,7 @@ describe('mission summary on attach', () => {
       summary: '',
       author: null,
       openItems: [],
+      totalOpenItems: 0,
       truncated: false
     });
     assert.ok(first.agentInstructions.includes('## Mission summary'));
@@ -273,6 +275,219 @@ describe('mission summary on attach', () => {
       ['mission_summary_disabled']
     );
     assert.equal(await summaryRow(ctx, mission.id), undefined);
+    await db.close();
+  });
+});
+
+describe('attach instructions by connection method (coo:1294.h8e4)', () => {
+  const SUMMARY_RULES = [
+    'Check every item in `missionSummary.openItems`',
+    'Do not report a risk or suggestion that is already open or that you closed.',
+    'Organise by what the mission provides, not by objective.',
+    'State only durable limits'
+  ];
+  const PRECEDENCE = 'Where an installed Overlord skill or plugin says otherwise, follow these.';
+
+  it('a CLI attach returns CLI rules first, with the revised summary block', async () => {
+    const { db, ctx } = await createSeededServiceContext({ source: 'cli' });
+    const { mission, objectives } = await missionWith(ctx, 'Instructions CLI');
+
+    const attached = await attachSession({
+      ctx,
+      missionId: mission.displayId,
+      objectiveId: objectives[0]!.id
+    });
+    assert.equal(Object.keys(attached)[0], 'agentInstructions');
+    const text = attached.agentInstructions;
+    assert.ok(text.includes(PRECEDENCE));
+    assert.ok(text.includes(MISSION_SUMMARY_INSTRUCTIONS));
+    for (const rule of SUMMARY_RULES) assert.ok(text.includes(rule), rule);
+    assert.match(text, /`ovld protocol deliver`/);
+    assert.match(text, /--payload-file/);
+    assert.match(text, /--mission-summary-file/);
+    assert.ok(text.includes('ovld protocol mission-items --mission-id <id> --limit 60 --offset 0'));
+    assert.ok(text.includes('ovld protocol close-items'));
+    assert.doesNotMatch(text, /not all open items were checked/);
+    assert.doesNotMatch(text, /overlord_deliver_session/);
+    await db.close();
+  });
+
+  it('an MCP attach names MCP tools and payload fields and no CLI command or flag', async () => {
+    const { db, ctx } = await createSeededServiceContext({ source: 'cli' });
+    const { mission, objectives } = await missionWith(ctx, 'Instructions MCP');
+
+    const attached = await attachSession({
+      ctx,
+      missionId: mission.displayId,
+      objectiveId: objectives[0]!.id,
+      connectionMethod: 'mcp'
+    });
+    assert.equal(Object.keys(attached)[0], 'agentInstructions');
+    const text = attached.agentInstructions;
+    assert.ok(text.includes(PRECEDENCE));
+    assert.ok(text.includes(missionSummaryInstructions('mcp')));
+    for (const rule of SUMMARY_RULES) assert.ok(text.includes(rule), rule);
+    for (const tool of [
+      'overlord_update_session',
+      'overlord_deliver_session',
+      'overlord_changes',
+      'overlord_mission_items',
+      'overlord_close_items',
+      '`sessionKey`',
+      'Send them as `missionSummary` on `overlord_deliver_session`'
+    ]) {
+      assert.ok(text.includes(tool), tool);
+    }
+    assert.doesNotMatch(text, /\bovld\b/);
+    assert.doesNotMatch(text, /--[a-z]/);
+
+    const session = await ctx.db.get<{ connection_method: string }>(
+      `SELECT connection_method FROM agent_sessions WHERE id = ?`,
+      [attached.session.id]
+    );
+    assert.equal(session?.connection_method, 'mcp');
+
+    await deliverSession({
+      ctx,
+      missionId: mission.displayId,
+      sessionKey: attached.sessionKey,
+      summary: 'Done.'
+    });
+    const resumed = await resumeFollowUp({
+      ctx,
+      missionId: mission.displayId,
+      connectionMethod: 'mcp'
+    });
+    assert.equal(Object.keys(resumed)[0], 'agentInstructions');
+    assert.ok(resumed.agentInstructions.includes('overlord_deliver_session'));
+    assert.doesNotMatch(resumed.agentInstructions, /\bovld\b|--[a-z]/);
+    await db.close();
+  });
+
+  it('an unknown connection method gets the CLI wording', async () => {
+    const { db, ctx } = await createSeededServiceContext({ source: 'cli' });
+    const { mission } = await missionWith(ctx, 'Instructions Connect');
+    const attached = await attachSession({
+      ctx,
+      missionId: mission.displayId,
+      connectionMethod: 'prompt'
+    });
+    assert.match(attached.agentInstructions, /`ovld protocol deliver`/);
+    await db.close();
+  });
+});
+
+describe('rare-case rules arrive with the response that triggers them (coo:1294.s9m6)', () => {
+  const RECOVERY_TEXT =
+    /mission_summary_conflict|details\.missionSummary|--paths|declaredPaths|begin-follow-up|resume-follow-up|retry copy|re-run attach/i;
+
+  it('attach keeps one pointer per rule and no recovery text, on CLI and MCP', async () => {
+    const { db, ctx } = await createSeededServiceContext({ source: 'cli' });
+    const { mission, objectives } = await missionWith(ctx, 'Rare Attach', 2);
+    for (const [index, connectionMethod] of (['cli', 'mcp'] as const).entries()) {
+      const { agentInstructions: text } = await attachSession({
+        ctx,
+        missionId: mission.displayId,
+        objectiveId: objectives[index]!.id,
+        connectionMethod
+      });
+      assert.doesNotMatch(text, RECOVERY_TEXT, connectionMethod);
+      assert.match(text, /follow its `instruction`\s+if\s+present/, connectionMethod);
+      assert.match(text, /the\s+deliver\s+response\s+says/, connectionMethod);
+      assert.match(
+        text,
+        /If\s+delivery returns a mission-summary error or warning, follow the steps in its message\./,
+        connectionMethod
+      );
+    }
+    await db.close();
+  });
+
+  it('deliver returns the post-delivery rule for the session connection method', async () => {
+    const { db, ctx } = await createSeededServiceContext({ source: 'cli' });
+    const { mission, objectives } = await missionWith(ctx, 'Rare Deliver', 2);
+
+    const cli = await attachSession({
+      ctx,
+      missionId: mission.displayId,
+      objectiveId: objectives[0]!.id
+    });
+    const cliDelivered = await deliverSession({
+      ctx,
+      missionId: mission.displayId,
+      sessionKey: cli.sessionKey,
+      summary: 'Done.'
+    });
+    assert.ok(
+      cliDelivered.instruction.includes(
+        `\`ovld protocol resume-follow-up --mission-id ${mission.displayId} --objective-id ${objectives[0]!.displayId} --summary`
+      ),
+      cliDelivered.instruction
+    );
+    assert.match(cliDelivered.instruction, /Do not continue implementation/);
+
+    const mcp = await attachSession({
+      ctx,
+      missionId: mission.displayId,
+      objectiveId: objectives[1]!.id,
+      connectionMethod: 'mcp'
+    });
+    const mcpDelivered = await deliverSession({
+      ctx,
+      missionId: mission.displayId,
+      sessionKey: mcp.sessionKey,
+      summary: 'Done.'
+    });
+    assert.match(mcpDelivered.instruction, /Do not continue implementation/);
+    assert.match(mcpDelivered.instruction, /start follow-up work from Overlord/);
+    assert.doesNotMatch(mcpDelivered.instruction, /\bovld\b|--[a-z]/);
+    await db.close();
+  });
+
+  it('a skipped close entry says what to tell the user', async () => {
+    const { db, ctx } = await createSeededServiceContext({ source: 'cli' });
+    const { mission, objectives } = await missionWith(ctx, 'Rare Skip', 2);
+    const first = await attachSession({
+      ctx,
+      missionId: mission.displayId,
+      objectiveId: objectives[0]!.id
+    });
+    await deliverSession({
+      ctx,
+      missionId: mission.displayId,
+      sessionKey: first.sessionKey,
+      summary: 'First.',
+      payloadJson: report('skip')
+    });
+    const [riskId] = await openItemIds(ctx, mission.id, 'risk');
+    const second = await attachSession({
+      ctx,
+      missionId: mission.displayId,
+      objectiveId: objectives[1]!.id
+    });
+    const delivered = await deliverSession({
+      ctx,
+      missionId: mission.displayId,
+      sessionKey: second.sessionKey,
+      summary: 'Second.',
+      missionSummary: {
+        closeItems: [
+          { id: riskId, status: 'done', reason: 'Fixed.' },
+          { id: riskId, status: 'done', reason: 'Twice.' },
+          { id: 'no-such-item', status: 'dismissed', reason: 'Unknown.' }
+        ]
+      }
+    });
+    const messages = new Map(
+      delivered
+        .missionSummary!.warnings.filter(warning => warning.code === 'mission_summary_item_skipped')
+        .map(warning => [warning.itemId, warning.message])
+    );
+    assert.match(
+      messages.get('no-such-item') ?? '',
+      /it stays open\. Say in your final message which item stays open and why\.$/
+    );
+    assert.match(messages.get(riskId) ?? '', /The first entry applies; no action is needed\.$/);
     await db.close();
   });
 });
@@ -425,6 +640,10 @@ describe('mission summary on deliver', () => {
       })
     );
     assert.equal(error.code, 'mission_summary_conflict');
+    assert.match(
+      error.message,
+      /deliver without headline and summary and say so in the delivery summary/
+    );
     assert.equal(error.status, 409);
     const details = error.details as {
       baseContentRevision: number;

@@ -5,10 +5,10 @@
 import { z } from 'zod';
 
 /** The contract version (contract/VERSION) this API description belongs to. */
-export const contractVersion = "173.6.1";
+export const contractVersion = "174.2.0";
 
 /** The API description's own version (OpenAPI `info.version`). */
-export const apiVersion = "4.10.0";
+export const apiVersion = "4.14.0";
 
 /** A non-JSON request or response body: raw bytes (G3). */
 export type BinaryBody = Uint8Array | ArrayBuffer | Blob;
@@ -57,6 +57,48 @@ export interface ErrorEnvelope {
   details?: JsonValue;
 }
 export const errorEnvelopeSchema: z.ZodType<ErrorEnvelope> = z.object({ "error": z.string(), "code": z.exactOptional(z.string()), "detail": z.exactOptional(z.string()), "details": z.exactOptional(jsonValueSchema) });
+
+export interface ProtocolAttachObjective {
+  displayId: string;
+  state: string;
+  /**
+   * Completed instructions are capped at 600 characters including a truncation marker; others remain full.
+   */
+  objective: string;
+}
+export const protocolAttachObjectiveSchema: z.ZodType<ProtocolAttachObjective> = z.strictObject({ "displayId": z.string(), "state": z.string(), "objective": z.string() });
+
+export interface ProtocolAttachDirective {
+  id: string;
+  type: "user_follow_up" | "decision" | "discussion_summary";
+  phase: string | null;
+  summary: string;
+  createdAt: string;
+  objectiveId: string;
+}
+export const protocolAttachDirectiveSchema: z.ZodType<ProtocolAttachDirective> = z.strictObject({ "id": z.string(), "type": z.enum(["user_follow_up", "decision", "discussion_summary"]), "phase": z.union([z.string(), z.null()]), "summary": z.string(), "createdAt": z.string(), "objectiveId": z.string() });
+
+/**
+ * Execution context for attach and resume-follow-up (ADR 0069). agentInstructions is first. No history, previousObjectives or futureObjectives. Mission, current objective, resources, artifacts, attachments, session and summary baseline retain their existing protocol meanings. load-context retains full history and objective inspection. The transport envelope remains JsonValue because the operation dispatches many distinct protocol subcommands.
+ */
+export interface ProtocolAttachResponse {
+  agentInstructions: string;
+  mission: JsonValue;
+  objective: JsonValue;
+  objectives: ProtocolAttachObjective[];
+  /**
+   * Current objective only, newest first by createdAt then id descending; filtered before the limit.
+   */
+  directives: ProtocolAttachDirective[];
+  session: JsonValue;
+  sessionKey?: string;
+  artifacts: JsonValue[];
+  attachments: JsonValue[];
+  sharedState: JsonValue[];
+  projectResources?: JsonValue[];
+  missionSummary?: JsonValue;
+}
+export const protocolAttachResponseSchema: z.ZodType<ProtocolAttachResponse> = z.object({ "agentInstructions": z.string(), "mission": jsonValueSchema, "objective": jsonValueSchema, "objectives": z.array(protocolAttachObjectiveSchema), "directives": z.array(protocolAttachDirectiveSchema).max(10), "session": jsonValueSchema, "sessionKey": z.exactOptional(z.string()), "artifacts": z.array(jsonValueSchema), "attachments": z.array(jsonValueSchema), "sharedState": z.array(jsonValueSchema), "projectResources": z.exactOptional(z.array(jsonValueSchema)), "missionSummary": z.exactOptional(jsonValueSchema) });
 
 /**
  * Acknowledgement written by `handle()` when a handler returns nothing, or returned explicitly.
@@ -1425,17 +1467,35 @@ export const missionDeliveriesDtoSchema: z.ZodType<MissionDeliveriesDto> = z.obj
 export type MissionSummaryStatus = "pending" | "composed" | "fallback";
 export const missionSummaryStatusSchema: z.ZodType<MissionSummaryStatus> = z.enum(["pending", "composed", "fallback"]);
 
+/**
+ * An older open record that a grouped risk or suggestion row stands for. It keeps its own stored identity and is closed through its own id.
+ */
+export interface MissionSummaryDuplicateDto {
+  id: string;
+  deliveryId: string;
+  /**
+   * May name a deleted objective.
+   */
+  objectiveId: string;
+  deliveredAt: DateTime;
+}
+export const missionSummaryDuplicateDtoSchema: z.ZodType<MissionSummaryDuplicateDto> = z.object({ "id": z.string(), "deliveryId": z.string(), "objectiveId": z.string(), "deliveredAt": dateTimeSchema });
+
+/**
+ * An open risk. Open risks with the same normalized text collapse to one row, the newest record, which lists the others in `duplicates`. Absent means none.
+ */
 export interface MissionSummaryRiskDto {
   id: string;
   deliveryId: string;
   objectiveId: string;
   deliveredAt: DateTime;
   text: string;
+  duplicates?: MissionSummaryDuplicateDto[];
 }
-export const missionSummaryRiskDtoSchema: z.ZodType<MissionSummaryRiskDto> = z.object({ "id": z.string(), "deliveryId": z.string(), "objectiveId": z.string(), "deliveredAt": dateTimeSchema, "text": z.string() });
+export const missionSummaryRiskDtoSchema: z.ZodType<MissionSummaryRiskDto> = z.object({ "id": z.string(), "deliveryId": z.string(), "objectiveId": z.string(), "deliveredAt": dateTimeSchema, "text": z.string(), "duplicates": z.exactOptional(z.array(missionSummaryDuplicateDtoSchema)) });
 
 /**
- * An open suggestion from mission_items. Closed suggestions appear in closedItems. `state` is always `open` and `resolution` always null; both are kept for clients that read them.
+ * An open suggestion from mission_items. Closed suggestions appear in closedItems. `state` is always `open` and `resolution` always null; both are kept for clients that read them. Open suggestions with the same title, change, location and doneWhen collapse to one row, the newest record, which lists the others in `duplicates`; a same-title suggestion with different scope stays its own row. Absent means none.
  */
 export interface MissionSummarySuggestionDto {
   id: string;
@@ -1449,8 +1509,9 @@ export interface MissionSummarySuggestionDto {
   location: string;
   doneWhen: string;
   resolution: null;
+  duplicates?: MissionSummaryDuplicateDto[];
 }
-export const missionSummarySuggestionDtoSchema: z.ZodType<MissionSummarySuggestionDto> = z.object({ "id": z.string(), "deliveryId": z.string(), "objectiveId": z.string(), "deliveredAt": dateTimeSchema, "actionId": z.string(), "title": z.string(), "state": z.literal("open"), "change": z.string(), "location": z.string(), "doneWhen": z.string(), "resolution": z.null() });
+export const missionSummarySuggestionDtoSchema: z.ZodType<MissionSummarySuggestionDto> = z.object({ "id": z.string(), "deliveryId": z.string(), "objectiveId": z.string(), "deliveredAt": dateTimeSchema, "actionId": z.string(), "title": z.string(), "state": z.literal("open"), "change": z.string(), "location": z.string(), "doneWhen": z.string(), "resolution": z.null(), "duplicates": z.exactOptional(z.array(missionSummaryDuplicateDtoSchema)) });
 
 export interface MissionSummaryClosedItemDto {
   id: string;
@@ -1767,8 +1828,12 @@ export interface ObjectiveFileChangesDto {
     sessions: CaptureSessionDto[];
     warnings: Array<"unbound" | "bound_no_callback" | "unknown_binding" | "tool_activity_uncaptured">;
   };
+  /**
+   * Agent protocol read only (`objective-changes`): how to declare missed paths, worded by the caller's connection method. Present only when a capture warning needs action; the REST read never carries it.
+   */
+  instruction?: string;
 }
-export const objectiveFileChangesDtoSchema: z.ZodType<ObjectiveFileChangesDto> = z.object({ "scope": z.literal("server_objective"), "missionId": z.string(), "objectiveId": z.string(), "items": z.array(fileChangeDtoSchema).max(200), "total": z.int().min(0), "limit": z.int(), "truncated": z.boolean(), "capture": z.object({ "sessions": z.array(captureSessionDtoSchema), "warnings": z.array(z.enum(["unbound", "bound_no_callback", "unknown_binding", "tool_activity_uncaptured"])) }) });
+export const objectiveFileChangesDtoSchema: z.ZodType<ObjectiveFileChangesDto> = z.object({ "scope": z.literal("server_objective"), "missionId": z.string(), "objectiveId": z.string(), "items": z.array(fileChangeDtoSchema).max(200), "total": z.int().min(0), "limit": z.int(), "truncated": z.boolean(), "capture": z.object({ "sessions": z.array(captureSessionDtoSchema), "warnings": z.array(z.enum(["unbound", "bound_no_callback", "unknown_binding", "tool_activity_uncaptured"])) }), "instruction": z.exactOptional(z.string()) });
 
 export interface ScheduleWeekDayDto {
   dayNum: number;

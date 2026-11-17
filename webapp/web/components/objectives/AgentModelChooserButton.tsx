@@ -35,6 +35,16 @@ type AgentModelChooserButtonProps = {
    * an icon (and Manual) show the person mark. Clicks never reach the host row.
    */
   iconOnly?: boolean;
+  /**
+   * Show the full "<agent> · <model>" label with no width cap (the objective row's hover line).
+   * The default shows the model only, truncated.
+   */
+  fullLabel?: boolean;
+  /**
+   * Classes for the label and chevron, so a host can collapse the trigger to its icon with a
+   * container query.
+   */
+  collapsibleClassName?: string;
 };
 
 /**
@@ -53,6 +63,8 @@ export function AgentModelChooserButton({
   disabled = false,
   compact = false,
   iconOnly = false,
+  fullLabel: showFullLabel = false,
+  collapsibleClassName,
   onOpenChange
 }: AgentModelChooserButtonProps) {
   const [open, setOpenState] = useState(false);
@@ -123,12 +135,16 @@ export function AgentModelChooserButton({
               disabled={disabled || !catalog}
               className={cn(
                 'inline-flex h-8 items-center gap-1 rounded-md border border-input bg-background px-2 text-xs text-foreground shadow-sm transition-colors',
-                compact ? 'shrink-0' : 'max-w-[230px] @max-[360px]/objective-toolbar:px-2',
+                compact
+                  ? 'shrink-0'
+                  : showFullLabel
+                    ? 'shrink-0'
+                    : 'max-w-[230px] @max-[360px]/objective-toolbar:px-2',
                 disabled || !catalog
                   ? 'cursor-not-allowed opacity-60'
                   : 'cursor-pointer hover:bg-accent hover:text-accent-foreground'
               )}
-              aria-label={compact ? triggerLabel : undefined}
+              aria-label={compact || showFullLabel ? triggerLabel : undefined}
               title={compact ? triggerLabel : 'Choose agent and model'}
             >
               {isManual ? (
@@ -143,7 +159,11 @@ export function AgentModelChooserButton({
               ) : (
                 <Bot className="h-3.5 w-3.5 shrink-0" />
               )}
-              {compact ? null : (
+              {compact ? null : showFullLabel ? (
+                <span className={cn('whitespace-nowrap', collapsibleClassName)} data-agent-label="">
+                  {fullLabel}
+                </span>
+              ) : (
                 <span className="max-w-[120px] truncate @max-[360px]/objective-toolbar:hidden">
                   {label}
                 </span>
@@ -151,7 +171,8 @@ export function AgentModelChooserButton({
               <ChevronDown
                 className={cn(
                   'h-3 w-3 shrink-0',
-                  !compact && '@max-[360px]/objective-toolbar:hidden'
+                  !compact && '@max-[360px]/objective-toolbar:hidden',
+                  collapsibleClassName
                 )}
               />
             </PopoverTrigger>

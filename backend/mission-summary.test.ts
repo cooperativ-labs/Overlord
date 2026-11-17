@@ -398,3 +398,84 @@ test('item closures update risks and actions immediately and resolved history is
   assert.equal(paged.actions.length, 100);
   assert.equal(paged.truncated.actions, true);
 });
+
+test('equal open risks and same-scope suggestions group into one row; different scope stays apart', async () => {
+  const { project, mission, objective: first } = await seedMission('Grouped items');
+  const second = await createObjective({ missionId: mission.id, instructionText: 'Second' });
+  const third = await createObjective({ missionId: mission.id, instructionText: 'Third' });
+  const scope = { id: mission.id, workspaceId: mission.workspaceId, projectId: project.id };
+  const retry = {
+    title: 'Cap retries',
+    change: 'Add the retry cap.',
+    location: 'backend/retry.ts',
+    doneWhen: 'Retries stop at three.'
+  };
+
+  const older = seedDelivery({
+    mission: scope,
+    objectiveId: first.id,
+    deliveredAt: '2026-10-23T08:00:00.000Z',
+    knownRisks: ['Retries may duplicate requests.'],
+    deferredWork: [retry]
+  });
+  seedDelivery({
+    mission: scope,
+    objectiveId: second.id,
+    deliveredAt: '2026-10-23T09:00:00.000Z',
+    knownRisks: ['  retries may  DUPLICATE requests. '],
+    deferredWork: [retry]
+  });
+  seedDelivery({
+    mission: scope,
+    objectiveId: third.id,
+    deliveredAt: '2026-10-23T10:00:00.000Z',
+    knownRisks: ['A different risk.'],
+    deferredWork: [{ ...retry, location: 'cli/src/retry.ts', doneWhen: 'The CLI stops at three.' }]
+  });
+  db.prepare(
+    `INSERT INTO mission_summaries (mission_id, workspace_id, project_id, status, generated_by, headline,
+    created_at, updated_at) VALUES (?, ?, ?, 'composed', 'deterministic', 'Grouped.', ?, ?)`
+  ).run(
+    mission.id,
+    mission.workspaceId,
+    mission.projectId,
+    '2026-10-23T11:00:00.000Z',
+    '2026-10-23T11:00:00.000Z'
+  );
+
+  const summary = (await getMissionSummary(mission.id)).summary!;
+  assert.equal(summary.risks.length, 2);
+  const grouped = summary.risks.find(risk => risk.objectiveId === second.id)!;
+  assert.deepEqual(
+    grouped.duplicates!.map(duplicate => [duplicate.objectiveId, duplicate.deliveryId]),
+    [[first.id, older.id]],
+    'the newest record represents the group and the older one is listed, not hidden'
+  );
+  const single = summary.risks.find(risk => risk.objectiveId === third.id)!;
+  assert.equal(single.duplicates, undefined, 'a single record carries no duplicates field');
+
+  assert.equal(summary.suggestions.length, 2);
+  const sameScope = summary.suggestions.find(item => item.location === 'backend/retry.ts')!;
+  assert.equal(sameScope.objectiveId, second.id);
+  assert.deepEqual(
+    sameScope.duplicates!.map(duplicate => duplicate.objectiveId),
+    [first.id]
+  );
+  const otherScope = summary.suggestions.find(item => item.location === 'cli/src/retry.ts')!;
+  assert.equal(otherScope.title, sameScope.title);
+  assert.equal(otherScope.duplicates, undefined, 'same title, different scope: its own row');
+
+  // Stored identity is unchanged: each record closes through its own id.
+  const { resolveMissionItem } = await import('./mission-item-resolutions.ts');
+  await resolveMissionItem(grouped.id, { status: 'done' });
+  const afterOne = (await getMissionSummary(mission.id)).summary!;
+  const remaining = afterOne.risks.find(risk => risk.objectiveId === first.id)!;
+  assert.equal(remaining.id, grouped.duplicates![0]!.id);
+  assert.equal(remaining.duplicates, undefined);
+  await resolveMissionItem(remaining.id, { status: 'done' });
+  const afterAll = (await getMissionSummary(mission.id)).summary!;
+  assert.deepEqual(
+    afterAll.risks.map(risk => risk.text),
+    ['A different risk.']
+  );
+});

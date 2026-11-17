@@ -657,6 +657,7 @@ const PROTOCOL_FILE_FLAGS = [
   '--changes-file',
   '--declared-paths-file',
   '--mission-summary-file',
+  '--close-items-file',
   '--paths-file',
   '--value-file',
   '--content-text-file',
@@ -673,6 +674,8 @@ const PROTOCOL_FILE_FLAGS = [
 
 /** Protocol subcommands that require a session key the cache can auto-inject. */
 const SESSION_KEY_SUBCOMMANDS = new Set([
+  'mission-items',
+  'close-items',
   'add-artifact',
   'update',
   'heartbeat',
@@ -699,6 +702,8 @@ const OBJECTIVE_SCOPED_SUBCOMMANDS = new Set([
   'attachment-download-url',
   'attachment-list',
   'changes',
+  'mission-items',
+  'close-items',
   'connect',
   'deliver',
   'heartbeat',

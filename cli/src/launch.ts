@@ -35,7 +35,6 @@ import {
   composeAgentTerminalCommand,
   type LaunchExecution,
   resolveLaunchExecution,
-  shellQuote,
   TERMINAL_OPEN_SPAWN_KILL_SIGNAL,
   TERMINAL_OPEN_SPAWN_TIMEOUT_MS,
   terminalLaunchScriptContent,
@@ -272,18 +271,6 @@ function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
 }
 
-/**
- * Operational lifecycle event types excluded from the "Recent Activity" history
- * surfaced to the agent. The agent only cares
- * about substantive events (updates, deliveries, asks, alerts, discussion), not
- * runner/orchestration status churn.
- */
-const AGENT_HISTORY_EXCLUDED_EVENT_TYPES = new Set([
-  'status_change',
-  'execution_requested',
-  'awaiting_approval'
-]);
-
 /** Keep the execution intent visible even when context falls back to a file. */
 const EXECUTION_DIRECTIVE =
   'This is an execution session. After attaching, immediately execute the current objective. Do not wait for more instructions or ask for confirmation; only stop to ask a question when blocked.';
@@ -359,12 +346,6 @@ async function loadMissionContext({
   const mission = asRecord(
     await runtime.backend.get(`/api/missions/${encodeURIComponent(missionId)}`)
   );
-  const events = await runtime.backend
-    .get<unknown[]>(`/api/missions/${encodeURIComponent(missionId)}/events`)
-    .catch(() => []);
-  const artifacts = await runtime.backend
-    .get<unknown[]>(`/api/missions/${encodeURIComponent(missionId)}/artifacts`)
-    .catch(() => []);
   const displayId = String(mission.displayId ?? mission.id ?? missionId);
   const title = String(mission.title ?? '(untitled)');
   // Blank objectives are the empty slots the UI keeps ready for the user to type
@@ -377,43 +358,13 @@ async function loadMissionContext({
   const objectiveDisplayId = selected ? objectiveDisplayRef(selected) : null;
   const selectedTitle = selected ? objectiveTitleText(selected) : null;
 
-  // Attachments are stored per objective and are not part of the mission detail
-  // payload, so fetch them for each objective. Surfacing them in the launch
-  // prompt is what lets the agent know files were attached to its objective
-  // (otherwise it only ever sees them if it parses the raw attach JSON).
-  const attachmentLines: string[] = [];
-  await Promise.all(
-    objectives.map(async objective => {
-      const id = objective.id;
-      if (typeof id !== 'string' || id.length === 0) return;
-      const attachments = await runtime.backend
-        .get<unknown[]>(`/api/objectives/${encodeURIComponent(id)}/attachments`)
-        .catch(() => []);
-      const label = objectiveDisplayRef(objective) ?? id;
-      for (const attachment of attachments) {
-        const record = asRecord(attachment);
-        const filename = String(record.filename ?? 'attachment');
-        const contentType = record.contentType ? ` (${String(record.contentType)})` : '';
-        const attachmentId = typeof record.id === 'string' ? record.id : null;
-        const storageKey = typeof record.storageKey === 'string' ? record.storageKey : null;
-        const url = storageKey
-          ? `${runtime.backend.baseUrl}/api/storage/attachments/${encodeURIComponent(storageKey)}`
-          : null;
-        attachmentLines.push(`- [${label}] ${filename}${contentType}${url ? ` — ${url}` : ''}`);
-        if (attachmentId) {
-          const output = `./.overlord/tmp/attachment-${attachmentId}-${path.basename(filename)}`;
-          attachmentLines.push(
-            `  Download: \`ovld protocol attachment-download-url --objective-id ${shellQuote(label)} --attachment-id ${shellQuote(attachmentId)} --output ${shellQuote(output)}\``
-          );
-        }
-      }
-    })
-  );
-
   const attachCommand = objectiveDisplayId
     ? `ovld protocol attach --mission-id ${displayId} --objective-id ${objectiveDisplayId}`
     : `ovld protocol attach --mission-id ${displayId}`;
 
+  // The prompt only leads to attach (plan coo:1294, D3): attach returns the
+  // objective, its siblings, attachments, history, artifacts and every working
+  // and delivery rule, so repeating them here only spends context twice.
   const launchContext = [
     `# Overlord Mission: ${displayId}: ${title}`,
     '',
@@ -421,35 +372,10 @@ async function loadMissionContext({
     ...(objectiveDisplayId ? [`Objective ID: ${objectiveDisplayId}`] : []),
     '',
     '## Instructions',
-    'Use the Overlord skill. Follow the required protocol workflow.',
+    'Do not load the Overlord skill. The attach response carries all instructions for this session.',
     EXECUTION_DIRECTIVE,
     '',
-    '## Objectives',
-    ...objectives.map(objective => {
-      const ref = objectiveDisplayRef(objective) ?? 'objective';
-      return `- ${ref} [${objective.state ?? 'unknown'}] ${objectiveInstruction(objective)}`;
-    }),
-    '',
-    ...(attachmentLines.length > 0
-      ? [
-          '## Attachments',
-          'Attachment URLs require Overlord authentication. Use the download commands below; the CLI supplies its own credentials. Use `ovld protocol attachment-list` to refresh this list.',
-          ...attachmentLines,
-          ''
-        ]
-      : []),
-    '## Recent Activity',
-    ...events
-      .filter(event => !AGENT_HISTORY_EXCLUDED_EVENT_TYPES.has(String(asRecord(event).type)))
-      .slice(-20)
-      .map(event => `- ${asRecord(event).summary ?? JSON.stringify(event)}`),
-    '',
-    '## Artifacts',
-    ...artifacts.map(
-      artifact => `- ${asRecord(artifact).label ?? asRecord(artifact).type ?? 'artifact'}`
-    ),
-    '',
-    `Run \`${attachCommand}\` before making changes, update during work, and ALWAYS deliver last.`
+    `Run \`${attachCommand}\` before making changes.`
   ].join('\n');
 
   return {

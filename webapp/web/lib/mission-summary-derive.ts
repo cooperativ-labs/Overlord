@@ -20,6 +20,7 @@
  * `contract/mission-summary-derive-fixtures.json`.
  */
 import type {
+  DeliveryDto,
   FileChangeDto,
   FileChangeSource,
   HumanActionCategory,
@@ -27,6 +28,7 @@ import type {
   MissionItemResolverDto,
   MissionSummaryClosedItemDto,
   MissionSummaryDto,
+  MissionSummaryDuplicateDto,
   MissionSummaryEvidenceDto,
   MissionSummaryResponse,
   ObjectiveState,
@@ -147,6 +149,150 @@ export function missionSummaryRunningSentences(
     );
 }
 
+// ---- Live status ----
+
+export type MissionLiveStatusKind =
+  | 'blocked'
+  | 'waiting'
+  | 'in_progress'
+  | 'launching'
+  | 'complete'
+  | 'idle';
+
+/**
+ * The mission's volatile status, derived from live state and never from the agent-written
+ * summary prose: that prose is written at delivery and is protected between deliveries
+ * (contract: narrative publication guard), so it cannot follow a blocker that a person closes.
+ */
+export interface MissionLiveStatus {
+  kind: MissionLiveStatusKind;
+  /** Short label, always shown as text: `Blocked`, `Waiting on you`, `In progress`… */
+  label: string;
+  /** The reason in one sentence, or null when the label says it all. */
+  detail: string | null;
+  /** Open blocking human actions, after grouping equal ones. */
+  blockingActions: number;
+  /** Open questions and choices. */
+  openQuestions: number;
+  /** Objectives running now. */
+  running: number;
+}
+
+function plural(count: number, one: string, many: string): string {
+  return `${count} ${count === 1 ? one : many}`;
+}
+
+/**
+ * Status from the mission's state type, its objectives, its open questions and choices, and its
+ * open items. Most urgent first: a blocking human action (blocked), an open question (waiting on
+ * a person), a running objective (in progress), a launching objective, then a completed mission.
+ * Closing the last blocking action or answering the last question changes the status on the next
+ * refresh without any delivery.
+ */
+export function missionLiveStatus({
+  statusType,
+  objectives,
+  openQuestions,
+  actionRows
+}: {
+  statusType: StatusType;
+  objectives: readonly Pick<SummaryObjective, 'state'>[];
+  openQuestions: readonly unknown[];
+  actionRows: readonly Pick<SummaryActionRow, 'kind' | 'blocking'>[];
+}): MissionLiveStatus {
+  const blockingActions = actionRows.filter(row => row.kind === 'action' && row.blocking).length;
+  const questions = openQuestions.length;
+  const running = objectives.filter(
+    objective => objective.state === 'executing' || objective.state === 'pending_delivery'
+  ).length;
+  const status = (
+    kind: MissionLiveStatusKind,
+    label: string,
+    detail: string | null
+  ): MissionLiveStatus => ({
+    kind,
+    label,
+    detail,
+    blockingActions,
+    openQuestions: questions,
+    running
+  });
+
+  if (blockingActions > 0) {
+    return status(
+      'blocked',
+      'Blocked',
+      `${plural(blockingActions, 'blocking action needs', 'blocking actions need')} you.`
+    );
+  }
+  if (questions > 0) {
+    return status(
+      'waiting',
+      'Waiting on you',
+      `${plural(questions, 'open question needs', 'open questions need')} an answer.`
+    );
+  }
+  if (running > 0) {
+    return status(
+      'in_progress',
+      'In progress',
+      `${plural(running, 'objective is', 'objectives are')} running.`
+    );
+  }
+  if (objectives.some(objective => objective.state === 'launching')) {
+    return status('launching', 'Launching', null);
+  }
+  if (statusType === 'complete') return status('complete', 'Complete', null);
+  return status('idle', 'No work running', null);
+}
+
+// ---- Grouped items ----
+
+/** One objective an open item came from. `objectiveKey` is null once the objective is deleted. */
+export interface SummaryGroupSource {
+  objectiveId: string;
+  objectiveKey: string | null;
+}
+
+/**
+ * What a row stands for when several stored records say the same thing. Every record keeps its
+ * own stored identity; closing the row closes each id in `itemIds`, and says so.
+ */
+export interface SummaryItemGroup {
+  /** Every stored record the row stands for, the displayed (newest) one first. */
+  itemIds: string[];
+  /** Number of stored records: 1 means the row is one record. */
+  count: number;
+  /** Distinct source objectives, in the order the records are listed. */
+  sources: SummaryGroupSource[];
+}
+
+function groupOf(
+  head: { id: string; objectiveId: string },
+  others: readonly Pick<MissionSummaryDuplicateDto, 'id' | 'objectiveId'>[],
+  live: Map<string, SummaryObjective>
+): SummaryItemGroup {
+  const records = [head, ...others];
+  const seen = new Set<string>();
+  const sources: SummaryGroupSource[] = [];
+  for (const record of records) {
+    if (seen.has(record.objectiveId)) continue;
+    seen.add(record.objectiveId);
+    sources.push({
+      objectiveId: record.objectiveId,
+      objectiveKey: live.get(record.objectiveId)?.displayId ?? null
+    });
+  }
+  return { itemIds: records.map(record => record.id), count: records.length, sources };
+}
+
+/** Plain-text note on what resolving a grouped row does; null for a single record. */
+export function summaryGroupResolveNote(group: Pick<SummaryItemGroup, 'count'>): string | null {
+  return group.count > 1
+    ? `Resolving closes all ${group.count} matching records, one per objective report.`
+    : null;
+}
+
 // ---- Sources line ----
 
 export interface SummarySource {
@@ -206,6 +352,8 @@ export interface SummaryActionRow {
   deliveryId: string | null;
   /** The `mission_items` id a person closes; null for a question or choice. */
   itemId: string | null;
+  /** The stored records the row stands for; one record for a question or choice. */
+  group: SummaryItemGroup;
 }
 
 function questionTitle(kind: string, objective: SummaryObjective | undefined): string {
@@ -221,9 +369,11 @@ function questionTitle(kind: string, objective: SummaryObjective | undefined): s
 
 /**
  * Open human actions (from the envelope) plus open questions and choices.
- * Blocking actions first, then newest first, then report order. Actions are
- * deduped across objectives by normalised text, newest kept. There is no row
- * for reviewing the mission; a closed action moves to `closedItems`.
+ * Blocking actions first, then newest first, then report order. Actions with
+ * the same normalised text across objectives are grouped into one row, the
+ * newest record shown; the row lists every record, is blocking if any is, and
+ * resolving it closes them all. There is no row for reviewing the mission; a
+ * closed action moves to `closedItems`.
  */
 export function missionSummaryActions({
   evidence,
@@ -243,12 +393,26 @@ export function missionSummaryActions({
     (a, b) => timeOf(b.action.deliveredAt) - timeOf(a.action.deliveredAt) || a.index - b.index
   );
   const kept = new Set<number>();
-  const seenText = new Set<string>();
+  const groupedByText = new Map<string, number>();
+  const duplicatesOf = new Map<number, MissionSummaryDuplicateDto[]>();
+  const anyBlocking = new Set<number>();
   for (const entry of byRecency) {
     const text = normaliseSummaryText(entry.action.action);
-    if (seenText.has(text)) continue;
-    seenText.add(text);
-    kept.add(entry.index);
+    const head = groupedByText.get(text);
+    if (head === undefined) {
+      groupedByText.set(text, entry.index);
+      kept.add(entry.index);
+      duplicatesOf.set(entry.index, []);
+      if (entry.action.blocking === true) anyBlocking.add(entry.index);
+      continue;
+    }
+    duplicatesOf.get(head)?.push({
+      id: entry.action.id,
+      deliveryId: entry.action.deliveryId,
+      objectiveId: entry.action.objectiveId,
+      deliveredAt: entry.action.deliveredAt
+    });
+    if (entry.action.blocking === true) anyBlocking.add(head);
   }
 
   const rows: Array<{ row: SummaryActionRow; order: number }> = [];
@@ -262,7 +426,7 @@ export function missionSummaryActions({
         kind: 'action',
         title: action.action,
         detail: action.reason?.trim() || null,
-        blocking: action.blocking === true,
+        blocking: anyBlocking.has(index),
         category: action.category,
         command: action.command ?? null,
         verify: action.verify ?? null,
@@ -272,7 +436,8 @@ export function missionSummaryActions({
         introducedAt: action.deliveredAt,
         isNew: isLater(action.deliveredAt, baseline),
         deliveryId: action.deliveryId,
-        itemId: action.id
+        itemId: action.id,
+        group: groupOf(action, duplicatesOf.get(index) ?? [], live)
       }
     });
   }
@@ -295,7 +460,8 @@ export function missionSummaryActions({
         introducedAt: request.createdAt,
         isNew: isLater(request.createdAt, baseline),
         deliveryId: null,
-        itemId: null
+        itemId: null,
+        group: { itemIds: [], count: 1, sources: [] }
       }
     });
   });
@@ -325,6 +491,8 @@ export interface SummarySuggestionRow {
   objectiveKey: string | null;
   /** Introduced after the visit baseline. */
   isNew: boolean;
+  /** The stored records the row stands for; the server groups only equal title and scope. */
+  group: SummaryItemGroup;
 }
 
 /**
@@ -351,7 +519,8 @@ export function missionSummarySuggestions({
     location: suggestion.location,
     doneWhen: suggestion.doneWhen,
     objectiveKey: live.get(suggestion.objectiveId)?.displayId ?? null,
-    isNew: isLater(suggestion.deliveredAt, baseline)
+    isNew: isLater(suggestion.deliveredAt, baseline),
+    group: groupOf(suggestion, suggestion.duplicates ?? [], live)
   }));
 }
 
@@ -366,9 +535,11 @@ export interface SummaryRiskRow {
   objectiveKey: string | null;
   text: string;
   isNew: boolean;
+  /** The stored records the row stands for: equal risks reported by several objectives. */
+  group: SummaryItemGroup;
 }
 
-/** Open risks from the summary DTO: the deterministic open list, deduped by the server. */
+/** Open risks from the summary DTO: the deterministic open list, grouped by the server. */
 export function missionSummaryRisks({
   summary,
   objectives,
@@ -386,8 +557,51 @@ export function missionSummaryRisks({
     objectiveId: risk.objectiveId,
     objectiveKey: live.get(risk.objectiveId)?.displayId ?? null,
     text: risk.text,
-    isNew: isLater(risk.deliveredAt, baseline)
+    isNew: isLater(risk.deliveredAt, baseline),
+    group: groupOf(risk, risk.duplicates ?? [], live)
   }));
+}
+
+// ---- Tradeoffs ----
+
+export interface SummaryTradeoffRow {
+  key: string;
+  deliveryId: string;
+  objectiveId: string;
+  objectiveKey: string | null;
+  decision: string;
+  rationale: string;
+  alternativesConsidered: string[];
+  impact: string | null;
+}
+
+/**
+ * Tradeoffs the agents reported across the mission's deliveries, newest delivery first.
+ * Reporting tradeoffs is optional, so most deliveries contribute none.
+ */
+export function missionSummaryTradeoffs({
+  deliveries,
+  objectives
+}: {
+  deliveries: readonly Pick<DeliveryDto, 'id' | 'objectiveId' | 'report'>[];
+  objectives: readonly SummaryObjective[];
+}): SummaryTradeoffRow[] {
+  const live = liveObjectiveMap(objectives);
+  return deliveries.flatMap(delivery =>
+    // Older or partial delivery records may carry no report; treat them as no tradeoffs.
+    ((delivery.report as DeliveryDto['report'] | undefined)?.presentation.tradeoffsMade ?? [])
+      .filter(tradeoff => tradeoff.decision.trim() !== '')
+      .map(tradeoff => ({
+        key: `tradeoff:${delivery.id}:${tradeoff.id}`,
+        deliveryId: delivery.id,
+        objectiveId: delivery.objectiveId,
+        objectiveKey: live.get(delivery.objectiveId)?.displayId ?? null,
+        decision: tradeoff.decision.trim(),
+        rationale: tradeoff.rationale.trim(),
+        alternativesConsidered: tradeoff.alternativesConsidered.filter(a => a.trim() !== ''),
+        impact: tradeoff.impact?.trim() || null
+      }))
+  );
 }
 
 // ---- Provenance and resolved items (contract v173) ----

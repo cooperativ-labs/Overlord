@@ -236,3 +236,159 @@ test('duplicate compose jobs for the same delivery are not enqueued while one is
   assert.equal(second.enqueued, false);
   assert.equal(second.jobId, first.jobId);
 });
+
+/**
+ * Risk identity is a digest of the risk text (missionItemRef), so composition
+ * must keep the agent's wording. The fake provider below paraphrases every risk;
+ * the stored rows must not change identity.
+ */
+async function riskMissionFixture(name: string) {
+  const ctx = await serviceCtx();
+  const project = await createProject({ ctx, name });
+  const { mission, objectives } = await createMissionWithObjectives({
+    ctx,
+    projectId: project.id,
+    objectives: [{ objective: `${name} first.` }, { objective: `${name} second.` }]
+  });
+  await ctx.db.run(`UPDATE objectives SET state = 'submitted' WHERE id = ?`, [objectives[0]?.id]);
+  const attached = await attachSession({
+    ctx,
+    missionId: mission.displayId,
+    objectiveId: objectives[0]!.id,
+    agentIdentifier: 'codex'
+  });
+  const delivered = await deliverSession({
+    ctx,
+    missionId: mission.displayId,
+    sessionKey: attached.sessionKey,
+    summary: 'Delivered with one risk.',
+    payloadJson: {
+      deliveryReport: {
+        schemaVersion: 1,
+        agentReport: { knownRisks: ['The export is slow on large missions.'] }
+      }
+    }
+  });
+  return { ctx, mission, objectives, delivered };
+}
+
+async function riskRows(missionId: string) {
+  return requireDatabaseClient().all<{ id: string; status: string; text: string }>(
+    `SELECT id, status, text FROM mission_items WHERE mission_id = ? AND kind = 'risk'
+      ORDER BY created_at, id`,
+    [missionId]
+  );
+}
+
+function paraphrasingProvider() {
+  deliveryComposeWorker.setGenerateOverride(async () =>
+    JSON.stringify({
+      markdown: 'Composed summary.',
+      humanActions: [],
+      tradeoffsMade: [],
+      knownRisks: ['Large missions export slowly.'],
+      assumptions: []
+    })
+  );
+}
+
+test('composition keeps the agent risk text and the open risk row id', async () => {
+  const { mission, delivered } = await riskMissionFixture('Risk Identity Open');
+  const before = await riskRows(mission.id);
+  assert.equal(before.length, 1);
+
+  paraphrasingProvider();
+  try {
+    await waitForJobStatus('succeeded', delivered.deliveryId);
+  } finally {
+    deliveryComposeWorker.setGenerateOverride(null);
+  }
+
+  const row = (await requireDatabaseClient().get(
+    `SELECT payload_json FROM deliveries WHERE id = ?`,
+    [delivered.deliveryId]
+  )) as { payload_json: string };
+  const presentation = (
+    JSON.parse(row.payload_json) as {
+      deliveryReport: { presentation: { status: string; knownRisks: string[] } };
+    }
+  ).deliveryReport.presentation;
+  assert.equal(presentation.status, 'composed');
+  assert.deepEqual(presentation.knownRisks, ['The export is slow on large missions.']);
+  assert.deepEqual(await riskRows(mission.id), before, 'same row, same text, still open');
+});
+
+test('a risk closed before composition stays closed and gains no new open row', async () => {
+  const { mission, delivered } = await riskMissionFixture('Risk Identity Closed');
+  const [risk] = await riskRows(mission.id);
+  const { closeMissionItem } = await import('../packages/core/service/mission-items.ts');
+  const closed = await closeMissionItem(requireDatabaseClient(), {
+    itemId: risk!.id,
+    status: 'done',
+    reason: 'Fixed by streaming.',
+    resolver: { kind: 'person', workspaceUserId: null },
+    attribution: { actorWorkspaceUserId: null, actorTokenId: null, source: 'webapp' }
+  });
+  assert.equal(closed.ok, true);
+
+  paraphrasingProvider();
+  try {
+    await waitForJobStatus('succeeded', delivered.deliveryId);
+  } finally {
+    deliveryComposeWorker.setGenerateOverride(null);
+  }
+
+  const after = await riskRows(mission.id);
+  assert.deepEqual(
+    after.map(item => ({ id: item.id, status: item.status })),
+    [{ id: risk!.id, status: 'done' }]
+  );
+});
+
+test('the next objective closes a risk by the id it received at attach while composition was pending', async () => {
+  const { ctx, mission, objectives, delivered } = await riskMissionFixture('Risk Identity Pending');
+  await ctx.db.run(`UPDATE objectives SET state = 'submitted' WHERE id = ?`, [objectives[1]?.id]);
+  const next = (await attachSession({
+    ctx,
+    missionId: mission.displayId,
+    objectiveId: objectives[1]!.id,
+    agentIdentifier: 'codex'
+  })) as {
+    sessionKey: string;
+    missionSummary?: {
+      contentRevision: number;
+      openItems: Array<{ id: string; kind: string }>;
+    };
+  };
+  const risk = next.missionSummary!.openItems.find(item => item.kind === 'risk')!;
+  assert.ok(risk, 'attach lists the open risk before composition runs');
+
+  paraphrasingProvider();
+  try {
+    await waitForJobStatus('succeeded', delivered.deliveryId);
+  } finally {
+    deliveryComposeWorker.setGenerateOverride(null);
+  }
+
+  const result = await deliverSession({
+    ctx,
+    missionId: mission.displayId,
+    sessionKey: next.sessionKey,
+    summary: 'Removed the slow export path.',
+    missionSummary: {
+      baseContentRevision: next.missionSummary!.contentRevision,
+      closeItems: [{ id: risk.id, status: 'done', reason: 'Streaming removed the slow path.' }]
+    }
+  });
+  assert.deepEqual(result.missionSummary?.closedItemIds, [risk.id]);
+  assert.equal(
+    result.missionSummary?.warnings.some(
+      warning => warning.code === 'mission_summary_item_skipped'
+    ),
+    false
+  );
+  assert.deepEqual(
+    (await riskRows(mission.id)).map(item => ({ id: item.id, status: item.status })),
+    [{ id: risk.id, status: 'done' }]
+  );
+});

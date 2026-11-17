@@ -101,3 +101,9 @@ record and the index disagree.
 - [0064 — Confirmed terminal lifecycle and retained history](0064-terminal-session-history.md)
 - [0065 — An answer is recorded, then delivered, and the two are reported separately](0065-answer-delivery-outcomes.md)
 - [0066 — Background inspection and absent terminal mappings](0066-delegator-background-inspection.md)
+- [0067 — Attach instructions by connection method](0067-attach-instructions-by-connection-method.md)
+- [0068 — The delivery composer preserves risk text](0068-composer-preserves-risk-text.md)
+- [0069 — Compact execution context on attach](0069-compact-attach-context.md)
+
+- [0073 — Agent mission item inspection and standalone closure](0073-agent-mission-item-inspection.md)
+- [0074 — Grouped open items in the mission summary read](0074-grouped-open-items-in-summary-read.md)

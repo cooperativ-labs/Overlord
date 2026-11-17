@@ -35,7 +35,7 @@ function parseMessages(chunk) {
   return messages;
 }
 
-async function runProtocol(subcommand, args = {}) {
+async function runProtocol(subcommand, args = {}, stdin) {
   const flags = Object.entries(args).flatMap(([key, value]) => {
     if (value === undefined || value === null) return [];
     if (typeof value === 'boolean') return value ? [`--${key}`] : [];
@@ -45,13 +45,15 @@ async function runProtocol(subcommand, args = {}) {
   });
 
   try {
-    const { stdout } = await execFileAsync(OVLD_BIN, ['protocol', subcommand, ...flags], {
+    const pending = execFileAsync(OVLD_BIN, ['protocol', subcommand, ...flags], {
       env: {
         ...process.env,
         AGENT_IDENTIFIER: process.env.AGENT_IDENTIFIER ?? DEFAULT_AGENT
       },
       maxBuffer: 20 * 1024 * 1024
     });
+    if (stdin !== undefined) pending.child.stdin.end(stdin);
+    const { stdout } = await pending;
     const data = stdout.trim() ? JSON.parse(stdout) : {};
     return {
       content: [{ type: 'text', text: JSON.stringify(data, null, 2) }],
@@ -463,10 +465,104 @@ const tools = [
     }
   },
   {
+    name: 'overlord_mission_items',
+    title: 'Read full mission items',
+    description:
+      'Use this to read all open items of an attached session’s mission with full text and detail (suggestion change, location, doneWhen; action command and verify). Blocking human actions come first. Returns items, total, limit, offset, truncated and nextOffset; page until nextOffset is null. If items change while paging, restart at offset 0; do not close items while paging.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        missionId: {
+          type: 'string',
+          description: 'Mission UUID or display id; optional with an objective display id.'
+        },
+        objectiveId: {
+          type: 'string',
+          description: 'Objective UUID or display id.'
+        },
+        sessionKey: {
+          type: 'string',
+          description: 'Attached live session key for this mission.'
+        },
+        limit: {
+          type: 'integer',
+          minimum: 1,
+          maximum: 200
+        },
+        offset: {
+          type: 'integer',
+          minimum: 0
+        }
+      },
+      required: ['sessionKey'],
+      additionalProperties: false
+    },
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      openWorldHint: false
+    }
+  },
+  {
+    name: 'overlord_close_items',
+    title: 'Close verified mission items',
+    description:
+      'Use this to close verified open items of the attached session’s mission as done or dismissed, with a reason, without delivering. Uses delivery closeItems rules and warnings. Returns closedItemIds and warnings; skipped entries carry recovery instructions. Repeat for more than 50 closures.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        missionId: {
+          type: 'string',
+          description: 'Mission UUID or display id; optional with an objective display id.'
+        },
+        objectiveId: {
+          type: 'string',
+          description: 'Objective UUID or display id.'
+        },
+        sessionKey: {
+          type: 'string',
+          description: 'Attached live session key for this mission.'
+        },
+        closeItems: {
+          type: 'array',
+          minItems: 1,
+          maxItems: 50,
+          items: {
+            type: 'object',
+            properties: {
+              id: {
+                type: 'string',
+                description: 'Open item id from attach or the mission-items read.'
+              },
+              status: {
+                type: 'string',
+                enum: ['done', 'dismissed']
+              },
+              reason: {
+                type: 'string',
+                minLength: 1,
+                maxLength: 280
+              }
+            },
+            required: ['id', 'status', 'reason'],
+            additionalProperties: false
+          }
+        }
+      },
+      required: ['sessionKey', 'closeItems'],
+      additionalProperties: false
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      openWorldHint: false
+    }
+  },
+  {
     name: 'overlord_changes',
     title: 'List objective file changes',
     description:
-      'Use this to read the synchronized changed-file evidence of one objective across every session, resource, and device. Returns ObjectiveFileChangesDto { scope: "server_objective", items, total, limit, truncated, capture }: compact rows (resourceKey, filePath, source declared_edit | agent_declared | null for unknown, observedAt, hookHealth) ordered by resource then path and capped at 200, total as the pre-cap count, and persisted capture diagnostics with warnings. It never includes unsynchronized local evidence, needs no attached session, and does not mutate anything.',
+      'Use this to read the synchronized changed-file evidence of one objective across every session, resource, and device. Returns ObjectiveFileChangesDto { scope: "server_objective", items, total, limit, truncated, capture }: compact rows (resourceKey, filePath, source declared_edit | agent_declared | null for unknown, observedAt, hookHealth) ordered by resource then path and capped at 200, total as the pre-cap count, and persisted capture diagnostics with warnings, plus instruction (how to declare missed paths) when a warning needs action. It never includes unsynchronized local evidence, needs no attached session, and does not mutate anything.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -946,7 +1042,7 @@ const tools = [
     name: 'overlord_attach_session',
     title: 'Attach to mission',
     description:
-      'Use this only after the user asks the connected agent to begin work on a mission. It opens an MCP-hosted session for later updates and delivery. Pass objectiveId when the caller already knows which objective to execute so attach does not rediscover another one.',
+      'Use this only after the user asks the connected agent to begin work on a mission. It opens an MCP-hosted session for later updates and delivery. Returns compact objectives and current-objective directives (newest 10); full history is available through load mission context. Pass objectiveId when the caller already knows which objective to execute so attach does not rediscover another one.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -1686,8 +1782,30 @@ async function callOverlordTool(name, args) {
   if (name === 'overlord_list_deliveries') {
     return runProtocol('list-deliveries', missionScopeFlags(args));
   }
+  if (name === 'overlord_mission_items') {
+    return runProtocol('mission-items', {
+      ...missionScopeFlags(args),
+      'session-key': requiredString(args, 'sessionKey'),
+      ...(args.limit !== undefined ? { limit: String(args.limit) } : {}),
+      ...(args.offset !== undefined ? { offset: String(args.offset) } : {})
+    });
+  }
+  if (name === 'overlord_close_items') {
+    return runProtocol(
+      'close-items',
+      {
+        ...missionScopeFlags(args),
+        'session-key': requiredString(args, 'sessionKey'),
+        'close-items-file': '-'
+      },
+      JSON.stringify(args.closeItems)
+    );
+  }
   if (name === 'overlord_changes') {
-    return runProtocol('objective-changes', missionScopeFlags(args));
+    return runProtocol('objective-changes', {
+      ...missionScopeFlags(args),
+      'connection-method': 'mcp'
+    });
   }
   if (name === 'overlord_launch_objective') {
     return runProtocol('launch-objective', {
@@ -1916,6 +2034,8 @@ async function callOverlordTool(name, args) {
   if (name === 'overlord_attach_session') {
     return runProtocol('attach', {
       ...missionScopeFlags(args),
+      // Attach rules then name MCP tools and payload fields, not CLI flags.
+      'connection-method': 'mcp',
       agent: optionalString(args, 'agent') ?? DEFAULT_AGENT,
       ...(optionalString(args, 'model') ? { model: requiredString(args, 'model') } : {}),
       ...(optionalString(args, 'executionTargetId')
@@ -2008,7 +2128,7 @@ process.stdin.on('data', async chunk => {
         result: {
           protocolVersion: PROTOCOL_VERSION,
           capabilities: { tools: { listChanged: false } },
-          serverInfo: { name: 'overlord-__OVERLORD_ADAPTER_KEY__', version: '0.3.64' }
+          serverInfo: { name: 'overlord-__OVERLORD_ADAPTER_KEY__', version: '0.3.70' }
         }
       });
       continue;

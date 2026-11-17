@@ -694,13 +694,13 @@ export async function listMissionItems(
     kinds?: readonly MissionItemKind[];
     statuses?: readonly MissionItemStatus[];
     limit?: number;
-    order?: 'reported' | 'resolved';
+    order?: 'reported' | 'resolved' | 'blocking';
     offset?: number;
   }
-): Promise<{ items: MissionItem[]; truncated: boolean }> {
+): Promise<{ items: MissionItem[]; truncated: boolean; total: number }> {
   const kinds = scope.kinds ?? MISSION_ITEM_KINDS;
   const statuses = scope.statuses ?? ['open'];
-  if (kinds.length === 0 || statuses.length === 0) return { items: [], truncated: false };
+  if (kinds.length === 0 || statuses.length === 0) return { items: [], truncated: false, total: 0 };
   for (const kind of kinds) {
     if (!(MISSION_ITEM_KINDS as readonly string[]).includes(kind)) {
       throw invalidInput(`Unknown mission item kind '${kind}'`);
@@ -734,12 +734,19 @@ export async function listMissionItems(
     params.push(scope.workspaceId);
   }
 
+  const count = await db.get<{ total: number | string }>(
+    `SELECT COUNT(*) AS total FROM mission_items
+       JOIN deliveries d ON d.id = mission_items.delivery_id AND d.deleted_at IS NULL
+      WHERE ${where.join(' AND ')}`,
+    params
+  );
   const rows = await db.all<MissionItemRow>(
     `SELECT ${ITEM_COLUMNS}
        FROM mission_items
        JOIN deliveries d ON d.id = mission_items.delivery_id AND d.deleted_at IS NULL
       WHERE ${where.join(' AND ')}
-      ORDER BY ${scope.order === 'resolved' ? 'mission_items.resolved_at DESC, mission_items.id DESC,' : ''}
+      ORDER BY ${scope.order === 'blocking' ? `CASE WHEN mission_items.kind = 'human_action' AND ${db.dialect === 'postgres' ? "(mission_items.detail_json::jsonb ->> 'blocking') = 'true'" : "json_extract(mission_items.detail_json, '$.blocking') = 1"} THEN 0 ELSE 1 END,` : ''}
+               ${scope.order === 'resolved' ? 'mission_items.resolved_at DESC, mission_items.id DESC,' : ''}
                d.delivered_at DESC, mission_items.delivery_id DESC,
                mission_items.kind ASC, mission_items.position ASC, mission_items.id ASC
       LIMIT ? OFFSET ?`,
@@ -747,6 +754,7 @@ export async function listMissionItems(
   );
   return {
     items: rows.slice(0, limit).map(toMissionItem),
+    total: Number(count?.total ?? 0),
     truncated: rows.length > limit
   };
 }

@@ -618,8 +618,30 @@ const toolHandlers: Record<string, ToolHandler> = {
     ),
   overlord_list_deliveries: args =>
     runProtocolSubcommand('list-deliveries', protocolBody(missionScopeFlags(args))),
+  overlord_mission_items: args =>
+    runProtocolSubcommand(
+      'mission-items',
+      protocolBody({
+        ...missionScopeFlags(args),
+        '--session-key': requiredString(args, 'sessionKey'),
+        ...(args.limit !== undefined ? { '--limit': String(args.limit) } : {}),
+        ...(args.offset !== undefined ? { '--offset': String(args.offset) } : {})
+      })
+    ),
+  overlord_close_items: args =>
+    runProtocolSubcommand(
+      'close-items',
+      protocolBody({
+        ...missionScopeFlags(args),
+        '--session-key': requiredString(args, 'sessionKey'),
+        '--close-items-json': JSON.stringify(args.closeItems)
+      })
+    ),
   overlord_changes: args =>
-    runProtocolSubcommand('objective-changes', protocolBody(missionScopeFlags(args))),
+    runProtocolSubcommand(
+      'objective-changes',
+      protocolBody({ ...missionScopeFlags(args), '--connection-method': 'mcp' })
+    ),
   overlord_launch_objective: args =>
     runProtocolSubcommand(
       'launch-objective',
@@ -714,6 +736,8 @@ const toolHandlers: Record<string, ToolHandler> = {
       'attach',
       protocolBody({
         ...missionScopeFlags(args),
+        // Attach rules then name MCP tools and payload fields, not CLI flags.
+        '--connection-method': 'mcp',
         '--agent': optionalString(args, 'agent') ?? HOSTED_MCP_DEFAULT_AGENT,
         ...(optionalString(args, 'model') ? { '--model': requiredString(args, 'model') } : {}),
         ...(optionalString(args, 'executionTargetId')

@@ -21,8 +21,7 @@ const { runProtocolSubcommand } = await import('./protocol.ts');
 const { getMissionSummary } = await import('./mission-summary.ts');
 const { missionSummaryComposeWorker } = await import('./mission-summary-compose-worker.ts');
 const { ServiceError } = await import('../packages/core/service/errors.ts');
-const { claimNextWorkerJob, enqueueMissionSummaryComposeJob, MISSION_SUMMARY_COMPOSE_JOB_TYPE } =
-  await import('../packages/core/service/worker-jobs.ts');
+const { enqueueMissionSummaryComposeJob } = await import('../packages/core/service/worker-jobs.ts');
 
 after(() => {
   missionSummaryComposeWorker.setGenerateOverride(null);
@@ -111,6 +110,7 @@ test('attach returns the baseline; load-context and connect do not', async () =>
     summary: '',
     author: null,
     openItems: [],
+    totalOpenItems: 0,
     truncated: false
   });
   assert.ok(attached.agentInstructions.includes('## Mission summary'));
@@ -123,6 +123,57 @@ test('attach returns the baseline; load-context and connect do not', async () =>
     flags: { '--objective-id': first.displayId }
   })) as Record<string, unknown>;
   assert.equal('missionSummary' in connected, false);
+});
+
+test('attach --connection-method mcp returns MCP wording first; other values are rejected', async () => {
+  const { first, second } = await missionFixture('Connection Method');
+  const mcp = (await runProtocolSubcommand('attach', {
+    flags: { '--objective-id': first.displayId, '--connection-method': 'mcp' }
+  })) as AttachResult;
+  assert.equal(Object.keys(mcp)[0], 'agentInstructions');
+  assert.match(mcp.agentInstructions, /overlord_deliver_session/);
+  assert.doesNotMatch(mcp.agentInstructions, /\bovld\b|--[a-z]/);
+
+  const cli = await attach(second.displayId);
+  assert.match(cli.agentInstructions, /`ovld protocol deliver`/);
+
+  await assert.rejects(
+    runProtocolSubcommand('attach', {
+      flags: { '--objective-id': second.displayId, '--connection-method': 'chat' }
+    }),
+    (error: { status?: number; code?: string }) =>
+      error.status === 400 && error.code === 'invalid_input'
+  );
+});
+
+test('objective-changes and deliver return their own instruction by connection method (coo:1294.s9m6)', async () => {
+  const { mission, first } = await missionFixture('Rare Case Routes');
+  const attached = (await runProtocolSubcommand('attach', {
+    flags: { '--objective-id': first.displayId, '--connection-method': 'mcp' }
+  })) as AttachResult;
+  const read = (connectionMethod?: string) =>
+    runProtocolSubcommand('objective-changes', {
+      flags: {
+        '--objective-id': first.displayId,
+        ...(connectionMethod ? { '--connection-method': connectionMethod } : {})
+      }
+    }) as Promise<{ capture: { warnings: string[] }; instruction?: string }>;
+
+  const mcpRead = await read('mcp');
+  assert.ok(mcpRead.capture.warnings.length > 0);
+  assert.match(mcpRead.instruction ?? '', /`declaredPaths`/);
+  assert.doesNotMatch(mcpRead.instruction ?? '', /\bovld\b|--[a-z]/);
+  assert.match((await read())?.instruction ?? '', /--paths a,b/);
+  await assert.rejects(read('chat'), (error: { status?: number }) => error.status === 400);
+
+  const delivered = (await runProtocolSubcommand('deliver', {
+    flags: {
+      '--mission-id': mission.displayId,
+      '--session-key': attached.sessionKey,
+      '--summary': 'Done.'
+    }
+  })) as { instruction: string };
+  assert.match(delivered.instruction, /start follow-up work from Overlord/);
 });
 
 test('a delivery with missionSummary shows agent prose at once and closes own items', async () => {
@@ -269,7 +320,7 @@ test('malformed missionSummary is a 400 before any write', async () => {
   assert.equal(Number(count?.n), 0);
 });
 
-test('a delivery without missionSummary succeeds and gets fallback prose', async () => {
+test('a delivery without missionSummary succeeds and keeps the agent prose', async () => {
   const { mission, first, second } = await missionFixture('Fallback');
   const a = await attach(first.displayId);
   await deliver(first.displayId, a.sessionKey, {
@@ -290,28 +341,12 @@ test('a delivery without missionSummary succeeds and gets fallback prose', async
     missionId: mission.id,
     reason: 'delivery_presented'
   });
-  assert.equal(trigger.triggered, true, 'the newest delivery has no agent prose');
+  assert.equal(trigger.triggered, false, 'agent prose is not replaced by a delivery without prose');
 
-  const prompts: string[] = [];
-  missionSummaryComposeWorker.setGenerateOverride(async ({ prompt }) => {
-    prompts.push(prompt);
-    return JSON.stringify({ headline: 'A and B landed.', summary: 'Both are delivered.' });
-  });
-  const job = await claimNextWorkerJob({
-    db: requireDatabaseClient(),
-    jobType: MISSION_SUMMARY_COMPOSE_JOB_TYPE,
-    workerId: 'protocol-mission-summary-test'
-  });
-  assert.ok(job);
-  await missionSummaryComposeWorker.processJobForTest(requireDatabaseClient(), job);
-
-  assert.ok(prompts[0]?.includes('A landed.'), 'the agent text is the previous summary');
   const summary = (await getMissionSummary(mission.id)).summary!;
-  assert.equal(summary.generatedBy, 'gemini');
-  assert.equal(summary.headline, 'A and B landed.');
-  assert.equal(summary.author.kind, 'gemini');
-  assert.equal(summary.author.deliveryId, null);
-  assert.equal(summary.contentRevision, 2);
+  assert.equal(summary.generatedBy, 'agent');
+  assert.equal(summary.headline, 'A landed.');
+  assert.equal(summary.contentRevision, 1);
 });
 
 test('record-work accepts missionSummary without a base', async () => {
@@ -342,4 +377,41 @@ test('record-work accepts missionSummary without a base', async () => {
     [result.deliveryId]
   );
   assert.equal(JSON.parse(payload!.payload_json).missionSummary, undefined);
+});
+
+test('item commands read full detail and close with file input without delivering', async () => {
+  const { first, second } = await missionFixture('Standalone items');
+  const a = await attach(first.displayId);
+  await deliver(first.displayId, a.sessionKey, { deliveryReport: report('standalone') });
+  const b = await attach(second.displayId);
+  const flags = { '--objective-id': second.displayId, '--session-key': b.sessionKey };
+  const page = (await runProtocolSubcommand('mission-items', {
+    flags: { ...flags, '--limit': '1', '--offset': '0' }
+  })) as any;
+  assert.equal(page.total, 2);
+  assert.equal(page.items.length, 1);
+  assert.equal(page.nextOffset, 1);
+  const closed = (await runProtocolSubcommand('close-items', {
+    flags: { ...flags, '--close-items-file': '-' },
+    fileInputs: {
+      '--close-items-file': JSON.stringify([
+        { id: page.items[0].id, status: 'dismissed', reason: 'No longer needed.' }
+      ])
+    }
+  })) as any;
+  assert.deepEqual(closed.closedItemIds, [page.items[0].id]);
+  assert.equal(closed.narrativeWritten, false);
+  const next = (await runProtocolSubcommand('mission-items', { flags })) as any;
+  assert.equal(next.total, 1);
+  await assert.rejects(
+    runProtocolSubcommand('mission-items', { flags: { ...flags, '--offset': 'invalid' } })
+  );
+  await assert.rejects(
+    runProtocolSubcommand('close-items', { flags: { ...flags, '--close-items-json': '[{}]' } })
+  );
+  const db = requireDatabaseClient();
+  const session = await db.get<any>('SELECT ended_at FROM agent_sessions WHERE objective_id = ?', [
+    second.id
+  ]);
+  assert.equal(session.ended_at, null);
 });

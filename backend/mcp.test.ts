@@ -134,16 +134,21 @@ function assertChangeTrackingSchema(tools: Array<Record<string, any>>): void {
 async function callLocalShimTool(
   name: string,
   args: Record<string, unknown>,
-  { conflict = false }: { conflict?: boolean } = {}
+  {
+    conflict = false,
+    response: stubResponse
+  }: { conflict?: boolean; response?: Record<string, unknown> } = {}
 ): Promise<Record<string, any>> {
   const dir = await mkdtemp(path.join(os.tmpdir(), 'ovld-shim-'));
   try {
     const fakeBin = path.join(dir, 'ovld');
     await writeFile(
       fakeBin,
-      conflict
-        ? `#!/usr/bin/env node\nprocess.stdout.write(JSON.stringify({ code: 'mission_summary_conflict', missionSummary: { contentRevision: 9 } }));\nprocess.exit(1);\n`
-        : `#!/usr/bin/env node\nprocess.stdout.write(JSON.stringify({ argv: process.argv.slice(2) }));\n`
+      stubResponse
+        ? `#!/usr/bin/env node\nprocess.stdout.write(${JSON.stringify(JSON.stringify(stubResponse))});\n`
+        : conflict
+          ? `#!/usr/bin/env node\nprocess.stdout.write(JSON.stringify({ code: 'mission_summary_conflict', missionSummary: { contentRevision: 9 } }));\nprocess.exit(1);\n`
+          : `#!/usr/bin/env node\nconst argv = process.argv.slice(2); if (argv.includes('--close-items-file')) { let stdin = ''; process.stdin.on('data', d => stdin += d); process.stdin.on('end', () => process.stdout.write(JSON.stringify({ argv, stdin }))); } else process.stdout.write(JSON.stringify({ argv }));\n`
     );
     await chmod(fakeBin, 0o755);
     const child = spawn(
@@ -184,6 +189,49 @@ const MISSION_SUMMARY_ARG = {
   summary: 'Implemented and tested, not deployed.',
   closeItems: [{ id: 'item-1', status: 'done', reason: 'Fixed in this objective.' }]
 };
+
+test('local MCP forwards compact attach context unchanged and both catalogs describe directives', async () => {
+  const response = {
+    agentInstructions: 'Use directives and objectives.',
+    mission: { displayId: 'coo:1' },
+    objective: { displayId: 'coo:1.abcd' },
+    objectives: [{ displayId: 'coo:1.efgh', state: 'complete', objective: 'Earlier work' }],
+    directives: [{ type: 'user_follow_up', summary: 'Continue with my change' }],
+    session: { sessionKey: 'test-session' },
+    artifacts: [],
+    attachments: [],
+    sharedState: [],
+    missionSummary: { contentRevision: 1, headline: 'Mission outcome', openItems: [] }
+  };
+  const result = await callLocalShimTool(
+    'overlord_attach_session',
+    { objectiveId: 'coo:1.abcd' },
+    { response }
+  );
+  assert.deepEqual(result.structuredContent, response);
+  assert.deepEqual(JSON.parse(result.content[0].text), response);
+  for (const tools of [
+    await localToolDefinitions(path.join(repoRoot, 'connectors/core/scripts/overlord-mcp.mjs')),
+    hostedMcpToolDefinitions
+  ]) {
+    const attach = tools.find(tool => tool.name === 'overlord_attach_session');
+    assert.match(String(attach?.description), /current-objective directives/);
+  }
+});
+
+test('local MCP shim attaches with --connection-method mcp', async () => {
+  const result = await callLocalShimTool('overlord_attach_session', { objectiveId: 'coo:1.abcd' });
+  const argv = result.structuredContent.argv as string[];
+  assert.equal(argv[1], 'attach');
+  assert.equal(flagValue(argv, '--connection-method'), 'mcp');
+});
+
+test('local MCP shim reads objective changes with --connection-method mcp', async () => {
+  const result = await callLocalShimTool('overlord_changes', { objectiveId: 'coo:1.abcd' });
+  const argv = result.structuredContent.argv as string[];
+  assert.equal(argv[1], 'objective-changes');
+  assert.equal(flagValue(argv, '--connection-method'), 'mcp');
+});
 
 test('local MCP shim forwards missionSummary on deliver with the delivery report', async () => {
   const result = await callLocalShimTool('overlord_deliver_session', {
@@ -881,4 +929,29 @@ test('an MCP tool error keeps the conflict code and fresh baseline', () => {
   assert.equal(parsed.code, 'mission_summary_conflict');
   assert.deepEqual(parsed.details.missionSummary, baseline);
   assert.equal(toolErrorText(new Error('plain')).content[0]!.text, 'plain');
+});
+
+test('local MCP item tools forward paging and closure payloads', async () => {
+  const scope = { objectiveId: 'coo:1.abcd', sessionKey: 'session-key' };
+  const read = await callLocalShimTool('overlord_mission_items', {
+    ...scope,
+    limit: 25,
+    offset: 60
+  });
+  const argv = read.structuredContent.argv as string[];
+  assert.equal(argv[1], 'mission-items');
+  assert.equal(flagValue(argv, '--limit'), '25');
+  assert.equal(flagValue(argv, '--offset'), '60');
+  assert.equal(flagValue(argv, '--session-key'), scope.sessionKey);
+  const closeItems = [{ id: 'item', status: 'done', reason: 'Verified' }];
+  const close = await callLocalShimTool('overlord_close_items', { ...scope, closeItems });
+  const closeArgv = close.structuredContent.argv as string[];
+  assert.equal(closeArgv[1], 'close-items');
+  assert.equal(flagValue(closeArgv, '--close-items-file'), '-');
+  assert.deepEqual(JSON.parse(close.structuredContent.stdin), closeItems);
+  for (const name of ['overlord_mission_items', 'overlord_close_items']) {
+    const tool = hostedMcpToolDefinitions.find(tool => tool.name === name)!;
+    assert.ok(tool);
+    assert.ok((tool.inputSchema.required as string[]).includes('sessionKey'));
+  }
 });

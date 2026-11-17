@@ -3,15 +3,19 @@ import type { CaptureBindingState } from '@overlord/contract';
 
 import {
   askQuestion,
+  ATTACH_CONNECTION_METHODS,
   attachSession,
+  closeAgentMissionItems,
   connectSession,
   deliverSession,
   heartbeatSession,
+  readAgentMissionItems,
   recordHookEvent,
   resumeFollowUp,
   syncChanges,
   updateSession
 } from '../../packages/core/service/protocol.ts';
+import { ApiError } from '../errors.ts';
 
 import {
   type ArtifactInput,
@@ -44,6 +48,24 @@ function captureBindingFlag(body: Parameters<typeof strFlag>[0]): CaptureBinding
   return value === undefined ? undefined : (value as CaptureBindingState);
 }
 
+/**
+ * Optional `--connection-method cli|mcp` (default cli). MCP servers send `mcp`
+ * so `agentInstructions` names MCP tools and payload fields instead of CLI flags.
+ */
+export function connectionMethodFlag(body: Parameters<typeof strFlag>[0]): string | undefined {
+  const value = strFlag(body, '--connection-method');
+  if (value === undefined) return undefined;
+  if (!(ATTACH_CONNECTION_METHODS as readonly string[]).includes(value)) {
+    throw new ApiError(
+      400,
+      `--connection-method must be one of: ${ATTACH_CONNECTION_METHODS.join(', ')}`,
+      undefined,
+      'invalid_input'
+    );
+  }
+  return value;
+}
+
 /** Agent-declared shell/script outputs, deletes, and renames (`--declared-paths-json|file`). */
 function declaredPathsInput(body: Parameters<typeof strFlag>[0]): unknown[] | undefined {
   return parseJsonArrayInput<unknown>(
@@ -55,6 +77,32 @@ function declaredPathsInput(body: Parameters<typeof strFlag>[0]): unknown[] | un
 }
 
 export const sessionSubcommands: SubcommandTable = {
+  'mission-items': {
+    permission: PERMISSIONS.MISSION_READ,
+    handler: (ctx, body) =>
+      readAgentMissionItems({
+        ctx,
+        missionId: missionRefFlag(body),
+        sessionKey: requireFlag(body, '--session-key'),
+        limit: Number(strFlag(body, '--limit') ?? 60),
+        offset: Number(strFlag(body, '--offset') ?? 0)
+      })
+  },
+  'close-items': {
+    permission: PERMISSIONS.EVENT_CREATE,
+    handler: (ctx, body) =>
+      closeAgentMissionItems({
+        ctx,
+        missionId: missionRefFlag(body),
+        sessionKey: requireFlag(body, '--session-key'),
+        closeItems: parseJsonArrayInput(
+          body,
+          '--close-items-json',
+          '--close-items-file',
+          'closeItems'
+        )
+      })
+  },
   // Session lifecycle ------------------------------------------------------
   attach: {
     permission: PERMISSIONS.SESSION_ATTACH,
@@ -64,6 +112,7 @@ export const sessionSubcommands: SubcommandTable = {
         missionId: missionRefFlag(body),
         agentIdentifier: strFlag(body, '--agent') ?? 'unknown',
         modelIdentifier: strFlag(body, '--model') ?? null,
+        connectionMethod: connectionMethodFlag(body),
         existingSessionKey: strFlag(body, '--session-key') ?? null,
         externalSessionId: externalSessionId(body),
         executionRequestId: strFlag(body, '--execution-request-id') ?? null,
@@ -223,6 +272,7 @@ export const sessionSubcommands: SubcommandTable = {
         objectiveId: objectiveRefFlag(body),
         agentIdentifier: strFlag(body, '--agent') ?? 'unknown',
         modelIdentifier: strFlag(body, '--model') ?? null,
+        connectionMethod: connectionMethodFlag(body),
         externalSessionId: externalSessionId(body),
         summary: resolveInput(body, '--summary', '--summary-file') ?? null,
         executionTargetId: strFlag(body, '--execution-target-id') ?? null

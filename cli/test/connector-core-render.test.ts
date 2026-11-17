@@ -40,7 +40,7 @@ test('renderConnectorSkill interpolates connector core into adapter template', (
   assert.ok(rendered.startsWith('---\nname: demo'));
   assert.ok(!rendered.includes(CONNECTOR_CORE_MARKER));
   assert.ok(rendered.includes('# Overlord Mission'));
-  assert.ok(rendered.includes('## Mode 1: Launched From Overlord Desktop Or CLI'));
+  assert.ok(rendered.includes('## After You Attach'));
   assert.ok(rendered.includes('## Demo Adapter Notes'));
 });
 

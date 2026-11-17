@@ -122,6 +122,8 @@ export function MissionObjectivesSection({
   }, [onRowOrderChange, rowOrderKey]);
 
   const sensors = useObjectiveRowSensors(orderedQueuedObjectives.length > 1);
+  /** A row is being dragged: no row opens its hover line, and an open one closes. */
+  const [dragging, setDragging] = useState(false);
 
   /** Persist a new not-started order: optimistic, complete set, rollback on rejection. */
   function commitOrder(nextOrder: string[]) {
@@ -140,6 +142,7 @@ export function MissionObjectivesSection({
   }
 
   function handleDragEnd(event: DragEndEvent) {
+    setDragging(false);
     // The pointer release after a drag fires a click on the row button; never open on drop.
     suppressNextClick();
     const { active, over } = event;
@@ -173,7 +176,8 @@ export function MissionObjectivesSection({
   }
 
   return (
-    <div className="min-w-0" data-mission-objective-list="">
+    // The container sizes the rows' hover line, whose labels collapse at narrow panel widths.
+    <div className="@container/objective-list min-w-0" data-mission-objective-list="">
       {fixedRows.length > 0 ? (
         <ol aria-label="Started objectives" className="min-w-0">
           {fixedRows.map(objective => (
@@ -193,8 +197,12 @@ export function MissionObjectivesSection({
           sensors={sensors}
           collisionDetection={closestCenter}
           modifiers={OBJECTIVE_ROW_DND_MODIFIERS}
+          onDragStart={() => setDragging(true)}
           onDragEnd={handleDragEnd}
-          onDragCancel={() => suppressNextClick()}
+          onDragCancel={() => {
+            setDragging(false);
+            suppressNextClick();
+          }}
         >
           <SortableContext
             items={orderedQueuedObjectives.map(o => o.id)}
@@ -206,6 +214,7 @@ export function MissionObjectivesSection({
                   key={objective.id}
                   objective={objective}
                   selected={objective.id === openObjectiveId}
+                  listDragging={dragging}
                   onMoveUp={index > 0 ? () => moveBy(objective.id, -1) : undefined}
                   onMoveDown={
                     index < orderedQueuedObjectives.length - 1

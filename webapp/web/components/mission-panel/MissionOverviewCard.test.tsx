@@ -6,7 +6,7 @@ import {
   createRouter,
   RouterProvider
 } from '@tanstack/react-router';
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, it } from 'node:test';
@@ -18,7 +18,7 @@ import {
 import { useMissionOpenAgentRequests } from '../../lib/queries.ts';
 import { keys } from '../../lib/query-keys.ts';
 
-import { MissionOverviewCard, overviewBadge } from './MissionOverviewCard.tsx';
+import { MissionOverviewCard } from './MissionOverviewCard.tsx';
 
 const fixture = JSON.parse(
   readFileSync(
@@ -121,7 +121,19 @@ function selectTab(name: RegExp) {
   return tab;
 }
 
-async function mount(response: MissionSummaryResponse = structuredClone(fixture.summaryResponse)) {
+/** Opens the Summary tab and expands its collapsed Resolved group (the mission's decisions). */
+function openResolved(count?: number) {
+  selectTab(/Summary/);
+  const toggle = screen.getByRole('button', {
+    name: count === undefined ? /^Resolved\s*\d+$/ : new RegExp(`^Resolved\\s*${count}$`)
+  });
+  if (toggle.getAttribute('aria-expanded') !== 'true') fireEvent.click(toggle);
+}
+
+async function mount(
+  response: MissionSummaryResponse = structuredClone(fixture.summaryResponse),
+  deliveries: unknown[] = fixture.deliveries
+) {
   // gcTime 0: a finished mutation's five-minute gc timer would keep the test process alive.
   const client = new QueryClient({
     defaultOptions: {
@@ -136,10 +148,7 @@ async function mount(response: MissionSummaryResponse = structuredClone(fixture.
   // The Files tab mounts after the first render; seed what it reads so no request outlives the
   // test's fetch stub.
   client.setQueryData(keys.profile, { editorScheme: null });
-  client.setQueryData(keys.missionDeliveries(id), {
-    items: fixture.deliveries,
-    total: fixture.deliveries.length
-  });
+  client.setQueryData(keys.missionDeliveries(id), { items: deliveries, total: deliveries.length });
   client.setQueryData(keys.workspaceMembers(fixture.mission.workspaceId), fixture.members);
   client.setQueryData(keys.missionFileChanges(id), {
     items: fixture.fileChanges.items,
@@ -217,8 +226,8 @@ it('renders updating evidence, expandable actions, compact promoted suggestions,
   fireEvent.click(action);
   assert.equal(action.getAttribute('aria-expanded'), 'true');
   assert.ok(screen.getByText('yarn db:migrate --env staging'));
-  // A promoted suggestion is a resolved item; it is listed in the Resolved tab.
-  selectTab(/Resolved/);
+  // A promoted suggestion is a resolved item; it is listed in the Summary tab's Resolved group.
+  openResolved();
   assert.ok(screen.getByText(/Add derivation tests on iOS/));
   selectTab(/Summary/);
   const dots = screen.getAllByRole('img', { name: 'New since your last visit' }).length;
@@ -231,7 +240,7 @@ it('renders updating evidence, expandable actions, compact promoted suggestions,
   );
   await waitFor(() => assert.ok(screen.getByText('The refreshed summary is ready.')));
   assert.equal(screen.getAllByRole('img', { name: 'New since your last visit' }).length, dots);
-  selectTab(/Files/);
+  // Files sit in the Summary tab, below the summary and risks.
   const more = screen.getByRole('button', { name: /\+\d+ more/ });
   fireEvent.click(more);
   assert.equal(
@@ -276,6 +285,19 @@ it('shows first-compose evidence without an empty post and shows all-clear after
 it('names the authoring objective, and shows no provenance for automatic summaries', async () => {
   await mount();
   selectTab(/Summary/);
+  // Risks, resolved items and files live in the Summary tab, not in tabs of their own.
+  const labels = screen.getAllByRole('tab').map(tab => tab.textContent ?? '');
+  for (const gone of [/^Risks/, /^Resolved/, /^Files/]) {
+    assert.equal(
+      labels.some(label => gone.test(label)),
+      false,
+      String(gone)
+    );
+  }
+  assert.ok(screen.getByRole('heading', { name: /^Risks/ }));
+  assert.ok(screen.getByRole('heading', { name: /^Files changed/ }));
+  // The full summary is shown; there is no clamp toggle.
+  assert.equal(screen.queryByRole('button', { name: /^Show (more|less)$/ }), null);
   assert.ok(screen.getByText('Updated by'));
   assert.ok(
     screen.getByRole('button', { name: 'Open objective coo:900.cccc, which wrote this summary' })
@@ -290,9 +312,44 @@ it('names the authoring objective, and shows no provenance for automatic summari
   assert.equal(screen.queryByText('Updated by') === null, true);
 });
 
-it('lists resolved items in their tab, with kind, who resolved them and the reason', async () => {
+it('lists reported tradeoffs in their own Summary section, and hides it when there are none', async () => {
   await mount();
-  selectTab(/Resolved\s*4$/);
+  selectTab(/Summary/);
+  assert.equal(screen.queryByRole('region', { name: /^Tradeoffs/ }), null);
+  cleanup();
+  const tradeoff = {
+    id: 'tradeoff-0',
+    decision: 'Kept the summary cache in memory.',
+    alternativesConsidered: ['Redis', 'No cache'],
+    rationale: 'One process serves the panel today.',
+    impact: 'A restart drops the cache.',
+    source: 'agent'
+  };
+  const deliveries = fixture.deliveries.map((delivery: { id: string }, index: number) =>
+    index === 0
+      ? { ...delivery, report: { presentation: { tradeoffsMade: [tradeoff] } } }
+      : delivery
+  );
+  await mount(structuredClone(fixture.summaryResponse), deliveries);
+  selectTab(/Summary/);
+  const region = screen.getByRole('region', { name: /^Tradeoffs\s*1$/ });
+  const text = region.textContent ?? '';
+  for (const part of [
+    tradeoff.decision,
+    tradeoff.rationale,
+    'Impact: A restart drops the cache.',
+    'Considered: Redis, No cache'
+  ]) {
+    assert.ok(text.includes(part), part);
+  }
+  assert.ok(
+    within(region).getByRole('button', { name: 'Open the delivery in objective coo:900.cccc' })
+  );
+});
+
+it('lists resolved items in the Summary tab, with kind, who resolved them and the reason', async () => {
+  await mount();
+  openResolved(4);
   const region = screen.getByRole('region', { name: 'Resolved items' });
   const text = region.textContent ?? '';
   // Kind and status are text, not colour alone.
@@ -318,7 +375,8 @@ it('hides the resolved group when nothing is resolved', async () => {
   const response = structuredClone(fixture.summaryResponse);
   response.summary.closedItems = [];
   await mount(response);
-  assert.equal(screen.queryByRole('tab', { name: /Resolved/ }) === null, true);
+  selectTab(/Summary/);
+  assert.equal(screen.queryByRole('region', { name: 'Resolved items' }) === null, true);
 });
 
 it('resolves a risk with a reason and moves it to the resolved group live', async () => {
@@ -342,7 +400,7 @@ it('resolves a risk with a reason and moves it to the resolved group live', asyn
   ];
   nextSummary = after;
   await mount();
-  selectTab(/Risks/);
+  selectTab(/Summary/);
 
   const trigger = screen.getByRole('button', { name: `Resolve risk: ${risk.text}` });
   assert.equal(trigger.getAttribute('aria-expanded'), 'false');
@@ -368,7 +426,7 @@ it('resolves a risk with a reason and moves it to the resolved group live', asyn
     path: `/api/mission-items/${risk.id}/resolution`,
     body: { status: 'dismissed', reason: 'The widget target was removed.' }
   });
-  selectTab(/Resolved\s*5$/);
+  openResolved(5);
   assert.ok(screen.getByRole('button', { name: `Restore risk: ${risk.text}` }));
   assert.ok(screen.getByText('“The widget target was removed.”'));
 });
@@ -407,7 +465,7 @@ it('restores a resolved item and explains a superseded one', async () => {
         }
       : { status: 200, body: {} };
   await mount();
-  selectTab(/Resolved\s*4$/);
+  openResolved(4);
   fireEvent.click(
     screen.getByRole('button', {
       name: 'Restore risk: The old summary route may still be cached by proxies.'
@@ -427,45 +485,156 @@ it('restores a resolved item and explains a superseded one', async () => {
   );
 });
 
-it('chooses the badge from blocked, in-flight, launching and complete state', () => {
-  const blocked = new Map([['b', [{}]]]);
-  const none = new Map<string, unknown[]>();
-  const at = (state: string) => [{ id: 'b', state }] as never;
+/** The live status line: its kind from `data-live-status`, and its visible text. */
+function liveStatus() {
+  const element = screen.getByRole('group', { name: 'Mission status' });
+  return { kind: element.getAttribute('data-live-status'), text: element.textContent ?? '' };
+}
+
+it('shows the live status apart from the summary prose and updates it when the last blocker closes', async () => {
+  const blocker = fixture.summaryResponse.evidence.actions[0];
+  assert.equal(blocker.blocking, true);
+  const after = structuredClone(fixture.summaryResponse);
+  after.evidence.actions = after.evidence.actions.filter(
+    (action: { id: string }) => action.id !== blocker.id
+  );
+  after.evidence.totals.actions -= 1;
+  nextSummary = after;
+  await mount();
+
+  // Blocked by the one blocking action; the agent-written prose is untouched and separate.
+  assert.deepEqual(liveStatus().kind, 'blocked');
+  assert.match(liveStatus().text, /Blocked/);
+  assert.match(liveStatus().text, /1 blocking action needs you/);
+  selectTab(/Summary/);
+  const status = screen.getByRole('group', { name: 'Mission status' });
   assert.equal(
-    overviewBadge({
-      objectives: at('executing'),
-      blockingByObjective: blocked,
-      statusType: 'execute'
-    }),
-    'waiting'
+    status.contains(screen.getByRole('heading', { level: 2 })),
+    false,
+    'the status is outside the headline and summary'
+  );
+
+  selectTab(/For you/);
+  fireEvent.click(screen.getByRole('button', { name: `Resolve action: ${blocker.action}` }));
+  fireEvent.submit(screen.getByRole('form', { name: `Resolve action: ${blocker.action}` }));
+  await settle();
+
+  // No delivery and no new summary prose: the status moved on from live item state alone. The
+  // open question still needs a person.
+  assert.equal(liveStatus().kind, 'waiting');
+  assert.match(liveStatus().text, /Waiting on you/);
+});
+
+it('groups equal actions into one row and closes every record, oldest first', async () => {
+  const response = structuredClone(fixture.summaryResponse);
+  const [newest, older] = response.evidence.actions.filter((action: { action: string }) =>
+    /overlord_flag/i.test(action.action)
+  );
+  assert.ok(newest && older);
+  await mount(response);
+  selectTab(/For you/);
+
+  const row = screen.getByText(newest.action).closest('li')!;
+  const group = row.querySelector('[data-item-group]');
+  assert.ok(group, 'the row says it stands for several records');
+  assert.match(group.textContent ?? '', /2 matching action records from/);
+  assert.ok(
+    within(group as HTMLElement).getByRole('button', { name: 'Open objective coo:900.cccc' })
+  );
+  assert.match(group.textContent ?? '', /Delivery/, 'a deleted objective shows as Delivery');
+  assert.equal(
+    screen.getAllByText(newest.action).length,
+    1,
+    'the older wording is not a second row'
+  );
+
+  const trigger = within(row).getByRole('button', {
+    name: /Resolve all 2 matching action records/
+  });
+  assert.match(trigger.textContent ?? '', /Resolve all 2/);
+  fireEvent.click(trigger);
+  const form = screen.getByRole('form', { name: /Resolve all 2 matching action records/ });
+  assert.match(form.textContent ?? '', /closes all 2 matching action records/);
+  fireEvent.submit(form);
+  await settle();
+  assert.deepEqual(
+    requests.filter(req => req.method === 'PUT').map(req => req.path),
+    [`/api/mission-items/${older.id}/resolution`, `/api/mission-items/${newest.id}/resolution`],
+    'the older record closes first and the shown record last'
+  );
+});
+
+it('groups a risk reported by two objectives and shows its sources and the close-all control', async () => {
+  const response = structuredClone(fixture.summaryResponse);
+  const risk = response.summary.risks[0];
+  risk.duplicates = [
+    {
+      id: 'item-risk-dup',
+      deliveryId: 'delivery-a1',
+      objectiveId: 'obj-a',
+      deliveredAt: '2026-10-21T08:00:00.000Z'
+    }
+  ];
+  await mount(response);
+  selectTab(/Summary/);
+
+  const row = screen.getByText(risk.text).closest('li')!;
+  assert.match(
+    row.querySelector('[data-item-group]')?.textContent ?? '',
+    /2 matching risk records from/
+  );
+  fireEvent.click(within(row).getByRole('button', { name: /Resolve all 2 matching risk records/ }));
+  fireEvent.submit(screen.getByRole('form', { name: /Resolve all 2 matching risk records/ }));
+  await settle();
+  assert.deepEqual(
+    requests.filter(req => req.method === 'PUT').map(req => req.path),
+    ['/api/mission-items/item-risk-dup/resolution', `/api/mission-items/${risk.id}/resolution`]
+  );
+});
+
+it('decides a grouped suggestion for every matching record, and keeps different scope apart', async () => {
+  const response = structuredClone(fixture.summaryResponse);
+  const [first, second] = response.summary.suggestions;
+  first.duplicates = [
+    {
+      id: 'item-suggestion-dup',
+      deliveryId: 'delivery-a1',
+      objectiveId: 'obj-a',
+      deliveredAt: '2026-10-21T08:00:00.000Z'
+    }
+  ];
+  await mount(response);
+  selectTab(/Suggested/);
+
+  const row = screen.getByText(first.title).closest('li')!;
+  assert.match(
+    row.querySelector('[data-item-group]')?.textContent ?? '',
+    /2 matching suggestion records from/
+  );
+  const otherRow = screen.getByText(second.title).closest('li')!;
+  assert.equal(
+    otherRow.querySelector('[data-item-group]'),
+    null,
+    'a suggestion with its own scope is not grouped'
+  );
+
+  fireEvent.click(within(row).getByRole('button', { name: new RegExp(first.title) }));
+  assert.match(row.textContent ?? '', /applies to all 2 matching records/);
+  fireEvent.click(within(row).getByRole('button', { name: `Dismiss: ${first.title}` }));
+  await settle();
+  // The older record closes through its item id before the shown one is decided.
+  assert.deepEqual(
+    requests.find(req => req.method === 'PUT'),
+    {
+      method: 'PUT',
+      path: '/api/mission-items/item-suggestion-dup/resolution',
+      body: { status: 'dismissed', reason: 'Dismissed with its match.' }
+    }
   );
   assert.equal(
-    overviewBadge({
-      objectives: at('pending_delivery'),
-      blockingByObjective: none,
-      statusType: 'execute'
-    }),
-    'executing'
-  );
-  assert.equal(
-    overviewBadge({
-      objectives: at('launching'),
-      blockingByObjective: blocked,
-      statusType: 'execute'
-    }),
-    'launching'
-  );
-  assert.equal(
-    overviewBadge({
-      objectives: at('complete'),
-      blockingByObjective: none,
-      statusType: 'complete'
-    }),
-    'complete'
-  );
-  assert.equal(
-    overviewBadge({ objectives: at('draft'), blockingByObjective: none, statusType: 'next' }),
-    null
+    requests.filter(req => req.path.startsWith('/api/mission-items/')).length,
+    1,
+    'only the matching duplicate closes here; the shown record uses the delivery route'
   );
 });
 

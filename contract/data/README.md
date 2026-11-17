@@ -1193,7 +1193,7 @@ Live or historical attachment between an agent and one objective.
 | `session_key_hash`             | SecretHash   | yes      | Hash raw session key.                               |
 | `agent_identifier`             | text         | yes      | `codex`, `claude`, etc.                             |
 | `model_identifier`             | text         | no       |                                                     |
-| `connection_method`            | text         | yes      | `cli`, `api`, `connector`, `runner`, etc.           |
+| `connection_method`            | text         | yes      | `cli`, `mcp`, `api`, `connector`, `runner`, etc.    |
 | `external_session_id`          | text         | no       | Native harness session/resume ID when available.    |
 | `phase`                        | text         | yes      | Protocol phase.                                     |
 | `delivery_state`               | text         | yes      | `not_delivered`, `delivered`, `pending_redelivery`. |
@@ -1520,7 +1520,7 @@ and who closed the others. It replaces `human_action_resolutions`. Not indexed i
 | `objective_id`                  | Id           | yes      | FK to `objectives`, cascade delete; the reporting objective. |
 | `delivery_id`                   | Id           | yes      | FK to `deliveries`, cascade delete; the reporting delivery. |
 | `kind`                          | text         | yes      | Closed: `risk`, `human_action`, `suggestion`. |
-| `item_ref`                      | text         | yes      | Stable identity inside the delivery, at most 200 characters. A suggestion reuses `DeferredWorkV1.id`. A risk is `risk-<digest>` of its normalised text (trimmed, whitespace collapsed, lower-cased). A human action is `human_action-<digest>` of `[source, id, sourceRef, normalised agent wording]`, which the delivery composer preserves when it rephrases an action. Digests are the first 16 hex characters of SHA-256 over the JSON form. |
+| `item_ref`                      | text         | yes      | Stable identity inside the delivery, at most 200 characters. A suggestion reuses `DeferredWorkV1.id`. A risk is `risk-<digest>` of its normalised text (trimmed, whitespace collapsed, lower-cased); the delivery composer never rewrites risk text (presentation `knownRisks` is always the agent's `agentReport.knownRisks`), so composition keeps a risk's row and its status. A human action is `human_action-<digest>` of `[source, id, sourceRef, normalised agent wording]`, which the delivery composer preserves when it rephrases an action. Digests are the first 16 hex characters of SHA-256 over the JSON form. |
 | `position`                      | integer      | yes      | Zero-based order inside the delivery's presentation list of that kind. |
 | `text`                          | text         | yes      | Risk text, action sentence, or suggestion title, from the current presentation. |
 | `detail_json`                   | Json         | yes      | Object of kind-specific fields. Suggestion: `change`, `location`, `doneWhen`. Human action: `actionId` (the delivery-local `HumanActionV1.id`), `category`, `source`, and when present `reason`, `blocking`, `command`, `verify`, `link`, `sourceRef`. Risk: `{}`. |
@@ -1528,8 +1528,8 @@ and who closed the others. It replaces `human_action_resolutions`. Not indexed i
 | `status_reason`                 | text         | no       | At most 280 characters; only on `done` or `dismissed`; required when an agent closed the item. Shown to people. |
 | `resolved_by_kind`              | text         | no       | Closed: `person`, `agent`. Set exactly when `status` is `done` or `dismissed`. |
 | `resolved_by_workspace_user_id` | Id           | no       | FK to `workspace_users`, set null on delete. The person who closed the item. |
-| `resolved_by_objective_id`      | Id           | no       | FK to `objectives`, set null on delete. The objective whose delivery closed the item. |
-| `resolved_by_delivery_id`       | Id           | no       | FK to `deliveries`, set null on delete. The delivery that closed the item. |
+| `resolved_by_objective_id`      | Id           | no       | FK to `objectives`, set null on delete. The objective whose agent session closed the item. |
+| `resolved_by_delivery_id`       | Id           | no       | FK to `deliveries`, set null on delete. The delivery that closed the item; null for standalone agent closure. |
 | `outcome`                       | text         | no       | Closed: `mission_created`, `objective_added`. Promotion of a suggestion, only with `status = 'done'`. |
 | `outcome_ref`                   | text         | no       | Display id of the mission or objective the promotion created; only with `outcome`. |
 | `resolved_at`                   | TimestampUTC | no       | Set exactly when `status` is `done` or `dismissed`. |
@@ -1556,6 +1556,10 @@ migration backfill from `@overlord/database`):
   rows take the new text, position and detail; new items are inserted `open`; a row still `open`
   that the presentation no longer lists is deleted. A closed or superseded row is never deleted.
   A risk whose normalised text repeats within one delivery is stored once.
+  Across deliveries the same text is several rows, one per delivery. The summary read groups
+  equal open risks, and open suggestions with equal title, change, location and done-when, into
+  one display row that lists the other records as `duplicates` (ADR 0074); grouping is display
+  only and never merges, closes or re-identifies a row, so each record is closed through its own id.
 - **Supersede.** Once a newer live delivery of the same objective exists (newer by
   `delivered_at`, ties by delivery id), the `open` human actions of the earlier deliveries become
   `superseded`. When an objective reopens, every `open` item of a delivery made before its
@@ -1627,13 +1631,14 @@ never from the narrative or delivery JSON. Closed (`done`, `dismissed`) rows are
 `closedItems`, capped at 100, newest resolution first. Superseded rows are omitted.
 The drop migration also removes `risks_json` and `suggestions_json` from `mission_summaries`.
 
-A trigger is a no-op (no status change or job) when the newest live delivery is
-`narrative_delivery_id`. Otherwise it increments `requested_generation`, sets `status = 'pending'`, bumps `revision`,
+A trigger is a no-op (no status change or job) while `narrative_delivery_id` names a live
+(not soft-deleted) delivery of the mission, whichever delivery is newest, so a later delivery
+that sent no prose never replaces agent prose. Otherwise it increments `requested_generation`, sets `status = 'pending'`, bumps `revision`,
 and keeps the previous content in the transaction of the write it follows; the first trigger
 inserts a pending shell. Triggers: a delivery presentation persisted as `composed` or
 `fallback`; a deferred-work resolution create or delete; an agent request of kind `question`
 or `choice` on creation and on every transition out of `open`; an objective reopening. The worker publishes only while `requested_generation` still equals
-the generation it captured and the newest live delivery is not `narrative_delivery_id`.
+the generation it captured and `narrative_delivery_id` does not name a live delivery.
 It writes headline and summary only, sets `completed_generation`, increments `content_revision`,
 and clears the narrative author references. It never writes item lists. An agent narrative
 write (protocol `deliver` / `record-work` `missionSummary`) runs in the delivery transaction:

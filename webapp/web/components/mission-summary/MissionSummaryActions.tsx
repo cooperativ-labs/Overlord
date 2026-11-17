@@ -11,6 +11,7 @@ import {
   useResolveDisclosure
 } from './MissionSummaryItemControls.tsx';
 import {
+  GroupSources,
   NewDot,
   ObjectiveKeyLink,
   SummaryBlockHeading,
@@ -72,7 +73,12 @@ function ActionRow({ row, missionId }: { row: SummaryActionRow; missionId: strin
           </div>
           <span className="flex shrink-0 items-center gap-2">
             {itemId ? (
-              <ResolveItemButton disclosure={disclosure} noun="action" itemText={row.title} />
+              <ResolveItemButton
+                disclosure={disclosure}
+                noun="action"
+                itemText={row.title}
+                count={row.group.count}
+              />
             ) : null}
             <ObjectiveKeyLink
               objectiveKey={row.objectiveKey}
@@ -87,6 +93,7 @@ function ActionRow({ row, missionId }: { row: SummaryActionRow; missionId: strin
             />
           </span>
         </div>
+        <GroupSources group={row.group} noun="action" />
         {expandable ? (
           <div
             id={detailsId}
@@ -99,7 +106,7 @@ function ActionRow({ row, missionId }: { row: SummaryActionRow; missionId: strin
         {itemId && disclosure.open ? (
           <ResolveItemForm
             disclosure={disclosure}
-            itemId={itemId}
+            itemIds={row.group.itemIds}
             missionId={missionId}
             noun="action"
             itemText={row.title}

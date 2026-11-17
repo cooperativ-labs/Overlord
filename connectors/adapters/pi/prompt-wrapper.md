@@ -11,5 +11,5 @@ Rules:
 - Pass the selected provider-qualified model unchanged with `--model`; do not split it into `--provider` plus a bare model ID.
 - Pass thinking separately with `--thinking` only when the selected launch configuration specifies it.
 - Place user-configured launch flags before the `@<context-file>` and visible message arguments.
-- The context file contains the mission, objectives, history, artifacts, attachments, and lifecycle instructions. Do not put credentials in it.
+- The context file holds only the mission and objective ids, the execution directive and the attach command; the attach response carries the objectives, history, artifacts, attachments and lifecycle instructions. Do not put credentials in it.
 - The visible message must explicitly direct execution without waiting for confirmation.

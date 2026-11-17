@@ -15,6 +15,7 @@ import {
   missionItemOutcomeLabel,
   missionItemResolver,
   missionItemResolverText,
+  missionLiveStatus,
   missionSummaryActions,
   missionSummaryClosedItems,
   missionSummaryFiles,
@@ -31,6 +32,7 @@ import {
   summaryCoverageComplete,
   summaryCoverageRequirements,
   type SummaryDeliveryStamp,
+  summaryGroupResolveNote,
   type SummaryMember,
   type SummaryObjective,
   summaryWatermarkIsDisplayed,
@@ -444,4 +446,130 @@ test('coverage requires every nonempty evidence group with its current content',
     ),
     true
   );
+});
+
+// ---- Live status and grouped items (coo:1294.jp1p) ----
+
+const stateOf = (...states: SummaryObjective['state'][]) => states.map(state => ({ state }));
+
+test('live status: a blocking action blocks, then a question waits, then a running objective progresses', () => {
+  const base = { statusType: 'execute' as StatusType, objectives: stateOf('executing') };
+  const blocking = [{ kind: 'action' as const, blocking: true }];
+  const optional = [{ kind: 'action' as const, blocking: false }];
+  const question = [{ kind: 'question' as const, blocking: false }];
+
+  const blocked = missionLiveStatus({ ...base, openQuestions: [{}], actionRows: blocking });
+  assert.deepEqual([blocked.kind, blocked.label], ['blocked', 'Blocked']);
+  assert.equal(blocked.detail, '1 blocking action needs you.');
+
+  const waiting = missionLiveStatus({ ...base, openQuestions: [{}, {}], actionRows: question });
+  assert.deepEqual([waiting.kind, waiting.detail], ['waiting', '2 open questions need an answer.']);
+
+  const running = missionLiveStatus({ ...base, openQuestions: [], actionRows: optional });
+  assert.deepEqual([running.kind, running.detail], ['in_progress', '1 objective is running.']);
+  assert.equal(
+    missionLiveStatus({
+      ...base,
+      objectives: stateOf('executing', 'pending_delivery'),
+      openQuestions: [],
+      actionRows: []
+    }).detail,
+    '2 objectives are running.'
+  );
+});
+
+test('live status: closing the last blocker, answering the last question, and finishing each change it', () => {
+  const objectives = stateOf('complete', 'executing');
+  const at = (openQuestions: unknown[], actionRows: Array<{ kind: 'action'; blocking: boolean }>) =>
+    missionLiveStatus({ statusType: 'execute', objectives, openQuestions, actionRows }).kind;
+  assert.equal(at([{}], [{ kind: 'action', blocking: true }]), 'blocked');
+  assert.equal(at([{}], []), 'waiting');
+  assert.equal(at([], []), 'in_progress');
+
+  const done = stateOf('complete', 'complete');
+  assert.equal(
+    missionLiveStatus({
+      statusType: 'complete',
+      objectives: done,
+      openQuestions: [],
+      actionRows: []
+    }).kind,
+    'complete'
+  );
+  assert.equal(
+    missionLiveStatus({
+      statusType: 'execute',
+      objectives: stateOf('launching'),
+      openQuestions: [],
+      actionRows: []
+    }).kind,
+    'launching'
+  );
+  assert.equal(
+    missionLiveStatus({
+      statusType: 'next',
+      objectives: stateOf('draft'),
+      openQuestions: [],
+      actionRows: []
+    }).kind,
+    'idle'
+  );
+});
+
+test('live status ignores the agent-written prose entirely', () => {
+  // The inputs hold no summary field: a status cannot be stale because prose is.
+  const keys = Object.keys(
+    missionLiveStatus({ statusType: 'execute', objectives: [], openQuestions: [], actionRows: [] })
+  );
+  assert.deepEqual(keys.sort(), [
+    'blockingActions',
+    'detail',
+    'kind',
+    'label',
+    'openQuestions',
+    'running'
+  ]);
+});
+
+test('fixture: duplicate actions group under the newest record, blocking if any is, one id per record', () => {
+  const rows = missionSummaryActions({ evidence, openQuestions, objectives, baseline });
+  const flag = rows.find(row => /overlord_flag/i.test(row.title))!;
+  assert.equal(flag.group.count, 2);
+  assert.deepEqual(flag.group.itemIds, ['item-action-c4-1', 'item-action-x3-0']);
+  assert.deepEqual(
+    flag.group.sources.map(source => source.objectiveKey),
+    ['coo:900.cccc', null],
+    'a deleted objective has no key'
+  );
+  assert.match(summaryGroupResolveNote(flag.group) ?? '', /closes all 2 matching records/);
+  const single = rows.find(row => /migration/i.test(row.title))!;
+  assert.equal(single.group.count, 1);
+  assert.equal(summaryGroupResolveNote(single.group), null);
+
+  // An older blocking duplicate keeps the group blocking even when the newest is not.
+  const ev = structuredClone(evidence);
+  const older = ev.actions.find(action => action.id === 'item-action-x3-0')!;
+  older.blocking = true;
+  const grouped = missionSummaryActions({ evidence: ev, openQuestions: [], objectives, baseline });
+  assert.equal(grouped.find(row => /overlord_flag/i.test(row.title))!.blocking, true);
+});
+
+test('risks and suggestions carry the records they stand for from the server grouping', () => {
+  const grouped = structuredClone(summary);
+  grouped.risks[0]!.duplicates = [
+    {
+      id: 'dup-1',
+      deliveryId: 'd1',
+      objectiveId: 'obj-a',
+      deliveredAt: '2026-10-20T00:00:00.000Z'
+    },
+    { id: 'dup-2', deliveryId: 'd2', objectiveId: 'obj-a', deliveredAt: '2026-10-19T00:00:00.000Z' }
+  ];
+  const [risk] = missionSummaryRisks({ summary: grouped, objectives, baseline });
+  assert.equal(risk!.group.count, 3);
+  assert.deepEqual(risk!.group.itemIds, [risk!.itemId, 'dup-1', 'dup-2']);
+  assert.equal(risk!.group.sources.length, 2, 'two reports from one objective are one source');
+
+  const plain = missionSummarySuggestions({ summary, objectives, baseline });
+  assert.ok(plain.every(row => row.group.count === 1 && row.group.itemIds[0] === row.id));
 });

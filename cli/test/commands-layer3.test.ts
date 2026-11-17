@@ -1,3 +1,4 @@
+import { captureGapInstruction } from '@overlord/contract';
 import assert from 'node:assert/strict';
 import { mkdtempSync, readdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
@@ -423,7 +424,8 @@ test('changes returns the local objective read without inspecting the worktree',
     truncated: false,
     sync: { synced: 0, pending: 0, failed: false },
     capture: { bindingState: 'unknown', callbackObserved: false, healthCodes: [] },
-    warnings: ['unknown_binding']
+    warnings: ['unknown_binding'],
+    instruction: captureGapInstruction('cli', ['unknown_binding'])
   });
 });
 

@@ -10,7 +10,7 @@ claude --append-system-prompt-file <context-file> --model <model> --effort <leve
 
 Rules:
 
-- The context file should contain the Overlord mission prompt, objective metadata, history, artifacts, attachments, and shared context assembled by the protocol layer.
+- The context file holds only what is needed to attach: mission and objective ids, the execution directive and the attach command. The attach response carries the objective, history, artifacts, attachments, shared context and all working rules.
 - The visible user prompt should point Claude at the context file, name the active mission ID, and explicitly direct execution without waiting for confirmation.
 - `--model` is passed only when the execution target has a model configured.
 - `--effort` is passed only when the installed Claude binary supports it and the execution target has an effort level configured.

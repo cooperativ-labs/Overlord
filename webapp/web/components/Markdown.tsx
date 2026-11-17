@@ -17,6 +17,7 @@ type InlineToken =
   | { kind: 'code'; value: string }
   | { kind: 'strong'; value: string }
   | { kind: 'em'; value: string }
+  | { kind: 'del'; value: string }
   | { kind: 'link'; value: string; href: string };
 
 // Ordered so the earliest match at each position wins (code before emphasis so
@@ -24,8 +25,10 @@ type InlineToken =
 const INLINE_PATTERNS: Array<{ kind: InlineToken['kind']; re: RegExp }> = [
   { kind: 'code', re: /`([^`]+)`/ },
   { kind: 'link', re: /\[([^\]]+)\]\(([^)\s]+)\)/ },
-  { kind: 'strong', re: /\*\*([^*]+)\*\*/ },
-  { kind: 'strong', re: /__([^_]+)__/ },
+  { kind: 'strong', re: /\*\*(\*[^*]+\*)\*\*/ },
+  { kind: 'strong', re: /\*\*(.+?)\*\*/ },
+  { kind: 'strong', re: /__(.+?)__/ },
+  { kind: 'del', re: /~~(.+?)~~/ },
   { kind: 'em', re: /\*([^*]+)\*/ },
   { kind: 'em', re: /_([^_]+)_/ }
 ];
@@ -70,14 +73,20 @@ function renderInline(text: string, keyPrefix: string): ReactNode[] {
       case 'strong':
         return (
           <strong key={key} className="font-semibold">
-            {token.value}
+            {renderInline(token.value, key)}
           </strong>
         );
       case 'em':
         return (
           <em key={key} className="italic">
-            {token.value}
+            {renderInline(token.value, key)}
           </em>
+        );
+      case 'del':
+        return (
+          <del key={key} className="line-through opacity-70">
+            {renderInline(token.value, key)}
+          </del>
         );
       case 'code':
         return (
@@ -97,7 +106,7 @@ function renderInline(text: string, keyPrefix: string): ReactNode[] {
             rel="noreferrer"
             className="text-sky-600 underline underline-offset-2 dark:text-sky-400"
           >
-            {token.value}
+            {renderInline(token.value, key)}
           </a>
         );
       default:
@@ -117,11 +126,65 @@ function isSafeLinkHref(href: string): boolean {
   }
 }
 
+interface ListItemNode {
+  text: string;
+  children: ListNode[];
+}
+
+interface ListNode {
+  ordered: boolean;
+  start: number;
+  items: ListItemNode[];
+}
+
+const LIST_ITEM_RE = /^(\s*)([-*+]|\d+[.)])\s+(.*)$/;
+
+function listIndent(ws: string): number {
+  return ws.replace(/\t/g, '    ').length;
+}
+
+/**
+ * Parses a (possibly nested) list starting at `lines[start]`. Deeper-indented
+ * items become children of the preceding item; a marker-type change at the same
+ * indent ends the list. Blank lines between items do not restart numbering.
+ */
+function parseList(lines: string[], start: number): { node: ListNode; next: number } {
+  const first = LIST_ITEM_RE.exec(lines[start])!;
+  const baseIndent = listIndent(first[1]);
+  const ordered = /\d/.test(first[2]);
+  const node: ListNode = {
+    ordered,
+    start: ordered ? Number.parseInt(first[2], 10) : 1,
+    items: []
+  };
+  let i = start;
+
+  while (i < lines.length) {
+    let j = i;
+    while (j < lines.length && lines[j].trim() === '') j += 1;
+    if (j >= lines.length) break;
+    const m = LIST_ITEM_RE.exec(lines[j]);
+    if (!m) break;
+    const indent = listIndent(m[1]);
+    if (indent < baseIndent) break;
+    if (indent > baseIndent && node.items.length > 0) {
+      const child = parseList(lines, j);
+      node.items[node.items.length - 1].children.push(child.node);
+      i = child.next;
+      continue;
+    }
+    if (/\d/.test(m[2]) !== ordered) break;
+    node.items.push({ text: m[3], children: [] });
+    i = j + 1;
+  }
+
+  return { node, next: i };
+}
+
 type Block =
   | { type: 'heading'; level: number; text: string }
   | { type: 'code'; text: string }
-  | { type: 'ul'; items: string[] }
-  | { type: 'ol'; items: string[]; start: number }
+  | { type: 'list'; list: ListNode }
   | { type: 'quote'; text: string }
   | { type: 'hr' }
   | { type: 'table'; headers: string[]; rows: string[][] }
@@ -181,37 +244,11 @@ function parseBlocks(source: string): Block[] {
       continue;
     }
 
-    // Unordered list.
-    if (/^\s*[-*+]\s+/.test(line)) {
-      const items: string[] = [];
-      while (i < lines.length && /^\s*[-*+]\s+/.test(lines[i])) {
-        items.push(lines[i].replace(/^\s*[-*+]\s+/, ''));
-        i += 1;
-      }
-      blocks.push({ type: 'ul', items });
-      continue;
-    }
-
-    // Ordered list.
-    if (/^\s*\d+[.)]\s+/.test(line)) {
-      const start = Number.parseInt(/^\s*(\d+)/.exec(line)![1], 10);
-      const items: string[] = [];
-      while (i < lines.length) {
-        if (/^\s*\d+[.)]\s+/.test(lines[i])) {
-          items.push(lines[i].replace(/^\s*\d+[.)]\s+/, ''));
-          i += 1;
-          continue;
-        }
-        // A blank line between items ("loose" list) must not restart numbering.
-        let j = i;
-        while (j < lines.length && lines[j].trim() === '') j += 1;
-        if (j > i && j < lines.length && /^\s*\d+[.)]\s+/.test(lines[j])) {
-          i = j;
-          continue;
-        }
-        break;
-      }
-      blocks.push({ type: 'ol', items, start });
+    // Ordered / unordered list (nested).
+    if (LIST_ITEM_RE.test(line)) {
+      const { node, next } = parseList(lines, i);
+      blocks.push({ type: 'list', list: node });
+      i = next;
       continue;
     }
 
@@ -270,6 +307,24 @@ function parseBlocks(source: string): Block[] {
   return blocks;
 }
 
+function renderList(list: ListNode, key: string): ReactNode {
+  const Tag = list.ordered ? 'ol' : 'ul';
+  return (
+    <Tag
+      key={key}
+      start={list.ordered ? list.start : undefined}
+      className={`ml-4 space-y-0.5 wrap-anywhere ${list.ordered ? 'list-decimal' : 'list-disc'}`}
+    >
+      {list.items.map((item, j) => (
+        <li key={`${key}-${j}`}>
+          {renderInline(item.text, `${key}-${j}`)}
+          {item.children.map((child, c) => renderList(child, `${key}-${j}-l${c}`))}
+        </li>
+      ))}
+    </Tag>
+  );
+}
+
 /**
  * Renders a markdown string as styled React elements. Intended for the
  * expanded "detail" state of an activity-feed event, where formatting should
@@ -302,26 +357,8 @@ export function Markdown({ text }: { text: string }) {
                 <code>{block.text}</code>
               </pre>
             );
-          case 'ul':
-            return (
-              <ul key={key} className="ml-4 list-disc space-y-0.5 wrap-anywhere">
-                {block.items.map((item, j) => (
-                  <li key={`${key}-${j}`}>{renderInline(item, `${key}-${j}`)}</li>
-                ))}
-              </ul>
-            );
-          case 'ol':
-            return (
-              <ol
-                key={key}
-                start={block.start}
-                className="ml-4 list-decimal space-y-0.5 wrap-anywhere"
-              >
-                {block.items.map((item, j) => (
-                  <li key={`${key}-${j}`}>{renderInline(item, `${key}-${j}`)}</li>
-                ))}
-              </ol>
-            );
+          case 'list':
+            return renderList(block.list, key);
           case 'quote':
             return (
               <blockquote

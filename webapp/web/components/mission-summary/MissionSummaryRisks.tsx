@@ -8,7 +8,7 @@ import {
   ResolveItemForm,
   useResolveDisclosure
 } from './MissionSummaryItemControls.tsx';
-import { ObjectiveKeyLink, SummaryBlockHeading } from './MissionSummaryParts.tsx';
+import { GroupSources, ObjectiveKeyLink, SummaryBlockHeading } from './MissionSummaryParts.tsx';
 
 function RiskRow({ row, missionId }: { row: SummaryRiskRow; missionId: string }) {
   const disclosure = useResolveDisclosure();
@@ -28,9 +28,17 @@ function RiskRow({ row, missionId }: { row: SummaryRiskRow; missionId: string })
       >
         !
       </span>
-      <span className="min-w-0 text-(--color-ink) wrap-anywhere">{row.text}</span>
+      <span className="grid min-w-0 gap-0.5">
+        <span className="min-w-0 text-(--color-ink) wrap-anywhere">{row.text}</span>
+        <GroupSources group={row.group} noun="risk" />
+      </span>
       <span className="flex items-center gap-2">
-        <ResolveItemButton disclosure={disclosure} noun="risk" itemText={row.text} />
+        <ResolveItemButton
+          disclosure={disclosure}
+          noun="risk"
+          itemText={row.text}
+          count={row.group.count}
+        />
         <ObjectiveKeyLink
           objectiveKey={row.objectiveKey}
           chevron
@@ -43,7 +51,7 @@ function RiskRow({ row, missionId }: { row: SummaryRiskRow; missionId: string })
         <div className="col-span-2 col-start-2">
           <ResolveItemForm
             disclosure={disclosure}
-            itemId={row.itemId}
+            itemIds={row.group.itemIds}
             missionId={missionId}
             noun="risk"
             itemText={row.text}

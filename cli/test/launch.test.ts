@@ -20,7 +20,6 @@ import {
 
 function runtime({
   title = 'Prompt Capture',
-  attachments = [],
   objectives = [
     {
       id: 'objective-uuid',
@@ -33,7 +32,6 @@ function runtime({
   ]
 }: {
   title?: string;
-  attachments?: Array<Record<string, unknown>>;
   objectives?: Array<Record<string, unknown>>;
 } = {}): CliRuntime {
   return {
@@ -41,16 +39,9 @@ function runtime({
       baseUrl: 'http://127.0.0.1:4310',
       health: async () => ({ ok: true }),
       get: async <T>(requestPath: string): Promise<T> => {
-        if (requestPath.startsWith('/api/missions/') && requestPath.endsWith('/events')) {
-          return [] as T;
-        }
-        if (requestPath.startsWith('/api/missions/') && requestPath.endsWith('/artifacts')) {
-          return [] as T;
-        }
-        if (requestPath.startsWith('/api/objectives/') && requestPath.endsWith('/attachments')) {
-          return attachments as T;
-        }
-        if (requestPath.startsWith('/api/missions/')) {
+        // Only the mission detail is read: events, artifacts and attachments
+        // reach the agent through attach, so any other GET fails the test.
+        if (/^\/api\/missions\/[^/]+$/.test(requestPath)) {
           return {
             id: 'mission-uuid',
             displayId: 'coo:11',
@@ -74,16 +65,23 @@ function runtime({
   };
 }
 
-test('launch context gives an authenticated download command for every attachment', async () => {
-  const workingDirectory = mkdtempSync(path.join('/tmp', 'ovld-launch-attachment-'));
+test('launch prompt holds only what is needed to attach', async () => {
+  const workingDirectory = mkdtempSync(path.join('/tmp', 'ovld-launch-minimal-'));
   const plan = await buildLaunchPlan({
     runtime: runtime({
-      attachments: [
+      objectives: [
         {
-          id: 'attachment-123',
-          filename: 'spec.pdf',
-          contentType: 'application/pdf',
-          storageKey: 'private/spec.pdf'
+          id: 'done-uuid',
+          state: 'complete',
+          instructionText: 'Earlier work',
+          displayId: 'coo:11.a1b2'
+        },
+        {
+          id: 'objective-uuid',
+          state: 'executing',
+          instructionText: 'Ship it',
+          displayId: 'coo:11.k7xm',
+          title: 'Ship it'
         }
       ]
     }),
@@ -91,15 +89,26 @@ test('launch context gives an authenticated download command for every attachmen
   });
 
   const context = readFileSync(plan.contextFile, 'utf8');
-  assert.match(
+  assert.equal(
     context,
-    /http:\/\/127\.0\.0\.1:4310\/api\/storage\/attachments\/private%2Fspec\.pdf/
+    [
+      '# Overlord Mission: coo:11: Prompt Capture',
+      '',
+      'Mission ID: coo:11',
+      'Objective ID: coo:11.k7xm',
+      '',
+      '## Instructions',
+      'Do not load the Overlord skill. The attach response carries all instructions for this session.',
+      'This is an execution session. After attaching, immediately execute the current objective. Do not wait for more instructions or ask for confirmation; only stop to ask a question when blocked.',
+      '',
+      'Run `ovld protocol attach --mission-id coo:11 --objective-id coo:11.k7xm` before making changes.',
+      ''
+    ].join('\n')
   );
-  assert.match(
-    context,
-    /attachment-download-url --objective-id 'coo:11\.k7xm' --attachment-id 'attachment-123' --output '\.\/\.overlord\/tmp\/attachment-attachment-123-spec\.pdf'/
-  );
-  assert.match(context, /URLs require Overlord authentication/);
+  for (const removed of ['## Objectives', '## Attachments', '## Recent Activity', '## Artifacts']) {
+    assert.ok(!context.includes(removed), removed);
+  }
+  assert.ok(!context.includes('Earlier work'));
 });
 
 test('shell-composed launches use the configured interactive login shell', () => {
@@ -133,6 +142,12 @@ test('buildLaunchPlan exports mission context for terminal prompt hooks', async 
   assert.equal(plan.env.OVERLORD_OBJECTIVE_ID, 'coo:11.k7xm');
   assert.match(plan.prompt, /immediately execute the current objective/i);
   assert.match(plan.prompt, /Do not wait for more instructions/i);
+  assert.ok(
+    plan.prompt.includes(
+      'Do not load the Overlord skill. The attach response carries all instructions for this session.'
+    )
+  );
+  assert.ok(!plan.prompt.includes('Use the Overlord skill.'));
 
   const script = plan.execution.args[1] ?? '';
   const launchScriptPath = path.join(
@@ -153,14 +168,14 @@ test('buildLaunchPlan exports mission context for terminal prompt hooks', async 
   assert.ok(launchScript.includes(`'codex'`));
 });
 
-test('buildLaunchPlan omits blank objective slots from the prompt objective list', async () => {
+test('buildLaunchPlan never pins a blank objective slot', async () => {
   const workingDirectory = mkdtempSync(path.join('/tmp', 'ovld-launch-blank-'));
   const plan = await buildLaunchPlan({
     runtime: runtime({
       objectives: [
-        { id: 'objective-uuid', state: 'executing', instructionText: 'Ship it' },
-        { id: 'blank-uuid', state: 'draft', instructionText: '   ' },
-        { id: 'null-uuid', state: 'draft', instructionText: null }
+        { id: 'blank-uuid', state: 'draft', instructionText: '   ', displayId: 'coo:11.zz00' },
+        { id: 'null-uuid', state: 'draft', instructionText: null, displayId: 'coo:11.zz01' },
+        { id: 'next-uuid', state: 'draft', instructionText: 'Ship it', displayId: 'coo:11.k7xm' }
       ]
     }),
     options: {
@@ -171,10 +186,11 @@ test('buildLaunchPlan omits blank objective slots from the prompt objective list
     }
   });
 
-  assert.match(plan.prompt, /- objective \[executing\] Ship it/);
-  // Blank slots exist only so the user can type a next objective; the agent
-  // must not see them as objectives awaiting approval.
-  assert.ok(!plan.prompt.includes('[draft]'));
+  // Blank slots exist only so the user can type a next objective; the launch
+  // must attach to the next real objective, not to an empty slot.
+  assert.match(plan.prompt, /--objective-id coo:11\.k7xm/);
+  assert.ok(!plan.prompt.includes('zz00'));
+  assert.ok(!plan.prompt.includes('zz01'));
 });
 
 test('buildLaunchPlan substitutes and exports launch env vars before pre-launch commands and the agent', async () => {

@@ -22,6 +22,7 @@ import {
   suppressNextClick
 } from './objective-row-dnd.ts';
 import { ObjectiveRow, objectiveRowTitle, objectiveShortKey } from './ObjectiveRow.tsx';
+import { OBJECTIVE_ROW_LINE_CLOSE_DELAY_MS } from './ObjectiveRowHoverLine.tsx';
 
 /**
  * Mission panel redesign §6.3 / §7: compact objective rows, the unified state-aware menu, the
@@ -596,56 +597,56 @@ describe('objective row drag helpers', () => {
   });
 });
 
+function resource(key: string, isPrimary: boolean): ProjectResourceDto {
+  return {
+    id: `res-${key}`,
+    workspaceId: 'ws-1',
+    projectId: 'project-1',
+    executionTargetId: null,
+    resourceKey: key,
+    type: 'local_directory',
+    label: key,
+    path: `/tmp/${key}`,
+    isPrimary,
+    accessMode: 'read_write',
+    status: 'active',
+    observedAt: null,
+    observationSource: null,
+    createdAt: '2026-11-16T00:00:00.000Z',
+    updatedAt: '2026-11-16T00:00:00.000Z',
+    revision: 1,
+    sources: []
+  } as ProjectResourceDto;
+}
+
+function seededClient(resources: ProjectResourceDto[]) {
+  const qc = client();
+  qc.setQueryData(keys.projectResources('project-1'), resources);
+  qc.setQueryData(keys.launchPreference('project-1'), null);
+  qc.setQueryData(keys.project('project-1'), { id: 'project-1', workspaceId: 'ws-1' });
+  qc.setQueryData(keys.projectExecutionTarget('project-1'), {
+    selectedExecutionTargetId: null,
+    eligibleTargets: []
+  });
+  qc.setQueryData(keys.agentCatalog('ws-1'), {
+    agents: [
+      {
+        key: 'claude',
+        label: 'Claude',
+        availableByDefault: true,
+        models: [{ id: 'opus', displayName: 'Opus' }],
+        defaultModel: 'opus',
+        defaultReasoningEffort: null,
+        reasoningLabel: 'Thinking'
+      }
+    ],
+    defaultAgent: 'claude',
+    defaultModel: 'opus'
+  });
+  return qc;
+}
+
 describe('ObjectiveRow menu Run and Resource (coo:1289)', () => {
-  function resource(key: string, isPrimary: boolean): ProjectResourceDto {
-    return {
-      id: `res-${key}`,
-      workspaceId: 'ws-1',
-      projectId: 'project-1',
-      executionTargetId: null,
-      resourceKey: key,
-      type: 'local_directory',
-      label: key,
-      path: `/tmp/${key}`,
-      isPrimary,
-      accessMode: 'read_write',
-      status: 'active',
-      observedAt: null,
-      observationSource: null,
-      createdAt: '2026-11-16T00:00:00.000Z',
-      updatedAt: '2026-11-16T00:00:00.000Z',
-      revision: 1,
-      sources: []
-    } as ProjectResourceDto;
-  }
-
-  function seededClient(resources: ProjectResourceDto[]) {
-    const qc = client();
-    qc.setQueryData(keys.projectResources('project-1'), resources);
-    qc.setQueryData(keys.launchPreference('project-1'), null);
-    qc.setQueryData(keys.project('project-1'), { id: 'project-1', workspaceId: 'ws-1' });
-    qc.setQueryData(keys.projectExecutionTarget('project-1'), {
-      selectedExecutionTargetId: null,
-      eligibleTargets: []
-    });
-    qc.setQueryData(keys.agentCatalog('ws-1'), {
-      agents: [
-        {
-          key: 'claude',
-          label: 'Claude',
-          availableByDefault: true,
-          models: [{ id: 'opus', displayName: 'Opus' }],
-          defaultModel: 'opus',
-          defaultReasoningEffort: null,
-          reasoningLabel: 'Thinking'
-        }
-      ],
-      defaultAgent: 'claude',
-      defaultModel: 'opus'
-    });
-    return qc;
-  }
-
   function renderSeeded(
     o: ObjectiveDto,
     options: { resources?: ProjectResourceDto[]; siblings?: ObjectiveDto[] } = {}
@@ -772,5 +773,304 @@ describe('ObjectiveRow menu Run and Resource (coo:1289)', () => {
       assert.ok(patch, 'patch sent');
       assert.deepEqual(patch.body, { resourceKey: 'docs' });
     });
+  });
+});
+
+describe('ObjectiveRow hover line (coo:1289.94nr)', () => {
+  const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+  /** Longer than the line's close delay. */
+  const AFTER_CLOSE_MS = OBJECTIVE_ROW_LINE_CLOSE_DELAY_MS + 60;
+  const originalMatchMedia = window.matchMedia;
+
+  afterEach(() => {
+    window.matchMedia = originalMatchMedia;
+  });
+
+  function renderLineRow(
+    o: ObjectiveDto,
+    options: {
+      resources?: ProjectResourceDto[];
+      siblings?: ObjectiveDto[];
+      listDragging?: boolean;
+    } = {}
+  ) {
+    const qc = seededClient(
+      options.resources ?? [resource('primary', true), resource('docs', false)]
+    );
+    const opened: Opened[] = [];
+    const listEvents: string[] = [];
+    const utils = render(
+      wrap(
+        qc,
+        <ul
+          onClick={() => listEvents.push('click')}
+          onPointerDown={() => listEvents.push('pointerdown')}
+        >
+          <ObjectiveRow
+            objective={o}
+            mission={mission([o, ...(options.siblings ?? [])])}
+            listDragging={options.listDragging}
+            onOpen={objective => opened.push({ id: objective.id })}
+          />
+        </ul>
+      )
+    );
+    return {
+      ...utils,
+      opened,
+      listEvents,
+      row: utils.container.querySelector('li') as HTMLElement
+    };
+  }
+
+  function lineOf(row: HTMLElement): HTMLElement | null {
+    return row.querySelector('[data-objective-row-line]');
+  }
+
+  /** The first row's trailing controls (everything after the row button). */
+  function firstRowControls(row: HTMLElement): HTMLElement {
+    return row.querySelector(':scope > button + div') as HTMLElement;
+  }
+
+  async function hover(row: HTMLElement) {
+    await act(async () => {
+      fireEvent.pointerEnter(row, { pointerType: 'mouse' });
+    });
+    return waitFor(() => {
+      const line = lineOf(row);
+      assert.equal(line?.getAttribute('data-objective-row-line'), 'open', 'line open');
+      return line as HTMLElement;
+    });
+  }
+
+  async function leave(row: HTMLElement) {
+    await act(async () => {
+      fireEvent.pointerLeave(row, { pointerType: 'mouse' });
+    });
+    // The close timer starts in an effect that act flushes on exit; wait it out afterwards.
+    await act(async () => {
+      await sleep(AFTER_CLOSE_MS);
+    });
+  }
+
+  function isOpen(row: HTMLElement) {
+    return lineOf(row)?.getAttribute('data-objective-row-line') === 'open';
+  }
+
+  function lineButton(line: HTMLElement, text: string): HTMLElement {
+    const found = [...line.querySelectorAll('button')].find(el => el.textContent?.trim() === text);
+    assert.ok(found, `line button ${text}`);
+    return found as HTMLElement;
+  }
+
+  it('opens on hover and keyboard focus for draft and submitted rows only', async () => {
+    for (const state of ['draft', 'submitted'] as const) {
+      const { row, unmount } = renderLineRow(objective({ id: `h-${state}`, state }));
+      assert.equal(lineOf(row), null, 'controls are not mounted before the first open');
+      await hover(row);
+      unmount();
+      cleanup();
+    }
+
+    const focused = renderLineRow(objective({ id: 'h-focus' }));
+    await act(async () => {
+      (focused.row.querySelector('button') as HTMLButtonElement).focus();
+    });
+    await waitFor(() => assert.ok(isOpen(focused.row), 'keyboard focus opens the line'));
+    focused.unmount();
+    cleanup();
+
+    for (const state of ['launching', 'executing', 'complete'] as const) {
+      const { row, unmount } = renderLineRow(objective({ id: `h-${state}`, state }));
+      await act(async () => {
+        fireEvent.pointerEnter(row, { pointerType: 'mouse' });
+        await sleep(30);
+      });
+      assert.equal(lineOf(row), null, `${state} rows have no line`);
+      unmount();
+      cleanup();
+    }
+  });
+
+  it('moves the queue, identifier and agent controls into the line while open', async () => {
+    const { row } = renderLineRow(objective({ id: 'mv', assignedAgent: 'claude', model: 'opus' }));
+    const controls = firstRowControls(row);
+    assert.ok(controls.querySelector('[aria-label="Copy coo:1.mv"]'), 'id on the first row');
+    assert.ok(controls.querySelector('[aria-label^="Change agent"]'), 'agent icon on first row');
+
+    const line = await hover(row);
+    assert.equal(row.querySelectorAll('[aria-label="Copy coo:1.mv"]').length, 1, 'one id button');
+    assert.ok(line.querySelector('[aria-label="Copy coo:1.mv"]'), 'id in the line');
+    assert.ok(line.querySelector('[aria-label="Add to Run Queue"]'), 'queue trigger in the line');
+    assert.equal(controls.querySelectorAll('button').length, 1, 'first row keeps only the menu');
+    assert.equal(controls.querySelector('[aria-label^="Change agent"]'), null);
+
+    await leave(row);
+    assert.ok(!isOpen(row), 'line closes after leaving');
+    assert.ok(lineOf(row)?.hasAttribute('inert'), 'closed line is inert');
+    assert.ok(controls.querySelector('[aria-label="Copy coo:1.mv"]'), 'id back on the first row');
+    assert.ok(controls.querySelector('[aria-label^="Change agent"]'), 'agent icon back');
+  });
+
+  it('stays open while the resource picker is open and closes after it', async () => {
+    const { row } = renderLineRow(objective({ id: 'hold', assignedAgent: 'claude' }));
+    const line = await hover(row);
+    await act(async () => {
+      fireEvent.click(line.querySelector('[aria-label="Choose resource: primary"]') as HTMLElement);
+    });
+    await waitFor(() => assert.ok(document.querySelector('[role="menu"]'), 'picker open'));
+    await leave(row);
+    assert.ok(isOpen(row), 'held open by the picker');
+
+    await act(async () => {
+      fireEvent.keyDown(document.querySelector('[role="menu"]') as HTMLElement, { key: 'Escape' });
+    });
+    await waitFor(() => assert.equal(document.querySelector('[role="menu"]'), null));
+    await act(async () => {
+      await sleep(AFTER_CLOSE_MS);
+    });
+    // Escape is a keyboard close: focus returns to the trigger and keyboard focus holds the line.
+    assert.ok(isOpen(row), 'keyboard focus on the trigger keeps it open');
+    await act(async () => {
+      (document.activeElement as HTMLElement | null)?.blur();
+    });
+    await act(async () => {
+      await sleep(AFTER_CLOSE_MS);
+    });
+    assert.ok(!isOpen(row), 'closes once the picker is closed and focus has left');
+  });
+
+  it('never opens on devices without hover or while a row is dragged', async () => {
+    window.matchMedia = ((query: string) => ({
+      matches: query === '(hover: none)',
+      media: query,
+      addEventListener: () => {},
+      removeEventListener: () => {}
+    })) as unknown as typeof window.matchMedia;
+    const touch = renderLineRow(objective({ id: 'touch' }));
+    await act(async () => {
+      fireEvent.pointerEnter(touch.row, { pointerType: 'mouse' });
+      await sleep(30);
+    });
+    assert.equal(lineOf(touch.row), null, 'no line under (hover: none)');
+    touch.unmount();
+    cleanup();
+    window.matchMedia = originalMatchMedia;
+
+    const dragging = renderLineRow(objective({ id: 'drag' }), { listDragging: true });
+    await act(async () => {
+      fireEvent.pointerEnter(dragging.row, { pointerType: 'mouse' });
+      await sleep(30);
+    });
+    assert.equal(lineOf(dragging.row), null, 'no line while dragging');
+  });
+
+  it('Run launches with the selection the agent chooser shows', async () => {
+    respond = req =>
+      req.method === 'POST' && req.path === '/api/objectives/run1/launch'
+        ? { status: 200, body: { id: 'req-1', objectiveId: 'run1', status: 'queued' } }
+        : null;
+    const { row, opened } = renderLineRow(
+      objective({ id: 'run1', assignedAgent: 'claude', model: 'opus' })
+    );
+    const line = await hover(row);
+    const label = line.querySelector('[data-agent-label]');
+    assert.equal(label?.textContent, 'Claude · Opus', 'full agent label');
+    await act(async () => {
+      fireEvent.click(lineButton(line, 'Run'));
+    });
+    await waitFor(() => {
+      const launch = requests.find(r => r.path === '/api/objectives/run1/launch');
+      assert.ok(launch, 'launch sent');
+      assert.deepEqual(launch.body, { agent: 'claude', model: 'opus', reasoningEffort: null });
+    });
+    assert.deepEqual(opened, [], 'Run does not open the detail');
+  });
+
+  it('Run with an active sibling asks first instead of queueing silently', async () => {
+    const { row } = renderLineRow(objective({ id: 'sib', assignedAgent: 'claude' }), {
+      siblings: [objective({ id: 'busy', state: 'executing' })]
+    });
+    const line = await hover(row);
+    await act(async () => {
+      fireEvent.click(lineButton(line, 'Run'));
+    });
+    await waitFor(() =>
+      assert.match(document.body.textContent ?? '', /An agent appears to be working/)
+    );
+    assert.ok(!requests.some(r => r.path.endsWith('/run-queues/entries')), 'nothing enqueued');
+    assert.ok(!requests.some(r => r.path.endsWith('/launch')), 'nothing launched');
+    await leave(row);
+    assert.ok(isOpen(row), 'held open by the confirmation');
+  });
+
+  it('shows a launch failure in the row error slot and stays open', async () => {
+    respond = req =>
+      req.method === 'POST' && req.path === '/api/objectives/fail/launch'
+        ? { status: 500, body: { error: 'Runner offline' } }
+        : null;
+    const { row } = renderLineRow(objective({ id: 'fail', assignedAgent: 'claude' }));
+    const line = await hover(row);
+    await act(async () => {
+      fireEvent.click(lineButton(line, 'Run'));
+    });
+    await waitFor(() => assert.ok(row.querySelector('[role="alert"]'), 'row error shown'));
+    await leave(row);
+    assert.ok(isOpen(row), 'a failed launch keeps the line open');
+  });
+
+  it('Resource change sends the PATCH', async () => {
+    respond = req =>
+      req.method === 'PATCH' && req.path === '/api/objectives/res'
+        ? { status: 200, body: objective({ id: 'res', resourceKey: 'docs' }) }
+        : null;
+    const { row } = renderLineRow(objective({ id: 'res', assignedAgent: 'claude' }));
+    const line = await hover(row);
+    await act(async () => {
+      fireEvent.click(line.querySelector('[aria-label="Choose resource: primary"]') as HTMLElement);
+    });
+    const docs = await waitFor(() => {
+      const option = [...document.querySelectorAll('[role="menuitem"]')].find(
+        el => el.textContent?.trim() === 'docs'
+      );
+      assert.ok(option, 'docs option');
+      return option as HTMLElement;
+    });
+    await act(async () => {
+      fireEvent.click(docs);
+    });
+    await waitFor(() => {
+      const patch = requests.find(r => r.method === 'PATCH' && r.path === '/api/objectives/res');
+      assert.ok(patch, 'patch sent');
+      assert.deepEqual(patch.body, { resourceKey: 'docs' });
+    });
+  });
+
+  it('line controls do not open the detail or reach the list', async () => {
+    const { row, opened, listEvents } = renderLineRow(objective({ id: 'iso' }));
+    const line = await hover(row);
+    listEvents.length = 0;
+    for (const control of [
+      line.querySelector('[aria-label="Choose resource: primary"]') as HTMLElement,
+      line.querySelector('[aria-label="Copy coo:1.iso"]') as HTMLElement,
+      line
+    ]) {
+      await act(async () => {
+        fireEvent.pointerDown(control);
+        fireEvent.click(control);
+      });
+    }
+    assert.deepEqual(opened, []);
+    assert.deepEqual(listEvents, [], 'pointerdown and click stop at the line');
+  });
+
+  it('shows the full agent label and collapses it below a 480px panel', async () => {
+    const { row } = renderLineRow(objective({ id: 'lbl', assignedAgent: 'claude', model: 'opus' }));
+    const line = await hover(row);
+    const label = line.querySelector('[data-agent-label]') as HTMLElement;
+    assert.equal(label.textContent, 'Claude · Opus');
+    assert.ok(!label.className.includes('truncate'), 'not truncated');
+    assert.ok(!/max-w-/.test(label.className), 'no width cap');
+    assert.ok(label.className.includes('@max-[480px]/objective-list:hidden'), 'icon only < 480px');
   });
 });

@@ -118,12 +118,9 @@ describe('protocol objective creation', () => {
 
     assert.equal(result.objective.objective, 'First prompt objective');
     assert.equal(result.objective.state, 'executing');
-    // The current objective is excluded from both arrays.
-    assert.equal(result.previousObjectives.length, 0);
-    assert.equal(result.futureObjectives.length, 1);
-    assert.equal(result.futureObjectives[0]?.state, 'draft');
-    assert.ok(!result.previousObjectives.some(o => o.id === result.objective.id));
-    assert.ok(!result.futureObjectives.some(o => o.id === result.objective.id));
+    assert.equal(result.objectives.length, 1);
+    assert.equal(result.objectives[0]?.state, 'draft');
+    assert.ok(!result.objectives.some(o => o.displayId === result.objective.displayId));
 
     await db.close();
   });
@@ -148,8 +145,7 @@ describe('protocol objective creation', () => {
     });
 
     assert.equal(attached.objective.state, 'executing');
-    assert.equal(attached.previousObjectives.length, 0);
-    assert.equal(attached.futureObjectives.length, 0);
+    assert.equal(attached.objectives.length, 0);
 
     // The empty next-up field is the mission panel's client-only composer, so
     // execution leaves no draft row behind for agents or counts to misread.
@@ -180,10 +176,9 @@ describe('protocol objective creation', () => {
 
     assert.equal(attached.objective.id, objectives[0]?.id);
     assert.equal(attached.objective.state, 'executing');
-    assert.equal(attached.previousObjectives.length, 0);
     assert.deepEqual(
-      attached.futureObjectives.map(objective => [objective.id, objective.state]),
-      [[objectives[1]?.id, 'draft']]
+      attached.objectives.map(objective => [objective.displayId, objective.state]),
+      [[objectives[1]?.displayId, 'draft']]
     );
 
     await db.close();
@@ -279,16 +274,15 @@ describe('protocol objective creation', () => {
     });
 
     assert.equal(attached.objective.id, objectives[1]?.id);
-    assert.deepEqual(attached.previousObjectives, []);
     assert.deepEqual(
-      attached.futureObjectives.map(objective => objective.objective),
+      attached.objectives.map(objective => objective.objective),
       ['Real queued follow-up']
     );
 
     await db.close();
   });
 
-  it('splits completed prior work into previousObjectives, excluding the current objective', async () => {
+  it('includes completed sibling work without repeating the current objective', async () => {
     const { db, ctx } = await createSeededServiceContext({ source: 'protocol' });
     const project = await createProject({ ctx, name: 'Attach Previous Split' });
     const { mission, objectives } = await createMissionWithObjectives({
@@ -310,23 +304,20 @@ describe('protocol objective creation', () => {
     assert.equal(attached.objective.id, objectives[1]?.id);
     assert.equal(attached.objective.state, 'executing');
 
-    // Prior completed objective lands in previousObjectives.
+    // Completed instructions remain available with their real state.
     assert.deepEqual(
-      attached.previousObjectives.map(objective => objective.id),
-      [objectives[0]?.id]
+      attached.objectives.map(objective => objective.displayId),
+      [objectives[0]?.displayId]
     );
-    // A fresh blank draft is created after the current objective, but blank
-    // slots are not planned work and never reach the agent.
-    assert.equal(attached.futureObjectives.length, 0);
+    assert.equal(attached.objectives.length, 1);
 
-    // The current objective never appears in either array.
-    assert.ok(!attached.previousObjectives.some(o => o.id === attached.objective.id));
-    assert.ok(!attached.futureObjectives.some(o => o.id === attached.objective.id));
+    // The current objective never appears in the sibling list.
+    assert.ok(!attached.objectives.some(o => o.displayId === attached.objective.displayId));
 
     await db.close();
   });
 
-  it('keeps history in structured fields instead of duplicating it in agent instructions', async () => {
+  it('omits general history and runner activity from execution context', async () => {
     const { db, ctx } = await createSeededServiceContext({ source: 'protocol' });
     const project = await createProject({ ctx, name: 'Attach History Filter' });
     const { mission } = await createMissionWithObjectives({
@@ -354,14 +345,8 @@ describe('protocol objective creation', () => {
       agentIdentifier: 'codex'
     });
 
-    assert.deepEqual(
-      attached.history.map(event => event.summary),
-      [
-        'Runner claimed execution request',
-        'Delegated execution for a runner',
-        'Agent made meaningful progress'
-      ]
-    );
+    assert.equal('history' in attached, false);
+    assert.deepEqual(attached.directives, []);
     assert.doesNotMatch(attached.agentInstructions, /Agent made meaningful progress/);
     assert.doesNotMatch(attached.agentInstructions, /Runner claimed execution request/);
     assert.doesNotMatch(attached.agentInstructions, /Delegated execution for a runner/);

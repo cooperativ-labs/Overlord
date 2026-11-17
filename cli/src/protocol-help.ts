@@ -9,6 +9,8 @@ export const SUPPORTED_PROTOCOL_SUBCOMMANDS = [
   'auth-status',
   'capture-change',
   'changes',
+  'mission-items',
+  'close-items',
   'connect',
   'create',
   'create-project',
@@ -107,7 +109,7 @@ Subcommands:
   discover-project       Resolve a project from the working directory or explicit id
   create-project         Create a project in one authorized workspace
   register-target        Register this machine as an execution target
-  attach                 Start a mission session and return full working context
+  attach                 Start a mission session and return compact execution context
   connect                Start a lightweight session without full context assembly
   load-context           Read mission context without creating a session
   list-deliveries        List normalized deliveries for one mission
@@ -132,6 +134,8 @@ Subcommands:
   capture-change         Local-only: append direct-path hook evidence to an objective ledger
   changes                Local-only: sync and read this checkout's evidence for one objective
                          (synced + pending paths, capture/sync warnings); never arbitrate peers
+  mission-items         Page full open-item detail (--limit 1..200 --offset 0); requires a session
+  close-items           Close verified items (--close-items-json or --close-items-file); requires a session
   objective-changes      Read the objective's synchronized evidence across sessions and devices
   read-context           Read shared persistent context for this mission
   write-context          Write shared persistent context for future sessions
@@ -248,6 +252,8 @@ attach:
     --session-channel-id <id>  Bind the channel prepared by the launcher
     --objective-id <id>         Pin attach to this objective (UUID or coo:756.k7xm)
     --external-session-id <id>  Native agent thread/session id for resume
+    --connection-method cli|mcp Tool vocabulary of agentInstructions (default cli).
+                                MCP servers send mcp to get tool names and fields.
   Notes:
     --capture-binding is transport metadata computed by the CLI, not a user override.
     The CLI records the session's capture binding: bound when OVERLORD_OBJECTIVE_ID
@@ -256,8 +262,12 @@ attach:
     Attach warns on stderr if its local binding cannot be saved. Check OVLD_HOME
     permissions and re-run attach in this checkout to restore native capture.
   Returns:
-    Full JSON including session.sessionKey, mission, history, artifacts, sharedState,
-    and agentInstructions with required workflow instructions and structured-field pointers.
+    attach-response-v4 JSON, agentInstructions first, then mission, current objective,
+    ordered sibling objectives (displayId, state, instructions) and current-objective
+    directives (newest 10 user follow-ups, decisions and discussion summaries).
+    Artifacts, attachments, sharedState, session.sessionKey and missionSummary remain.
+    Completed sibling instructions are capped at 600 characters; load-context retains
+    full instructions and history. Attach has no history or previous/future arrays.
     For a mission with a summary, also missionSummary: { contentRevision, headline,
     summary, author, openItems: [{ id, kind, objective, text, blocking? }], truncated },
     the baseline you rewrite at delivery (see deliver).
@@ -316,11 +326,14 @@ objective-changes:
     --objective-id <id>         Display id (coo:756.k7xm) or UUID with --mission-id
   Optional:
     --mission-id <id>           Required when --objective-id is a UUID
+    --connection-method cli|mcp Tool vocabulary of instruction (default cli)
   Returns:
     ObjectiveFileChangesDto { scope: "server_objective", items, total, limit, truncated,
-    capture }. items are compact rows (resourceKey, filePath, source declared_edit |
-    agent_declared | null for unknown, observedAt, hookHealth) ordered by resource then
-    path, capped at 200; total is the pre-cap count after the objective filter.
+    capture, instruction? }. items are compact rows (resourceKey, filePath, source
+    declared_edit | agent_declared | null for unknown, observedAt, hookHealth) ordered by
+    resource then path, capped at 200; total is the pre-cap count after the objective
+    filter. instruction (how to declare missed paths) is present only when a capture
+    warning needs action.
 
 launch-objective:
   Purpose:
@@ -866,7 +879,8 @@ deliver:
     and limitations by behavior or component. No per-file explanation exists. The CLI
     syncs objective-bound ledger evidence before update, changes, and deliver; tracking
     gaps and sync failure never fail delivery. Do not continue implementation after
-    delivery without explicit follow-up.
+    delivery without explicit follow-up; the response's instruction gives the
+    resume-follow-up command.
 
     Before delivering, read \`${primaryCommand} protocol changes --objective-id <id>\` once.
     Declare with --paths / --paths-file only paths you know you changed that native
@@ -915,7 +929,9 @@ changes:
     --session-key <key>         Must identify a local session of the objective
   Returns:
     LocalObjectiveChangesDto { scope: "local_objective_sessions", objectiveId, coverage,
-    items, total, limit, truncated, sync, capture, warnings }. items are
+    items, total, limit, truncated, sync, capture, warnings, instruction? }. instruction
+    says how to declare missed paths and is present only when a warning needs action.
+    items are
     { filePath, source declared_edit | agent_declared, observedAt, hookHealth,
     syncState synced | pending } sorted by path and capped at 200; total counts distinct
     local paths. coverage "unavailable" means no local session matched, not "no files
@@ -954,8 +970,9 @@ resume-follow-up:
     --model <identifier>
     --summary or --summary-file <path|->
     --external-session-id <id>
+    --connection-method cli|mcp Tool vocabulary of agentInstructions (default cli)
   Returns:
-    attach-response-v3 JSON with a new session key, including the missionSummary
+    attach-response-v4 JSON with a new session key, including the missionSummary
     baseline for a mission with a summary.
 
 hook-event:

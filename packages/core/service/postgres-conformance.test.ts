@@ -1096,6 +1096,33 @@ for (const adapter of adapters) {
         });
         assert.equal(reconciled.updated.length, 1);
 
+        const originalAction = await client.get<{ detail_json: string }>(
+          `SELECT detail_json FROM mission_items WHERE delivery_id = ? AND kind = 'human_action'`,
+          [second.id]
+        );
+        await client.run(
+          `UPDATE mission_items SET detail_json = ? WHERE delivery_id = ? AND kind = 'human_action'`,
+          [JSON.stringify({ blocking: true, command: 'apply', verify: 'inspect' }), second.id]
+        );
+        const prioritized = await listMissionItems(client, {
+          missionId: 'm-items',
+          order: 'blocking',
+          limit: 1
+        });
+        assert.equal(prioritized.items[0]?.kind, 'human_action');
+        assert.equal(prioritized.items[0]?.detail.command, 'apply');
+        assert.equal(prioritized.truncated, true);
+        const rest = await listMissionItems(client, {
+          missionId: 'm-items',
+          order: 'blocking',
+          offset: 1
+        });
+        assert.equal(prioritized.total, rest.items.length + 1);
+        assert.ok(rest.items.every(item => item.id !== prioritized.items[0]!.id));
+        await client.run(
+          `UPDATE mission_items SET detail_json = ? WHERE delivery_id = ? AND kind = 'human_action'`,
+          [originalAction!.detail_json, second.id]
+        );
         const open = await listMissionItems(client, { missionId: 'm-items' });
         assert.deepEqual(
           open.items.map(item => [item.deliveryId, item.kind, item.text]),

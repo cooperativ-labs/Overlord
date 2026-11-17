@@ -7,10 +7,18 @@ import {
   persistDeliveryPresentation,
   readDeliveryComposeContext
 } from './delivery-presentation.js';
-import { closeMissionItem } from './mission-items.js';
+import { buildDeliveryReport } from './delivery-report.js';
+import { closeMissionItem, insertDeliveryMissionItems } from './mission-items.js';
 import { createMissionWithObjectives } from './missions.js';
 import { createProject } from './projects.js';
-import { attachSession, deliverSession, recordWork, resumeFollowUp } from './protocol.js';
+import {
+  attachSession,
+  closeAgentMissionItems,
+  deliverSession,
+  readAgentMissionItems,
+  recordWork,
+  resumeFollowUp
+} from './protocol.js';
 import { createSeededServiceContext } from './test-helpers.js';
 
 /**
@@ -294,5 +302,160 @@ describe('mission items on the protocol write paths', () => {
     assert.equal(deleteChange?.operation, 'delete');
 
     await db.close();
+  });
+});
+
+describe('agent item inspection and standalone closure', () => {
+  it('pages beyond 60 with full detail, prioritizes blockers, and closes without delivery', async () => {
+    const { db, ctx } = await createSeededServiceContext({ source: 'cli' });
+    try {
+      const project = await createProject({ ctx, name: 'Paged items' });
+      const { mission, objectives } = await createMissionWithObjectives({
+        ctx,
+        projectId: project.id,
+        objectives: [{ objective: 'Report work' }, { objective: 'Inspect work' }]
+      });
+      const first = await attachSession({
+        ctx,
+        missionId: mission.id,
+        objectiveId: objectives[0]!.id
+      });
+      const delivered = await deliverSession({
+        ctx,
+        missionId: mission.id,
+        sessionKey: first.sessionKey,
+        summary: 'Reported work.'
+      });
+      const payload = agentReport('page').deliveryReport;
+      const report = buildDeliveryReport({
+        summary: 'Report',
+        deliveryReport: {
+          ...payload,
+          agentReport: {
+            ...payload.agentReport,
+            knownRisks: Array.from(
+              { length: 65 },
+              (_, i) => `Risk ${i}: ${'Long detail '.repeat(45)}`
+            ),
+            humanActions: [
+              { action: 'Optional action', reason: 'Useful', category: 'other', blocking: false },
+              {
+                action: 'Apply migration',
+                reason: 'Required',
+                category: 'database',
+                blocking: true,
+                command: 'yarn migrate',
+                verify: 'Check schema'
+              }
+            ]
+          }
+        }
+      });
+      report.presentation.knownRisks = Array.from(
+        { length: 65 },
+        (_, i) => `Risk ${i}: ${'Long detail '.repeat(45)}`
+      );
+      await insertDeliveryMissionItems(db, {
+        delivery: {
+          id: delivered.deliveryId,
+          workspaceId: ctx.workspace.id,
+          projectId: project.id,
+          missionId: mission.id,
+          objectiveId: objectives[0]!.id,
+          deliveredAt: new Date().toISOString()
+        },
+        report,
+        attribution: { source: ctx.source, actorWorkspaceUserId: ctx.actorWorkspaceUserId }
+      });
+      const attached = await attachSession({
+        ctx,
+        missionId: mission.id,
+        objectiveId: objectives[1]!.id
+      });
+      assert.equal(attached.missionSummary?.totalOpenItems, 68);
+      assert.equal(attached.missionSummary?.openItems.length, 60);
+      assert.equal(attached.missionSummary?.openItems[0]?.blocking, true);
+      const scope = { ctx, missionId: mission.id, sessionKey: attached.sessionKey };
+      const page = await readAgentMissionItems(scope);
+      assert.equal(page.total, 68);
+      assert.equal(page.nextOffset, 60);
+      assert.equal(page.items[0]!.detail.command, 'yarn migrate');
+      assert.equal(page.items[0]!.detail.verify, 'Check schema');
+      const last = await readAgentMissionItems({ ...scope, offset: page.nextOffset! });
+      assert.equal(last.nextOffset, null);
+      assert.equal(new Set([...page.items, ...last.items].map(item => item.id)).size, 68);
+      assert.ok(page.items.find(item => item.kind === 'risk')!.text.length > 400);
+      const suggestion = [...page.items, ...last.items].find(item => item.kind === 'suggestion')!;
+      assert.ok(suggestion.detail.change);
+      assert.ok(suggestion.detail.location);
+      assert.ok(suggestion.detail.doneWhen);
+      const target = last.items.find(item => item.kind === 'risk')!;
+      const before = await db.get<{ n: number }>(
+        'SELECT COUNT(*) AS n FROM deliveries WHERE mission_id = ?',
+        [mission.id]
+      );
+      const closed = await closeAgentMissionItems({
+        ...scope,
+        closeItems: [
+          { id: target.id, status: 'done', reason: 'Verified fixed.' },
+          { id: target.id, status: 'dismissed', reason: 'Duplicate.' },
+          { id: 'missing', status: 'done', reason: 'Missing.' }
+        ]
+      });
+      assert.deepEqual(closed.closedItemIds, [target.id]);
+      assert.equal(closed.warnings.length, 2);
+      assert.equal(closed.narrativeWritten, false);
+      const row = await db.get<any>('SELECT * FROM mission_items WHERE id = ?', [target.id]);
+      assert.equal(row.resolved_by_kind, 'agent');
+      assert.equal(row.resolved_by_objective_id, objectives[1]!.id);
+      assert.equal(row.resolved_by_delivery_id, null);
+      assert.equal(row.status_reason, 'Verified fixed.');
+      assert.equal(await itemChangeCount(ctx, target.id), 2);
+      assert.deepEqual(
+        await db.get('SELECT COUNT(*) AS n FROM deliveries WHERE mission_id = ?', [mission.id]),
+        before
+      );
+      assert.equal((await readAgentMissionItems(scope)).total, 67);
+      await assert.rejects(
+        closeAgentMissionItems({ ...scope, closeItems: [{ id: suggestion.id, status: 'done' }] })
+      );
+      await assert.rejects(readAgentMissionItems({ ...scope, offset: -1 }));
+      await assert.rejects(readAgentMissionItems({ ...scope, sessionKey: 'invalid' }));
+      const other = await attachedMission(ctx, 'Foreign mission');
+      await assert.rejects(readAgentMissionItems({ ...scope, missionId: other.mission.id }));
+      await assert.rejects(
+        closeAgentMissionItems({
+          ...scope,
+          missionId: other.mission.id,
+          closeItems: [{ id: target.id, status: 'done', reason: 'Wrong mission.' }]
+        })
+      );
+      const skipped = await closeAgentMissionItems({
+        ctx,
+        missionId: other.mission.id,
+        sessionKey: other.sessionKey,
+        closeItems: [{ id: suggestion.id, status: 'dismissed', reason: 'Foreign item.' }]
+      });
+      assert.equal(skipped.closedItemIds.length, 0);
+      assert.match(skipped.warnings[0]!.message, /another mission/);
+      await assert.rejects(
+        readAgentMissionItems({ ...scope, ctx: { ...ctx, allowedProjectIds: ['other-project'] } })
+      );
+      await assert.rejects(
+        readAgentMissionItems({
+          ...scope,
+          ctx: { ...ctx, workspace: { ...ctx.workspace, id: 'other-workspace' } }
+        })
+      );
+      await deliverSession({ ...scope, summary: 'Inspection done.' });
+      await assert.rejects(
+        closeAgentMissionItems({
+          ...scope,
+          closeItems: [{ id: suggestion.id, status: 'done', reason: 'Too late.' }]
+        })
+      );
+    } finally {
+      await db.close();
+    }
   });
 });

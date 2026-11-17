@@ -1,6 +1,7 @@
 import {
   CAPTURE_GAP_CODES,
   type CaptureBindingState,
+  captureGapInstruction,
   type CaptureWarningCode,
   type LocalFileChangeDto,
   type LocalObjectiveChangesDto,
@@ -52,7 +53,8 @@ export function buildLocalObjectiveChanges({
         callbackObserved: false,
         healthCodes: [unavailableDiagnosis]
       },
-      warnings: ['unknown_binding']
+      warnings: ['unknown_binding'],
+      instruction: captureGapInstruction('cli', ['unknown_binding'])!
     };
   }
 
@@ -110,6 +112,7 @@ export function buildLocalObjectiveChanges({
     }
   }
   if (pending > 0) warnings.add(syncFailed ? 'sync_failed' : 'sync_pending');
+  const instruction = captureGapInstruction('cli', [...warnings]);
 
   return {
     scope: 'local_objective_sessions',
@@ -125,6 +128,7 @@ export function buildLocalObjectiveChanges({
       callbackObserved,
       healthCodes: [...healthCodes].sort().slice(0, MAX_LOCAL_HEALTH_CODES)
     },
-    warnings: [...warnings]
+    warnings: [...warnings],
+    ...(instruction ? { instruction } : {})
   };
 }

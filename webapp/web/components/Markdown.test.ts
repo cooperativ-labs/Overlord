@@ -46,3 +46,39 @@ describe('Markdown', () => {
     assert.match(html, /<td[^>]*>two<\/td>/);
   });
 });
+
+describe('Markdown full formatting', () => {
+  const render = (text: string) => renderToStaticMarkup(createElement(Markdown, { text }));
+
+  it('nests ordered lists inside ordered lists', () => {
+    const html = render('1. a\n   1. a1\n   2. a2\n2. b');
+    assert.equal((html.match(/<ol/g) ?? []).length, 2);
+    assert.equal((html.match(/<li/g) ?? []).length, 4);
+    assert.match(html, /<li>a<ol/);
+  });
+
+  it('nests mixed list kinds', () => {
+    const html = render('1. a\n   - x\n   - y\n2. b');
+    assert.equal((html.match(/<ol/g) ?? []).length, 1);
+    assert.equal((html.match(/<ul/g) ?? []).length, 1);
+  });
+
+  it('renders bold, italic, strikethrough and inline code', () => {
+    const html = render('**b** *i* ~~s~~ `c`');
+    assert.match(html, /<strong[^>]*>b<\/strong>/);
+    assert.match(html, /<em[^>]*>i<\/em>/);
+    assert.match(html, /<del[^>]*>s<\/del>/);
+    assert.match(html, /<code[^>]*>c<\/code>/);
+  });
+
+  it('nests inline formatting', () => {
+    const html = render('***bi*** and **bold with `code`**');
+    assert.match(html, /<strong[^>]*><em[^>]*>bi<\/em><\/strong>/);
+    assert.match(html, /<strong[^>]*>bold with <code[^>]*>code<\/code><\/strong>/);
+  });
+
+  it('renders fenced code blocks verbatim', () => {
+    const html = render('```ts\nconst a = **1**;\n```');
+    assert.match(html, /<pre[^>]*><code>const a = \*\*1\*\*;<\/code><\/pre>/);
+  });
+});

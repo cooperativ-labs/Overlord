@@ -65,6 +65,7 @@ export type MissionSummaryBaseline = {
   /** Who wrote the current headline and summary; null before the first write. */
   author: MissionSummaryAuthorKind | null;
   openItems: MissionSummaryBaselineItem[];
+  totalOpenItems: number;
   /** More open items exist than `openItems` carries. */
   truncated: boolean;
 };
@@ -136,9 +137,10 @@ export async function readMissionSummaryBaseline(
        FROM mission_summaries WHERE mission_id = ?`,
     [missionId]
   );
-  const { items, truncated } = await listMissionItems(db, {
+  const { items, truncated, total } = await listMissionItems(db, {
     missionId,
-    limit: MISSION_SUMMARY_BASELINE_ITEM_LIMIT
+    limit: MISSION_SUMMARY_BASELINE_ITEM_LIMIT,
+    order: 'blocking'
   });
   const objectiveIds = [...new Set(items.map(item => item.objectiveId))];
   const keys = new Map<string, string>();
@@ -171,6 +173,7 @@ export async function readMissionSummaryBaseline(
       text: cut(item.text, MISSION_SUMMARY_BASELINE_ITEM_TEXT_MAX),
       ...(item.kind === 'human_action' ? { blocking: item.detail.blocking === true } : {})
     })),
+    totalOpenItems: total,
     truncated
   };
 }
@@ -323,7 +326,7 @@ export async function missionSummaryConflictError(
 ): Promise<ServiceError> {
   const baseline = await readMissionSummaryBaseline(db, conflict.missionId);
   return new ServiceError(
-    `The mission summary changed since you attached (base content revision ${conflict.baseContentRevision}, current ${conflict.currentContentRevision}). Nothing was delivered. Rewrite the headline and summary from details.missionSummary and deliver again with its contentRevision as baseContentRevision; if this happens twice, deliver without headline and summary.`,
+    `The mission summary changed since you attached (base content revision ${conflict.baseContentRevision}, current ${conflict.currentContentRevision}). Nothing was delivered. Rewrite the headline and summary from details.missionSummary and deliver again with its contentRevision as baseContentRevision; if this happens twice, deliver without headline and summary and say so in the delivery summary.`,
     'mission_summary_conflict',
     409,
     {
@@ -403,6 +406,19 @@ const SKIP_MESSAGES: Record<MissionItemWriteProblem | 'duplicate', string> = {
 };
 
 /**
+ * What the agent does about a skipped close entry (plan coo:1294 D6): the
+ * warning carries its own instruction, so attach does not have to.
+ */
+const STAYS_OPEN = 'Say in your final message which item stays open and why.';
+const SKIP_ACTIONS: Record<MissionItemWriteProblem | 'duplicate', string> = {
+  not_found: `If you meant an open item of this mission, it stays open. ${STAYS_OPEN}`,
+  other_mission: `If you meant an open item of this mission, it stays open. ${STAYS_OPEN}`,
+  not_open: 'No action is needed.',
+  superseded: `Its replacement from the later delivery may still be open. ${STAYS_OPEN}`,
+  duplicate: 'The first entry applies; no action is needed.'
+};
+
+/**
  * Second step inside the delivery transaction, after the delivery and its
  * items are written: closes the listed open items of this mission with agent
  * provenance, then writes the narrative (`generated_by = 'agent'`,
@@ -423,7 +439,7 @@ export async function applyMissionSummaryWrite(
     prepared: PreparedMissionSummaryWrite;
     mission: MissionScope;
     objectiveId: string;
-    deliveryId: string;
+    deliveryId: string | null;
     model: string | null;
     attribution: MissionItemChangeAttribution;
     now?: string;
@@ -456,7 +472,7 @@ export async function applyMissionSummaryWrite(
       warnings.push({
         code: 'mission_summary_item_skipped',
         itemId: cut(entry.id, 80),
-        message: `Item ${cut(entry.id, 80)} was not closed: ${SKIP_MESSAGES[problem]}.`
+        message: `Item ${cut(entry.id, 80)} was not closed: ${SKIP_MESSAGES[problem]}. ${SKIP_ACTIONS[problem]}`
       });
     }
   }

@@ -99,3 +99,66 @@ test('bound session without a callback and failed sync are reported', () => {
   assert.deepEqual(local.warnings.sort(), ['bound_no_callback', 'sync_failed']);
   assert.equal(local.sync.failed, true);
 });
+
+test('a capture gap returns its own CLI instruction; a healthy read returns none (coo:1294.s9m6)', () => {
+  const healthy = buildLocalObjectiveChanges({
+    objectiveId: 'objective-1',
+    snapshots: [snapshot({ capture: { bindingState: 'bound', callbackObservedAt: AT } })],
+    syncFailed: false
+  });
+  assert.deepEqual(healthy.warnings, []);
+  assert.equal(healthy.instruction, undefined);
+
+  const pendingOnly = buildLocalObjectiveChanges({
+    objectiveId: 'objective-1',
+    snapshots: [
+      snapshot({
+        capture: { bindingState: 'bound', callbackObservedAt: AT },
+        evidence: [
+          { idempotencyKey: 'p', filePath: 'a.ts', source: 'declared_edit', observedAt: AT }
+        ]
+      })
+    ],
+    syncFailed: false
+  });
+  assert.deepEqual(pendingOnly.warnings, ['sync_pending']);
+  assert.equal(pendingOnly.instruction, undefined);
+
+  const gap = buildLocalObjectiveChanges({
+    objectiveId: 'objective-1',
+    snapshots: [
+      snapshot({
+        capture: { bindingState: 'bound', callbackObservedAt: AT },
+        health: [{ at: AT, code: 'shell_activity_unverified' }]
+      })
+    ],
+    syncFailed: false
+  });
+  assert.match(gap.instruction ?? '', /--paths a,b/);
+  assert.match(gap.instruction ?? '', /--paths-file/);
+  assert.match(gap.instruction ?? '', /`ovld protocol deliver`/);
+  assert.doesNotMatch(gap.instruction ?? '', /declaredPaths|overlord_/);
+  assert.doesNotMatch(gap.instruction ?? '', /--session-key/);
+
+  const unavailable = buildLocalObjectiveChanges({
+    objectiveId: 'objective-1',
+    snapshots: [],
+    syncFailed: false
+  });
+  assert.match(unavailable.instruction ?? '', /--session-key and --objective-id/);
+
+  const failed = buildLocalObjectiveChanges({
+    objectiveId: 'objective-1',
+    snapshots: [
+      snapshot({
+        capture: { bindingState: 'bound', callbackObservedAt: AT },
+        evidence: [
+          { idempotencyKey: 'f', filePath: 'a.ts', source: 'declared_edit', observedAt: AT }
+        ]
+      })
+    ],
+    syncFailed: true
+  });
+  assert.deepEqual(failed.warnings, ['sync_failed']);
+  assert.match(failed.instruction ?? '', /no local retry copy exists/);
+});

@@ -40,7 +40,11 @@ import {
   enqueueLiveActivityRefreshForMission,
   enqueueLiveActivityStartForMission
 } from './live-activity-jobs.js';
-import { insertDeliveryMissionItems, type MissionItemChangeAttribution } from './mission-items.js';
+import {
+  insertDeliveryMissionItems,
+  listMissionItems,
+  type MissionItemChangeAttribution
+} from './mission-items.js';
 import {
   applyMissionSummaryWrite,
   type MissionSummaryBaseline,
@@ -100,7 +104,7 @@ export type SessionSummary = {
   deliveryState: string;
 };
 
-export type AttachResponse = {
+export type MissionContextResponse = {
   mission: MissionSummary;
   objective: ObjectiveSummary;
   previousObjectives: ObjectiveSummary[];
@@ -119,6 +123,19 @@ export type AttachResponse = {
   missionSummary?: MissionSummaryBaseline;
 };
 
+/** Compact execution context; ordinary objective and load-context reads stay full. */
+const COMPLETED_INSTRUCTION_LIMIT = 600;
+const TRUNCATION_MARKER = '… [truncated]';
+
+export type AttachObjective = Pick<ObjectiveSummary, 'displayId' | 'state' | 'objective'>;
+export type AttachResponse = Omit<
+  MissionContextResponse,
+  'previousObjectives' | 'futureObjectives' | 'history'
+> & {
+  objectives: AttachObjective[];
+  directives: MissionEventSummary[];
+};
+
 type SessionRow = {
   id: string;
   mission_id: string;
@@ -127,40 +144,29 @@ type SessionRow = {
   delivery_state: string;
   ended_at: string | null;
   external_session_id: string | null;
+  connection_method: string | null;
 };
 
-const PROTOCOL_WORKFLOW = `
+/**
+ * Which tool vocabulary the attach rules are written in (plan coo:1294 D7). A
+ * caller on MCP has Overlord tools and payload fields, not `ovld` commands and
+ * flags, so it must never be told to run a CLI command it does not have.
+ */
+export type InstructionStyle = 'cli' | 'mcp';
 
-1. Read the current objective from the top-level \`objective\` field in this JSON response, then immediately begin executing it. This is an execution session: do not wait for more instructions or ask for confirmation.
-2. Post progress with \`ovld protocol update\` or liveness with \`ovld protocol heartbeat\`.
-3. Ask blocking questions with \`ovld protocol ask\` and stop work only when no safe progress remains.
-4. Deliver with \`ovld protocol deliver\` when work is complete. A summary is the only required
-   delivery input; explain the outcome by behavior or component, not file by file.
-5. Do not stage or commit changes unless explicitly instructed to do so.
-6. Do not continue implementation after delivery without \`--begin-follow-up-work\`.
+/** `--connection-method` values a caller may declare on attach and resume-follow-up. */
+export const ATTACH_CONNECTION_METHODS = ['cli', 'mcp'] as const;
 
-Changed files:
-  Overlord keeps a cumulative list of the files changed during this objective from native
-  connector callbacks plus any paths you declare. It is not a Git diff and needs no exhaustive
-  enumeration. Before delivering, read it once with \`ovld protocol changes --objective-id <id>\`
-  (this checkout's sessions) or the server \`objective-changes\` read (synchronized history).
-  Never diff or status-scan the shared worktree, and never send changed-file,
-  observed-dirty-path, or no-file-change inputs. When capture reports shell, unsupported, or
-  partial tool activity, declare only the files you know you changed that it missed (script and
-  generator outputs, deletes, both rename endpoints) with \`--paths a,b\` or \`--paths-file\`
-  (a JSON string array) on the same update or deliver call; they are labelled Declared. When
-  unsure, state the coverage gap in the summary instead of guessing. Quote inline path lists
-  containing spaces. If the local binding or ledger is unavailable, keep the path flags and
-  pass --session-key and --objective-id explicitly: the CLI warns and submits Declared evidence
-  through the authenticated session. Use objective-changes to read that synchronized evidence.
-  Failed fallback sync needs the declarations repeated on a later update/deliver because no
-  local retry copy exists. Re-run attach in this checkout to restore native capture.
+export function instructionStyleFor(connectionMethod: string | null | undefined): InstructionStyle {
+  return connectionMethod === 'mcp' ? 'mcp' : 'cli';
+}
 
-Delivery evidence:
-  Every delivery should also provide a \`deliveryReport.agentReport\` in \`--payload-json\` or
-  \`--payload-file\`: \`humanActions\`, \`tradeoffsMade\`, \`knownRisks\`, \`deferredWork\`, and
-  \`assumptions\`. Use empty arrays when none apply.   Human actions are only concrete work a
-  human must perform outside completed agent work; never include Git actions or routine review/testing.
+const INSTRUCTIONS_PRECEDENCE =
+  'These instructions are authoritative for this session. Where an installed Overlord skill or plugin says otherwise, follow these.';
+
+const DELIVERY_EVIDENCE_RULES = `
+  Human actions are only concrete work a human must perform outside completed agent work; never
+  include Git actions or routine review/testing.
   Tradeoffs must describe an implementation decision, alternatives considered, and why it was chosen.
   Deferred work is only a recommended new objective that is not part of this mission (for
   example an out-of-scope bug). Each item is an object { title, change, location, doneWhen }:
@@ -169,6 +175,72 @@ Delivery evidence:
   work already in this mission's future objectives, leftover slices of the current
   objective, or human follow-up such as deploy, secrets, or migrations (those belong in
   humanActions).`;
+
+const CLI_PROTOCOL_WORKFLOW = `
+1. Read the current objective from the top-level \`objective\` field in this JSON response, then immediately begin executing it. This is an execution session: do not wait for more instructions or ask for confirmation.
+2. Post progress with \`ovld protocol update\` or liveness with \`ovld protocol heartbeat\`.
+3. Ask blocking questions with \`ovld protocol ask\` and stop work only when no safe progress remains.
+4. Deliver with \`ovld protocol deliver\` when work is complete. A summary is the only required
+   delivery input; explain the outcome by behavior or component, not file by file.
+5. Do not stage or commit changes unless explicitly instructed to do so.
+6. Do not continue implementation after delivery; the deliver response says how to begin
+   follow-up work.
+
+Changed files:
+  Overlord records the files you change; the list is not a Git diff. Before delivering, read it
+  once with \`ovld protocol changes --objective-id <id>\` and follow its \`instruction\` if
+  present. Never diff or status-scan the shared worktree, and never send changed-file,
+  observed-dirty-path, or no-file-change inputs.
+
+Delivery evidence:
+  Every delivery should also provide a \`deliveryReport.agentReport\` in \`--payload-json\` or
+  \`--payload-file\`: \`humanActions\`, \`tradeoffsMade\`, \`knownRisks\`, \`deferredWork\`, and
+  \`assumptions\`. Use empty arrays when none apply.${DELIVERY_EVIDENCE_RULES}`;
+
+const MCP_PROTOCOL_WORKFLOW = `
+1. Read the current objective from the top-level \`objective\` field in this response, then immediately begin executing it. This is an execution session: do not wait for more instructions or ask for confirmation.
+2. Pass \`session.sessionKey\` from this response as \`sessionKey\` on every session tool call.
+3. Post progress with \`overlord_update_session\`.
+4. If you are blocked, ask the user in this conversation, and stop work only when no safe progress remains.
+5. Deliver with \`overlord_deliver_session\` when work is complete. \`summary\` is the only required
+   field; explain the outcome by behavior or component, not file by file.
+6. Do not stage or commit changes unless explicitly instructed to do so.
+7. Do not continue implementation after delivery; the deliver response says what to do if more
+   work is needed.
+
+Changed files:
+  Overlord records the files you change; the list is not a Git diff. Before delivering, read it
+  once with \`overlord_changes\` (\`objectiveId\`) and follow its \`instruction\` if present.
+  Never diff or status-scan a shared worktree.
+
+Delivery evidence:
+  Every delivery should also send \`humanActions\`, \`tradeoffsMade\`, \`knownRisks\`,
+  \`deferredWork\`, and \`assumptions\` on \`overlord_deliver_session\`. Use empty arrays when
+  none apply.${DELIVERY_EVIDENCE_RULES}`;
+
+/**
+ * The post-delivery rule, returned as `instruction` on the deliver response
+ * (plan coo:1294 D6) instead of in every attach. MCP tools cannot begin
+ * follow-up work, so an MCP caller is told to hand it back to the user.
+ */
+export function postDeliveryInstruction({
+  style,
+  missionDisplayId,
+  objectiveDisplayId
+}: {
+  style: InstructionStyle;
+  missionDisplayId: string;
+  objectiveDisplayId: string;
+}): string {
+  if (style === 'mcp') {
+    return 'Delivered; this session has ended. Do not continue implementation. These tools cannot begin follow-up work: if the user asks for more work on this objective, ask them to start follow-up work from Overlord.';
+  }
+  return `Delivered; this session has ended. Do not continue implementation. If the user asks for more work on this objective, first run \`ovld protocol resume-follow-up --mission-id ${missionDisplayId} --objective-id ${objectiveDisplayId} --summary "<what you will do>"\`, use the session key it returns, and deliver again when done.`;
+}
+
+function protocolWorkflow(style: InstructionStyle): string {
+  return style === 'mcp' ? MCP_PROTOCOL_WORKFLOW : CLI_PROTOCOL_WORKFLOW;
+}
 
 function resolveActiveObjective(objectives: ObjectiveSummary[]): ObjectiveSummary {
   const rankedStates = ['executing', 'launching', 'pending_delivery'] as const;
@@ -297,7 +369,8 @@ async function getSessionByKeyMaybeEnded(
   const hash = hashSessionKey(sessionKey);
   const endedFilter = options.includeEnded ? '' : 'AND ended_at IS NULL';
   return (await ctx.db.get(
-    `SELECT id, mission_id, objective_id, phase, delivery_state, ended_at, external_session_id
+    `SELECT id, mission_id, objective_id, phase, delivery_state, ended_at, external_session_id,
+            connection_method
        FROM agent_sessions
        WHERE workspace_id = ? AND session_key_hash = ? AND deleted_at IS NULL ${endedFilter}
        ORDER BY started_at DESC LIMIT 1`,
@@ -324,7 +397,8 @@ async function getLatestSessionByExternalId({
   externalSessionId: string;
 }): Promise<SessionRow | undefined> {
   return (await ctx.db.get(
-    `SELECT id, mission_id, objective_id, phase, delivery_state, ended_at, external_session_id
+    `SELECT id, mission_id, objective_id, phase, delivery_state, ended_at, external_session_id,
+            connection_method
        FROM agent_sessions
        WHERE workspace_id = ? AND mission_id = ? AND external_session_id = ? AND deleted_at IS NULL
        ORDER BY started_at DESC LIMIT 1`,
@@ -343,7 +417,8 @@ async function getLatestSessionForObjective({
 }): Promise<SessionRow | undefined> {
   const endedFilter = openOnly ? 'AND ended_at IS NULL' : '';
   return (await ctx.db.get(
-    `SELECT id, mission_id, objective_id, phase, delivery_state, ended_at, external_session_id
+    `SELECT id, mission_id, objective_id, phase, delivery_state, ended_at, external_session_id,
+            connection_method
        FROM agent_sessions
        WHERE workspace_id = ? AND objective_id = ? AND deleted_at IS NULL ${endedFilter}
        ORDER BY started_at DESC LIMIT 1`,
@@ -429,31 +504,83 @@ function splitObjectivesAroundCurrent({
 }
 
 /**
- * The Mission summary block of attach instructions (plan 3.3, 3.4). Present
- * only when the response carries the `missionSummary` baseline.
+ * The Mission summary block of attach instructions (plan coo:1294 step 1).
+ * Present only when the response carries the `missionSummary` baseline. Only
+ * the sending line differs by connection method.
  */
-export const MISSION_SUMMARY_INSTRUCTIONS = `People read the mission summary to learn what the mission has produced, what still limits it,
-and what they must do. You have seen the repository, so you write it when you deliver. The
+export function missionSummaryInstructions(style: InstructionStyle): string {
+  const send =
+    style === 'mcp'
+      ? 'Send them as `missionSummary` on `overlord_deliver_session`:'
+      : 'Send them as `missionSummary` in the delivery payload (`--payload-file` or `--mission-summary-file`):';
+  return `At delivery, update the mission summary for the whole mission, not only this objective. The
 current text, its \`contentRevision\` and the open items with their ids are in the top-level
 \`missionSummary\` field of this response.
 
-When you deliver, add \`missionSummary\` to the delivery payload (\`--payload-file\` or
-\`--mission-summary-file\`):
-  { "baseContentRevision": <missionSummary.contentRevision>, "headline": "...", "summary": "...",
-    "closeItems": [{ "id": "<item id>", "status": "done" | "dismissed", "reason": "..." }] }
-- Headline: one sentence, at most 140 characters. Summary: Markdown, at most 1,200 characters.
-- State what the mission now provides and why it matters, then current limits, then what a
-  person must do.
-- Say whether a claim is implemented, tested or deployed. Do not merge them.
-- Rewrite the whole summary to be true now. Do not append to the previous text.
-- Do not restate open actions or suggestions in prose; they are shown as their own lists.
-- Close an item only after you checked it in the code or the mission history. Give the reason
-  (at most 280 characters). Use done when the item was addressed and dismissed when it no longer
-  applies. closeItems may be sent without headline and summary, and the reverse.
-- If delivery fails with mission_summary_conflict, another objective changed the summary since
-  you attached. Nothing was delivered. Rewrite the headline and summary from the fresh baseline
-  in the error (details.missionSummary) and deliver again once with its contentRevision. If it
-  conflicts again, deliver without headline and summary and say so in the delivery summary.`;
+1. Check every item in \`missionSummary.openItems\` against the work you verified. Close it as
+   \`done\` if the work is complete, or \`dismissed\` if it no longer applies, with a reason of at
+   most 280 characters. Leave it open if you are not sure. Objective instructions state intent;
+   they do not prove completion.
+2. Do not report a risk or suggestion that is already open or that you closed.
+3. Rewrite \`headline\` (one sentence, 140 characters) and \`summary\` (Markdown, 1,200 characters)
+   so they are true now. Organise by what the mission provides, not by objective. Keep earlier
+   outcomes that still hold and remove claims that later work replaced. Say whether each claim is
+   implemented, tested or deployed. State only durable limits; do not repeat open items.
+4. ${send}
+   { "baseContentRevision": <missionSummary.contentRevision>, "headline": "...", "summary": "...",
+     "closeItems": [{ "id": "<item id>", "status": "done" | "dismissed", "reason": "..." }] }
+   \`closeItems\` (at most 50) may be sent alone.
+
+For full detail or overflow, ${
+    style === 'mcp'
+      ? 'call `overlord_mission_items` with `missionId`, `sessionKey`, `limit` and `offset`; follow `nextOffset` until null. Close verified items with `overlord_close_items` (`missionId`, `sessionKey`, `closeItems`).'
+      : 'run `ovld protocol mission-items --mission-id <id> --limit 60 --offset 0`; follow `nextOffset` until null. Close verified items with `ovld protocol close-items --mission-id <id> --close-items-file <path|->`.'
+  }
+If delivery returns a mission-summary error or warning, follow the steps in its message.`;
+}
+
+function shellArg(value: string): string {
+  return /^[\w@%+=:,./-]+$/.test(value) ? value : `'${value.replace(/'/g, `'\\''`)}'`;
+}
+
+/**
+ * Download rule for the current objective's attachments. The launch prompt
+ * used to carry these commands; attach is now the only channel (plan coo:1294,
+ * step 5), so the rule arrives on every launch path and only when files exist.
+ */
+function attachmentsInstructions({
+  mission,
+  objective,
+  attachments,
+  style
+}: {
+  mission: MissionSummary;
+  objective: ObjectiveSummary;
+  attachments: AttachmentSummary[];
+  style: InstructionStyle;
+}): string | null {
+  if (attachments.length === 0) return null;
+  if (style === 'mcp') {
+    return [
+      'The user attached files to this objective; they are listed in `attachments`. No Overlord MCP',
+      'tool downloads them. If you need a file to do the work, say so in a session update.'
+    ].join('\n');
+  }
+  const lines = attachments.map(attachment => {
+    const base = attachment.filename.split(/[\\/]/).pop() || 'attachment';
+    const output = `./.overlord/tmp/attachment-${attachment.id}-${base}`;
+    return `- ${attachment.filename}: \`ovld protocol attachment-download-url --mission-id ${shellArg(mission.displayId)} --objective-id ${shellArg(objective.displayId)} --attachment-id ${shellArg(attachment.id)} --output ${shellArg(output)}\``;
+  });
+  return [
+    'The user attached files to this objective (listed in `attachments`). Their URLs need Overlord',
+    'authentication; download with these commands, which use the CLI credentials:',
+    ...lines,
+    `Files attached to other objectives: \`ovld protocol attachment-list --mission-id ${shellArg(mission.displayId)}\`.`
+  ].join('\n');
+}
+
+/** The CLI wording of the Mission summary block, kept as a constant for tests and docs. */
+export const MISSION_SUMMARY_INSTRUCTIONS = missionSummaryInstructions('cli');
 
 function assembleAgentInstructions({
   mission,
@@ -461,7 +588,10 @@ function assembleAgentInstructions({
   projectName,
   agentInstructions,
   projectResourcesSection = null,
-  missionSummary = false
+  missionSummary = false,
+  attachments = [],
+  style = 'cli',
+  compactContext = false
 }: {
   mission: MissionSummary;
   objective: ObjectiveSummary;
@@ -469,30 +599,47 @@ function assembleAgentInstructions({
   agentInstructions: string | null;
   projectResourcesSection?: string | null;
   missionSummary?: boolean;
+  attachments?: AttachmentSummary[];
+  style?: InstructionStyle;
+  compactContext?: boolean;
 }): string {
   const objectiveLabel = objective.title?.trim() || `Objective ${objective.position + 1}`;
+  const mcp = style === 'mcp';
+  const attachmentsSection = attachmentsInstructions({ mission, objective, attachments, style });
 
   return [
     `# Overlord Agent Instructions`,
     `You are attached to mission **${mission.displayId}** via Overlord.`,
+    INSTRUCTIONS_PRECEDENCE,
     ``,
-    `Mission ID: ${mission.displayId}  <- pass this to every \`ovld protocol ... --mission-id\` call`,
-    `Objective ID: ${objective.displayId}  <- pass as --objective-id on attach; never as --mission-id`,
+    mcp
+      ? `Mission ID: ${mission.displayId}  <- pass as \`missionId\` on Overlord tool calls`
+      : `Mission ID: ${mission.displayId}  <- pass this to every \`ovld protocol ... --mission-id\` call`,
+    mcp
+      ? `Objective ID: ${objective.displayId}  <- pass as \`objectiveId\`; never as \`missionId\``
+      : `Objective ID: ${objective.displayId}  <- pass as --objective-id on attach; never as --mission-id`,
     `Objective: ${objectiveLabel}`,
     `Project: ${projectName}`,
     '',
     '## Context Location',
     '- The current task body is in the top-level `objective.objective` field.',
-    '- Previous and future work are in `previousObjectives` and `futureObjectives`.',
-    '- History, attachments, artifacts, and shared context are in their structured top-level fields.',
+    compactContext
+      ? '- Sibling work is in `objectives` in mission order; check each state. Completed instructions may be truncated.'
+      : '- Previous and future work are in `previousObjectives` and `futureObjectives`.',
+    compactContext
+      ? '- Current-objective user directions and decisions are in `directives` (newest 10). Attachments, artifacts and shared context have their own fields.'
+      : '- History, attachments, artifacts, and shared context are in their structured top-level fields.',
     '',
     projectResourcesSection ? '' : null,
     projectResourcesSection,
+    attachmentsSection ? '## Attachments' : null,
+    attachmentsSection,
+    attachmentsSection ? '' : null,
     `## Required Protocol Workflow`,
-    PROTOCOL_WORKFLOW,
+    protocolWorkflow(style),
     '',
     missionSummary ? '## Mission summary' : null,
-    missionSummary ? MISSION_SUMMARY_INSTRUCTIONS : null,
+    missionSummary ? missionSummaryInstructions(style) : null,
     missionSummary ? '' : null,
     '## Important Notes',
     `- Other agents may be working on the same branch as you, so you may notice file changes that are not yours. EXCLUDE THESE FROM THE FILE CHANGES YOU REPORT.`,
@@ -623,22 +770,54 @@ async function resolveSessionResourceId({
   return primary?.id ?? null;
 }
 
+type ContextOptions = {
+  ctx: ServiceContext;
+  mission: MissionSummary;
+  objective: ObjectiveSummary;
+  executionTargetId?: string | null;
+  includeMissionSummary?: boolean;
+  style?: InstructionStyle;
+};
+
+function contextForObjective(
+  options: ContextOptions & { includeMissionSummary: true }
+): Promise<Omit<AttachResponse, 'session'>>;
+// eslint-disable-next-line no-redeclare -- TypeScript overload.
+function contextForObjective(
+  options: ContextOptions & { includeMissionSummary?: false }
+): Promise<Omit<MissionContextResponse, 'session'>>;
+// eslint-disable-next-line no-redeclare -- TypeScript overload implementation.
 async function contextForObjective({
   ctx,
   mission,
   objective,
   executionTargetId = null,
-  includeMissionSummary = false
-}: {
-  ctx: ServiceContext;
-  mission: MissionSummary;
-  objective: ObjectiveSummary;
-  executionTargetId?: string | null;
-  /** Attach and resume-follow-up only: add the summary baseline and its instructions. */
-  includeMissionSummary?: boolean;
-}): Promise<Omit<AttachResponse, 'session'>> {
+  includeMissionSummary = false,
+  style = 'cli'
+}: ContextOptions): Promise<
+  Omit<AttachResponse, 'session'> | Omit<MissionContextResponse, 'session'>
+> {
   const objectives = await listObjectives({ ctx, missionId: mission.id });
-  const history = await listMissionEvents({ ctx, missionId: mission.id });
+  // Filter before LIMIT: busy runner activity must never hide a user directive.
+  const directives = includeMissionSummary
+    ? await ctx.db.all<{
+        id: string;
+        type: string;
+        phase: string | null;
+        summary: string;
+        createdAt: string;
+        objectiveId: string;
+      }>(
+        `SELECT id, type, phase, summary, created_at AS "createdAt", objective_id AS "objectiveId"
+       FROM mission_events WHERE mission_id = ? AND objective_id = ?
+       AND type IN ('user_follow_up', 'decision', 'discussion_summary')
+       ORDER BY created_at DESC, id DESC LIMIT 10`,
+        [mission.id, objective.id]
+      )
+    : [];
+  const history = includeMissionSummary
+    ? []
+    : await listMissionEvents({ ctx, missionId: mission.id });
   const artifacts = await listArtifacts({ ctx, missionId: mission.id });
   const attachments = await listAttachments({
     ctx,
@@ -671,25 +850,44 @@ async function contextForObjective({
     ? await readMissionSummaryBaseline(ctx.db, mission.id)
     : null;
 
+  // `agentInstructions` is the first key so a harness that cuts long tool
+  // output still shows the rules (plan coo:1294, condition 2). Callers spread
+  // this object first, so overriding a later key keeps this order.
   return {
-    mission,
-    objective,
-    previousObjectives,
-    futureObjectives,
-    history,
-    artifacts,
-    attachments,
-    sharedState,
-    ...(projectResources.length > 0 ? { projectResources } : {}),
-    ...(missionSummary ? { missionSummary } : {}),
     agentInstructions: assembleAgentInstructions({
       mission,
       objective,
       projectName: project.name,
       agentInstructions,
       projectResourcesSection,
-      missionSummary: missionSummary !== null
-    })
+      missionSummary: missionSummary !== null,
+      attachments,
+      style,
+      compactContext: includeMissionSummary
+    }),
+    mission,
+    objective,
+    ...(includeMissionSummary
+      ? {
+          objectives: objectives
+            .filter(candidate => candidate.id !== objective.id && hasInstruction(candidate))
+            .map(({ displayId, state, objective: text }) => ({
+              displayId,
+              state,
+              objective:
+                state === 'complete' && text.length > COMPLETED_INSTRUCTION_LIMIT
+                  ? text.slice(0, COMPLETED_INSTRUCTION_LIMIT - TRUNCATION_MARKER.length) +
+                    TRUNCATION_MARKER
+                  : text
+            })),
+          directives
+        }
+      : { previousObjectives, futureObjectives, history }),
+    artifacts,
+    attachments,
+    sharedState,
+    ...(projectResources.length > 0 ? { projectResources } : {}),
+    ...(missionSummary ? { missionSummary } : {})
   };
 }
 
@@ -703,7 +901,7 @@ export async function loadMissionContext({
   missionId: string;
   objectiveId?: string | null;
   executionTargetId?: string | null;
-}): Promise<Omit<AttachResponse, 'session'>> {
+}): Promise<Omit<MissionContextResponse, 'session'>> {
   const mission = await getMissionSummary({ ctx, missionId });
   const objectives = await listObjectives({ ctx, missionId: mission.id });
   // Reading context is the reconnect path, so it must be pinnable the same way
@@ -805,12 +1003,8 @@ export async function attachSession({
     missionId: mission.id,
     objectiveId: objective.id
   });
-  const context = await contextForObjective({
-    ctx,
-    mission,
-    objective,
-    executionTargetId: resolvedTargetId
-  });
+  // Assemble execution context after session state is refreshed, once.
+  const context = { mission, objective };
 
   if (existingSessionKey) {
     const existing = await getSessionByKey(ctx, existingSessionKey);
@@ -865,7 +1059,8 @@ export async function attachSession({
       mission: context.mission,
       objective: refreshedObjective,
       executionTargetId: resolvedTargetId,
-      includeMissionSummary: true
+      includeMissionSummary: true,
+      style: instructionStyleFor(connectionMethod)
     });
     const resolvedChannelId =
       sessionChannelId ??
@@ -1046,24 +1241,19 @@ export async function attachSession({
     ...objective,
     state: 'executing'
   };
-  const refreshedSplit = splitObjectivesAroundCurrent({
-    objectives: refreshedObjectives,
-    currentObjective: refreshedObjective
-  });
   const refreshedContext = await contextForObjective({
     ctx,
     mission: refreshedMission,
     objective: refreshedObjective,
     executionTargetId: resolvedTargetId,
-    includeMissionSummary: true
+    includeMissionSummary: true,
+    style: instructionStyleFor(connectionMethod)
   });
 
   return {
     ...refreshedContext,
     mission: refreshedMission,
     objective: refreshedObjective,
-    previousObjectives: refreshedSplit.previousObjectives,
-    futureObjectives: refreshedSplit.futureObjectives,
     session: {
       id: sessionId,
       sessionKey: rawKey,
@@ -1436,7 +1626,8 @@ export async function resumeFollowUp({
       missionId: mission.id,
       objectiveId: selectedObjective.id
     }),
-    includeMissionSummary: true
+    includeMissionSummary: true,
+    style: instructionStyleFor(connectionMethod)
   });
 
   return {
@@ -2611,6 +2802,8 @@ export async function deliverSession({
   deliveryId: string;
   eventId: string;
   missionSummary?: MissionSummaryWriteResult;
+  /** What to do after delivery, worded for the session's connection method. */
+  instruction: string;
 }> {
   const trimmedSummary = summary.trim();
   if (!trimmedSummary) {
@@ -2962,7 +3155,16 @@ export async function deliverSession({
     });
   }
 
-  return { deliveryId, eventId, ...(summaryResult ? { missionSummary: summaryResult } : {}) };
+  return {
+    deliveryId,
+    eventId,
+    ...(summaryResult ? { missionSummary: summaryResult } : {}),
+    instruction: postDeliveryInstruction({
+      style: instructionStyleFor(session.connection_method),
+      missionDisplayId: mission.displayId,
+      objectiveDisplayId: currentObjectiveRow?.displayId ?? session.objective_id
+    })
+  };
 }
 
 export async function protocolCreate({
@@ -3313,3 +3515,98 @@ export {
   updateObjective,
   writeSharedContext
 } from './missions.js';
+
+/** Full open-item detail for an attached agent, without loading mission history. */
+export async function readAgentMissionItems({
+  ctx,
+  missionId,
+  sessionKey,
+  limit = 60,
+  offset = 0
+}: {
+  ctx: ServiceContext;
+  missionId: string;
+  sessionKey: string;
+  limit?: number;
+  offset?: number;
+}) {
+  const mission = await resolveMissionId(ctx, missionId);
+  const session = await getSessionByKey(ctx, sessionKey);
+  if (session.mission_id !== mission.id) {
+    throw new ServiceError('Session key does not match mission', 'invalid_session', 401);
+  }
+  if (
+    !Number.isInteger(limit) ||
+    limit < 1 ||
+    limit > 200 ||
+    !Number.isInteger(offset) ||
+    offset < 0
+  ) {
+    throw new ServiceError(
+      'limit must be 1..200 and offset a non-negative integer',
+      'invalid_input',
+      400
+    );
+  }
+  return ctx.db.transaction(async tx => {
+    const page = await listMissionItems(tx, {
+      missionId: mission.id,
+      workspaceId: ctx.workspace.id,
+      limit,
+      offset,
+      order: 'blocking'
+    });
+    return {
+      missionId: mission.id,
+      ...page,
+      limit,
+      offset,
+      nextOffset: page.truncated ? offset + page.items.length : null
+    };
+  });
+}
+
+/** The same validated close entries and warnings as delivery, without ending the session. */
+export async function closeAgentMissionItems({
+  ctx,
+  missionId,
+  sessionKey,
+  closeItems
+}: {
+  ctx: ServiceContext;
+  missionId: string;
+  sessionKey: string;
+  closeItems: unknown;
+}): Promise<MissionSummaryWriteResult> {
+  const input = parseMissionSummaryInput({ closeItems }, { requireBase: true });
+  if (!input) throw new ServiceError('closeItems must contain 1..50 entries', 'invalid_input', 400);
+  return ctx.db.transaction(async tx => {
+    const txCtx = { ...ctx, db: tx };
+    const mission = await resolveMissionId(txCtx, missionId);
+    const session = await getSessionByKey(txCtx, sessionKey);
+    if (session.mission_id !== mission.id) {
+      throw new ServiceError('Session key does not match mission', 'invalid_session', 401);
+    }
+    if (session.delivery_state === 'delivered') {
+      throw new ServiceError(
+        'Resume follow-up work before closing items',
+        'delivery_boundary',
+        409
+      );
+    }
+    const scope = { ...mission, workspaceId: ctx.workspace.id };
+    const prepared = await prepareMissionSummaryWrite(tx, {
+      mission: scope,
+      input,
+      checkBase: false
+    });
+    return applyMissionSummaryWrite(tx, {
+      prepared,
+      mission: scope,
+      objectiveId: session.objective_id,
+      deliveryId: null,
+      model: null,
+      attribution: missionItemAttribution(ctx)
+    });
+  });
+}

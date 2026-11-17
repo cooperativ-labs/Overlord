@@ -45,7 +45,6 @@ export type ComposeDeliveryDraft = {
   markdown?: string;
   humanActions?: Array<Record<string, unknown>>;
   tradeoffsMade?: Array<Record<string, unknown>>;
-  knownRisks?: string[];
   assumptions?: string[];
   reviewHighlights?: string[];
 };
@@ -84,7 +83,6 @@ export const COMPOSE_DELIVERY_RESPONSE_SCHEMA: Schema = {
         required: ['sourceId', 'decision', 'rationale']
       }
     },
-    knownRisks: { type: 'array', items: { type: 'string' } },
     assumptions: { type: 'array', items: { type: 'string' } },
     reviewHighlights: { type: 'array', items: { type: 'string' } }
   },
@@ -103,8 +101,9 @@ Rules:
 - Carry each action's command, verify, and link fields through unchanged when the evidence supplies them; never fabricate a command, URL, or path that is not in the evidence.
 - File paths (a candidate action's link or sourceRef) are context only. Never describe what a file does or why it changed, and never infer behavior, impact, tests, or verification from a file or path name; only the agent summary and the supplied report facts state those.
 - Never include git commit/push/PR actions or routine "review/test the code" actions.
+- Known risks are read-only evidence: mention them in markdown if useful, but never return them; the agent's wording is kept as is.
 - Prefer concise, scannable Markdown. Do not include secrets, tokens, or raw diffs.
-Apply the WRITING rules below to markdown, humanActions action and reason, tradeoffsMade text, knownRisks, and assumptions. They do not apply to command, verify, link, file paths, identifiers, or quoted agent text; copy those exactly.
+Apply the WRITING rules below to markdown, humanActions action and reason, tradeoffsMade text, and assumptions. They do not apply to command, verify, link, file paths, identifiers, or quoted agent text; copy those exactly.
 ${WRITING_RULES}`;
 
 export function buildComposeDeliveryPrompt(input: ComposeDeliveryInput): string {
@@ -125,7 +124,7 @@ export function buildComposeDeliveryPrompt(input: ComposeDeliveryInput): string 
     input.followUpNotes ? `Follow-up notes: ${input.followUpNotes}` : null,
     `Human actions evidence:\n${JSON.stringify(input.humanActions)}`,
     `Tradeoffs evidence:\n${JSON.stringify(input.tradeoffsMade)}`,
-    `Known risks:\n${JSON.stringify(input.knownRisks)}`,
+    `Known risks (read-only):\n${JSON.stringify(input.knownRisks)}`,
     `Assumptions:\n${JSON.stringify(input.assumptions)}`,
     `Deterministic candidate actions:\n${JSON.stringify(input.candidateActions)}`,
     input.recentEvents && input.recentEvents.length > 0

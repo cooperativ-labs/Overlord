@@ -4,6 +4,7 @@ import {
   MISSION_SUMMARY_EVIDENCE_LIMIT,
   type MissionSummaryActionDto,
   type MissionSummaryDto,
+  type MissionSummaryDuplicateDto,
   type MissionSummaryEvidenceDto,
   type MissionSummaryResponse,
   type MissionSummaryRiskDto,
@@ -91,18 +92,66 @@ function latestTimestamp(...values: Array<string | null | undefined>): string | 
   return latest === null ? null : new Date(latest).toISOString();
 }
 
-/** Display dedupe keeps the newest open row, without changing its stored identity. */
-function dedupe(items: MissionItem[], kind: MissionItem['kind'], limit: number): MissionItem[] {
-  const seen = new Set<string>();
-  return items
-    .filter(item => {
-      if (item.kind !== kind) return false;
-      const key = item.text.trim().replace(/\s+/g, ' ').toLowerCase();
-      if (!key || seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    })
-    .slice(0, limit);
+function normalizeText(text: string): string {
+  return text.trim().replace(/\s+/g, ' ').toLowerCase();
+}
+
+/**
+ * What makes two open records the same thing to close. A risk is its text. A
+ * suggestion is its title together with the change, location and done-when it
+ * asks for, so two suggestions with one title and different scope stay apart.
+ */
+function groupKey(item: MissionItem): string {
+  const text = normalizeText(item.text);
+  if (item.kind !== 'suggestion') return text;
+  return JSON.stringify(
+    [text, item.detail.change, item.detail.location, item.detail.doneWhen].map(part =>
+      normalizeText(String(part ?? ''))
+    )
+  );
+}
+
+interface ItemGroup {
+  /** The newest record, which keeps its stored identity and represents the row. */
+  item: MissionItem;
+  /** Older open records with the same key, newest first. */
+  duplicates: MissionItem[];
+}
+
+/**
+ * Display grouping: open records that are the same item collapse to one row
+ * that carries the others as `duplicates`. Every record keeps its own stored
+ * identity; nothing is closed or merged here.
+ */
+function groupOpenItems(
+  items: MissionItem[],
+  kind: MissionItem['kind'],
+  limit: number
+): ItemGroup[] {
+  const groups = new Map<string, ItemGroup>();
+  for (const item of items) {
+    if (item.kind !== kind) continue;
+    if (!normalizeText(item.text)) continue;
+    const key = groupKey(item);
+    const existing = groups.get(key);
+    if (existing) existing.duplicates.push(item);
+    else groups.set(key, { item, duplicates: [] });
+  }
+  return [...groups.values()].slice(0, limit);
+}
+
+function duplicateRefs(
+  group: ItemGroup
+): { duplicates: MissionSummaryDuplicateDto[] } | Record<string, never> {
+  if (group.duplicates.length === 0) return {};
+  return {
+    duplicates: group.duplicates.map(duplicate => ({
+      id: duplicate.id,
+      deliveryId: duplicate.deliveryId,
+      objectiveId: duplicate.objectiveId,
+      deliveredAt: duplicate.reportedAt
+    }))
+  };
 }
 
 function actionDto(item: MissionItem): MissionSummaryActionDto {
@@ -149,31 +198,35 @@ function projectSummary(
   items: MissionItem[],
   closed: MissionItem[]
 ): MissionSummaryDto {
-  const risks: MissionSummaryRiskDto[] = dedupe(items, 'risk', MISSION_SUMMARY_LIMITS.risks).map(
-    item => ({
-      id: item.id,
-      deliveryId: item.deliveryId,
-      objectiveId: item.objectiveId,
-      deliveredAt: item.reportedAt,
-      text: item.text
-    })
-  );
-  const suggestions: MissionSummarySuggestionDto[] = dedupe(
+  const risks: MissionSummaryRiskDto[] = groupOpenItems(
+    items,
+    'risk',
+    MISSION_SUMMARY_LIMITS.risks
+  ).map(group => ({
+    id: group.item.id,
+    deliveryId: group.item.deliveryId,
+    objectiveId: group.item.objectiveId,
+    deliveredAt: group.item.reportedAt,
+    text: group.item.text,
+    ...duplicateRefs(group)
+  }));
+  const suggestions: MissionSummarySuggestionDto[] = groupOpenItems(
     items,
     'suggestion',
     MISSION_SUMMARY_LIMITS.suggestions
-  ).map(item => ({
-    id: item.id,
-    deliveryId: item.deliveryId,
-    objectiveId: item.objectiveId,
-    deliveredAt: item.reportedAt,
-    actionId: item.itemRef,
-    title: item.text,
+  ).map(group => ({
+    id: group.item.id,
+    deliveryId: group.item.deliveryId,
+    objectiveId: group.item.objectiveId,
+    deliveredAt: group.item.reportedAt,
+    actionId: group.item.itemRef,
+    title: group.item.text,
     state: 'open',
-    change: String(item.detail.change ?? ''),
-    location: String(item.detail.location ?? ''),
-    doneWhen: String(item.detail.doneWhen ?? ''),
-    resolution: null
+    change: String(group.item.detail.change ?? ''),
+    location: String(group.item.detail.location ?? ''),
+    doneWhen: String(group.item.detail.doneWhen ?? ''),
+    resolution: null,
+    ...duplicateRefs(group)
   }));
   const generatedBy = row.generated_by as MissionSummaryDto['generatedBy'];
   return {

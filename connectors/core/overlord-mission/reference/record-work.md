@@ -66,7 +66,7 @@ identical across the CLI (`--payload-file -`) and the hosted MCP tool
   Use an empty array when nothing qualifies. It improves review visibility but never blocks the record.
 
 - **`missionSummary`** (optional) — the new mission's headline and summary for people,
-  written as in `deliver` (see the **Mission Summary** section of the skill). `headline`
+  written as in `deliver` (rules in the attach response; shapes in [mission-summary.md](mission-summary.md)). `headline`
   and `summary` go together. No `baseContentRevision` is needed: the mission is new, so
   there is nothing to conflict with. `closeItems` is accepted with the same rules, but a
   new mission has no earlier open items to close. Malformed input is rejected with

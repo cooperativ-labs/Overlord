@@ -282,6 +282,28 @@ function item(title: string, change: string) {
   return { title, change, location: 'somewhere.ts', doneWhen: 'It is done.' };
 }
 
+describe('known-risk reconciliation', () => {
+  it('keeps the agent risk text whatever the draft returns, so risk item identity holds', () => {
+    const report = baseReport();
+    const draft = {
+      markdown: 'x',
+      knownRisks: ['The model might rephrase things badly.'],
+      humanActions: [],
+      tradeoffsMade: []
+    } as unknown as Parameters<typeof reconcileDeliveryComposeDraft>[0]['draft'];
+    const composed = reconcileDeliveryComposeDraft({ report, draft });
+    assert.equal(composed.status, 'composed');
+    assert.deepEqual(composed.knownRisks, ['Model may paraphrase poorly.']);
+
+    const stale = applyDeliveryPresentation({
+      report,
+      presentation: { ...report.presentation, knownRisks: ['An earlier paraphrase.'] }
+    });
+    const fallback = reconcileDeliveryComposeDraft({ report: stale, draft: null });
+    assert.deepEqual(fallback.knownRisks, ['Model may paraphrase poorly.']);
+  });
+});
+
 describe('deferred-work reconciliation', () => {
   it('sets presentation deferred work to the eligible agent objects whatever the draft returns', () => {
     const report = baseReport();

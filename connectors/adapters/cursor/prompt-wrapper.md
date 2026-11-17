@@ -10,7 +10,7 @@ agent [--model <model>] "Begin working on this mission."
 
 Rules:
 
-- The assembled Overlord mission prompt, objective metadata, history, artifacts, attachments, and shared context should be injected as the initial session prompt by the protocol layer.
+- The initial session prompt holds only what is needed to attach: mission and objective ids, the execution directive and the attach command. The attach response carries the objective, history, artifacts, attachments, shared context and all working rules.
 - The visible user prompt should name the active mission ID; for normal execution this is a short instruction such as `Begin working on this mission.`
 - `--model` is passed only when the execution target has a model configured.
 - Do not embed secrets in the prompt wrapper. Authentication comes from shared `ovld auth` credentials, Overlord-launched environment variables, or `Overlord_USER_TOKEN` / `OVLD_USER_TOKEN`.

@@ -22,7 +22,7 @@ import assert from 'node:assert/strict';
 const args = process.argv.slice(2);
 const plugin = args[2];
 const skill = fs.readFileSync(path.join(plugin, 'skills/overlord-mission/SKILL.md'), 'utf8');
-assert.ok(skill.includes('Attach first'));
+assert.ok(skill.includes('After You Attach'));
 assert.ok(!skill.includes('<!-- @connector-core -->'));
 assert.ok(fs.existsSync(path.join(plugin, 'skills/overlord-mission/reference/cli.md')));
 const hook = path.join(plugin, 'scripts/post-tool-use-hook.sh');

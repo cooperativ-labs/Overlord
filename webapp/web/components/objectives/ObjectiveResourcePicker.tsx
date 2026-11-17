@@ -67,6 +67,8 @@ type ObjectiveResourcePickerProps = {
   onChange: (resourceKey: string | null) => void;
   disabled?: boolean;
   className?: string;
+  /** Classes for the label, replacing its default width cap (the row hover line narrows it). */
+  labelClassName?: string;
 };
 
 /**
@@ -79,6 +81,7 @@ export function ObjectiveResourcePicker({
   onChange,
   disabled = false,
   className,
+  labelClassName,
   onOpenChange
 }: ObjectiveResourcePickerProps) {
   const [open, setOpenState] = useState(false);
@@ -109,7 +112,12 @@ export function ObjectiveResourcePicker({
               aria-label={triggerLabel}
             >
               <FolderOpen className="h-3.5 w-3.5 shrink-0" />
-              <span className="max-w-[120px] truncate @max-[360px]/objective-toolbar:hidden">
+              <span
+                className={cn(
+                  'truncate @max-[360px]/objective-toolbar:hidden',
+                  labelClassName ?? 'max-w-[120px]'
+                )}
+              >
                 {currentLabel}
               </span>
               <ChevronDown className="h-3 w-3 shrink-0 @max-[360px]/objective-toolbar:hidden" />

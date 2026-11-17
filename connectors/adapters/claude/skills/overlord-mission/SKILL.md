@@ -1,6 +1,6 @@
 ---
 name: overlord-mission
-description: Use for the shared Overlord workflow whenever the user refers to an Overlord mission or ticket.
+description: Use for chat-started Overlord work, when the user refers to an Overlord mission, ticket or objective and asks to create, find, inspect, discuss, connect or attach. Not needed in a session that Overlord launched, where the attach response carries the instructions.
 ---
 
 <!-- @connector-core -->

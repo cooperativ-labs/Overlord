@@ -32,10 +32,7 @@ ovld protocol attach --objective-id coo:756.k7xm
 
 `attach` establishes the objective/session binding used by the local change ledger. It does not snapshot or diff the working tree.
 
-For a mission with a summary, the attach JSON (and `resume-follow-up`) also carries a top-level
-`missionSummary` editing baseline: `{ contentRevision, headline, summary, author, openItems:
-[{ id, kind, objective, text, blocking? }], truncated }`. `load-context` and `connect` never
-carry it. You rewrite it at delivery; see **Mission summary at delivery** below.
+After attach, follow the instructions in the attach response.
 
 ## Update
 
@@ -104,93 +101,11 @@ flag.
 
 If `heartbeat` succeeds but `deliver` or `update` fails, the session is likely fine — retry with the corresponding `--*-file -` flag instead of inline `--*-json`.
 
-### Mission summary at delivery
+### Delivery payloads
 
-When attach returned `missionSummary`, send the rewritten mission headline and summary and the
-items you closed, either as a `missionSummary` field of `--payload-json` / `--payload-file` or
-with `--mission-summary-file <path|->` (which wins over the payload field):
-
-```bash
-ovld protocol deliver --session-key <sessionKey> --objective-id $OBJECTIVE_ID --payload-file - <<'EOF'
-{
-  "summary": "Narrative for the reviewer about this objective.",
-  "missionSummary": {
-    "baseContentRevision": 7,
-    "headline": "One sentence, at most 140 characters.",
-    "summary": "Markdown, at most 1,200 characters, true for the whole mission now.",
-    "closeItems": [{ "id": "<openItems[].id>", "status": "done", "reason": "Why, at most 280 characters." }]
-  }
-}
-EOF
-```
-
-- `baseContentRevision` is `missionSummary.contentRevision` from attach; required with prose.
-- `headline` and `summary` go together; `closeItems` may be sent alone (at most 50 entries).
-- `status` is `done` (addressed) or `dismissed` (no longer applies); `reason` is required.
-- Malformed input is rejected with 400 `invalid_input` before anything is written. Unknown,
-  foreign or already-closed ids are skipped with a `mission_summary_item_skipped` warning.
-- The response carries `missionSummary { contentRevision, narrativeWritten, closedItemIds,
-  warnings }`; `mission_summary_style` warnings are advisory.
-- Only one `--*-file` flag may read stdin at a time.
-
-On 409 `mission_summary_conflict` nothing is delivered. The CLI exits non-zero and prints
-`{ error, code, baseContentRevision, missionSummary }` on stdout, where `missionSummary` is the
-fresh baseline. Rewrite from it and deliver again once with its `contentRevision`. If that
-conflicts again, deliver without `headline` and `summary` and say so in the delivery summary.
-Writing guidance is in the **Mission Summary** section of the skill.
-
-### Captured file evidence
-
-Read the objective's captured paths once before writing the delivery summary:
-
-```bash
-ovld protocol changes --objective-id $OBJECTIVE_ID            # this checkout's sessions
-ovld protocol objective-changes --objective-id $OBJECTIVE_ID  # synchronized server history
-```
-
-`changes` is local-only: it syncs pending ledger entries (failure is advisory) and returns
-`LocalObjectiveChangesDto` with `scope: "local_objective_sessions"`, synced and pending paths
-deduplicated by path, a 200-row cap with pre-cap `total` and `truncated`, and capture and sync
-warnings. `coverage: "unavailable"` means no local session matched, not that nothing changed.
-`objective-changes` (hosted MCP `overlord_changes`) returns `ObjectiveFileChangesDto` with
-`scope: "server_objective"` across every session, resource, and device, but cannot see
-unsynchronized local rows. Neither read diffs the worktree, classifies ownership, or gates
-delivery.
-
-Rows are cumulative objective evidence, including edits later reverted. `source` is
-`declared_edit` (Native: at least one successful native edit callback), `agent_declared`
-(Declared), or `null` (Unknown historical provenance). Native capture appends a path only for a
-codec-normalized edit with a successful outcome; reads, searches, and fetches are silent. Gap
-codes mean capture may be incomplete, not that a file changed: `shell_activity_unverified`
-(shell ran), `outcome_partial` / `outcome_unavailable` (an edit failed partway or its result was
-unknown, so no path was recorded), and `direct_path_unavailable` (an unmappable tool ran).
-Binding warnings distinguish an unbound session, a bound session with no observed callback, and
-unknown (hosted) availability.
-
-When you know you changed files capture missed (shell or heredoc writes, script or generator
-outputs, deletes, and both rename endpoints), declare exactly those on the existing `update` or
-`deliver` call:
-
-```bash
-ovld protocol deliver --session-key <sessionKey> --objective-id $OBJECTIVE_ID \
-  --summary "Narrative: what you did and next steps." \
-  --paths src/generated/schema.ts,docs/old-name.md,docs/new-name.md
-```
-
-Use `--paths-file <path|->` with a JSON string array for long lists or paths containing commas.
-Paths are normalized against the checkout; traversal, symlinks leaving the checkout, ignored
-paths, and Overlord-managed paths are rejected with a reason on stderr and never fail the call.
-Absent targets (deleted or renamed-away files) are valid. Never enumerate every changed or
-opened file, and when unsure, describe the coverage gap in the summary instead of guessing.
-
-Quote an inline value containing spaces: `--paths "planning/demo environment.md,src/generated.ts"`.
-If the local binding or ledger is unavailable, pass `--session-key` and `--objective-id`
-explicitly and keep the path flags. The CLI warns and submits normalized paths through the
-authenticated session as Declared; do not drop the paths from delivery. Fallback sync failures
-warn and need the declarations repeated on a later update/deliver (no local retry copy).
-Use `objective-changes` to read synchronized fallback evidence. Local `changes` instead reports
-the missing/invalid binding in `capture.healthCodes` and stderr. Restore native capture by
-re-running attach in the intended checkout with the same `OVLD_HOME` and writable storage.
+Mission summary, delivery report, changed-files reads and missed-path declarations follow the
+attach response instructions. Shapes, limits and error examples:
+[mission-summary.md](mission-summary.md).
 
 ### Shared worktree safety (critical)
 
@@ -206,12 +121,6 @@ about the addressed objective, not an ownership arbiter for a shared worktree. R
 uses the same summary-only delivery as every other objective.
 
 Ordinary deliver artifacts should use `next_steps`, `test_results`, `migration`, `note`, `url`, or `decision`.
-
-## Retired Per-File Inputs
-
-`--change-rationales-json|file`, `--changed-files-json|file`, and the `changeRationales` /
-`changedFiles` payload fields are rejected on `update`, `deliver`, and `record-work`. Explain
-changes in the summary and declare missed paths with `--paths` / `--paths-file`.
 
 ## Project Discovery And Mission Creation
 

@@ -3,10 +3,10 @@ info:
   title: Overlord API
   # info.version is the API description's own Semantic Version; it changes when
   # this document changes and is never compared with the contract version.
-  version: 4.10.0
+  version: 4.14.0
   # The contract version (contract/VERSION) this document belongs to. Written
   # only by `yarn version:contract`.
-  x-overlord-contract-version: 173.6.1
+  x-overlord-contract-version: 174.2.0
   description: >-
     Normative description of Overlord's REST surface (ADR 0006): one operation for every
     method and path the backend registers, at the path it is served (ADR 0007), excluding
@@ -10641,7 +10641,10 @@ paths:
       description: >-
         The HTTP transport of `ovld protocol <subcommand>` (ADR 0008). This operation describes the
         transport envelope only: each subcommand's flags, permission, side effects and response shape are
-        specified by contract/protocol-commands.yaml and contract/protocol.md, not here. Authorization is
+        specified by contract/protocol-commands.yaml and contract/protocol.md. Attach and resume-follow-up
+        use ProtocolAttachResponse (attach-response-v4): compact sibling objectives and current-objective
+        directives replace history and the previous/future split; load-context keeps its full shape.
+        Authorization is
         per subcommand: the dispatch table (`backend/protocol/*.ts`) names the RBAC action checked before
         dispatch, in the workspace derived from the flags (an execution request, session key, objective,
         mission, then project reference, each among the caller's active memberships), else in any
@@ -10665,7 +10668,11 @@ paths:
       responses:
         '200':
           description: >-
-            The subcommand's result, whose shape protocol-commands.yaml specifies per subcommand. A
+            The subcommand's result, whose shape protocol-commands.yaml specifies per subcommand.
+            `mission-items` returns full open item detail, total, limit, offset, truncated and
+            nextOffset for a matching live session. `close-items` returns closedItemIds and
+            warnings using delivery closure validation and agent objective provenance, without
+            a delivery or narrative write. Both preserve workspace/project/session scope. A
             project reference that matches in several workspaces instead answers `{ status:
             'project_selection_required', message, projectRef, projects: [{ id, name, slug, workspaceId,
             workspaceName, workspaceSlug }] }`.
@@ -11316,6 +11323,55 @@ components:
           description: Additional human-readable detail (ApiError detail, driver message, or the 500 message).
         details:
           $ref: '#/components/schemas/JsonValue'
+    ProtocolAttachObjective:
+      type: object
+      additionalProperties: false
+      required: [displayId, state, objective]
+      properties:
+        displayId: { type: string }
+        state: { type: string }
+        objective:
+          type: string
+          description: Completed instructions are capped at 600 characters including a truncation marker; others remain full.
+    ProtocolAttachDirective:
+      type: object
+      additionalProperties: false
+      required: [id, type, phase, summary, createdAt, objectiveId]
+      properties:
+        id: { type: string }
+        type: { type: string, enum: [user_follow_up, decision, discussion_summary] }
+        phase: { anyOf: [{ type: string }, { type: 'null' }] }
+        summary: { type: string }
+        createdAt: { type: string }
+        objectiveId: { type: string }
+    ProtocolAttachResponse:
+      type: object
+      description: >-
+        Execution context for attach and resume-follow-up (ADR 0069). agentInstructions is first.
+        No history, previousObjectives or futureObjectives. Mission, current objective, resources,
+        artifacts, attachments, session and summary baseline retain their existing protocol meanings.
+        load-context retains full history and objective inspection. The transport envelope remains
+        JsonValue because the operation dispatches many distinct protocol subcommands.
+      required: [agentInstructions, mission, objective, objectives, directives, session, artifacts, attachments, sharedState]
+      properties:
+        agentInstructions: { type: string }
+        mission: { $ref: '#/components/schemas/JsonValue' }
+        objective: { $ref: '#/components/schemas/JsonValue' }
+        objectives:
+          type: array
+          items: { $ref: '#/components/schemas/ProtocolAttachObjective' }
+        directives:
+          type: array
+          maxItems: 10
+          description: Current objective only, newest first by createdAt then id descending; filtered before the limit.
+          items: { $ref: '#/components/schemas/ProtocolAttachDirective' }
+        session: { $ref: '#/components/schemas/JsonValue' }
+        sessionKey: { type: string }
+        artifacts: { type: array, items: { $ref: '#/components/schemas/JsonValue' } }
+        attachments: { type: array, items: { $ref: '#/components/schemas/JsonValue' } }
+        sharedState: { type: array, items: { $ref: '#/components/schemas/JsonValue' } }
+        projectResources: { type: array, items: { $ref: '#/components/schemas/JsonValue' } }
+        missionSummary: { $ref: '#/components/schemas/JsonValue' }
     JsonValue:
       description: >-
         Any JSON value. Used where the code passes through arbitrary JSON (artifact `contentJson`,
@@ -13586,7 +13642,21 @@ components:
     MissionSummaryStatus:
       type: string
       enum: [ pending, composed, fallback ]
+    MissionSummaryDuplicateDto:
+      description: An older open record that a grouped risk or suggestion row stands for. It keeps
+        its own stored identity and is closed through its own id.
+      type: object
+      required: [ id, deliveryId, objectiveId, deliveredAt ]
+      properties:
+        id: { type: string }
+        deliveryId: { type: string }
+        objectiveId:
+          type: string
+          description: May name a deleted objective.
+        deliveredAt: { $ref: '#/components/schemas/DateTime' }
     MissionSummaryRiskDto:
+      description: An open risk. Open risks with the same normalized text collapse to one row, the
+        newest record, which lists the others in `duplicates`. Absent means none.
       type: object
       required: [ id, deliveryId, objectiveId, deliveredAt, text ]
       properties:
@@ -13595,9 +13665,15 @@ components:
         objectiveId: { type: string }
         deliveredAt: { $ref: '#/components/schemas/DateTime' }
         text: { type: string }
+        duplicates:
+          type: array
+          items: { $ref: '#/components/schemas/MissionSummaryDuplicateDto' }
     MissionSummarySuggestionDto:
       description: An open suggestion from mission_items. Closed suggestions appear in closedItems.
         `state` is always `open` and `resolution` always null; both are kept for clients that read them.
+        Open suggestions with the same title, change, location and doneWhen collapse to one row, the
+        newest record, which lists the others in `duplicates`; a same-title suggestion with different
+        scope stays its own row. Absent means none.
       type: object
       required:
         [
@@ -13625,6 +13701,9 @@ components:
         location: { type: string }
         doneWhen: { type: string }
         resolution: { type: 'null' }
+        duplicates:
+          type: array
+          items: { $ref: '#/components/schemas/MissionSummaryDuplicateDto' }
     MissionSummaryDto:
       type: object
       required:
@@ -14069,6 +14148,12 @@ components:
               items:
                 type: string
                 enum: [ unbound, bound_no_callback, unknown_binding, tool_activity_uncaptured ]
+        instruction:
+          type: string
+          description: >-
+            Agent protocol read only (`objective-changes`): how to declare missed paths,
+            worded by the caller's connection method. Present only when a capture warning
+            needs action; the REST read never carries it.
     ScheduleWeekDayDto:
       type: object
       required: [ dayNum, times ]

@@ -191,6 +191,7 @@ export type {
   MissionSummaryActionDto,
   MissionSummaryClosedItemDto,
   MissionSummaryDto,
+  MissionSummaryDuplicateDto,
   MissionSummaryEvidenceDto,
   MissionSummaryResponse,
   MissionSummaryRiskDto,
@@ -681,6 +682,43 @@ export const CAPTURE_WARNING_MESSAGES: Record<CaptureWarningCode, string> = {
   sync_failed: 'Some captured paths have not synchronized.'
 };
 
+/**
+ * Recovery text for a capture gap, returned as `instruction` on the changes
+ * reads only when a warning needs agent action (plan coo:1294 D6). Worded for
+ * the caller's tools (D7): `cli` names `ovld protocol` flags, `mcp` names
+ * Overlord MCP tools and payload fields. Returns null when no action is needed;
+ * `sync_pending` alone resolves by itself.
+ */
+export function captureGapInstruction(
+  style: 'cli' | 'mcp',
+  warnings: readonly CaptureWarningCode[]
+): string | null {
+  const gap = warnings.some(code => code !== 'sync_pending' && code !== 'sync_failed');
+  const syncFailed = warnings.includes('sync_failed');
+  if (!gap && !syncFailed) return null;
+  const parts: string[] = [];
+  if (gap && style === 'mcp') {
+    parts.push(
+      'Capture may have missed files you changed. Declare only the paths you know you changed that this list misses (all of them when no local connector captured your edits; also script and generator outputs, deletes, both rename endpoints) in `declaredPaths` on your next `overlord_update_session` or `overlord_deliver_session`; they are labelled Declared. If unsure, state the coverage gap in the delivery summary instead of guessing.'
+    );
+  } else if (gap) {
+    parts.push(
+      'Capture may have missed files you changed. Declare only the paths you know you changed that this list misses (script and generator outputs, deletes, both rename endpoints) with `--paths a,b` (quote lists with spaces) or `--paths-file <file>` (a JSON string array) on your next `ovld protocol update` or `ovld protocol deliver`; they are labelled Declared. If unsure, state the coverage gap in the delivery summary instead of guessing.'
+    );
+    if (warnings.includes('unbound') || warnings.includes('unknown_binding')) {
+      parts.push(
+        'If this checkout has no local binding, also pass --session-key and --objective-id; re-run attach in this checkout to restore automatic capture.'
+      );
+    }
+  }
+  if (syncFailed && style === 'cli') {
+    parts.push(
+      'Some paths did not synchronize: repeat any paths you declared without a local binding on a later update or deliver, because no local retry copy exists.'
+    );
+  }
+  return parts.length > 0 ? parts.join(' ') : null;
+}
+
 /** Hard cap on rows returned by every objective file-change read. */
 export const OBJECTIVE_FILE_CHANGES_LIMIT = 200;
 
@@ -718,6 +756,8 @@ export interface LocalObjectiveChangesDto {
     healthCodes: string[];
   };
   warnings: CaptureWarningCode[];
+  /** What to do about the warnings ({@link captureGapInstruction}); absent when none needs action. */
+  instruction?: string;
 }
 
 // ---- Agent catalog and launch configuration ----

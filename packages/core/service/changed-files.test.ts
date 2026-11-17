@@ -358,6 +358,43 @@ describe('session capture diagnostics', () => {
     await db.close();
   });
 
+  it('the agent read returns a capture-gap instruction worded by connection method (coo:1294.s9m6)', async () => {
+    const { db, ctx, mission, attach } = await setup();
+    const { mission: m, objectives } = await mission();
+    await attach(m.id, objectives[0]!.id, 'unbound');
+    const read = (instructionStyle?: 'cli' | 'mcp') =>
+      listObjectiveFileChanges({
+        ctx,
+        missionId: m.id,
+        objectiveId: objectives[0]!.id,
+        ...(instructionStyle ? { instructionStyle } : {})
+      });
+
+    // The web read carries diagnostics only.
+    assert.equal((await read()).instruction, undefined);
+
+    const cli = (await read('cli')).instruction ?? '';
+    assert.match(cli, /--paths a,b/);
+    assert.match(cli, /`ovld protocol update`/);
+    assert.doesNotMatch(cli, /declaredPaths/);
+
+    const mcp = (await read('mcp')).instruction ?? '';
+    assert.match(mcp, /`declaredPaths`/);
+    assert.match(mcp, /`overlord_deliver_session`/);
+    assert.doesNotMatch(mcp, /\bovld\b|--[a-z]/);
+
+    // A healthy capture needs no instruction.
+    await db.run(
+      `UPDATE agent_sessions SET capture_binding_state = 'bound', capture_callback_observed_at = ?
+        WHERE objective_id = ?`,
+      ['2026-10-02T00:00:00.000Z', objectives[0]!.id]
+    );
+    const healthy = await read('cli');
+    assert.deepEqual(healthy.capture.warnings, []);
+    assert.equal(healthy.instruction, undefined);
+    await db.close();
+  });
+
   it('aggregates sticky gaps idempotently and bounds distinct codes', async () => {
     const { db, ctx, mission, attach } = await setup();
     const { mission: m, objectives } = await mission();

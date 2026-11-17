@@ -365,8 +365,8 @@ export async function enqueueMissionSummaryComposeJob({
          source_delivery_id = excluded.source_delivery_id,
          updated_at = excluded.updated_at
        WHERE mission_summaries.narrative_delivery_id IS NULL
-          OR mission_summaries.narrative_delivery_id IS DISTINCT FROM (SELECT id FROM deliveries
-               WHERE mission_id = ? AND deleted_at IS NULL ORDER BY delivered_at DESC, id DESC LIMIT 1)
+          OR NOT EXISTS (SELECT 1 FROM deliveries
+               WHERE id = mission_summaries.narrative_delivery_id AND mission_id = ? AND deleted_at IS NULL)
        RETURNING revision, requested_generation`,
     [missionId, workspaceId, mission.project_id, sourceDeliveryId, now, now, missionId]
   );
@@ -477,18 +477,22 @@ export async function lockMissionSummaryRow(
   );
 }
 
-/** True only when the current live delivery is the narrative's source. */
+/**
+ * True while agent prose exists and its source delivery is still live. A later
+ * delivery that sent no prose does not lift the guard, so the fallback never
+ * replaces mission-wide agent prose with text about one delivery.
+ */
 async function hasCurrentNarrative(
   db: DatabaseClient,
   missionId: string,
   narrativeDeliveryId: string | null
 ): Promise<boolean> {
   if (narrativeDeliveryId === null) return false;
-  const latest = await db.get<{ id: string }>(
-    `SELECT id FROM deliveries WHERE mission_id = ? AND deleted_at IS NULL ORDER BY delivered_at DESC, id DESC LIMIT 1`,
-    [missionId]
+  const source = await db.get<{ id: string }>(
+    `SELECT id FROM deliveries WHERE id = ? AND mission_id = ? AND deleted_at IS NULL`,
+    [narrativeDeliveryId, missionId]
   );
-  return latest?.id === narrativeDeliveryId;
+  return source !== undefined && source !== null;
 }
 
 /** Prose written by a guarded fallback publication. */

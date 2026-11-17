@@ -2,6 +2,7 @@ import { ChevronRight } from 'lucide-react';
 import { type ReactNode } from 'react';
 
 import { useObjectiveDetailNavigation } from '../../lib/hooks/use-objective-detail-navigation.ts';
+import type { SummaryItemGroup } from '../../lib/mission-summary-derive.ts';
 import { cn } from '../../lib/utils.ts';
 
 /** Shared focus ring for every control in the section (plan §11 item 14). */
@@ -91,5 +92,42 @@ export function ObjectiveKeyLink({
       {children}
       {chevron ? <ChevronRight className="size-3" aria-hidden="true" /> : null}
     </button>
+  );
+}
+
+/**
+ * What a grouped row stands for: the count of stored records and the objectives they came from.
+ * Renders nothing for a single record. Count is text, never colour alone.
+ */
+export function GroupSources({
+  group,
+  noun,
+  className
+}: {
+  group: SummaryItemGroup;
+  noun: string;
+  className?: string;
+}) {
+  if (group.count < 2) return null;
+  return (
+    <span
+      data-item-group=""
+      className={cn(
+        'inline-flex min-w-0 flex-wrap items-center gap-x-1.5 text-xs text-(--color-ink-dim)',
+        className
+      )}
+    >
+      <span className="font-medium text-(--color-ink)">
+        {group.count} matching {noun} records from
+      </span>
+      {group.sources.map((source, index) => (
+        <ObjectiveKeyLink
+          key={source.objectiveId}
+          objectiveKey={source.objectiveKey}
+          ariaLabel={source.objectiveKey ? `Open objective ${source.objectiveKey}` : undefined}
+          className={index < group.sources.length - 1 ? 'after:content-[","]' : undefined}
+        />
+      ))}
+    </span>
   );
 }

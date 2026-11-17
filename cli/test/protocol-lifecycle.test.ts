@@ -160,7 +160,7 @@ test('hook-event persists external session id on the active agent session', asyn
   await db.close();
 });
 
-test('attach response includes attach-response-v3 fields', async () => {
+test('attach response includes attach-response-v4 fields', async () => {
   const { db, ctx } = await createSeededCliContext({ source: 'protocol' });
 
   const project = await createProject({ ctx, name: 'Shape Test' });
@@ -174,18 +174,19 @@ test('attach response includes attach-response-v3 fields', async () => {
   const attached = await attachSession({ ctx, missionId: mission.id });
   assert.equal(attached.mission.statusType, 'execute');
   for (const field of [
-    'history',
+    'directives',
     'artifacts',
     'attachments',
-    'previousObjectives',
-    'futureObjectives',
+    'objectives',
     'session',
     'sharedState',
     'agentInstructions'
   ] as const) {
     assert.ok(field in attached, `missing ${field}`);
   }
-  assert.ok(!('objectives' in attached), 'objectives field should be removed in v2+');
+  for (const field of ['history', 'previousObjectives', 'futureObjectives']) {
+    assert.ok(!(field in attached), `retired field ${field}`);
+  }
   assert.ok(!('promptContext' in attached), 'promptContext field should be removed in v3');
   assert.ok(attached.session.sessionKey);
   assert.ok(attached.agentInstructions.includes('Required Protocol Workflow'));

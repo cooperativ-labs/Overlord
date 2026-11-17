@@ -105,12 +105,25 @@ Command names, flags and response shapes are in
   surfaces, not part of the agent protocol. Agents never claim queue work through
   `ovld protocol`; a user-facing agent may use `launch-objective` to create the same
   execution request as the existing launch surface.
-- **Attach response.** `attach` returns mission metadata; current objective metadata,
-  including objective ID, instruction text, and optional `resourceKey`; all objective IDs,
-  states, and optional `resourceKey` values in order; the session object with
-  `sessionKey`; history/events relevant to the mission; artifacts; attachments visible to
-  the active objective; shared context; `projectResources` when available; concise
-  `agentInstructions`; and pending objective information when relevant. Runner-launched
+- **Attach response (ADR 0069).** `attach` and `resume-follow-up` return compact execution
+  context (`attach-response-v4`): mission metadata; the full current `objective`;
+  `objectives: [{ displayId, state, objective }]` in mission order, excluding the current
+  objective and empty-instruction slots; and `directives`, the newest 10 events of this
+  objective of types `user_follow_up`, `decision`, and `discussion_summary`, newest first
+  (created time descending, id descending to break ties). Filtering occurs before the limit.
+  Completed sibling instruction text is capped at 600 characters including `… [truncated]`;
+  other siblings retain full text and all siblings retain their real lifecycle state.
+  `history`, `previousObjectives` and `futureObjectives` are absent. Full instructions
+  and explicit event history remain available through `load-context --objective-id`;
+  that read and ordinary `ObjectiveSummary` consumers retain their existing shape.
+  The session with `sessionKey`, artifacts, current-objective attachments, shared context,
+  optional `projectResources` and mission-summary editing baseline are retained.
+  `agentInstructions` names the new context fields and
+  is the first top-level key, states that it takes precedence over an installed Overlord
+  skill or plugin, and is worded for the caller's connection method: `attach` and
+  `resume-follow-up` accept an optional `--connection-method cli|mcp` (default `cli`); MCP
+  servers send `mcp`, and the rules then name Overlord MCP tools and payload fields and no
+  CLI command or flag. Runner-launched
   agents carry `OVERLORD_EXECUTION_REQUEST_ID` and `OVERLORD_OBJECTIVE_ID`, which the CLI
   forwards as `--execution-request-id` and `--objective-id` so the backend pins that
   objective and links `execution_requests.launched_session_id` to the created session.
@@ -151,6 +164,15 @@ Command names, flags and response shapes are in
   matches) and is never sent to the backend: it drains, snapshots, then finalizes, and
   prints exactly `LocalObjectiveChangesDto`; a foreign mission/objective pair or a
   `--session-key` that is not a local session of the objective is rejected.
+- **Rare-case instructions.** A rule the agent needs only when a case occurs arrives in
+  the response that reports the case, not in `agentInstructions`. The changes reads add
+  `instruction` (how to declare missed paths) only when a capture warning needs action:
+  `objective-changes` words it by an optional `--connection-method cli|mcp` (default
+  `cli`; MCP servers send `mcp`), and the CLI-local `changes` read uses CLI wording.
+  `deliver` returns `instruction` with the post-delivery rule worded by the session's
+  connection method (CLI: `resume-follow-up` with the delivered ids; MCP: ask the user to
+  start follow-up work). `mission_summary_conflict` and `mission_summary_item_skipped`
+  messages state their own next step. `agentInstructions` keeps one pointer per rule.
 - **Delivery.** A summary is the only required delivery content; delivery-report
   evidence and artifacts are optional annotations. The CLI drains objective-ledger
   evidence before delivery; sync warnings, unavailable hooks, and missing paths never
@@ -172,7 +194,8 @@ Command names, flags and response shapes are in
   `missionSummary` editing baseline for summary-enabled missions: `contentRevision`, the
   current `headline` and `summary`, `author` (`agent`, `gemini`, `deterministic`, or null
   before the first write), up to 60 `openItems` (`id`, `kind`, objective display id,
-  `text`, `blocking` for human actions) and `truncated`. `load-context` and `connect` never
+  `text`, `blocking` for human actions), `totalOpenItems` and `truncated`. Blocking human
+  actions precede other items; within each group newest delivery then report order applies. `load-context` and `connect` never
   carry it, and the seen marker stays operator-only. `deliver` and `record-work` accept an
   optional `missionSummary { baseContentRevision, headline, summary, closeItems }` in the
   payload envelope or through `--mission-summary-file`; headline and summary travel
@@ -197,12 +220,12 @@ Command names, flags and response shapes are in
 - **Authentication**: Session key passed as flag or environment variable
 - **Required sequence**: `attach → (update|heartbeat)* → (ask|deliver)`
 - **Response format**: JSON on stdout; non-zero exit on error
-- **Attachment download**: objective launch context lists each attachment's authenticated HTTPS URL and an `ovld protocol attachment-download-url --attachment-id <id> --output <path>` command. The optional CLI-only `--output` flag downloads the attachment through the CLI's authenticated backend client and writes it to a new local file; it never exposes the user's token to the agent or places it in a URL. Without `--output` the URL response is unchanged; the URL alone is not a public link.
+- **Attachment download**: when the current objective has attachments, attach and resume-follow-up `agentInstructions` add an Attachments section. In CLI wording it gives each attachment's `ovld protocol attachment-download-url --mission-id <id> --objective-id <id> --attachment-id <id> --output <path>` command and the `attachment-list` command for other objectives; in MCP wording it states that no Overlord MCP tool downloads them. The launch prompt does not list attachments: it carries only the mission and objective ids, the instruction not to load the Overlord skill, the execution directive and the attach command. The optional CLI-only `--output` flag downloads the attachment through the CLI's authenticated backend client and writes it to a new local file; it never exposes the user's token to the agent or places it in a URL. Without `--output` the URL response is unchanged; the URL alone is not a public link.
 - **Advisory evidence recovery**: `sync-changes` also accepts an ended, delivered session for advisory evidence recovery. The caller still needs current workspace membership and event permission; mission, objective and resource remain pinned to that session. Deleted sessions and ended sessions without a delivery remain invalid. Recovery does not reopen the session or objective or rewrite the delivery summary or report.
 - **Inbox capture**: `ovld protocol create --unassigned-to-project` (the `--inbox` alias is retired, ADR 0054) creates an account-owned unassigned capture. Protocol `create`, `prompt`, and `record-work` never infer a project from the current directory or other discovery: a normal mission/objective creation supplies an explicit `--project-id` (or MCP `projectId`), and only non-executing `create` may instead supply the explicit unassigned intent flag (MCP `overlord_create_mission` `unassignedToProject: true`; `overlord_create_inbox_item` is already explicit intent). `--project-id` cannot be combined with that flag. `prompt` and `record-work` cannot create inbox items, so they reject an omitted project reference.
 - **Project references**: Protocol `--project-id` and MCP `projectId` accept a project UUID, slug, or name; names match case-insensitively across the caller's live memberships. Because slugs and names are unique per workspace rather than per organization, a reference matching in more than one workspace returns the structured `project_selection_required` result — `{ status, message, projectRef, projects[] }`, each project `{ id, name, slug, workspaceId, workspaceName, workspaceSlug }` — instead of a 409, and `--workspace-id` / `workspaceId` (id, slug, or name) narrows the retry.
 - **Shell-special content**: Must use `--summary-file -` / `--payload-file -` with stdin heredoc
-- **Delivery evidence**: `deliver` accepts an optional versioned `deliveryReport.agentReport` object. Its `humanActions`, `tradeoffsMade`, `knownRisks`, `deferredWork`, and `assumptions` fields are advisory agent evidence, normalized to empty arrays when absent. Malformed advisory items are discarded independently with bounded warnings; evidence, change tracking, and model availability never delay delivery. Human actions must exclude Git operations and routine review/testing; the protocol applies this exclusion before persistence. Each human action carries a required `action`, expected `reason` and `category`, optional `blocking`, and optional `command`, `verify`, and `link` (HTTP(S) URL or repository-relative path only) that are preserved verbatim through normalization and composition. A human action whose `blocking` is `true` is a required follow-up step (the delivered work does not function until a person completes it), not a question the agent asked; blocking questions remain exclusively `ask` mission events. Deferred work is recommended new work outside the current mission, written by the agent as `DeferredWorkInputV1` objects (`title`, `change`, `location`, `doneWhen`); a string item, an over-long or missing field, or an unknown key is rejected with `invalid_input`. Each stored item (`DeferredWorkV1`) is the input plus a stable delivery-local `id`: `deferred-work-<index>-<digest>`, where `index` is the zero-based position in the normalized agent report and `digest` is the first 16 hex characters of the SHA-256 of the UTF-8 JSON text of `[title, change, location, doneWhen]` with each field trimmed; `contract/delivery-report-v1-fixtures.json` pins the derivation. Nothing rewrites an item: `presentation.deferredWork` is the eligible subset of the agent objects, with their ids, after dropping items that restate planned sibling objectives, leftover current-objective work, or human follow-up. The stored `deliveryReport.presentation` begins as an immediate deterministic fallback and is marked `pending` when a compose job is enqueued; a background worker may later replace only `presentation` with a Gemini-composed or `fallback` result, and in every outcome it appends the deterministic path-derived `deterministic_rule` actions (migrations, env examples, deployment configs, dependency manifests, CI workflow files) that the agent and model did not already cover; each carries the triggering path as `link` and `sourceRef` and a generic `verify` step. The original delivery summary remains immutable.
+- **Delivery evidence**: `deliver` accepts an optional versioned `deliveryReport.agentReport` object. Its `humanActions`, `tradeoffsMade`, `knownRisks`, `deferredWork`, and `assumptions` fields are advisory agent evidence, normalized to empty arrays when absent. Malformed advisory items are discarded independently with bounded warnings; evidence, change tracking, and model availability never delay delivery. Human actions must exclude Git operations and routine review/testing; the protocol applies this exclusion before persistence. Each human action carries a required `action`, expected `reason` and `category`, optional `blocking`, and optional `command`, `verify`, and `link` (HTTP(S) URL or repository-relative path only) that are preserved verbatim through normalization and composition. A human action whose `blocking` is `true` is a required follow-up step (the delivered work does not function until a person completes it), not a question the agent asked; blocking questions remain exclusively `ask` mission events. Deferred work is recommended new work outside the current mission, written by the agent as `DeferredWorkInputV1` objects (`title`, `change`, `location`, `doneWhen`); a string item, an over-long or missing field, or an unknown key is rejected with `invalid_input`. Each stored item (`DeferredWorkV1`) is the input plus a stable delivery-local `id`: `deferred-work-<index>-<digest>`, where `index` is the zero-based position in the normalized agent report and `digest` is the first 16 hex characters of the SHA-256 of the UTF-8 JSON text of `[title, change, location, doneWhen]` with each field trimmed; `contract/delivery-report-v1-fixtures.json` pins the derivation. Nothing rewrites an item: `presentation.deferredWork` is the eligible subset of the agent objects, with their ids, after dropping items that restate planned sibling objectives, leftover current-objective work, or human follow-up. Known risks are likewise never rewritten: `presentation.knownRisks` is always `agentReport.knownRisks`, because a risk's mission-item identity is a digest of its text. The stored `deliveryReport.presentation` begins as an immediate deterministic fallback and is marked `pending` when a compose job is enqueued; a background worker may later replace only `presentation` with a Gemini-composed or `fallback` result, and in every outcome it appends the deterministic path-derived `deterministic_rule` actions (migrations, env examples, deployment configs, dependency manifests, CI workflow files) that the agent and model did not already cover; each carries the triggering path as `link` and `sourceRef` and a generic `verify` step. The original delivery summary remains immutable.
 
 ### Protocol → Database (Service Layer)
 
@@ -317,3 +340,29 @@ answering a decision it is blocked on, and injecting an instruction into it.
   (`session:read`, ADR 0063). Dismissal is per workspace member, bound to the request
   revision, and exposed as additive `dismissed`/`dismissedAt` on human reads; it never
   changes the request, its delivery, the blocking-question seen marker, or answerability.
+
+### Agent mission item inspection and closure (ADR 0073)
+
+`mission-items` and `close-items` require an attached live session key matching the
+mission. Mission resolution enforces workspace and project scope. Reads require
+`mission:read`; closure requires `event:create`. No new token scopes are granted.
+Both accept `--mission-id` or an objective display id through `--objective-id`.
+
+- `mission-items --limit 60 --offset 0` reads open items, including untrimmed text,
+  full `detail` (suggestion `change`, `location`, `doneWhen`; action `command`, `verify`),
+  source objective/delivery ids and resolution metadata. Returns `{ missionId, items,
+  total, limit, offset, truncated, nextOffset }`; total counts all matching live-delivery
+  open items. Limit is an integer 1..200, default 60; offset is a nonnegative integer,
+  default 0. Ordering matches the baseline. Follow nextOffset until null. Paging is a
+  live read: restart at zero after concurrent changes and finish inspection before closing.
+- `close-items --close-items-json <array>` or `--close-items-file <path|->` accepts
+  1..50 delivery close entries (`id`, `status: done|dismissed`, required reason <=280).
+  Validation and skipped-entry warnings are identical to delivery; repeated calls support
+  larger batches. Returns the delivery mission-summary write result, without prose or a
+  lifecycle transition. Attribution is agent plus the attached objective; delivery id is
+  null because no delivery is created. Each changed item emits the usual entity change.
+  Ended or delivered sessions must resume follow-up before closing.
+
+MCP exposes `overlord_mission_items` (`missionId` or `objectiveId`, `sessionKey`,
+`limit`, `offset`) and `overlord_close_items` (same scope and key, `closeItems`).
+Attach instructions name the read and closure by the caller's connection method.

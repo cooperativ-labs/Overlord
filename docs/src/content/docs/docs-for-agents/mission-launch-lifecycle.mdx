@@ -74,11 +74,14 @@ ground from the system's point of view, plus everything before and after.
    This is the step where the most data gets assembled, all inside the CLI's
    `launchAgent` / `buildLaunchPlan`:
 
-   - **Mission context.** The runner fetches the mission, its event history,
-     artifacts, and any objective attachments, and assembles a markdown
-     briefing — including an explicit directive to start the objective
-     immediately and only stop to ask a question when genuinely blocked. This
-     is written to a temp file (`.overlord/tmp/objective-<mission>-<key>.md`) that gets
+   - **Mission context.** The runner fetches the mission to pick the
+     objective and assembles a short markdown briefing: the mission id and
+     title, the objective id, an instruction not to load the Overlord skill,
+     an explicit directive to start the objective immediately and only stop to
+     ask a question when genuinely blocked, and the attach command. The
+     objectives, attachments, history and artifacts arrive in the attach
+     response, with every working and delivery rule. The briefing is written to
+     a temp file (`.overlord/tmp/objective-<mission>-<key>.md`) that gets
      passed to the agent as its system-prompt file.
    - **Project resources.** The runner calls the protocol's `load-context`
      endpoint to resolve every logical resource linked to the project for this

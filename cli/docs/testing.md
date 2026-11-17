@@ -71,17 +71,18 @@ shared with [Layer 3 §3.5](../../TEST_PLAN.md#35-protocol-command-surface-confo
   the documented "agent must stop" contract is representable (single question per
   call rejected if multiple).
 
-### B2. `attach` response shape (`attach-response-v3`)
-- Output contains every `requiredTopLevelFields`: `history`, `artifacts`,
-  `attachments`, `previousObjectives`, `futureObjectives`, `session`,
+### B2. `attach` response shape (`attach-response-v4`)
+- Output contains every `requiredTopLevelFields`: `directives`, `artifacts`,
+  `attachments`, `objectives`, `session`,
   `sharedState`, `agentInstructions`.
-- `session` has `sessionKey` + `state`; objective arrays each have
-  `id`/`objective`/`state`/`position`.
+- `session` has `sessionKey` + `state`; sibling objectives have only
+  `displayId`/`state`/`objective`. Completed instructions are capped at 600 characters.
 - `agentInstructions` contains every `agentInstructionsRequiredContent` item:
   mission ID, objective ID, objective label, pointers to the structured JSON
   fields, and required protocol workflow instructions.
-- Objective text, history, attachments, artifacts, and shared context remain in
-  their structured fields instead of being duplicated in `agentInstructions`.
+- Current-objective directions are in `directives` (newest 10); general `history`
+  and the previous/future arrays are absent. `load-context` retains full inspection.
+  Attachments, artifacts and shared context stay in their structured fields.
 
 ### B3. Required flags and vocab enforcement
 - Each command rejects a call missing any `requiredFlags` entry.
@@ -179,7 +180,7 @@ A thin set of real-subprocess tests via `runOvld` confirming the wiring L2/L3
 proved is actually reachable at the binary boundary:
 
 - `ovld protocol attach` against a temp SQLite DB returns valid
-  `attach-response-v3` JSON on stdout, exit 0.
+  `attach-response-v4` JSON on stdout, exit 0.
 - A full happy path: `attach → update → deliver` over subprocess leaves the
   expected rows.
 - An error path (`update` without session key) exits non-zero with a clear message.

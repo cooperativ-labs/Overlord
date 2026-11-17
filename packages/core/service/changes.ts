@@ -1,6 +1,7 @@
 import {
   CAPTURE_GAP_CODES,
   type CaptureBindingState,
+  captureGapInstruction,
   type CaptureHealthEntryDto,
   type CaptureSessionDto,
   type FileChangeDto,
@@ -130,11 +131,17 @@ async function resolveObjectiveInMission({
 export async function listObjectiveFileChanges({
   ctx,
   missionId,
-  objectiveId
+  objectiveId,
+  instructionStyle = null
 }: {
   ctx: ServiceContext;
   missionId: string;
   objectiveId: string;
+  /**
+   * Set by the agent protocol read: adds `instruction` when a capture warning
+   * needs agent action, worded for the caller's tools (plan coo:1294 D6, D7).
+   */
+  instructionStyle?: 'cli' | 'mcp' | null;
 }): Promise<ObjectiveFileChangesDto> {
   const mission = await resolveMissionId(ctx, missionId);
   if (!objectiveId?.trim()) {
@@ -193,6 +200,8 @@ export async function listObjectiveFileChanges({
     hookHealth: row.hook_health
   }));
 
+  const warnings = deriveCaptureWarnings(sessions);
+  const instruction = instructionStyle ? captureGapInstruction(instructionStyle, warnings) : null;
   return {
     scope: 'server_objective',
     missionId: mission.id,
@@ -201,6 +210,7 @@ export async function listObjectiveFileChanges({
     total,
     limit: OBJECTIVE_FILE_CHANGES_LIMIT,
     truncated: total > items.length,
-    capture: { sessions, warnings: deriveCaptureWarnings(sessions) }
+    capture: { sessions, warnings },
+    ...(instruction ? { instruction } : {})
   };
 }

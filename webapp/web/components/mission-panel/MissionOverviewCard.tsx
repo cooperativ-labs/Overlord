@@ -1,17 +1,11 @@
-import type {
-  DeliveryDto,
-  MissionDetailDto,
-  MissionSummaryEvidenceDto,
-  ObjectiveDto
-} from '@overlord/contract';
-import { CheckCircle2, Clock, HelpCircle, Loader2, Rocket } from 'lucide-react';
+import type { DeliveryDto, MissionDetailDto, MissionSummaryEvidenceDto } from '@overlord/contract';
+import { CheckCircle2, CircleSlash, Clock, HelpCircle, Loader2, Rocket } from 'lucide-react';
 import {
   type KeyboardEvent,
   type ReactNode,
   useCallback,
   useEffect,
   useId,
-  useLayoutEffect,
   useMemo,
   useRef,
   useState
@@ -25,6 +19,8 @@ import {
   useMissionSummaryVisitBaseline
 } from '../../lib/hooks/use-mission-summary-seen.ts';
 import {
+  type MissionLiveStatus,
+  missionLiveStatus,
   missionSummaryActions,
   missionSummaryClosedItems,
   missionSummaryFiles,
@@ -33,6 +29,7 @@ import {
   missionSummaryRunningSentences,
   missionSummarySectionState,
   missionSummarySuggestions,
+  missionSummaryTradeoffs,
   openSummaryQuestions,
   summaryCoverageComplete,
   summaryCoverageRequirements,
@@ -59,21 +56,14 @@ import { MissionSummaryProvenanceLine } from '../mission-summary/MissionSummaryP
 import { MissionSummaryResolved } from '../mission-summary/MissionSummaryResolved.tsx';
 import { MissionSummaryRisks } from '../mission-summary/MissionSummaryRisks.tsx';
 import { MissionSummarySuggestions } from '../mission-summary/MissionSummarySuggestions.tsx';
-import { isInFlightObjective } from '../objectives/ObjectiveRow.tsx';
+import { MissionSummaryTradeoffs } from '../mission-summary/MissionSummaryTradeoffs.tsx';
 import { StatusSpinner } from '../StatusMotion.tsx';
 
 import { OVERVIEW_TAB_TONES, type OverviewTabTone } from './overview-tab-tones.ts';
 
 type OpenRequests = ReturnType<typeof useMissionOpenAgentRequests>;
 
-export type OverviewTabId =
-  | 'objectives'
-  | 'summary'
-  | 'for_you'
-  | 'risks'
-  | 'suggested'
-  | 'resolved'
-  | 'files';
+export type OverviewTabId = 'objectives' | 'summary' | 'for_you' | 'suggested';
 
 type OverviewTab = {
   id: OverviewTabId;
@@ -87,7 +77,8 @@ type OverviewTab = {
 /** Tabs whose content is evidence the seen watermark covers. */
 const TAB_EVIDENCE_GROUP: Partial<Record<OverviewTabId, SummaryEvidenceGroup>> = {
   for_you: 'for_you',
-  risks: 'risks',
+  // The Summary tab carries the mission's risks alongside the summary prose.
+  summary: 'risks',
   suggested: 'suggested'
 };
 
@@ -110,66 +101,75 @@ function useMinuteClock(): string {
   return now;
 }
 
-export type OverviewBadge = 'waiting' | 'executing' | 'launching' | 'complete' | null;
-
 /**
- * The card's state badge (plan §6.1): waiting on you when any objective is blocked, otherwise
- * executing while one is in flight, launching while one launches, complete when the mission's
- * status type is complete, and nothing otherwise.
+ * The mission's live status, shown apart from the agent-written summary: a labelled badge plus the
+ * reason. It is derived from live mission, objective, request and item state (`missionLiveStatus`),
+ * so closing the last blocking action or answering the last question changes it on the next
+ * refresh, without a delivery. It is a polite live region (a labelled group, so the updating strip stays the only `status`) and the change is announced.
  */
-export function overviewBadge({
-  objectives,
-  blockingByObjective,
-  statusType
-}: {
-  objectives: readonly Pick<ObjectiveDto, 'id' | 'state'>[];
-  blockingByObjective: ReadonlyMap<string, readonly unknown[]>;
-  statusType: MissionDetailDto['statusType'];
-}): OverviewBadge {
-  const inFlight = objectives.filter(objective => isInFlightObjective(objective.state));
-  if (inFlight.some(objective => (blockingByObjective.get(objective.id)?.length ?? 0) > 0)) {
-    return 'waiting';
-  }
-  if (inFlight.length > 0) return 'executing';
-  if (objectives.some(objective => objective.state === 'launching')) return 'launching';
-  if (statusType === 'complete') return 'complete';
-  return null;
-}
-
-function OverviewKindBadge({ badge }: { badge: OverviewBadge }) {
-  if (badge === 'waiting') {
-    return (
-      <KindBadge
-        tone="question"
-        icon={<HelpCircle className="size-3" aria-hidden="true" />}
-        label="waiting on you"
-      />
-    );
-  }
-  if (badge === 'executing') {
-    return (
-      <KindBadge tone="running" icon={<StatusSpinner className="size-3" />} label="executing" />
-    );
-  }
-  if (badge === 'launching') {
-    return (
-      <KindBadge
-        tone="launching"
-        icon={<Rocket className="size-3" aria-hidden="true" />}
-        label="launching"
-      />
-    );
-  }
-  if (badge === 'complete') {
-    return (
-      <KindBadge
-        tone="delivered"
-        icon={<CheckCircle2 className="size-3" aria-hidden="true" />}
-        label="complete"
-      />
-    );
-  }
-  return null;
+function LiveStatusLine({ status }: { status: MissionLiveStatus }) {
+  const badge = (() => {
+    switch (status.kind) {
+      case 'blocked':
+        return (
+          <KindBadge
+            tone="blocked"
+            icon={<CircleSlash className="size-3" aria-hidden="true" />}
+            label={status.label}
+          />
+        );
+      case 'waiting':
+        return (
+          <KindBadge
+            tone="question"
+            icon={<HelpCircle className="size-3" aria-hidden="true" />}
+            label={status.label}
+          />
+        );
+      case 'in_progress':
+        return (
+          <KindBadge
+            tone="running"
+            icon={<StatusSpinner className="size-3" />}
+            label={status.label}
+          />
+        );
+      case 'launching':
+        return (
+          <KindBadge
+            tone="launching"
+            icon={<Rocket className="size-3" aria-hidden="true" />}
+            label={status.label}
+          />
+        );
+      case 'complete':
+        return (
+          <KindBadge
+            tone="delivered"
+            icon={<CheckCircle2 className="size-3" aria-hidden="true" />}
+            label={status.label}
+          />
+        );
+      case 'idle':
+        return <KindBadge tone="delivered" icon={null} label={status.label} />;
+    }
+  })();
+  return (
+    <div
+      role="group"
+      aria-live="polite"
+      aria-label="Mission status"
+      data-live-status={status.kind}
+      className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1"
+    >
+      {badge}
+      {status.detail ? (
+        <span className="min-w-0 text-xs text-(--color-ink-dim) wrap-anywhere">
+          {status.detail}
+        </span>
+      ) : null}
+    </div>
+  );
 }
 
 function UpdatingStrip({ label }: { label: ReactNode }) {
@@ -177,50 +177,6 @@ function UpdatingStrip({ label }: { label: ReactNode }) {
     <div className="flex items-center gap-2.5 border-b border-sky-200 bg-sky-50 px-4 py-2.5 text-sm text-sky-950 dark:border-sky-500/40 dark:bg-sky-500/10 dark:text-sky-100">
       <Loader2 className="size-3.5 shrink-0 animate-spin" aria-hidden="true" />
       <span className="min-w-0 wrap-anywhere">{label}</span>
-    </div>
-  );
-}
-
-/** The summary paragraph, clamped to three lines with Show more (plan §6.1). */
-function ClampedSummary({ children, dimmed }: { children: ReactNode; dimmed: boolean }) {
-  const [expanded, setExpanded] = useState(false);
-  const [overflowing, setOverflowing] = useState(false);
-  const bodyRef = useRef<HTMLDivElement>(null);
-  const bodyId = useId();
-  useLayoutEffect(() => {
-    const node = bodyRef.current;
-    if (!node || expanded) return;
-    const measure = () => setOverflowing(node.scrollHeight > node.clientHeight + 1);
-    measure();
-    if (typeof ResizeObserver === 'undefined') return;
-    const observer = new ResizeObserver(measure);
-    observer.observe(node);
-    return () => observer.disconnect();
-  }, [children, expanded]);
-  return (
-    <div className={cn('grid min-w-0 gap-1', dimmed && 'opacity-55')}>
-      <div
-        id={bodyId}
-        ref={bodyRef}
-        className={cn(
-          'min-w-0 text-sm text-(--color-ink)',
-          // Markdown contains block layouts, which Chromium does not always line-clamp.
-          !expanded && 'line-clamp-3 max-h-[3lh] overflow-hidden'
-        )}
-      >
-        {children}
-      </div>
-      {overflowing || expanded ? (
-        <button
-          type="button"
-          aria-expanded={expanded}
-          aria-controls={bodyId}
-          onClick={() => setExpanded(value => !value)}
-          className="w-fit rounded-sm text-xs font-medium text-(--color-ink-dim) hover:text-(--color-ink) hover:underline focus-visible:outline-2"
-        >
-          {expanded ? 'Show less' : 'Show more'}
-        </button>
-      ) : null}
     </div>
   );
 }
@@ -288,7 +244,7 @@ function OverviewTabs({
 
 /**
  * The mission overview card (mission-panel-redesign plan §6): a feed-style header (context line,
- * state badge, headline, clamped summary) over a tab row whose selection replaces the lower half.
+ * state badge, headline, full summary) over a tab row whose selection replaces the lower half.
  * The Objectives tab holds the objective list; the other tabs reuse the summary components
  * headless. The card never hides, because it carries the objective list, so every summary state
  * (ineligible, awaiting, error, first pending/updating, summary) has a header form.
@@ -367,6 +323,14 @@ export function MissionOverviewCard({
     () => (summary ? missionSummaryClosedItems({ summary, objectives, members }) : []),
     [summary, objectives, members]
   );
+  const tradeoffRows = useMemo(
+    () =>
+      missionSummaryTradeoffs({
+        deliveries: deliveriesQ.data?.items ?? NO_DELIVERIES,
+        objectives
+      }),
+    [deliveriesQ.data, objectives]
+  );
   const provenance = useMemo(
     () => (summary ? missionSummaryProvenance(summary, objectives) : null),
     [summary, objectives]
@@ -391,8 +355,20 @@ export function MissionOverviewCard({
       hasNew: false
     }
   ];
-  if (state.kind === 'summary') {
-    tabs.push({ id: 'summary', label: 'Summary', count: '', tone: 'grey', hasNew: false });
+  // Summary holds the summary prose plus the risks, tradeoffs, resolved items (decisions) and
+  // files.
+  const showRisks = showSummaryTabs && riskRows.length > 0;
+  const showTradeoffs = showSummaryTabs && tradeoffRows.length > 0;
+  const showResolved = showSummaryTabs && closedRows.length > 0;
+  const showFiles = showSummaryTabs && files.total > 0;
+  if (state.kind === 'summary' || showRisks || showTradeoffs || showResolved || showFiles) {
+    tabs.push({
+      id: 'summary',
+      label: 'Summary',
+      count: '',
+      tone: 'grey',
+      hasNew: riskRows.some(row => row.isNew)
+    });
   }
   if (actionRows.length > 0) {
     tabs.push({
@@ -403,15 +379,6 @@ export function MissionOverviewCard({
       hasNew: actionRows.some(row => row.isNew)
     });
   }
-  if (showSummaryTabs && riskRows.length > 0) {
-    tabs.push({
-      id: 'risks',
-      label: 'Risks',
-      count: String(riskRows.length),
-      tone: 'red',
-      hasNew: riskRows.some(row => row.isNew)
-    });
-  }
   if (showSummaryTabs && suggestionRows.length > 0) {
     tabs.push({
       id: 'suggested',
@@ -419,24 +386,6 @@ export function MissionOverviewCard({
       count: String(suggestionRows.length),
       tone: 'violet',
       hasNew: suggestionRows.some(row => row.isNew)
-    });
-  }
-  if (showSummaryTabs && closedRows.length > 0) {
-    tabs.push({
-      id: 'resolved',
-      label: 'Resolved',
-      count: String(closedRows.length),
-      tone: 'grey',
-      hasNew: false
-    });
-  }
-  if (showSummaryTabs && files.total > 0) {
-    tabs.push({
-      id: 'files',
-      label: 'Files',
-      count: `${files.total}${files.truncated ? '+' : ''}`,
-      tone: 'grey',
-      hasNew: false
     });
   }
   const [requestedTab, setRequestedTab] = useState<OverviewTabId>('objectives');
@@ -468,7 +417,7 @@ export function MissionOverviewCard({
   const lowerVisible = useForegroundVisible(lowerRef, true);
   const selectedGroup = TAB_EVIDENCE_GROUP[selectedTab] ?? null;
   // For you mixes summary evidence with open questions, so it counts only when both are
-  // complete; Risks and Suggested need a successfully loaded summary.
+  // complete; Summary (its risks) and Suggested need a successfully loaded summary.
   const selectedGroupReady =
     selectedGroup === 'for_you'
       ? requestsComplete && summaryStable
@@ -493,11 +442,16 @@ export function MissionOverviewCard({
   });
 
   // ---- Header ----
-  const badge = overviewBadge({
-    objectives: mission.objectives,
-    blockingByObjective: openRequests.blockingByObjective,
-    statusType: mission.statusType
-  });
+  const liveStatus = useMemo(
+    () =>
+      missionLiveStatus({
+        statusType: mission.statusType,
+        objectives,
+        openQuestions,
+        actionRows
+      }),
+    [mission.statusType, objectives, openQuestions, actionRows]
+  );
   const updating = state.kind === 'first_pending' || (state.kind === 'summary' && state.updating);
   const sourceObjective = updating
     ? updatingSourceObjective({
@@ -553,6 +507,7 @@ export function MissionOverviewCard({
             </button>
           </p>
         ) : null}
+        <LiveStatusLine status={liveStatus} />
         <OverviewTabs tabs={tabs} selected={selectedTab} onSelect={setRequestedTab} idFor={idFor} />
       </div>
 
@@ -576,51 +531,75 @@ export function MissionOverviewCard({
             className="min-w-0 outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             {selectedTab === 'summary' ? (
-              <div ref={headerRef} className="grid min-w-0 gap-2 p-4">
-                {state.kind === 'summary' ? (
-                  <>
-                    {generatedAt ? (
-                      <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs text-(--color-ink-dim)">
-                        <span
-                          className="inline-flex items-center gap-1"
-                          title={formatTimestamp(generatedAt)}
+              <>
+                <div ref={headerRef} className="grid min-w-0 gap-2 p-4">
+                  {state.kind === 'summary' ? (
+                    <>
+                      {generatedAt ? (
+                        <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs text-(--color-ink-dim)">
+                          <span
+                            className="inline-flex items-center gap-1"
+                            title={formatTimestamp(generatedAt)}
+                          >
+                            <Clock className="size-3" aria-hidden="true" />
+                            Summary updated{' '}
+                            {relativeTime(generatedAt, now, { immediate: 'just now' })}
+                          </span>
+                        </div>
+                      ) : null}
+                      <div className="flex min-w-0 items-center gap-2">
+                        <h2
+                          id={`mission-summary-headline-${mission.id}`}
+                          className={cn(
+                            'min-w-0 flex-1 truncate text-base font-semibold text-(--color-ink)',
+                            state.updating && 'opacity-55'
+                          )}
+                          title={headline}
                         >
-                          <Clock className="size-3" aria-hidden="true" />
-                          Summary updated{' '}
-                          {relativeTime(generatedAt, now, { immediate: 'just now' })}
-                        </span>
+                          {headline}
+                        </h2>
                       </div>
-                    ) : null}
-                    <div className="flex min-w-0 items-center gap-2">
-                      <OverviewKindBadge badge={badge} />
-                      <h2
-                        id={`mission-summary-headline-${mission.id}`}
+                      <div
                         className={cn(
-                          'min-w-0 flex-1 truncate text-base font-semibold text-(--color-ink)',
+                          'grid min-w-0 gap-1 text-sm text-(--color-ink)',
                           state.updating && 'opacity-55'
                         )}
-                        title={headline}
                       >
-                        {headline}
-                      </h2>
-                    </div>
-                    <ClampedSummary dimmed={state.updating}>
-                      {state.summary.summary.trim() ? (
-                        <Markdown text={state.summary.summary} />
-                      ) : null}
-                      {runningSentences.length > 0 ? <p>{runningSentences.join(' ')}</p> : null}
-                    </ClampedSummary>
-                    <MissionSummaryProvenanceLine
-                      provenance={provenance ?? { kind: 'automatic' }}
-                    />
-                  </>
-                ) : state.kind === 'error' ? (
-                  <p className="text-sm text-red-600 dark:text-red-400">
-                    Could not load the mission summary:{' '}
-                    {(summaryQ.error as Error)?.message ?? 'unknown error'}
-                  </p>
+                        {state.summary.summary.trim() ? (
+                          <Markdown text={state.summary.summary} />
+                        ) : null}
+                      </div>
+                      <MissionSummaryProvenanceLine
+                        provenance={provenance ?? { kind: 'automatic' }}
+                      />
+                    </>
+                  ) : state.kind === 'error' ? (
+                    <p className="text-sm text-red-600 dark:text-red-400">
+                      Could not load the mission summary:{' '}
+                      {(summaryQ.error as Error)?.message ?? 'unknown error'}
+                    </p>
+                  ) : null}
+                </div>
+                {showRisks ? (
+                  <MissionSummaryRisks
+                    rows={riskRows}
+                    missionId={mission.id}
+                    dimmed={state.kind === 'summary' && state.updating}
+                  />
                 ) : null}
-              </div>
+                {showTradeoffs ? (
+                  <MissionSummaryTradeoffs
+                    rows={tradeoffRows}
+                    dimmed={state.kind === 'summary' && state.updating}
+                  />
+                ) : null}
+                {showResolved ? (
+                  <MissionSummaryResolved rows={closedRows} missionId={mission.id} now={now} />
+                ) : null}
+                {showFiles ? (
+                  <MissionSummaryFiles files={files} projectId={mission.projectId} />
+                ) : null}
+              </>
             ) : selectedTab === 'for_you' ? (
               <MissionSummaryActions
                 headless
@@ -629,13 +608,6 @@ export function MissionOverviewCard({
                 totalActions={evidence.totals.actions}
                 truncated={evidence.truncated.actions}
               />
-            ) : selectedTab === 'risks' ? (
-              <MissionSummaryRisks
-                headless
-                rows={riskRows}
-                missionId={mission.id}
-                dimmed={state.kind === 'summary' && state.updating}
-              />
             ) : selectedTab === 'suggested' ? (
               <MissionSummarySuggestions
                 headless
@@ -643,10 +615,6 @@ export function MissionOverviewCard({
                 missionId={mission.id}
                 now={now}
               />
-            ) : selectedTab === 'resolved' ? (
-              <MissionSummaryResolved headless rows={closedRows} missionId={mission.id} now={now} />
-            ) : selectedTab === 'files' ? (
-              <MissionSummaryFiles headless files={files} projectId={mission.projectId} />
             ) : null}
           </div>
         ) : null}

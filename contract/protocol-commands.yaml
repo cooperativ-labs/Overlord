@@ -63,8 +63,24 @@ requestEnvelope:
       - changedFiles
 
 sessionLifecycle:
+  mission-items:
+    requiredFlags: [--session-key]
+    optionalFlags: [--mission-id, --objective-id, --limit, --offset]
+    responseShapeVersion: 1
+    sideEffects: []
+    notes:
+      - 'Live attached session must match mission; workspace/project scope and mission:read apply.'
+      - 'Returns full open items, total, limit (default 60, 1..200), offset (default 0), truncated and nextOffset. Blocking human actions first; restart paging after concurrent changes.'
+  close-items:
+    requiredFlags: [--session-key]
+    optionalFlags: [--mission-id, --objective-id, --close-items-json, --close-items-file]
+    responseShapeVersion: 1
+    sideEffects: [mission_item_update, entity_change_append]
+    notes:
+      - 'Requires event:create and a live attached session matching the mission; delivered sessions must resume follow-up.'
+      - 'Requires 1..50 close entries with delivery validation and warnings. Agent provenance uses attached objective and null delivery id. Returns contentRevision, narrativeWritten false, closedItemIds and warnings.'
   attach:
-    description: 'Start a working session; return full structured mission context plus agent instructions'
+    description: 'Start a working session; return compact execution context plus agent instructions'
     requiredFlags: []
     optionalFlags:
       - --mission-id
@@ -83,9 +99,13 @@ sessionLifecycle:
       # Declared capture binding observed by the attaching client: bound | unbound | unknown
       # (default unknown). Configuration evidence only; never proof that a hook ran.
       - --capture-binding
+      # Tool vocabulary of agentInstructions: cli (default) or mcp. MCP servers send mcp so the
+      # rules name MCP tools and payload fields, never CLI commands or flags.
+      - --connection-method
     returnsSessionKey: true
-    responseShape: attach-response-v3
+    responseShape: attach-response-v4
     rules:
+      - '--connection-method accepts cli or mcp (default cli); any other value is rejected with invalid_input. With mcp, agentInstructions names Overlord MCP tools and payload fields and no CLI commands or flags; the value is also stored as the session connection_method'
       - 'For a summary-enabled mission the response carries the optional top-level missionSummary editing baseline (ADR 0060) and agentInstructions gains a Mission summary block; load-context and connect never carry either'
       - 'When --objective-id or --execution-request-id is present, attach pins to that objective and must not rediscover via mission state'
       - 'Without a pin, attach rediscovers in this order: the single executing, launching or pending_delivery objective (two equally ranked active objectives return 409 ambiguous_active_objective); then the first submitted objective; then the next runnable draft (first draft with instruction text); then the first draft; then the first unfinished objective — each by position, created_at, id (ADR 0056)'
@@ -171,8 +191,10 @@ sessionLifecycle:
       - --external-session-id
       - --summary
       - --summary-file
+      # Same meaning as on attach.
+      - --connection-method
     returnsSessionKey: true
-    responseShape: attach-response-v3
+    responseShape: attach-response-v4
     sideEffects:
       - creates-agent-session
       - objective-state-complete-to-pending-delivery
@@ -235,12 +257,14 @@ sessionLifecycle:
     optionalFlags:
       - --mission-id
       - --objective-id
+      - --connection-method
     responseShape: objective-file-changes-v1
     rules:
       - 'Server-only read of persisted rows; never reads an execution target filesystem and never sees unsynchronized local ledger rows. The response says so with scope server_objective.'
       - 'The objective is validated against the addressed mission before any SQL; a foreign mission/objective pair is rejected. The objective filter applies before count and the 200-row limit.'
       - 'Returns { scope, missionId, objectiveId, items, total, limit, truncated, capture } with compact FileChangeDto items ordered by resource then path, total as the pre-cap count, and persisted per-session capture diagnostics plus derived warnings.'
       - 'Needs no attach and no mutation; reuses mission read authorization, active workspace membership, and token project scope.'
+      - 'When a capture warning needs agent action (any warning on this read), the response adds instruction: how to declare missed paths, worded by --connection-method cli|mcp (default cli; other values 400 invalid_input). MCP servers send mcp and the text names declaredPaths on the Overlord MCP session tools and no CLI flag. The CLI-local changes read returns the same field in CLI wording, also for sync_failed; sync_pending alone adds none (coo:1294 D6).'
     sideEffects: []
 
   ask:
@@ -289,7 +313,7 @@ sessionLifecycle:
       rules:
         - 'Validated before any write; malformed input, headline and summary not sent together, a headline that is empty, multi-line or over 140 characters, a summary empty or over 1,200 characters, prose without baseContentRevision, more than 50 closeItems, or a close entry without status done|dismissed and a reason of at most 280 characters answers 400 invalid_input'
         - 'The base revision is compared with mission_summaries.content_revision under the summary row lock before any delivery row is written; a stale base rejects the whole delivery with 409 mission_summary_conflict, writes nothing, and returns details { baseContentRevision, missionSummary } with a fresh baseline in the attach shape. The CLI prints that object on stdout before failing'
-        - 'closeItems close only open items of the delivering mission with agent provenance; unknown, foreign, duplicate, superseded or already-closed ids are skipped with bounded mission_summary_item_skipped warnings and never reject the delivery'
+        - 'closeItems close only open items of the delivering mission with agent provenance; unknown, foreign, duplicate, superseded or already-closed ids are skipped with bounded mission_summary_item_skipped warnings and never reject the delivery. Each warning message states the cause and what the agent does next: when the intended item may stay open, it says to name that item and why in the final message'
         - 'The narrative is written with generated_by agent, status composed, the narrative_* references and content_revision + 1, visible at once; the response carries missionSummary { contentRevision, narrativeWritten, closedItemIds, warnings } with advisory mission_summary_style warnings'
         - 'The field is never stored in the delivery payload. A delivery without it behaves as before and gets fallback prose'
     clientCapture:
@@ -306,6 +330,7 @@ sessionLifecycle:
       - 'deliveryReport.presentation starts as an immediate deterministic/pending fallback; a durable overlord.delivery.compose.v1 worker job may asynchronously replace only presentation while delivery success and latency never depend on an automation provider'
       - 'Changed-file provenance and capture diagnostics are objective-scoped review metadata aggregated across sessions (and no-session record-work records); none can reject delivery.'
       - 'Delivery is the final work boundary — no implementation after delivery without explicit follow-up'
+      - 'The response carries instruction: the post-delivery rule worded by the session connection_method. A cli session is told to run resume-follow-up with the delivered mission and objective display ids before more work; an mcp session is told to ask the user to start follow-up work from Overlord (coo:1294 D6)'
     sideEffects:
       - records-optional-agent-declared-changed-files
       - emits-scoped-changed-file-entity-changes
@@ -947,13 +972,13 @@ responseShapes:
 
   attach-response-v3:
     description: >-
-      Response shape returned by the attach and resume-follow-up commands.
+      Legacy full context shape, retained for load-context; superseded for execution by attach-response-v4.
       Replaces the human-readable `promptContext` field from attach-response-v2
       with `agentInstructions`. Mission context lives in the structured top-level
       fields (`mission`, `objective`, `previousObjectives`, `futureObjectives`,
       `history`, `attachments`, `artifacts`, and `sharedState`). `agentInstructions`
-      is intentionally concise workflow guidance for agents that attach without
-      a richer launch prompt. Contract version 1 keeps this v3 shape and adds
+      is the only source of working and delivery rules; the launch prompt carries
+      only what is needed to attach. Contract version 1 keeps this v3 shape and adds
       optional resource-binding metadata: `projectResources` at the top level and
       `resourceKey` on current/previous/future objective summaries.
     requiredTopLevelFields:
@@ -986,6 +1011,7 @@ responseShapes:
         - summary
         - author
         - openItems
+        - totalOpenItems
         - truncated
       openItemFields:
         - id
@@ -998,7 +1024,72 @@ responseShapes:
       - objective ID
       - objective title or fallback label
       - location of objective details in the structured JSON
-      - required protocol workflow instructions
+      - required protocol workflow instructions, worded for the caller's connection method
+      - a statement that these instructions take precedence over an installed Overlord skill or plugin
+    # agentInstructions is the first top-level key so output truncation never drops it.
+    agentInstructionsFirst: true
+    agentInstructionsOptionalContent:
+      - user custom agent instructions
+      - mission summary writing guidance and the one-retry conflict rule (when missionSummary is present)
+
+  attach-response-v4:
+    description: >-
+      Compact execution context for attach and resume-follow-up (ADR 0069).
+      No history or previousObjectives/futureObjectives. Siblings contain only displayId,
+      state and objective in mission order, excluding the current objective and blank slots.
+      Completed instructions are capped at 600 characters including a truncation marker;
+      other siblings keep full instructions. Full objective context and history remain
+      available through load-context. Ordinary ObjectiveSummary reads are unchanged.
+    requiredTopLevelFields:
+      - mission
+      - objective
+      - directives
+      - artifacts
+      - attachments
+      - objectives
+      - session
+      - sharedState
+      - agentInstructions
+    optionalTopLevelFields:
+      projectResources: 'Project resource manifest for the current execution target, grouped by logical resource key.'
+    sessionRequiredFields:
+      - sessionKey
+      - state
+    objectivesRequiredFields:
+      - displayId
+      - state
+      - objective
+    completedObjectiveInstructionMaxCharacters: 600
+    directivesLimit: 10
+    directivesOrder: newest-first
+    directivesScope: current-objective
+    directivesEventTypes: [user_follow_up, decision, discussion_summary]
+    objectivesExcludeCurrent: true
+    # Additive (ADR 0060): attach and resume-follow-up only, summary-enabled missions only.
+    missionSummaryOptionalField:
+      fields:
+        - contentRevision
+        - headline
+        - summary
+        - author
+        - openItems
+        - totalOpenItems
+        - truncated
+      openItemFields:
+        - id
+        - kind
+        - objective
+        - text
+        - blocking
+    agentInstructionsRequiredContent:
+      - mission ID
+      - objective ID
+      - objective title or fallback label
+      - location of objective details in the structured JSON
+      - required protocol workflow instructions, worded for the caller's connection method
+      - a statement that these instructions take precedence over an installed Overlord skill or plugin
+    # agentInstructions is the first top-level key so output truncation never drops it.
+    agentInstructionsFirst: true
     agentInstructionsOptionalContent:
       - user custom agent instructions
       - mission summary writing guidance and the one-retry conflict rule (when missionSummary is present)

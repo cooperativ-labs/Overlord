@@ -237,7 +237,7 @@ test('an ineligible mission is never triggered', async () => {
   assert.equal(row, undefined);
 });
 
-test('agent narrative makes triggers no-ops, blocks a queued fallback, and allows the next legacy delivery', async () => {
+test('agent narrative makes triggers no-ops, blocks a queued fallback, and keeps the prose across a later legacy delivery', async () => {
   const { mission, deliveryId } = await seedEligibleMission('Agent narrative guard');
   await trigger(mission);
   db.prepare(
@@ -276,16 +276,44 @@ test('agent narrative makes triggers no-ops, blocks a queued fallback, and allow
     summary: 'Legacy client delivery.',
     deliveredAt: '2026-10-21T10:00:00.000Z'
   });
-  assert.equal((await trigger(mission)).triggered, true);
-  missionSummaryComposeWorker.setGenerateOverride(async ({ prompt }) => {
-    assert.match(prompt, /Agent verified/);
-    return JSON.stringify({ headline: 'Legacy fallback.', summary: 'The new delivery shipped.' });
+  assert.equal((await trigger(mission)).triggered, false);
+  assert.deepEqual(
+    db.prepare('SELECT * FROM mission_summaries WHERE mission_id = ?').get(mission.id),
+    before
+  );
+});
+
+test('a later delivery without prose keeps agent prose and does not queue a fallback', async () => {
+  const { mission, deliveryId } = await seedEligibleMission('Prose-less delivery keeps prose');
+  await trigger(mission);
+  db.prepare(
+    `UPDATE mission_summaries SET headline = 'Agent mission-wide.', summary_markdown = 'Mission-wide prose.',
+    status = 'composed', generated_by = 'agent', content_revision = 4, narrative_delivery_id = ?, narrative_objective_id = ? WHERE mission_id = ?`
+  ).run(deliveryId, mission.objectives[0]!.id, mission.id);
+  seedDelivery(db, {
+    workspaceId: mission.workspaceId,
+    projectId: mission.projectId,
+    missionId: mission.id,
+    objectiveId: mission.objectives[0]!.id,
+    summary: 'Follow-up delivery that sent no prose.',
+    deliveredAt: '2026-10-22T10:00:00.000Z'
   });
+  const before = db.prepare('SELECT * FROM mission_summaries WHERE mission_id = ?').get(mission.id);
+  assert.deepEqual(await trigger(mission), { triggered: false, generation: null, jobId: null });
+  missionSummaryComposeWorker.setGenerateOverride(async () =>
+    JSON.stringify({ headline: 'Replaced.', summary: 'About one delivery.' })
+  );
   await runQueuedJob();
-  const after = await summaryRow(mission.id);
-  assert.equal(after.headline, 'Legacy fallback.');
-  assert.equal(after.generated_by, 'gemini');
-  assert.equal(Number(after.content_revision), 2);
+  assert.deepEqual(
+    db.prepare('SELECT * FROM mission_summaries WHERE mission_id = ?').get(mission.id),
+    before
+  );
+  // A soft-deleted source delivery no longer protects the prose.
+  db.prepare(`UPDATE deliveries SET deleted_at = ? WHERE id = ?`).run(
+    '2026-10-23T10:00:00.000Z',
+    deliveryId
+  );
+  assert.equal((await trigger(mission)).triggered, true);
 });
 
 test('fallback context reads live item text and omits closed claims still in delivery JSON', async () => {

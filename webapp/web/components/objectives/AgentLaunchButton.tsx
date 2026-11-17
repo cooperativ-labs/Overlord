@@ -1,6 +1,6 @@
 import type { ExecutionRequestDto, ObjectiveDto } from '@overlord/contract';
 import { Check, CheckCircle2, ChevronDown, Copy, Loader2, MoreVertical, Play } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { api } from '../../lib/api.ts';
 import { useCopyToClipboard } from '../../lib/hooks/use-copy-to-clipboard.ts';
@@ -43,6 +43,18 @@ type AgentLaunchButtonProps = {
    * flushes unsaved instructions here, so a launch never uses stale text; plan §9.8).
    */
   beforeLaunch?: () => Promise<boolean>;
+  /**
+   * Reports whether one of the button's popups (the options menu or the parallel-launch
+   * confirmation) is open. The objective row's hover line stays open while it is.
+   */
+  onPopupOpenChange?: (open: boolean) => void;
+  /** Reports whether a launch, queue add or completion is in flight. */
+  onPendingChange?: (pending: boolean) => void;
+  /**
+   * Reports the launch error, and null when it clears. When given, the host shows the error
+   * (the objective row's error slot) and the button renders none of its own.
+   */
+  onErrorChange?: (message: string | null) => void;
 };
 
 const sizeStyles: Record<
@@ -83,7 +95,10 @@ export function AgentLaunchButton({
   activeSiblingId = null,
   activeRequest = null,
   size = 'sm',
-  beforeLaunch
+  beforeLaunch,
+  onPopupOpenChange,
+  onPendingChange,
+  onErrorChange
 }: AgentLaunchButtonProps) {
   const launch = useLaunchObjective();
   const updateObjective = useUpdateObjective();
@@ -91,6 +106,7 @@ export function AgentLaunchButton({
   const executionTargetQ = useProjectExecutionTarget(objective.projectId);
   const enqueue = useEnqueueRunQueueEntry(objective.projectId);
   const [showActiveConfirm, setShowActiveConfirm] = useState(false);
+  const [optionsOpen, setOptionsOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [executionTargetId, setExecutionTargetId] = useState<string>('');
   const { copied: promptCopied, copy: copyPromptText } = useCopyToClipboard();
@@ -116,6 +132,27 @@ export function AgentLaunchButton({
   // Saved and runnable: green label and a filled play icon, so Run never reads like the
   // composer's Save step that precedes it (coo:1289).
   const isReady = !isDisabled && !hasActiveRequest;
+  const isPending = isLaunching || enqueue.isPending;
+  const popupOpen = showActiveConfirm || optionsOpen;
+
+  // Report state to the host only when it changes, so mounting never clears a host's error.
+  const reportedRef = useRef({ popupOpen: false, pending: false, error: null as string | null });
+  useEffect(() => {
+    if (reportedRef.current.popupOpen === popupOpen) return;
+    reportedRef.current.popupOpen = popupOpen;
+    onPopupOpenChange?.(popupOpen);
+  }, [onPopupOpenChange, popupOpen]);
+  useEffect(() => {
+    if (reportedRef.current.pending === isPending) return;
+    reportedRef.current.pending = isPending;
+    onPendingChange?.(isPending);
+  }, [onPendingChange, isPending]);
+  useEffect(() => {
+    if (reportedRef.current.error === error) return;
+    reportedRef.current.error = error;
+    onErrorChange?.(error);
+  }, [onErrorChange, error]);
+  const ownError = onErrorChange ? null : error;
 
   async function confirmSaved(): Promise<boolean> {
     if (!beforeLaunch) return true;
@@ -377,9 +414,9 @@ export function AgentLaunchButton({
           )}
           <span className={cn('whitespace-nowrap', styles.label)}>Complete</span>
         </button>
-        {error ? (
+        {ownError ? (
           <p className="absolute top-full right-0 z-10 mt-1 max-w-[260px] text-right text-[11px] text-red-400">
-            {error}
+            {ownError}
           </p>
         ) : null}
       </div>
@@ -406,8 +443,9 @@ export function AgentLaunchButton({
       >
         {runButtonWrapped}
 
-        <DropdownMenu>
+        <DropdownMenu open={optionsOpen} onOpenChange={setOptionsOpen}>
           <DropdownMenuTrigger
+            aria-label="Run options"
             className={cn(
               'inline-flex items-center rounded-r-md border-l transition-colors',
 
@@ -455,9 +493,9 @@ export function AgentLaunchButton({
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
-      {error ? (
+      {ownError ? (
         <p className="absolute top-full right-0 z-10 mt-1 max-w-[260px] text-right text-[11px] text-red-400">
-          {error}
+          {ownError}
         </p>
       ) : null}
     </div>

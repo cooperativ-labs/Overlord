@@ -159,3 +159,29 @@ test('other errors print no conflict output', () => {
   );
   assert.equal(missionSummaryConflictOutput(new Error('x')), null);
 });
+
+test('close-items accepts closures streamed on stdin and forwards them', async () => {
+  const input = JSON.stringify([{ id: 'item', status: 'done', reason: 'Verified.' }]);
+  const flags = new Map<string, string | true>([['--close-items-file', '-']]);
+  assert.equal(
+    (await resolveProtocolFileInputs({ flags, stdin: input })).fileInputs['--close-items-file'],
+    input
+  );
+  let posted: any;
+  const runtime = runtimeWithPost(async ({ path, body }) => {
+    posted = { path, body };
+    return {} as never;
+  });
+  await inWorkspace(async () => {
+    await captureStdout(() =>
+      runProtocolCommand({
+        runtime,
+        subcommand: 'close-items',
+        args: ['--objective-id', 'coo:1.abcd', '--session-key', 'key', '--close-items-file', '-'],
+        stdin: input
+      })
+    );
+  });
+  assert.equal(posted.path, '/api/protocol/close-items');
+  assert.equal(posted.body.fileInputs['--close-items-file'], input);
+});

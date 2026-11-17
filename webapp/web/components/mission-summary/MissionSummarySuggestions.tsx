@@ -4,10 +4,12 @@ import { useId, useState } from 'react';
 
 import { relativeTime } from '../../lib/format-date.ts';
 import type { SummarySuggestionRow } from '../../lib/mission-summary-derive.ts';
+import { useResolveMissionItem } from '../../lib/queries.ts';
 import { cn } from '../../lib/utils.ts';
 import { deferredWorkActionButtonClass, useDeferredWorkActions } from '../DeferredWorkItem.tsx';
 
 import {
+  GroupSources,
   NewDot,
   ObjectiveKeyLink,
   SummaryBlockHeading,
@@ -74,6 +76,36 @@ function OpenSuggestionRow({
     resolution: null
   });
 
+  // Equal suggestions reported by several objectives are one row. A decision on the row applies
+  // to every one of them, oldest first and the displayed record last, so the row stays until the
+  // whole group is decided and a failure leaves it open.
+  const resolveItem = useResolveMissionItem();
+  const [groupPending, setGroupPending] = useState(false);
+  const [groupError, setGroupError] = useState<string | null>(null);
+  const duplicateIds = row.group.itemIds.slice(1).reverse();
+  async function decide(
+    status: 'done' | 'dismissed',
+    reason: string,
+    primary: () => Promise<void>
+  ) {
+    setGroupError(null);
+    if (duplicateIds.length > 0) {
+      setGroupPending(true);
+      try {
+        for (const id of duplicateIds) {
+          await resolveItem.mutateAsync({ id, missionId, status, reason });
+        }
+      } catch (cause) {
+        setGroupError(cause instanceof Error ? cause.message : 'Something went wrong.');
+        return;
+      } finally {
+        setGroupPending(false);
+      }
+    }
+    await primary();
+  }
+  const busy = actions.busy || groupPending;
+
   // The decision is shown at once; the summary refetch then projects it.
   if (actions.resolution?.status === 'dismissed') return null;
   if (actions.resolution) {
@@ -103,6 +135,7 @@ function OpenSuggestionRow({
             <span className="font-mono">{row.location}</span> · from{' '}
             <span className="font-mono">{row.objectiveKey ?? 'Delivery'}</span>
           </span>
+          <GroupSources group={row.group} noun="suggestion" />
         </span>
         <span className="mt-0.5 text-(--color-ink-dim)" aria-hidden="true">
           {expanded ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />}
@@ -121,16 +154,20 @@ function OpenSuggestionRow({
           <div className="flex flex-wrap gap-1.5">
             <button
               type="button"
-              disabled={actions.busy}
-              onClick={() => void actions.addObjective()}
+              disabled={busy}
+              onClick={() =>
+                void decide('done', 'Same suggestion added as an objective.', actions.addObjective)
+              }
               className={cn(deferredWorkActionButtonClass, 'px-2.5 py-1', summaryFocusRing)}
             >
               {actions.pending === 'objective' ? 'Adding…' : '+ Objective on this mission'}
             </button>
             <button
               type="button"
-              disabled={actions.busy}
-              onClick={() => void actions.createMission()}
+              disabled={busy}
+              onClick={() =>
+                void decide('done', 'Same suggestion created as a mission.', actions.createMission)
+              }
               className={cn(deferredWorkActionButtonClass, 'px-2.5 py-1', summaryFocusRing)}
             >
               {actions.pending === 'mission' ? 'Creating…' : '+ New mission'}
@@ -138,8 +175,8 @@ function OpenSuggestionRow({
           </div>
           <button
             type="button"
-            disabled={actions.busy}
-            onClick={() => void actions.dismiss()}
+            disabled={busy}
+            onClick={() => void decide('dismissed', 'Dismissed with its match.', actions.dismiss)}
             aria-label={`Dismiss: ${row.title}`}
             className={cn(
               'rounded-md px-2 py-1 text-xs font-medium text-(--color-ink-dim) hover:text-(--color-ink) disabled:opacity-50',
@@ -149,9 +186,14 @@ function OpenSuggestionRow({
             {actions.pending === 'dismiss' ? 'Dismissing…' : 'Dismiss'}
           </button>
         </div>
-        {actions.error ? (
+        {row.group.count > 1 ? (
+          <p className="text-xs text-(--color-ink-dim)">
+            Adding, creating or dismissing applies to all {row.group.count} matching records.
+          </p>
+        ) : null}
+        {actions.error || groupError ? (
           <p className="text-xs text-red-600 dark:text-red-300" role="alert">
-            {actions.error}
+            {actions.error ?? groupError}
           </p>
         ) : null}
       </div>

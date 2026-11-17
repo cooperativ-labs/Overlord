@@ -10,7 +10,7 @@ codex [--model <model>] [-c model_reasoning_effort="<level>"] "Attach, then imme
 
 Rules:
 
-- The assembled Overlord mission prompt, objective metadata, history, artifacts, attachments, and shared context should be injected as the initial session prompt by the protocol layer.
+- The initial session prompt holds only what is needed to attach: mission and objective ids, the execution directive and the attach command. The attach response carries the objective, history, artifacts, attachments, shared context and all working rules.
 - The visible user prompt should name the active mission ID and explicitly direct execution without waiting for confirmation.
 - `--model` is passed only when the execution target has a model configured.
 - `-c model_reasoning_effort="<level>"` is passed only when the execution target has an effort level configured.

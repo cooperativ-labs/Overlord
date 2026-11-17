@@ -28,6 +28,11 @@ import { AgentIcon } from './AgentIcon.tsx';
 import { AgentModelChooserButton } from './AgentModelChooserButton.tsx';
 import { ObjectiveMenuButton } from './ObjectiveMenuButton.tsx';
 import { ObjectiveQueuePopover } from './ObjectiveQueuePopover.tsx';
+import {
+  type ObjectiveRowAgentSelection,
+  ObjectiveRowHoverLine,
+  useObjectiveRowHoverLine
+} from './ObjectiveRowHoverLine.tsx';
 import { ObjectiveStateIcon } from './ObjectiveStateIcon.tsx';
 import { useObjectiveAgentSelection } from './useObjectiveAgentSelection.ts';
 import { useObjectiveQuickRun } from './useObjectiveQuickRun.ts';
@@ -112,6 +117,8 @@ export type ObjectiveRowProps = {
   /** The objective was deleted (close its detail when open). */
   onDeleted?: (objective: ObjectiveDto) => void;
   drag?: ObjectiveRowDragProps;
+  /** A row of this list is being dragged: no row opens its hover line. */
+  listDragging?: boolean;
   /** Ref to the row button, for hosts that return focus to it. */
   buttonRef?: Ref<HTMLButtonElement>;
 };
@@ -123,8 +130,29 @@ export type ObjectiveRowProps = {
  * Resource while not started). The
  * controls are siblings of the row button, never children, so nothing interactive nests, and
  * each stops propagation so it never opens the detail.
+ *
+ * Not-started rows also open a hover line under the row (objective-row-hover-toolbar.md) with
+ * resource, agent, Run Queue, identifier and the split Run button. While it is open the first
+ * row keeps only the state icon, the title and the menu.
  */
-export function ObjectiveRow({
+export function ObjectiveRow(props: ObjectiveRowProps) {
+  return isNotStartedObjective(props.objective.state) ? (
+    <NotStartedObjectiveRow {...props} />
+  ) : (
+    <ObjectiveRowView {...props} agent={null} />
+  );
+}
+
+/**
+ * Not started: one agent selection for the row's agent icon, the menu's Run and the hover line,
+ * so every Run launches with the agent and model the chooser shows.
+ */
+function NotStartedObjectiveRow(props: ObjectiveRowProps) {
+  const agent = useObjectiveAgentSelection(props.objective);
+  return <ObjectiveRowView {...props} agent={agent} />;
+}
+
+function ObjectiveRowView({
   objective,
   mission = null,
   blocked = false,
@@ -135,16 +163,26 @@ export function ObjectiveRow({
   onMoveDown,
   onDeleted,
   drag,
-  buttonRef
-}: ObjectiveRowProps) {
+  listDragging = false,
+  buttonRef,
+  agent
+}: ObjectiveRowProps & { agent: ObjectiveRowAgentSelection | null }) {
   const rowRef = useRef<HTMLLIElement | null>(null);
   const localButtonRef = useRef<HTMLButtonElement | null>(null);
   const [queueOpen, setQueueOpen] = useState(false);
   /** Opened from the menu: anchor to the row, since the queue icon may be hidden or absent. */
   const [queueFromMenu, setQueueFromMenu] = useState(false);
   const { copied, copy } = useCopyToClipboard({ resetMs: 1200 });
-  /** A Run or resource change from the menu failed. Shown under the row until the next try. */
-  const [menuError, setMenuError] = useState<string | null>(null);
+  /**
+   * A Run or resource change from the menu or the hover line failed. Shown under the row until
+   * the next try.
+   */
+  const [rowError, setRowError] = useState<string | null>(null);
+  const line = useObjectiveRowHoverLine({
+    enabled: agent !== null,
+    dragging: listDragging || Boolean(drag?.isDragging)
+  });
+  const lineOpen = agent !== null && line.open;
 
   const notStarted = isNotStartedObjective(objective.state);
   const inFlight = isInFlightObjective(objective.state);
@@ -197,6 +235,47 @@ export function ObjectiveRow({
     onDeleted: onDeleted ? () => onDeleted(objective) : undefined
   };
 
+  const showQueue = queueTrigger !== 'none' || queueOpen;
+  const queueControl = showQueue ? (
+    <ObjectiveQueuePopover
+      objective={objective}
+      open={queueOpen}
+      onOpenChange={next => {
+        setQueueOpen(next);
+        if (!next) setQueueFromMenu(false);
+      }}
+      showTrigger={queueTrigger !== 'none'}
+      anchor={queueFromMenu || queueTrigger === 'none' ? rowRef : undefined}
+      triggerClassName={cn(
+        'h-7 w-7 justify-center px-0',
+        // In the hover line the trigger is always visible; on the first row an unqueued
+        // trigger shows on hover/focus only.
+        !lineOpen &&
+          queueTrigger === 'hover' &&
+          'opacity-0 group-hover/row:opacity-100 group-focus-within/row:opacity-100 focus-visible:opacity-100 data-[popup-open]:opacity-100 data-[queue-pending=true]:opacity-100 [@media(hover:none)]:hidden'
+      )}
+    />
+  ) : null;
+
+  const idControl = objective.displayId ? (
+    <button
+      type="button"
+      className={cn(
+        'inline-flex h-7 min-w-[3.25rem] items-center justify-center rounded-md px-1 font-mono text-[11px] transition-colors hover:bg-muted/60',
+        copied ? 'text-emerald-600 dark:text-emerald-400' : 'text-(--color-ink-dim)'
+      )}
+      aria-label={`Copy ${fullId}`}
+      title={`Copy ${fullId}`}
+      onPointerDown={event => event.stopPropagation()}
+      onClick={event => {
+        event.stopPropagation();
+        void copy(fullId);
+      }}
+    >
+      {copied ? 'Copied' : objectiveShortKey(objective.displayId)}
+    </button>
+  ) : null;
+
   return (
     <li
       ref={setRowRef}
@@ -204,6 +283,8 @@ export function ObjectiveRow({
       data-objective-id={objective.id}
       data-objective-ref={objective.displayId || objective.id}
       data-blocked={isBlocked ? 'true' : undefined}
+      data-row-line-open={lineOpen ? 'true' : undefined}
+      {...(agent ? line.rowProps : undefined)}
       className={cn(
         'group/row relative flex min-h-9 min-w-0 flex-wrap items-center gap-x-1 overflow-hidden pr-2 transition-colors',
         isBlocked && 'bg-yellow-300/60 dark:bg-yellow-400/25',
@@ -244,49 +325,17 @@ export function ObjectiveRow({
       </button>
 
       <div className="relative z-[1] flex shrink-0 items-center gap-0.5">
-        {queueTrigger !== 'none' || queueOpen ? (
-          <ObjectiveQueuePopover
-            objective={objective}
-            open={queueOpen}
-            onOpenChange={next => {
-              setQueueOpen(next);
-              if (!next) setQueueFromMenu(false);
-            }}
-            showTrigger={queueTrigger !== 'none'}
-            anchor={queueFromMenu || queueTrigger === 'none' ? rowRef : undefined}
-            triggerClassName={cn(
-              'h-7 w-7 justify-center px-0',
-              queueTrigger === 'hover' &&
-                'opacity-0 group-hover/row:opacity-100 group-focus-within/row:opacity-100 focus-visible:opacity-100 data-[popup-open]:opacity-100 data-[queue-pending=true]:opacity-100 [@media(hover:none)]:hidden'
-            )}
-          />
-        ) : null}
+        {lineOpen ? null : queueControl}
+        {lineOpen ? null : idControl}
 
-        {objective.displayId ? (
-          <button
-            type="button"
-            className={cn(
-              'inline-flex h-7 min-w-[3.25rem] items-center justify-center rounded-md px-1 font-mono text-[11px] transition-colors hover:bg-muted/60',
-              copied ? 'text-emerald-600 dark:text-emerald-400' : 'text-(--color-ink-dim)'
-            )}
-            aria-label={`Copy ${fullId}`}
-            title={`Copy ${fullId}`}
-            onPointerDown={event => event.stopPropagation()}
-            onClick={event => {
-              event.stopPropagation();
-              void copy(fullId);
-            }}
-          >
-            {copied ? 'Copied' : objectiveShortKey(objective.displayId)}
-          </button>
-        ) : null}
-
-        {notStarted ? (
+        {agent ? (
           <NotStartedRowTail
             objective={objective}
             mission={mission}
+            agent={agent}
+            showAgentIcon={!lineOpen}
             menuProps={menuProps}
-            onMenuError={setMenuError}
+            onRowError={setRowError}
           />
         ) : (
           <>
@@ -295,13 +344,25 @@ export function ObjectiveRow({
           </>
         )}
       </div>
-      {menuError ? (
+      {agent && line.mounted ? (
+        <ObjectiveRowHoverLine
+          open={lineOpen}
+          objective={objective}
+          mission={mission}
+          agent={agent}
+          queueControl={lineOpen ? queueControl : null}
+          idControl={lineOpen ? idControl : null}
+          onHeldChange={line.setHeld}
+          onError={setRowError}
+        />
+      ) : null}
+      {rowError ? (
         <p
           role="alert"
           className="relative z-[1] basis-full truncate pb-1.5 pl-9 text-[11px] text-destructive"
-          title={menuError}
+          title={rowError}
         >
-          {menuError}
+          {rowError}
         </p>
       ) : null}
     </li>
@@ -309,20 +370,24 @@ export function ObjectiveRow({
 }
 
 /**
- * Not started: the agent icon opens the agent/model selector, and the menu adds Run and the
- * Resource submenu (coo:1289). Both share one agent selection, so Run launches with the agent the
- * icon shows.
+ * Not started: the agent icon opens the agent/model selector (hidden while the hover line shows
+ * the labelled one), and the menu adds Run and the Resource submenu (coo:1289). All use the
+ * row's one agent selection, so Run launches with the agent the chooser shows.
  */
 function NotStartedRowTail({
   objective,
   mission,
+  agent,
+  showAgentIcon,
   menuProps,
-  onMenuError
+  onRowError
 }: {
   objective: ObjectiveDto;
   mission: MissionDetailDto | null;
+  agent: ObjectiveRowAgentSelection;
+  showAgentIcon: boolean;
   menuProps: ComponentProps<typeof ObjectiveMenuButton>;
-  onMenuError: (message: string | null) => void;
+  onRowError: (message: string | null) => void;
 }) {
   const {
     catalog,
@@ -333,29 +398,31 @@ function NotStartedRowTail({
     useInheritedLaunchConfig,
     launchConfigSourceHint,
     loaded
-  } = useObjectiveAgentSelection(objective);
+  } = agent;
   const quickRun = useObjectiveQuickRun({
     objective,
     mission,
     selection,
     selectionLoaded: loaded,
-    onError: onMenuError
+    onError: onRowError
   });
   const resourcesQ = useProjectResources(objective.projectId);
   const updateObjective = useUpdateObjective();
 
   return (
     <>
-      <AgentModelChooserButton
-        iconOnly
-        catalog={catalog}
-        selection={selection}
-        onChange={setSelection}
-        agentConfigs={agentConfigs}
-        onLaunchConfigCommit={commitLaunchConfig}
-        onUseInheritedDefault={useInheritedLaunchConfig}
-        launchConfigSourceHint={launchConfigSourceHint}
-      />
+      {showAgentIcon ? (
+        <AgentModelChooserButton
+          iconOnly
+          catalog={catalog}
+          selection={selection}
+          onChange={setSelection}
+          agentConfigs={agentConfigs}
+          onLaunchConfigCommit={commitLaunchConfig}
+          onUseInheritedDefault={useInheritedLaunchConfig}
+          launchConfigSourceHint={launchConfigSourceHint}
+        />
+      ) : null}
       <ObjectiveMenuButton
         {...menuProps}
         run={{
@@ -369,12 +436,12 @@ function NotStartedRowTail({
           value: objective.resourceKey,
           disabled: updateObjective.isPending,
           onChange: resourceKey => {
-            onMenuError(null);
+            onRowError(null);
             updateObjective.mutate(
               { id: objective.id, body: { resourceKey } },
               {
                 onError: err =>
-                  onMenuError(err instanceof Error ? err.message : 'Failed to change the resource')
+                  onRowError(err instanceof Error ? err.message : 'Failed to change the resource')
               }
             );
           }

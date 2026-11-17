@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import { describe, it } from 'node:test';
 
 import {
@@ -56,6 +57,34 @@ for (const adapter of conformanceAdapters()) {
 
         const a = await attachSession({ ctx, missionId: mission.id, objectiveId: first!.id });
         const b = await attachSession({ ctx, missionId: mission.id, objectiveId: second.id });
+        await db.run(
+          `INSERT INTO mission_events
+          (id, workspace_id, project_id, mission_id, objective_id, type, summary, source, created_at)
+          VALUES (?, ?, ?, ?, ?, 'user_follow_up', 'Keep this direction', 'cli', ?)`,
+          [
+            randomUUID(),
+            ctx.workspace.id,
+            project.id,
+            mission.id,
+            first!.id,
+            new Date().toISOString()
+          ]
+        );
+        const reattached = await attachSession({
+          ctx,
+          missionId: mission.id,
+          existingSessionKey: a.sessionKey,
+          connectionMethod: 'mcp'
+        });
+        assert.deepEqual(
+          reattached.directives.map(event => event.summary),
+          ['Keep this direction']
+        );
+        assert.deepEqual(
+          reattached.objectives.map(objective => [objective.displayId, objective.state]),
+          [[second.displayId, 'executing']]
+        );
+        assert.equal('history' in reattached, false);
         assert.equal(a.missionSummary?.contentRevision, 0);
         assert.equal(b.missionSummary?.contentRevision, 0);
 

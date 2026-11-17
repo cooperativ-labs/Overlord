@@ -5,6 +5,175 @@ is the current version and must equal [VERSION](VERSION); `yarn version:contract
 writes its skeleton. Dates use ISO 8601 and describe the contract change, not
 merely the files edited.
 
+## [174.2.0] - 2026-11-17
+
+Contract impact: minor. The mission summary read groups equal open items instead of
+hiding older records (coo:1294.jp1p, plan step 8). `MissionSummaryRiskDto` and
+`MissionSummarySuggestionDto` gain an optional `duplicates` list of
+`MissionSummaryDuplicateDto` (id, deliveryId, objectiveId, deliveredAt): the older open
+records that the newest row stands for, absent when there are none. Suggestions now group
+only when title, change, location and doneWhen all match, so a same-title suggestion with
+different scope is a separate row. Item identity, closure and the narrative publication
+guard are unchanged; no REST route, protocol command or migration changes. Existing
+clients keep working and show the newest record only. OpenAPI description version 4.14.0;
+ADR 0074.
+
+## [174.1.0] - 2026-11-17
+
+Contract impact: minor. Add session-authorized mission-items and close-items
+commands and matching MCP tools. Full open-item detail is paged with a total;
+attach adds totalOpenItems and prioritizes blocking human actions. Standalone
+closure shares delivery validation and warnings with objective provenance and
+no delivery reference. Core, backend, CLI, hosted/local MCP and generated
+artifacts move together; existing clients remain compatible. No migration.
+OpenAPI description version 4.13.0; ADR 0073.
+
+## [174.0.0] - 2026-11-17
+
+Contract impact: major. Owner approved the breaking execution-context projection
+for coo:1294.hhh9 (ADR 0069). Attach and resume-follow-up now return
+attach-response-v4: ordered sibling displayId/state/instructions and the current
+objective's newest 10 user directives replace history and the previous/future
+arrays. Completed sibling instructions are capped at 600 characters. Full
+ObjectiveSummary and load-context inspection remain unchanged; no data migration.
+CLI, local/hosted MCP, generated API types, connector guidance and fixtures move
+together. Restamp every conformance manifest; update consumers with the backend.
+OpenAPI description version is 4.12.0. See ADR 0069 for compatibility and rollout.
+
+## [173.9.1] - 2026-11-17
+
+Contract impact: patch. The mission-summary trigger and publication guard holds
+while the narrative's source delivery is live, instead of only while it is the
+newest delivery (coo:1294.2jvr, plan step 5b). No schema, REST, MCP or consumer
+change; a mission with no agent prose still gets a fallback summary.
+
+### Changed
+
+- `data/README.md`, `architecture.md` and `components.yaml`: a delivery that
+  sends no `missionSummary` prose no longer lifts the narrative guard, so the
+  fallback composer cannot replace agent prose with text about one delivery.
+  The guard releases when the source delivery is soft-deleted.
+
+### Version
+
+- Patch contract version 173.9.1, from 173.9.0.
+
+## [173.9.0] - 2026-11-17
+
+Contract impact: minor. The launch prompt only leads to attach, and attach
+carries the attachment download rule the prompt used to hold (coo:1294.gb9q,
+plan decision D3). No database migration, REST or MCP schema change.
+
+### Added
+
+- Attach and resume-follow-up `agentInstructions` add an Attachments section
+  when the current objective has attachments: in CLI wording a
+  `attachment-download-url --mission-id --objective-id --attachment-id --output`
+  command for each file and the `attachment-list` command for other objectives;
+  in MCP wording a statement that no Overlord MCP tool downloads them.
+
+### Changed
+
+- The `ovld launch` prompt carries only the mission id and title, the objective
+  id, the instruction not to load the Overlord skill, the execution directive
+  and the attach command. It no longer lists objectives, attachments, recent
+  activity or artifacts; attach returns all of them. `protocol.md` "Attachment
+  download" and the attach-response-v3 description are reworded to match.
+
+### Version
+
+- Minor contract version 173.9.0, from 173.8.0.
+
+## [173.8.0] - 2026-11-17
+
+Contract impact: minor. Rules for rare cases arrive in the response that
+reports the case instead of in every attach (coo:1294.s9m6, plan decision D6).
+No database migration; OpenAPI 4.11.0 adds one optional response field.
+
+### Added
+
+- `objective-changes` accepts optional `--connection-method cli|mcp` (default
+  `cli`; other values 400 `invalid_input`). When a capture warning needs agent
+  action, `ObjectiveFileChangesDto` adds optional `instruction`, how to declare
+  missed paths in the caller's wording. MCP servers (hosted and local shim) send
+  `mcp`. The REST read never carries the field.
+- The CLI-local `changes` read (`LocalObjectiveChangesDto`) adds the same
+  optional `instruction` in CLI wording, also for `sync_failed`; `sync_pending`
+  alone adds none.
+- `deliver` returns `instruction`: the post-delivery rule worded by the session
+  `connection_method` (CLI: `resume-follow-up` with the delivered ids; MCP: ask
+  the user to start follow-up work).
+
+### Changed
+
+- `mission_summary_item_skipped` warning messages state the next step for each
+  cause; the `mission_summary_conflict` message adds "say so in the delivery
+  summary" to its second-conflict step.
+- `agentInstructions` drops the changed-files recovery block, the conflict
+  procedure and the post-delivery rule, keeping one pointer sentence for each.
+  `protocol.md` gains a "Rare-case instructions" rule.
+
+### Version
+
+- Minor contract version 173.8.0, from 173.7.1.
+
+## [173.7.1] - 2026-11-17
+
+Contract impact: patch. The delivery composer no longer rewrites known risks, so
+a risk keeps its mission-item row, id and status through composition
+(coo:1294.rw8a, ADR 0068). No database migration; OpenAPI unchanged.
+
+### Changed
+
+- `presentation.knownRisks` is always `agentReport.knownRisks`, in composed and
+  fallback presentations, as `presentation.deferredWork` already is. The
+  compose-delivery response schema drops `knownRisks`; risks remain read-only
+  prompt evidence. `protocol.md` (delivery evidence) and `data/README.md`
+  (`mission_items.item_ref`) state this.
+
+### Version
+
+- Patch contract version 173.7.1, from 173.7.0.
+
+## [173.7.0] - 2026-11-17
+
+Contract impact: minor. Attach instructions are worded for the caller's
+connection method, so an agent on MCP gets rules it can follow with its own
+tools (coo:1294.h8e4, ADR 0067). No database migration; OpenAPI unchanged.
+
+### Added
+
+- Optional `--connection-method cli|mcp` on `attach` and `resume-follow-up`
+  (default `cli`; other values are rejected with `invalid_input`). The hosted
+  MCP server and the local connector MCP shim send `mcp`. The value is stored
+  as the session `connection_method`.
+- `agentInstructions` states that it takes precedence over an installed
+  Overlord skill or plugin.
+
+### Changed
+
+- With `mcp`, `agentInstructions` names Overlord MCP tools and payload fields
+  (`overlord_update_session`, `overlord_deliver_session`, `overlord_changes`,
+  `declaredPaths`, `missionSummary`) and no CLI command or flag.
+- `agentInstructions` is the first top-level key of the attach and
+  resume-follow-up response, so output truncation does not drop it.
+- The Mission summary block tells the agent to check every open item, not to
+  report a risk or suggestion that is already open or that it closed, to
+  organise the summary by what the mission provides, and to state only durable
+  limits.
+
+### Compatibility
+
+- Existing callers keep working: without the flag the CLI wording is
+  unchanged in meaning, and the response fields are unchanged; only key order
+  and instruction prose differ.
+- An older backend ignores the unknown flag, so a new MCP shim against an old
+  server receives the CLI wording as before.
+
+### Version
+
+- Minor contract version 173.7.0, from 173.6.1.
+
 ## [173.6.1] - 2026-11-16
 
 Contract impact: patch. Clarify missing Latch inspection cleanup for queued and

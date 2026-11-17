@@ -12,6 +12,7 @@ import {
 import {
   addObjectivesToMission,
   discussObjective,
+  instructionStyleFor,
   loadMissionContext,
   protocolCreate,
   protocolPrompt,
@@ -62,6 +63,7 @@ import {
   type SubcommandTable
 } from './flags.ts';
 import { ProjectSelectionRequiredError, resolveProjectRefChoices } from './project-refs.ts';
+import { connectionMethodFlag } from './session.ts';
 
 // ---- Mission and objective protocol subcommands ---------------------------
 //
@@ -588,7 +590,12 @@ export const missionSubcommands: SubcommandTable = {
     handler: (ctx, body) => {
       const objectiveId = objectiveRefFlag(body);
       if (!objectiveId) throw new ApiError(400, 'objective-changes requires --objective-id');
-      return listObjectiveFileChanges({ ctx, missionId: missionRefFlag(body), objectiveId });
+      return listObjectiveFileChanges({
+        ctx,
+        missionId: missionRefFlag(body),
+        objectiveId,
+        instructionStyle: instructionStyleFor(connectionMethodFlag(body))
+      });
     }
   },
 
