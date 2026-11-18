@@ -65227,9 +65227,9 @@ var require_implementation = __commonJS({
         throw new TypeError(ERROR_MESSAGE + target);
       }
       var args = slicy(arguments, 1);
-      var bound3;
+      var bound;
       var binder = function() {
-        if (this instanceof bound3) {
+        if (this instanceof bound) {
           var result2 = target.apply(
             this,
             concatty(args, arguments)
@@ -65249,15 +65249,15 @@ var require_implementation = __commonJS({
       for (var i5 = 0; i5 < boundLength; i5++) {
         boundArgs[i5] = "$" + i5;
       }
-      bound3 = Function("binder", "return function (" + joiny(boundArgs, ",") + "){ return binder.apply(this,arguments); }")(binder);
+      bound = Function("binder", "return function (" + joiny(boundArgs, ",") + "){ return binder.apply(this,arguments); }")(binder);
       if (target.prototype) {
         var Empty = function Empty2() {
         };
         Empty.prototype = target.prototype;
-        bound3.prototype = new Empty();
+        bound.prototype = new Empty();
         Empty.prototype = null;
       }
-      return bound3;
+      return bound;
     };
   }
 });
@@ -73641,7 +73641,7 @@ var require_serve_static = __commonJS({
       return '<!DOCTYPE html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n<title>' + title + "</title>\n</head>\n<body>\n<pre>" + body + "</pre>\n</body>\n</html>\n";
     }
     function createNotFoundDirectoryListener() {
-      return function notFound() {
+      return function notFound2() {
         this.error(404);
       };
     }
@@ -77494,14 +77494,14 @@ var init_getProfileName = __esm({
 });
 
 // ../node_modules/@smithy/core/dist-es/submodules/config/shared-ini-file-loader/getSSOTokenFilepath.js
-var import_node_crypto18, import_node_path22, getSSOTokenFilepath;
+var import_node_crypto21, import_node_path22, getSSOTokenFilepath;
 var init_getSSOTokenFilepath = __esm({
   "../node_modules/@smithy/core/dist-es/submodules/config/shared-ini-file-loader/getSSOTokenFilepath.js"() {
-    import_node_crypto18 = require("node:crypto");
+    import_node_crypto21 = require("node:crypto");
     import_node_path22 = require("node:path");
     init_getHomeDir();
     getSSOTokenFilepath = (id2) => {
-      const hasher = (0, import_node_crypto18.createHash)("sha1");
+      const hasher = (0, import_node_crypto21.createHash)("sha1");
       const cacheName = hasher.update(id2).digest("hex");
       return (0, import_node_path22.join)(getHomeDir(), ".aws", "sso", "cache", `${cacheName}.json`);
     };
@@ -79672,10 +79672,10 @@ function castSourceData(toCast, encoding) {
   }
   return fromArrayBuffer(toCast);
 }
-var import_node_crypto19, Hash;
+var import_node_crypto22, Hash;
 var init_hash_node = __esm({
   "../node_modules/@smithy/core/dist-es/submodules/serde/hash-node/hash-node.js"() {
-    import_node_crypto19 = require("node:crypto");
+    import_node_crypto22 = require("node:crypto");
     init_buffer_from();
     init_toUint8Array();
     Hash = class {
@@ -79694,7 +79694,7 @@ var init_hash_node = __esm({
         return Promise.resolve(this.hash.digest());
       }
       reset() {
-        this.hash = this.secret ? (0, import_node_crypto19.createHmac)(this.algorithmIdentifier, castSourceData(this.secret)) : (0, import_node_crypto19.createHash)(this.algorithmIdentifier);
+        this.hash = this.secret ? (0, import_node_crypto22.createHmac)(this.algorithmIdentifier, castSourceData(this.secret)) : (0, import_node_crypto22.createHash)(this.algorithmIdentifier);
       }
     };
   }
@@ -80588,10 +80588,10 @@ __export(serde_exports, {
   toUtf8: () => toUtf8,
   v4: () => v4
 });
-var import_node_crypto20, Uint8ArrayBlobAdapter, _getRandomValues, v4, generateIdempotencyToken;
+var import_node_crypto23, Uint8ArrayBlobAdapter, _getRandomValues, v4, generateIdempotencyToken;
 var init_serde = __esm({
   "../node_modules/@smithy/core/dist-es/submodules/serde/index.js"() {
-    import_node_crypto20 = require("node:crypto");
+    import_node_crypto23 = require("node:crypto");
     init_fromBase64();
     init_toBase64();
     init_Uint8ArrayBlobAdapter();
@@ -80628,7 +80628,7 @@ var init_serde = __esm({
     init_stream_collector();
     Uint8ArrayBlobAdapter = class extends bindUint8ArrayBlobAdapter(toUtf8, fromUtf8, toBase64, fromBase64) {
     };
-    _getRandomValues = import_node_crypto20.getRandomValues;
+    _getRandomValues = import_node_crypto23.getRandomValues;
     v4 = bindV4(_getRandomValues);
     generateIdempotencyToken = v4;
   }
@@ -105525,7 +105525,7 @@ var require_dist_cjs16 = __commonJS({
     var { setCredentialFeature: setCredentialFeature2 } = (init_client3(), __toCommonJS(client_exports2));
     var { CredentialsProviderError: CredentialsProviderError2, readFile: readFile4, parseKnownFiles: parseKnownFiles2, getProfileName: getProfileName2 } = (init_config2(), __toCommonJS(config_exports));
     var { HttpRequest: HttpRequest2 } = (init_protocols(), __toCommonJS(protocols_exports));
-    var { createHash: createHash30, createPrivateKey, createPublicKey, sign: sign2 } = require("node:crypto");
+    var { createHash: createHash33, createPrivateKey, createPublicKey, sign: sign2 } = require("node:crypto");
     var { promises } = require("node:fs");
     var { homedir: homedir2 } = require("node:os");
     var { dirname, join: join6 } = require("node:path");
@@ -105686,7 +105686,7 @@ var require_dist_cjs16 = __commonJS({
       getTokenFilePath() {
         const directory = process.env.AWS_LOGIN_CACHE_DIRECTORY ?? join6(homedir2(), ".aws", "login", "cache");
         const loginSessionBytes = Buffer.from(this.loginSession, "utf8");
-        const loginSessionSha256 = createHash30("sha256").update(loginSessionBytes).digest("hex");
+        const loginSessionSha256 = createHash33("sha256").update(loginSessionBytes).digest("hex");
         return join6(directory, `${loginSessionSha256}.json`);
       }
       derToRawSignature(derSignature) {
@@ -107715,7 +107715,7 @@ var init_Md5Js = __esm({
 function buildNativeClass() {
   return class Md5Node {
     digestLength = 16;
-    hash = (0, import_node_crypto21.createHash)("md5");
+    hash = (0, import_node_crypto24.createHash)("md5");
     update(data) {
       this.hash.update(toUint8Array2(data));
     }
@@ -107724,19 +107724,19 @@ function buildNativeClass() {
       return new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength);
     }
     reset() {
-      this.hash = (0, import_node_crypto21.createHash)("md5");
+      this.hash = (0, import_node_crypto24.createHash)("md5");
     }
   };
 }
-var import_node_crypto21, hasNativeCrypto, Md5Node;
+var import_node_crypto24, hasNativeCrypto, Md5Node;
 var init_Md5Node = __esm({
   "../node_modules/@smithy/core/dist-es/submodules/checksum/md5/Md5Node.js"() {
-    import_node_crypto21 = require("node:crypto");
+    import_node_crypto24 = require("node:crypto");
     init_serde();
     init_Md5Js();
     hasNativeCrypto = (() => {
       try {
-        (0, import_node_crypto21.createHash)("md5");
+        (0, import_node_crypto24.createHash)("md5");
         return true;
       } catch {
         return false;
@@ -108080,7 +108080,7 @@ function buildNativeClass3() {
       this.finished = false;
     }
     createHash() {
-      return this.secret ? (0, import_node_crypto22.createHmac)("sha256", toBuffer(this.secret)) : (0, import_node_crypto22.createHash)("sha256");
+      return this.secret ? (0, import_node_crypto25.createHmac)("sha256", toBuffer(this.secret)) : (0, import_node_crypto25.createHash)("sha256");
     }
   };
 }
@@ -108093,14 +108093,14 @@ function toBuffer(data) {
   }
   return Buffer.from(data);
 }
-var import_node_crypto22, hasNativeCrypto2, Sha256Node;
+var import_node_crypto25, hasNativeCrypto2, Sha256Node;
 var init_Sha256Node = __esm({
   "../node_modules/@smithy/core/dist-es/submodules/checksum/sha256/Sha256Node.js"() {
-    import_node_crypto22 = require("node:crypto");
+    import_node_crypto25 = require("node:crypto");
     init_Sha256Js();
     hasNativeCrypto2 = (() => {
       try {
-        (0, import_node_crypto22.createHash)("sha256");
+        (0, import_node_crypto25.createHash)("sha256");
         return true;
       } catch {
         return false;
@@ -112032,6 +112032,28 @@ var REPOSITORY_READ_DEFAULT_BOUNDS = {
 };
 var REPOSITORY_READ_OPERATION_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$/;
 
+// ../packages/contract/dist/report-draft.js
+var REPORT_DRAFT_KINDS = [
+  "human_action",
+  "tradeoff",
+  "known_risk",
+  "deferred_work",
+  "assumption"
+];
+var REPORT_DRAFT_LIMITS = {
+  /** Active (not withdrawn) entries per kind; the V1 per-array item limit. */
+  maxActivePerKind: 12,
+  /** Accepted batches retained per draft (their receipts always replay). */
+  maxBatches: 1e3,
+  /** Distinct entry ids per draft, withdrawn ones included. */
+  maxEntryIds: 1e3,
+  /** Operations in one update batch or one final deliver set. */
+  maxOperationsPerBatch: 50,
+  maxEntryIdLength: 100,
+  maxWithdrawReasonLength: 280
+};
+var REPORT_DRAFT_ENTRY_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,99}$/;
+
 // ../packages/contract/dist/launch-variables.js
 var LAUNCH_VARIABLES = [
   {
@@ -112953,13 +112975,13 @@ function finalizeNextStatusTypeSqlite(db) {
         WHERE status_id IN (SELECT id FROM project_statuses WHERE type = 'next')`);
     db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_project_statuses_active_next
          ON project_statuses (project_id) WHERE type = 'next' AND deleted_at IS NULL`);
-    const invalid4 = db.prepare(`SELECT 1 FROM projects p
+    const invalid5 = db.prepare(`SELECT 1 FROM projects p
           LEFT JOIN project_statuses ps ON ps.project_id = p.id AND ps.deleted_at IS NULL
          WHERE p.deleted_at IS NULL
          GROUP BY p.id
         HAVING SUM(ps.type = 'next') != 1
          LIMIT 1`).get();
-    if (invalid4)
+    if (invalid5)
       throw new Error("Next-status migration could not establish one next status per project");
     db.exec("COMMIT");
   } catch (error64) {
@@ -113368,10 +113390,10 @@ async function finalizeProjectStatusesPostgres(client) {
     await tx.exec(`ALTER TABLE my_mission_positions ALTER COLUMN project_id SET NOT NULL`);
     await tx.exec(`ALTER TABLE my_mission_positions ADD FOREIGN KEY (project_id,status_id) REFERENCES project_statuses(project_id,id) ON DELETE CASCADE`);
     await tx.exec(`ALTER TABLE my_mission_positions ADD FOREIGN KEY (project_id,mission_id) REFERENCES missions(project_id,id) ON DELETE CASCADE`);
-    const invalid4 = await tx.get(`SELECT 1 FROM missions m LEFT JOIN project_statuses ps ON ps.project_id=m.project_id AND ps.id=m.status_id WHERE ps.id IS NULL LIMIT 1`);
+    const invalid5 = await tx.get(`SELECT 1 FROM missions m LEFT JOIN project_statuses ps ON ps.project_id=m.project_id AND ps.id=m.status_id WHERE ps.id IS NULL LIMIT 1`);
     const singleton = await tx.get(`SELECT 1 FROM projects p LEFT JOIN project_statuses ps ON ps.project_id=p.id AND ps.deleted_at IS NULL WHERE p.deleted_at IS NULL GROUP BY p.id HAVING COUNT(*) FILTER (WHERE ps.is_default) != 1 OR COUNT(*) FILTER (WHERE ps.type='execute') != 1 OR COUNT(*) FILTER (WHERE ps.type='review') != 1 LIMIT 1`);
     const fanout = await tx.get(`SELECT 1 FROM (SELECT p.workspace_id,COUNT(*) projects FROM projects p GROUP BY p.workspace_id) p LEFT JOIN (SELECT workspace_id,COUNT(*) statuses FROM workspace_statuses WHERE deleted_at IS NULL GROUP BY workspace_id) ws USING (workspace_id) LEFT JOIN (SELECT workspace_id,COUNT(*) statuses FROM project_statuses GROUP BY workspace_id) ps USING (workspace_id) WHERE COALESCE(ps.statuses,0) != p.projects * COALESCE(ws.statuses,0) LIMIT 1`);
-    if (invalid4 || singleton || fanout)
+    if (invalid5 || singleton || fanout)
       throw new Error("Project-status migration verification failed");
     await tx.exec("ALTER TABLE workspace_statuses RENAME TO workspace_statuses_legacy");
   });
@@ -116327,10 +116349,10 @@ function decodeProtectedHeader(token) {
       encodedProtectedHeader = token.protected;
     else
       throw new TypeError("Token does not contain a Protected Header");
-  const invalid4 = "Invalid Token or Protected Header formatting";
+  const invalid5 = "Invalid Token or Protected Header formatting";
   if (typeof encodedProtectedHeader != "string" || !encodedProtectedHeader)
-    throw new TypeError(invalid4);
-  return parseJoseHeader(encodedProtectedHeader, TypeError, invalid4);
+    throw new TypeError(invalid5);
+  return parseJoseHeader(encodedProtectedHeader, TypeError, invalid5);
 }
 
 // ../node_modules/jose/dist/webapi/util/decode_jwt.js
@@ -130962,9 +130984,9 @@ function assertExistingTableIndexFits({ columnBounds, dbType, existingColumns, f
         requiredBytes += (generatedLength ?? 0) * (dbType === "mysql" ? 4 : 1);
         continue;
       }
-      const bound3 = columnBounds.get(createDatabaseColumnKey(table2, column));
-      if (!bound3?.maxIndexBytes) throw new BetterAuthError(`Cannot create database index "${index.name}" on existing table "${table2}" because column "${column}" is not bounded for ${dbType === "mysql" ? "MySQL" : "SQL Server"}. Change it to a bounded string column, resolve oversized values, then run the migration again.`);
-      requiredBytes += bound3.maxIndexBytes;
+      const bound = columnBounds.get(createDatabaseColumnKey(table2, column));
+      if (!bound?.maxIndexBytes) throw new BetterAuthError(`Cannot create database index "${index.name}" on existing table "${table2}" because column "${column}" is not bounded for ${dbType === "mysql" ? "MySQL" : "SQL Server"}. Change it to a bounded string column, resolve oversized values, then run the migration again.`);
+      requiredBytes += bound.maxIndexBytes;
     } else requiredBytes += 16;
   }
   if (requiredBytes > byteBudget) throw new BetterAuthError(`Cannot create database index "${index.name}" on existing table "${table2}" because its columns can exceed ${dbType === "mysql" ? "MySQL" : "SQL Server"}'s ${byteBudget}-byte index-key limit. Bound the indexed string columns to the generated schema lengths, resolve oversized values, then run the migration again.`);
@@ -131913,8 +131935,8 @@ Most of the features of Better Auth will not work correctly.`);
   checkEndpointConflicts(options, logger3);
   const trustedProxies = options.advanced?.ipAddress?.trustedProxies;
   if (trustedProxies && trustedProxies.length > 0) {
-    const invalid4 = findInvalidTrustedProxies(trustedProxies);
-    if (invalid4.length > 0) logger3.warn(`Ignoring invalid \`advanced.ipAddress.trustedProxies\` entries: ${invalid4.join(", ")}. Each entry must be an IP address or CIDR range.`);
+    const invalid5 = findInvalidTrustedProxies(trustedProxies);
+    if (invalid5.length > 0) logger3.warn(`Ignoring invalid \`advanced.ipAddress.trustedProxies\` entries: ${invalid5.join(", ")}. Each entry must be an IP address or CIDR range.`);
   }
   const cookies = getCookies(options);
   const tables = getAuthTables(options);
@@ -133970,99 +133992,6 @@ var composeDeliveryTool = {
   })
 };
 
-// ../automations/dist/compose-mission-summary/compose.js
-var COMPOSE_MISSION_SUMMARY_RESPONSE_SCHEMA = {
-  type: "object",
-  properties: {
-    headline: { type: "string" },
-    summary: { type: "string" }
-  },
-  required: ["headline", "summary"]
-};
-var MISSION_SUMMARY_SYSTEM_INSTRUCTION = `You write fallback headline and summary prose when a delivery supplied no agent-authored mission summary.
-Return JSON only matching the schema.
-Rules:
-- Write for the operator who owns the mission. Say what is done, what is in flight, what is blocked, and what is waiting on them, in that order.
-- The headline is one sentence of at most 140 characters. It names the single most important fact right now. Prefer the newest delivery unless an open blocking action or question outranks it.
-- The summary is Markdown of two to five sentences.
-- Rewrite the whole summary to be true from the supplied evidence. The previous summary may be agent-authored; retain only claims the evidence still supports.
-- Risks, human actions and suggestions are separate live lists. Never return, select or rewrite list items; do not repeat them in prose.
-- Pending suggestions are context only. You may say that work is waiting; do not restate the suggestions.
-- Use only facts in the evidence. Never invent files, commands, or state.
-Apply the WRITING rules below to headline and summary. They do not apply to commands, paths, identifiers, or quoted agent text; copy those exactly.
-${WRITING_RULES}`;
-function buildComposeMissionSummaryPrompt(input2) {
-  return [
-    "Update the mission summary from this bounded evidence.",
-    "",
-    `Mission:
-${JSON.stringify(input2.mission)}`,
-    `Previous summary:
-${JSON.stringify(input2.previousSummary)}`,
-    `Objectives:
-${JSON.stringify(input2.objectives)}`,
-    `Newest delivery:
-${JSON.stringify(input2.newestDelivery)}`,
-    `Open actions:
-${JSON.stringify(input2.openActions)}`,
-    `Open questions:
-${JSON.stringify(input2.openQuestions)}`,
-    `Pending suggestions (context only):
-${JSON.stringify(input2.pendingSuggestions)}`,
-    `Known risks:
-${JSON.stringify(input2.knownRisks)}`,
-    `Counts:
-${JSON.stringify(input2.counts)}`
-  ].join("\n\n");
-}
-async function composeMissionSummaryWithGemini(params) {
-  const { input: input2, env: env3 = process.env, logPrefix = "[automations/compose-mission-summary]", generate } = params;
-  const prompt = buildComposeMissionSummaryPrompt(input2);
-  const text = generate !== void 0 ? await generate({
-    prompt,
-    systemInstruction: MISSION_SUMMARY_SYSTEM_INSTRUCTION,
-    responseSchema: COMPOSE_MISSION_SUMMARY_RESPONSE_SCHEMA
-  }) : await generateMissionSummaryJson({ prompt, env: env3, logPrefix });
-  if (!text)
-    return null;
-  try {
-    const parsed = JSON.parse(text);
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed))
-      return null;
-    return parsed;
-  } catch (error64) {
-    console.warn(`${logPrefix} failed to parse Gemini JSON:`, error64);
-    return null;
-  }
-}
-async function generateMissionSummaryJson(params) {
-  const { prompt, env: env3, logPrefix } = params;
-  const client = getGeminiClient(env3);
-  const config4 = readGeminiConfigFromEnv(env3);
-  if (!client || !config4) {
-    console.warn(`${logPrefix} OPENROUTER_API_KEY not set`);
-    return null;
-  }
-  try {
-    const response = await client.models.generateContent({
-      model: config4.model,
-      contents: [{ role: "user", parts: [{ text: prompt }] }],
-      config: {
-        systemInstruction: MISSION_SUMMARY_SYSTEM_INSTRUCTION,
-        temperature: 0.2,
-        maxOutputTokens: 2048,
-        responseMimeType: "application/json",
-        responseSchema: COMPOSE_MISSION_SUMMARY_RESPONSE_SCHEMA
-      }
-    });
-    const text = (response.text ?? "").trim();
-    return text || null;
-  } catch (error64) {
-    console.warn(`${logPrefix} Gemini call failed:`, error64);
-    return null;
-  }
-}
-
 // ../automations/dist/objective-brief/brief.js
 var OBJECTIVE_BRIEF_SCHEMA_VERSION = 1;
 var OBJECTIVE_BRIEF_TITLE_MAX_CHARS = 60;
@@ -135415,6 +135344,11 @@ var missionBranchDtoSchema = external_exports.object({ "name": external_exports.
 var missionCreatedFromDtoSchema = external_exports.object({ "sessionId": external_exports.string(), "missionId": external_exports.string(), "missionDisplayId": external_exports.string(), "agentIdentifier": external_exports.string() });
 var missionDetailDtoSchema = external_exports.object({ ...missionDtoShape, "objectives": external_exports.array(objectiveDtoSchema), "statuses": external_exports.array(projectStatusDtoSchema), "executionRequests": external_exports.array(executionRequestDtoSchema), "terminalSessions": external_exports.array(terminalSessionDtoSchema), "branch": missionBranchDtoSchema.nullable(), "createdFrom": missionCreatedFromDtoSchema.nullable() });
 var objectiveAttachmentDtoSchema = external_exports.object({ "id": external_exports.string(), "workspaceId": external_exports.string(), "projectId": external_exports.string().nullable(), "missionId": external_exports.string().nullable(), "objectiveId": external_exports.string().nullable(), "inboxItemId": external_exports.string().nullable(), "bucketKey": external_exports.literal("attachments"), "storageKey": external_exports.string(), "filename": external_exports.string(), "contentType": external_exports.string().nullable(), "sizeBytes": external_exports.int().min(1).nullable(), "uploadStatus": external_exports.enum(["prepared", "uploaded", "available", "failed", "deleted"]), "url": external_exports.string(), "createdAt": dateTimeSchema });
+var reportDraftKindSchema = external_exports.enum(["human_action", "tradeoff", "known_risk", "deferred_work", "assumption"]);
+var reportDraftCountsSchema = external_exports.object({ "human_action": external_exports.int().min(0), "tradeoff": external_exports.int().min(0), "known_risk": external_exports.int().min(0), "deferred_work": external_exports.int().min(0), "assumption": external_exports.int().min(0) });
+var reportDraftEntryDtoSchema = external_exports.object({ "entryId": external_exports.string(), "kind": reportDraftKindSchema, "content": external_exports.record(external_exports.string(), external_exports.unknown()), "position": external_exports.int().min(0), "state": external_exports.enum(["active", "withdrawn"]), "withdrawnAt": dateTimeSchema.nullable(), "withdrawnReason": external_exports.string().nullable(), "importedFrom": external_exports.object({ "draftId": external_exports.string(), "entryId": external_exports.string() }).nullable(), "sealedRef": external_exports.string().nullable(), "revision": external_exports.int().min(1), "createdAt": dateTimeSchema, "updatedAt": dateTimeSchema });
+var reportDraftDtoSchema = external_exports.object({ "id": external_exports.string(), "missionId": external_exports.string(), "objectiveId": external_exports.string(), "sessionId": external_exports.string(), "state": external_exports.enum(["open", "sealed", "abandoned"]), "revision": external_exports.int().min(1), "batchCount": external_exports.int().min(0).max(1e3), "entryCount": external_exports.int().min(0).max(1e3), "activeCounts": reportDraftCountsSchema, "withdrawnCount": external_exports.int().min(0), "sealedAt": dateTimeSchema.nullable(), "sealedDeliveryId": external_exports.string().nullable(), "createdAt": dateTimeSchema, "updatedAt": dateTimeSchema, "entries": external_exports.array(reportDraftEntryDtoSchema), "withdrawn": external_exports.exactOptional(external_exports.array(reportDraftEntryDtoSchema)) });
+var objectiveReportDraftListSchema = external_exports.object({ "objectiveId": external_exports.string(), "drafts": external_exports.array(reportDraftDtoSchema).max(20) });
 var objectiveAttachmentListSchema = external_exports.array(objectiveAttachmentDtoSchema);
 var rawUploadBodySchema = binaryBodySchema;
 var createProjectBodySchema = external_exports.object({ "name": external_exports.string(), "workspaceId": external_exports.exactOptional(external_exports.string()), "slug": external_exports.exactOptional(external_exports.string()), "description": external_exports.exactOptional(external_exports.string().nullable()), "color": external_exports.exactOptional(external_exports.string()), "primaryResource": external_exports.exactOptional(external_exports.object({ "directoryPath": external_exports.string(), "executionTargetId": external_exports.exactOptional(external_exports.string().nullable()) }).nullable()) });
@@ -135468,11 +135402,11 @@ var deferredWorkV1Schema = external_exports.strictObject({ "id": external_export
 var deliveryAgentReportV1Schema = external_exports.strictObject({ "humanActions": external_exports.array(humanActionV1Schema).max(12), "tradeoffsMade": external_exports.array(tradeoffMadeV1Schema).max(12), "knownRisks": external_exports.array(external_exports.string()).max(12), "deferredWork": external_exports.array(deferredWorkV1Schema).max(12), "assumptions": external_exports.array(external_exports.string()).max(12) });
 var deliveryPresentationV1Schema = external_exports.strictObject({ "status": external_exports.enum(["deterministic", "pending", "composed", "fallback"]), "markdown": external_exports.string(), "humanActions": external_exports.array(humanActionV1Schema).max(12), "tradeoffsMade": external_exports.array(tradeoffMadeV1Schema).max(12), "knownRisks": external_exports.array(external_exports.string()).max(12), "deferredWork": external_exports.array(deferredWorkV1Schema).max(12), "assumptions": external_exports.array(external_exports.string()).max(12), "generatedBy": external_exports.enum(["deterministic", "gemini"]), "generatedAt": external_exports.exactOptional(external_exports.string()), "model": external_exports.exactOptional(external_exports.string()) });
 var deliveryReportPayloadV1Schema = external_exports.strictObject({ "schemaVersion": external_exports.literal(1), "agentReport": deliveryAgentReportV1Schema, "warnings": external_exports.exactOptional(external_exports.array(external_exports.string()).max(12)), "presentation": deliveryPresentationV1Schema });
-var missionItemResolverDtoSchema = external_exports.object({ "kind": external_exports.enum(["person", "agent"]), "workspaceUserId": external_exports.string().nullable(), "objectiveId": external_exports.string().nullable(), "deliveryId": external_exports.string().nullable() });
+var missionItemResolverDtoSchema = external_exports.object({ "kind": external_exports.enum(["person", "agent"]), "workspaceUserId": external_exports.string().nullable(), "objectiveId": external_exports.string().nullable(), "deliveryId": external_exports.string().nullable(), "missionId": external_exports.exactOptional(external_exports.string().nullable()), "missionDisplayId": external_exports.exactOptional(external_exports.string().nullable()), "objectiveDisplayId": external_exports.exactOptional(external_exports.string().nullable()), "sessionId": external_exports.exactOptional(external_exports.string().nullable()), "crossMission": external_exports.exactOptional(external_exports.boolean()) });
 var humanActionResolutionDtoSchema = external_exports.object({ "status": external_exports.enum(["done", "dismissed"]), "resolvedAt": dateTimeSchema, "resolvedByWorkspaceUserId": external_exports.string().nullable(), "outcome": external_exports.enum(["mission_created", "objective_added"]).nullable(), "outcomeRef": external_exports.string().nullable(), "reason": external_exports.string().nullable(), "resolvedBy": missionItemResolverDtoSchema });
 var missionItemDtoSchema = external_exports.object({ "id": external_exports.string(), "missionId": external_exports.string(), "objectiveId": external_exports.string(), "deliveryId": external_exports.string(), "kind": external_exports.enum(["risk", "human_action", "suggestion"]), "text": external_exports.string(), "status": external_exports.enum(["open", "done", "dismissed", "superseded"]), "reason": external_exports.string().nullable(), "resolvedBy": missionItemResolverDtoSchema.nullable(), "resolvedAt": dateTimeSchema.nullable(), "outcome": external_exports.enum(["mission_created", "objective_added"]).nullable(), "outcomeRef": external_exports.string().nullable(), "reportedAt": dateTimeSchema, "revision": external_exports.int() });
 var deliveryDeferredWorkItemDtoSchema = external_exports.object({ "actionId": external_exports.string(), "title": external_exports.string(), "change": external_exports.string(), "location": external_exports.string(), "doneWhen": external_exports.string(), "resolution": humanActionResolutionDtoSchema.nullable() });
-var deliveryDtoSchema = external_exports.object({ "id": external_exports.string(), "missionId": external_exports.string(), "objectiveId": external_exports.string(), "sessionId": external_exports.string().nullable(), "summary": external_exports.string(), "verificationSummary": external_exports.string().nullable(), "followUpNotes": external_exports.string().nullable(), "report": deliveryReportPayloadV1Schema, "deliveredAt": dateTimeSchema, "agentIdentifier": external_exports.string().nullable(), "modelIdentifier": external_exports.string().nullable(), "deferredWorkItems": external_exports.array(deliveryDeferredWorkItemDtoSchema) });
+var deliveryDtoSchema = external_exports.object({ "closedElsewhere": external_exports.exactOptional(external_exports.array(external_exports.object({ "itemId": external_exports.string(), "kind": external_exports.enum(["risk", "human_action", "suggestion"]), "text": external_exports.string(), "missionDisplayId": external_exports.string(), "status": external_exports.enum(["done", "dismissed"]), "reason": external_exports.string() })).max(50)), "id": external_exports.string(), "missionId": external_exports.string(), "objectiveId": external_exports.string(), "sessionId": external_exports.string().nullable(), "summary": external_exports.string(), "verificationSummary": external_exports.string().nullable(), "followUpNotes": external_exports.string().nullable(), "report": deliveryReportPayloadV1Schema, "deliveredAt": dateTimeSchema, "agentIdentifier": external_exports.string().nullable(), "modelIdentifier": external_exports.string().nullable(), "deferredWorkItems": external_exports.array(deliveryDeferredWorkItemDtoSchema) });
 var missionDeliveriesDtoSchema = external_exports.object({ "items": external_exports.array(deliveryDtoSchema).max(200), "total": external_exports.int().min(0), "limit": external_exports.int() });
 var missionSummaryStatusSchema = external_exports.enum(["pending", "composed", "fallback"]);
 var missionSummaryDuplicateDtoSchema = external_exports.object({ "id": external_exports.string(), "deliveryId": external_exports.string(), "objectiveId": external_exports.string(), "deliveredAt": dateTimeSchema });
@@ -135483,7 +135417,8 @@ var missionSummaryDtoSchema = external_exports.object({ "missionId": external_ex
 var missionSummaryActionDtoSchema = external_exports.object({ "id": external_exports.string(), "deliveryId": external_exports.string(), "objectiveId": external_exports.string(), "actionId": external_exports.string(), "deliveredAt": dateTimeSchema, "action": external_exports.string(), "reason": external_exports.exactOptional(external_exports.string()), "category": humanActionCategorySchema2, "blocking": external_exports.exactOptional(external_exports.boolean()), "command": external_exports.exactOptional(external_exports.string()), "verify": external_exports.exactOptional(external_exports.string()), "link": external_exports.exactOptional(external_exports.string()), "source": external_exports.enum(["agent", "deterministic_rule"]), "sourceRef": external_exports.exactOptional(external_exports.string()) });
 var missionSummarySourceDtoSchema = external_exports.object({ "objectiveId": external_exports.string(), "deliveryId": external_exports.string(), "deliveredAt": dateTimeSchema });
 var missionSummaryEvidenceDtoSchema = external_exports.object({ "actions": external_exports.array(missionSummaryActionDtoSchema).max(100), "sources": external_exports.array(missionSummarySourceDtoSchema).max(100), "totals": external_exports.object({ "actions": external_exports.int().min(0), "sources": external_exports.int().min(0), "currentRunDeliveries": external_exports.int().min(0) }), "truncated": external_exports.object({ "actions": external_exports.boolean(), "sources": external_exports.boolean() }) });
-var missionSummaryResponseSchema = external_exports.union([external_exports.object({ "eligible": external_exports.literal(false), "summary": external_exports.null(), "evidence": external_exports.null(), "watermark": external_exports.null(), "seenAt": external_exports.null() }), external_exports.object({ "eligible": external_exports.literal(true), "summary": missionSummaryDtoSchema.nullable(), "evidence": missionSummaryEvidenceDtoSchema, "watermark": dateTimeSchema.nullable(), "seenAt": dateTimeSchema.nullable() })]);
+var missionNarrativeDtoSchema = external_exports.object({ "state": external_exports.enum(["absent", "current", "outdated", "legacy"]), "evidenceRevision": external_exports.int().min(0), "publishedEvidenceRevision": external_exports.int().min(0).nullable(), "deliveryId": external_exports.string().nullable(), "objectiveId": external_exports.string().nullable(), "publishedAt": dateTimeSchema.nullable(), "changedAt": dateTimeSchema.nullable(), "outstandingDeliveryId": external_exports.string().nullable() });
+var missionSummaryResponseSchema = external_exports.union([external_exports.object({ "eligible": external_exports.literal(false), "summary": external_exports.null(), "evidence": external_exports.null(), "watermark": external_exports.null(), "narrative": external_exports.null(), "narrativeWatermark": external_exports.null(), "itemsWatermark": external_exports.exactOptional(external_exports.null()), "itemsTruncated": external_exports.exactOptional(external_exports.literal(false)), "seenAt": external_exports.null() }), external_exports.object({ "eligible": external_exports.literal(true), "summary": missionSummaryDtoSchema.nullable(), "evidence": missionSummaryEvidenceDtoSchema, "watermark": dateTimeSchema.nullable(), "narrative": missionNarrativeDtoSchema, "narrativeWatermark": dateTimeSchema.nullable(), "itemsWatermark": external_exports.exactOptional(dateTimeSchema.nullable()), "itemsTruncated": external_exports.exactOptional(external_exports.boolean()), "seenAt": dateTimeSchema.nullable() })]);
 var markMissionSummarySeenBodySchema = external_exports.object({ "watermark": external_exports.string() });
 var missionSummarySeenResponseSchema = external_exports.object({ "seenAt": dateTimeSchema });
 var artifactDtoSchema = external_exports.object({ "id": external_exports.string(), "workspaceId": external_exports.string(), "projectId": external_exports.string(), "missionId": external_exports.string(), "objectiveId": external_exports.string().nullable(), "sessionId": external_exports.string().nullable(), "deliveryId": external_exports.string().nullable(), "type": external_exports.string(), "label": external_exports.string(), "contentText": external_exports.string().nullable(), "contentJson": jsonValueSchema, "externalUrl": external_exports.string().nullable(), "createdAt": dateTimeSchema, "updatedAt": dateTimeSchema, "revision": external_exports.int().min(1) });
@@ -136030,6 +135965,7 @@ var getObjectivesByIdLaunchCommandPathParamsSchema = external_exports.object({ "
 var getObjectivesByIdLaunchCommandQueryParamsSchema = external_exports.object({ "agent": external_exports.string(), "model": external_exports.exactOptional(external_exports.string()), "reasoningEffort": external_exports.exactOptional(external_exports.string()), "executionTargetId": external_exports.exactOptional(external_exports.string()) });
 var getObjectivesByIdEffectiveLaunchConfigPathParamsSchema = external_exports.object({ "id": external_exports.string() });
 var getObjectivesByIdEffectiveLaunchConfigQueryParamsSchema = external_exports.object({ "agent": external_exports.string(), "executionTargetId": external_exports.exactOptional(external_exports.string()) });
+var getObjectivesByIdReportDraftsPathParamsSchema = external_exports.object({ "id": external_exports.string() });
 var getObjectivesByIdAttachmentsPathParamsSchema = external_exports.object({ "id": external_exports.string() });
 var postObjectivesByIdAttachmentsPathParamsSchema = external_exports.object({ "id": external_exports.string() });
 var postObjectivesByIdAttachmentsHeaderParamsSchema = external_exports.object({ "x-upload-filename": external_exports.exactOptional(external_exports.string()) });
@@ -140598,6 +140534,25 @@ var apiOperations = {
     responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: objectiveEffectiveLaunchConfigDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "500": apiResponses.InternalError }
   },
   /**
+   * GET /api/objectives/{id}/report-drafts: List an objective's provisional report drafts
+   */
+  getObjectivesByIdReportDrafts: {
+    operationId: "getObjectivesByIdReportDrafts",
+    method: "GET",
+    path: "/api/objectives/{id}/report-drafts",
+    tags: ["objectives"],
+    deprecated: false,
+    permission: "mission:read",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["mobile", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: getObjectivesByIdReportDraftsPathParamsSchema, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: objectiveReportDraftListSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "500": apiResponses.InternalError }
+  },
+  /**
    * GET /api/objectives/{id}/attachments: List an objective's attachments
    */
   getObjectivesByIdAttachments: {
@@ -141828,15 +141783,15 @@ var TomlDate = class _TomlDate extends Date {
     return this.#hasDate || this.#hasTime;
   }
   toISOString() {
-    let iso = super.toISOString();
+    let iso4 = super.toISOString();
     if (this.isDate())
-      return iso.slice(0, 10);
+      return iso4.slice(0, 10);
     if (this.isTime())
-      return iso.slice(11, 23);
+      return iso4.slice(11, 23);
     if (this.#offset === null)
-      return iso.slice(0, -1);
+      return iso4.slice(0, -1);
     if (this.#offset === "Z")
-      return iso;
+      return iso4;
     let offset = +this.#offset.slice(1, 3) * 60 + +this.#offset.slice(4, 6);
     offset = this.#offset[0] === "-" ? offset : -offset;
     let offsetDate = new Date(this.getTime() - offset * 6e4);
@@ -144914,7 +144869,6 @@ var import_node_crypto10 = require("node:crypto");
 
 // ../packages/core/service/worker-jobs.ts
 var DELIVERY_COMPOSE_JOB_TYPE = "overlord.delivery.compose.v1";
-var MISSION_SUMMARY_COMPOSE_JOB_TYPE = "overlord.mission.summary.compose.v1";
 var OBJECTIVE_BRIEF_COMPOSE_JOB_TYPE = "overlord.objective.brief.compose.v1";
 var OBJECTIVE_BRIEF_DEBOUNCE_MS = 5e3;
 var OBJECTIVE_BRIEF_MAX_DEBOUNCE_MS = 6e4;
@@ -145051,12 +145005,6 @@ async function enqueueDeliveryComposeJob({
   }
   return result2;
 }
-function triggerWorkspaceId(ctx) {
-  return "workspace" in ctx ? ctx.workspace.id : ctx.workspaceId;
-}
-function isSummaryEnabled(value2) {
-  return value2 === true || Number(value2) === 1;
-}
 async function recordMissionSummaryChange(db, fields) {
   await insertEntityChange(db, {
     workspaceId: fields.workspaceId,
@@ -145072,200 +145020,23 @@ async function recordMissionSummaryChange(db, fields) {
     source: fields.source
   });
 }
-async function enqueueMissionSummaryComposeJob({
-  ctx,
-  missionId,
-  reason,
-  sourceDeliveryId = null,
-  now: now2 = nowIso(),
-  maxAttempts = DEFAULT_MAX_ATTEMPTS,
-  priority = DEFAULT_PRIORITY
-}) {
-  const db = ctx.db;
-  const workspaceId2 = triggerWorkspaceId(ctx);
-  const mission = await db.get(
-    `SELECT project_id, summary_enabled FROM missions
-      WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
-    [missionId, workspaceId2]
-  );
-  if (!mission || !isSummaryEnabled(mission.summary_enabled)) {
-    return { triggered: false, generation: null, jobId: null };
-  }
-  const current = await lockMissionSummaryRow(db, missionId);
-  if (current && await hasCurrentNarrative(db, missionId, current.narrative_delivery_id)) {
-    return { triggered: false, generation: null, jobId: null };
-  }
-  const row = await db.get(
-    `INSERT INTO mission_summaries
-         (mission_id, workspace_id, project_id, revision, requested_generation,
-          completed_generation, status, headline, summary_markdown,
-          source_delivery_id, generated_by, generated_at, model,
-          created_at, updated_at)
-       VALUES (?, ?, ?, 1, 1, 0, 'pending', '', '', ?, 'deterministic', NULL, NULL, ?, ?)
-       ON CONFLICT (mission_id) DO UPDATE SET
-         requested_generation = mission_summaries.requested_generation + 1,
-         revision = mission_summaries.revision + 1,
-         status = 'pending',
-         source_delivery_id = excluded.source_delivery_id,
-         updated_at = excluded.updated_at
-       WHERE mission_summaries.narrative_delivery_id IS NULL
-          OR NOT EXISTS (SELECT 1 FROM deliveries
-               WHERE id = mission_summaries.narrative_delivery_id AND mission_id = ? AND deleted_at IS NULL)
-       RETURNING revision, requested_generation`,
-    [missionId, workspaceId2, mission.project_id, sourceDeliveryId, now2, now2, missionId]
-  );
-  if (!row) return { triggered: false, generation: null, jobId: null };
-  const revision3 = Number(row?.revision ?? 1);
-  const generation = Number(row?.requested_generation ?? 1);
-  await recordMissionSummaryChange(db, {
-    workspaceId: workspaceId2,
-    projectId: mission.project_id,
-    missionId,
-    revision: revision3,
-    operation: revision3 === 1 ? "insert" : "update",
-    changedFields: ["status", "requested_generation"],
-    actorWorkspaceUserId: ctx.actorWorkspaceUserId,
-    actorTokenId: ctx.actorTokenId ?? null,
-    source: ctx.source
-  });
-  const result2 = await enqueueWorkerJob({
-    db,
-    workspaceId: workspaceId2,
-    type: MISSION_SUMMARY_COMPOSE_JOB_TYPE,
-    dedupeBy: { field: "missionId", value: missionId },
-    payload: { missionId },
-    priority,
-    maxAttempts,
-    now: now2
-  });
-  console.info(
-    "[mission-summary-compose-worker]",
-    JSON.stringify({
-      event: "mission_summary_requested",
-      missionId,
-      reason,
-      generation,
-      jobId: result2.jobId,
-      enqueued: result2.enqueued
-    })
-  );
-  return { triggered: true, generation, jobId: result2.jobId };
-}
-async function readMissionSummaryGeneration(db, missionId) {
-  const row = await db.get(
-    `SELECT workspace_id, project_id, requested_generation, completed_generation,
-            source_delivery_id, headline, summary_markdown
-       FROM mission_summaries WHERE mission_id = ?`,
+async function lockMissionSummaryRow(tx, missionId) {
+  const lockClause = tx.dialect === "postgres" ? "FOR UPDATE" : "";
+  const row = await tx.get(
+    `SELECT workspace_id, project_id, revision, content_revision, evidence_revision,
+            published_evidence_revision, narrative_delivery_id, narrative_changed_at
+       FROM mission_summaries WHERE mission_id = ? ${lockClause}`,
     [missionId]
   );
   if (!row) return null;
   return {
-    workspaceId: row.workspace_id,
-    projectId: row.project_id,
-    requestedGeneration: Number(row.requested_generation),
-    completedGeneration: Number(row.completed_generation),
-    sourceDeliveryId: row.source_delivery_id,
-    previous: row.headline.trim() ? { headline: row.headline, summary: row.summary_markdown } : null
+    ...row,
+    revision: Number(row.revision),
+    content_revision: Number(row.content_revision),
+    evidence_revision: Number(row.evidence_revision),
+    published_evidence_revision: row.published_evidence_revision === null ? null : Number(row.published_evidence_revision),
+    narrative_changed_at: row.narrative_changed_at === null ? null : new Date(String(row.narrative_changed_at)).toISOString()
   };
-}
-async function lockMissionSummaryRow(tx, missionId) {
-  const lockClause = tx.dialect === "postgres" ? "FOR UPDATE" : "";
-  return await tx.get(
-    `SELECT workspace_id, project_id, revision, requested_generation, completed_generation, narrative_delivery_id
-         FROM mission_summaries WHERE mission_id = ? ${lockClause}`,
-    [missionId]
-  ) ?? null;
-}
-async function hasCurrentNarrative(db, missionId, narrativeDeliveryId) {
-  if (narrativeDeliveryId === null) return false;
-  const source = await db.get(
-    `SELECT id FROM deliveries WHERE id = ? AND mission_id = ? AND deleted_at IS NULL`,
-    [narrativeDeliveryId, missionId]
-  );
-  return source !== void 0 && source !== null;
-}
-async function publishMissionSummary({
-  db,
-  missionId,
-  generation,
-  publication,
-  now: now2 = nowIso()
-}) {
-  return db.transaction(async (tx) => {
-    const row = await lockMissionSummaryRow(tx, missionId);
-    if (!row) return "missing";
-    if (await hasCurrentNarrative(tx, missionId, row.narrative_delivery_id)) return "stale";
-    if (Number(row.requested_generation) !== generation || Number(row.completed_generation) >= generation)
-      return "stale";
-    const revision3 = Number(row.revision) + 1;
-    await tx.run(
-      `UPDATE mission_summaries
-          SET status = ?, headline = ?, summary_markdown = ?,
-              source_delivery_id = ?, generated_by = ?,
-              generated_at = ?, model = ?, completed_generation = ?, revision = ?,
-              updated_at = ?, content_revision = content_revision + 1,
-              narrative_delivery_id = NULL, narrative_objective_id = NULL
-        WHERE mission_id = ? AND requested_generation = ?`,
-      [
-        publication.status,
-        publication.headline,
-        publication.summary,
-        publication.sourceDeliveryId,
-        publication.generatedBy,
-        now2,
-        publication.model,
-        generation,
-        revision3,
-        now2,
-        missionId,
-        generation
-      ]
-    );
-    await recordMissionSummaryChange(tx, {
-      workspaceId: row.workspace_id,
-      projectId: row.project_id,
-      missionId,
-      revision: revision3,
-      operation: "update",
-      changedFields: [
-        "status",
-        "headline",
-        "summary_markdown",
-        "content_revision",
-        "narrative_delivery_id",
-        "narrative_objective_id",
-        "completed_generation"
-      ],
-      actorWorkspaceUserId: null,
-      source: "runner"
-    });
-    return "published";
-  });
-}
-async function completeMissionSummaryComposeJob({
-  db,
-  jobId,
-  missionId,
-  status,
-  lastError = null,
-  now: now2 = nowIso()
-}) {
-  return db.transaction(async (tx) => {
-    const row = await lockMissionSummaryRow(tx, missionId);
-    await finishWorkerJob(tx, jobId, status, lastError, now2);
-    if (!row || Number(row.requested_generation) <= Number(row.completed_generation) || await hasCurrentNarrative(tx, missionId, row.narrative_delivery_id)) {
-      return { successorJobId: null };
-    }
-    const successor = await enqueueWorkerJob({
-      db: tx,
-      workspaceId: row.workspace_id,
-      type: MISSION_SUMMARY_COMPOSE_JOB_TYPE,
-      dedupeBy: { field: "missionId", value: missionId },
-      payload: { missionId },
-      now: now2
-    });
-    return { successorJobId: successor.jobId };
-  });
 }
 async function missionOwnerProfileId({
   db,
@@ -145282,8 +145053,8 @@ async function missionOwnerProfileId({
   );
   return owner?.profile_id ?? null;
 }
-function addMs(iso, ms) {
-  return new Date(Date.parse(iso) + ms).toISOString();
+function addMs(iso4, ms) {
+  return new Date(Date.parse(iso4) + ms).toISOString();
 }
 async function enqueueObjectiveBriefComposeJob({
   db,
@@ -150158,8 +149929,8 @@ var SESSION_CHANNEL_ABSOLUTE_LIFETIME_SECONDS = 60 * 60 * 24;
 function hashSessionChannelToken(rawToken) {
   return (0, import_node_crypto12.createHash)(SESSION_CHANNEL_TOKEN_HASH_ALGORITHM).update(rawToken).digest("hex");
 }
-function addSeconds(iso, seconds2) {
-  return new Date(new Date(iso).getTime() + seconds2 * 1e3).toISOString();
+function addSeconds(iso4, seconds2) {
+  return new Date(new Date(iso4).getTime() + seconds2 * 1e3).toISOString();
 }
 function renewedExpiry({
   now: now2,
@@ -150199,21 +149970,6 @@ var REQUEST_COLUMNS = `
   waiter_lease_id, waiter_lease_expires_at, application_state, application_observed_at,
   created_at, updated_at, revision
 `;
-async function triggerMissionSummaryForRequest({
-  ctx,
-  request,
-  reason,
-  now: now2
-}) {
-  if (request.kind !== "question" && request.kind !== "choice") return;
-  if (!request.mission_id) return;
-  await enqueueMissionSummaryComposeJob({
-    ctx,
-    missionId: request.mission_id,
-    reason,
-    ...now2 ? { now: now2 } : {}
-  });
-}
 function boundedSummary(value2) {
   const trimmed9 = value2.trim();
   if (!trimmed9) throw new ServiceError("Request summary is required", "invalid_request", 400);
@@ -150316,12 +150072,6 @@ async function createRequest({
       missionId: channel.mission_id,
       objectiveId: channel.objective_id
     });
-    await triggerMissionSummaryForRequest({
-      ctx: txCtx,
-      request: { kind, mission_id: channel.mission_id },
-      reason: "agent_request_opened",
-      now: now2
-    });
   });
   return await getRequest2({ ctx, requestId: id2 });
 }
@@ -150382,12 +150132,6 @@ async function releaseRequestToTerminal({
       missionId: existing.mission_id,
       objectiveId: existing.objective_id,
       changedFields: ["status", "released_reason"]
-    });
-    await triggerMissionSummaryForRequest({
-      ctx: txCtx,
-      request: existing,
-      reason: "agent_request_closed",
-      now: now2
     });
     return true;
   });
@@ -150467,12 +150211,6 @@ async function resolveRequest({
         "resolved_by_workspace_user_id",
         ...isQuestion ? ["application_state"] : []
       ]
-    });
-    await triggerMissionSummaryForRequest({
-      ctx: txCtx,
-      request: existing,
-      reason: "agent_request_closed",
-      now: now2
     });
     if (isQuestion && existing.mission_id && existing.project_id && existing.session_id) {
       const details = parseObject(existing.details_json);
@@ -154991,7 +154729,7 @@ async function moveMissionToExecute({
 }
 
 // ../packages/core/service/protocol.ts
-var import_node_crypto14 = require("node:crypto");
+var import_node_crypto17 = require("node:crypto");
 
 // ../packages/core/service/agent-session/channels.ts
 var CHANNEL_COLUMNS = `
@@ -155275,11 +155013,6 @@ async function endChannel({
         WHERE id = ? AND revision = ?`,
       [state2, now2, reason, exitCode, now2, now2, revision3, channelId, existing.revision]
     );
-    const closingQuestions = await tx.all(
-      `SELECT DISTINCT kind, mission_id FROM agent_requests
-        WHERE channel_id = ? AND status = 'open' AND kind IN ('question', 'choice')`,
-      [channelId]
-    );
     await tx.run(
       `UPDATE agent_requests
           SET status = 'released_to_terminal',
@@ -155291,17 +155024,6 @@ async function endChannel({
         WHERE channel_id = ? AND status = 'open'`,
       [state2 === "lost" ? "channel_lost" : "channel_ended", now2, channelId]
     );
-    const summaryMissions = /* @__PURE__ */ new Set();
-    for (const request of closingQuestions) {
-      if (!request.mission_id || summaryMissions.has(request.mission_id)) continue;
-      summaryMissions.add(request.mission_id);
-      await triggerMissionSummaryForRequest({
-        ctx: txCtx,
-        request,
-        reason: "agent_request_closed",
-        now: now2
-      });
-    }
     await tx.run(
       `UPDATE agent_session_inputs
           SET status = 'expired', last_error_code = ?, updated_at = ?, revision = revision + 1
@@ -155420,6 +155142,138 @@ async function emitNotification({
     now: now2
   });
   return { notificationId, emitted: true };
+}
+
+// ../packages/core/service/changes.ts
+function toIso(value2) {
+  return value2 instanceof Date ? value2.toISOString() : value2;
+}
+function toSource(value2) {
+  return value2 === "declared_edit" || value2 === "agent_declared" ? value2 : null;
+}
+function toBindingState(value2) {
+  return value2 === "bound" || value2 === "unbound" ? value2 : "unknown";
+}
+function readHealth(value2) {
+  let parsed = value2;
+  if (typeof value2 === "string") {
+    try {
+      parsed = JSON.parse(value2);
+    } catch {
+      return [];
+    }
+  }
+  const health = parsed?.health;
+  if (typeof health !== "object" || health === null) return [];
+  return Object.entries(health).filter(([, entry]) => typeof entry?.firstAt === "string" && typeof entry.lastAt === "string").map(([code, entry]) => ({
+    code,
+    firstAt: entry.firstAt,
+    lastAt: entry.lastAt
+  })).sort((left, right) => left.code.localeCompare(right.code));
+}
+function deriveCaptureWarnings(sessions) {
+  const warnings = /* @__PURE__ */ new Set();
+  for (const session of sessions) {
+    if (session.bindingState === "unbound") warnings.add("unbound");
+    else if (session.bindingState === "unknown") warnings.add("unknown_binding");
+    else if (!session.callbackObservedAt) warnings.add("bound_no_callback");
+    if (session.health.some((entry) => CAPTURE_GAP_CODES.includes(entry.code))) {
+      warnings.add("tool_activity_uncaptured");
+    }
+  }
+  return [...warnings];
+}
+async function resolveObjectiveInMission({
+  ctx,
+  missionId,
+  ref
+}) {
+  const exact = await ctx.db.get(
+    `SELECT id FROM objectives
+      WHERE id = ? AND mission_id = ? AND workspace_id = ? AND deleted_at IS NULL`,
+    [ref, missionId, ctx.workspace.id]
+  );
+  if (exact) return exact;
+  const resolved = await resolveObjectiveRef({ ctx, ref, missionId });
+  if (resolved.missionId !== missionId) {
+    throw new ServiceError(
+      "Objective does not belong to the addressed mission",
+      "objective_mismatch",
+      409
+    );
+  }
+  return resolved;
+}
+async function listObjectiveFileChanges({
+  ctx,
+  missionId,
+  objectiveId,
+  instructionStyle = null
+}) {
+  const mission = await resolveMissionId(ctx, missionId);
+  if (!objectiveId?.trim()) {
+    throw new ServiceError("objectiveId is required", "validation_error", 400);
+  }
+  const objective = await resolveObjectiveInMission({
+    ctx,
+    missionId: mission.id,
+    ref: objectiveId
+  });
+  const countRow = await ctx.db.get(
+    `SELECT COUNT(*) AS total FROM changed_files
+      WHERE objective_id = ? AND mission_id = ? AND workspace_id = ? AND deleted_at IS NULL`,
+    [objective.id, mission.id, ctx.workspace.id]
+  );
+  const rows = await ctx.db.all(
+    `SELECT cf.id, cf.mission_id, cf.objective_id, cf.file_path, cf.source, cf.hook_health,
+            cf.last_observed_at, COALESCE(pr.resource_key, o.resource_key) AS resource_key
+       FROM changed_files cf
+       LEFT JOIN objectives o ON o.id = cf.objective_id AND o.deleted_at IS NULL
+       LEFT JOIN project_resources pr ON pr.id = cf.resource_id AND pr.deleted_at IS NULL
+      WHERE cf.objective_id = ? AND cf.mission_id = ? AND cf.workspace_id = ?
+        AND cf.deleted_at IS NULL
+      ORDER BY COALESCE(pr.resource_key, o.resource_key, '') ASC, cf.file_path ASC, cf.id ASC
+      LIMIT ?`,
+    [objective.id, mission.id, ctx.workspace.id, OBJECTIVE_FILE_CHANGES_LIMIT]
+  );
+  const total = Number(countRow?.total ?? 0);
+  const sessionRows = await ctx.db.all(
+    `SELECT id, started_at, capture_binding_state, capture_callback_observed_at, capture_health_json
+       FROM agent_sessions
+      WHERE objective_id = ? AND mission_id = ? AND workspace_id = ? AND deleted_at IS NULL
+      ORDER BY started_at ASC, id ASC`,
+    [objective.id, mission.id, ctx.workspace.id]
+  );
+  const sessions = sessionRows.map((row) => ({
+    sessionId: row.id,
+    startedAt: toIso(row.started_at),
+    bindingState: toBindingState(row.capture_binding_state),
+    callbackObservedAt: row.capture_callback_observed_at ? toIso(row.capture_callback_observed_at) : null,
+    health: readHealth(row.capture_health_json)
+  }));
+  const items = rows.map((row) => ({
+    id: row.id,
+    missionId: row.mission_id,
+    objectiveId: row.objective_id,
+    resourceKey: row.resource_key?.trim() || null,
+    filePath: row.file_path,
+    source: toSource(row.source),
+    observedAt: toIso(row.last_observed_at),
+    hookHealth: row.hook_health
+  }));
+  const warnings = deriveCaptureWarnings(sessions);
+  const instruction = instructionStyle ? captureGapInstruction(instructionStyle, warnings) : null;
+  return {
+    scope: "server_objective",
+    missionId: mission.id,
+    objectiveId: objective.id,
+    items,
+    total,
+    limit: OBJECTIVE_FILE_CHANGES_LIMIT,
+    truncated: total > items.length,
+    capture: { sessions, warnings },
+    ...instruction ? { instruction } : {}
+  };
 }
 
 // ../packages/core/service/delivery-compose.ts
@@ -155870,6 +155724,1783 @@ function applyDeliveryPresentation({
   return {
     ...report2,
     presentation
+  };
+}
+
+// ../packages/core/service/delivery-finalization.ts
+var import_node_crypto14 = require("node:crypto");
+var OPERATION_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$/;
+var DELIVERY_OPERATION_CONFLICT = "delivery_operation_conflict";
+var DELIVERY_ALREADY_ACCEPTED = "delivery_already_accepted";
+var DELIVERY_RECEIPT_NOT_FOUND = "delivery_receipt_not_found";
+var DIGEST_VERSION = "v1";
+function parseOperationId(value2) {
+  if (value2 === void 0 || value2 === null) return void 0;
+  if (typeof value2 !== "string" || !OPERATION_ID_PATTERN.test(value2)) {
+    throw new ServiceError(
+      'operationId must be 8-128 characters of letters, digits, ".", "_", ":" or "-", starting with a letter or digit',
+      "invalid_input",
+      400
+    );
+  }
+  return value2;
+}
+function canonicalJson(value2) {
+  return JSON.stringify(canonicalize(value2));
+}
+function canonicalize(value2) {
+  if (Array.isArray(value2)) return value2.map((item) => canonicalize(item ?? null));
+  if (value2 && typeof value2 === "object") {
+    const record2 = value2;
+    const out = {};
+    for (const key of Object.keys(record2).sort()) {
+      const member2 = record2[key];
+      if (member2 === void 0) continue;
+      out[key] = canonicalize(member2);
+    }
+    return out;
+  }
+  return value2;
+}
+function finalizationRequestDigest(kind, semantic) {
+  const hash2 = (0, import_node_crypto14.createHash)("sha256").update(canonicalJson({ kind, semantic })).digest("hex");
+  return `${DIGEST_VERSION}:${hash2}`;
+}
+var RECEIPT_COLUMNS = `id, workspace_id, project_id, mission_id, objective_id, delivery_id,
+  actor_workspace_user_id, session_id, operation_kind, operation_id, request_digest,
+  result_json, accepted_at`;
+function receiptResult(row) {
+  return typeof row.result_json === "string" ? JSON.parse(row.result_json) : row.result_json;
+}
+async function findReceiptByOperation(db, {
+  workspaceId: workspaceId2,
+  actorWorkspaceUserId,
+  kind,
+  operationId
+}) {
+  return await db.get(
+    `SELECT ${RECEIPT_COLUMNS} FROM delivery_finalizations
+      WHERE workspace_id = ? AND actor_workspace_user_id = ? AND operation_kind = ?
+        AND operation_id = ?`,
+    [workspaceId2, actorWorkspaceUserId, kind, operationId]
+  );
+}
+async function findReceiptBySession(db, sessionId) {
+  return await db.get(
+    `SELECT ${RECEIPT_COLUMNS} FROM delivery_finalizations WHERE session_id = ?`,
+    [sessionId]
+  );
+}
+function assertReplayMatches(receipt, {
+  digest: digest6,
+  missionId,
+  sessionId
+}) {
+  const sameScope = (missionId === void 0 || receipt.mission_id === missionId) && (sessionId === void 0 || receipt.session_id === sessionId);
+  if (!sameScope || receipt.request_digest !== digest6) {
+    throw new ServiceError(
+      "This operationId was already accepted with a different request. Retry with the original request, or use a new operationId for separate work.",
+      DELIVERY_OPERATION_CONFLICT,
+      409,
+      {
+        operationId: receipt.operation_id,
+        operationKind: receipt.operation_kind,
+        deliveryId: receipt.delivery_id
+      }
+    );
+  }
+}
+async function insertFinalizationReceipt(db, receipt) {
+  await db.run(
+    `INSERT INTO delivery_finalizations
+       (id, workspace_id, project_id, mission_id, objective_id, delivery_id,
+        actor_workspace_user_id, session_id, operation_kind, operation_id, request_digest,
+        result_json, accepted_at, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      newId(),
+      receipt.workspaceId,
+      receipt.projectId,
+      receipt.missionId,
+      receipt.objectiveId,
+      receipt.deliveryId,
+      receipt.actorWorkspaceUserId,
+      receipt.sessionId,
+      receipt.kind,
+      receipt.operationId,
+      receipt.digest,
+      JSON.stringify(receipt.result),
+      receipt.acceptedAt,
+      receipt.acceptedAt
+    ]
+  );
+}
+function isUniqueViolation(error64) {
+  if (!error64 || typeof error64 !== "object") return false;
+  const code = error64.code;
+  if (code === "23505") return true;
+  if (code === "SQLITE_CONSTRAINT_UNIQUE" || code === "SQLITE_CONSTRAINT_PRIMARYKEY") return true;
+  const cause = error64.cause;
+  return cause !== void 0 && cause !== error64 ? isUniqueViolation(cause) : false;
+}
+function deliveryAlreadyAcceptedError(deliveryId) {
+  return new ServiceError(
+    "This session already delivered. Do not deliver again; use resume-follow-up for new work.",
+    DELIVERY_ALREADY_ACCEPTED,
+    409,
+    { deliveryId }
+  );
+}
+async function historicalSessionDeliveryId(db, sessionId) {
+  const row = await db.get(
+    `SELECT id FROM deliveries WHERE session_id = ? AND deleted_at IS NULL
+      ORDER BY delivered_at DESC, id DESC LIMIT 1`,
+    [sessionId]
+  );
+  return row?.id ?? null;
+}
+async function readDeliveryReceipt({
+  ctx,
+  missionId,
+  deliveryId,
+  operationId,
+  operationKind
+}) {
+  const notFound2 = () => new ServiceError("Delivery receipt not found", DELIVERY_RECEIPT_NOT_FOUND, 404);
+  if (!deliveryId === !operationId) {
+    throw new ServiceError(
+      "delivery-receipt requires exactly one of deliveryId or operationId",
+      "invalid_input",
+      400
+    );
+  }
+  const kind = operationKind ?? "deliver";
+  if (kind !== "deliver" && kind !== "record_work" && kind !== "record-work") {
+    throw new ServiceError("operationKind must be deliver or record_work", "invalid_input", 400);
+  }
+  const actor = ctx.actorWorkspaceUserId;
+  if (!actor) throw notFound2();
+  let row;
+  if (operationId) {
+    row = await findReceiptByOperation(ctx.db, {
+      workspaceId: ctx.workspace.id,
+      actorWorkspaceUserId: actor,
+      kind: kind === "deliver" ? "deliver" : "record_work",
+      operationId: parseOperationId(operationId)
+    });
+  } else {
+    row = await ctx.db.get(
+      `SELECT ${RECEIPT_COLUMNS} FROM delivery_finalizations
+        WHERE workspace_id = ? AND actor_workspace_user_id = ? AND delivery_id = ?`,
+      [ctx.workspace.id, actor, deliveryId]
+    );
+  }
+  if (!row) throw notFound2();
+  let mission;
+  try {
+    mission = await resolveMissionId(ctx, row.mission_id);
+  } catch {
+    throw notFound2();
+  }
+  if (missionId) {
+    let named;
+    try {
+      named = await resolveMissionId(ctx, missionId);
+    } catch {
+      throw notFound2();
+    }
+    if (named.id !== mission.id) throw notFound2();
+  }
+  const delivery = await ctx.db.get(
+    `SELECT id FROM deliveries WHERE id = ? AND deleted_at IS NULL`,
+    [row.delivery_id]
+  );
+  if (!delivery) throw notFound2();
+  return {
+    receipt: {
+      operationKind: row.operation_kind,
+      operationId: row.operation_id,
+      missionId: mission.id,
+      missionDisplayId: mission.displayId,
+      objectiveId: row.objective_id,
+      deliveryId: row.delivery_id,
+      acceptedAt: new Date(row.accepted_at).toISOString(),
+      result: receiptResult(row)
+    }
+  };
+}
+
+// ../packages/core/service/delivery-summary-publication.ts
+var import_node_crypto15 = require("node:crypto");
+
+// ../packages/core/service/mission-narrative.ts
+function isSummaryEnabled(value2) {
+  return value2 === true || Number(value2) === 1;
+}
+function iso(value2) {
+  if (value2 === null || value2 === void 0) return null;
+  return new Date(value2 instanceof Date ? value2 : String(value2)).toISOString();
+}
+function nextNarrativeTimestamp(previous, now2 = nowIso()) {
+  const at = Date.parse(now2);
+  const floor = previous === null ? Number.NEGATIVE_INFINITY : Date.parse(previous) + 1;
+  return new Date(Math.max(at, floor)).toISOString();
+}
+async function ensureMissionSummaryRow(tx, mission, now2 = nowIso()) {
+  const inserted = await tx.run(
+    `INSERT INTO mission_summaries
+         (mission_id, workspace_id, project_id, revision, requested_generation,
+          completed_generation, status, headline, summary_markdown,
+          source_delivery_id, generated_by, generated_at, model, created_at, updated_at)
+       VALUES (?, ?, ?, 1, 0, 0, 'composed', '', '', NULL, 'agent', NULL, NULL, ?, ?)
+       ON CONFLICT (mission_id) DO NOTHING`,
+    [mission.id, mission.workspaceId, mission.projectId, now2, now2]
+  );
+  return { created: inserted.changes > 0 };
+}
+var SUPERSEDED_BY = {
+  delivery: "newer_delivery",
+  follow_up: "follow_up",
+  reopened: "reopened",
+  source_deleted: "source_deleted"
+};
+async function advanceMissionNarrativeEvidence(tx, {
+  mission: missionRef,
+  reason,
+  attribution,
+  now: now2 = nowIso()
+}) {
+  const mission = await tx.get(
+    `SELECT workspace_id, project_id, summary_enabled FROM missions
+      WHERE id = ? AND deleted_at IS NULL`,
+    [missionRef.id]
+  );
+  if (!mission || !isSummaryEnabled(mission.summary_enabled)) return null;
+  const scope2 = {
+    id: missionRef.id,
+    workspaceId: mission.workspace_id,
+    projectId: mission.project_id
+  };
+  const { created } = await ensureMissionSummaryRow(tx, scope2, now2);
+  const current = await lockMissionSummaryRow(tx, scope2.id);
+  const changedAt = nextNarrativeTimestamp(current?.narrative_changed_at ?? null, now2);
+  await tx.run(
+    `UPDATE delivery_summary_publications
+        SET superseded_at = ?, superseded_reason = ?, revision = revision + 1, updated_at = ?
+      WHERE mission_id = ? AND published_at IS NULL AND superseded_at IS NULL`,
+    [now2, SUPERSEDED_BY[reason], now2, scope2.id]
+  );
+  const updated = await tx.get(
+    `UPDATE mission_summaries
+        SET evidence_revision = evidence_revision + 1, revision = revision + 1,
+            narrative_changed_at = ?, updated_at = ?
+      WHERE mission_id = ?
+      RETURNING revision, evidence_revision`,
+    [changedAt, now2, scope2.id]
+  );
+  if (!updated) return null;
+  const revision3 = Number(updated.revision);
+  await recordMissionSummaryChange(tx, {
+    workspaceId: scope2.workspaceId,
+    projectId: scope2.projectId,
+    missionId: scope2.id,
+    revision: revision3,
+    operation: created ? "insert" : "update",
+    changedFields: ["evidence_revision", "narrative_changed_at"],
+    actorWorkspaceUserId: attribution.actorWorkspaceUserId,
+    actorTokenId: attribution.actorTokenId ?? null,
+    source: attribution.source
+  });
+  return { evidenceRevision: Number(updated.evidence_revision), revision: revision3 };
+}
+async function createDeliveryPublication(tx, {
+  mission,
+  objectiveId,
+  deliveryId,
+  actorWorkspaceUserId,
+  sessionId,
+  evidenceRevision,
+  proposal,
+  withheldReason,
+  now: now2 = nowIso()
+}) {
+  const id2 = newId();
+  await tx.run(
+    `INSERT INTO delivery_summary_publications
+       (id, workspace_id, project_id, mission_id, objective_id, delivery_id,
+        actor_workspace_user_id, session_id, evidence_revision, proposed_headline,
+        proposed_summary, withheld_reason, revision, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
+    [
+      id2,
+      mission.workspaceId,
+      mission.projectId,
+      mission.id,
+      objectiveId,
+      deliveryId,
+      actorWorkspaceUserId,
+      sessionId,
+      evidenceRevision,
+      proposal?.headline ?? null,
+      proposal?.summary ?? null,
+      withheldReason,
+      now2,
+      now2
+    ]
+  );
+  return { id: id2 };
+}
+async function writeAgentNarrative(tx, {
+  mission,
+  narrative,
+  deliveryId,
+  objectiveId,
+  model,
+  evidenceRevision,
+  publicationId,
+  publishOperation,
+  attribution,
+  created = false,
+  now: now2 = nowIso()
+}) {
+  const current = await lockMissionSummaryRow(tx, mission.id);
+  const publishedAt = nextNarrativeTimestamp(current?.narrative_changed_at ?? null, now2);
+  const updated = await tx.get(
+    `UPDATE mission_summaries
+        SET status = 'composed', headline = ?, summary_markdown = ?,
+            source_delivery_id = ?, generated_by = 'agent', generated_at = ?, model = ?,
+            narrative_delivery_id = ?, narrative_objective_id = ?,
+            content_revision = content_revision + 1, revision = revision + 1,
+            completed_generation = requested_generation,
+            published_evidence_revision = ?, narrative_published_at = ?,
+            narrative_changed_at = ?, updated_at = ?
+      WHERE mission_id = ?
+      RETURNING revision, content_revision`,
+    [
+      narrative.headline,
+      narrative.summary,
+      deliveryId,
+      publishedAt,
+      model,
+      deliveryId,
+      objectiveId,
+      evidenceRevision,
+      publishedAt,
+      publishedAt,
+      now2,
+      mission.id
+    ]
+  );
+  if (!updated) throw new Error(`mission summary row missing for ${mission.id}`);
+  const contentRevision = Number(updated.content_revision);
+  await tx.run(
+    `UPDATE delivery_summary_publications
+        SET published_headline = ?, published_summary = ?, published_content_revision = ?,
+            published_at = ?, publish_operation_id = ?, publish_request_digest = ?,
+            revision = revision + 1, updated_at = ?
+      WHERE id = ?`,
+    [
+      narrative.headline,
+      narrative.summary,
+      contentRevision,
+      publishedAt,
+      publishOperation?.operationId ?? null,
+      publishOperation?.digest ?? null,
+      now2,
+      publicationId
+    ]
+  );
+  const revision3 = Number(updated.revision);
+  await recordMissionSummaryChange(tx, {
+    workspaceId: mission.workspaceId,
+    projectId: mission.projectId,
+    missionId: mission.id,
+    revision: revision3,
+    operation: created ? "insert" : "update",
+    changedFields: [
+      "status",
+      "headline",
+      "summary_markdown",
+      "generated_by",
+      "content_revision",
+      "narrative_delivery_id",
+      "narrative_objective_id",
+      "published_evidence_revision",
+      "narrative_published_at",
+      "narrative_changed_at"
+    ],
+    actorWorkspaceUserId: attribution.actorWorkspaceUserId,
+    actorTokenId: attribution.actorTokenId ?? null,
+    source: attribution.source
+  });
+  return { contentRevision, publishedAt, revision: revision3 };
+}
+var ABSENT_NARRATIVE = {
+  state: "absent",
+  evidenceRevision: 0,
+  publishedEvidenceRevision: null,
+  deliveryId: null,
+  objectiveId: null,
+  publishedAt: null,
+  changedAt: null,
+  outstandingDeliveryId: null
+};
+async function readMissionNarrative(db, missionId) {
+  const row = await db.get(
+    `SELECT headline, summary_markdown, evidence_revision, published_evidence_revision,
+            narrative_delivery_id, narrative_objective_id, narrative_published_at,
+            narrative_changed_at
+       FROM mission_summaries WHERE mission_id = ?`,
+    [missionId]
+  );
+  if (!row) return ABSENT_NARRATIVE;
+  const evidenceRevision = Number(row.evidence_revision);
+  const published = row.published_evidence_revision === null ? null : Number(row.published_evidence_revision);
+  const hasProse = Boolean(row.headline.trim() || row.summary_markdown.trim());
+  let state2;
+  if (!hasProse) state2 = "absent";
+  else if (published === null) state2 = "legacy";
+  else if (published === evidenceRevision) state2 = "current";
+  else state2 = "outdated";
+  if (state2 === "current" && row.narrative_delivery_id) {
+    const source = await db.get(
+      `SELECT id FROM deliveries WHERE id = ? AND deleted_at IS NULL`,
+      [row.narrative_delivery_id]
+    );
+    if (!source) state2 = "outdated";
+  }
+  const outstanding = await db.get(
+    `SELECT p.delivery_id FROM delivery_summary_publications p
+       JOIN deliveries d ON d.id = p.delivery_id AND d.deleted_at IS NULL
+      WHERE p.mission_id = ? AND p.published_at IS NULL AND p.superseded_at IS NULL
+        AND p.evidence_revision = ?
+      ORDER BY p.created_at DESC, p.id DESC
+      LIMIT 1`,
+    [missionId, evidenceRevision]
+  );
+  return {
+    state: state2,
+    evidenceRevision,
+    publishedEvidenceRevision: hasProse ? published : null,
+    deliveryId: hasProse ? row.narrative_delivery_id : null,
+    objectiveId: hasProse ? row.narrative_objective_id : null,
+    publishedAt: hasProse && published !== null ? iso(row.narrative_published_at) : null,
+    changedAt: iso(row.narrative_changed_at),
+    outstandingDeliveryId: outstanding?.delivery_id ?? null
+  };
+}
+
+// ../packages/core/service/mission-items.ts
+var ITEM_COLUMNS = `mission_items.id, mission_items.workspace_id, mission_items.project_id,
+  mission_items.mission_id, mission_items.objective_id, mission_items.delivery_id,
+  mission_items.kind, mission_items.item_ref, mission_items.position, mission_items.text,
+  mission_items.detail_json, mission_items.status, mission_items.status_reason,
+  mission_items.resolved_by_kind, mission_items.resolved_by_workspace_user_id,
+  mission_items.resolved_by_objective_id, mission_items.resolved_by_delivery_id,
+  mission_items.outcome, mission_items.outcome_ref, mission_items.resolved_at,
+  mission_items.reported_at, mission_items.created_at, mission_items.updated_at,
+  mission_items.revision, mission_items.resolved_by_mission_id,
+  mission_items.resolved_by_session_id, mission_items.restored_at,
+  (SELECT display_id FROM missions rm WHERE rm.id = mission_items.resolved_by_mission_id
+     AND rm.deleted_at IS NULL AND rm.workspace_id = mission_items.workspace_id
+     AND rm.project_id = mission_items.project_id) AS resolver_mission_display_id,
+  (SELECT rm.display_id || '.' || ro.display_key FROM objectives ro
+     JOIN missions rm ON rm.id = ro.mission_id AND rm.deleted_at IS NULL
+       AND rm.workspace_id = mission_items.workspace_id AND rm.project_id = mission_items.project_id
+     WHERE ro.id = mission_items.resolved_by_objective_id AND ro.deleted_at IS NULL)
+     AS resolver_objective_display_id`;
+function parseDetail(value2) {
+  let parsed = value2;
+  if (typeof value2 === "string") {
+    try {
+      parsed = JSON.parse(value2);
+    } catch {
+      parsed = null;
+    }
+  }
+  return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+}
+function toResolver(row) {
+  if (row.resolved_by_kind === "person") {
+    return { kind: "person", workspaceUserId: row.resolved_by_workspace_user_id };
+  }
+  if (row.resolved_by_kind === "agent") {
+    return {
+      kind: "agent",
+      objectiveId: row.resolved_by_objective_id,
+      deliveryId: row.resolved_by_delivery_id,
+      missionId: row.resolved_by_mission_id,
+      sessionId: row.resolved_by_session_id,
+      missionDisplayId: row.resolver_mission_display_id ?? null,
+      objectiveDisplayId: row.resolver_objective_display_id ?? null
+    };
+  }
+  return null;
+}
+function toMissionItem(row) {
+  return {
+    id: row.id,
+    workspaceId: row.workspace_id,
+    projectId: row.project_id,
+    missionId: row.mission_id,
+    objectiveId: row.objective_id,
+    deliveryId: row.delivery_id,
+    kind: row.kind,
+    itemRef: row.item_ref,
+    position: Number(row.position),
+    text: row.text,
+    detail: parseDetail(row.detail_json),
+    status: row.status,
+    statusReason: row.status_reason,
+    resolvedBy: toResolver(row),
+    outcome: row.outcome ?? null,
+    outcomeRef: row.outcome_ref,
+    restoredAt: row.restored_at,
+    resolvedAt: row.resolved_at,
+    reportedAt: row.reported_at,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    revision: Number(row.revision)
+  };
+}
+async function recordItemChange(db, item, operation2, entityRevision, changedFields, attribution) {
+  await insertEntityChange(db, {
+    entityType: "mission_item",
+    entityId: item.id,
+    operation: operation2,
+    entityRevision,
+    projectId: item.projectId,
+    missionId: item.missionId,
+    objectiveId: item.objectiveId,
+    workspaceId: item.workspaceId,
+    changedFields,
+    ...attribution
+  });
+}
+async function readItemsByIds(db, ids) {
+  if (ids.length === 0) return [];
+  const rows = await db.all(
+    `SELECT ${ITEM_COLUMNS} FROM mission_items WHERE mission_items.id IN (${sqlPlaceholders(ids.length)})`,
+    ids
+  );
+  return rows.map(toMissionItem);
+}
+async function getMissionItem(db, id2) {
+  const [item] = await readItemsByIds(db, [id2]);
+  return item ?? null;
+}
+async function insertDerivedItem(db, delivery, item, attribution, now2) {
+  const id2 = newId();
+  const result2 = await db.run(
+    INSERT_MISSION_ITEM_SQL,
+    insertMissionItemParams({ id: id2, delivery, item, now: now2 })
+  );
+  if (result2.changes === 0) return null;
+  await recordItemChange(
+    db,
+    {
+      id: id2,
+      workspaceId: delivery.workspaceId,
+      projectId: delivery.projectId,
+      missionId: delivery.missionId,
+      objectiveId: delivery.objectiveId
+    },
+    "insert",
+    1,
+    ["status", "text"],
+    attribution
+  );
+  return id2;
+}
+async function applyMissionItemSupersedeRules(db, {
+  objectiveId,
+  attribution,
+  now: now2 = nowIso()
+}) {
+  return db.transaction(async (tx) => {
+    const candidates = await tx.all(
+      `SELECT mission_items.id FROM mission_items
+        WHERE mission_items.objective_id = ? AND ${SUPERSEDED_ITEM_PREDICATE_SQL}`,
+      [objectiveId]
+    );
+    const superseded = [];
+    for (const { id: id2 } of candidates) {
+      const updated = await tx.run(
+        `UPDATE mission_items
+            SET status = 'superseded', updated_at = ?, revision = revision + 1
+          WHERE id = ? AND status = 'open'`,
+        [now2, id2]
+      );
+      if (updated.changes === 0) continue;
+      superseded.push(id2);
+    }
+    for (const item of await readItemsByIds(tx, superseded)) {
+      await recordItemChange(tx, item, "update", item.revision, ["status"], attribution);
+    }
+    return superseded;
+  });
+}
+async function insertDeliveryMissionItems(db, {
+  delivery,
+  report: report2,
+  attribution,
+  now: now2 = nowIso()
+}) {
+  return db.transaction(async (tx) => {
+    const inserted = [];
+    for (const item of deriveMissionItems(report2)) {
+      const id2 = await insertDerivedItem(tx, delivery, item, attribution, now2);
+      if (id2) inserted.push(id2);
+    }
+    const superseded = await applyMissionItemSupersedeRules(tx, {
+      objectiveId: delivery.objectiveId,
+      attribution,
+      now: now2
+    });
+    return { inserted, superseded };
+  });
+}
+function sameDetail(left, right) {
+  const canonical = (value2) => JSON.stringify(
+    Object.keys(value2).sort().map((key) => [key, value2[key]])
+  );
+  return canonical(left) === canonical(right);
+}
+async function reconcileDeliveryMissionItems(db, {
+  delivery,
+  report: report2,
+  attribution,
+  now: now2 = nowIso()
+}) {
+  return db.transaction(async (tx) => {
+    const existing = (await tx.all(
+      `SELECT ${ITEM_COLUMNS} FROM mission_items WHERE mission_items.delivery_id = ?`,
+      [delivery.id]
+    )).map(toMissionItem);
+    const byKey2 = new Map(existing.map((item) => [`${item.kind}:${item.itemRef}`, item]));
+    const derived2 = deriveMissionItems(report2);
+    const derivedKeys = new Set(derived2.map((item) => `${item.kind}:${item.itemRef}`));
+    const deleted = [];
+    for (const item of existing) {
+      if (item.status !== "open" || derivedKeys.has(`${item.kind}:${item.itemRef}`)) continue;
+      const removed = await tx.run(`DELETE FROM mission_items WHERE id = ? AND status = 'open'`, [
+        item.id
+      ]);
+      if (removed.changes === 0) continue;
+      deleted.push(item.id);
+      await recordItemChange(tx, item, "delete", null, ["status"], attribution);
+    }
+    const inserted = [];
+    const updated = [];
+    for (const item of derived2) {
+      const current = byKey2.get(`${item.kind}:${item.itemRef}`);
+      if (!current) {
+        const id2 = await insertDerivedItem(tx, delivery, item, attribution, now2);
+        if (id2) inserted.push(id2);
+        continue;
+      }
+      const changedFields = [
+        ...current.text === item.text ? [] : ["text"],
+        ...current.position === item.position ? [] : ["position"],
+        ...sameDetail(current.detail, item.detail) ? [] : ["detail_json"]
+      ];
+      if (changedFields.length === 0) continue;
+      await tx.run(
+        `UPDATE mission_items
+            SET text = ?, position = ?, detail_json = ?, updated_at = ?, revision = revision + 1
+          WHERE id = ?`,
+        [item.text, item.position, JSON.stringify(item.detail), now2, current.id]
+      );
+      updated.push(current.id);
+      await recordItemChange(
+        tx,
+        current,
+        "update",
+        current.revision + 1,
+        changedFields,
+        attribution
+      );
+    }
+    const superseded = await applyMissionItemSupersedeRules(tx, {
+      objectiveId: delivery.objectiveId,
+      attribution,
+      now: now2
+    });
+    return { inserted, updated, deleted, superseded };
+  });
+}
+function invalidInput(message2) {
+  return new ServiceError(message2, "invalid_input", 400);
+}
+function normaliseReason(reason, required2) {
+  const trimmed9 = typeof reason === "string" ? reason.trim() : "";
+  if (!trimmed9) {
+    if (required2) throw invalidInput("A reason is required to close an item.");
+    return null;
+  }
+  if (trimmed9.length > MISSION_ITEM_STATUS_REASON_MAX_LENGTH) {
+    throw invalidInput(
+      `A reason must be at most ${MISSION_ITEM_STATUS_REASON_MAX_LENGTH} characters.`
+    );
+  }
+  return trimmed9;
+}
+async function scopedItem(db, itemId, missionId) {
+  const item = await getMissionItem(db, itemId);
+  if (!item) return { ok: false, problem: "not_found", item: null };
+  if (missionId !== void 0 && item.missionId !== missionId) {
+    return { ok: false, problem: "other_mission", item };
+  }
+  return item;
+}
+async function closeMissionItem(db, {
+  itemId,
+  missionId,
+  status,
+  reason,
+  resolver,
+  outcome = null,
+  outcomeRef = null,
+  attribution,
+  now: now2 = nowIso()
+}) {
+  if (!MISSION_ITEM_CLOSED_STATUSES.includes(status)) {
+    throw invalidInput("status must be 'done' or 'dismissed'");
+  }
+  const statusReason = normaliseReason(reason, resolver.kind === "agent");
+  if (outcome !== null) {
+    if (!MISSION_ITEM_OUTCOMES.includes(outcome)) {
+      throw invalidInput("outcome must be 'mission_created' or 'objective_added'");
+    }
+    if (status !== "done") throw invalidInput("outcome requires status 'done'");
+  }
+  if (outcomeRef !== null && (outcome === null || !outcomeRef.trim())) {
+    throw invalidInput("outcomeRef requires an outcome and a non-empty display id");
+  }
+  return db.transaction(async (tx) => {
+    const scoped = await scopedItem(tx, itemId, missionId);
+    if ("ok" in scoped) return scoped;
+    if (resolver.kind === "agent" && !resolver.missionId && resolver.objectiveId) {
+      const origin = await tx.get(
+        "SELECT mission_id FROM objectives WHERE id = ?",
+        [resolver.objectiveId]
+      );
+      resolver = { ...resolver, missionId: origin?.mission_id ?? null };
+    }
+    if (resolver.kind === "agent" && resolver.missionId && resolver.missionId !== scoped.missionId && scoped.restoredAt) {
+      return { ok: false, problem: "restored_by_person", item: scoped };
+    }
+    const from = resolver.kind === "agent" ? ["open"] : MISSION_ITEM_STATUSES;
+    if (!from.includes(scoped.status)) {
+      return {
+        ok: false,
+        problem: scoped.status === "superseded" ? "superseded" : "not_open",
+        item: scoped
+      };
+    }
+    const updated = await tx.run(
+      `UPDATE mission_items
+          SET status = ?, status_reason = ?, resolved_by_kind = ?,
+              resolved_by_workspace_user_id = ?, resolved_by_objective_id = ?,
+              resolved_by_delivery_id = ?, resolved_by_mission_id = ?, resolved_by_session_id = ?, outcome = ?, outcome_ref = ?, resolved_at = ?,
+              updated_at = ?, revision = revision + 1
+        WHERE id = ? AND status IN (${sqlPlaceholders(from.length)})`,
+      [
+        status,
+        statusReason,
+        resolver.kind,
+        resolver.kind === "person" ? resolver.workspaceUserId : null,
+        resolver.kind === "agent" ? resolver.objectiveId : null,
+        resolver.kind === "agent" ? resolver.deliveryId : null,
+        resolver.kind === "agent" ? resolver.missionId ?? null : null,
+        resolver.kind === "agent" ? resolver.sessionId ?? null : null,
+        outcome,
+        outcome === null ? null : outcomeRef?.trim() ?? null,
+        now2,
+        now2,
+        itemId,
+        ...from
+      ]
+    );
+    if (updated.changes === 0) return { ok: false, problem: "not_open", item: scoped };
+    const item = await getMissionItem(tx, itemId);
+    await recordItemChange(
+      tx,
+      item,
+      "update",
+      item.revision,
+      ["status", "status_reason", "resolved_by", "outcome"],
+      attribution
+    );
+    return { ok: true, item, changed: true };
+  });
+}
+async function restoreMissionItem(db, {
+  itemId,
+  missionId,
+  attribution,
+  now: now2 = nowIso()
+}) {
+  return db.transaction(async (tx) => {
+    const scoped = await scopedItem(tx, itemId, missionId);
+    if ("ok" in scoped) return scoped;
+    if (scoped.status === "open") return { ok: true, item: scoped, changed: false };
+    if (scoped.status === "superseded") return { ok: false, problem: "superseded", item: scoped };
+    const updated = await tx.run(
+      `UPDATE mission_items
+          SET restored_at = CASE WHEN resolved_by_kind = 'agent' THEN ? ELSE restored_at END,
+              status = 'open', status_reason = NULL, resolved_by_kind = NULL,
+              resolved_by_workspace_user_id = NULL, resolved_by_objective_id = NULL,
+              resolved_by_delivery_id = NULL, resolved_by_mission_id = NULL, resolved_by_session_id = NULL, outcome = NULL, outcome_ref = NULL,
+              resolved_at = NULL, updated_at = ?, revision = revision + 1
+        WHERE id = ? AND status IN ('done', 'dismissed')`,
+      [now2, now2, itemId]
+    );
+    if (updated.changes === 0) return { ok: false, problem: "not_open", item: scoped };
+    const restored = await getMissionItem(tx, itemId);
+    await recordItemChange(
+      tx,
+      restored,
+      "update",
+      restored.revision,
+      ["status", "status_reason", "resolved_by", "outcome"],
+      attribution
+    );
+    await applyMissionItemSupersedeRules(tx, {
+      objectiveId: restored.objectiveId,
+      attribution,
+      now: now2
+    });
+    const item = await getMissionItem(tx, itemId);
+    return { ok: true, item, changed: true };
+  });
+}
+async function repointMissionItemsProject(db, {
+  missionId,
+  workspaceId: workspaceId2,
+  projectId,
+  attribution,
+  now: now2 = nowIso()
+}) {
+  return db.transaction(async (tx) => {
+    const ids = (await tx.all(
+      `SELECT id FROM mission_items
+          WHERE mission_id = ? AND workspace_id = ? AND project_id <> ?`,
+      [missionId, workspaceId2, projectId]
+    )).map((row) => row.id);
+    if (ids.length === 0) return 0;
+    await tx.run(
+      `UPDATE mission_items
+          SET project_id = ?, updated_at = ?, revision = revision + 1
+        WHERE mission_id = ? AND workspace_id = ? AND project_id <> ?`,
+      [projectId, now2, missionId, workspaceId2, projectId]
+    );
+    for (const item of await readItemsByIds(tx, ids)) {
+      await recordItemChange(tx, item, "update", item.revision, ["project_id"], attribution);
+    }
+    return ids.length;
+  });
+}
+async function listDeliveryMissionItems(db, {
+  deliveryIds,
+  kinds = MISSION_ITEM_KINDS
+}) {
+  const ids = [...new Set(deliveryIds)];
+  if (ids.length === 0 || kinds.length === 0) return [];
+  const rows = await db.all(
+    `SELECT ${ITEM_COLUMNS} FROM mission_items
+      WHERE mission_items.delivery_id IN (${sqlPlaceholders(ids.length)})
+        AND mission_items.kind IN (${sqlPlaceholders(kinds.length)})
+      ORDER BY mission_items.delivery_id ASC, mission_items.kind ASC, mission_items.position ASC`,
+    [...ids, ...kinds]
+  );
+  return rows.map(toMissionItem);
+}
+var MISSION_ITEMS_DEFAULT_LIMIT = 200;
+var MISSION_ITEMS_MAX_LIMIT = 1e3;
+async function listMissionItems(db, scope2) {
+  const kinds = scope2.kinds ?? MISSION_ITEM_KINDS;
+  const statuses = scope2.statuses ?? ["open"];
+  if (kinds.length === 0 || statuses.length === 0) return { items: [], truncated: false, total: 0 };
+  for (const kind of kinds) {
+    if (!MISSION_ITEM_KINDS.includes(kind)) {
+      throw invalidInput(`Unknown mission item kind '${kind}'`);
+    }
+  }
+  for (const status of statuses) {
+    if (!MISSION_ITEM_STATUSES.includes(status)) {
+      throw invalidInput(`Unknown mission item status '${status}'`);
+    }
+  }
+  const limit2 = Math.min(
+    Math.max(1, Math.floor(scope2.limit ?? MISSION_ITEMS_DEFAULT_LIMIT)),
+    MISSION_ITEMS_MAX_LIMIT
+  );
+  const where = [];
+  const params = [];
+  if (scope2.missionId !== void 0) {
+    where.push("mission_items.mission_id = ?");
+    params.push(scope2.missionId);
+  } else {
+    where.push("mission_items.project_id = ?");
+    params.push(scope2.projectId);
+  }
+  where.push(`mission_items.status IN (${sqlPlaceholders(statuses.length)})`);
+  params.push(...statuses);
+  where.push(`mission_items.kind IN (${sqlPlaceholders(kinds.length)})`);
+  params.push(...kinds);
+  if (scope2.workspaceId !== void 0) {
+    where.push("mission_items.workspace_id = ?");
+    params.push(scope2.workspaceId);
+  }
+  const count = await db.get(
+    `SELECT COUNT(*) AS total FROM mission_items
+       JOIN deliveries d ON d.id = mission_items.delivery_id AND d.deleted_at IS NULL
+      WHERE ${where.join(" AND ")}`,
+    params
+  );
+  const rows = await db.all(
+    `SELECT ${ITEM_COLUMNS}
+       FROM mission_items
+       JOIN deliveries d ON d.id = mission_items.delivery_id AND d.deleted_at IS NULL
+      WHERE ${where.join(" AND ")}
+      ORDER BY ${scope2.order === "blocking" ? `CASE WHEN mission_items.kind = 'human_action' AND ${db.dialect === "postgres" ? "(mission_items.detail_json::jsonb ->> 'blocking') = 'true'" : "json_extract(mission_items.detail_json, '$.blocking') = 1"} THEN 0 ELSE 1 END,` : ""}
+               ${scope2.order === "resolved" ? "mission_items.resolved_at DESC, mission_items.id DESC," : ""}
+               d.delivered_at DESC, mission_items.delivery_id DESC,
+               mission_items.kind ASC, mission_items.position ASC, mission_items.id ASC
+      LIMIT ? OFFSET ?`,
+    [...params, limit2 + 1, Math.max(0, Math.floor(scope2.offset ?? 0))]
+  );
+  return {
+    items: rows.slice(0, limit2).map(toMissionItem),
+    total: Number(count?.total ?? 0),
+    truncated: rows.length > limit2
+  };
+}
+async function linkSessionMissionItems(db, scope2) {
+  const rows = await db.all(
+    `SELECT mi.id FROM mission_items mi
+    JOIN deliveries d ON d.id = mi.delivery_id AND d.deleted_at IS NULL
+    JOIN missions m ON m.id = mi.mission_id AND m.deleted_at IS NULL
+    WHERE mi.resolved_by_session_id = ? AND mi.resolved_by_mission_id = ?
+      AND mi.workspace_id = ? AND mi.project_id = ? AND m.project_id = ?
+      AND mi.resolved_by_delivery_id IS NULL AND mi.resolved_by_kind = 'agent'
+      AND mi.status IN ('done', 'dismissed')`,
+    [scope2.sessionId, scope2.missionId, scope2.workspaceId, scope2.projectId, scope2.projectId]
+  );
+  for (const { id: id2 } of rows) {
+    await db.run(
+      `UPDATE mission_items SET resolved_by_delivery_id = ?, updated_at = ?, revision = revision + 1
+      WHERE id = ?`,
+      [scope2.deliveryId, scope2.now, id2]
+    );
+    const item = await getMissionItem(db, id2);
+    await recordItemChange(db, item, "update", item.revision, ["resolved_by"], scope2.attribution);
+  }
+}
+async function closedElsewhere(db, deliveryId, missionId) {
+  return db.all(
+    `SELECT mi.id AS "itemId", mi.kind, mi.text,
+      m.display_id AS "missionDisplayId", mi.status, mi.status_reason AS reason
+    FROM mission_items mi JOIN missions m ON m.id = mi.mission_id AND m.deleted_at IS NULL
+    JOIN deliveries d ON d.id = mi.delivery_id AND d.deleted_at IS NULL
+    JOIN deliveries source ON source.id = mi.resolved_by_delivery_id AND source.deleted_at IS NULL
+    WHERE mi.resolved_by_delivery_id = ? AND mi.mission_id <> ?
+      AND mi.workspace_id = source.workspace_id AND mi.project_id = source.project_id
+      AND m.project_id = source.project_id AND mi.resolved_by_kind = 'agent'
+      AND mi.status IN ('done', 'dismissed') ORDER BY mi.mission_id, mi.id LIMIT 50`,
+    [deliveryId, missionId]
+  );
+}
+
+// ../packages/core/service/mission-summary-evidence.ts
+var MISSION_SUMMARY_LIMITS = {
+  headline: 140,
+  summary: 1200,
+  risks: 8,
+  suggestions: 50
+};
+function newestFirst(left, right) {
+  const byTime = Date.parse(right.deliveredAt) - Date.parse(left.deliveredAt);
+  if (byTime !== 0) return byTime;
+  return left.id < right.id ? 1 : left.id > right.id ? -1 : 0;
+}
+function currentRunDeliveryPredicateSql(delivery = "d", objective = "o") {
+  return `(${objective}.reopened_at IS NULL OR ${delivery}.delivered_at >= ${objective}.reopened_at)`;
+}
+function splitMissionSummaryRuns({
+  objectives,
+  deliveries
+}) {
+  const reopenedAt = new Map(objectives.map((objective) => [objective.id, objective.reopenedAt]));
+  const sorted = [...deliveries].sort(newestFirst);
+  const currentRun = [];
+  const latestByObjective = [];
+  const superseded = [];
+  const seenObjectives = /* @__PURE__ */ new Set();
+  for (const delivery of sorted) {
+    const boundary = reopenedAt.get(delivery.objectiveId) ?? null;
+    if (boundary !== null && Date.parse(delivery.deliveredAt) < Date.parse(boundary)) {
+      superseded.push(delivery);
+      continue;
+    }
+    currentRun.push(delivery);
+    if (seenObjectives.has(delivery.objectiveId)) {
+      superseded.push(delivery);
+    } else {
+      seenObjectives.add(delivery.objectiveId);
+      latestByObjective.push(delivery);
+    }
+  }
+  return { currentRun, latestByObjective, superseded };
+}
+function readObjectiveRows(db, missionId) {
+  return db.all(`SELECT id, reopened_at FROM objectives WHERE mission_id = ?`, [
+    missionId
+  ]);
+}
+function reportFromPayload(payloadJson, summary) {
+  let deliveryReport;
+  try {
+    deliveryReport = payloadJson ? JSON.parse(payloadJson).deliveryReport : void 0;
+  } catch {
+    deliveryReport = void 0;
+  }
+  return readDeliveryReport2({ summary, deliveryReport });
+}
+async function readRuns(db, missionId, objectives, workspaceId2) {
+  const workspaceGuard = workspaceId2 === void 0 ? "" : " AND d.workspace_id = ?";
+  const deliveryRows = await db.all(
+    `SELECT d.id, d.objective_id, d.delivered_at, d.summary, d.payload_json
+       FROM deliveries d
+       LEFT JOIN objectives o ON o.id = d.objective_id
+      WHERE d.mission_id = ?${workspaceGuard} AND d.deleted_at IS NULL
+        AND ${currentRunDeliveryPredicateSql()}
+      ORDER BY d.delivered_at DESC, d.id DESC`,
+    workspaceId2 === void 0 ? [missionId] : [missionId, workspaceId2]
+  );
+  const deliveries = deliveryRows.map((row) => ({
+    id: row.id,
+    objectiveId: row.objective_id,
+    deliveredAt: row.delivered_at,
+    summary: row.summary,
+    report: reportFromPayload(row.payload_json, row.summary)
+  }));
+  return splitMissionSummaryRuns({ objectives, deliveries });
+}
+async function readMissionSummaryRuns(db, missionId, { workspaceId: workspaceId2 } = {}) {
+  const objectives = (await readObjectiveRows(db, missionId)).map((row) => ({
+    id: row.id,
+    reopenedAt: row.reopened_at
+  }));
+  return readRuns(db, missionId, objectives, workspaceId2);
+}
+async function readMissionSummaryOpenItems(db, missionId, workspaceId2) {
+  const items = [];
+  for (; ; ) {
+    const page = await listMissionItems(db, {
+      missionId,
+      ...workspaceId2 === void 0 ? {} : { workspaceId: workspaceId2 },
+      limit: 1e3,
+      offset: items.length
+    });
+    items.push(...page.items);
+    if (!page.truncated) return items;
+  }
+}
+
+// ../packages/core/service/mission-summary-agent.ts
+var MISSION_SUMMARY_BASELINE_ITEM_LIMIT = 60;
+var MISSION_SUMMARY_BASELINE_ITEM_TEXT_MAX = 400;
+var MISSION_SUMMARY_CLOSE_ITEMS_MAX = 50;
+var MISSION_SUMMARY_MAX_STYLE_WARNINGS = 10;
+var MISSION_SUMMARY_MAX_WARNINGS = 30;
+function invalidInput2(message2) {
+  return new ServiceError(`missionSummary: ${message2}`, "invalid_input", 400);
+}
+function cut(text, max) {
+  return text.length <= max ? text : `${text.slice(0, max - 1).trimEnd()}\u2026`;
+}
+async function readMissionSummaryBaseline(db, missionId) {
+  const mission = await db.get(
+    `SELECT summary_enabled, display_id FROM missions WHERE id = ? AND deleted_at IS NULL`,
+    [missionId]
+  );
+  if (!mission || !isSummaryEnabled(mission.summary_enabled)) return null;
+  const row = await db.get(
+    `SELECT content_revision, evidence_revision, headline, summary_markdown, generated_by
+       FROM mission_summaries WHERE mission_id = ?`,
+    [missionId]
+  );
+  const narrative = await readMissionNarrative(db, missionId);
+  const { items, truncated, total } = await listMissionItems(db, {
+    missionId,
+    limit: MISSION_SUMMARY_BASELINE_ITEM_LIMIT,
+    order: "blocking"
+  });
+  const objectiveIds = [...new Set(items.map((item) => item.objectiveId))];
+  const keys = /* @__PURE__ */ new Map();
+  if (objectiveIds.length > 0) {
+    const rows = await db.all(
+      `SELECT id, display_key FROM objectives WHERE id IN (${sqlPlaceholders(objectiveIds.length)})`,
+      objectiveIds
+    );
+    for (const objective of rows) {
+      keys.set(
+        objective.id,
+        formatObjectiveDisplayId({
+          missionDisplayId: mission.display_id,
+          displayKey: objective.display_key
+        })
+      );
+    }
+  }
+  const hasProse = Boolean(row && (row.headline.trim() || row.summary_markdown.trim()));
+  return {
+    contentRevision: Number(row?.content_revision ?? 0),
+    evidenceRevision: Number(row?.evidence_revision ?? 0),
+    narrative,
+    headline: row?.headline ?? "",
+    summary: row?.summary_markdown ?? "",
+    author: hasProse ? row.generated_by : null,
+    openItems: items.map((item) => ({
+      id: item.id,
+      kind: item.kind,
+      objective: keys.get(item.objectiveId) ?? null,
+      text: cut(item.text, MISSION_SUMMARY_BASELINE_ITEM_TEXT_MAX),
+      ...item.kind === "human_action" ? { blocking: item.detail.blocking === true } : {}
+    })),
+    totalOpenItems: total,
+    truncated
+  };
+}
+var INPUT_KEYS = /* @__PURE__ */ new Set([
+  "baseContentRevision",
+  "baseEvidenceRevision",
+  "headline",
+  "summary",
+  "closeItems"
+]);
+var CLOSE_KEYS = /* @__PURE__ */ new Set(["id", "status", "reason"]);
+function parseMissionSummaryInput(value2, { requireBase }) {
+  if (value2 === void 0 || value2 === null) return null;
+  if (typeof value2 !== "object" || Array.isArray(value2)) {
+    throw invalidInput2("must be an object");
+  }
+  const input2 = value2;
+  const unknownKeys = Object.keys(input2).filter((key) => !INPUT_KEYS.has(key));
+  if (unknownKeys.length > 0) {
+    throw invalidInput2(`unsupported field(s): ${unknownKeys.join(", ")}`);
+  }
+  let baseContentRevision = null;
+  if (input2.baseContentRevision !== void 0 && input2.baseContentRevision !== null) {
+    const base = input2.baseContentRevision;
+    if (typeof base !== "number" || !Number.isInteger(base) || base < 0) {
+      throw invalidInput2("baseContentRevision must be a non-negative integer");
+    }
+    baseContentRevision = base;
+  }
+  let baseEvidenceRevision = null;
+  if (input2.baseEvidenceRevision !== void 0 && input2.baseEvidenceRevision !== null) {
+    const base = input2.baseEvidenceRevision;
+    if (typeof base !== "number" || !Number.isInteger(base) || base < 0) {
+      throw invalidInput2("baseEvidenceRevision must be a non-negative integer");
+    }
+    baseEvidenceRevision = base;
+  }
+  const hasHeadline = input2.headline !== void 0 && input2.headline !== null;
+  const hasSummary = input2.summary !== void 0 && input2.summary !== null;
+  let narrative = null;
+  if (hasHeadline || hasSummary) {
+    if (!hasHeadline || !hasSummary) {
+      throw invalidInput2("headline and summary must be sent together");
+    }
+    if (typeof input2.headline !== "string" || typeof input2.summary !== "string") {
+      throw invalidInput2("headline and summary must be strings");
+    }
+    const headline = input2.headline.trim();
+    const summary = input2.summary.trim();
+    if (!headline) throw invalidInput2("headline must not be empty");
+    if (!summary) throw invalidInput2("summary must not be empty");
+    if (/[\r\n]/.test(headline)) throw invalidInput2("headline must be one line");
+    if (headline.length > MISSION_SUMMARY_LIMITS.headline) {
+      throw invalidInput2(
+        `headline must be at most ${MISSION_SUMMARY_LIMITS.headline} characters (got ${headline.length})`
+      );
+    }
+    if (summary.length > MISSION_SUMMARY_LIMITS.summary) {
+      throw invalidInput2(
+        `summary must be at most ${MISSION_SUMMARY_LIMITS.summary} characters (got ${summary.length})`
+      );
+    }
+    if (requireBase && baseContentRevision === null) {
+      throw invalidInput2(
+        "baseContentRevision is required with headline and summary; use missionSummary.contentRevision from attach"
+      );
+    }
+    narrative = { headline, summary };
+  }
+  const closeItems = [];
+  if (input2.closeItems !== void 0 && input2.closeItems !== null) {
+    if (!Array.isArray(input2.closeItems)) throw invalidInput2("closeItems must be an array");
+    if (input2.closeItems.length > MISSION_SUMMARY_CLOSE_ITEMS_MAX) {
+      throw invalidInput2(`closeItems accepts at most ${MISSION_SUMMARY_CLOSE_ITEMS_MAX} entries`);
+    }
+    input2.closeItems.forEach((entry, index) => {
+      const where = `closeItems[${index}]`;
+      if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+        throw invalidInput2(`${where} must be an object { id, status, reason }`);
+      }
+      const record2 = entry;
+      const extra = Object.keys(record2).filter((key) => !CLOSE_KEYS.has(key));
+      if (extra.length > 0)
+        throw invalidInput2(`${where} has unsupported field(s): ${extra.join(", ")}`);
+      if (typeof record2.id !== "string" || !record2.id.trim()) {
+        throw invalidInput2(`${where}.id must be an item id from the attach baseline`);
+      }
+      if (typeof record2.status !== "string" || !MISSION_ITEM_CLOSED_STATUSES.includes(record2.status)) {
+        throw invalidInput2(`${where}.status must be 'done' or 'dismissed'`);
+      }
+      const reason = typeof record2.reason === "string" ? record2.reason.trim() : "";
+      if (!reason) throw invalidInput2(`${where}.reason is required`);
+      if (reason.length > MISSION_ITEM_STATUS_REASON_MAX_LENGTH) {
+        throw invalidInput2(
+          `${where}.reason must be at most ${MISSION_ITEM_STATUS_REASON_MAX_LENGTH} characters`
+        );
+      }
+      closeItems.push({
+        id: record2.id.trim(),
+        status: record2.status,
+        reason
+      });
+    });
+  }
+  if (!narrative && closeItems.length === 0) return null;
+  return { baseContentRevision, baseEvidenceRevision, narrative, closeItems };
+}
+function missionSummaryStyleWarnings(narrative) {
+  return [...lintSte(narrative.headline), ...lintSte(narrative.summary)].slice(0, MISSION_SUMMARY_MAX_STYLE_WARNINGS).map((issue2) => ({
+    code: "mission_summary_style",
+    rule: issue2.code,
+    message: issue2.message,
+    ..."excerpt" in issue2 && issue2.excerpt ? { excerpt: cut(issue2.excerpt, 300) } : {},
+    ..."suggestion" in issue2 && issue2.suggestion ? { suggestion: issue2.suggestion } : {}
+  }));
+}
+async function prepareMissionSummaryWrite(tx, {
+  mission,
+  input: input2,
+  mode,
+  now: now2 = nowIso()
+}) {
+  const row = await tx.get(
+    `SELECT summary_enabled FROM missions WHERE id = ?`,
+    [mission.id]
+  );
+  const enabled = isSummaryEnabled(row?.summary_enabled);
+  if (!enabled || mode === "close_only") {
+    return { input: input2, mode, enabled, created: false, withheldReason: null };
+  }
+  const { created } = await ensureMissionSummaryRow(tx, mission, now2);
+  const current = await lockMissionSummaryRow(tx, mission.id);
+  let withheldReason = null;
+  if (!input2?.narrative) {
+    withheldReason = "absent";
+  } else if (mode === "deliver") {
+    if (input2.baseContentRevision !== (current?.content_revision ?? 0)) {
+      withheldReason = "stale_content";
+    } else if (input2.baseEvidenceRevision === null) {
+      withheldReason = "missing_evidence_base";
+    } else if (input2.baseEvidenceRevision !== (current?.evidence_revision ?? 0)) {
+      withheldReason = "stale_evidence";
+    }
+  }
+  return { input: input2, mode, enabled, created, withheldReason };
+}
+var WITHHELD_MESSAGES = {
+  stale_content: "The mission summary changed since your baseline (baseContentRevision is stale), so your headline and summary were not published.",
+  stale_evidence: "Other accepted work changed the mission since your baseline (baseEvidenceRevision is stale), so your headline and summary were not published.",
+  missing_evidence_base: "The headline and summary were sent without baseEvidenceRevision, so they could not be verified against the current mission and were not published."
+};
+var SKIP_MESSAGES = {
+  not_found: "no item has this id",
+  other_mission: "the item belongs to another mission",
+  forbidden: "mission:update permission is required on the target",
+  restored_by_person: "a person restored this item; only a person or its own mission may close it",
+  not_open: "the item is no longer open",
+  superseded: "the item was superseded by a later delivery of its objective",
+  duplicate: "the id is listed more than once"
+};
+var STAYS_OPEN = "Say in your final message which item stays open and why.";
+var SKIP_ACTIONS = {
+  not_found: `If you meant an open item of this mission, it stays open. ${STAYS_OPEN}`,
+  forbidden: STAYS_OPEN,
+  restored_by_person: STAYS_OPEN,
+  other_mission: `If you meant an open item of this mission, it stays open. ${STAYS_OPEN}`,
+  not_open: "No action is needed.",
+  superseded: `Its replacement from the later delivery may still be open. ${STAYS_OPEN}`,
+  duplicate: "The first entry applies; no action is needed."
+};
+async function applyMissionSummaryWrite(tx, {
+  prepared,
+  mission,
+  objectiveId,
+  deliveryId,
+  sessionId = null,
+  canCloseForeign = false,
+  model,
+  attribution,
+  now: now2 = nowIso()
+}) {
+  const { input: input2, enabled, mode } = prepared;
+  const warnings = [];
+  const closedItemIds = [];
+  const seen = /* @__PURE__ */ new Set();
+  const targets = /* @__PURE__ */ new Map();
+  for (const entry of input2?.closeItems ?? []) {
+    let problem = null;
+    let current = null;
+    if (seen.has(entry.id)) {
+      problem = "duplicate";
+    } else {
+      seen.add(entry.id);
+      const item = await getMissionItem(tx, entry.id);
+      const target = item ? await tx.get(
+        `SELECT m.display_id FROM missions m
+        JOIN deliveries d ON d.id = ? AND d.deleted_at IS NULL
+        WHERE m.id = ? AND m.workspace_id = ? AND m.project_id = ? AND m.deleted_at IS NULL`,
+        [item.deliveryId, item.missionId, mission.workspaceId, mission.projectId]
+      ) : void 0;
+      if (!item || !target || item.workspaceId !== mission.workspaceId || item.projectId !== mission.projectId) {
+        problem = "not_found";
+      } else if (item.missionId !== mission.id && !canCloseForeign) {
+        problem = "forbidden";
+      } else {
+        const result2 = await closeMissionItem(tx, {
+          itemId: entry.id,
+          missionId: item.missionId,
+          status: entry.status,
+          reason: entry.reason,
+          resolver: { kind: "agent", objectiveId, deliveryId, missionId: mission.id, sessionId },
+          attribution,
+          now: now2
+        });
+        if (result2.ok) {
+          closedItemIds.push(entry.id);
+          if (item.missionId !== mission.id)
+            targets.set(target.display_id, (targets.get(target.display_id) ?? 0) + 1);
+        } else {
+          problem = result2.problem;
+          current = result2.item;
+        }
+      }
+    }
+    if (problem !== null) {
+      warnings.push({
+        code: "mission_summary_item_skipped",
+        itemId: cut(entry.id, 80),
+        problem,
+        ...current ? { currentStatus: current.status, resolvedBy: current.resolvedBy } : {},
+        message: `Item ${cut(entry.id, 80)} was not closed: ${SKIP_MESSAGES[problem]}. ${SKIP_ACTIONS[problem]}`
+      });
+    }
+  }
+  if (mode === "deliver" && deliveryId && sessionId) {
+    await linkSessionMissionItems(tx, {
+      sessionId,
+      missionId: mission.id,
+      workspaceId: mission.workspaceId,
+      projectId: mission.projectId,
+      deliveryId,
+      attribution,
+      now: now2
+    });
+  }
+  let contentRevision = null;
+  let narrativeWritten = false;
+  let publication;
+  if (input2?.narrative && !enabled) {
+    warnings.push({
+      code: "mission_summary_disabled",
+      message: "This mission has no summary, so the headline and summary were not stored."
+    });
+  } else if (enabled && mode !== "close_only" && deliveryId) {
+    const advanced = await advanceMissionNarrativeEvidence(tx, {
+      mission,
+      reason: "delivery",
+      attribution,
+      now: now2
+    });
+    const evidenceRevision = advanced?.evidenceRevision ?? 0;
+    const created = await createDeliveryPublication(tx, {
+      mission,
+      objectiveId,
+      deliveryId,
+      actorWorkspaceUserId: attribution.actorWorkspaceUserId,
+      sessionId,
+      evidenceRevision,
+      proposal: input2?.narrative ?? null,
+      withheldReason: prepared.withheldReason,
+      now: now2
+    });
+    if (prepared.withheldReason === null && input2?.narrative) {
+      const written = await writeAgentNarrative(tx, {
+        mission,
+        narrative: input2.narrative,
+        deliveryId,
+        objectiveId,
+        model,
+        evidenceRevision,
+        publicationId: created.id,
+        publishOperation: null,
+        attribution,
+        created: prepared.created,
+        now: now2
+      });
+      narrativeWritten = true;
+      contentRevision = written.contentRevision;
+      warnings.push(...missionSummaryStyleWarnings(input2.narrative));
+    } else if (input2?.narrative && prepared.withheldReason && prepared.withheldReason !== "absent") {
+      warnings.push({
+        code: "mission_summary_withheld",
+        message: `${WITHHELD_MESSAGES[prepared.withheldReason]} The delivery and item closes were accepted. Read the current summary and publish once for this delivery.`
+      });
+    }
+    publication = {
+      id: created.id,
+      available: !narrativeWritten,
+      withheldReason: prepared.withheldReason
+    };
+  }
+  if (contentRevision === null && enabled) {
+    const row = await tx.get(
+      `SELECT content_revision FROM mission_summaries WHERE mission_id = ?`,
+      [mission.id]
+    );
+    contentRevision = row ? Number(row.content_revision) : 0;
+  }
+  return {
+    contentRevision,
+    narrativeWritten,
+    closedItemIds,
+    targets: [...targets].sort(([a5], [b5]) => a5.localeCompare(b5)).map(([missionDisplayId, closed]) => ({ missionDisplayId, closed })),
+    warnings: warnings.slice(0, MISSION_SUMMARY_MAX_WARNINGS),
+    ...publication ? { publication } : {}
+  };
+}
+
+// ../packages/core/service/delivery-summary-publication.ts
+var MISSION_SUMMARY_PUBLICATION_NOT_FOUND = "mission_summary_publication_not_found";
+var MISSION_SUMMARY_PUBLICATION_SUPERSEDED = "mission_summary_publication_superseded";
+var MISSION_SUMMARY_ALREADY_PUBLISHED = "mission_summary_already_published";
+var MISSION_SUMMARY_CONFLICT = "mission_summary_conflict";
+var PUBLICATION_COLUMNS = `id, workspace_id, project_id, mission_id, objective_id, delivery_id,
+  actor_workspace_user_id, session_id, evidence_revision, published_at,
+  published_content_revision, publish_operation_id, publish_request_digest, superseded_at,
+  superseded_reason`;
+function iso2(value2) {
+  if (value2 === null || value2 === void 0) return null;
+  return new Date(value2 instanceof Date ? value2 : String(value2)).toISOString();
+}
+function notFound() {
+  return new ServiceError(
+    "Mission summary publication not found",
+    MISSION_SUMMARY_PUBLICATION_NOT_FOUND,
+    404
+  );
+}
+async function bindPublication(ctx, db, {
+  missionId,
+  deliveryId,
+  publicationId,
+  sessionKey,
+  lock = false
+}) {
+  if (!deliveryId === !publicationId) {
+    throw new ServiceError("Name exactly one of deliveryId or publicationId", "invalid_input", 400);
+  }
+  const actor = ctx.actorWorkspaceUserId;
+  if (!actor) throw notFound();
+  let mission;
+  try {
+    mission = await resolveMissionId({ ...ctx, db }, missionId);
+  } catch {
+    throw notFound();
+  }
+  const lockClause = lock && db.dialect === "postgres" ? "FOR UPDATE" : "";
+  const row = await db.get(
+    `SELECT ${PUBLICATION_COLUMNS} FROM delivery_summary_publications
+      WHERE workspace_id = ? AND mission_id = ? AND ${publicationId ? "id" : "delivery_id"} = ?
+      ${lockClause}`,
+    [ctx.workspace.id, mission.id, publicationId ?? deliveryId]
+  );
+  if (!row || row.actor_workspace_user_id !== actor) throw notFound();
+  if (row.project_id !== mission.projectId) throw notFound();
+  const source = await db.get(
+    `SELECT d.id, o.display_key FROM deliveries d
+       JOIN objectives o ON o.id = d.objective_id AND o.deleted_at IS NULL
+      WHERE d.id = ? AND d.mission_id = ? AND d.deleted_at IS NULL`,
+    [row.delivery_id, mission.id]
+  );
+  if (!source) throw notFound();
+  let sessionModel = null;
+  if (row.session_id !== null) {
+    if (!sessionKey) {
+      throw new ServiceError(
+        "sessionKey is required: send the session key of the session that delivered",
+        "invalid_input",
+        400
+      );
+    }
+    const session = await db.get(
+      `SELECT id, mission_id, objective_id, delivery_state, ended_at, model_identifier
+         FROM agent_sessions
+        WHERE workspace_id = ? AND session_key_hash = ? AND deleted_at IS NULL`,
+      [ctx.workspace.id, hashSessionKey(sessionKey)]
+    );
+    if (!session || session.id !== row.session_id || session.mission_id !== mission.id || session.objective_id !== row.objective_id || session.delivery_state !== "delivered") {
+      throw new ServiceError("Invalid or expired session key", "invalid_session", 401);
+    }
+    sessionModel = session.model_identifier;
+  }
+  return {
+    mission,
+    row,
+    objectiveDisplayId: source.display_key ? formatObjectiveDisplayId({
+      missionDisplayId: mission.displayId,
+      displayKey: source.display_key
+    }) : null,
+    sessionModel
+  };
+}
+async function publicationState(db, bound) {
+  const { row, mission } = bound;
+  if (row.published_at !== null) return { state: "published", supersededReason: null };
+  if (row.superseded_at !== null) {
+    return { state: "superseded", supersededReason: row.superseded_reason };
+  }
+  const missionRow = await db.get(
+    `SELECT summary_enabled FROM missions WHERE id = ?`,
+    [mission.id]
+  );
+  if (!isSummaryEnabled(missionRow?.summary_enabled)) {
+    return { state: "ineligible", supersededReason: null };
+  }
+  const summary = await db.get(
+    `SELECT evidence_revision FROM mission_summaries WHERE mission_id = ?`,
+    [mission.id]
+  );
+  const objective = await db.get(`SELECT state FROM objectives WHERE id = ?`, [
+    row.objective_id
+  ]);
+  if (Number(summary?.evidence_revision ?? 0) !== Number(row.evidence_revision) || objective?.state !== "complete") {
+    return { state: "superseded", supersededReason: null };
+  }
+  return { state: "outstanding", supersededReason: null };
+}
+function toPublication(bound, state2, published) {
+  const { row, mission } = bound;
+  return {
+    id: row.id,
+    missionId: mission.id,
+    missionDisplayId: mission.displayId,
+    objectiveId: row.objective_id,
+    objectiveDisplayId: bound.objectiveDisplayId,
+    deliveryId: row.delivery_id,
+    evidenceRevision: Number(row.evidence_revision),
+    available: state2.state === "outstanding",
+    state: state2.state,
+    supersededReason: state2.supersededReason,
+    publishedAt: published?.at ?? iso2(row.published_at),
+    publishedContentRevision: published?.contentRevision ?? (row.published_content_revision === null ? null : Number(row.published_content_revision))
+  };
+}
+function publicationInstruction(style, publication) {
+  if (publication.state === "published") {
+    return "The mission summary for this delivery is published. Stop; do not deliver again or resume execution.";
+  }
+  if (!publication.available) {
+    return "This delivery can no longer publish the mission summary: newer work, a follow-up or a reopen changed the mission, or the mission has no summary. Do not deliver again or resume execution only to update it; tell the user the mission summary is missing or outdated.";
+  }
+  const command = style === "mcp" ? `call \`overlord_publish_delivery_summary\` with missionId ${publication.missionDisplayId}, deliveryId ${publication.deliveryId}, your session key, a new operationId, baseContentRevision and baseEvidenceRevision from that baseline, and the headline and summary` : `run \`ovld protocol publish-delivery-summary --mission-id ${publication.missionDisplayId} --delivery-id ${publication.deliveryId} --session-key <key> --operation-id <new id> --payload-file <file>\` with { "baseContentRevision", "baseEvidenceRevision", "headline", "summary" } from that baseline`;
+  return `Reconcile the mission summary for the whole mission from this baseline and ${command}. Keep the operationId for a retry of the same publication. On a conflict, read the returned baseline and try once more; then stop and say the summary is not updated. Do not deliver again or resume execution.`;
+}
+async function readDeliverySummaryContext({
+  ctx,
+  missionId,
+  deliveryId,
+  publicationId,
+  sessionKey,
+  style = "cli"
+}) {
+  const bound = await bindPublication(ctx, ctx.db, {
+    missionId,
+    deliveryId,
+    publicationId,
+    sessionKey
+  });
+  const state2 = await publicationState(ctx.db, bound);
+  const publication = toPublication(bound, state2);
+  return {
+    publication,
+    baseline: state2.state === "ineligible" ? null : await readMissionSummaryBaseline(ctx.db, bound.mission.id),
+    instruction: publicationInstruction(style, publication)
+  };
+}
+function publishDigest(publicationId, semantic) {
+  return `v1:${(0, import_node_crypto15.createHash)("sha256").update(canonicalJson({ kind: "publish_delivery_summary", publicationId, semantic })).digest("hex")}`;
+}
+async function publishDeliverySummary({
+  ctx,
+  missionId,
+  deliveryId,
+  publicationId,
+  sessionKey,
+  operationId: rawOperationId,
+  narrative: rawNarrative,
+  style = "cli",
+  now: now2 = nowIso()
+}) {
+  const operationId = parseOperationId(rawOperationId);
+  if (!operationId) {
+    throw new ServiceError(
+      "operationId is required: choose one before sending and reuse it for every retry of this publication",
+      "invalid_input",
+      400
+    );
+  }
+  if (!rawNarrative || typeof rawNarrative !== "object" || Array.isArray(rawNarrative)) {
+    throw new ServiceError(
+      "Send { baseContentRevision, baseEvidenceRevision, headline, summary }",
+      "invalid_input",
+      400
+    );
+  }
+  if ("closeItems" in rawNarrative) {
+    throw new ServiceError(
+      "publish-delivery-summary accepts no closeItems; close items while you work or at delivery",
+      "invalid_input",
+      400
+    );
+  }
+  const parsed = parseMissionSummaryInput(rawNarrative, { requireBase: true });
+  if (!parsed?.narrative) {
+    throw new ServiceError("headline and summary are required", "invalid_input", 400);
+  }
+  if (parsed.baseContentRevision === null || parsed.baseEvidenceRevision === null) {
+    throw new ServiceError(
+      "baseContentRevision and baseEvidenceRevision are required; read them with delivery-summary-context",
+      "invalid_input",
+      400
+    );
+  }
+  const narrative = parsed.narrative;
+  const bases = {
+    content: parsed.baseContentRevision,
+    evidence: parsed.baseEvidenceRevision
+  };
+  const preliminary = await bindPublication(ctx, ctx.db, {
+    missionId,
+    deliveryId,
+    publicationId,
+    sessionKey
+  });
+  const digest6 = publishDigest(preliminary.row.id, {
+    headline: narrative.headline,
+    summary: narrative.summary,
+    baseContentRevision: bases.content,
+    baseEvidenceRevision: bases.evidence
+  });
+  const outcome = await ctx.db.transaction(async (tx) => {
+    await lockMissionObjectiveQueue(tx, preliminary.mission.id);
+    await lockMissionSummaryRow(tx, preliminary.mission.id);
+    const bound2 = await bindPublication(ctx, tx, {
+      missionId: preliminary.mission.id,
+      publicationId: preliminary.row.id,
+      sessionKey,
+      lock: true
+    });
+    const { row, mission } = bound2;
+    if (row.published_at !== null) {
+      if (row.publish_operation_id === operationId && row.publish_request_digest === digest6) {
+        return { replay: true, bound: bound2 };
+      }
+      throw new ServiceError(
+        "The mission summary for this delivery was already published. A publication cannot be changed; newer work needs its own delivery.",
+        MISSION_SUMMARY_ALREADY_PUBLISHED,
+        409,
+        { publication: toPublication(bound2, { state: "published", supersededReason: null }) }
+      );
+    }
+    const state2 = await publicationState(tx, bound2);
+    if (state2.state !== "outstanding") {
+      const publication2 = toPublication(bound2, state2);
+      throw new ServiceError(
+        "This delivery can no longer publish the mission summary: the mission changed after it (newer delivery, follow-up or reopen), or it has no summary.",
+        MISSION_SUMMARY_PUBLICATION_SUPERSEDED,
+        409,
+        { publication: publication2, instruction: publicationInstruction(style, publication2) }
+      );
+    }
+    const current = await lockMissionSummaryRow(tx, mission.id);
+    if (!current || current.content_revision !== bases.content || current.evidence_revision !== bases.evidence) {
+      const publication2 = toPublication(bound2, state2);
+      throw new ServiceError(
+        `The mission summary changed since your baseline (content ${bases.content} \u2192 ${current?.content_revision ?? 0}, evidence ${bases.evidence} \u2192 ${current?.evidence_revision ?? 0}). Nothing was published. Reconcile from details.missionSummary and publish once more with its revisions.`,
+        MISSION_SUMMARY_CONFLICT,
+        409,
+        {
+          publication: publication2,
+          missionSummary: await readMissionSummaryBaseline(tx, mission.id),
+          instruction: publicationInstruction(style, publication2)
+        }
+      );
+    }
+    const written = await writeAgentNarrative(tx, {
+      mission: { id: mission.id, workspaceId: ctx.workspace.id, projectId: mission.projectId },
+      narrative,
+      deliveryId: row.delivery_id,
+      objectiveId: row.objective_id,
+      model: bound2.sessionModel,
+      evidenceRevision: Number(row.evidence_revision),
+      publicationId: row.id,
+      publishOperation: { operationId, digest: digest6 },
+      attribution: {
+        actorWorkspaceUserId: ctx.actorWorkspaceUserId,
+        actorTokenId: ctx.actorTokenId ?? null,
+        source: ctx.source
+      },
+      now: now2
+    });
+    return { written, bound: bound2 };
+  });
+  const bound = outcome.bound;
+  const publishedState = { state: "published", supersededReason: null };
+  if ("replay" in outcome) {
+    const publication2 = toPublication(bound, publishedState);
+    return {
+      publication: publication2,
+      operationId,
+      contentRevision: publication2.publishedContentRevision ?? 0,
+      evidenceRevision: publication2.evidenceRevision,
+      publishedAt: publication2.publishedAt ?? "",
+      warnings: missionSummaryStyleWarnings(narrative),
+      instruction: publicationInstruction(style, publication2),
+      replayed: true
+    };
+  }
+  const publication = toPublication(bound, publishedState, {
+    at: outcome.written.publishedAt,
+    contentRevision: outcome.written.contentRevision
+  });
+  return {
+    publication,
+    operationId,
+    contentRevision: outcome.written.contentRevision,
+    evidenceRevision: publication.evidenceRevision,
+    publishedAt: outcome.written.publishedAt,
+    warnings: missionSummaryStyleWarnings(narrative),
+    instruction: publicationInstruction(style, publication)
   };
 }
 
@@ -157973,961 +159604,67 @@ async function linkExecutionRequestToSession({
   });
 }
 
-// ../packages/core/service/mission-items.ts
-var ITEM_COLUMNS = `mission_items.id, mission_items.workspace_id, mission_items.project_id,
-  mission_items.mission_id, mission_items.objective_id, mission_items.delivery_id,
-  mission_items.kind, mission_items.item_ref, mission_items.position, mission_items.text,
-  mission_items.detail_json, mission_items.status, mission_items.status_reason,
-  mission_items.resolved_by_kind, mission_items.resolved_by_workspace_user_id,
-  mission_items.resolved_by_objective_id, mission_items.resolved_by_delivery_id,
-  mission_items.outcome, mission_items.outcome_ref, mission_items.resolved_at,
-  mission_items.reported_at, mission_items.created_at, mission_items.updated_at,
-  mission_items.revision`;
-function parseDetail(value2) {
-  let parsed = value2;
-  if (typeof value2 === "string") {
+// ../packages/core/service/mission-item-locks.ts
+async function canCloseForeignItems(ctx) {
+  if (ctx.canUpdateMissionItems) return ctx.canUpdateMissionItems();
+  if (!ctx.actorWorkspaceUserId || ctx.actorTokenId) return false;
+  const roles = await ctx.db.all(
+    `SELECT role_key FROM role_assignments
+    WHERE workspace_id = ? AND workspace_user_id = ? AND deleted_at IS NULL`,
+    [ctx.workspace.id, ctx.actorWorkspaceUserId]
+  );
+  return defaultAuthorizer.can(
+    makeActor(
+      ctx.actorWorkspaceUserId,
+      roles.map((r5) => r5.role_key)
+    ),
+    PERMISSIONS.MISSION_UPDATE
+  ).allowed;
+}
+var RetryMissionSet = class extends Error {
+};
+async function withMissionItemLocks(ctx, scope2, run) {
+  const targets = async (db) => {
+    const ids = new Set(scope2.missionId ? [scope2.missionId] : []);
+    if (!projectAllowed(scope2.projectId, ctx.allowedProjectIds)) return [...ids];
+    const predicates = [];
+    const params = [ctx.workspace.id, scope2.projectId, scope2.projectId];
+    if (scope2.itemIds.length) {
+      predicates.push(`mi.id IN (${sqlPlaceholders(scope2.itemIds.length)})`);
+      params.push(...scope2.itemIds);
+    }
+    if (scope2.sessionId) {
+      predicates.push(`(mi.resolved_by_session_id = ? AND mi.resolved_by_mission_id = ?
+        AND mi.resolved_by_kind = 'agent' AND mi.resolved_by_delivery_id IS NULL
+        AND mi.status IN ('done', 'dismissed'))`);
+      params.push(scope2.sessionId, scope2.missionId);
+    }
+    if (predicates.length) {
+      const rows = await db.all(
+        `SELECT DISTINCT mi.mission_id
+        FROM mission_items mi JOIN missions m ON m.id = mi.mission_id AND m.deleted_at IS NULL
+        JOIN deliveries d ON d.id = mi.delivery_id AND d.deleted_at IS NULL
+        WHERE mi.workspace_id = ? AND mi.project_id = ? AND m.project_id = ?
+          AND (${predicates.join(" OR ")})`,
+        params
+      );
+      for (const row of rows) ids.add(row.mission_id);
+    }
+    return [...ids].sort();
+  };
+  for (; ; ) {
     try {
-      parsed = JSON.parse(value2);
-    } catch {
-      parsed = null;
-    }
-  }
-  return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
-}
-function toResolver(row) {
-  if (row.resolved_by_kind === "person") {
-    return { kind: "person", workspaceUserId: row.resolved_by_workspace_user_id };
-  }
-  if (row.resolved_by_kind === "agent") {
-    return {
-      kind: "agent",
-      objectiveId: row.resolved_by_objective_id,
-      deliveryId: row.resolved_by_delivery_id
-    };
-  }
-  return null;
-}
-function toMissionItem(row) {
-  return {
-    id: row.id,
-    workspaceId: row.workspace_id,
-    projectId: row.project_id,
-    missionId: row.mission_id,
-    objectiveId: row.objective_id,
-    deliveryId: row.delivery_id,
-    kind: row.kind,
-    itemRef: row.item_ref,
-    position: Number(row.position),
-    text: row.text,
-    detail: parseDetail(row.detail_json),
-    status: row.status,
-    statusReason: row.status_reason,
-    resolvedBy: toResolver(row),
-    outcome: row.outcome ?? null,
-    outcomeRef: row.outcome_ref,
-    resolvedAt: row.resolved_at,
-    reportedAt: row.reported_at,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-    revision: Number(row.revision)
-  };
-}
-async function recordItemChange(db, item, operation2, entityRevision, changedFields, attribution) {
-  await insertEntityChange(db, {
-    entityType: "mission_item",
-    entityId: item.id,
-    operation: operation2,
-    entityRevision,
-    projectId: item.projectId,
-    missionId: item.missionId,
-    objectiveId: item.objectiveId,
-    workspaceId: item.workspaceId,
-    changedFields,
-    ...attribution
-  });
-}
-async function readItemsByIds(db, ids) {
-  if (ids.length === 0) return [];
-  const rows = await db.all(
-    `SELECT ${ITEM_COLUMNS} FROM mission_items WHERE mission_items.id IN (${sqlPlaceholders(ids.length)})`,
-    ids
-  );
-  return rows.map(toMissionItem);
-}
-async function getMissionItem(db, id2) {
-  const [item] = await readItemsByIds(db, [id2]);
-  return item ?? null;
-}
-async function insertDerivedItem(db, delivery, item, attribution, now2) {
-  const id2 = newId();
-  const result2 = await db.run(
-    INSERT_MISSION_ITEM_SQL,
-    insertMissionItemParams({ id: id2, delivery, item, now: now2 })
-  );
-  if (result2.changes === 0) return null;
-  await recordItemChange(
-    db,
-    {
-      id: id2,
-      workspaceId: delivery.workspaceId,
-      projectId: delivery.projectId,
-      missionId: delivery.missionId,
-      objectiveId: delivery.objectiveId
-    },
-    "insert",
-    1,
-    ["status", "text"],
-    attribution
-  );
-  return id2;
-}
-async function applyMissionItemSupersedeRules(db, {
-  objectiveId,
-  attribution,
-  now: now2 = nowIso()
-}) {
-  return db.transaction(async (tx) => {
-    const candidates = await tx.all(
-      `SELECT mission_items.id FROM mission_items
-        WHERE mission_items.objective_id = ? AND ${SUPERSEDED_ITEM_PREDICATE_SQL}`,
-      [objectiveId]
-    );
-    const superseded = [];
-    for (const { id: id2 } of candidates) {
-      const updated = await tx.run(
-        `UPDATE mission_items
-            SET status = 'superseded', updated_at = ?, revision = revision + 1
-          WHERE id = ? AND status = 'open'`,
-        [now2, id2]
-      );
-      if (updated.changes === 0) continue;
-      superseded.push(id2);
-    }
-    for (const item of await readItemsByIds(tx, superseded)) {
-      await recordItemChange(tx, item, "update", item.revision, ["status"], attribution);
-    }
-    return superseded;
-  });
-}
-async function insertDeliveryMissionItems(db, {
-  delivery,
-  report: report2,
-  attribution,
-  now: now2 = nowIso()
-}) {
-  return db.transaction(async (tx) => {
-    const inserted = [];
-    for (const item of deriveMissionItems(report2)) {
-      const id2 = await insertDerivedItem(tx, delivery, item, attribution, now2);
-      if (id2) inserted.push(id2);
-    }
-    const superseded = await applyMissionItemSupersedeRules(tx, {
-      objectiveId: delivery.objectiveId,
-      attribution,
-      now: now2
-    });
-    return { inserted, superseded };
-  });
-}
-function sameDetail(left, right) {
-  const canonical = (value2) => JSON.stringify(
-    Object.keys(value2).sort().map((key) => [key, value2[key]])
-  );
-  return canonical(left) === canonical(right);
-}
-async function reconcileDeliveryMissionItems(db, {
-  delivery,
-  report: report2,
-  attribution,
-  now: now2 = nowIso()
-}) {
-  return db.transaction(async (tx) => {
-    const existing = (await tx.all(
-      `SELECT ${ITEM_COLUMNS} FROM mission_items WHERE mission_items.delivery_id = ?`,
-      [delivery.id]
-    )).map(toMissionItem);
-    const byKey2 = new Map(existing.map((item) => [`${item.kind}:${item.itemRef}`, item]));
-    const derived2 = deriveMissionItems(report2);
-    const derivedKeys = new Set(derived2.map((item) => `${item.kind}:${item.itemRef}`));
-    const deleted = [];
-    for (const item of existing) {
-      if (item.status !== "open" || derivedKeys.has(`${item.kind}:${item.itemRef}`)) continue;
-      const removed = await tx.run(`DELETE FROM mission_items WHERE id = ? AND status = 'open'`, [
-        item.id
-      ]);
-      if (removed.changes === 0) continue;
-      deleted.push(item.id);
-      await recordItemChange(tx, item, "delete", null, ["status"], attribution);
-    }
-    const inserted = [];
-    const updated = [];
-    for (const item of derived2) {
-      const current = byKey2.get(`${item.kind}:${item.itemRef}`);
-      if (!current) {
-        const id2 = await insertDerivedItem(tx, delivery, item, attribution, now2);
-        if (id2) inserted.push(id2);
-        continue;
-      }
-      const changedFields = [
-        ...current.text === item.text ? [] : ["text"],
-        ...current.position === item.position ? [] : ["position"],
-        ...sameDetail(current.detail, item.detail) ? [] : ["detail_json"]
-      ];
-      if (changedFields.length === 0) continue;
-      await tx.run(
-        `UPDATE mission_items
-            SET text = ?, position = ?, detail_json = ?, updated_at = ?, revision = revision + 1
-          WHERE id = ?`,
-        [item.text, item.position, JSON.stringify(item.detail), now2, current.id]
-      );
-      updated.push(current.id);
-      await recordItemChange(
-        tx,
-        current,
-        "update",
-        current.revision + 1,
-        changedFields,
-        attribution
-      );
-    }
-    const superseded = await applyMissionItemSupersedeRules(tx, {
-      objectiveId: delivery.objectiveId,
-      attribution,
-      now: now2
-    });
-    return { inserted, updated, deleted, superseded };
-  });
-}
-function invalidInput(message2) {
-  return new ServiceError(message2, "invalid_input", 400);
-}
-function normaliseReason(reason, required2) {
-  const trimmed9 = typeof reason === "string" ? reason.trim() : "";
-  if (!trimmed9) {
-    if (required2) throw invalidInput("A reason is required to close an item.");
-    return null;
-  }
-  if (trimmed9.length > MISSION_ITEM_STATUS_REASON_MAX_LENGTH) {
-    throw invalidInput(
-      `A reason must be at most ${MISSION_ITEM_STATUS_REASON_MAX_LENGTH} characters.`
-    );
-  }
-  return trimmed9;
-}
-async function scopedItem(db, itemId, missionId) {
-  const item = await getMissionItem(db, itemId);
-  if (!item) return { ok: false, problem: "not_found", item: null };
-  if (missionId !== void 0 && item.missionId !== missionId) {
-    return { ok: false, problem: "other_mission", item };
-  }
-  return item;
-}
-async function closeMissionItem(db, {
-  itemId,
-  missionId,
-  status,
-  reason,
-  resolver,
-  outcome = null,
-  outcomeRef = null,
-  attribution,
-  now: now2 = nowIso()
-}) {
-  if (!MISSION_ITEM_CLOSED_STATUSES.includes(status)) {
-    throw invalidInput("status must be 'done' or 'dismissed'");
-  }
-  const statusReason = normaliseReason(reason, resolver.kind === "agent");
-  if (outcome !== null) {
-    if (!MISSION_ITEM_OUTCOMES.includes(outcome)) {
-      throw invalidInput("outcome must be 'mission_created' or 'objective_added'");
-    }
-    if (status !== "done") throw invalidInput("outcome requires status 'done'");
-  }
-  if (outcomeRef !== null && (outcome === null || !outcomeRef.trim())) {
-    throw invalidInput("outcomeRef requires an outcome and a non-empty display id");
-  }
-  return db.transaction(async (tx) => {
-    const scoped = await scopedItem(tx, itemId, missionId);
-    if ("ok" in scoped) return scoped;
-    const from = resolver.kind === "agent" ? ["open"] : MISSION_ITEM_STATUSES;
-    if (!from.includes(scoped.status)) {
-      return {
-        ok: false,
-        problem: scoped.status === "superseded" ? "superseded" : "not_open",
-        item: scoped
-      };
-    }
-    const updated = await tx.run(
-      `UPDATE mission_items
-          SET status = ?, status_reason = ?, resolved_by_kind = ?,
-              resolved_by_workspace_user_id = ?, resolved_by_objective_id = ?,
-              resolved_by_delivery_id = ?, outcome = ?, outcome_ref = ?, resolved_at = ?,
-              updated_at = ?, revision = revision + 1
-        WHERE id = ? AND status IN (${sqlPlaceholders(from.length)})`,
-      [
-        status,
-        statusReason,
-        resolver.kind,
-        resolver.kind === "person" ? resolver.workspaceUserId : null,
-        resolver.kind === "agent" ? resolver.objectiveId : null,
-        resolver.kind === "agent" ? resolver.deliveryId : null,
-        outcome,
-        outcome === null ? null : outcomeRef?.trim() ?? null,
-        now2,
-        now2,
-        itemId,
-        ...from
-      ]
-    );
-    if (updated.changes === 0) return { ok: false, problem: "not_open", item: scoped };
-    const item = await getMissionItem(tx, itemId);
-    await recordItemChange(
-      tx,
-      item,
-      "update",
-      item.revision,
-      ["status", "status_reason", "resolved_by", "outcome"],
-      attribution
-    );
-    return { ok: true, item, changed: true };
-  });
-}
-async function restoreMissionItem(db, {
-  itemId,
-  missionId,
-  attribution,
-  now: now2 = nowIso()
-}) {
-  return db.transaction(async (tx) => {
-    const scoped = await scopedItem(tx, itemId, missionId);
-    if ("ok" in scoped) return scoped;
-    if (scoped.status === "open") return { ok: true, item: scoped, changed: false };
-    if (scoped.status === "superseded") return { ok: false, problem: "superseded", item: scoped };
-    const updated = await tx.run(
-      `UPDATE mission_items
-          SET status = 'open', status_reason = NULL, resolved_by_kind = NULL,
-              resolved_by_workspace_user_id = NULL, resolved_by_objective_id = NULL,
-              resolved_by_delivery_id = NULL, outcome = NULL, outcome_ref = NULL,
-              resolved_at = NULL, updated_at = ?, revision = revision + 1
-        WHERE id = ? AND status IN ('done', 'dismissed')`,
-      [now2, itemId]
-    );
-    if (updated.changes === 0) return { ok: false, problem: "not_open", item: scoped };
-    const restored = await getMissionItem(tx, itemId);
-    await recordItemChange(
-      tx,
-      restored,
-      "update",
-      restored.revision,
-      ["status", "status_reason", "resolved_by", "outcome"],
-      attribution
-    );
-    await applyMissionItemSupersedeRules(tx, {
-      objectiveId: restored.objectiveId,
-      attribution,
-      now: now2
-    });
-    const item = await getMissionItem(tx, itemId);
-    return { ok: true, item, changed: true };
-  });
-}
-async function repointMissionItemsProject(db, {
-  missionId,
-  workspaceId: workspaceId2,
-  projectId,
-  attribution,
-  now: now2 = nowIso()
-}) {
-  return db.transaction(async (tx) => {
-    const ids = (await tx.all(
-      `SELECT id FROM mission_items
-          WHERE mission_id = ? AND workspace_id = ? AND project_id <> ?`,
-      [missionId, workspaceId2, projectId]
-    )).map((row) => row.id);
-    if (ids.length === 0) return 0;
-    await tx.run(
-      `UPDATE mission_items
-          SET project_id = ?, updated_at = ?, revision = revision + 1
-        WHERE mission_id = ? AND workspace_id = ? AND project_id <> ?`,
-      [projectId, now2, missionId, workspaceId2, projectId]
-    );
-    for (const item of await readItemsByIds(tx, ids)) {
-      await recordItemChange(tx, item, "update", item.revision, ["project_id"], attribution);
-    }
-    return ids.length;
-  });
-}
-async function listDeliveryMissionItems(db, {
-  deliveryIds,
-  kinds = MISSION_ITEM_KINDS
-}) {
-  const ids = [...new Set(deliveryIds)];
-  if (ids.length === 0 || kinds.length === 0) return [];
-  const rows = await db.all(
-    `SELECT ${ITEM_COLUMNS} FROM mission_items
-      WHERE mission_items.delivery_id IN (${sqlPlaceholders(ids.length)})
-        AND mission_items.kind IN (${sqlPlaceholders(kinds.length)})
-      ORDER BY mission_items.delivery_id ASC, mission_items.kind ASC, mission_items.position ASC`,
-    [...ids, ...kinds]
-  );
-  return rows.map(toMissionItem);
-}
-var MISSION_ITEMS_DEFAULT_LIMIT = 200;
-var MISSION_ITEMS_MAX_LIMIT = 1e3;
-async function listMissionItems(db, scope2) {
-  const kinds = scope2.kinds ?? MISSION_ITEM_KINDS;
-  const statuses = scope2.statuses ?? ["open"];
-  if (kinds.length === 0 || statuses.length === 0) return { items: [], truncated: false, total: 0 };
-  for (const kind of kinds) {
-    if (!MISSION_ITEM_KINDS.includes(kind)) {
-      throw invalidInput(`Unknown mission item kind '${kind}'`);
-    }
-  }
-  for (const status of statuses) {
-    if (!MISSION_ITEM_STATUSES.includes(status)) {
-      throw invalidInput(`Unknown mission item status '${status}'`);
-    }
-  }
-  const limit2 = Math.min(
-    Math.max(1, Math.floor(scope2.limit ?? MISSION_ITEMS_DEFAULT_LIMIT)),
-    MISSION_ITEMS_MAX_LIMIT
-  );
-  const where = [];
-  const params = [];
-  if (scope2.missionId !== void 0) {
-    where.push("mission_items.mission_id = ?");
-    params.push(scope2.missionId);
-  } else {
-    where.push("mission_items.project_id = ?");
-    params.push(scope2.projectId);
-  }
-  where.push(`mission_items.status IN (${sqlPlaceholders(statuses.length)})`);
-  params.push(...statuses);
-  where.push(`mission_items.kind IN (${sqlPlaceholders(kinds.length)})`);
-  params.push(...kinds);
-  if (scope2.workspaceId !== void 0) {
-    where.push("mission_items.workspace_id = ?");
-    params.push(scope2.workspaceId);
-  }
-  const count = await db.get(
-    `SELECT COUNT(*) AS total FROM mission_items
-       JOIN deliveries d ON d.id = mission_items.delivery_id AND d.deleted_at IS NULL
-      WHERE ${where.join(" AND ")}`,
-    params
-  );
-  const rows = await db.all(
-    `SELECT ${ITEM_COLUMNS}
-       FROM mission_items
-       JOIN deliveries d ON d.id = mission_items.delivery_id AND d.deleted_at IS NULL
-      WHERE ${where.join(" AND ")}
-      ORDER BY ${scope2.order === "blocking" ? `CASE WHEN mission_items.kind = 'human_action' AND ${db.dialect === "postgres" ? "(mission_items.detail_json::jsonb ->> 'blocking') = 'true'" : "json_extract(mission_items.detail_json, '$.blocking') = 1"} THEN 0 ELSE 1 END,` : ""}
-               ${scope2.order === "resolved" ? "mission_items.resolved_at DESC, mission_items.id DESC," : ""}
-               d.delivered_at DESC, mission_items.delivery_id DESC,
-               mission_items.kind ASC, mission_items.position ASC, mission_items.id ASC
-      LIMIT ? OFFSET ?`,
-    [...params, limit2 + 1, Math.max(0, Math.floor(scope2.offset ?? 0))]
-  );
-  return {
-    items: rows.slice(0, limit2).map(toMissionItem),
-    total: Number(count?.total ?? 0),
-    truncated: rows.length > limit2
-  };
-}
-
-// ../packages/core/service/mission-summary-compose.ts
-var MISSION_SUMMARY_LIMITS = {
-  headline: 140,
-  summary: 1200,
-  riskText: 400,
-  risks: 8,
-  riskCandidates: 40,
-  suggestions: 50,
-  fallbackSummarySentences: 3,
-  firstParagraph: 600,
-  newestDeliveryMarkdown: 3e3,
-  questionPrompt: 400,
-  openActions: 40,
-  objectives: 60
-};
-var RUNNING_OBJECTIVE_STATES = /* @__PURE__ */ new Set(["launching", "executing", "pending_delivery"]);
-function newestFirst(left, right) {
-  const byTime = Date.parse(right.deliveredAt) - Date.parse(left.deliveredAt);
-  if (byTime !== 0) return byTime;
-  return left.id < right.id ? 1 : left.id > right.id ? -1 : 0;
-}
-function currentRunDeliveryPredicateSql(delivery = "d", objective = "o") {
-  return `(${objective}.reopened_at IS NULL OR ${delivery}.delivered_at >= ${objective}.reopened_at)`;
-}
-function splitMissionSummaryRuns({
-  objectives,
-  deliveries
-}) {
-  const reopenedAt = new Map(objectives.map((objective) => [objective.id, objective.reopenedAt]));
-  const sorted = [...deliveries].sort(newestFirst);
-  const currentRun = [];
-  const latestByObjective = [];
-  const superseded = [];
-  const seenObjectives = /* @__PURE__ */ new Set();
-  for (const delivery of sorted) {
-    const boundary = reopenedAt.get(delivery.objectiveId) ?? null;
-    if (boundary !== null && Date.parse(delivery.deliveredAt) < Date.parse(boundary)) {
-      superseded.push(delivery);
-      continue;
-    }
-    currentRun.push(delivery);
-    if (seenObjectives.has(delivery.objectiveId)) {
-      superseded.push(delivery);
-    } else {
-      seenObjectives.add(delivery.objectiveId);
-      latestByObjective.push(delivery);
-    }
-  }
-  return { currentRun, latestByObjective, superseded };
-}
-function bound(value2, maxChars) {
-  const trimmed9 = value2.trim();
-  if (trimmed9.length <= maxChars) return trimmed9;
-  return `${trimmed9.slice(0, maxChars - 1).trimEnd()}\u2026`;
-}
-function stripMarkdownInline(text) {
-  return text.replace(/```[\s\S]*?```/g, " ").replace(/`[^`]+`/g, "").replace(/\[([^\]]+)\]\([^)]+\)/g, "$1").replace(/[#*_>~-]/g, "").replace(/\s+/g, " ").trim();
-}
-function deliveryOneSentence(delivery) {
-  const source = delivery.report.presentation.markdown.trim() || delivery.summary.trim();
-  const plain = stripMarkdownInline(source);
-  const match = plain.match(/^[^.!?]+[.!?]?/);
-  return match?.[0]?.trim() || plain.slice(0, 200);
-}
-function deliveryFirstParagraph(delivery) {
-  const source = delivery.report.presentation.markdown.trim() || delivery.summary.trim();
-  const paragraph = source.split(/\n\s*\n/).find((part) => part.trim()) ?? "";
-  return bound(paragraph, MISSION_SUMMARY_LIMITS.firstParagraph);
-}
-function objectiveLabel(objectives, objectiveId) {
-  const objective = objectives.find((candidate) => candidate.id === objectiveId);
-  if (!objective || objective.deleted) return "An objective";
-  return objective.key ? `Objective ${objective.key}` : `Objective "${objective.title}"`;
-}
-function withPeriod(sentence) {
-  return /[.!?…]$/.test(sentence) ? sentence : `${sentence}.`;
-}
-function deterministicMissionSummaryText({
-  objectives,
-  runs,
-  openQuestions
-}) {
-  const newest = runs.latestByObjective[0];
-  if (newest) {
-    const sentences = runs.latestByObjective.slice(0, MISSION_SUMMARY_LIMITS.fallbackSummarySentences).map((delivery) => withPeriod(deliveryOneSentence(delivery))).filter((sentence) => sentence !== ".");
-    return {
-      headline: bound(deliveryOneSentence(newest), MISSION_SUMMARY_LIMITS.headline),
-      summary: bound(sentences.join(" "), MISSION_SUMMARY_LIMITS.summary)
-    };
-  }
-  const question = [...openQuestions].sort(
-    (left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt)
-  )[0];
-  if (question) {
-    return {
-      headline: "An agent is waiting for your answer.",
-      summary: bound(
-        `${objectiveLabel(objectives, question.objectiveId)} asks: ${question.prompt.trim()}`,
-        MISSION_SUMMARY_LIMITS.summary
-      )
-    };
-  }
-  const running = objectives.find(
-    (objective) => !objective.deleted && RUNNING_OBJECTIVE_STATES.has(objective.state)
-  );
-  if (running) {
-    const label = objectiveLabel(objectives, running.id);
-    return {
-      headline: bound(`${label} is running.`, MISSION_SUMMARY_LIMITS.headline),
-      summary: `${label} is running. No objective has delivered yet.`
-    };
-  }
-  return {
-    headline: "No objective has delivered yet.",
-    summary: "The mission is waiting for its first delivery."
-  };
-}
-function reconcileMissionSummaryDraft({
-  draft,
-  objectives,
-  runs,
-  openQuestions,
-  model
-}) {
-  const record2 = draft && typeof draft === "object" && !Array.isArray(draft) ? draft : null;
-  const headline = typeof record2?.headline === "string" ? record2.headline.trim() : "";
-  const summary = typeof record2?.summary === "string" ? record2.summary.trim() : "";
-  if (!record2 || !headline || !summary) {
-    return buildDeterministicMissionSummary({ objectives, runs, openQuestions });
-  }
-  return {
-    status: "composed",
-    headline: bound(headline, MISSION_SUMMARY_LIMITS.headline),
-    summary: bound(summary, MISSION_SUMMARY_LIMITS.summary),
-    generatedBy: "gemini",
-    model
-  };
-}
-function buildDeterministicMissionSummary({
-  objectives,
-  runs,
-  openQuestions
-}) {
-  return {
-    status: "fallback",
-    ...deterministicMissionSummaryText({ objectives, runs, openQuestions }),
-    generatedBy: "deterministic",
-    model: null
-  };
-}
-
-// ../packages/core/service/mission-summary-agent.ts
-var MISSION_SUMMARY_BASELINE_ITEM_LIMIT = 60;
-var MISSION_SUMMARY_BASELINE_ITEM_TEXT_MAX = 400;
-var MISSION_SUMMARY_CLOSE_ITEMS_MAX = 50;
-var MISSION_SUMMARY_MAX_STYLE_WARNINGS = 10;
-var MISSION_SUMMARY_MAX_WARNINGS = 30;
-function isSummaryEnabled2(value2) {
-  return value2 === true || Number(value2) === 1;
-}
-function invalidInput2(message2) {
-  return new ServiceError(`missionSummary: ${message2}`, "invalid_input", 400);
-}
-function cut(text, max) {
-  return text.length <= max ? text : `${text.slice(0, max - 1).trimEnd()}\u2026`;
-}
-async function readMissionSummaryBaseline(db, missionId) {
-  const mission = await db.get(
-    `SELECT summary_enabled, display_id FROM missions WHERE id = ? AND deleted_at IS NULL`,
-    [missionId]
-  );
-  if (!mission || !isSummaryEnabled2(mission.summary_enabled)) return null;
-  const row = await db.get(
-    `SELECT content_revision, headline, summary_markdown, generated_by
-       FROM mission_summaries WHERE mission_id = ?`,
-    [missionId]
-  );
-  const { items, truncated, total } = await listMissionItems(db, {
-    missionId,
-    limit: MISSION_SUMMARY_BASELINE_ITEM_LIMIT,
-    order: "blocking"
-  });
-  const objectiveIds = [...new Set(items.map((item) => item.objectiveId))];
-  const keys = /* @__PURE__ */ new Map();
-  if (objectiveIds.length > 0) {
-    const rows = await db.all(
-      `SELECT id, display_key FROM objectives WHERE id IN (${sqlPlaceholders(objectiveIds.length)})`,
-      objectiveIds
-    );
-    for (const objective of rows) {
-      keys.set(
-        objective.id,
-        formatObjectiveDisplayId({
-          missionDisplayId: mission.display_id,
-          displayKey: objective.display_key
-        })
-      );
-    }
-  }
-  const hasProse = Boolean(row && (row.headline.trim() || row.summary_markdown.trim()));
-  return {
-    contentRevision: Number(row?.content_revision ?? 0),
-    headline: row?.headline ?? "",
-    summary: row?.summary_markdown ?? "",
-    author: hasProse ? row.generated_by : null,
-    openItems: items.map((item) => ({
-      id: item.id,
-      kind: item.kind,
-      objective: keys.get(item.objectiveId) ?? null,
-      text: cut(item.text, MISSION_SUMMARY_BASELINE_ITEM_TEXT_MAX),
-      ...item.kind === "human_action" ? { blocking: item.detail.blocking === true } : {}
-    })),
-    totalOpenItems: total,
-    truncated
-  };
-}
-var INPUT_KEYS = /* @__PURE__ */ new Set(["baseContentRevision", "headline", "summary", "closeItems"]);
-var CLOSE_KEYS = /* @__PURE__ */ new Set(["id", "status", "reason"]);
-function parseMissionSummaryInput(value2, { requireBase }) {
-  if (value2 === void 0 || value2 === null) return null;
-  if (typeof value2 !== "object" || Array.isArray(value2)) {
-    throw invalidInput2("must be an object");
-  }
-  const input2 = value2;
-  const unknownKeys = Object.keys(input2).filter((key) => !INPUT_KEYS.has(key));
-  if (unknownKeys.length > 0) {
-    throw invalidInput2(`unsupported field(s): ${unknownKeys.join(", ")}`);
-  }
-  let baseContentRevision = null;
-  if (input2.baseContentRevision !== void 0 && input2.baseContentRevision !== null) {
-    const base = input2.baseContentRevision;
-    if (typeof base !== "number" || !Number.isInteger(base) || base < 0) {
-      throw invalidInput2("baseContentRevision must be a non-negative integer");
-    }
-    baseContentRevision = base;
-  }
-  const hasHeadline = input2.headline !== void 0 && input2.headline !== null;
-  const hasSummary = input2.summary !== void 0 && input2.summary !== null;
-  let narrative = null;
-  if (hasHeadline || hasSummary) {
-    if (!hasHeadline || !hasSummary) {
-      throw invalidInput2("headline and summary must be sent together");
-    }
-    if (typeof input2.headline !== "string" || typeof input2.summary !== "string") {
-      throw invalidInput2("headline and summary must be strings");
-    }
-    const headline = input2.headline.trim();
-    const summary = input2.summary.trim();
-    if (!headline) throw invalidInput2("headline must not be empty");
-    if (!summary) throw invalidInput2("summary must not be empty");
-    if (/[\r\n]/.test(headline)) throw invalidInput2("headline must be one line");
-    if (headline.length > MISSION_SUMMARY_LIMITS.headline) {
-      throw invalidInput2(
-        `headline must be at most ${MISSION_SUMMARY_LIMITS.headline} characters (got ${headline.length})`
-      );
-    }
-    if (summary.length > MISSION_SUMMARY_LIMITS.summary) {
-      throw invalidInput2(
-        `summary must be at most ${MISSION_SUMMARY_LIMITS.summary} characters (got ${summary.length})`
-      );
-    }
-    if (requireBase && baseContentRevision === null) {
-      throw invalidInput2(
-        "baseContentRevision is required with headline and summary; use missionSummary.contentRevision from attach"
-      );
-    }
-    narrative = { headline, summary };
-  }
-  const closeItems = [];
-  if (input2.closeItems !== void 0 && input2.closeItems !== null) {
-    if (!Array.isArray(input2.closeItems)) throw invalidInput2("closeItems must be an array");
-    if (input2.closeItems.length > MISSION_SUMMARY_CLOSE_ITEMS_MAX) {
-      throw invalidInput2(`closeItems accepts at most ${MISSION_SUMMARY_CLOSE_ITEMS_MAX} entries`);
-    }
-    input2.closeItems.forEach((entry, index) => {
-      const where = `closeItems[${index}]`;
-      if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
-        throw invalidInput2(`${where} must be an object { id, status, reason }`);
-      }
-      const record2 = entry;
-      const extra = Object.keys(record2).filter((key) => !CLOSE_KEYS.has(key));
-      if (extra.length > 0)
-        throw invalidInput2(`${where} has unsupported field(s): ${extra.join(", ")}`);
-      if (typeof record2.id !== "string" || !record2.id.trim()) {
-        throw invalidInput2(`${where}.id must be an item id from the attach baseline`);
-      }
-      if (typeof record2.status !== "string" || !MISSION_ITEM_CLOSED_STATUSES.includes(record2.status)) {
-        throw invalidInput2(`${where}.status must be 'done' or 'dismissed'`);
-      }
-      const reason = typeof record2.reason === "string" ? record2.reason.trim() : "";
-      if (!reason) throw invalidInput2(`${where}.reason is required`);
-      if (reason.length > MISSION_ITEM_STATUS_REASON_MAX_LENGTH) {
-        throw invalidInput2(
-          `${where}.reason must be at most ${MISSION_ITEM_STATUS_REASON_MAX_LENGTH} characters`
-        );
-      }
-      closeItems.push({
-        id: record2.id.trim(),
-        status: record2.status,
-        reason
+      return await ctx.db.transaction(async (tx) => {
+        const before = await targets(tx);
+        for (const id2 of before) await lockMissionObjectiveQueue(tx, id2);
+        if (JSON.stringify(before) !== JSON.stringify(await targets(tx)))
+          throw new RetryMissionSet();
+        return run(tx);
       });
-    });
-  }
-  if (!narrative && closeItems.length === 0) return null;
-  return { baseContentRevision, narrative, closeItems };
-}
-function missionSummaryStyleWarnings(narrative) {
-  return [...lintSte(narrative.headline), ...lintSte(narrative.summary)].slice(0, MISSION_SUMMARY_MAX_STYLE_WARNINGS).map((issue2) => ({
-    code: "mission_summary_style",
-    rule: issue2.code,
-    message: issue2.message,
-    ..."excerpt" in issue2 && issue2.excerpt ? { excerpt: cut(issue2.excerpt, 300) } : {},
-    ..."suggestion" in issue2 && issue2.suggestion ? { suggestion: issue2.suggestion } : {}
-  }));
-}
-var MissionSummaryConflict = class extends Error {
-  constructor(missionId, baseContentRevision, currentContentRevision) {
-    super("mission_summary_conflict");
-    this.missionId = missionId;
-    this.baseContentRevision = baseContentRevision;
-    this.currentContentRevision = currentContentRevision;
-    this.name = "MissionSummaryConflict";
-  }
-  missionId;
-  baseContentRevision;
-  currentContentRevision;
-};
-async function missionSummaryConflictError(db, conflict) {
-  const baseline = await readMissionSummaryBaseline(db, conflict.missionId);
-  return new ServiceError(
-    `The mission summary changed since you attached (base content revision ${conflict.baseContentRevision}, current ${conflict.currentContentRevision}). Nothing was delivered. Rewrite the headline and summary from details.missionSummary and deliver again with its contentRevision as baseContentRevision; if this happens twice, deliver without headline and summary and say so in the delivery summary.`,
-    "mission_summary_conflict",
-    409,
-    {
-      baseContentRevision: conflict.baseContentRevision,
-      missionSummary: baseline
-    }
-  );
-}
-async function prepareMissionSummaryWrite(tx, {
-  mission,
-  input: input2,
-  checkBase,
-  now: now2 = nowIso()
-}) {
-  const row = await tx.get(
-    `SELECT summary_enabled FROM missions WHERE id = ?`,
-    [mission.id]
-  );
-  const enabled = isSummaryEnabled2(row?.summary_enabled);
-  if (!enabled || !input2.narrative) return { input: input2, enabled, created: false };
-  const inserted = await tx.run(
-    `INSERT INTO mission_summaries
-         (mission_id, workspace_id, project_id, revision, requested_generation,
-          completed_generation, status, headline, summary_markdown,
-          source_delivery_id, generated_by, generated_at, model, created_at, updated_at)
-       VALUES (?, ?, ?, 1, 0, 0, 'composed', '', '', NULL, 'deterministic', NULL, NULL, ?, ?)
-       ON CONFLICT (mission_id) DO NOTHING`,
-    [mission.id, mission.workspaceId, mission.projectId, now2, now2]
-  );
-  await lockMissionSummaryRow(tx, mission.id);
-  if (checkBase && input2.baseContentRevision !== null) {
-    const current = await tx.get(
-      `SELECT content_revision FROM mission_summaries WHERE mission_id = ?`,
-      [mission.id]
-    );
-    const currentRevision = Number(current?.content_revision ?? 0);
-    if (currentRevision !== input2.baseContentRevision) {
-      throw new MissionSummaryConflict(mission.id, input2.baseContentRevision, currentRevision);
+    } catch (error64) {
+      if (!(error64 instanceof RetryMissionSet)) throw error64;
     }
   }
-  return { input: input2, enabled, created: inserted.changes > 0 };
-}
-var SKIP_MESSAGES = {
-  not_found: "no item has this id",
-  other_mission: "the item belongs to another mission",
-  not_open: "the item is no longer open",
-  superseded: "the item was superseded by a later delivery of its objective",
-  duplicate: "the id is listed more than once"
-};
-var STAYS_OPEN = "Say in your final message which item stays open and why.";
-var SKIP_ACTIONS = {
-  not_found: `If you meant an open item of this mission, it stays open. ${STAYS_OPEN}`,
-  other_mission: `If you meant an open item of this mission, it stays open. ${STAYS_OPEN}`,
-  not_open: "No action is needed.",
-  superseded: `Its replacement from the later delivery may still be open. ${STAYS_OPEN}`,
-  duplicate: "The first entry applies; no action is needed."
-};
-async function applyMissionSummaryWrite(tx, {
-  prepared,
-  mission,
-  objectiveId,
-  deliveryId,
-  model,
-  attribution,
-  now: now2 = nowIso()
-}) {
-  const { input: input2, enabled } = prepared;
-  const warnings = [];
-  const closedItemIds = [];
-  const seen = /* @__PURE__ */ new Set();
-  for (const entry of input2.closeItems) {
-    let problem = null;
-    if (seen.has(entry.id)) {
-      problem = "duplicate";
-    } else {
-      seen.add(entry.id);
-      const result2 = await closeMissionItem(tx, {
-        itemId: entry.id,
-        missionId: mission.id,
-        status: entry.status,
-        reason: entry.reason,
-        resolver: { kind: "agent", objectiveId, deliveryId },
-        attribution,
-        now: now2
-      });
-      if (result2.ok) closedItemIds.push(entry.id);
-      else problem = result2.problem;
-    }
-    if (problem !== null) {
-      warnings.push({
-        code: "mission_summary_item_skipped",
-        itemId: cut(entry.id, 80),
-        message: `Item ${cut(entry.id, 80)} was not closed: ${SKIP_MESSAGES[problem]}. ${SKIP_ACTIONS[problem]}`
-      });
-    }
-  }
-  let contentRevision = null;
-  let narrativeWritten = false;
-  if (input2.narrative && !enabled) {
-    warnings.push({
-      code: "mission_summary_disabled",
-      message: "This mission has no summary, so the headline and summary were not stored."
-    });
-  } else if (input2.narrative) {
-    const updated = await tx.get(
-      `UPDATE mission_summaries
-          SET status = 'composed', headline = ?, summary_markdown = ?,
-              source_delivery_id = ?, generated_by = 'agent', generated_at = ?, model = ?,
-              narrative_delivery_id = ?, narrative_objective_id = ?,
-              content_revision = content_revision + 1, revision = revision + 1,
-              completed_generation = requested_generation, updated_at = ?
-        WHERE mission_id = ?
-        RETURNING revision, content_revision`,
-      [
-        input2.narrative.headline,
-        input2.narrative.summary,
-        deliveryId,
-        now2,
-        model,
-        deliveryId,
-        objectiveId,
-        now2,
-        mission.id
-      ]
-    );
-    if (updated) {
-      narrativeWritten = true;
-      contentRevision = Number(updated.content_revision);
-      await recordMissionSummaryChange(tx, {
-        workspaceId: mission.workspaceId,
-        projectId: mission.projectId,
-        missionId: mission.id,
-        revision: Number(updated.revision),
-        operation: prepared.created ? "insert" : "update",
-        changedFields: [
-          "status",
-          "headline",
-          "summary_markdown",
-          "generated_by",
-          "content_revision",
-          "narrative_delivery_id",
-          "narrative_objective_id"
-        ],
-        actorWorkspaceUserId: attribution.actorWorkspaceUserId,
-        actorTokenId: attribution.actorTokenId ?? null,
-        source: attribution.source
-      });
-      warnings.push(...missionSummaryStyleWarnings(input2.narrative));
-    }
-  }
-  if (contentRevision === null && enabled) {
-    const row = await tx.get(
-      `SELECT content_revision FROM mission_summaries WHERE mission_id = ?`,
-      [mission.id]
-    );
-    contentRevision = row ? Number(row.content_revision) : 0;
-  }
-  return {
-    contentRevision,
-    narrativeWritten,
-    closedItemIds,
-    warnings: warnings.slice(0, MISSION_SUMMARY_MAX_WARNINGS)
-  };
 }
 
 // ../packages/core/service/objective-lifecycle-timestamps.ts
@@ -158939,6 +159676,134 @@ var OBJECTIVE_REOPENABLE_STATES = Object.freeze([
   "pending_delivery",
   "complete"
 ]);
+
+// ../packages/core/service/project-items.ts
+var GENERIC = /* @__PURE__ */ new Set([
+  "index.ts",
+  "index.tsx",
+  "index.js",
+  "index.jsx",
+  "readme.md",
+  "package.json",
+  "mod.rs",
+  "lib.rs",
+  "main.rs",
+  "__init__.py",
+  "index.md"
+]);
+var compare = (a5, b5) => a5 < b5 ? -1 : a5 > b5 ? 1 : 0;
+function normalizeItemPath(path29) {
+  const value2 = path29.replace(/\\/g, "/").replace(/^(?:\.\/)+/, "").replace(/\/+/g, "/").replace(/\/$/, "");
+  return !value2 || value2.startsWith("/") || /^[A-Za-z]:/.test(value2) || value2.split("/").some((p3) => p3 === ".." || p3 === ".") ? null : value2;
+}
+function matchProjectItem(text, paths2) {
+  const tokens = new Set(
+    text.match(/[A-Za-z0-9_@.~-]+(?:[\\/][A-Za-z0-9_@.~-]+)*/g)?.map((t) => t.replace(/\\/g, "/").replace(/\.+$/, "")) ?? []
+  );
+  const matches = [];
+  for (const path29 of [
+    ...new Set(paths2.map(normalizeItemPath).filter((p3) => p3 !== null))
+  ].sort(compare)) {
+    const parts = path29.split("/");
+    let score2 = tokens.has(path29) ? 3 : 0;
+    for (let n3 = 2; n3 < parts.length && score2 < 2; n3++) {
+      const prefix = parts.slice(0, n3).join("/");
+      if ([...tokens].some((t) => t === prefix || t.startsWith(prefix + "/"))) score2 = 2;
+    }
+    const base = parts.at(-1);
+    if (!score2 && !GENERIC.has(base.toLowerCase()) && [...tokens].some((t) => t.split("/").at(-1) === base))
+      score2 = 1;
+    if (score2) matches.push({ path: path29, score: score2 });
+  }
+  matches.sort((a5, b5) => b5.score - a5.score || compare(a5.path, b5.path));
+  const score = matches[0]?.score ?? 0;
+  return {
+    paths: matches.slice(0, 5).map((m3) => m3.path),
+    strength: ["none", "weak", "medium", "strong"][score]
+  };
+}
+var FROM = `FROM mission_items mi
+  JOIN deliveries d ON d.id = mi.delivery_id AND d.deleted_at IS NULL
+  JOIN missions m ON m.id = mi.mission_id AND m.deleted_at IS NULL
+  JOIN objectives o ON o.id = mi.objective_id AND o.deleted_at IS NULL
+  WHERE mi.workspace_id = ? AND mi.project_id = ? AND m.workspace_id = mi.workspace_id
+    AND m.project_id = mi.project_id AND mi.status = 'open'`;
+async function countOtherMissionOpenItems(db, scope2) {
+  const row = await db.get(
+    `SELECT COUNT(*) AS total ${FROM} AND mi.mission_id <> ?`,
+    [scope2.workspaceId, scope2.projectId, scope2.missionId]
+  );
+  return Number(row?.total ?? 0);
+}
+async function listProjectItemCandidates(db, scope2, ledger) {
+  const {
+    limit: limit2 = 20,
+    offset = 0,
+    query = "",
+    paths: paths2 = [],
+    kinds = ["risk", "human_action", "suggestion"]
+  } = scope2;
+  if (!Number.isSafeInteger(limit2) || limit2 < 1 || limit2 > 100 || !Number.isSafeInteger(offset) || offset < 0 || query.length > 200 || !kinds.length || kinds.some((k5) => !["risk", "human_action", "suggestion"].includes(k5)) || paths2.length > 200 || paths2.some((p3) => p3.length > 1e3 || !normalizeItemPath(p3))) {
+    throw new ServiceError(
+      "Invalid project-items filters: limit 1..100, non-negative offset, query <=200 characters, valid kinds and <=200 repo-relative paths",
+      "invalid_input",
+      400
+    );
+  }
+  const where = scope2.includeOwnMission ? "" : " AND mi.mission_id <> ?";
+  const params = [
+    scope2.workspaceId,
+    scope2.projectId,
+    ...scope2.includeOwnMission ? [] : [scope2.missionId]
+  ];
+  const count = await db.get(
+    `SELECT COUNT(*) AS total ${FROM}${where}`,
+    params
+  );
+  const rows = await db.all(
+    `SELECT mi.id, mi.kind, mi.text, mi.detail_json, mi.reported_at, m.display_id, m.title, o.display_key ${FROM}${where}
+      ORDER BY d.delivered_at DESC, d.id DESC, mi.kind ASC, mi.position ASC, mi.id ASC LIMIT 2000`,
+    params
+  );
+  const ranked = rows.flatMap((row, order) => {
+    const detail = typeof row.detail_json === "string" ? JSON.parse(row.detail_json) : row.detail_json;
+    const fields = [row.text, detail.change, detail.location, detail.doneWhen].filter((v) => typeof v === "string").join("\n");
+    if (!kinds.includes(row.kind) || !fields.toLowerCase().includes(query.toLowerCase())) return [];
+    const match = matchProjectItem([fields, JSON.stringify(detail), row.title].join("\n"), [
+      ...ledger.paths,
+      ...paths2
+    ]);
+    return [{ order, match, row, detail }];
+  });
+  const scores = { none: 0, weak: 1, medium: 2, strong: 3 };
+  ranked.sort((a5, b5) => scores[b5.match.strength] - scores[a5.match.strength] || a5.order - b5.order);
+  const items = ranked.slice(offset, offset + limit2).map(({ row, detail, match }) => ({
+    id: row.id,
+    kind: row.kind,
+    mission: { displayId: row.display_id, title: row.title },
+    objective: `${row.display_id}.${row.display_key}`,
+    text: row.text.slice(0, 240),
+    ...row.text.length > 240 ? { textTruncated: true } : {},
+    ...typeof detail.location === "string" ? { location: detail.location.slice(0, 240) } : {},
+    blocking: typeof detail.blocking === "boolean" ? detail.blocking : null,
+    reportedAt: row.reported_at instanceof Date ? row.reported_at.toISOString() : row.reported_at,
+    match
+  }));
+  const truncated = offset + items.length < ranked.length;
+  return {
+    responseShapeVersion: 1,
+    projectId: scope2.projectId,
+    excludedMissionId: scope2.includeOwnMission ? null : scope2.missionId,
+    total: ranked.length,
+    items,
+    limit: limit2,
+    offset,
+    nextOffset: truncated ? offset + items.length : null,
+    truncated,
+    scanTruncated: Number(count?.total ?? 0) > 2e3,
+    ledger: { paths: ledger.paths.length, captureGap: ledger.captureGap }
+  };
+}
 
 // ../packages/core/service/target-resource-observations.ts
 var OBSERVATION_STATES = /* @__PURE__ */ new Set([
@@ -159270,6 +160135,934 @@ function formatProjectResourcesInstructions(projectResources) {
     lines.push(`- \`${resource.resourceKey}\` \u2014 ${pathPart} (${resource.state})`);
   }
   return lines.join("\n");
+}
+
+// ../packages/core/service/report-draft.ts
+var import_node_crypto16 = require("node:crypto");
+init_zod();
+var REPORT_DRAFT_CONFLICT = "report_draft_conflict";
+var REPORT_DRAFT_OPERATION_CONFLICT = "report_draft_operation_conflict";
+var REPORT_DRAFT_SEALED = "report_draft_sealed";
+var REPORT_DRAFT_LIMIT_EXCEEDED = "report_draft_limit_exceeded";
+var REPORT_DRAFT_NOT_FOUND = "report_draft_not_found";
+var REPORT_DRAFT_FORBIDDEN = "report_draft_forbidden";
+var DIGEST_VERSION2 = "v1";
+var textContentSchema = external_exports.strictObject({ text: conciseTextSchema });
+var CONTENT_SCHEMAS = {
+  human_action: humanActionSchema,
+  tradeoff: tradeoffSchema,
+  deferred_work: deferredWorkInputSchema,
+  known_risk: textContentSchema,
+  assumption: textContentSchema
+};
+function invalid2(message2) {
+  return new ServiceError(message2, "invalid_input", 400);
+}
+function parseEntryId(value2, field) {
+  if (typeof value2 !== "string" || !REPORT_DRAFT_ENTRY_ID_PATTERN.test(value2)) {
+    throw invalid2(
+      `${field} must be 1-${REPORT_DRAFT_LIMITS.maxEntryIdLength} letters, digits, ".", "_", ":" or "-", starting with a letter or digit`
+    );
+  }
+  return value2;
+}
+function parseOperation(value2, index) {
+  const field = `reportDraft.operations[${index}]`;
+  if (typeof value2 !== "object" || value2 === null || Array.isArray(value2)) {
+    throw invalid2(`${field} must be an object`);
+  }
+  const op2 = value2;
+  const allowed = (keys) => {
+    const extra = Object.keys(op2).filter((key) => !keys.includes(key));
+    if (extra.length > 0) throw invalid2(`${field} has unsupported fields: ${extra.join(", ")}`);
+  };
+  switch (op2.op) {
+    case "upsert": {
+      allowed(["op", "entryId", "kind", "content"]);
+      const entryId = parseEntryId(op2.entryId, `${field}.entryId`);
+      if (typeof op2.kind !== "string" || !REPORT_DRAFT_KINDS.includes(op2.kind)) {
+        throw invalid2(`${field}.kind must be one of: ${REPORT_DRAFT_KINDS.join(", ")}`);
+      }
+      const kind = op2.kind;
+      const parsed = CONTENT_SCHEMAS[kind].safeParse(op2.content);
+      if (!parsed.success) {
+        const issue2 = parsed.error.issues[0];
+        const path29 = issue2?.path.length ? `.${issue2.path.join(".")}` : "";
+        throw invalid2(`${field}.content${path29}: ${issue2?.message ?? `invalid ${kind} content`}`);
+      }
+      return { op: "upsert", entryId, kind, content: parsed.data };
+    }
+    case "withdraw": {
+      allowed(["op", "entryId", "reason"]);
+      const entryId = parseEntryId(op2.entryId, `${field}.entryId`);
+      const reason = typeof op2.reason === "string" ? op2.reason.trim() : "";
+      if (!reason || reason.length > REPORT_DRAFT_LIMITS.maxWithdrawReasonLength) {
+        throw invalid2(
+          `${field}.reason is required, at most ${REPORT_DRAFT_LIMITS.maxWithdrawReasonLength} characters`
+        );
+      }
+      return { op: "withdraw", entryId, reason };
+    }
+    case "import": {
+      allowed(["op", "entryId", "sourceDraftId", "sourceEntryId"]);
+      if (typeof op2.sourceDraftId !== "string" || !op2.sourceDraftId.trim()) {
+        throw invalid2(`${field}.sourceDraftId is required`);
+      }
+      const sourceEntryId = parseEntryId(op2.sourceEntryId, `${field}.sourceEntryId`);
+      const entryId = op2.entryId === void 0 ? sourceEntryId : parseEntryId(op2.entryId, `${field}.entryId`);
+      return { op: "import", entryId, sourceDraftId: op2.sourceDraftId.trim(), sourceEntryId };
+    }
+    default:
+      throw invalid2(`${field}.op must be upsert, withdraw or import`);
+  }
+}
+function parseReportDraftInput(value2, mode) {
+  if (value2 === void 0 || value2 === null) return void 0;
+  if (typeof value2 !== "object" || Array.isArray(value2)) {
+    throw invalid2("reportDraft must be an object");
+  }
+  const input2 = value2;
+  const keys = mode === "update" ? ["operationId", "expectedRevision", "operations"] : ["expectedRevision", "operations"];
+  const extra = Object.keys(input2).filter((key) => !keys.includes(key));
+  if (extra.length > 0) {
+    throw invalid2(
+      mode === "deliver" && extra.includes("operationId") ? "reportDraft.operationId is not accepted on deliver; the delivery operationId identifies the final operations" : `reportDraft has unsupported fields: ${extra.join(", ")}`
+    );
+  }
+  let operationId;
+  if (mode === "update") {
+    if (input2.operationId === void 0 || input2.operationId === null) {
+      throw invalid2(
+        "reportDraft.operationId is required: choose it before sending and reuse it for every retry of this batch"
+      );
+    }
+    operationId = parseOperationId(input2.operationId);
+  }
+  const expectedRevision2 = input2.expectedRevision;
+  if (typeof expectedRevision2 !== "number" || !Number.isInteger(expectedRevision2) || expectedRevision2 < 0) {
+    throw invalid2(
+      "reportDraft.expectedRevision must be a non-negative integer (0 when this session has no draft)"
+    );
+  }
+  const rawOperations = input2.operations;
+  if (rawOperations !== void 0 && !Array.isArray(rawOperations)) {
+    throw invalid2("reportDraft.operations must be an array");
+  }
+  const list2 = rawOperations ?? [];
+  if (mode === "update" && list2.length === 0) {
+    throw invalid2("reportDraft.operations needs at least one operation");
+  }
+  if (list2.length > REPORT_DRAFT_LIMITS.maxOperationsPerBatch) {
+    throw invalid2(
+      `reportDraft.operations accepts at most ${REPORT_DRAFT_LIMITS.maxOperationsPerBatch} operations`
+    );
+  }
+  const operations2 = list2.map((item, index) => parseOperation(item, index));
+  const seen = /* @__PURE__ */ new Set();
+  for (const operation2 of operations2) {
+    if (seen.has(operation2.entryId)) {
+      throw invalid2(
+        `reportDraft.operations names entryId ${operation2.entryId} more than once; send one operation per entry`
+      );
+    }
+    seen.add(operation2.entryId);
+  }
+  return { ...operationId ? { operationId } : {}, expectedRevision: expectedRevision2, operations: operations2 };
+}
+function reportDraftBatchDigest(semantic) {
+  const hash2 = (0, import_node_crypto16.createHash)("sha256").update(canonicalJson({ kind: "report_draft_batch", semantic })).digest("hex");
+  return `${DIGEST_VERSION2}:${hash2}`;
+}
+var DRAFT_COLUMNS = `d.id, d.workspace_id, d.project_id, d.mission_id, d.objective_id, d.session_id,
+  d.owner_workspace_user_id, d.revision, d.batch_count, d.entry_count, d.sealed_at,
+  d.sealed_delivery_id, d.created_at, d.updated_at`;
+var ENTRY_COLUMNS = `id, draft_id, entry_id, kind, content_json, position, withdrawn_at,
+  withdrawn_reason, source_event_id, imported_from_draft_id, imported_from_entry_id, sealed_ref,
+  revision, created_at, updated_at`;
+function iso3(value2) {
+  return new Date(value2).toISOString();
+}
+function isoOrNull(value2) {
+  return value2 === null ? null : iso3(value2);
+}
+function entryContent(row) {
+  return typeof row.content_json === "string" ? JSON.parse(row.content_json) : row.content_json;
+}
+async function loadSessionDraft(db, sessionId) {
+  return await db.get(
+    `SELECT ${DRAFT_COLUMNS} FROM delivery_report_drafts d WHERE d.session_id = ?`,
+    [sessionId]
+  );
+}
+async function loadEntries(db, draftId) {
+  return await db.all(
+    `SELECT ${ENTRY_COLUMNS} FROM delivery_report_draft_entries
+      WHERE draft_id = ? ORDER BY position ASC, entry_id ASC`,
+    [draftId]
+  );
+}
+async function findDraftBatch(db, draftId, operationId) {
+  return await db.get(
+    `SELECT id, draft_id, operation_id, request_digest, result_revision, event_id, accepted_at
+       FROM delivery_report_draft_batches WHERE draft_id = ? AND operation_id = ?`,
+    [draftId, operationId]
+  );
+}
+function emptyCounts() {
+  return { human_action: 0, tradeoff: 0, known_risk: 0, deferred_work: 0, assumption: 0 };
+}
+function toEntryDto(row) {
+  return {
+    entryId: row.entry_id,
+    kind: row.kind,
+    content: entryContent(row),
+    position: Number(row.position),
+    state: row.withdrawn_at === null ? "active" : "withdrawn",
+    withdrawnAt: isoOrNull(row.withdrawn_at),
+    withdrawnReason: row.withdrawn_reason,
+    importedFrom: row.imported_from_draft_id && row.imported_from_entry_id ? { draftId: row.imported_from_draft_id, entryId: row.imported_from_entry_id } : null,
+    sealedRef: row.sealed_ref,
+    revision: Number(row.revision),
+    createdAt: iso3(row.created_at),
+    updatedAt: iso3(row.updated_at)
+  };
+}
+function draftState(draft, session) {
+  if (draft.sealed_at !== null) return "sealed";
+  return session && session.ended_at === null ? "open" : "abandoned";
+}
+function toDraftDto(draft, entries, state2, { includeWithdrawn }) {
+  const activeCounts = emptyCounts();
+  const active = [];
+  const withdrawn = [];
+  for (const row of entries) {
+    if (row.withdrawn_at === null) {
+      activeCounts[row.kind] += 1;
+      active.push(toEntryDto(row));
+    } else {
+      withdrawn.push(toEntryDto(row));
+    }
+  }
+  return {
+    id: draft.id,
+    missionId: draft.mission_id,
+    objectiveId: draft.objective_id,
+    sessionId: draft.session_id,
+    state: state2,
+    revision: Number(draft.revision),
+    batchCount: Number(draft.batch_count),
+    entryCount: Number(draft.entry_count),
+    activeCounts,
+    withdrawnCount: withdrawn.length,
+    sealedAt: isoOrNull(draft.sealed_at),
+    sealedDeliveryId: draft.sealed_delivery_id,
+    createdAt: iso3(draft.created_at),
+    updatedAt: iso3(draft.updated_at),
+    entries: active,
+    ...includeWithdrawn ? { withdrawn } : {}
+  };
+}
+async function sessionEnd(db, sessionId) {
+  return await db.get(
+    `SELECT ended_at FROM agent_sessions WHERE id = ? AND deleted_at IS NULL`,
+    [sessionId]
+  );
+}
+async function readDraftDto(db, draft, options) {
+  const [entries, session] = await Promise.all([
+    loadEntries(db, draft.id),
+    sessionEnd(db, draft.session_id)
+  ]);
+  return toDraftDto(draft, entries, draftState(draft, session), options);
+}
+async function reportDraftConflict(db, draft, message2) {
+  return new ServiceError(message2, REPORT_DRAFT_CONFLICT, 409, {
+    currentRevision: draft ? Number(draft.revision) : 0,
+    draft: draft ? await readDraftDto(db, draft, { includeWithdrawn: false }) : null
+  });
+}
+function reportDraftSealedError(draft) {
+  return new ServiceError(
+    "This report draft was sealed by an accepted delivery and can no longer change.",
+    REPORT_DRAFT_SEALED,
+    409,
+    { draftId: draft.id, sealedDeliveryId: draft.sealed_delivery_id }
+  );
+}
+function limitExceeded(message2, details) {
+  return new ServiceError(message2, REPORT_DRAFT_LIMIT_EXCEEDED, 409, {
+    ...details,
+    limits: REPORT_DRAFT_LIMITS
+  });
+}
+function assertBatchReplayMatches(batch, digest6) {
+  if (batch.request_digest !== digest6) {
+    throw new ServiceError(
+      "This reportDraft.operationId was already accepted with a different request. Retry with the original request, or use a new operationId for a new batch.",
+      REPORT_DRAFT_OPERATION_CONFLICT,
+      409,
+      { operationId: batch.operation_id, revision: Number(batch.result_revision) }
+    );
+  }
+}
+function replayedBatch(batch, draft) {
+  return {
+    eventId: batch.event_id,
+    reportDraft: {
+      draftId: batch.draft_id,
+      operationId: batch.operation_id,
+      revision: Number(batch.result_revision),
+      replayed: true,
+      currentRevision: Number(draft.revision)
+    }
+  };
+}
+async function loadImportSource(db, scope2, ownDraftId, sourceDraftId, sourceEntryId) {
+  const notFound2 = () => new ServiceError(
+    `Import source ${sourceDraftId}/${sourceEntryId} is not an active entry of an abandoned draft of this objective`,
+    REPORT_DRAFT_NOT_FOUND,
+    404
+  );
+  if (sourceDraftId === ownDraftId) throw notFound2();
+  const source = await db.get(
+    `SELECT d.id FROM delivery_report_drafts d
+       JOIN agent_sessions s ON s.id = d.session_id
+      WHERE d.id = ? AND d.workspace_id = ? AND d.objective_id = ? AND d.sealed_at IS NULL
+        AND s.ended_at IS NOT NULL`,
+    [sourceDraftId, scope2.workspaceId, scope2.objectiveId]
+  );
+  if (!source) throw notFound2();
+  const row = await db.get(
+    `SELECT ${ENTRY_COLUMNS} FROM delivery_report_draft_entries
+      WHERE draft_id = ? AND entry_id = ? AND withdrawn_at IS NULL`,
+    [sourceDraftId, sourceEntryId]
+  );
+  if (!row) throw notFound2();
+  return { draftId: sourceDraftId, row };
+}
+async function applyDraftOperations(tx, {
+  ctx,
+  scope: scope2,
+  draft,
+  operations: operations2,
+  eventId,
+  countBatch,
+  now: now2
+}) {
+  if (countBatch && draft && Number(draft.batch_count) >= REPORT_DRAFT_LIMITS.maxBatches) {
+    throw limitExceeded(
+      `This draft already retains ${REPORT_DRAFT_LIMITS.maxBatches} accepted batches; no further batches are accepted. Deliver with final operations instead.`,
+      { batchCount: Number(draft.batch_count) }
+    );
+  }
+  const existing = draft ? await loadEntries(tx, draft.id) : [];
+  const byId = new Map(existing.map((row) => [row.entry_id, row]));
+  const planned = [];
+  const upserted = [];
+  const withdrawn = [];
+  const imported = [];
+  const projected = new Map(
+    existing.map((row) => [row.entry_id, { kind: row.kind, active: row.withdrawn_at === null }])
+  );
+  for (const operation2 of operations2) {
+    const current = byId.get(operation2.entryId);
+    if (operation2.op === "withdraw") {
+      if (!current) {
+        throw invalid2(`reportDraft cannot withdraw unknown entryId ${operation2.entryId}`);
+      }
+      if (current.withdrawn_at === null) {
+        planned.push({ type: "withdraw", row: current, reason: operation2.reason });
+        projected.set(operation2.entryId, { kind: current.kind, active: false });
+      }
+      withdrawn.push(operation2.entryId);
+      continue;
+    }
+    let kind;
+    let content;
+    let importedFrom = null;
+    if (operation2.op === "import") {
+      const source = await loadImportSource(
+        tx,
+        scope2,
+        draft?.id ?? null,
+        operation2.sourceDraftId,
+        operation2.sourceEntryId
+      );
+      kind = source.row.kind;
+      content = entryContent(source.row);
+      importedFrom = { draftId: source.draftId, entryId: source.row.entry_id };
+      imported.push(operation2.entryId);
+    } else {
+      kind = operation2.kind;
+      content = operation2.content;
+      upserted.push(operation2.entryId);
+    }
+    if (current) {
+      if (current.kind !== kind) {
+        throw invalid2(
+          `reportDraft entryId ${operation2.entryId} is a ${current.kind} entry; its kind cannot change (withdraw it and use a new entryId)`
+        );
+      }
+      const unchanged = current.withdrawn_at === null && canonicalJson(entryContent(current)) === canonicalJson(content) && importedFrom === null;
+      if (!unchanged) planned.push({ type: "update", row: current, content, importedFrom });
+    } else {
+      planned.push({ type: "insert", entryId: operation2.entryId, kind, content, importedFrom });
+    }
+    projected.set(operation2.entryId, { kind, active: true });
+  }
+  if (projected.size > REPORT_DRAFT_LIMITS.maxEntryIds) {
+    throw limitExceeded(
+      `A draft retains at most ${REPORT_DRAFT_LIMITS.maxEntryIds} distinct entry ids, withdrawn ones included. Reuse an existing entryId instead.`,
+      { entryCount: projected.size }
+    );
+  }
+  const activeCounts = emptyCounts();
+  for (const value2 of projected.values()) if (value2.active) activeCounts[value2.kind] += 1;
+  for (const kind of REPORT_DRAFT_KINDS) {
+    if (activeCounts[kind] > REPORT_DRAFT_LIMITS.maxActivePerKind) {
+      throw limitExceeded(
+        `A draft holds at most ${REPORT_DRAFT_LIMITS.maxActivePerKind} active ${kind} entries; withdraw or amend existing entries first.`,
+        { kind, active: activeCounts[kind] }
+      );
+    }
+  }
+  let header;
+  if (!draft) {
+    header = {
+      id: newId(),
+      workspace_id: scope2.workspaceId,
+      project_id: scope2.projectId,
+      mission_id: scope2.missionId,
+      objective_id: scope2.objectiveId,
+      session_id: scope2.sessionId,
+      owner_workspace_user_id: scope2.ownerWorkspaceUserId,
+      revision: 1,
+      batch_count: countBatch ? 1 : 0,
+      entry_count: projected.size,
+      sealed_at: null,
+      sealed_delivery_id: null,
+      created_at: now2,
+      updated_at: now2
+    };
+    await tx.run(
+      `INSERT INTO delivery_report_drafts
+         (id, workspace_id, project_id, mission_id, objective_id, session_id,
+          owner_workspace_user_id, revision, batch_count, entry_count, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        header.id,
+        header.workspace_id,
+        header.project_id,
+        header.mission_id,
+        header.objective_id,
+        header.session_id,
+        header.owner_workspace_user_id,
+        header.revision,
+        header.batch_count,
+        header.entry_count,
+        now2,
+        now2
+      ]
+    );
+  } else {
+    header = {
+      ...draft,
+      revision: Number(draft.revision) + 1,
+      batch_count: Number(draft.batch_count) + (countBatch ? 1 : 0),
+      entry_count: projected.size,
+      updated_at: now2
+    };
+    await tx.run(
+      `UPDATE delivery_report_drafts
+          SET revision = ?, batch_count = ?, entry_count = ?, updated_at = ?
+        WHERE id = ? AND revision = ?`,
+      [
+        header.revision,
+        header.batch_count,
+        header.entry_count,
+        now2,
+        draft.id,
+        Number(draft.revision)
+      ]
+    );
+  }
+  let nextPosition = existing.reduce((max, row) => Math.max(max, Number(row.position) + 1), 0);
+  for (const step of planned) {
+    if (step.type === "insert") {
+      await tx.run(
+        `INSERT INTO delivery_report_draft_entries
+           (id, draft_id, workspace_id, entry_id, kind, content_json, position, source_event_id,
+            imported_from_draft_id, imported_from_entry_id, revision, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
+        [
+          newId(),
+          header.id,
+          scope2.workspaceId,
+          step.entryId,
+          step.kind,
+          JSON.stringify(step.content),
+          nextPosition,
+          eventId,
+          step.importedFrom?.draftId ?? null,
+          step.importedFrom?.entryId ?? null,
+          now2,
+          now2
+        ]
+      );
+      nextPosition += 1;
+    } else if (step.type === "update") {
+      await tx.run(
+        `UPDATE delivery_report_draft_entries
+            SET content_json = ?, withdrawn_at = NULL, withdrawn_reason = NULL,
+                source_event_id = ?, imported_from_draft_id = ?, imported_from_entry_id = ?,
+                revision = revision + 1, updated_at = ?
+          WHERE id = ?`,
+        [
+          JSON.stringify(step.content),
+          eventId,
+          step.importedFrom?.draftId ?? step.row.imported_from_draft_id,
+          step.importedFrom?.entryId ?? step.row.imported_from_entry_id,
+          now2,
+          step.row.id
+        ]
+      );
+    } else {
+      await tx.run(
+        `UPDATE delivery_report_draft_entries
+            SET withdrawn_at = ?, withdrawn_reason = ?, source_event_id = ?,
+                revision = revision + 1, updated_at = ?
+          WHERE id = ?`,
+        [now2, step.reason, eventId, now2, step.row.id]
+      );
+    }
+  }
+  await recordChange({
+    ctx: { ...ctx, db: tx },
+    entityType: "delivery_report_draft",
+    entityId: header.id,
+    operation: draft ? "update" : "insert",
+    entityRevision: header.revision,
+    projectId: scope2.projectId,
+    missionId: scope2.missionId,
+    objectiveId: scope2.objectiveId,
+    changedFields: ["revision", "entries"]
+  });
+  return {
+    draft: header,
+    entries: await loadEntries(tx, header.id),
+    upserted,
+    withdrawn,
+    imported
+  };
+}
+async function insertDraftBatchReceipt(tx, {
+  draft,
+  operationId,
+  digest: digest6,
+  eventId,
+  operationCount,
+  now: now2
+}) {
+  await tx.run(
+    `INSERT INTO delivery_report_draft_batches
+       (id, draft_id, workspace_id, operation_id, request_digest, result_revision, event_id,
+        operation_count, accepted_at, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      newId(),
+      draft.id,
+      draft.workspace_id,
+      operationId,
+      digest6,
+      Number(draft.revision),
+      eventId,
+      operationCount,
+      now2,
+      now2
+    ]
+  );
+}
+function activeCountsOf(entries) {
+  const counts = emptyCounts();
+  for (const row of entries) if (row.withdrawn_at === null) counts[row.kind] += 1;
+  return counts;
+}
+var AGENT_REPORT_KEYS = /* @__PURE__ */ new Set([
+  "humanActions",
+  "tradeoffsMade",
+  "knownRisks",
+  "deferredWork",
+  "assumptions"
+]);
+var KIND_FIELDS = [
+  { kind: "human_action", field: "humanActions" },
+  { kind: "tradeoff", field: "tradeoffsMade" },
+  { kind: "known_risk", field: "knownRisks" },
+  { kind: "deferred_work", field: "deferredWork" },
+  { kind: "assumption", field: "assumptions" }
+];
+var TEXT_KINDS = /* @__PURE__ */ new Set(["known_risk", "assumption"]);
+function legacyItems(deliveryReport, warnings) {
+  const out = {
+    human_action: [],
+    tradeoff: [],
+    known_risk: [],
+    deferred_work: [],
+    assumption: []
+  };
+  if (deliveryReport === void 0 || deliveryReport === null) return out;
+  if (typeof deliveryReport !== "object" || Array.isArray(deliveryReport)) {
+    warnings.push("Ignored deliveryReport: expected an object.");
+    return out;
+  }
+  const root5 = deliveryReport;
+  if (root5.schemaVersion !== 1) {
+    warnings.push("Ignored deliveryReport: schemaVersion must be 1.");
+    return out;
+  }
+  const report2 = root5.agentReport;
+  if (report2 === void 0) return out;
+  if (typeof report2 !== "object" || report2 === null || Array.isArray(report2)) {
+    warnings.push("Ignored deliveryReport.agentReport: expected an object.");
+    return out;
+  }
+  const fields = report2;
+  if (Object.keys(fields).some((key) => !AGENT_REPORT_KEYS.has(key))) {
+    warnings.push("Ignored unsupported deliveryReport.agentReport fields.");
+  }
+  for (const { kind, field } of KIND_FIELDS) {
+    const value2 = fields[field];
+    if (value2 === void 0) continue;
+    if (!Array.isArray(value2)) {
+      warnings.push(`Ignored deliveryReport.agentReport.${field}: expected an array.`);
+      continue;
+    }
+    value2.forEach((item, index) => {
+      const candidate = TEXT_KINDS.has(kind) ? typeof item === "string" ? { text: item } : null : item;
+      const parsed = CONTENT_SCHEMAS[kind].safeParse(candidate);
+      if (parsed.success) out[kind].push(parsed.data);
+      else
+        warnings.push(
+          `Ignored deliveryReport.agentReport.${field}[${index}]: invalid advisory item.`
+        );
+    });
+  }
+  return out;
+}
+function mergeDraftEvidence(activeEntries, legacyDeliveryReport) {
+  const warnings = [];
+  const legacy = legacyItems(legacyDeliveryReport, warnings);
+  const merged = {
+    human_action: [],
+    tradeoff: [],
+    known_risk: [],
+    deferred_work: [],
+    assumption: []
+  };
+  const keys = {
+    human_action: /* @__PURE__ */ new Set(),
+    tradeoff: /* @__PURE__ */ new Set(),
+    known_risk: /* @__PURE__ */ new Set(),
+    deferred_work: /* @__PURE__ */ new Set(),
+    assumption: /* @__PURE__ */ new Set()
+  };
+  for (const entry of activeEntries) {
+    merged[entry.kind].push({ entryId: entry.entry_id, content: entry.content });
+    keys[entry.kind].add(canonicalJson(entry.content));
+  }
+  for (const { kind } of KIND_FIELDS) {
+    for (const content of legacy[kind]) {
+      if (keys[kind].has(canonicalJson(content))) continue;
+      merged[kind].push({ entryId: null, content });
+    }
+    if (merged[kind].length > REPORT_DRAFT_LIMITS.maxActivePerKind) {
+      throw limitExceeded(
+        `The merged report has ${merged[kind].length} ${kind} items; at most ${REPORT_DRAFT_LIMITS.maxActivePerKind} are accepted. Withdraw draft entries or drop final items; nothing is truncated.`,
+        { kind, active: merged[kind].length }
+      );
+    }
+  }
+  const refs = [];
+  let humanIndex = 0;
+  for (const item of merged.human_action) {
+    const action = String(item.content.action ?? "");
+    if (isDisplayableHumanAction(action)) {
+      humanIndex += 1;
+      refs.push({ entryId: item.entryId, kind: "human_action", ref: `human-action-${humanIndex}` });
+    } else {
+      refs.push({
+        entryId: item.entryId,
+        kind: "human_action",
+        ref: null,
+        excludedReason: "not_a_human_action"
+      });
+      warnings.push(
+        `Excluded human action ${item.entryId ? `draft entry ${item.entryId}` : `"${action.slice(0, 60)}"`}: Git operations and routine review/testing are not human actions.`
+      );
+    }
+  }
+  merged.tradeoff.forEach(
+    (item, index) => refs.push({ entryId: item.entryId, kind: "tradeoff", ref: `tradeoff-${index + 1}` })
+  );
+  merged.deferred_work.forEach(
+    (item, index) => refs.push({
+      entryId: item.entryId,
+      kind: "deferred_work",
+      ref: deferredWorkId(index, item.content)
+    })
+  );
+  merged.known_risk.forEach(
+    (item, index) => refs.push({ entryId: item.entryId, kind: "known_risk", ref: `knownRisks[${index}]` })
+  );
+  merged.assumption.forEach(
+    (item, index) => refs.push({ entryId: item.entryId, kind: "assumption", ref: `assumptions[${index}]` })
+  );
+  const text = (items) => items.map((item) => String(item.content.text));
+  return {
+    deliveryReport: {
+      schemaVersion: 1,
+      agentReport: {
+        humanActions: merged.human_action.map((item) => item.content),
+        tradeoffsMade: merged.tradeoff.map((item) => item.content),
+        knownRisks: text(merged.known_risk),
+        deferredWork: merged.deferred_work.map((item) => item.content),
+        assumptions: text(merged.assumption)
+      }
+    },
+    refs,
+    warnings
+  };
+}
+function applyEligibilityToRefs(refs, eligible, warnings) {
+  const kept = new Set(eligible.presentation.deferredWork.map((item) => item.id));
+  return refs.map((ref) => {
+    if (ref.kind !== "deferred_work" || ref.ref === null || kept.has(ref.ref)) return ref;
+    warnings.push(
+      `Deferred work ${ref.entryId ? `draft entry ${ref.entryId}` : ref.ref} is kept in the accepted report but not shown as out-of-mission work: it matches this objective, a planned objective or a human action.`
+    );
+    return { ...ref, excludedReason: "not_out_of_mission_work" };
+  });
+}
+async function sealDraft(tx, {
+  ctx,
+  draft,
+  refs,
+  entries,
+  deliveryId,
+  now: now2
+}) {
+  const refByEntry = new Map(
+    refs.filter((ref) => ref.entryId !== null).map((ref) => [ref.entryId, ref.ref])
+  );
+  const active = entries.filter((row) => row.withdrawn_at === null);
+  for (const row of active) {
+    const ref = refByEntry.get(row.entry_id) ?? null;
+    if (ref === null) continue;
+    await tx.run(`UPDATE delivery_report_draft_entries SET sealed_ref = ? WHERE id = ?`, [
+      ref,
+      row.id
+    ]);
+  }
+  const revision3 = Number(draft.revision) + 1;
+  await tx.run(
+    `UPDATE delivery_report_drafts
+        SET sealed_at = ?, sealed_delivery_id = ?, revision = ?, updated_at = ?
+      WHERE id = ? AND sealed_at IS NULL`,
+    [now2, deliveryId, revision3, now2, draft.id]
+  );
+  await recordChange({
+    ctx: { ...ctx, db: tx },
+    entityType: "delivery_report_draft",
+    entityId: draft.id,
+    operation: "update",
+    entityRevision: revision3,
+    projectId: draft.project_id,
+    missionId: draft.mission_id,
+    objectiveId: draft.objective_id,
+    changedFields: ["sealed_at", "sealed_delivery_id"]
+  });
+  return {
+    draftId: draft.id,
+    revision: revision3,
+    activeEntries: active.length,
+    refs: active.map((row) => ({ entryId: row.entry_id, ref: refByEntry.get(row.entry_id) ?? null }))
+  };
+}
+function activeEntryInputs(entries) {
+  return entries.filter((row) => row.withdrawn_at === null).map((row) => ({ entry_id: row.entry_id, kind: row.kind, content: entryContent(row) }));
+}
+async function abandonedDrafts(db, {
+  workspaceId: workspaceId2,
+  objectiveId,
+  exceptDraftId,
+  limit: limit2 = 10
+}) {
+  const rows = await db.all(
+    `SELECT d.id, d.session_id, d.revision, d.updated_at,
+            (SELECT COUNT(*) FROM delivery_report_draft_entries e
+              WHERE e.draft_id = d.id AND e.withdrawn_at IS NULL) AS active
+       FROM delivery_report_drafts d
+       JOIN agent_sessions s ON s.id = d.session_id
+      WHERE d.workspace_id = ? AND d.objective_id = ? AND d.sealed_at IS NULL
+        AND s.ended_at IS NOT NULL AND d.id <> ?
+      ORDER BY d.updated_at DESC, d.id DESC
+      LIMIT ?`,
+    [workspaceId2, objectiveId, exceptDraftId ?? "", limit2]
+  );
+  return rows.map((row) => ({
+    draftId: row.id,
+    sessionId: row.session_id,
+    state: "abandoned",
+    revision: Number(row.revision),
+    activeEntryCount: Number(row.active),
+    updatedAt: iso3(row.updated_at)
+  }));
+}
+async function readReportDraftAttachBaseline(db, {
+  workspaceId: workspaceId2,
+  objectiveId,
+  sessionId
+}) {
+  const own2 = sessionId ? await loadSessionDraft(db, sessionId) : void 0;
+  const ownOpen = own2 && own2.sealed_at === null ? own2 : void 0;
+  const abandoned = await abandonedDrafts(db, {
+    workspaceId: workspaceId2,
+    objectiveId,
+    exceptDraftId: own2?.id ?? null,
+    limit: 5
+  });
+  if (!ownOpen && abandoned.length === 0) return void 0;
+  let current = null;
+  if (ownOpen) {
+    const entries = await loadEntries(db, ownOpen.id);
+    current = {
+      draftId: ownOpen.id,
+      revision: Number(ownOpen.revision),
+      activeCounts: activeCountsOf(entries),
+      withdrawnCount: entries.filter((row) => row.withdrawn_at !== null).length
+    };
+  }
+  return { current, abandoned };
+}
+async function readReportDraft({
+  ctx,
+  missionId,
+  sessionKey,
+  draftId,
+  includeWithdrawn = false
+}) {
+  const mission = await resolveMissionId(ctx, missionId);
+  const session = await ctx.db.get(
+    `SELECT id, mission_id, objective_id, ended_at, delivery_state FROM agent_sessions
+      WHERE workspace_id = ? AND session_key_hash = ? AND deleted_at IS NULL
+      ORDER BY started_at DESC LIMIT 1`,
+    [ctx.workspace.id, hashSessionKey(sessionKey)]
+  );
+  if (!session || session.mission_id !== mission.id) {
+    throw new ServiceError("Invalid or expired session key", "invalid_session", 401);
+  }
+  const own2 = await loadSessionDraft(ctx.db, session.id);
+  let target = own2;
+  if (draftId && draftId !== own2?.id) {
+    const other = await ctx.db.get(
+      `SELECT ${DRAFT_COLUMNS} FROM delivery_report_drafts d
+        WHERE d.id = ? AND d.workspace_id = ? AND d.objective_id = ?`,
+      [draftId, ctx.workspace.id, session.objective_id]
+    );
+    const otherSession = other ? await sessionEnd(ctx.db, other.session_id) : void 0;
+    if (!other || draftState(other, otherSession) === "open") {
+      throw new ServiceError("Report draft not found", REPORT_DRAFT_NOT_FOUND, 404);
+    }
+    target = other;
+  }
+  const abandoned = await abandonedDrafts(ctx.db, {
+    workspaceId: ctx.workspace.id,
+    objectiveId: session.objective_id,
+    exceptDraftId: own2?.id ?? null
+  });
+  if (!target) {
+    return { draft: null, revision: 0, inspection: null, abandoned, limits: REPORT_DRAFT_LIMITS };
+  }
+  const dto = await readDraftDto(ctx.db, target, { includeWithdrawn });
+  const inspection = target === own2 && dto.state === "open" ? await inspectDraft(ctx, {
+    missionId: mission.id,
+    objectiveId: session.objective_id,
+    entries: await loadEntries(ctx.db, target.id)
+  }) : null;
+  return {
+    draft: dto,
+    revision: dto.revision,
+    inspection,
+    abandoned,
+    limits: REPORT_DRAFT_LIMITS
+  };
+}
+async function deliveryEligibilityContext(ctx, { missionId, objectiveId }) {
+  const objectives = await listObjectives({ ctx, missionId });
+  const current = objectives.find((objective) => objective.id === objectiveId);
+  const plannedObjectives = objectives.filter(
+    (objective) => objective.id !== objectiveId && objective.state !== "complete" && Boolean(objective.objective?.trim())
+  ).map((objective) => ({ title: objective.title, instruction: objective.objective }));
+  const changed = await ctx.db.all(
+    `SELECT file_path FROM changed_files WHERE objective_id = ? AND deleted_at IS NULL`,
+    [objectiveId]
+  );
+  return {
+    currentObjective: current ? { title: current.title, instruction: current.objective } : null,
+    plannedObjectives,
+    candidateActions: deriveDeterministicActionCandidates({
+      filePaths: changed.map((row) => row.file_path)
+    })
+  };
+}
+async function inspectDraft(ctx, {
+  missionId,
+  objectiveId,
+  entries
+}) {
+  let merge3;
+  try {
+    merge3 = mergeDraftEvidence(activeEntryInputs(entries), void 0);
+  } catch (error64) {
+    if (error64 instanceof ServiceError) {
+      return {
+        agentReport: {
+          humanActions: [],
+          tradeoffsMade: [],
+          knownRisks: [],
+          deferredWork: [],
+          assumptions: []
+        },
+        entries: [],
+        warnings: [error64.message]
+      };
+    }
+    throw error64;
+  }
+  const report2 = buildDeliveryReport({ summary: "", deliveryReport: merge3.deliveryReport });
+  const eligible = applyDeferredWorkEligibility({
+    report: report2,
+    ...await deliveryEligibilityContext(ctx, { missionId, objectiveId })
+  });
+  const warnings = [...merge3.warnings, ...report2.warnings ?? []];
+  const refs = applyEligibilityToRefs(merge3.refs, eligible, warnings);
+  return { agentReport: eligible.agentReport, entries: refs, warnings };
+}
+async function listObjectiveReportDrafts(db, {
+  workspaceId: workspaceId2,
+  objectiveId,
+  limit: limit2 = 20
+}) {
+  const drafts = await db.all(
+    `SELECT ${DRAFT_COLUMNS} FROM delivery_report_drafts d
+      WHERE d.workspace_id = ? AND d.objective_id = ?
+      ORDER BY d.created_at DESC, d.id DESC
+      LIMIT ?`,
+    [workspaceId2, objectiveId, limit2]
+  );
+  const out = [];
+  for (const draft of drafts) out.push(await readDraftDto(db, draft, { includeWithdrawn: true }));
+  return out;
 }
 
 // ../packages/core/service/workspace-members.ts
@@ -159611,8 +161404,9 @@ function splitObjectivesAroundCurrent({
 function missionSummaryInstructions(style) {
   const send = style === "mcp" ? "Send them as `missionSummary` on `overlord_deliver_session`:" : "Send them as `missionSummary` in the delivery payload (`--payload-file` or `--mission-summary-file`):";
   return `At delivery, update the mission summary for the whole mission, not only this objective. The
-current text, its \`contentRevision\` and the open items with their ids are in the top-level
-\`missionSummary\` field of this response.
+current text, its \`contentRevision\` and \`evidenceRevision\`, and the open items with their ids
+are in the top-level \`missionSummary\` field of this response. Only agents write this summary;
+nothing generates it for you.
 
 1. Check every item in \`missionSummary.openItems\` against the work you verified. Close it as
    \`done\` if the work is complete, or \`dismissed\` if it no longer applies, with a reason of at
@@ -159624,9 +161418,12 @@ current text, its \`contentRevision\` and the open items with their ids are in t
    outcomes that still hold and remove claims that later work replaced. Say whether each claim is
    implemented, tested or deployed. State only durable limits; do not repeat open items.
 4. ${send}
-   { "baseContentRevision": <missionSummary.contentRevision>, "headline": "...", "summary": "...",
+   { "baseContentRevision": <missionSummary.contentRevision>,
+     "baseEvidenceRevision": <missionSummary.evidenceRevision>, "headline": "...", "summary": "...",
      "closeItems": [{ "id": "<item id>", "status": "done" | "dismissed", "reason": "..." }] }
-   \`closeItems\` (at most 50) may be sent alone.
+   \`closeItems\` (at most 50) may be sent alone. If other work changed the mission since your
+   baseline, the delivery is still accepted but your headline and summary are withheld; the
+   response then tells you how to publish once for this delivery.
 
 For full detail or overflow, ${style === "mcp" ? "call `overlord_mission_items` with `missionId`, `sessionKey`, `limit` and `offset`; follow `nextOffset` until null. Close verified items with `overlord_close_items` (`missionId`, `sessionKey`, `closeItems`)." : "run `ovld protocol mission-items --mission-id <id> --limit 60 --offset 0`; follow `nextOffset` until null. Close verified items with `ovld protocol close-items --mission-id <id> --close-items-file <path|->`."}
 If delivery returns a mission-summary error or warning, follow the steps in its message.`;
@@ -159667,11 +161464,12 @@ function assembleAgentInstructions({
   agentInstructions,
   projectResourcesSection = null,
   missionSummary = false,
+  otherMissionOpenItems = 0,
   attachments = [],
   style = "cli",
   compactContext = false
 }) {
-  const objectiveLabel2 = objective.title?.trim() || `Objective ${objective.position + 1}`;
+  const objectiveLabel = objective.title?.trim() || `Objective ${objective.position + 1}`;
   const mcp = style === "mcp";
   const attachmentsSection = attachmentsInstructions({ mission, objective, attachments, style });
   return [
@@ -159681,7 +161479,7 @@ function assembleAgentInstructions({
     ``,
     mcp ? `Mission ID: ${mission.displayId}  <- pass as \`missionId\` on Overlord tool calls` : `Mission ID: ${mission.displayId}  <- pass this to every \`ovld protocol ... --mission-id\` call`,
     mcp ? `Objective ID: ${objective.displayId}  <- pass as \`objectiveId\`; never as \`missionId\`` : `Objective ID: ${objective.displayId}  <- pass as --objective-id on attach; never as --mission-id`,
-    `Objective: ${objectiveLabel2}`,
+    `Objective: ${objectiveLabel}`,
     `Project: ${projectName}`,
     "",
     "## Context Location",
@@ -159700,6 +161498,7 @@ function assembleAgentInstructions({
     missionSummary ? "## Mission summary" : null,
     missionSummary ? missionSummaryInstructions(style) : null,
     missionSummary ? "" : null,
+    otherMissionOpenItems > 0 ? `Other missions in this project have ${otherMissionOpenItems} open items. Before delivery, run ${mcp ? "overlord_project_items" : "`ovld protocol project-items`"} once. Verify in code that work resolved or obsoleted each item before closing; similarity is insufficient. Give a reason naming the verified change. Close with ${mcp ? "overlord_close_items" : "`close-items`"} while working or delivery missionSummary.closeItems. Retain the same delivery operation id and semantic body for uncertain-response replay. Accepted withheld prose uses ${mcp ? "overlord_delivery_summary_context and overlord_publish_delivery_summary" : "`delivery-summary-context` and `publish-delivery-summary`"} with fresh content/evidence bases and a separate retained publication operation id; never resend closes to publication.` : null,
     "## Important Notes",
     `- Other agents may be working on the same branch as you, so you may notice file changes that are not yours. EXCLUDE THESE FROM THE FILE CHANGES YOU REPORT.`,
     agentInstructions ? "" : null,
@@ -159834,6 +161633,11 @@ async function contextForObjective({
   });
   const projectResourcesSection = formatProjectResourcesInstructions(projectResources);
   const missionSummary = includeMissionSummary ? await readMissionSummaryBaseline(ctx.db, mission.id) : null;
+  const otherMissionOpenItems = includeMissionSummary ? await countOtherMissionOpenItems(ctx.db, {
+    workspaceId: ctx.workspace.id,
+    projectId: mission.projectId,
+    missionId: mission.id
+  }) : 0;
   return {
     agentInstructions: assembleAgentInstructions({
       mission,
@@ -159842,6 +161646,7 @@ async function contextForObjective({
       agentInstructions,
       projectResourcesSection,
       missionSummary: missionSummary !== null,
+      otherMissionOpenItems,
       attachments,
       style,
       compactContext: includeMissionSummary
@@ -159860,7 +161665,7 @@ async function contextForObjective({
     attachments,
     sharedState,
     ...projectResources.length > 0 ? { projectResources } : {},
-    ...missionSummary ? { missionSummary } : {}
+    ...missionSummary ? { missionSummary: { ...missionSummary, otherMissionOpenItems } } : {}
   };
 }
 async function loadMissionContext({
@@ -160008,8 +161813,14 @@ async function attachSession({
         agentIdentifier
       });
     }
+    const reattachDraft = await readReportDraftAttachBaseline(ctx.db, {
+      workspaceId: ctx.workspace.id,
+      objectiveId: existing.objective_id,
+      sessionId: existing.id
+    });
     return {
       ...refreshedContext2,
+      ...reattachDraft ? { reportDraft: reattachDraft } : {},
       session: {
         id: existing.id,
         sessionKey: existingSessionKey,
@@ -160152,8 +161963,14 @@ async function attachSession({
     includeMissionSummary: true,
     style: instructionStyleFor(connectionMethod)
   });
+  const abandonedDrafts2 = await readReportDraftAttachBaseline(ctx.db, {
+    workspaceId: ctx.workspace.id,
+    objectiveId: objective.id,
+    sessionId: null
+  });
   return {
     ...refreshedContext,
+    ...abandonedDrafts2 ? { reportDraft: abandonedDrafts2 } : {},
     mission: refreshedMission,
     objective: refreshedObjective,
     session: {
@@ -160191,7 +162008,7 @@ async function connectSession({
   };
 }
 function promptHash(prompt) {
-  return (0, import_node_crypto14.createHash)("sha256").update(prompt).digest("hex");
+  return (0, import_node_crypto17.createHash)("sha256").update(prompt).digest("hex");
 }
 function objectiveFromSession(objectives, session) {
   if (!session) return void 0;
@@ -160359,6 +162176,7 @@ async function resumeFollowUp({
   const eventId = newId();
   await ctx.db.transaction(async (tx) => {
     const txCtx = { ...ctx, db: tx };
+    await lockMissionObjectiveQueue(tx, mission.id);
     await txCtx.db.run(
       `UPDATE objectives
          SET state = 'pending_delivery', completed_at = NULL, updated_at = ?, revision = revision + 1
@@ -160411,6 +162229,12 @@ async function resumeFollowUp({
       ]
     );
     await moveMissionToExecute({ ctx: txCtx, missionId: mission.id });
+    await advanceMissionNarrativeEvidence(tx, {
+      mission: { id: mission.id },
+      reason: "follow_up",
+      attribution: missionItemAttribution(ctx),
+      now: now2
+    });
     await recordChange({
       ctx: txCtx,
       entityType: "objective",
@@ -160452,8 +162276,14 @@ async function resumeFollowUp({
     includeMissionSummary: true,
     style: instructionStyleFor(connectionMethod)
   });
+  const followUpDrafts = await readReportDraftAttachBaseline(ctx.db, {
+    workspaceId: ctx.workspace.id,
+    objectiveId: selectedObjective.id,
+    sessionId: null
+  });
   return {
     ...context,
+    ...followUpDrafts ? { reportDraft: followUpDrafts } : {},
     session: {
       id: sessionId,
       sessionKey: rawKey2,
@@ -161014,35 +162844,59 @@ async function updateSession2({
   summary,
   phase,
   eventType = "update",
-  payloadJson,
+  payloadJson: rawPayloadJson,
   externalUrl,
   externalSessionId: externalSessionId2,
   beginFollowUpWork = false,
   followUpIntent,
-  declaredPaths
+  declaredPaths,
+  reportDraft
 }) {
+  const { reportDraft: payloadReportDraft, ...payloadRest } = rawPayloadJson ?? {};
+  const payloadJson = rawPayloadJson ? payloadRest : rawPayloadJson;
+  if (reportDraft !== void 0 && payloadReportDraft !== void 0) {
+    throw new ServiceError(
+      "Send reportDraft once: as the reportDraft input or inside the payload, not both",
+      "invalid_input",
+      400
+    );
+  }
+  const draftWrite = parseReportDraftInput(reportDraft ?? payloadReportDraft, "update");
   const trimmedSummary = summary.trim();
-  if (!trimmedSummary) {
+  if (!trimmedSummary && !draftWrite) {
     throw new ServiceError("Update summary is required", "validation_error");
   }
+  if (draftWrite && beginFollowUpWork) {
+    throw new ServiceError(
+      "reportDraft cannot be combined with begin-follow-up-work; a follow-up session records its own draft",
+      "invalid_input",
+      400
+    );
+  }
   const mission = await resolveMissionId(ctx, missionId);
+  if (draftWrite) {
+    return await updateSessionWithDraft({
+      ctx,
+      mission,
+      sessionKey,
+      summary: trimmedSummary,
+      phase,
+      eventType,
+      payloadJson,
+      externalUrl,
+      externalSessionId: externalSessionId2,
+      declaredPaths,
+      write: draftWrite
+    });
+  }
   const session = await getSessionByKey(ctx, sessionKey);
   if (session.mission_id !== mission.id) {
     throw new ServiceError("Session key does not match mission", "invalid_session", 401);
   }
   if (session.delivery_state === "delivered" && !beginFollowUpWork) {
-    throw new ServiceError(
-      "Mission was delivered. Use --begin-follow-up-work before posting execution updates.",
-      "delivery_boundary",
-      409
-    );
+    throw deliveryBoundaryError();
   }
-  if (phase && !UPDATE_PHASES.includes(phase)) {
-    throw new ServiceError(`Invalid phase: ${phase}`, "validation_error");
-  }
-  if (eventType && !UPDATE_EVENT_TYPES.includes(eventType)) {
-    throw new ServiceError(`Invalid event type: ${eventType}`, "validation_error");
-  }
+  assertUpdatePhaseAndType(phase, eventType);
   const now2 = nowIso();
   const eventId = newId();
   const declared = normalizeDeclaredPaths(declaredPaths);
@@ -161061,66 +162915,280 @@ async function updateSession2({
         [now2, session.id]
       );
     }
-    await txCtx.db.run(
-      `INSERT INTO mission_events
-           (id, workspace_id, project_id, mission_id, objective_id, session_id,
-            type, phase, summary, payload_json, external_url, source,
-            actor_workspace_user_id, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        eventId,
-        ctx.workspace.id,
-        mission.projectId,
-        mission.id,
-        session.objective_id,
-        session.id,
-        eventType ?? "update",
-        phase ?? null,
-        trimmedSummary,
-        JSON.stringify({
-          ...payloadJson ?? {},
-          ...followUpIntent ? { followUpIntent } : {},
-          ...declared.warnings.length > 0 ? { declaredPathWarnings: declared.warnings } : {}
-        }),
-        externalUrl ?? null,
-        ctx.source,
-        ctx.actorWorkspaceUserId,
-        now2
-      ]
-    );
-    await recordChange({
-      ctx: txCtx,
-      entityType: "mission_event",
-      entityId: eventId,
-      operation: "insert",
-      projectId: mission.projectId,
-      missionId: mission.id,
-      objectiveId: session.objective_id
-    });
-    await applyDeclaredPaths({
-      ctx: txCtx,
+    await writeUpdateEvent(txCtx, {
       mission,
-      objectiveId: session.objective_id,
-      sessionId: session.id,
-      resourceId: declaredResourceId,
-      paths: declared.paths,
+      session,
+      eventId,
+      summary: trimmedSummary,
+      phase,
+      eventType,
+      payload: {
+        ...payloadJson ?? {},
+        ...followUpIntent ? { followUpIntent } : {}
+      },
+      declared,
+      declaredResourceId,
+      externalUrl,
+      externalSessionId: externalSessionId2,
       now: now2
     });
-    if (externalSessionId2 !== void 0) {
-      await txCtx.db.run(
-        `UPDATE agent_sessions SET external_session_id = ?, updated_at = ?, revision = revision + 1
-           WHERE id = ?`,
-        [externalSessionId2, now2, session.id]
-      );
-    }
-    if (phase) {
-      await txCtx.db.run(
-        `UPDATE agent_sessions SET phase = ?, updated_at = ?, revision = revision + 1 WHERE id = ?`,
-        [phase, now2, session.id]
-      );
-    }
   });
   return { eventId };
+}
+function deliveryBoundaryError() {
+  return new ServiceError(
+    "Mission was delivered. Use --begin-follow-up-work before posting execution updates.",
+    "delivery_boundary",
+    409
+  );
+}
+function assertUpdatePhaseAndType(phase, eventType) {
+  if (phase && !UPDATE_PHASES.includes(phase)) {
+    throw new ServiceError(`Invalid phase: ${phase}`, "validation_error");
+  }
+  if (eventType && !UPDATE_EVENT_TYPES.includes(eventType)) {
+    throw new ServiceError(`Invalid event type: ${eventType}`, "validation_error");
+  }
+}
+async function writeUpdateEvent(txCtx, {
+  mission,
+  session,
+  eventId,
+  summary,
+  phase,
+  eventType,
+  payload,
+  declared,
+  declaredResourceId,
+  externalUrl,
+  externalSessionId: externalSessionId2,
+  now: now2
+}) {
+  await txCtx.db.run(
+    `INSERT INTO mission_events
+         (id, workspace_id, project_id, mission_id, objective_id, session_id,
+          type, phase, summary, payload_json, external_url, source,
+          actor_workspace_user_id, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      eventId,
+      txCtx.workspace.id,
+      mission.projectId,
+      mission.id,
+      session.objective_id,
+      session.id,
+      eventType ?? "update",
+      phase ?? null,
+      summary,
+      JSON.stringify({
+        ...payload,
+        ...declared.warnings.length > 0 ? { declaredPathWarnings: declared.warnings } : {}
+      }),
+      externalUrl ?? null,
+      txCtx.source,
+      txCtx.actorWorkspaceUserId,
+      now2
+    ]
+  );
+  await recordChange({
+    ctx: txCtx,
+    entityType: "mission_event",
+    entityId: eventId,
+    operation: "insert",
+    projectId: mission.projectId,
+    missionId: mission.id,
+    objectiveId: session.objective_id
+  });
+  await applyDeclaredPaths({
+    ctx: txCtx,
+    mission,
+    objectiveId: session.objective_id,
+    sessionId: session.id,
+    resourceId: declaredResourceId,
+    paths: declared.paths,
+    now: now2
+  });
+  if (externalSessionId2 !== void 0) {
+    await txCtx.db.run(
+      `UPDATE agent_sessions SET external_session_id = ?, updated_at = ?, revision = revision + 1
+         WHERE id = ?`,
+      [externalSessionId2, now2, session.id]
+    );
+  }
+  if (phase) {
+    await txCtx.db.run(
+      `UPDATE agent_sessions SET phase = ?, updated_at = ?, revision = revision + 1 WHERE id = ?`,
+      [phase, now2, session.id]
+    );
+  }
+}
+function draftEventSummary(applied) {
+  const parts = [
+    applied.upserted.length ? `${applied.upserted.length} recorded` : "",
+    applied.withdrawn.length ? `${applied.withdrawn.length} withdrawn` : "",
+    applied.imported.length ? `${applied.imported.length} imported` : ""
+  ].filter(Boolean);
+  return `Draft report evidence: ${parts.join(", ") || "no change"}.`;
+}
+async function updateSessionWithDraft({
+  ctx,
+  mission,
+  sessionKey,
+  summary,
+  phase,
+  eventType,
+  payloadJson,
+  externalUrl,
+  externalSessionId: externalSessionId2,
+  declaredPaths,
+  write
+}) {
+  const operationId = write.operationId;
+  const actor = ctx.actorWorkspaceUserId;
+  if (!actor) {
+    throw new ServiceError(
+      "reportDraft requires an authenticated workspace member",
+      "invalid_input",
+      400
+    );
+  }
+  const session = await getSessionByKeyMaybeEnded(ctx, sessionKey, { includeEnded: true });
+  if (!session) {
+    throw new ServiceError("Invalid or expired session key", "invalid_session", 401);
+  }
+  if (session.mission_id !== mission.id) {
+    throw new ServiceError("Session key does not match mission", "invalid_session", 401);
+  }
+  assertUpdatePhaseAndType(phase, eventType);
+  const declared = normalizeDeclaredPaths(declaredPaths);
+  const digest6 = reportDraftBatchDigest({
+    sessionId: session.id,
+    summary,
+    phase: phase ?? null,
+    eventType: eventType ?? "update",
+    payload: payloadJson ?? null,
+    declaredPaths: declared.paths,
+    externalUrl: externalUrl ?? null,
+    expectedRevision: write.expectedRevision,
+    operations: write.operations
+  });
+  const replayFrom = async (db) => {
+    const draft = await loadSessionDraft(db, session.id);
+    if (!draft) return void 0;
+    const batch = await findDraftBatch(db, draft.id, operationId);
+    if (!batch) return void 0;
+    assertBatchReplayMatches(batch, digest6);
+    return replayedBatch(batch, draft);
+  };
+  const earlier = await replayFrom(ctx.db);
+  if (earlier) return earlier;
+  if (session.ended_at) {
+    if (session.delivery_state === "delivered") throw deliveryBoundaryError();
+    throw new ServiceError("Invalid or expired session key", "invalid_session", 401);
+  }
+  if (session.delivery_state === "delivered") throw deliveryBoundaryError();
+  const declaredResourceId = declared.paths.length > 0 ? await resolveSessionResourceId({ ctx, session, mission }) : null;
+  const now2 = nowIso();
+  const eventId = newId();
+  try {
+    return await ctx.db.transaction(async (tx) => {
+      const txCtx = { ...ctx, db: tx };
+      await lockMissionObjectiveQueue(tx, mission.id);
+      const concurrent = await replayFrom(tx);
+      if (concurrent) return concurrent;
+      const live = await tx.get(
+        `SELECT ended_at, delivery_state, created_by_workspace_user_id
+           FROM agent_sessions WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
+        [session.id, ctx.workspace.id]
+      );
+      if (!live) throw new ServiceError("Invalid or expired session key", "invalid_session", 401);
+      if (live.delivery_state === "delivered") throw deliveryBoundaryError();
+      if (live.ended_at) {
+        throw new ServiceError("Invalid or expired session key", "invalid_session", 401);
+      }
+      const draft = await loadSessionDraft(tx, session.id);
+      if (draft?.sealed_at) throw reportDraftSealedError(draft);
+      const owner = draft?.owner_workspace_user_id ?? live.created_by_workspace_user_id ?? actor;
+      if (owner !== actor) {
+        throw new ServiceError(
+          "Only the workspace member who owns this session may write its report draft",
+          REPORT_DRAFT_FORBIDDEN,
+          403
+        );
+      }
+      const currentRevision = draft ? Number(draft.revision) : 0;
+      if (write.expectedRevision !== currentRevision) {
+        throw await reportDraftConflict(
+          tx,
+          draft,
+          `reportDraft.expectedRevision ${write.expectedRevision} does not match the current draft revision ${currentRevision}. Nothing was applied: read report-draft, rebase the batch and send it again.`
+        );
+      }
+      const applied = await applyDraftOperations(tx, {
+        ctx: txCtx,
+        scope: {
+          workspaceId: ctx.workspace.id,
+          projectId: mission.projectId,
+          missionId: mission.id,
+          objectiveId: session.objective_id,
+          sessionId: session.id,
+          ownerWorkspaceUserId: owner
+        },
+        draft,
+        operations: write.operations,
+        eventId,
+        countBatch: true,
+        now: now2
+      });
+      await insertDraftBatchReceipt(tx, {
+        draft: applied.draft,
+        operationId,
+        digest: digest6,
+        eventId,
+        operationCount: write.operations.length,
+        now: now2
+      });
+      await writeUpdateEvent(txCtx, {
+        mission,
+        session,
+        eventId,
+        summary: summary || draftEventSummary(applied),
+        phase,
+        eventType,
+        // Bounded operation metadata only; entry text lives in the draft, not the event.
+        payload: {
+          ...payloadJson ?? {},
+          reportDraft: {
+            draftId: applied.draft.id,
+            operationId,
+            revision: Number(applied.draft.revision),
+            upserted: applied.upserted,
+            withdrawn: applied.withdrawn,
+            imported: applied.imported
+          }
+        },
+        declared,
+        declaredResourceId,
+        externalUrl,
+        externalSessionId: externalSessionId2,
+        now: now2
+      });
+      return {
+        eventId,
+        reportDraft: {
+          draftId: applied.draft.id,
+          operationId,
+          revision: Number(applied.draft.revision),
+          activeCounts: activeCountsOf(applied.entries)
+        }
+      };
+    });
+  } catch (error64) {
+    if (!isUniqueViolation(error64)) throw error64;
+    const winner = await replayFrom(ctx.db);
+    if (winner) return winner;
+    throw error64;
+  }
 }
 async function askQuestion({
   ctx,
@@ -161300,15 +163368,101 @@ function missionItemAttribution(ctx) {
     source: ctx.source
   };
 }
-async function withMissionSummaryConflict(ctx, run) {
-  try {
-    return await run();
-  } catch (error64) {
-    if (error64 instanceof MissionSummaryConflict) {
-      throw await missionSummaryConflictError(ctx.db, error64);
-    }
-    throw error64;
+async function finishMissionSummaryWrite(tx, args) {
+  const result2 = await applyMissionSummaryWrite(tx, args);
+  if (!result2.publication) {
+    return args.prepared.input ? result2 : void 0;
   }
+  return {
+    ...result2,
+    ...result2.publication.available ? { baseline: await readMissionSummaryBaseline(tx, args.mission.id) ?? void 0 } : {}
+  };
+}
+function withPublicationInstruction(instruction, summary, {
+  style,
+  missionDisplayId,
+  deliveryId
+}) {
+  if (!summary?.publication?.available) return instruction;
+  const lead = summary.publication.withheldReason === "absent" ? "Delivery accepted without a mission summary." : "Delivery accepted; your mission summary was not published because the mission changed since your baseline.";
+  return `${lead} ${publicationInstruction(style, {
+    state: "outstanding",
+    available: true,
+    missionDisplayId,
+    deliveryId
+  })} ${instruction}`;
+}
+async function prepareDraftDelivery(tx, {
+  ctx,
+  mission,
+  session,
+  draftFinal,
+  legacyDeliveryReport,
+  eventId,
+  now: now2
+}) {
+  let draft = await loadSessionDraft(tx, session.id);
+  if (!draft && !draftFinal) return void 0;
+  if (draft?.sealed_at) throw reportDraftSealedError(draft);
+  const currentRevision = draft ? Number(draft.revision) : 0;
+  if (!draftFinal) {
+    throw await reportDraftConflict(
+      tx,
+      draft,
+      `This session has a report draft at revision ${currentRevision}. Read report-draft, then deliver with reportDraft.expectedRevision ${currentRevision} so no recorded evidence is silently ignored.`
+    );
+  }
+  if (draftFinal.expectedRevision !== currentRevision) {
+    throw await reportDraftConflict(
+      tx,
+      draft,
+      `reportDraft.expectedRevision ${draftFinal.expectedRevision} does not match the current draft revision ${currentRevision}. Nothing was delivered: read report-draft and deliver again.`
+    );
+  }
+  let entries = draft ? await loadEntries(tx, draft.id) : [];
+  if (draftFinal.operations.length > 0) {
+    const actor = ctx.actorWorkspaceUserId;
+    const owner = draft?.owner_workspace_user_id ?? actor;
+    if (!actor || owner !== actor) {
+      throw new ServiceError(
+        "Only the workspace member who owns this session may write its report draft",
+        REPORT_DRAFT_FORBIDDEN,
+        403
+      );
+    }
+    const applied = await applyDraftOperations(tx, {
+      ctx,
+      scope: {
+        workspaceId: ctx.workspace.id,
+        projectId: mission.projectId,
+        missionId: mission.id,
+        objectiveId: session.objective_id,
+        sessionId: session.id,
+        ownerWorkspaceUserId: owner
+      },
+      draft,
+      operations: draftFinal.operations,
+      eventId,
+      countBatch: false,
+      now: now2
+    });
+    draft = applied.draft;
+    entries = applied.entries;
+  }
+  return {
+    draft,
+    entries,
+    merge: mergeDraftEvidence(activeEntryInputs(entries), legacyDeliveryReport)
+  };
+}
+async function alreadyAcceptedForSession(db, sessionId) {
+  const receipt = await findReceiptBySession(db, sessionId);
+  return deliveryAlreadyAcceptedError(
+    receipt?.delivery_id ?? await historicalSessionDeliveryId(db, sessionId)
+  );
+}
+function replayedDelivery(receipt) {
+  return { ...receiptResult(receipt), replayed: true };
 }
 async function deliverSession({
   ctx,
@@ -161317,34 +163471,79 @@ async function deliverSession({
   summary,
   artifacts = [],
   declaredPaths,
-  payloadJson,
+  payloadJson: rawPayloadJson,
   verificationSummary,
   followUpNotes,
-  missionSummary
+  missionSummary,
+  operationId: rawOperationId,
+  reportDraft
 }) {
   const trimmedSummary = summary.trim();
   if (!trimmedSummary) {
     throw new ServiceError("Delivery summary is required", "validation_error");
   }
+  const { reportDraft: payloadReportDraft, ...payloadRest } = rawPayloadJson ?? {};
+  const payloadJson = rawPayloadJson ? payloadRest : rawPayloadJson;
+  if (reportDraft !== void 0 && payloadReportDraft !== void 0) {
+    throw new ServiceError(
+      "Send reportDraft once: as the reportDraft input or inside the payload, not both",
+      "invalid_input",
+      400
+    );
+  }
   assertDeferredWorkInput(payloadJson?.deliveryReport);
+  const draftFinal = parseReportDraftInput(reportDraft ?? payloadReportDraft, "deliver");
   const summaryInput = parseMissionSummaryInput(missionSummary, { requireBase: true });
+  const operationId = parseOperationId(rawOperationId);
+  const actor = ctx.actorWorkspaceUserId;
+  if (operationId && !actor) {
+    throw new ServiceError(
+      "operationId requires an authenticated workspace member",
+      "invalid_input",
+      400
+    );
+  }
   const mission = await resolveMissionId(ctx, missionId);
-  const session = await getSessionByKey(ctx, sessionKey);
+  const session = await getSessionByKeyMaybeEnded(ctx, sessionKey, { includeEnded: true });
+  if (!session) {
+    throw new ServiceError("Invalid or expired session key", "invalid_session", 401);
+  }
   if (session.mission_id !== mission.id) {
     throw new ServiceError("Session key does not match mission", "invalid_session", 401);
   }
   const declared = normalizeDeclaredPaths(declaredPaths);
-  const declaredResourceId = declared.paths.length > 0 ? await resolveSessionResourceId({ ctx, session, mission }) : null;
   const normalizedArtifacts = validateProtocolArtifacts(artifacts);
-  const deliveryReport = appendDeliveryWarnings(
-    markDeliveryPresentationPending(
-      buildDeliveryReport({
-        summary: trimmedSummary,
-        deliveryReport: payloadJson?.deliveryReport
-      })
-    ),
-    declared.warnings
-  );
+  const digest6 = finalizationRequestDigest("deliver", {
+    missionId: mission.id,
+    objectiveId: session.objective_id,
+    sessionId: session.id,
+    summary: trimmedSummary,
+    artifacts: normalizedArtifacts,
+    declaredPaths: declared.paths,
+    payload: payloadJson ?? null,
+    verificationSummary: verificationSummary ?? null,
+    followUpNotes: followUpNotes ?? null,
+    missionSummary: summaryInput ?? null,
+    ...draftFinal ? { reportDraft: draftFinal } : {}
+  });
+  const findOwnReceipt = (db) => operationId && actor ? findReceiptByOperation(db, {
+    workspaceId: ctx.workspace.id,
+    actorWorkspaceUserId: actor,
+    kind: "deliver",
+    operationId
+  }) : Promise.resolve(void 0);
+  const earlier = await findOwnReceipt(ctx.db);
+  if (earlier) {
+    assertReplayMatches(earlier, { digest: digest6, missionId: mission.id, sessionId: session.id });
+    return replayedDelivery(earlier);
+  }
+  if (session.ended_at) {
+    if (session.delivery_state === "delivered") {
+      throw await alreadyAcceptedForSession(ctx.db, session.id);
+    }
+    throw new ServiceError("Invalid or expired session key", "invalid_session", 401);
+  }
+  const declaredResourceId = declared.paths.length > 0 ? await resolveSessionResourceId({ ctx, session, mission }) : null;
   const missionObjectives = await listObjectives({ ctx, missionId: mission.id });
   const currentObjectiveRow = missionObjectives.find(
     (objective) => objective.id === session.objective_id
@@ -161360,217 +163559,337 @@ async function deliverSession({
     workspaceId: ctx.workspace.id,
     projectId: mission.projectId
   };
-  const sessionModel = summaryInput ? (await ctx.db.get(
+  const sessionModel = summaryInput?.narrative ? (await ctx.db.get(
     `SELECT model_identifier FROM agent_sessions WHERE id = ?`,
     [session.id]
   ))?.model_identifier ?? null : null;
-  let summaryResult;
-  await withMissionSummaryConflict(
-    ctx,
-    () => ctx.db.transaction(async (tx) => {
-      const txCtx = { ...ctx, db: tx };
-      await lockMissionObjectiveQueue(tx, mission.id);
-      const preparedSummary = summaryInput ? await prepareMissionSummaryWrite(tx, {
-        mission: missionScope,
-        input: summaryInput,
-        checkBase: true,
-        now: now2
-      }) : null;
-      await applyDeclaredPaths({
-        ctx: txCtx,
-        mission,
-        objectiveId: session.objective_id,
+  const instruction = postDeliveryInstruction({
+    style: instructionStyleFor(session.connection_method),
+    missionDisplayId: mission.displayId,
+    objectiveDisplayId: currentObjectiveRow?.displayId ?? session.objective_id
+  });
+  let outcome;
+  try {
+    outcome = await withMissionItemLocks(
+      ctx,
+      {
+        missionId: mission.id,
+        projectId: mission.projectId,
         sessionId: session.id,
-        resourceId: declaredResourceId,
-        paths: declared.paths,
-        now: nowIso()
-      });
-      const objectiveChangedFiles = await txCtx.db.all(
-        `SELECT file_path FROM changed_files
-         WHERE objective_id = ? AND deleted_at IS NULL`,
-        [session.objective_id]
-      );
-      const eligibleDeliveryReport = applyDeferredWorkEligibility({
-        report: deliveryReport,
-        currentObjective: currentObjectiveRow ? { title: currentObjectiveRow.title, instruction: currentObjectiveRow.objective } : null,
-        plannedObjectives,
-        candidateActions: deriveDeterministicActionCandidates({
-          filePaths: objectiveChangedFiles.map((row) => row.file_path)
-        })
-      });
-      await txCtx.db.run(
-        `INSERT INTO deliveries
-           (id, workspace_id, project_id, mission_id, objective_id, session_id,
-            summary, payload_json, verification_summary, follow_up_notes,
-            delivered_at, delivered_by_workspace_user_id, created_at, updated_at, revision)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
-        [
-          deliveryId,
-          ctx.workspace.id,
-          mission.projectId,
-          mission.id,
-          session.objective_id,
-          session.id,
-          trimmedSummary,
-          JSON.stringify({
-            ...payloadJson ?? {},
-            deliveryReport: eligibleDeliveryReport
-          }),
-          verificationSummary ?? null,
-          followUpNotes ?? null,
-          now2,
-          ctx.actorWorkspaceUserId,
-          now2,
-          now2
-        ]
-      );
-      await insertDeliveryMissionItems(txCtx.db, {
-        delivery: {
-          id: deliveryId,
-          workspaceId: ctx.workspace.id,
-          projectId: mission.projectId,
-          missionId: mission.id,
+        itemIds: summaryInput?.closeItems.map((e5) => e5.id) ?? []
+      },
+      async (tx) => {
+        const txCtx = { ...ctx, db: tx };
+        const inScope = await resolveMissionId(txCtx, mission.id);
+        if (inScope.projectId !== mission.projectId) {
+          throw new ServiceError(`Mission not found: ${missionId}`, "mission_not_found", 404);
+        }
+        const concurrent = await findOwnReceipt(tx);
+        if (concurrent) {
+          assertReplayMatches(concurrent, {
+            digest: digest6,
+            missionId: mission.id,
+            sessionId: session.id
+          });
+          return { replay: concurrent };
+        }
+        const live = await tx.get(
+          `SELECT mission_id, objective_id, ended_at, delivery_state
+             FROM agent_sessions WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
+          [session.id, ctx.workspace.id]
+        );
+        if (!live || live.mission_id !== mission.id || live.objective_id !== session.objective_id) {
+          throw new ServiceError("Invalid or expired session key", "invalid_session", 401);
+        }
+        if (live.ended_at) {
+          if (live.delivery_state === "delivered") {
+            throw await alreadyAcceptedForSession(tx, session.id);
+          }
+          throw new ServiceError("Invalid or expired session key", "invalid_session", 401);
+        }
+        const preparedSummary = await prepareMissionSummaryWrite(tx, {
+          mission: missionScope,
+          input: summaryInput,
+          mode: "deliver",
+          now: now2
+        });
+        const draftDelivery = await prepareDraftDelivery(tx, {
+          ctx: txCtx,
+          mission,
+          session,
+          draftFinal,
+          legacyDeliveryReport: payloadJson?.deliveryReport,
+          eventId,
+          now: now2
+        });
+        const deliveryReport = appendDeliveryWarnings(
+          markDeliveryPresentationPending(
+            buildDeliveryReport({
+              summary: trimmedSummary,
+              deliveryReport: draftDelivery ? draftDelivery.merge.deliveryReport : payloadJson?.deliveryReport
+            })
+          ),
+          [...declared.warnings, ...draftDelivery?.merge.warnings ?? []]
+        );
+        await applyDeclaredPaths({
+          ctx: txCtx,
+          mission,
           objectiveId: session.objective_id,
-          deliveredAt: now2
-        },
-        report: eligibleDeliveryReport,
-        attribution: missionItemAttribution(ctx),
-        now: now2
-      });
-      if (preparedSummary) {
-        summaryResult = await applyMissionSummaryWrite(tx, {
+          sessionId: session.id,
+          resourceId: declaredResourceId,
+          paths: declared.paths,
+          now: nowIso()
+        });
+        const objectiveChangedFiles = await txCtx.db.all(
+          `SELECT file_path FROM changed_files
+           WHERE objective_id = ? AND deleted_at IS NULL`,
+          [session.objective_id]
+        );
+        const eligibleDeliveryReport = applyDeferredWorkEligibility({
+          report: deliveryReport,
+          currentObjective: currentObjectiveRow ? { title: currentObjectiveRow.title, instruction: currentObjectiveRow.objective } : null,
+          plannedObjectives,
+          candidateActions: deriveDeterministicActionCandidates({
+            filePaths: objectiveChangedFiles.map((row) => row.file_path)
+          })
+        });
+        await txCtx.db.run(
+          `INSERT INTO deliveries
+             (id, workspace_id, project_id, mission_id, objective_id, session_id,
+              summary, payload_json, verification_summary, follow_up_notes,
+              delivered_at, delivered_by_workspace_user_id, created_at, updated_at, revision)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+          [
+            deliveryId,
+            ctx.workspace.id,
+            mission.projectId,
+            mission.id,
+            session.objective_id,
+            session.id,
+            trimmedSummary,
+            JSON.stringify({
+              ...payloadJson ?? {},
+              deliveryReport: eligibleDeliveryReport
+            }),
+            verificationSummary ?? null,
+            followUpNotes ?? null,
+            now2,
+            ctx.actorWorkspaceUserId,
+            now2,
+            now2
+          ]
+        );
+        await insertDeliveryMissionItems(txCtx.db, {
+          delivery: {
+            id: deliveryId,
+            workspaceId: ctx.workspace.id,
+            projectId: mission.projectId,
+            missionId: mission.id,
+            objectiveId: session.objective_id,
+            deliveredAt: now2
+          },
+          report: eligibleDeliveryReport,
+          attribution: missionItemAttribution(ctx),
+          now: now2
+        });
+        const sealed = draftDelivery?.draft ? await sealDraft(tx, {
+          ctx: txCtx,
+          draft: draftDelivery.draft,
+          refs: draftDelivery.merge.refs,
+          entries: draftDelivery.entries,
+          deliveryId,
+          now: now2
+        }) : void 0;
+        const summaryResult = await finishMissionSummaryWrite(tx, {
+          canCloseForeign: await canCloseForeignItems(txCtx),
           prepared: preparedSummary,
           mission: missionScope,
           objectiveId: session.objective_id,
           deliveryId,
+          sessionId: session.id,
           model: sessionModel,
           attribution: missionItemAttribution(ctx),
           now: now2
         });
-      }
-      for (const artifact of normalizedArtifacts) {
-        await insertArtifactRow({
+        for (const artifact of normalizedArtifacts) {
+          await insertArtifactRow({
+            ctx: txCtx,
+            workspaceId: ctx.workspace.id,
+            projectId: mission.projectId,
+            missionId: mission.id,
+            objectiveId: session.objective_id,
+            sessionId: session.id,
+            deliveryId,
+            type: artifact.type,
+            label: artifact.label,
+            contentText: artifact.content ?? null,
+            externalUrl: artifact.url ?? null,
+            now: now2
+          });
+        }
+        await txCtx.db.run(
+          `INSERT INTO mission_events
+             (id, workspace_id, project_id, mission_id, objective_id, session_id,
+              type, phase, summary, payload_json, source, actor_workspace_user_id, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, 'delivery', 'deliver', ?, ?, ?, ?, ?)`,
+          [
+            eventId,
+            ctx.workspace.id,
+            mission.projectId,
+            mission.id,
+            session.objective_id,
+            session.id,
+            trimmedSummary,
+            JSON.stringify({ deliveryId, ...operationId ? { operationId } : {} }),
+            ctx.source,
+            ctx.actorWorkspaceUserId,
+            now2
+          ]
+        );
+        await recordChange({
           ctx: txCtx,
-          workspaceId: ctx.workspace.id,
+          entityType: "mission_event",
+          entityId: eventId,
+          operation: "insert",
+          projectId: mission.projectId,
+          missionId: mission.id,
+          objectiveId: session.objective_id
+        });
+        await enqueueWebhookEvent(txCtx, {
+          type: "mission.delivered",
+          projectId: mission.projectId,
+          entity: {
+            missionId: mission.id,
+            objectiveId: session.objective_id,
+            sessionId: session.id,
+            deliveryId
+          }
+        });
+        await enqueueDeliveryComposeJob({ ctx: txCtx, deliveryId, now: now2 });
+        await txCtx.db.run(
+          `UPDATE objectives SET state = 'complete', ${OBJECTIVE_COMPLETED_AT_ASSIGNMENT}, updated_at = ?, revision = revision + 1
+           WHERE id = ?`,
+          [now2, now2, session.objective_id]
+        );
+        await txCtx.db.run(
+          `UPDATE run_queue_entries SET deleted_at = ?, updated_at = ?, revision = revision + 1
+           WHERE objective_id = ? AND deleted_at IS NULL`,
+          [now2, now2, session.objective_id]
+        );
+        await retireEmptyRunQueues(txCtx.db, mission.projectId);
+        const objectiveRevision = (await txCtx.db.get(`SELECT revision FROM objectives WHERE id = ?`, [
+          session.objective_id
+        ]))?.revision;
+        await recordChange({
+          ctx: txCtx,
+          entityType: "objective",
+          entityId: session.objective_id,
+          operation: "update",
+          entityRevision: objectiveRevision ?? null,
           projectId: mission.projectId,
           missionId: mission.id,
           objectiveId: session.objective_id,
-          sessionId: session.id,
-          deliveryId,
-          type: artifact.type,
-          label: artifact.label,
-          contentText: artifact.content ?? null,
-          externalUrl: artifact.url ?? null,
+          changedFields: ["state", "completed_at"]
+        });
+        await enqueueWebhookEvent(txCtx, {
+          type: "objective.completed",
+          projectId: mission.projectId,
+          entity: {
+            missionId: mission.id,
+            objectiveId: session.objective_id,
+            sessionId: session.id,
+            deliveryId
+          }
+        });
+        await enqueueLiveActivityRefreshForMission({
+          db: txCtx.db,
+          workspaceId: ctx.workspace.id,
+          missionId: mission.id,
           now: now2
         });
-      }
-      await txCtx.db.run(
-        `INSERT INTO mission_events
-           (id, workspace_id, project_id, mission_id, objective_id, session_id,
-            type, phase, summary, payload_json, source, actor_workspace_user_id, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, 'delivery', 'deliver', ?, ?, ?, ?, ?)`,
-        [
+        await txCtx.db.run(
+          `UPDATE agent_sessions
+           SET delivery_state = 'delivered', phase = 'review', ended_at = ?, updated_at = ?, revision = revision + 1
+           WHERE id = ?`,
+          [now2, now2, session.id]
+        );
+        const sessionRevision = (await txCtx.db.get(`SELECT revision FROM agent_sessions WHERE id = ?`, [session.id]))?.revision;
+        await recordChange({
+          ctx: txCtx,
+          entityType: "agent_session",
+          entityId: session.id,
+          operation: "update",
+          entityRevision: sessionRevision ?? null,
+          projectId: mission.projectId,
+          missionId: mission.id,
+          objectiveId: session.objective_id,
+          changedFields: ["delivery_state", "phase", "ended_at"]
+        });
+        const remainingActive = await countActiveMissionObjectives({
+          ctx: txCtx,
+          missionId: mission.id
+        });
+        if (remainingActive === 0) {
+          await moveMissionToReview({ ctx: txCtx, missionId: mission.id });
+        }
+        await scheduleDeliveryFollowOn({
+          ctx: txCtx,
+          mission,
+          deliveredObjectiveId: session.objective_id,
+          missionNowIdle: remainingActive === 0
+        });
+        const result2 = {
+          deliveryId,
           eventId,
-          ctx.workspace.id,
-          mission.projectId,
-          mission.id,
-          session.objective_id,
-          session.id,
-          trimmedSummary,
-          JSON.stringify({ deliveryId }),
-          ctx.source,
-          ctx.actorWorkspaceUserId,
-          now2
-        ]
-      );
-      await recordChange({
-        ctx: txCtx,
-        entityType: "mission_event",
-        entityId: eventId,
-        operation: "insert",
-        projectId: mission.projectId,
-        missionId: mission.id,
-        objectiveId: session.objective_id
-      });
-      await enqueueWebhookEvent(txCtx, {
-        type: "mission.delivered",
-        projectId: mission.projectId,
-        entity: {
-          missionId: mission.id,
-          objectiveId: session.objective_id,
-          sessionId: session.id,
-          deliveryId
+          ...operationId ? { operationId } : {},
+          ...summaryResult ? { missionSummary: summaryResult } : {},
+          ...sealed ? { reportDraft: { ...sealed, sealed: true } } : {},
+          instruction: withPublicationInstruction(instruction, summaryResult, {
+            style: instructionStyleFor(session.connection_method),
+            missionDisplayId: mission.displayId,
+            deliveryId
+          })
+        };
+        if (actor) {
+          await insertFinalizationReceipt(tx, {
+            workspaceId: ctx.workspace.id,
+            projectId: mission.projectId,
+            missionId: mission.id,
+            objectiveId: session.objective_id,
+            deliveryId,
+            actorWorkspaceUserId: actor,
+            sessionId: session.id,
+            kind: "deliver",
+            operationId: operationId ?? null,
+            digest: digest6,
+            result: result2,
+            acceptedAt: now2
+          });
         }
-      });
-      await enqueueDeliveryComposeJob({ ctx: txCtx, deliveryId, now: now2 });
-      await txCtx.db.run(
-        `UPDATE objectives SET state = 'complete', ${OBJECTIVE_COMPLETED_AT_ASSIGNMENT}, updated_at = ?, revision = revision + 1
-         WHERE id = ?`,
-        [now2, now2, session.objective_id]
-      );
-      await txCtx.db.run(
-        `UPDATE run_queue_entries SET deleted_at = ?, updated_at = ?, revision = revision + 1
-         WHERE objective_id = ? AND deleted_at IS NULL`,
-        [now2, now2, session.objective_id]
-      );
-      await retireEmptyRunQueues(txCtx.db, mission.projectId);
-      const objectiveRevision = (await txCtx.db.get(`SELECT revision FROM objectives WHERE id = ?`, [
-        session.objective_id
-      ]))?.revision;
-      await recordChange({
-        ctx: txCtx,
-        entityType: "objective",
-        entityId: session.objective_id,
-        operation: "update",
-        entityRevision: objectiveRevision ?? null,
-        projectId: mission.projectId,
-        missionId: mission.id,
-        objectiveId: session.objective_id,
-        changedFields: ["state", "completed_at"]
-      });
-      await enqueueWebhookEvent(txCtx, {
-        type: "objective.completed",
-        projectId: mission.projectId,
-        entity: {
-          missionId: mission.id,
-          objectiveId: session.objective_id,
-          sessionId: session.id,
-          deliveryId
-        }
-      });
-      await enqueueLiveActivityRefreshForMission({
-        db: txCtx.db,
-        workspaceId: ctx.workspace.id,
-        missionId: mission.id,
-        now: now2
-      });
-      await txCtx.db.run(
-        `UPDATE agent_sessions
-         SET delivery_state = 'delivered', phase = 'review', ended_at = ?, updated_at = ?, revision = revision + 1
-         WHERE id = ?`,
-        [now2, now2, session.id]
-      );
-      const sessionRevision = (await txCtx.db.get(`SELECT revision FROM agent_sessions WHERE id = ?`, [session.id]))?.revision;
-      await recordChange({
-        ctx: txCtx,
-        entityType: "agent_session",
-        entityId: session.id,
-        operation: "update",
-        entityRevision: sessionRevision ?? null,
-        projectId: mission.projectId,
-        missionId: mission.id,
-        objectiveId: session.objective_id,
-        changedFields: ["delivery_state", "phase", "ended_at"]
-      });
-      const remainingActive2 = await countActiveMissionObjectives({
-        ctx: txCtx,
-        missionId: mission.id
-      });
-      if (remainingActive2 === 0) {
-        await moveMissionToReview({ ctx: txCtx, missionId: mission.id });
+        return { result: result2 };
       }
-    })
-  );
+    );
+  } catch (error64) {
+    if (!isUniqueViolation(error64)) throw error64;
+    const winner = await findOwnReceipt(ctx.db);
+    if (winner) {
+      assertReplayMatches(winner, { digest: digest6, missionId: mission.id, sessionId: session.id });
+      return replayedDelivery(winner);
+    }
+    if (await findReceiptBySession(ctx.db, session.id)) {
+      throw await alreadyAcceptedForSession(ctx.db, session.id);
+    }
+    throw error64;
+  }
+  if ("replay" in outcome) return replayedDelivery(outcome.replay);
+  return outcome.result;
+}
+async function scheduleDeliveryFollowOn({
+  ctx,
+  mission,
+  deliveredObjectiveId,
+  missionNowIdle
+}) {
   await enqueueRunQueueDispatch(ctx.db, mission.projectId, ctx.workspace.id);
   const nextObjective = await ctx.db.get(
     `SELECT id, title
@@ -161605,29 +163924,15 @@ async function deliverSession({
       );
     }
   }
-  const remainingActive = await countActiveMissionObjectives({
-    ctx,
-    missionId: mission.id
-  });
-  if (remainingActive === 0) {
+  if (missionNowIdle) {
     await emitNotification({
       db: ctx.db,
       workspaceId: ctx.workspace.id,
       missionId: mission.id,
       type: "mission_awaiting_review",
-      objectiveId: session.objective_id
+      objectiveId: deliveredObjectiveId
     });
   }
-  return {
-    deliveryId,
-    eventId,
-    ...summaryResult ? { missionSummary: summaryResult } : {},
-    instruction: postDeliveryInstruction({
-      style: instructionStyleFor(session.connection_method),
-      missionDisplayId: mission.displayId,
-      objectiveDisplayId: currentObjectiveRow?.displayId ?? session.objective_id
-    })
-  };
 }
 async function protocolCreate({
   ctx,
@@ -161703,14 +164008,31 @@ async function recordWork({
   declaredPaths,
   payloadJson,
   assignedTo,
-  missionSummary
+  missionSummary,
+  operationId: rawOperationId
 }) {
   const trimmedSummary = summary.trim();
   if (!trimmedSummary) {
     throw new ServiceError("Summary is required for record-work", "validation_error");
   }
+  if (payloadJson && Object.prototype.hasOwnProperty.call(payloadJson, "reportDraft")) {
+    throw new ServiceError(
+      "record-work does not accept reportDraft; send the final deliveryReport arrays instead",
+      "invalid_input",
+      400
+    );
+  }
   assertDeferredWorkInput(payloadJson?.deliveryReport);
   const summaryInput = parseMissionSummaryInput(missionSummary, { requireBase: false });
+  const operationId = parseOperationId(rawOperationId);
+  const actor = ctx.actorWorkspaceUserId;
+  if (operationId && !actor) {
+    throw new ServiceError(
+      "operationId requires an authenticated workspace member",
+      "invalid_input",
+      400
+    );
+  }
   const declared = normalizeDeclaredPaths(declaredPaths);
   const normalizedArtifacts = validateProtocolArtifacts(artifacts);
   const deliveryReport = appendDeliveryWarnings(
@@ -161735,146 +164057,223 @@ async function recordWork({
     );
   }
   const resolvedProjectId = await resolveProjectId(ctx, projectId);
-  const assignedWorkspaceUserId = await resolveAgentMissionAssignee({ ctx, assignedTo });
-  const created = await createMissionWithObjectives({
-    ctx,
+  const digest6 = finalizationRequestDigest("record_work", {
     projectId: resolvedProjectId,
-    objectives: [{ objective }],
-    statusType: "review",
-    assignedWorkspaceUserId,
-    ...title !== void 0 ? { title } : {}
+    objective,
+    title: title ?? null,
+    summary: trimmedSummary,
+    artifacts: normalizedArtifacts,
+    declaredPaths: declared.paths,
+    payload: payloadJson ?? null,
+    assignedTo: assignedTo ?? null,
+    missionSummary: summaryInput ?? null
   });
-  const now2 = nowIso();
-  const deliveryId = newId();
-  const objectiveId = created.objectives[0]?.id;
-  if (!objectiveId) {
-    throw new ServiceError("Failed to create objective for record-work", "internal_error", 500);
-  }
-  const missionScope = {
-    id: created.mission.id,
+  const findOwnReceipt = (db) => operationId && actor ? findReceiptByOperation(db, {
     workspaceId: ctx.workspace.id,
-    projectId: resolvedProjectId
-  };
-  let summaryResult;
-  await ctx.db.transaction(async (tx) => {
-    const txCtx = { ...ctx, db: tx };
-    await lockMissionObjectiveQueue(tx, created.mission.id);
-    const preparedSummary = summaryInput ? await prepareMissionSummaryWrite(tx, {
-      mission: missionScope,
-      input: summaryInput,
-      checkBase: false,
-      now: now2
-    }) : null;
-    await txCtx.db.run(
-      `INSERT INTO deliveries
-           (id, workspace_id, project_id, mission_id, objective_id, session_id,
-            summary, payload_json, delivered_at, delivered_by_workspace_user_id,
-            created_at, updated_at, revision)
-         VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, 1)`,
-      [
-        deliveryId,
-        ctx.workspace.id,
-        resolvedProjectId,
-        created.mission.id,
-        objectiveId,
-        trimmedSummary,
-        JSON.stringify({ ...payloadJson ?? {}, deliveryReport }),
-        now2,
-        ctx.actorWorkspaceUserId,
-        now2,
-        now2
-      ]
-    );
-    await insertDeliveryMissionItems(txCtx.db, {
-      delivery: {
-        id: deliveryId,
-        workspaceId: ctx.workspace.id,
-        projectId: resolvedProjectId,
-        missionId: created.mission.id,
-        objectiveId,
-        deliveredAt: now2
-      },
-      report: deliveryReport,
-      attribution: missionItemAttribution(ctx),
-      now: now2
-    });
-    if (preparedSummary) {
-      summaryResult = await applyMissionSummaryWrite(tx, {
-        prepared: preparedSummary,
-        mission: missionScope,
-        objectiveId,
-        deliveryId,
-        model: null,
-        attribution: missionItemAttribution(ctx),
-        now: now2
-      });
+    actorWorkspaceUserId: actor,
+    kind: "record_work",
+    operationId
+  }) : Promise.resolve(void 0);
+  const replay = async (receipt) => {
+    assertReplayMatches(receipt, { digest: digest6 });
+    try {
+      await resolveMissionId(ctx, receipt.mission_id);
+    } catch {
+      throw new ServiceError("Delivery receipt not found", "delivery_receipt_not_found", 404);
     }
-    for (const artifact of normalizedArtifacts) {
-      await insertArtifactRow({
-        ctx: txCtx,
-        workspaceId: ctx.workspace.id,
-        projectId: resolvedProjectId,
-        missionId: created.mission.id,
-        objectiveId,
-        sessionId: null,
-        deliveryId,
-        type: artifact.type,
-        label: artifact.label,
-        contentText: artifact.content ?? null,
-        externalUrl: artifact.url ?? null,
-        now: now2
-      });
-    }
-    await applyDeclaredPaths({
-      ctx: txCtx,
-      mission: { id: created.mission.id, projectId: resolvedProjectId },
-      objectiveId,
-      sessionId: null,
-      resourceId: null,
-      paths: declared.paths,
-      now: now2
-    });
-    await txCtx.db.run(
-      `INSERT INTO mission_events
-           (id, workspace_id, project_id, mission_id, objective_id,
-            type, phase, summary, payload_json, source, actor_workspace_user_id, created_at)
-         VALUES (?, ?, ?, ?, ?, 'delivery', 'deliver', ?, ?, ?, ?, ?)`,
-      [
-        newId(),
-        ctx.workspace.id,
-        resolvedProjectId,
-        created.mission.id,
-        objectiveId,
-        trimmedSummary,
-        JSON.stringify({ deliveryId, recordWork: true }),
-        ctx.source,
-        ctx.actorWorkspaceUserId,
-        now2
-      ]
-    );
-    await enqueueWebhookEvent(txCtx, {
-      type: "mission.delivered",
-      projectId: resolvedProjectId,
-      entity: { missionId: created.mission.id, objectiveId, deliveryId }
-    });
-    await enqueueWebhookEvent(txCtx, {
-      type: "objective.completed",
-      projectId: resolvedProjectId,
-      entity: { missionId: created.mission.id, objectiveId, deliveryId }
-    });
-    await enqueueDeliveryComposeJob({ ctx: txCtx, deliveryId, now: now2 });
-    await enqueueLiveActivityRefreshForMission({
-      db: txCtx.db,
-      workspaceId: ctx.workspace.id,
-      missionId: created.mission.id,
-      now: now2
-    });
-  });
-  return {
-    mission: created.mission,
-    deliveryId,
-    ...summaryResult ? { missionSummary: summaryResult } : {}
+    return { ...receiptResult(receipt), replayed: true };
   };
+  const earlier = await findOwnReceipt(ctx.db);
+  if (earlier) return await replay(earlier);
+  const assignedWorkspaceUserId = await resolveAgentMissionAssignee({ ctx, assignedTo });
+  let outcome;
+  try {
+    outcome = await withMissionItemLocks(
+      ctx,
+      { projectId: resolvedProjectId, itemIds: summaryInput?.closeItems.map((e5) => e5.id) ?? [] },
+      async (tx) => {
+        const txCtx = { ...ctx, db: tx };
+        const concurrent = await findOwnReceipt(tx);
+        if (concurrent) return { replay: concurrent };
+        const created = await createMissionWithObjectives({
+          ctx: txCtx,
+          projectId: resolvedProjectId,
+          objectives: [{ objective }],
+          statusType: "review",
+          assignedWorkspaceUserId,
+          ...title !== void 0 ? { title } : {}
+        });
+        const now2 = nowIso();
+        const deliveryId = newId();
+        const objectiveId = created.objectives[0]?.id;
+        if (!objectiveId) {
+          throw new ServiceError(
+            "Failed to create objective for record-work",
+            "internal_error",
+            500
+          );
+        }
+        const missionScope = {
+          id: created.mission.id,
+          workspaceId: ctx.workspace.id,
+          projectId: resolvedProjectId
+        };
+        await lockMissionObjectiveQueue(tx, created.mission.id);
+        const preparedSummary = await prepareMissionSummaryWrite(tx, {
+          mission: missionScope,
+          input: summaryInput,
+          mode: "record_work",
+          now: now2
+        });
+        await txCtx.db.run(
+          `INSERT INTO deliveries
+             (id, workspace_id, project_id, mission_id, objective_id, session_id,
+              summary, payload_json, delivered_at, delivered_by_workspace_user_id,
+              created_at, updated_at, revision)
+           VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, 1)`,
+          [
+            deliveryId,
+            ctx.workspace.id,
+            resolvedProjectId,
+            created.mission.id,
+            objectiveId,
+            trimmedSummary,
+            JSON.stringify({ ...payloadJson ?? {}, deliveryReport }),
+            now2,
+            ctx.actorWorkspaceUserId,
+            now2,
+            now2
+          ]
+        );
+        await insertDeliveryMissionItems(txCtx.db, {
+          delivery: {
+            id: deliveryId,
+            workspaceId: ctx.workspace.id,
+            projectId: resolvedProjectId,
+            missionId: created.mission.id,
+            objectiveId,
+            deliveredAt: now2
+          },
+          report: deliveryReport,
+          attribution: missionItemAttribution(ctx),
+          now: now2
+        });
+        const summaryResult = await finishMissionSummaryWrite(tx, {
+          canCloseForeign: await canCloseForeignItems(txCtx),
+          prepared: preparedSummary,
+          mission: missionScope,
+          objectiveId,
+          deliveryId,
+          sessionId: null,
+          model: null,
+          attribution: missionItemAttribution(ctx),
+          now: now2
+        });
+        for (const artifact of normalizedArtifacts) {
+          await insertArtifactRow({
+            ctx: txCtx,
+            workspaceId: ctx.workspace.id,
+            projectId: resolvedProjectId,
+            missionId: created.mission.id,
+            objectiveId,
+            sessionId: null,
+            deliveryId,
+            type: artifact.type,
+            label: artifact.label,
+            contentText: artifact.content ?? null,
+            externalUrl: artifact.url ?? null,
+            now: now2
+          });
+        }
+        await applyDeclaredPaths({
+          ctx: txCtx,
+          mission: { id: created.mission.id, projectId: resolvedProjectId },
+          objectiveId,
+          sessionId: null,
+          resourceId: null,
+          paths: declared.paths,
+          now: now2
+        });
+        await txCtx.db.run(
+          `INSERT INTO mission_events
+             (id, workspace_id, project_id, mission_id, objective_id,
+              type, phase, summary, payload_json, source, actor_workspace_user_id, created_at)
+           VALUES (?, ?, ?, ?, ?, 'delivery', 'deliver', ?, ?, ?, ?, ?)`,
+          [
+            newId(),
+            ctx.workspace.id,
+            resolvedProjectId,
+            created.mission.id,
+            objectiveId,
+            trimmedSummary,
+            JSON.stringify({
+              deliveryId,
+              recordWork: true,
+              ...operationId ? { operationId } : {}
+            }),
+            ctx.source,
+            ctx.actorWorkspaceUserId,
+            now2
+          ]
+        );
+        await enqueueWebhookEvent(txCtx, {
+          type: "mission.delivered",
+          projectId: resolvedProjectId,
+          entity: { missionId: created.mission.id, objectiveId, deliveryId }
+        });
+        await enqueueWebhookEvent(txCtx, {
+          type: "objective.completed",
+          projectId: resolvedProjectId,
+          entity: { missionId: created.mission.id, objectiveId, deliveryId }
+        });
+        await enqueueDeliveryComposeJob({ ctx: txCtx, deliveryId, now: now2 });
+        await enqueueLiveActivityRefreshForMission({
+          db: txCtx.db,
+          workspaceId: ctx.workspace.id,
+          missionId: created.mission.id,
+          now: now2
+        });
+        const result2 = {
+          mission: created.mission,
+          deliveryId,
+          ...operationId ? { operationId } : {},
+          ...summaryResult ? { missionSummary: summaryResult } : {},
+          ...summaryResult?.publication?.available ? {
+            instruction: publicationInstruction("cli", {
+              state: "outstanding",
+              available: true,
+              missionDisplayId: created.mission.displayId,
+              deliveryId
+            }).replace(" --session-key <key>", "")
+          } : {}
+        };
+        if (actor) {
+          await insertFinalizationReceipt(tx, {
+            workspaceId: ctx.workspace.id,
+            projectId: resolvedProjectId,
+            missionId: created.mission.id,
+            objectiveId,
+            deliveryId,
+            actorWorkspaceUserId: actor,
+            sessionId: null,
+            kind: "record_work",
+            operationId: operationId ?? null,
+            digest: digest6,
+            result: result2,
+            acceptedAt: now2
+          });
+        }
+        return { result: result2 };
+      }
+    );
+  } catch (error64) {
+    if (!isUniqueViolation(error64)) throw error64;
+    const winner = await findOwnReceipt(ctx.db);
+    if (!winner) throw error64;
+    return await replay(winner);
+  }
+  if ("replay" in outcome) return await replay(outcome.replay);
+  return outcome.result;
 }
 function authStatus({ ctx }) {
   return {
@@ -161929,34 +164328,91 @@ async function closeAgentMissionItems({
 }) {
   const input2 = parseMissionSummaryInput({ closeItems }, { requireBase: true });
   if (!input2) throw new ServiceError("closeItems must contain 1..50 entries", "invalid_input", 400);
-  return ctx.db.transaction(async (tx) => {
-    const txCtx = { ...ctx, db: tx };
+  const source = await resolveMissionId(ctx, missionId);
+  return withMissionItemLocks(
+    ctx,
+    { missionId: source.id, projectId: source.projectId, itemIds: input2.closeItems.map((e5) => e5.id) },
+    async (tx) => {
+      const txCtx = { ...ctx, db: tx };
+      const mission = await resolveMissionId(txCtx, missionId);
+      const session = await getSessionByKey(txCtx, sessionKey);
+      if (session.mission_id !== mission.id) {
+        throw new ServiceError("Session key does not match mission", "invalid_session", 401);
+      }
+      if (session.delivery_state === "delivered") {
+        throw new ServiceError(
+          "Resume follow-up work before closing items",
+          "delivery_boundary",
+          409
+        );
+      }
+      if (mission.projectId !== source.projectId) {
+        throw new ServiceError("Mission not found", "mission_not_found", 404);
+      }
+      const scope2 = { ...mission, workspaceId: ctx.workspace.id };
+      const prepared = await prepareMissionSummaryWrite(tx, {
+        mission: scope2,
+        input: input2,
+        mode: "close_only"
+      });
+      return applyMissionSummaryWrite(tx, {
+        canCloseForeign: await canCloseForeignItems(txCtx),
+        sessionId: session.id,
+        prepared,
+        mission: scope2,
+        objectiveId: session.objective_id,
+        deliveryId: null,
+        model: null,
+        attribution: missionItemAttribution(ctx)
+      });
+    }
+  );
+}
+async function readAgentProjectItems({
+  ctx,
+  missionId,
+  sessionKey,
+  objectiveId,
+  ...options
+}) {
+  return ctx.db.transaction(async (db) => {
+    const txCtx = { ...ctx, db };
     const mission = await resolveMissionId(txCtx, missionId);
     const session = await getSessionByKey(txCtx, sessionKey);
-    if (session.mission_id !== mission.id) {
-      throw new ServiceError("Session key does not match mission", "invalid_session", 401);
-    }
-    if (session.delivery_state === "delivered") {
+    if (session.mission_id !== mission.id || session.delivery_state === "delivered") {
       throw new ServiceError(
-        "Resume follow-up work before closing items",
-        "delivery_boundary",
-        409
+        "Discovery requires a live matching attached session",
+        "invalid_session",
+        401
       );
     }
-    const scope2 = { ...mission, workspaceId: ctx.workspace.id };
-    const prepared = await prepareMissionSummaryWrite(tx, {
-      mission: scope2,
-      input: input2,
-      checkBase: false
+    if (objectiveId) {
+      const objective = await resolveObjectiveRef({
+        ctx: txCtx,
+        missionId: mission.id,
+        ref: objectiveId
+      });
+      if (objective.id !== session.objective_id)
+        throw new ServiceError("Objective does not match session", "invalid_session", 401);
+    }
+    const ledger = await listObjectiveFileChanges({
+      ctx: txCtx,
+      missionId: mission.id,
+      objectiveId: session.objective_id
     });
-    return applyMissionSummaryWrite(tx, {
-      prepared,
-      mission: scope2,
-      objectiveId: session.objective_id,
-      deliveryId: null,
-      model: null,
-      attribution: missionItemAttribution(ctx)
-    });
+    return listProjectItemCandidates(
+      db,
+      {
+        ...options,
+        workspaceId: ctx.workspace.id,
+        projectId: mission.projectId,
+        missionId: mission.id
+      },
+      {
+        paths: ledger.items.map((i5) => i5.filePath),
+        captureGap: ledger.capture.warnings.length > 0 || ledger.truncated
+      }
+    );
   });
 }
 
@@ -162067,138 +164523,6 @@ var OBJECTIVE_REOPENABLE_STATES2 = Object.freeze([
 
 // repository.ts
 var import_node_path31 = __toESM(require("node:path"), 1);
-
-// ../packages/core/service/changes.ts
-function toIso(value2) {
-  return value2 instanceof Date ? value2.toISOString() : value2;
-}
-function toSource(value2) {
-  return value2 === "declared_edit" || value2 === "agent_declared" ? value2 : null;
-}
-function toBindingState(value2) {
-  return value2 === "bound" || value2 === "unbound" ? value2 : "unknown";
-}
-function readHealth(value2) {
-  let parsed = value2;
-  if (typeof value2 === "string") {
-    try {
-      parsed = JSON.parse(value2);
-    } catch {
-      return [];
-    }
-  }
-  const health = parsed?.health;
-  if (typeof health !== "object" || health === null) return [];
-  return Object.entries(health).filter(([, entry]) => typeof entry?.firstAt === "string" && typeof entry.lastAt === "string").map(([code, entry]) => ({
-    code,
-    firstAt: entry.firstAt,
-    lastAt: entry.lastAt
-  })).sort((left, right) => left.code.localeCompare(right.code));
-}
-function deriveCaptureWarnings(sessions) {
-  const warnings = /* @__PURE__ */ new Set();
-  for (const session of sessions) {
-    if (session.bindingState === "unbound") warnings.add("unbound");
-    else if (session.bindingState === "unknown") warnings.add("unknown_binding");
-    else if (!session.callbackObservedAt) warnings.add("bound_no_callback");
-    if (session.health.some((entry) => CAPTURE_GAP_CODES.includes(entry.code))) {
-      warnings.add("tool_activity_uncaptured");
-    }
-  }
-  return [...warnings];
-}
-async function resolveObjectiveInMission({
-  ctx,
-  missionId,
-  ref
-}) {
-  const exact = await ctx.db.get(
-    `SELECT id FROM objectives
-      WHERE id = ? AND mission_id = ? AND workspace_id = ? AND deleted_at IS NULL`,
-    [ref, missionId, ctx.workspace.id]
-  );
-  if (exact) return exact;
-  const resolved = await resolveObjectiveRef({ ctx, ref, missionId });
-  if (resolved.missionId !== missionId) {
-    throw new ServiceError(
-      "Objective does not belong to the addressed mission",
-      "objective_mismatch",
-      409
-    );
-  }
-  return resolved;
-}
-async function listObjectiveFileChanges({
-  ctx,
-  missionId,
-  objectiveId,
-  instructionStyle = null
-}) {
-  const mission = await resolveMissionId(ctx, missionId);
-  if (!objectiveId?.trim()) {
-    throw new ServiceError("objectiveId is required", "validation_error", 400);
-  }
-  const objective = await resolveObjectiveInMission({
-    ctx,
-    missionId: mission.id,
-    ref: objectiveId
-  });
-  const countRow = await ctx.db.get(
-    `SELECT COUNT(*) AS total FROM changed_files
-      WHERE objective_id = ? AND mission_id = ? AND workspace_id = ? AND deleted_at IS NULL`,
-    [objective.id, mission.id, ctx.workspace.id]
-  );
-  const rows = await ctx.db.all(
-    `SELECT cf.id, cf.mission_id, cf.objective_id, cf.file_path, cf.source, cf.hook_health,
-            cf.last_observed_at, COALESCE(pr.resource_key, o.resource_key) AS resource_key
-       FROM changed_files cf
-       LEFT JOIN objectives o ON o.id = cf.objective_id AND o.deleted_at IS NULL
-       LEFT JOIN project_resources pr ON pr.id = cf.resource_id AND pr.deleted_at IS NULL
-      WHERE cf.objective_id = ? AND cf.mission_id = ? AND cf.workspace_id = ?
-        AND cf.deleted_at IS NULL
-      ORDER BY COALESCE(pr.resource_key, o.resource_key, '') ASC, cf.file_path ASC, cf.id ASC
-      LIMIT ?`,
-    [objective.id, mission.id, ctx.workspace.id, OBJECTIVE_FILE_CHANGES_LIMIT]
-  );
-  const total = Number(countRow?.total ?? 0);
-  const sessionRows = await ctx.db.all(
-    `SELECT id, started_at, capture_binding_state, capture_callback_observed_at, capture_health_json
-       FROM agent_sessions
-      WHERE objective_id = ? AND mission_id = ? AND workspace_id = ? AND deleted_at IS NULL
-      ORDER BY started_at ASC, id ASC`,
-    [objective.id, mission.id, ctx.workspace.id]
-  );
-  const sessions = sessionRows.map((row) => ({
-    sessionId: row.id,
-    startedAt: toIso(row.started_at),
-    bindingState: toBindingState(row.capture_binding_state),
-    callbackObservedAt: row.capture_callback_observed_at ? toIso(row.capture_callback_observed_at) : null,
-    health: readHealth(row.capture_health_json)
-  }));
-  const items = rows.map((row) => ({
-    id: row.id,
-    missionId: row.mission_id,
-    objectiveId: row.objective_id,
-    resourceKey: row.resource_key?.trim() || null,
-    filePath: row.file_path,
-    source: toSource(row.source),
-    observedAt: toIso(row.last_observed_at),
-    hookHealth: row.hook_health
-  }));
-  const warnings = deriveCaptureWarnings(sessions);
-  const instruction = instructionStyle ? captureGapInstruction(instructionStyle, warnings) : null;
-  return {
-    scope: "server_objective",
-    missionId: mission.id,
-    objectiveId: objective.id,
-    items,
-    total,
-    limit: OBJECTIVE_FILE_CHANGES_LIMIT,
-    truncated: total > items.length,
-    capture: { sessions, warnings },
-    ...instruction ? { instruction } : {}
-  };
-}
 
 // ../packages/core/service/mission-branch-observations.ts
 var OBSERVED_BRANCH_STATUSES = /* @__PURE__ */ new Set([
@@ -162433,9 +164757,9 @@ function mergeMissionBranchObservation({
 }
 
 // ../packages/core/service/mission-reference-search.ts
-var import_node_crypto15 = require("node:crypto");
+var import_node_crypto18 = require("node:crypto");
 function referenceDigest(reference) {
-  return (0, import_node_crypto15.createHash)("sha256").update(reference).digest("hex").slice(0, 24);
+  return (0, import_node_crypto18.createHash)("sha256").update(reference).digest("hex").slice(0, 24);
 }
 function encodeCursor(body) {
   return Buffer.from(JSON.stringify(body), "utf8").toString("base64url");
@@ -162481,8 +164805,8 @@ async function searchMissionReferencesInProject({
   cursor: cursor3,
   limit: limit2
 }) {
-  const invalid4 = invalidMissionReference(reference);
-  if (invalid4) throw new ServiceError(invalid4, "validation_error");
+  const invalid5 = invalidMissionReference(reference);
+  if (invalid5) throw new ServiceError(invalid5, "validation_error");
   const pageSize = normalizeMissionReferenceLimit(limit2);
   const after = cursor3 ? decodeCursor(cursor3, projectId, reference) : null;
   const pattern = likePattern(reference);
@@ -162838,7 +165162,7 @@ ${diff}`,
 
 // db.ts
 var import_node_async_hooks2 = require("node:async_hooks");
-var import_node_crypto16 = require("node:crypto");
+var import_node_crypto19 = require("node:crypto");
 var import_node_path19 = __toESM(require("node:path"), 1);
 loadEnvDefaults(REPO_ROOT, ENV_PROFILE);
 function resolveDatabasePath2() {
@@ -162885,7 +165209,7 @@ function nowIso2() {
   return (/* @__PURE__ */ new Date()).toISOString();
 }
 function newId2() {
-  return (0, import_node_crypto16.randomUUID)();
+  return (0, import_node_crypto19.randomUUID)();
 }
 async function oldestWorkspaceRowFromClient(client) {
   return client.get(
@@ -163223,15 +165547,6 @@ async function restChangeAttribution(workspaceId2, client = requireDatabaseClien
     actor = profileId ? await findActiveMembershipId(workspaceId2, profileId, client) : null;
   }
   return { actorWorkspaceUserId: actor, actorTokenId: getActiveTokenId(), source: "webapp" };
-}
-function restMissionSummaryTriggerContext(tx, workspaceId2, actorWorkspaceUserId) {
-  return {
-    db: tx,
-    workspaceId: workspaceId2,
-    actorWorkspaceUserId,
-    actorTokenId: getActiveTokenId(),
-    source: "webapp"
-  };
 }
 async function enqueueWebhookEventRest(input2, client = requireDatabaseClient()) {
   const ctx = {
@@ -164978,7 +167293,7 @@ async function recordBranchActionActivityFromMutation({
 }
 
 // ext/github/service.ts
-var import_node_crypto17 = require("node:crypto");
+var import_node_crypto20 = require("node:crypto");
 var GITHUB_API = "https://api.github.com";
 var STATE_TTL_MS = 10 * 60 * 1e3;
 function githubAppConfig() {
@@ -165007,7 +167322,7 @@ function appJwt(config4) {
     JSON.stringify({ iat: now2 - 60, exp: now2 + 9 * 60, iss: config4.appId })
   );
   const signingInput = `${encodedHeader}.${encodedPayload}`;
-  const signer = (0, import_node_crypto17.createSign)("RSA-SHA256");
+  const signer = (0, import_node_crypto20.createSign)("RSA-SHA256");
   signer.update(signingInput);
   signer.end();
   return `${signingInput}.${signer.sign(config4.privateKey, "base64url")}`;
@@ -165046,16 +167361,16 @@ async function githubFetch(path29, token, init2 = {}) {
 }
 function signedInstallState(workspaceId2, privateKey) {
   const payload = base64url3(JSON.stringify({ workspaceId: workspaceId2, expiresAt: Date.now() + STATE_TTL_MS }));
-  const mac3 = (0, import_node_crypto17.createHmac)("sha256", privateKey).update(payload).digest("base64url");
+  const mac3 = (0, import_node_crypto20.createHmac)("sha256", privateKey).update(payload).digest("base64url");
   return `${payload}.${mac3}`;
 }
 function verifyInstallState(value2, privateKey) {
   const [payload, suppliedMac, ...extra] = value2?.split(".") ?? [];
   if (!payload || !suppliedMac || extra.length)
     throw new ApiError(400, "Invalid GitHub installation state.");
-  const expectedMac = (0, import_node_crypto17.createHmac)("sha256", privateKey).update(payload).digest("base64url");
+  const expectedMac = (0, import_node_crypto20.createHmac)("sha256", privateKey).update(payload).digest("base64url");
   const sameLength = suppliedMac.length === expectedMac.length;
-  if (!sameLength || !(0, import_node_crypto17.timingSafeEqual)(Buffer.from(suppliedMac), Buffer.from(expectedMac))) {
+  if (!sameLength || !(0, import_node_crypto20.timingSafeEqual)(Buffer.from(suppliedMac), Buffer.from(expectedMac))) {
     throw new ApiError(400, "Invalid GitHub installation state.");
   }
   let decoded;
@@ -165732,7 +168047,7 @@ async function loadResolutions(deliveryIds) {
 function findResolution(resolutions, deliveryId, entry) {
   return resolutions.get(`${deliveryId}:${entry.id}`);
 }
-function toResolverDto(resolver) {
+function toResolverDto(resolver, itemMissionId) {
   return resolver.kind === "person" ? {
     kind: "person",
     workspaceUserId: resolver.workspaceUserId,
@@ -165742,7 +168057,14 @@ function toResolverDto(resolver) {
     kind: "agent",
     workspaceUserId: null,
     objectiveId: resolver.objectiveId,
-    deliveryId: resolver.deliveryId
+    deliveryId: resolver.deliveryId,
+    missionId: resolver.missionId ?? null,
+    missionDisplayId: resolver.missionDisplayId ?? null,
+    objectiveDisplayId: resolver.objectiveDisplayId ?? null,
+    sessionId: resolver.sessionId ?? null,
+    crossMission: Boolean(
+      resolver.missionId && itemMissionId && resolver.missionId !== itemMissionId
+    )
   };
 }
 function toResolution(item) {
@@ -165758,7 +168080,7 @@ function toResolution(item) {
     outcome: item.outcome,
     outcomeRef: item.outcome === null ? null : item.outcomeRef,
     reason: item.statusReason,
-    resolvedBy: toResolverDto(resolvedBy)
+    resolvedBy: toResolverDto(resolvedBy, item.missionId)
   };
 }
 function deferredWorkItemDto(entry, item) {
@@ -165776,7 +168098,7 @@ function deferredWorkItemDto(entry, item) {
 var import_node_path30 = __toESM(require("node:path"), 1);
 
 // storage.ts
-var import_node_crypto23 = require("node:crypto");
+var import_node_crypto26 = require("node:crypto");
 var import_node_fs19 = require("node:fs");
 var import_node_path29 = __toESM(require("node:path"), 1);
 var import_node_url5 = require("node:url");
@@ -166475,7 +168797,7 @@ async function writeImageObject(bucket, input2, storageKeyFor) {
     sizeBytes: input2.bytes.length,
     // extensionForImage refused every other content type.
     contentType,
-    checksum: (0, import_node_crypto23.createHash)("sha256").update(input2.bytes).digest("hex"),
+    checksum: (0, import_node_crypto26.createHash)("sha256").update(input2.bytes).digest("hex"),
     publicUrl: publicUrlFor(bucket.bucket_key, storageKey)
   };
 }
@@ -166716,7 +169038,7 @@ async function writeAttachmentObject(bucket, workspaceId2, input2) {
     contentType,
     filename: input2.filename.trim() || `attachment${import_node_path29.default.extname(storageKey)}`,
     sizeBytes: input2.bytes.length,
-    checksum: (0, import_node_crypto23.createHash)("sha256").update(input2.bytes).digest("hex")
+    checksum: (0, import_node_crypto26.createHash)("sha256").update(input2.bytes).digest("hex")
   };
 }
 async function insertAttachmentRow(tx, written, scope2, createdByWorkspaceUserId) {
@@ -170448,6 +172770,13 @@ async function listMissionDeliveries(missionRef, limit2 = MISSION_EVIDENCE_LIST_
     [mission.id, mission.workspace_id, limit2]
   );
   const resolutions = await loadResolutions(rows.map((row) => row.id));
+  const crossCloses = new Map(
+    await Promise.all(
+      rows.map(
+        async (row) => [row.id, await closedElsewhere(requireDatabaseClient(), row.id, row.mission_id)]
+      )
+    )
+  );
   return {
     items: rows.map((row) => {
       const report2 = deliveryReportFromPayload(row.payload_json, row.summary);
@@ -170463,6 +172792,7 @@ async function listMissionDeliveries(missionRef, limit2 = MISSION_EVIDENCE_LIST_
         deliveredAt: row.delivered_at,
         agentIdentifier: row.agent_identifier,
         modelIdentifier: row.model_identifier,
+        closedElsewhere: crossCloses.get(row.id) ?? [],
         deferredWorkItems: deferredWorkEntries(report2).map(
           (entry) => deferredWorkItemDto(entry, findResolution(resolutions, row.id, entry))
         )
@@ -172484,10 +174814,10 @@ async function updateObjectiveTx(idRef, body, options = {}) {
         attribution: await restChangeAttribution(workspaceId2, tx, workspaceUserId),
         now: now2
       });
-      await enqueueMissionSummaryComposeJob({
-        ctx: restMissionSummaryTriggerContext(tx, workspaceId2, workspaceUserId),
-        missionId: existing.mission_id,
-        reason: "objective_reopened",
+      await advanceMissionNarrativeEvidence(tx, {
+        mission: { id: existing.mission_id },
+        reason: "reopened",
+        attribution: await restChangeAttribution(workspaceId2, tx, workspaceUserId),
         now: now2
       });
     }
@@ -173524,8 +175854,14 @@ function rejectRemovedProtocolPayloadFields(payload, context, removedFields = RE
 }
 function parseDeliveryPayloadEnvelope(body) {
   const fromFlag = parseMissionSummaryFlag(body);
+  const operationIdFlag = strFlag(body, "--operation-id");
   const input2 = parseJsonObjectInput(body, "--payload-json", "--payload-file", "delivery payload");
-  if (input2 === void 0) return fromFlag === void 0 ? {} : { missionSummary: fromFlag };
+  if (input2 === void 0) {
+    return {
+      ...fromFlag === void 0 ? {} : { missionSummary: fromFlag },
+      ...operationIdFlag === void 0 ? {} : { operationId: operationIdFlag }
+    };
+  }
   const {
     summary,
     artifacts,
@@ -173533,6 +175869,7 @@ function parseDeliveryPayloadEnvelope(body) {
     verificationSummary,
     followUpNotes,
     missionSummary,
+    operationId,
     ...payloadJson
   } = input2;
   if (summary !== void 0 && typeof summary !== "string") {
@@ -173558,6 +175895,8 @@ function parseDeliveryPayloadEnvelope(body) {
     ...followUpNotes === null || typeof followUpNotes === "string" ? { followUpNotes } : {},
     // The flag wins over the payload field, as individual flags do elsewhere.
     ...fromFlag !== void 0 ? { missionSummary: fromFlag } : missionSummary !== void 0 ? { missionSummary } : {},
+    // The flag wins over the envelope field; the service validates the value.
+    ...operationIdFlag !== void 0 ? { operationId: operationIdFlag } : operationId !== void 0 ? { operationId } : {},
     payloadJson
   };
 }
@@ -173638,6 +175977,9 @@ async function resolveProjectRefChoices({
 }
 
 // protocol/session.ts
+function publicationStyleFlag(body) {
+  return strFlag(body, "--connection-method") === "mcp" ? "mcp" : "cli";
+}
 function captureBindingFlag(body) {
   const value2 = strFlag(body, "--capture-binding");
   return value2 === void 0 ? void 0 : value2;
@@ -173663,7 +176005,49 @@ function declaredPathsInput(body) {
     "declaredPaths"
   );
 }
+function reportDraftInput(body, { allowRevisionShorthand }) {
+  const input2 = parseJsonObjectInput(
+    body,
+    "--report-draft-json",
+    "--report-draft-file",
+    "reportDraft"
+  );
+  const revision3 = allowRevisionShorthand ? strFlag(body, "--expected-draft-revision") : void 0;
+  if (revision3 === void 0) return input2;
+  if (input2 !== void 0) {
+    throw new ApiError(
+      400,
+      "Use either --expected-draft-revision or --report-draft-json/--report-draft-file, not both",
+      void 0,
+      "invalid_input"
+    );
+  }
+  if (!/^\d+$/.test(revision3)) {
+    throw new ApiError(
+      400,
+      "--expected-draft-revision must be a non-negative integer",
+      void 0,
+      "invalid_input"
+    );
+  }
+  return { expectedRevision: Number(revision3) };
+}
 var sessionSubcommands = {
+  "project-items": {
+    permission: PERMISSIONS.MISSION_READ,
+    handler: (ctx, body) => readAgentProjectItems({
+      ctx,
+      missionId: missionRefFlag(body),
+      objectiveId: objectiveRefFlag(body) ?? void 0,
+      sessionKey: requireFlag(body, "--session-key"),
+      kinds: strFlag(body, "--kind")?.split(",").map((s) => s.trim()),
+      query: strFlag(body, "--query"),
+      paths: strFlag(body, "--path")?.split(",").map((s) => s.trim()),
+      includeOwnMission: boolFlag(body, "--include-own-mission"),
+      limit: Number(strFlag(body, "--limit") ?? 20),
+      offset: Number(strFlag(body, "--offset") ?? 0)
+    })
+  },
   "mission-items": {
     permission: PERMISSIONS.MISSION_READ,
     handler: (ctx, body) => readAgentMissionItems({
@@ -173741,7 +176125,8 @@ var sessionSubcommands = {
         externalSessionId: externalSessionId(body),
         beginFollowUpWork: boolFlag(body, "--begin-follow-up-work"),
         followUpIntent: strFlag(body, "--follow-up-intent") ?? null,
-        declaredPaths: declaredPathsInput(body)
+        declaredPaths: declaredPathsInput(body),
+        reportDraft: reportDraftInput(body, { allowRevisionShorthand: false })
       });
     }
   },
@@ -173812,7 +176197,70 @@ var sessionSubcommands = {
         payloadJson: envelope2.payloadJson,
         verificationSummary: strFlag(body, "--verification-summary") ?? envelope2.verificationSummary ?? null,
         followUpNotes: strFlag(body, "--follow-up-notes") ?? envelope2.followUpNotes ?? null,
-        missionSummary: envelope2.missionSummary
+        missionSummary: envelope2.missionSummary,
+        operationId: envelope2.operationId,
+        reportDraft: reportDraftInput(body, { allowRevisionShorthand: true })
+      });
+    }
+  },
+  // The caller's own report draft (ADR 0078), with its final inspection while
+  // open; --draft-id reads an abandoned or sealed draft of the same objective.
+  "report-draft": {
+    permission: PERMISSIONS.MISSION_READ,
+    handler: (ctx, body) => readReportDraft({
+      ctx,
+      missionId: missionRefFlag(body),
+      sessionKey: requireFlag(body, "--session-key"),
+      draftId: strFlag(body, "--draft-id") ?? null,
+      includeWithdrawn: boolFlag(body, "--include-withdrawn")
+    })
+  },
+  // Scoped read of the caller's own finalization receipt (ADR 0075), by
+  // delivery id or by operation id; available after the session ended.
+  "delivery-receipt": {
+    permission: PERMISSIONS.MISSION_READ,
+    handler: (ctx, body) => readDeliveryReceipt({
+      ctx,
+      missionId: strFlag(body, "--mission-id") ?? null,
+      deliveryId: strFlag(body, "--delivery-id") ?? null,
+      operationId: strFlag(body, "--operation-id") ?? null,
+      operationKind: strFlag(body, "--operation-kind") ?? null
+    })
+  },
+  // Narrow post-delivery narrative surface (ADR 0076): the originating agent
+  // reads its delivery's publication opportunity and publishes once. The
+  // delivered, ended session is accepted here only; no other ended-session
+  // authority is granted.
+  "delivery-summary-context": {
+    permission: PERMISSIONS.EVENT_CREATE,
+    handler: (ctx, body) => readDeliverySummaryContext({
+      ctx,
+      missionId: missionRefFlag(body),
+      deliveryId: strFlag(body, "--delivery-id") ?? null,
+      publicationId: strFlag(body, "--publication-id") ?? null,
+      sessionKey: strFlag(body, "--session-key") ?? null,
+      style: publicationStyleFlag(body)
+    })
+  },
+  "publish-delivery-summary": {
+    permission: PERMISSIONS.EVENT_CREATE,
+    handler: (ctx, body) => {
+      const payload = parseJsonObjectInput(
+        body,
+        "--payload-json",
+        "--payload-file",
+        "publish-delivery-summary payload"
+      ) ?? {};
+      const { operationId: payloadOperationId, ...narrative } = payload;
+      return publishDeliverySummary({
+        ctx,
+        missionId: missionRefFlag(body),
+        deliveryId: strFlag(body, "--delivery-id") ?? null,
+        publicationId: strFlag(body, "--publication-id") ?? null,
+        sessionKey: strFlag(body, "--session-key") ?? null,
+        operationId: strFlag(body, "--operation-id") ?? payloadOperationId,
+        narrative,
+        style: publicationStyleFlag(body)
       });
     }
   },
@@ -174503,6 +176951,7 @@ var missionSubcommands = {
         declaredPaths: declaredPaths ?? envelope2.declaredPaths,
         payloadJson: restPayload,
         missionSummary: envelope2.missionSummary,
+        operationId: envelope2.operationId,
         ...assignedTo !== void 0 ? { assignedTo } : {}
       });
     }
@@ -174510,7 +176959,7 @@ var missionSubcommands = {
 };
 
 // workspaces.ts
-var import_node_crypto24 = require("node:crypto");
+var import_node_crypto27 = require("node:crypto");
 
 // sql-studio/sql-studio.ts
 var import_node_child_process7 = require("node:child_process");
@@ -180907,9 +183356,9 @@ var INVITATION_HASH_ALGORITHM = "sha256";
 var INVITATION_TTL_DAYS = 14;
 var WORKSPACE_ROLE_KEYS = /* @__PURE__ */ new Set(["ADMIN", "MANAGER", "MEMBER"]);
 function generateInvitationSecret() {
-  const prefix = `${INVITATION_TOKEN_SCHEME}_${(0, import_node_crypto24.randomBytes)(4).toString("hex")}`;
-  const secret = `${prefix}${(0, import_node_crypto24.randomBytes)(24).toString("hex")}`;
-  const hash2 = (0, import_node_crypto24.createHash)(INVITATION_HASH_ALGORITHM).update(secret).digest("hex");
+  const prefix = `${INVITATION_TOKEN_SCHEME}_${(0, import_node_crypto27.randomBytes)(4).toString("hex")}`;
+  const secret = `${prefix}${(0, import_node_crypto27.randomBytes)(24).toString("hex")}`;
+  const hash2 = (0, import_node_crypto27.createHash)(INVITATION_HASH_ALGORITHM).update(secret).digest("hex");
   return { secret, prefix, hash: hash2 };
 }
 var INVITATION_COLUMNS = "id, workspace_id, email, role_key, token_prefix, status, invited_by_workspace_user_id, expires_at, created_at, revision";
@@ -181079,7 +183528,7 @@ async function acceptWorkspaceInvitation(body) {
   if (!rawToken) throw new ApiError(400, "Invitation token is required");
   const profileId = getActiveProfileId();
   if (!profileId) throw new ApiError(401, "Authentication required");
-  const tokenHash = (0, import_node_crypto24.createHash)(INVITATION_HASH_ALGORITHM).update(rawToken).digest("hex");
+  const tokenHash = (0, import_node_crypto27.createHash)(INVITATION_HASH_ALGORITHM).update(rawToken).digest("hex");
   const client = requireDatabaseClient();
   const outcome = await client.transaction(async (tx) => {
     const invitation = await tx.get(
@@ -181963,6 +184412,10 @@ async function runProtocolSubcommand(subcommand, body) {
   try {
     const ctx = await buildProtocolContext(body, requiredPermission);
     await validateObjectiveAddressing({ ctx, body, subcommand });
+    ctx.canUpdateMissionItems = () => actorCan(PERMISSIONS.MISSION_UPDATE, {
+      workspaceId: ctx.workspace.id,
+      workspaceUserId: ctx.actorWorkspaceUserId
+    });
     return await entry.handler(ctx, body);
   } catch (error64) {
     if (error64 instanceof ProjectSelectionRequiredError) {
@@ -182056,8 +184509,15 @@ function missionSummaryProperty({ requireBase }) {
       baseContentRevision: {
         type: "integer",
         minimum: 0,
-        description: requireBase ? "missionSummary.contentRevision from attach. Required with headline and summary; a stale value rejects the whole delivery with mission_summary_conflict and a fresh baseline." : "Not needed: record-work creates a new mission with no summary to conflict with."
+        description: requireBase ? "missionSummary.contentRevision from attach. Required with headline and summary. If it is stale, the delivery is still accepted and your headline and summary are withheld." : "Not needed: record-work creates a new mission with no summary to conflict with."
       },
+      ...requireBase ? {
+        baseEvidenceRevision: {
+          type: "integer",
+          minimum: 0,
+          description: "missionSummary.evidenceRevision from attach. Without it, or if other accepted work changed the mission since, the delivery is still accepted and your headline and summary are withheld."
+        }
+      } : {},
       headline: stringProperty("One sentence, at most 140 characters. Send together with summary."),
       summary: stringProperty("Markdown, at most 1,200 characters, rewritten to be true now: what the mission provides and why it matters, current limits, then what a person must do. Say whether claims are implemented, tested or deployed. Do not restate open actions or suggestions."),
       closeItems: {
@@ -182071,7 +184531,7 @@ function missionSummaryProperty({ requireBase }) {
         }, ["id", "status", "reason"])
       }
     }),
-    description: requireBase ? "Optional agent-written mission summary for people: a replacement headline and summary based on the attach baseline, and open items to close. On mission_summary_conflict nothing is delivered: rewrite from error details.missionSummary and retry once, then deliver without headline and summary." : "Optional agent-written mission summary for the new mission: headline and summary."
+    description: requireBase ? "Optional agent-written mission summary for people: a replacement headline and summary based on the attach baseline, and open items to close. Nothing else writes it. Stale or absent prose never rejects the delivery: missionSummary.publication and instruction then say how to publish once with overlord_publish_delivery_summary." : "Optional agent-written mission summary for the new mission: headline and summary. Without it, the result says how to publish once later with overlord_publish_delivery_summary."
   };
 }
 var booleanProperty = (description) => ({
@@ -182087,6 +184547,36 @@ var declaredPathsProperty = (description) => ({
   type: "array",
   description,
   items: stringProperty("Canonical repository-relative path. Deleted and renamed paths (both endpoints) are valid.")
+});
+function operationIdProperty(kind) {
+  return stringProperty(`Optional retry identity for this ${kind}: 8-128 letters, digits, ".", "_", ":" or "-". Choose it yourself before the first call and send the same value on every retry of this attempt (for example after a timeout or lost response); the server then returns the original result instead of ` + (kind === "delivery" ? "delivering again. " : "recording the work twice. Use a new value only for intentionally separate work. ") + "The same value with a different request is refused with delivery_operation_conflict. Without it, retries are not deduplicated" + (kind === "delivery" ? " (a second delivery of the session is still refused)." : "."));
+}
+var reportDraftOperationsProperty = (description) => ({
+  type: "array",
+  maxItems: 50,
+  description,
+  items: {
+    type: "object",
+    properties: {
+      op: { type: "string", enum: ["upsert", "withdraw", "import"] },
+      entryId: stringProperty('Your stable id for one observation (1-100 letters, digits, ".", "_", ":" or "-"). Upsert the same id to amend it; its kind never changes.'),
+      kind: {
+        type: "string",
+        enum: ["human_action", "tradeoff", "known_risk", "deferred_work", "assumption"],
+        description: "upsert only."
+      },
+      content: {
+        type: "object",
+        additionalProperties: true,
+        description: "upsert only. human_action, tradeoff and deferred_work use the deliver item shapes (humanActions, tradeoffsMade, deferredWork); known_risk and assumption use { text }."
+      },
+      reason: stringProperty("withdraw only. Why the observation no longer applies, at most 280 characters."),
+      sourceDraftId: stringProperty("import only. An abandoned draft of this objective (from overlord_report_draft abandoned[])."),
+      sourceEntryId: stringProperty("import only. The active entry of that draft to copy.")
+    },
+    required: ["op"],
+    additionalProperties: false
+  }
 });
 var readOnly = { readOnlyHint: true, destructiveHint: false, openWorldHint: false };
 var writeAction = { readOnlyHint: false, destructiveHint: false, openWorldHint: false };
@@ -182221,6 +184711,105 @@ function overlordMcpToolDefinitions({ defaultAgent }) {
       annotations: readOnly
     },
     {
+      name: "overlord_delivery_receipt",
+      title: "Read delivery receipt",
+      description: "Use this to confirm whether your own deliver or record-work attempt was accepted, for example after a lost response. Give exactly one of deliveryId or operationId (with operationKind record_work for record-work). Returns the immutable accepted receipt; only the member who delivered can read it. A not-found answer does not prove a concurrent attempt failed: retry the original call with the same operationId instead of choosing a new one.",
+      inputSchema: objectSchema({
+        missionId: stringProperty("Optional mission UUID or display id the receipt must belong to."),
+        deliveryId: stringProperty("Delivery id from an accepted delivery."),
+        operationId: stringProperty("The operationId you sent with deliver or record-work."),
+        operationKind: {
+          type: "string",
+          enum: ["deliver", "record_work"],
+          description: "Namespace of operationId. Defaults to deliver."
+        }
+      }),
+      outputSchema: protocolOutputSchema("receipt { operationKind, operationId, missionId, missionDisplayId, objectiveId, deliveryId, acceptedAt, result }, where result is the original accepted response."),
+      annotations: readOnly
+    },
+    {
+      name: "overlord_report_draft",
+      title: "Read report draft",
+      description: "Use this before delivering when your session recorded draft evidence with overlord_update_session reportDraft. Returns your draft (state open, sealed or abandoned; revision; active entries; withdrawn entries when requested) and, while open, the final inspection: the normalized report deliver would seal now with exclusion warnings. Also lists abandoned drafts of the objective whose entries you may import explicitly. Read-only; drafts are provisional and never mission items.",
+      inputSchema: objectSchema({
+        missionId: stringProperty("Mission UUID or workspace display id. Optional when objectiveId is a display id."),
+        objectiveId: stringProperty("Objective UUID or display id such as coo:756.k7xm."),
+        sessionKey: stringProperty("Session key returned by overlord_attach_session."),
+        draftId: stringProperty("Optional. Read an abandoned or sealed draft of the same objective instead of your own."),
+        includeWithdrawn: booleanProperty("Include withdrawn entries.")
+      }, ["sessionKey"]),
+      outputSchema: protocolOutputSchema("draft (or null), revision (send as expectedRevision), inspection { agentReport, entries, warnings } for your open draft, abandoned[] and limits."),
+      annotations: readOnly
+    },
+    {
+      name: "overlord_delivery_summary_context",
+      title: "Read delivery summary context",
+      description: "Use this after your own accepted delivery when its mission summary was withheld or omitted. Returns the delivery publication opportunity (available, state, supersededReason), a fresh editing baseline with contentRevision and evidenceRevision, and an instruction. It grants no execution rights and works after the session ended. There is no deadline: the opportunity ends only when newer work, a follow-up or a reopen supersedes it, or it is published.",
+      inputSchema: objectSchema({
+        missionId: stringProperty("Mission UUID or display id of the delivery."),
+        deliveryId: stringProperty("The accepted delivery id. Give this or publicationId."),
+        publicationId: stringProperty("missionSummary.publication.id from the delivery result."),
+        sessionKey: stringProperty("The key of the session that delivered. Not needed for a record-work delivery.")
+      }, ["missionId"]),
+      outputSchema: protocolOutputSchema("{ publication { id, missionId, missionDisplayId, objectiveId, deliveryId, evidenceRevision, available, state, supersededReason, publishedAt, publishedContentRevision }, baseline, instruction }."),
+      annotations: readOnly
+    },
+    {
+      name: "overlord_publish_delivery_summary",
+      title: "Publish delivery summary",
+      description: "Use this once to publish a reconciled headline and summary for the whole mission, for your own accepted delivery whose summary was withheld or omitted. Read overlord_delivery_summary_context first and send its baseline contentRevision and evidenceRevision as bases. Writes only the narrative: no item closes, report fields or objective changes. On mission_summary_conflict nothing was written: reconcile from error details.missionSummary and try once more, then stop and say the summary is not updated. mission_summary_publication_superseded means newer work owns the next summary; do not deliver again or resume execution to update it.",
+      inputSchema: objectSchema({
+        missionId: stringProperty("Mission UUID or display id of the delivery."),
+        deliveryId: stringProperty("The accepted delivery id. Give this or publicationId."),
+        publicationId: stringProperty("missionSummary.publication.id from the delivery result."),
+        sessionKey: stringProperty("The key of the session that delivered. Not needed for a record-work delivery."),
+        operationId: stringProperty('Required retry identity for this publication: 8-128 letters, digits, ".", "_", ":" or "-". Choose it before the first call and reuse it on every retry of this publication; the same value and text after success returns the original result.'),
+        baseContentRevision: {
+          type: "integer",
+          minimum: 0,
+          description: "baseline.contentRevision from overlord_delivery_summary_context."
+        },
+        baseEvidenceRevision: {
+          type: "integer",
+          minimum: 0,
+          description: "baseline.evidenceRevision from overlord_delivery_summary_context."
+        },
+        headline: stringProperty("One sentence, at most 140 characters."),
+        summary: stringProperty("Markdown, at most 1,200 characters, rewritten for the whole mission to be true now. Say whether claims are implemented, tested or deployed.")
+      }, [
+        "missionId",
+        "operationId",
+        "baseContentRevision",
+        "baseEvidenceRevision",
+        "headline",
+        "summary"
+      ]),
+      outputSchema: protocolOutputSchema("{ publication, operationId, contentRevision, evidenceRevision, publishedAt, warnings, instruction, replayed? }."),
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false }
+    },
+    {
+      name: "overlord_project_items",
+      title: "Discover project open items",
+      description: "Use this to discover accepted live open items in the attached session project, excluding its own mission by default. Ranks by the live objective change ledger plus explicit paths: strong full path, medium directory, weak non-generic basename, then newest delivery. Default 20, max 100; scans at most 2,000 rows with scanTruncated. query is a case-insensitive text substring, not an id lookup. Returns bounded text and at most five matched paths; ledger.captureGap suggests supplying paths. Draft observations are excluded. Restart paging after concurrent writes. Verify resolution in code before closing through overlord_close_items or delivery closeItems.",
+      inputSchema: objectSchema({
+        missionId: stringProperty("Mission UUID or display id; optional with objective display id."),
+        objectiveId: stringProperty("Must match the attached session objective."),
+        sessionKey: stringProperty("Live matching attached session key; ended sessions denied."),
+        kinds: {
+          type: "array",
+          minItems: 1,
+          items: { type: "string", enum: ["risk", "human_action", "suggestion"] }
+        },
+        query: { type: "string", maxLength: 200 },
+        paths: { type: "array", maxItems: 200, items: { type: "string", maxLength: 1e3 } },
+        includeOwnMission: { type: "boolean" },
+        limit: { type: "integer", minimum: 1, maximum: 100, default: 20 },
+        offset: { type: "integer", minimum: 0 }
+      }, ["sessionKey"]),
+      outputSchema: protocolOutputSchema("Shape version 1: projectId, excludedMissionId, total, items, limit, offset, nextOffset, truncated, scanTruncated, ledger {paths, captureGap}."),
+      annotations: readOnly
+    },
+    {
       name: "overlord_mission_items",
       title: "Read full mission items",
       description: "Use this to read all open items of an attached session\u2019s mission with full text and detail (suggestion change, location, doneWhen; action command and verify). Blocking human actions come first. Returns items, total, limit, offset, truncated and nextOffset; page until nextOffset is null. If items change while paging, restart at offset 0; do not close items while paging.",
@@ -182237,7 +184826,7 @@ function overlordMcpToolDefinitions({ defaultAgent }) {
     {
       name: "overlord_close_items",
       title: "Close verified mission items",
-      description: "Use this to close verified open items of the attached session\u2019s mission as done or dismissed, with a reason, without delivering. Uses delivery closeItems rules and warnings. Returns closedItemIds and warnings; skipped entries carry recovery instructions. Repeat for more than 50 closures.",
+      description: "Use this to close verified open items of any mission in the attached session\u2019s project as done or dismissed, with a reason, without delivering. Uses delivery closeItems rules and warnings. Returns closedItemIds and warnings; skipped entries carry recovery instructions. Repeat for more than 50 closures.",
       inputSchema: objectSchema({
         missionId: stringProperty("Mission UUID or display id; optional with an objective display id."),
         objectiveId: stringProperty("Objective UUID or display id."),
@@ -182247,7 +184836,7 @@ function overlordMcpToolDefinitions({ defaultAgent }) {
           minItems: 1,
           maxItems: 50,
           items: objectSchema({
-            id: stringProperty("Open item id from attach or the mission-items read."),
+            id: stringProperty("Open item id from attach, project-items or an authorized mission read."),
             status: { type: "string", enum: ["done", "dismissed"] },
             reason: { type: "string", minLength: 1, maxLength: 280 }
           }, ["id", "status", "reason"])
@@ -182472,12 +185061,24 @@ function overlordMcpToolDefinitions({ defaultAgent }) {
         missionId: stringProperty("Mission UUID or workspace display id. Optional when objectiveId is a display id such as coo:756.k7xm, which already names its mission."),
         objectiveId: stringProperty("Objective UUID or display id such as coo:756.k7xm. Supplies missionId when it is omitted; the session key still determines which objective the event lands on."),
         sessionKey: stringProperty("Session key returned by overlord_attach_session."),
-        summary: stringProperty("Update text."),
+        summary: stringProperty("Update text. Optional when reportDraft is sent."),
         phase: stringProperty("Optional protocol phase."),
         eventType: stringProperty("Optional event type. Defaults to update."),
-        declaredPaths: declaredPathsProperty("Optional paths written by shell commands, generators, or scripts that native capture could not name. Recorded as agent_declared evidence; never an exhaustive list.")
-      }, ["sessionKey", "summary"]),
-      outputSchema: protocolOutputSchema("The recorded mission activity event."),
+        declaredPaths: declaredPathsProperty("Optional paths written by shell commands, generators, or scripts that native capture could not name. Recorded as agent_declared evidence; never an exhaustive list."),
+        reportDraft: {
+          ...objectSchema({
+            operationId: stringProperty('Required. Your id for this batch (8-128 letters, digits, ".", "_", ":" or "-"). Choose it before the first call and send the same value on every retry of this batch; the server then returns the original receipt instead of applying it again, even after later batches or delivery.'),
+            expectedRevision: {
+              type: "integer",
+              minimum: 0,
+              description: "The draft revision you last saw: 0 before your first batch, then reportDraft.revision from the previous result or overlord_report_draft. A stale value applies nothing and fails with report_draft_conflict carrying the fresh draft."
+            },
+            operations: reportDraftOperationsProperty("1-50 operations, at most one per entryId. At most 12 active entries per kind.")
+          }, ["operationId", "expectedRevision", "operations"]),
+          description: "Optional, opt-in provisional report evidence for this session (ADR 0078). Batch discoveries instead of reporting after every tool call. Draft entries never become mission items, obligations or badges; deliver seals them into the accepted report."
+        }
+      }, ["sessionKey"]),
+      outputSchema: protocolOutputSchema("The recorded mission activity event (eventId) and, with reportDraft, reportDraft { draftId, operationId, revision, activeCounts }, or replayed true with the original eventId and revision when this batch was already accepted."),
       annotations: writeAction
     },
     {
@@ -182544,9 +185145,21 @@ function overlordMcpToolDefinitions({ defaultAgent }) {
           type: "array",
           items: stringProperty("Material implementation assumption.")
         },
-        missionSummary: missionSummaryProperty({ requireBase: true })
+        missionSummary: missionSummaryProperty({ requireBase: true }),
+        operationId: operationIdProperty("delivery"),
+        reportDraft: {
+          ...objectSchema({
+            expectedRevision: {
+              type: "integer",
+              minimum: 0,
+              description: "The draft revision from your last overlord_report_draft read or update result."
+            },
+            operations: reportDraftOperationsProperty("Optional final draft operations applied before sealing (same shapes as overlord_update_session; no batch operationId: operationId above identifies this delivery).")
+          }, ["expectedRevision"]),
+          description: "Required when this session recorded a report draft: read overlord_report_draft first, then send its revision. Without it, or with a stale revision, nothing is delivered (report_draft_conflict). Active entries become the accepted report, followed by humanActions/tradeoffsMade/knownRisks/deferredWork/assumptions items that match no entry; amend or remove entries by entryId, not by omission. More than 12 items of a kind is refused, never truncated."
+        }
       }, ["sessionKey", "summary"]),
-      outputSchema: protocolOutputSchema("The completed delivery record and any recorded file changes, instruction (what to do after delivery), plus missionSummary { contentRevision, narrativeWritten, closedItemIds, warnings } when a summary was sent."),
+      outputSchema: protocolOutputSchema("The completed delivery record and any recorded file changes, instruction (what to do after delivery), operationId when sent, replayed true when this is the stored result of an earlier accepted attempt, plus missionSummary { contentRevision, narrativeWritten, closedItemIds, warnings } when a summary was sent, and reportDraft { draftId, revision, sealed, refs } when a draft was sealed. A session that already delivered fails with delivery_already_accepted and the existing deliveryId: do not deliver again."),
       annotations: writeAction
     },
     {
@@ -182598,9 +185211,10 @@ function overlordMcpToolDefinitions({ defaultAgent }) {
           type: "array",
           description: "Optional artifacts: next_steps, test_results, decision, note, or url."
         },
-        missionSummary: missionSummaryProperty({ requireBase: false })
+        missionSummary: missionSummaryProperty({ requireBase: false }),
+        operationId: operationIdProperty("record")
       }, ["projectId", "objective", "summary"]),
-      outputSchema: protocolOutputSchema("The created review-column mission and the delivery id whose Gemini summary is composing."),
+      outputSchema: protocolOutputSchema("The created review-column mission and the delivery id whose Gemini summary is composing; operationId when sent and replayed true when this is the stored result of an earlier accepted attempt with that operationId."),
       annotations: writeAction
     }
   ];
@@ -182732,6 +185346,15 @@ function autoAdvanceFlags(args) {
   if (args.autoAdvance === true) return { "--auto-advance": true };
   if (args.autoAdvance === false) return { "--no-auto-advance": true };
   return {};
+}
+function deliverySummaryFlags(args) {
+  return {
+    "--mission-id": requiredString2(args, "missionId"),
+    "--connection-method": "mcp",
+    ...optionalString(args, "deliveryId") ? { "--delivery-id": requiredString2(args, "deliveryId") } : {},
+    ...optionalString(args, "publicationId") ? { "--publication-id": requiredString2(args, "publicationId") } : {},
+    ...optionalString(args, "sessionKey") ? { "--session-key": requiredString2(args, "sessionKey") } : {}
+  };
 }
 function protocolBody(flags) {
   return { flags };
@@ -182929,7 +185552,9 @@ function recordWorkProtocolBody(args) {
     ...optionalString(args, "title") ? { title: requiredString2(args, "title") } : {},
     ...Array.isArray(args.declaredPaths) ? { declaredPaths: args.declaredPaths } : {},
     ...Array.isArray(args.artifacts) ? { artifacts: args.artifacts } : {},
-    ...isRecord(args.missionSummary) ? { missionSummary: args.missionSummary } : {}
+    ...isRecord(args.missionSummary) ? { missionSummary: args.missionSummary } : {},
+    // Caller-retained retry identity only: a handler-minted id would promise nothing.
+    ...optionalString(args, "operationId") ? { operationId: requiredString2(args, "operationId") } : {}
   };
   return {
     flags: {
@@ -182945,9 +185570,11 @@ function deliverSessionProtocolBody(args) {
       ...missionScopeFlags(args),
       "--session-key": requiredString2(args, "sessionKey"),
       "--summary": requiredString2(args, "summary"),
+      ...optionalString(args, "operationId") ? { "--operation-id": requiredString2(args, "operationId") } : {},
       ...Array.isArray(args.artifacts) ? { "--artifacts-file": true } : {},
       ...Array.isArray(args.declaredPaths) ? { "--declared-paths-file": true } : {},
       ...isRecord(args.missionSummary) ? { "--mission-summary-file": true } : {},
+      ...isRecord(args.reportDraft) ? { "--report-draft-json": JSON.stringify(args.reportDraft) } : {},
       ...Array.isArray(args.humanActions) || Array.isArray(args.tradeoffsMade) || Array.isArray(args.knownRisks) || Array.isArray(args.deferredWork) || Array.isArray(args.assumptions) ? {
         "--payload-json": JSON.stringify({
           deliveryReport: {
@@ -183084,6 +185711,52 @@ var toolHandlers = {
     })
   ),
   overlord_list_deliveries: (args) => runProtocolSubcommand("list-deliveries", protocolBody(missionScopeFlags(args))),
+  overlord_delivery_receipt: (args) => runProtocolSubcommand(
+    "delivery-receipt",
+    protocolBody({
+      ...optionalString(args, "missionId") ? { "--mission-id": requiredString2(args, "missionId") } : {},
+      ...optionalString(args, "deliveryId") ? { "--delivery-id": requiredString2(args, "deliveryId") } : {},
+      ...optionalString(args, "operationId") ? { "--operation-id": requiredString2(args, "operationId") } : {},
+      ...optionalString(args, "operationKind") ? { "--operation-kind": requiredString2(args, "operationKind") } : {}
+    })
+  ),
+  overlord_report_draft: (args) => runProtocolSubcommand(
+    "report-draft",
+    protocolBody({
+      ...missionScopeFlags(args),
+      "--session-key": requiredString2(args, "sessionKey"),
+      ...optionalString(args, "draftId") ? { "--draft-id": requiredString2(args, "draftId") } : {},
+      ...args.includeWithdrawn === true ? { "--include-withdrawn": true } : {}
+    })
+  ),
+  overlord_delivery_summary_context: (args) => runProtocolSubcommand("delivery-summary-context", protocolBody(deliverySummaryFlags(args))),
+  overlord_publish_delivery_summary: (args) => runProtocolSubcommand(
+    "publish-delivery-summary",
+    protocolBody({
+      ...deliverySummaryFlags(args),
+      // Caller-retained retry identity (ADR 0076); never minted here.
+      "--operation-id": requiredString2(args, "operationId"),
+      "--payload-json": JSON.stringify({
+        baseContentRevision: args.baseContentRevision,
+        baseEvidenceRevision: args.baseEvidenceRevision,
+        headline: requiredString2(args, "headline"),
+        summary: requiredString2(args, "summary")
+      })
+    })
+  ),
+  overlord_project_items: (args) => runProtocolSubcommand(
+    "project-items",
+    protocolBody({
+      ...missionScopeFlags(args),
+      "--session-key": requiredString2(args, "sessionKey"),
+      ...args.kinds !== void 0 ? { "--kind": args.kinds.join(",") } : {},
+      ...args.query !== void 0 ? { "--query": requiredString2(args, "query") } : {},
+      ...args.paths !== void 0 ? { "--path": args.paths.join(",") } : {},
+      ...args.includeOwnMission === true ? { "--include-own-mission": true } : {},
+      ...args.limit !== void 0 ? { "--limit": String(args.limit) } : {},
+      ...args.offset !== void 0 ? { "--offset": String(args.offset) } : {}
+    })
+  ),
   overlord_mission_items: (args) => runProtocolSubcommand(
     "mission-items",
     protocolBody({
@@ -183200,8 +185873,11 @@ var toolHandlers = {
     flags: {
       ...missionScopeFlags(args),
       "--session-key": requiredString2(args, "sessionKey"),
-      "--summary": requiredString2(args, "summary"),
+      // Optional with a report draft batch (ADR 0078); the service still requires one otherwise.
+      "--summary": optionalString(args, "summary") ?? "",
       ...optionalString(args, "phase") ? { "--phase": requiredString2(args, "phase") } : {},
+      // The batch operationId is caller-retained inside reportDraft; never minted here.
+      ...isRecord(args.reportDraft) ? { "--report-draft-json": JSON.stringify(args.reportDraft) } : {},
       ...optionalString(args, "eventType") ? { "--event-type": requiredString2(args, "eventType") } : {},
       ...Array.isArray(args.declaredPaths) ? { "--declared-paths-file": true } : {}
     },
@@ -183373,7 +186049,7 @@ async function handleMcpPost(req, res, next) {
 }
 
 // ../packages/core/service/chat/conversations.ts
-var import_node_crypto28 = require("node:crypto");
+var import_node_crypto31 = require("node:crypto");
 
 // ../packages/core/service/chat/performance.ts
 var import_node_async_hooks3 = require("node:async_hooks");
@@ -183518,7 +186194,7 @@ var UNCERTAIN_WRITE_RESULT = {
 };
 
 // ../packages/core/service/chat/proposals.ts
-var import_node_crypto27 = require("node:crypto");
+var import_node_crypto30 = require("node:crypto");
 
 // ../packages/core/service/chat/access.ts
 var ChatAccess = class {
@@ -183639,11 +186315,11 @@ function assignmentCatalogProjection(value2) {
 }
 
 // ../packages/core/service/chat/runs.ts
-var import_node_crypto26 = require("node:crypto");
+var import_node_crypto29 = require("node:crypto");
 var import_node_util2 = require("node:util");
 
 // ../packages/core/service/chat/store.ts
-var import_node_crypto25 = require("node:crypto");
+var import_node_crypto28 = require("node:crypto");
 var import_node_util = require("node:util");
 var ChatError = class extends ServiceError {
   /**
@@ -183837,7 +186513,7 @@ var ChatStore = class _ChatStore {
     await this.db.run(
       `INSERT INTO chat_events (id, thread_id, seq, kind, run_id, attempt_id, fence, payload_json, dependency_set_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
-        (0, import_node_crypto25.randomUUID)(),
+        (0, import_node_crypto28.randomUUID)(),
         threadId,
         t.last_event_seq,
         payload.kind,
@@ -183914,7 +186590,7 @@ var ChatStore = class _ChatStore {
       await this.db.run(
         `INSERT INTO chat_source_refs (id, thread_id, source_kind, scope_key, connection_id, locator_json, access_state, access_checked_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, 'unknown', ?, ?, ?) ON CONFLICT (thread_id, scope_key) DO NOTHING`,
         [
-          (0, import_node_crypto25.randomUUID)(),
+          (0, import_node_crypto28.randomUUID)(),
           threadId,
           source.locator.kind,
           source.scopeKey,
@@ -184086,14 +186762,14 @@ var ChatStore = class _ChatStore {
         throw new ChatError("source_access_lost");
     }
     const authorizationRevision = (await this.thread(threadId)).authorization_revision;
-    const digest6 = (0, import_node_crypto25.createHash)("sha256").update(JSON.stringify({ ids, authorizationRevision })).digest("hex");
+    const digest6 = (0, import_node_crypto28.createHash)("sha256").update(JSON.stringify({ ids, authorizationRevision })).digest("hex");
     const old = await this.db.get(
       "SELECT id, invalidated_at FROM chat_dependency_sets WHERE thread_id = ? AND digest = ?",
       [threadId, digest6]
     );
     if (old?.invalidated_at) throw new ChatError("source_access_lost");
     if (old) return old.id;
-    const id2 = (0, import_node_crypto25.randomUUID)();
+    const id2 = (0, import_node_crypto28.randomUUID)();
     await this.db.run(
       "INSERT INTO chat_dependency_sets (id, thread_id, digest, created_at) VALUES (?, ?, ?, ?)",
       [id2, threadId, digest6, this.timestamp()]
@@ -184181,7 +186857,7 @@ var ChatStore = class _ChatStore {
     await this.db.run(
       `INSERT INTO chat_notifications (id, owner_profile_id, organization_id, thread_id, run_id, question_id, type, transition_key, event_seq, state, due_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?) ON CONFLICT (owner_profile_id, thread_id, run_id, type, transition_key) DO NOTHING`,
       [
-        (0, import_node_crypto25.randomUUID)(),
+        (0, import_node_crypto28.randomUUID)(),
         t.owner_profile_id,
         t.organization_id,
         t.id,
@@ -184334,7 +187010,7 @@ var ChatRuns = class _ChatRuns extends ChatStore {
             );
           }
         }
-        const id2 = (0, import_node_crypto26.randomUUID)(), fence = r5.current_fence + 1, now2 = s.timestamp();
+        const id2 = (0, import_node_crypto29.randomUUID)(), fence = r5.current_fence + 1, now2 = s.timestamp();
         await tx.run(
           "UPDATE chat_runs SET state = 'running', current_fence = ?, active_attempt_id = ?, updated_at = ?, revision = revision + 1 WHERE id = ?",
           [fence, id2, now2, r5.id]
@@ -184592,7 +187268,7 @@ var ChatRuns = class _ChatRuns extends ChatStore {
         requiredText(req.providerCallId, 200);
         const args = JSON.stringify(req.arguments);
         if (Buffer.byteLength(args) > 64 * 1024) throw new ChatError("limit_exceeded");
-        const callId = (0, import_node_crypto26.randomUUID)();
+        const callId = (0, import_node_crypto29.randomUUID)();
         await s.db.run(
           `INSERT INTO chat_tool_calls (id, run_id, attempt_id, operation_id, turn_index, call_order, provider_call_id, tool_id, policy_version, arguments_json, state, requested_fence, writer_fence, dependency_set_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, 'requested', ?, ?, ?, ?, ?)`,
           [
@@ -184762,8 +187438,8 @@ var ChatRuns = class _ChatRuns extends ChatStore {
         [messageId, a5.runId]
       );
       if (messageId && !old) throw new ChatError("invalid_request");
-      const id2 = old ? old.id : (0, import_node_crypto26.randomUUID)();
-      const blocks = old ? JSON.parse(old.blocks_json) : [{ id: (0, import_node_crypto26.randomUUID)(), kind: "text", text: "", evidenceIds: [], fallbackText: "" }];
+      const id2 = old ? old.id : (0, import_node_crypto29.randomUUID)();
+      const blocks = old ? JSON.parse(old.blocks_json) : [{ id: (0, import_node_crypto29.randomUUID)(), kind: "text", text: "", evidenceIds: [], fallbackText: "" }];
       const block = blocks[0];
       if (!block || block.kind !== "text") throw new ChatError("invalid_request");
       if (block.text.length + text.length > s.limits.messageMaxChars)
@@ -184814,7 +187490,7 @@ var ChatRuns = class _ChatRuns extends ChatStore {
         "SELECT COUNT(*) AS n FROM chat_questions WHERE run_id = ?",
         [a5.runId]
       );
-      const id2 = (0, import_node_crypto26.randomUUID)(), now2 = s.timestamp();
+      const id2 = (0, import_node_crypto29.randomUUID)(), now2 = s.timestamp();
       await s.db.run(
         `INSERT INTO chat_questions (id, thread_id, run_id, ordinal, state, prompt, options_json, allow_free_text, dependency_set_id, created_at, updated_at) VALUES (?, ?, ?, ?, 'open', ?, ?, ?, ?, ?, ?)`,
         [
@@ -184897,7 +187573,7 @@ var ChatRuns = class _ChatRuns extends ChatStore {
       );
       const evidence = [];
       for (const [i5, source] of sources.entries()) {
-        const evidenceId = (0, import_node_crypto26.randomUUID)();
+        const evidenceId = (0, import_node_crypto29.randomUUID)();
         await s.db.run(
           `INSERT INTO chat_evidence (id, thread_id, run_id, tool_call_id, source_ref_id, label, excerpt, excerpt_truncated, source_revision, observed_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
@@ -184955,7 +187631,7 @@ var ChatRuns = class _ChatRuns extends ChatStore {
       }));
       const others = blocks.filter((b5) => b5.kind !== "evidence");
       others.push({
-        id: (0, import_node_crypto26.randomUUID)(),
+        id: (0, import_node_crypto29.randomUUID)(),
         kind: "evidence",
         evidence,
         fallbackText: `Sources: ${evidence.map((e5) => e5.label).join("; ")}`.slice(0, 4e3)
@@ -184998,7 +187674,7 @@ var ChatRuns = class _ChatRuns extends ChatStore {
       if (regressed) throw new ChatError("invalid_request");
       await s.db.run(
         "INSERT INTO chat_thread_summaries (id, thread_id, summary_revision, summary_json, covers_through_message_id, dependency_set_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-        [(0, import_node_crypto26.randomUUID)(), a5.threadId, Number(last?.n ?? 0) + 1, json2, latest.id, deps, s.timestamp()]
+        [(0, import_node_crypto29.randomUUID)(), a5.threadId, Number(last?.n ?? 0) + 1, json2, latest.id, deps, s.timestamp()]
       );
     });
   }
@@ -185307,7 +187983,7 @@ var ChatProposals = class _ChatProposals extends ChatStore {
       await runs.assertLease(a5);
       const destinationSet = await s.dependencySet(a5.threadId, sourceIds);
       const dependencySetId = await s.generationDependencies(a5.threadId, destinationSet);
-      const id2 = body.proposalId ?? (0, import_node_crypto27.randomUUID)();
+      const id2 = body.proposalId ?? (0, import_node_crypto30.randomUUID)();
       let next = 1;
       if (body.proposalId) {
         const old = await tx.get(
@@ -185350,10 +188026,10 @@ var ChatProposals = class _ChatProposals extends ChatStore {
         id: a5.id,
         fence: a5.fence
       });
-      const messageId = (0, import_node_crypto27.randomUUID)();
+      const messageId = (0, import_node_crypto30.randomUUID)();
       const blocks = [
         {
-          id: (0, import_node_crypto27.randomUUID)(),
+          id: (0, import_node_crypto30.randomUUID)(),
           kind: "proposal",
           proposalId: id2,
           revision: next,
@@ -185465,7 +188141,7 @@ var ChatProposals = class _ChatProposals extends ChatStore {
           [scope2.project.id]
         );
       }
-      const receiptId = (0, import_node_crypto27.randomUUID)();
+      const receiptId = (0, import_node_crypto30.randomUUID)();
       for (const [i5, m3] of missions.entries()) {
         const scope2 = scopes[i5];
         await s.destination(owner, m3.projectId);
@@ -185529,7 +188205,7 @@ var ChatProposals = class _ChatProposals extends ChatStore {
               expected,
               owner.profileId,
               key,
-              (0, import_node_crypto27.createHash)("sha256").update(JSON.stringify({ id: id2, expected })).digest("hex"),
+              (0, import_node_crypto30.createHash)("sha256").update(JSON.stringify({ id: id2, expected })).digest("hex"),
               thread.authorization_revision,
               s.timestamp()
             ]
@@ -185609,7 +188285,7 @@ var Conversations = class _Conversations extends ChatStore {
     if (message2 !== void 0 && (!message2 || typeof message2 !== "object" || Array.isArray(message2)))
       throw new ChatError("invalid_request");
     return this.db.transaction(async (tx) => {
-      const s = new _Conversations(tx, this.options), id2 = (0, import_node_crypto28.randomUUID)(), now2 = s.timestamp();
+      const s = new _Conversations(tx, this.options), id2 = (0, import_node_crypto31.randomUUID)(), now2 = s.timestamp();
       await s.access(owner);
       await tx.run(
         "INSERT INTO chat_threads (id, owner_profile_id, organization_id, last_activity_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
@@ -185725,10 +188401,10 @@ var Conversations = class _Conversations extends ChatStore {
       if (Number(count?.n) >= this.limits.concurrentRunsPerOwner)
         throw new ChatError("limit_exceeded");
     }
-    const messageId = (0, import_node_crypto28.randomUUID)(), runId = active?.id ?? (0, import_node_crypto28.randomUUID)(), now2 = this.timestamp();
+    const messageId = (0, import_node_crypto31.randomUUID)(), runId = active?.id ?? (0, import_node_crypto31.randomUUID)(), now2 = this.timestamp();
     const messageCreatedAt = await this.createdAt("chat_messages", id2);
     const blocks = [
-      { id: (0, import_node_crypto28.randomUUID)(), kind: "text", text: body.text, fallbackText: body.text, evidenceIds: [] }
+      { id: (0, import_node_crypto31.randomUUID)(), kind: "text", text: body.text, fallbackText: body.text, evidenceIds: [] }
     ];
     await this.db.run(
       `INSERT INTO chat_messages (id, thread_id, role, state, blocks_json, answers_question_id, client_request_id, created_at, updated_at) VALUES (?, ?, 'user', 'complete', ?, ?, ?, ?, ?)`,
@@ -185853,7 +188529,7 @@ var Conversations = class _Conversations extends ChatStore {
       );
       if (Number(count?.n) >= s.limits.concurrentRunsPerOwner)
         throw new ChatError("limit_exceeded");
-      const newId3 = (0, import_node_crypto28.randomUUID)();
+      const newId3 = (0, import_node_crypto31.randomUUID)();
       const inheritedGrant = storedKnowledgebaseWrite(r5.knowledgebase_write_json);
       await s.db.run(
         `INSERT INTO chat_runs (id, thread_id, trigger_message_id, continued_from_run_id, state, limits_json, knowledgebase_write_json, created_at, updated_at) VALUES (?, ?, ?, ?, 'queued', ?, ?, ?, ?)`,
@@ -186022,39 +188698,39 @@ async function postExecutionTargetObservations({
 }
 
 // ../packages/core/service/repository-reads.ts
-var import_node_crypto29 = require("node:crypto");
-function invalid2(message2) {
+var import_node_crypto32 = require("node:crypto");
+function invalid3(message2) {
   throw new ServiceError(message2, "invalid_request", 400);
 }
 function requiredString3(body, key) {
   const value2 = body[key];
-  if (typeof value2 !== "string" || value2.trim() === "") invalid2(`${key} is required.`);
+  if (typeof value2 !== "string" || value2.trim() === "") invalid3(`${key} is required.`);
   return value2.trim();
 }
 function optionalRelativePath(body, key) {
   if (body[key] === void 0 || body[key] === null) return void 0;
   const checked = normalizeRepositoryRelativePath(body[key]);
-  if (!checked.ok) invalid2(`${key}: ${checked.reason}`);
+  if (!checked.ok) invalid3(`${key}: ${checked.reason}`);
   return checked.relativePath;
 }
 function optionalPositiveInt(body, key) {
   const value2 = body[key];
   if (value2 === void 0 || value2 === null) return void 0;
   if (typeof value2 !== "number" || !Number.isInteger(value2) || value2 < 1) {
-    invalid2(`${key} must be a positive integer.`);
+    invalid3(`${key} must be a positive integer.`);
   }
   return value2;
 }
 function parseRepositoryReadRequest(raw) {
-  if (!raw || typeof raw !== "object" || Array.isArray(raw)) invalid2("A JSON object is required.");
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) invalid3("A JSON object is required.");
   const body = raw;
   const operation2 = body.operation;
   if (!REPOSITORY_READ_OPERATIONS.includes(operation2)) {
-    invalid2(`operation must be one of ${REPOSITORY_READ_OPERATIONS.join(", ")}.`);
+    invalid3(`operation must be one of ${REPOSITORY_READ_OPERATIONS.join(", ")}.`);
   }
   const operationId = requiredString3(body, "operationId");
   if (!REPOSITORY_READ_OPERATION_ID_PATTERN.test(operationId)) {
-    invalid2('operationId must be 8-128 characters of letters, digits, ".", "_", ":" or "-".');
+    invalid3('operationId must be 8-128 characters of letters, digits, ".", "_", ":" or "-".');
   }
   const binding = {
     executionTargetId: requiredString3(body, "executionTargetId"),
@@ -186081,17 +188757,17 @@ function parseRepositoryReadRequest(raw) {
     case "diff": {
       const scope2 = body.scope;
       if (scope2 !== "unstaged" && scope2 !== "staged" && scope2 !== "all") {
-        invalid2("scope must be unstaged, staged or all.");
+        invalid3("scope must be unstaged, staged or all.");
       }
       let relativePaths;
       if (body.relativePaths !== void 0 && body.relativePaths !== null) {
-        if (!Array.isArray(body.relativePaths)) invalid2("relativePaths must be an array.");
+        if (!Array.isArray(body.relativePaths)) invalid3("relativePaths must be an array.");
         if (body.relativePaths.length > REPOSITORY_READ_DEFAULT_BOUNDS.diffPaths) {
-          invalid2(`At most ${REPOSITORY_READ_DEFAULT_BOUNDS.diffPaths} paths are allowed.`);
+          invalid3(`At most ${REPOSITORY_READ_DEFAULT_BOUNDS.diffPaths} paths are allowed.`);
         }
         relativePaths = body.relativePaths.map((entry, index) => {
           const checked = normalizeRepositoryRelativePath(entry);
-          if (!checked.ok) invalid2(`relativePaths[${index}]: ${checked.reason}`);
+          if (!checked.ok) invalid3(`relativePaths[${index}]: ${checked.reason}`);
           return checked.relativePath || ".";
         });
       }
@@ -186104,11 +188780,11 @@ function parseRepositoryReadRequest(raw) {
     }
     case "read_file": {
       const relativePath = optionalRelativePath(body, "relativePath");
-      if (!relativePath) invalid2("relativePath is required.");
+      if (!relativePath) invalid3("relativePath is required.");
       const startLine = optionalPositiveInt(body, "startLine");
       const endLine = optionalPositiveInt(body, "endLine");
       if (startLine && endLine && endLine < startLine)
-        invalid2("endLine must not precede startLine.");
+        invalid3("endLine must not precede startLine.");
       return {
         ...binding,
         operation: "read_file",
@@ -186120,13 +188796,13 @@ function parseRepositoryReadRequest(raw) {
     case "search_text": {
       const query = body.query;
       if (typeof query !== "string" || query.length === 0 || query.length > REPOSITORY_READ_DEFAULT_BOUNDS.searchQueryChars || /[\0\r\n]/.test(query)) {
-        invalid2(
+        invalid3(
           `query must be 1-${REPOSITORY_READ_DEFAULT_BOUNDS.searchQueryChars} characters on one line.`
         );
       }
       const relativePath = optionalRelativePath(body, "relativePath");
       if (body.caseSensitive !== void 0 && typeof body.caseSensitive !== "boolean") {
-        invalid2("caseSensitive must be a boolean.");
+        invalid3("caseSensitive must be a boolean.");
       }
       return {
         ...binding,
@@ -186208,7 +188884,7 @@ var defaultProviderFactory = ({ target, queue }) => new RunnerQueueProvider(
   queue
 );
 function repositoryReadIdempotencyKey(actorWorkspaceUserId, operationId) {
-  const digest6 = (0, import_node_crypto29.createHash)("sha256").update(`${actorWorkspaceUserId}
+  const digest6 = (0, import_node_crypto32.createHash)("sha256").update(`${actorWorkspaceUserId}
 ${operationId}`).digest("hex").slice(0, 48);
   return `repository-read:${digest6}`;
 }
@@ -186884,8 +189560,8 @@ var ChatToolGateway = class {
     const declaration = args.declared.find((d5) => d5.name === args.name);
     if (!declaration || args.name === ASK_USER_TOOL || args.name === PREPARE_PROPOSAL_TOOL)
       return failure3("unknown_tool", "No such read tool is available.");
-    const invalid4 = validateToolArguments(declaration.parameters, args.arguments ?? {});
-    if (invalid4) return failure3("invalid_arguments", invalid4);
+    const invalid5 = validateToolArguments(declaration.parameters, args.arguments ?? {});
+    if (invalid5) return failure3("invalid_arguments", invalid5);
     const input2 = args.arguments ?? {};
     switch (args.name) {
       case "overlord_list_projects":
@@ -187631,10 +190307,10 @@ function classifyGeminiError(error64) {
 }
 
 // chat/gemini-runtime.ts
-var import_node_crypto33 = require("node:crypto");
+var import_node_crypto36 = require("node:crypto");
 
 // chat-worker.ts
-var import_node_crypto30 = require("node:crypto");
+var import_node_crypto33 = require("node:crypto");
 var ChatRuntimeFailure = class extends Error {
   constructor(failureCode) {
     super(failureCode);
@@ -187665,7 +190341,7 @@ var ChatWorker = class extends PollLoop {
   concurrency;
   lastRetentionAt = 0;
   active = /* @__PURE__ */ new Map();
-  id = (0, import_node_crypto30.randomUUID)();
+  id = (0, import_node_crypto33.randomUUID)();
   async stop() {
     const pass2 = super.stop();
     for (const job of this.active.values()) job.controller.abort();
@@ -187740,7 +190416,7 @@ var ChatWorker = class extends PollLoop {
 };
 
 // chat/gemini-diagnostics.ts
-var import_node_crypto31 = require("node:crypto");
+var import_node_crypto34 = require("node:crypto");
 var RunMetrics = class extends ChatPerformance {
   providerRounds = 0;
   providerRequests = 0;
@@ -187829,7 +190505,7 @@ function instrumentGeminiClient(client, hooks) {
   const { record: record2, metrics } = hooks;
   return {
     async stream(request) {
-      const exchangeId = (0, import_node_crypto31.randomUUID)();
+      const exchangeId = (0, import_node_crypto34.randomUUID)();
       if (metrics) metrics.providerRequests++;
       const started = metrics ? performance.now() : 0;
       const contentBytes = hooks.contentBytes(request);
@@ -187892,7 +190568,7 @@ function instrumentGeminiClient(client, hooks) {
       }
     },
     async generate(request) {
-      const exchangeId = (0, import_node_crypto31.randomUUID)();
+      const exchangeId = (0, import_node_crypto34.randomUUID)();
       if (metrics) metrics.summaryRounds++;
       const cached3 = hooks.staticUseFor(request);
       await record2("provider.request", {
@@ -188055,7 +190731,7 @@ ${text}`;
 }
 
 // chat/tool-manifest.ts
-var import_node_crypto32 = require("node:crypto");
+var import_node_crypto35 = require("node:crypto");
 var RELEVANCE_POLICY_VERSION = "expandable-families-v1";
 var TOOL_FAMILIES = ["status", "repository", "knowledgebase", "feature"];
 var EXPAND_CAPABILITIES_TOOL = "expand_capabilities";
@@ -188114,7 +190790,7 @@ function digest4(value2) {
       );
     return v;
   };
-  return (0, import_node_crypto32.createHash)("sha256").update(JSON.stringify(canonical(value2))).digest("hex");
+  return (0, import_node_crypto35.createHash)("sha256").update(JSON.stringify(canonical(value2))).digest("hex");
 }
 function createToolManifest(catalog, families) {
   const value2 = {
@@ -188182,7 +190858,7 @@ var GeminiChatRuntime = class {
       provider: "gemini",
       model,
       checkpointVersion: GEMINI_CHECKPOINT_VERSION,
-      configDigest: (0, import_node_crypto33.createHash)("sha256").update(
+      configDigest: (0, import_node_crypto36.createHash)("sha256").update(
         JSON.stringify({
           model,
           SYSTEM_PROMPT_VERSION,
@@ -188508,16 +191184,16 @@ var GeminiRunSession = class {
         );
         continue;
       }
-      const invalid4 = validateToolArguments(
+      const invalid5 = validateToolArguments(
         this.declared.find((d5) => d5.name === ASK_USER_TOOL).parameters,
         call.args
       );
-      if (invalid4) {
+      if (invalid5) {
         await this.runs.toolResult(
           this.attempt,
           call.operationId,
           this.stored(
-            { outcome: "invalid_arguments", content: { error: invalid4 }, sources: [] },
+            { outcome: "invalid_arguments", content: { error: invalid5 }, sources: [] },
             []
           ),
           "invalid_arguments"
@@ -188611,12 +191287,12 @@ var GeminiRunSession = class {
   async read(call) {
     if (call.name === EXPAND_CAPABILITIES_TOOL) {
       const declaration = this.declared.find((d5) => d5.name === EXPAND_CAPABILITIES_TOOL);
-      const invalid4 = declaration ? validateToolArguments(declaration.parameters, call.args) : "unknown_tool";
-      if (invalid4)
+      const invalid5 = declaration ? validateToolArguments(declaration.parameters, call.args) : "unknown_tool";
+      if (invalid5)
         return this.stored(
           {
             outcome: declaration ? "invalid_arguments" : "unknown_tool",
-            content: { error: invalid4 },
+            content: { error: invalid5 },
             sources: []
           },
           []
@@ -188642,10 +191318,10 @@ var GeminiRunSession = class {
     }
     if (call.name === PREPARE_PROPOSAL_TOOL) {
       const declaration = this.declared.find((d5) => d5.name === PREPARE_PROPOSAL_TOOL);
-      const invalid4 = declaration ? validateToolArguments(declaration.parameters, call.args) : "unknown_tool";
-      if (invalid4)
+      const invalid5 = declaration ? validateToolArguments(declaration.parameters, call.args) : "unknown_tool";
+      if (invalid5)
         return this.stored(
-          { outcome: "invalid_arguments", content: { error: invalid4 }, sources: [] },
+          { outcome: "invalid_arguments", content: { error: invalid5 }, sources: [] },
           []
         );
       try {
@@ -189061,10 +191737,10 @@ function chatLimitsFromEnv(env3) {
 }
 
 // connections/keyring.ts
-var import_node_crypto35 = require("node:crypto");
+var import_node_crypto38 = require("node:crypto");
 
 // connections/crypto.ts
-var import_node_crypto34 = require("node:crypto");
+var import_node_crypto37 = require("node:crypto");
 var SecretEnvelopeError = class extends Error {
   constructor() {
     super("The stored secret cannot be decrypted.");
@@ -189081,8 +191757,8 @@ function sealSecret({
   key,
   aad
 }) {
-  const nonce = (0, import_node_crypto34.randomBytes)(12);
-  const cipher = (0, import_node_crypto34.createCipheriv)("aes-256-gcm", key, nonce);
+  const nonce = (0, import_node_crypto37.randomBytes)(12);
+  const cipher = (0, import_node_crypto37.createCipheriv)("aes-256-gcm", key, nonce);
   cipher.setAAD(Buffer.from(aad, "utf8"));
   const ciphertext = Buffer.concat([cipher.update(plaintext, "utf8"), cipher.final()]);
   const tag2 = cipher.getAuthTag();
@@ -189098,7 +191774,7 @@ function openSecret({
     throw new SecretEnvelopeError();
   }
   try {
-    const decipher = (0, import_node_crypto34.createDecipheriv)("aes-256-gcm", key, Buffer.from(nonceText, "base64url"));
+    const decipher = (0, import_node_crypto37.createDecipheriv)("aes-256-gcm", key, Buffer.from(nonceText, "base64url"));
     decipher.setAAD(Buffer.from(aad, "utf8"));
     decipher.setAuthTag(Buffer.from(tagText, "base64url"));
     return Buffer.concat([
@@ -189110,7 +191786,7 @@ function openSecret({
   }
 }
 function hashSecret(value2) {
-  return (0, import_node_crypto34.createHash)("sha256").update(value2).digest("hex");
+  return (0, import_node_crypto37.createHash)("sha256").update(value2).digest("hex");
 }
 
 // connections/keyring.ts
@@ -189129,7 +191805,7 @@ function platformKeyFromSecret(secret) {
   const trimmed9 = secret?.trim();
   if (!trimmed9 || trimmed9.length < MIN_PLATFORM_SECRET_LENGTH) return null;
   const key = Buffer.from(
-    (0, import_node_crypto35.hkdfSync)(
+    (0, import_node_crypto38.hkdfSync)(
       "sha256",
       Buffer.from(trimmed9, "utf8"),
       Buffer.from("overlord:account-connections", "utf8"),
@@ -189137,7 +191813,7 @@ function platformKeyFromSecret(secret) {
       32
     )
   );
-  const fingerprint = (0, import_node_crypto35.createHash)("sha256").update("overlord:account-connections:platform-key-id:v1:").update(key).digest("hex").slice(0, 16);
+  const fingerprint = (0, import_node_crypto38.createHash)("sha256").update("overlord:account-connections:platform-key-id:v1:").update(key).digest("hex").slice(0, 16);
   return { id: `${PLATFORM_KEY_ID_PREFIX}${fingerprint}`, key };
 }
 function keyRingFromEnv(env3) {
@@ -189729,7 +192405,7 @@ function validateJson(value2, at, depth, budget) {
 }
 
 // connections/service.ts
-var import_node_crypto38 = require("node:crypto");
+var import_node_crypto41 = require("node:crypto");
 
 // connections/credential-rows.ts
 var REFRESH_LEASE_MS = 15e3;
@@ -189862,7 +192538,7 @@ async function refreshLeased(db, row, lockOwner, options) {
 }
 
 // connections/oauth.ts
-var import_node_crypto36 = require("node:crypto");
+var import_node_crypto39 = require("node:crypto");
 var OAuthError = class extends Error {
   constructor(code) {
     super(code);
@@ -189876,8 +192552,8 @@ var METADATA_BYTES = 64 * 1024;
 var TOKEN_BYTES = 64 * 1024;
 var TIMEOUT_MS = 1e4;
 function pkcePair() {
-  const verifier = (0, import_node_crypto36.randomBytes)(32).toString("base64url");
-  return { verifier, challenge: (0, import_node_crypto36.createHash)("sha256").update(verifier).digest("base64url") };
+  const verifier = (0, import_node_crypto39.randomBytes)(32).toString("base64url");
+  return { verifier, challenge: (0, import_node_crypto39.createHash)("sha256").update(verifier).digest("base64url") };
 }
 function sameResource(a5, b5) {
   return a5.replace(/\/+$/, "") === b5.replace(/\/+$/, "");
@@ -190032,7 +192708,7 @@ var KnowledgebaseOAuth = class {
 };
 
 // connections/oauth-flow.ts
-var import_node_crypto37 = require("node:crypto");
+var import_node_crypto40 = require("node:crypto");
 
 // connections/authorizations.ts
 var AUTHORIZATION_TTL_MS = 10 * 60 * 1e3;
@@ -190087,16 +192763,16 @@ async function consumeAuthorization(tx, options) {
 
 // connections/oauth-flow.ts
 async function beginConnectionOAuth(db, options) {
-  const state2 = (0, import_node_crypto37.randomBytes)(32).toString("base64url");
+  const state2 = (0, import_node_crypto40.randomBytes)(32).toString("base64url");
   const { verifier, challenge } = pkcePair();
   const authorizeUrl = await options.authorizeUrl(state2, challenge);
-  const authorizationId = (0, import_node_crypto37.randomUUID)();
+  const authorizationId = (0, import_node_crypto40.randomUUID)();
   const expiresAt = options.timestamp(AUTHORIZATION_TTL_MS);
   const connectionId = await db.transaction(async (tx) => {
     const now2 = options.timestamp();
     let row = await options.findLiveRow(tx);
     if (!row) {
-      const id2 = (0, import_node_crypto37.randomUUID)();
+      const id2 = (0, import_node_crypto40.randomUUID)();
       await options.insertPendingRow(tx, id2, now2);
       row = await tx.get("SELECT * FROM account_connections WHERE id = ?", [id2]);
     }
@@ -190214,7 +192890,7 @@ var AccountConnections = class {
   }
   db;
   options;
-  lockOwner = (0, import_node_crypto38.randomUUID)();
+  lockOwner = (0, import_node_crypto41.randomUUID)();
   now() {
     return this.options.now?.() ?? Date.now();
   }
@@ -190811,8 +193487,8 @@ var KnowledgebaseMcp = class {
       return { ...base, outcome: "reauthorization_required", detail: "connection_not_ready" };
     if (JSON.stringify(args ?? null).length > reviewed.maxArgumentBytes)
       return { ...base, outcome: "invalid_arguments", detail: "arguments_too_large" };
-    const invalid4 = validateArguments(reviewed.inputSchema, args);
-    if (invalid4) return { ...base, outcome: "invalid_arguments", detail: invalid4 };
+    const invalid5 = validateArguments(reviewed.inputSchema, args);
+    if (invalid5) return { ...base, outcome: "invalid_arguments", detail: invalid5 };
     const input2 = args;
     const workspace2 = typeof input2.workspace === "string" ? input2.workspace : null;
     base.workspace = workspace2;
@@ -191026,7 +193702,7 @@ function provenance(text, connectionId, workspace2, maxSources) {
 }
 
 // connections/profile.ts
-var import_node_crypto39 = require("node:crypto");
+var import_node_crypto42 = require("node:crypto");
 var ProviderOAuthError = class extends Error {
   constructor(code) {
     super(code);
@@ -191060,7 +193736,7 @@ var ProfileConnections = class {
   db;
   ring;
   options;
-  lockOwner = (0, import_node_crypto39.randomUUID)();
+  lockOwner = (0, import_node_crypto42.randomUUID)();
   adapters;
   provider(provider) {
     return this.adapters.get(provider) ?? null;
@@ -191194,7 +193870,7 @@ var ProfileConnections = class {
       );
       return connectionDto(await this.row(profileId, existing.id));
     }
-    const id2 = (0, import_node_crypto39.randomUUID)();
+    const id2 = (0, import_node_crypto42.randomUUID)();
     const draft = { id: id2, owner_profile_id: profileId, organization_id: null, provider };
     await this.db.run(
       `INSERT INTO account_connections (id, owner_profile_id, organization_id, provider, server_url, state, credential_kind, credential_format, credential_ciphertext, credential_key_id, credential_revision, external_account_id, external_account_label, external_account_avatar_url, last_validated_at, connected_at, created_at, updated_at, revision) VALUES (?, ?, NULL, ?, ?, 'connected', 'api_key', 'connection-v1', ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, 1)`,
@@ -191883,7 +194559,7 @@ function createProfileConnectionCallbackHandler(options) {
 }
 
 // ../packages/core/service/end-latch-session.ts
-var import_node_crypto40 = require("node:crypto");
+var import_node_crypto43 = require("node:crypto");
 async function endLatchSession({
   ctx,
   missionId,
@@ -191901,7 +194577,7 @@ async function endLatchSession({
   if (!row || !mapping) throw new ServiceError("Terminal session not found", "not_found", 404);
   const now2 = nowIso();
   const scope2 = "api.mission.terminal-session.end";
-  const requestHash = (0, import_node_crypto40.createHash)("sha256").update(JSON.stringify({ missionId, executionRequestId })).digest("hex");
+  const requestHash = (0, import_node_crypto43.createHash)("sha256").update(JSON.stringify({ missionId, executionRequestId })).digest("hex");
   await db.run(
     `INSERT INTO idempotency_keys
       (id, workspace_id, scope, key, request_hash, status, actor_workspace_user_id,
@@ -195547,8 +198223,8 @@ async function loadQuestions(workspaceIds) {
     [...workspaceIds, askedAfter, QUESTION_LIMIT]
   );
 }
-function twoWeeksBefore(iso) {
-  return new Date(Date.parse(iso) - DELIVERED_WINDOW_MS).toISOString();
+function twoWeeksBefore(iso4) {
+  return new Date(Date.parse(iso4) - DELIVERED_WINDOW_MS).toISOString();
 }
 function parseFeedBefore(value2) {
   if (typeof value2 !== "string" || value2.trim() === "") return null;
@@ -196767,17 +199443,17 @@ function encodeAgentRequestCursor(cursor3) {
   return Buffer.from(JSON.stringify(cursor3), "utf8").toString("base64url");
 }
 function decodeAgentRequestCursor(raw, scope2) {
-  const invalid4 = invalidPageInput("cursor is not a valid agent-request cursor");
+  const invalid5 = invalidPageInput("cursor is not a valid agent-request cursor");
   let parsed;
   try {
-    if (!/^[A-Za-z0-9_-]+$/.test(raw)) throw invalid4;
+    if (!/^[A-Za-z0-9_-]+$/.test(raw)) throw invalid5;
     parsed = JSON.parse(Buffer.from(raw, "base64url").toString("utf8"));
   } catch {
-    throw invalid4;
+    throw invalid5;
   }
   const value2 = asRecord(parsed);
   if (value2.v !== 1 || typeof value2.m !== "string" || !(value2.o === null || typeof value2.o === "string") || !(value2.s === null || PAGED_REQUEST_STATUSES.includes(value2.s)) || typeof value2.t !== "string" || !ISO_CURSOR_TIMESTAMP.test(value2.t) || typeof value2.i !== "string" || value2.i.length === 0) {
-    throw invalid4;
+    throw invalid5;
   }
   if (value2.m !== scope2.missionId || value2.o !== scope2.objectiveId || value2.s !== scope2.status) {
     throw invalidPageInput("cursor was issued for a different mission, objective or status");
@@ -198198,7 +200874,7 @@ function createChatRouter(options) {
 }
 
 // chat-notification-dispatcher.ts
-var import_node_crypto42 = require("node:crypto");
+var import_node_crypto45 = require("node:crypto");
 
 // ../packages/core/service/push-notification-jobs.ts
 var PUSH_NOTIFICATION_DISPATCH_JOB_TYPE = "overlord.push_notification.dispatch.v1";
@@ -198213,7 +200889,7 @@ function isPushNotificationMode(value2) {
 }
 
 // apns-client.ts
-var import_node_crypto41 = require("node:crypto");
+var import_node_crypto44 = require("node:crypto");
 var import_node_http2 = __toESM(require("node:http2"), 1);
 var SANDBOX_HOST = "https://api.sandbox.push.apple.com";
 var PRODUCTION_HOST = "https://api.push.apple.com";
@@ -198242,7 +200918,7 @@ function apnsJwt(config4) {
   const signingInput = `${b64url(JSON.stringify({ alg: "ES256", kid: config4.keyId }))}.${b64url(
     JSON.stringify({ iss: config4.teamId, iat: now2 })
   )}`;
-  const signer = (0, import_node_crypto41.createSign)("SHA256");
+  const signer = (0, import_node_crypto44.createSign)("SHA256");
   signer.update(signingInput);
   signer.end();
   const signature = signer.sign({ key: config4.privateKey, dsaEncoding: "ieee-p1363" });
@@ -198830,7 +201506,7 @@ var ChatNotificationDispatcher = class extends PollLoop {
   db;
   options;
   send;
-  workerId = `chat-notifications:${(0, import_node_crypto42.randomUUID)()}`;
+  workerId = `chat-notifications:${(0, import_node_crypto45.randomUUID)()}`;
   /** One claim/deliver pass. Returns how many candidates it processed. */
   async tick() {
     return await this.poll() ?? 0;
@@ -198895,6 +201571,8 @@ function writeFailure(result2) {
   switch (result2.problem) {
     case "not_found":
     case "other_mission":
+    case "forbidden":
+    case "restored_by_person":
       return new ApiError(404, "Mission item not found");
     case "superseded":
       return new ApiError(
@@ -198925,12 +201603,6 @@ async function closeMissionItemAsPerson(input2) {
       now: now2
     });
     if (!result2.ok) throw writeFailure(result2);
-    await enqueueMissionSummaryComposeJob({
-      ctx: restMissionSummaryTriggerContext(tx, input2.workspaceId, actor),
-      missionId: result2.item.missionId,
-      reason: "mission_item_closed",
-      now: now2
-    });
     return result2.item;
   });
 }
@@ -198957,14 +201629,6 @@ async function restoreMissionItemAsPerson({
       }
       throw writeFailure(result2);
     }
-    if (result2.changed) {
-      await enqueueMissionSummaryComposeJob({
-        ctx: restMissionSummaryTriggerContext(tx, workspaceId2, actor),
-        missionId: result2.item.missionId,
-        reason: "mission_item_restored",
-        now: now2
-      });
-    }
     return result2.item;
   });
 }
@@ -198978,7 +201642,7 @@ function toMissionItemDto(item) {
     text: item.text,
     status: item.status,
     reason: item.statusReason,
-    resolvedBy: item.resolvedBy ? toResolverDto(item.resolvedBy) : null,
+    resolvedBy: item.resolvedBy ? toResolverDto(item.resolvedBy, item.missionId) : null,
     resolvedAt: item.resolvedAt,
     outcome: item.outcome,
     outcomeRef: item.outcome === null ? null : item.outcomeRef,
@@ -199236,21 +201900,6 @@ async function persistDeliveryPresentation({
       attribution,
       now: now2
     });
-    const status = nextReport.presentation.status;
-    if (status === "composed" || status === "fallback") {
-      await enqueueMissionSummaryComposeJob({
-        ctx: {
-          db: tx,
-          workspaceId: delivery.workspace_id,
-          actorWorkspaceUserId: null,
-          source: "runner"
-        },
-        missionId: delivery.mission_id,
-        reason: "delivery_presented",
-        sourceDeliveryId: delivery.id,
-        now: now2
-      });
-    }
   });
 }
 
@@ -199493,7 +202142,7 @@ function boundComposeText(value2, maxChars) {
 var deliveryComposeWorker = new DeliveryComposeWorker();
 
 // desktop-oauth-handoff.ts
-var import_node_crypto43 = require("node:crypto");
+var import_node_crypto46 = require("node:crypto");
 var HANDOFF_TTL_MS = 6e4;
 var TICKET_PATTERN = /^[A-Za-z0-9_-]{32,128}$/;
 var handoffs = /* @__PURE__ */ new Map();
@@ -199504,7 +202153,7 @@ function discardExpiredHandoffs(now2 = Date.now()) {
 }
 function createOAuthHandoff(sessionToken, audience) {
   discardExpiredHandoffs();
-  const ticket = (0, import_node_crypto43.randomBytes)(32).toString("base64url");
+  const ticket = (0, import_node_crypto46.randomBytes)(32).toString("base64url");
   handoffs.set(ticket, { audience, sessionToken, expiresAt: Date.now() + HANDOFF_TTL_MS });
   return ticket;
 }
@@ -199550,7 +202199,7 @@ function beginDesktopGitHubOAuth(auth2, authBaseUrl2) {
 }
 
 // live-activities.ts
-var import_node_crypto44 = require("node:crypto");
+var import_node_crypto47 = require("node:crypto");
 var MAX_RUNNING = 2;
 var COMPLETION_HOLD_MS = 30 * 60 * 1e3;
 var START_TOKEN_MAX_LENGTH = 512;
@@ -199866,7 +202515,7 @@ async function buildLiveActivityContentState(db, profileId, now2 = /* @__PURE__ 
   };
 }
 function liveActivityContentHash(state2) {
-  return (0, import_node_crypto44.createHash)("sha256").update(
+  return (0, import_node_crypto47.createHash)("sha256").update(
     JSON.stringify(
       state2 && {
         running: state2.running,
@@ -200090,125 +202739,6 @@ var LiveActivityDispatcher = class extends WorkerJobPoller {
 };
 var liveActivityDispatcher = new LiveActivityDispatcher();
 
-// ../packages/core/service/mission-summary-evidence.ts
-function readObjectiveRows(db, missionId) {
-  return db.all(
-    `SELECT id, display_key, title, state, reopened_at, deleted_at
-       FROM objectives WHERE mission_id = ?`,
-    [missionId]
-  );
-}
-function reportFromPayload(payloadJson, summary) {
-  let deliveryReport;
-  try {
-    deliveryReport = payloadJson ? JSON.parse(payloadJson).deliveryReport : void 0;
-  } catch {
-    deliveryReport = void 0;
-  }
-  return readDeliveryReport2({ summary, deliveryReport });
-}
-async function readRuns(db, missionId, objectives, workspaceId2) {
-  const workspaceGuard = workspaceId2 === void 0 ? "" : " AND d.workspace_id = ?";
-  const deliveryRows = await db.all(
-    `SELECT d.id, d.objective_id, d.delivered_at, d.summary, d.payload_json
-       FROM deliveries d
-       LEFT JOIN objectives o ON o.id = d.objective_id
-      WHERE d.mission_id = ?${workspaceGuard} AND d.deleted_at IS NULL
-        AND ${currentRunDeliveryPredicateSql()}
-      ORDER BY d.delivered_at DESC, d.id DESC`,
-    workspaceId2 === void 0 ? [missionId] : [missionId, workspaceId2]
-  );
-  const deliveries = deliveryRows.map((row) => ({
-    id: row.id,
-    objectiveId: row.objective_id,
-    deliveredAt: row.delivered_at,
-    summary: row.summary,
-    report: reportFromPayload(row.payload_json, row.summary)
-  }));
-  return splitMissionSummaryRuns({ objectives, deliveries });
-}
-async function readMissionSummaryRuns(db, missionId, { workspaceId: workspaceId2 } = {}) {
-  const objectives = (await readObjectiveRows(db, missionId)).map((row) => ({
-    id: row.id,
-    reopenedAt: row.reopened_at
-  }));
-  return readRuns(db, missionId, objectives, workspaceId2);
-}
-async function readMissionSummaryEvidence(db, missionId, { workspaceId: workspaceId2 } = {}) {
-  return db.transaction(async (tx) => {
-    const generation = await readMissionSummaryGeneration(tx, missionId);
-    if (!generation) return null;
-    const mission = await tx.get(
-      `SELECT title, status_type, display_id, summary_enabled FROM missions
-        WHERE id = ? AND deleted_at IS NULL`,
-      [missionId]
-    );
-    if (!mission) return null;
-    const objectives = (await readObjectiveRows(tx, missionId)).map((row) => ({
-      id: row.id,
-      key: formatObjectiveDisplayId({
-        missionDisplayId: mission.display_id,
-        displayKey: row.display_key
-      }),
-      title: row.title?.trim() || "Untitled objective",
-      state: row.state,
-      reopenedAt: row.reopened_at,
-      deleted: row.deleted_at !== null
-    }));
-    const runs = await readRuns(tx, missionId, objectives, workspaceId2);
-    const openItems = await readMissionSummaryOpenItems(tx, missionId, workspaceId2);
-    const questionRows = await tx.all(
-      `SELECT id, objective_id, summary, created_at FROM agent_requests
-        WHERE mission_id = ? AND deleted_at IS NULL AND status = 'open'
-          AND kind IN ('question', 'choice')
-        ORDER BY created_at DESC
-        LIMIT 20`,
-      [missionId]
-    );
-    const filePathCount = await tx.get(
-      `SELECT COUNT(DISTINCT file_path) AS total FROM changed_files
-        WHERE mission_id = ? AND deleted_at IS NULL`,
-      [missionId]
-    );
-    return {
-      generation: generation.requestedGeneration,
-      sourceDeliveryId: generation.sourceDeliveryId,
-      previous: generation.previous,
-      mission: {
-        title: mission.title,
-        statusType: mission.status_type,
-        displayId: mission.display_id
-      },
-      objectives,
-      runs,
-      openQuestions: questionRows.map((row) => ({
-        requestId: row.id,
-        objectiveId: row.objective_id,
-        prompt: row.summary,
-        createdAt: row.created_at
-      })),
-      openItems,
-      counts: {
-        deliveries: runs.currentRun.length,
-        filePaths: Number(filePathCount?.total ?? 0)
-      }
-    };
-  });
-}
-async function readMissionSummaryOpenItems(db, missionId, workspaceId2) {
-  const items = [];
-  for (; ; ) {
-    const page = await listMissionItems(db, {
-      missionId,
-      ...workspaceId2 === void 0 ? {} : { workspaceId: workspaceId2 },
-      limit: 1e3,
-      offset: items.length
-    });
-    items.push(...page.items);
-    if (!page.truncated) return items;
-  }
-}
-
 // mission-summary.ts
 async function resolveMissionScope(missionRef) {
   const scope2 = await requireMissionPermission({
@@ -200369,7 +202899,7 @@ function projectSummary(row, items, closed) {
       objectiveId: item.objectiveId,
       status: item.status,
       reason: item.statusReason,
-      resolvedBy: item.resolvedBy ? toResolverDto(item.resolvedBy) : null,
+      resolvedBy: item.resolvedBy ? toResolverDto(item.resolvedBy, item.missionId) : null,
       resolvedAt: item.resolvedAt,
       outcome: item.outcome,
       outcomeRef: item.outcomeRef
@@ -200387,13 +202917,35 @@ async function loadSeenAt(scope2) {
   );
   return row?.seen_at ?? null;
 }
+async function itemsWatermark(scope2) {
+  const row = await requireDatabaseClient().get(
+    `SELECT mi.resolved_at FROM mission_items mi
+     JOIN deliveries d ON d.id = mi.delivery_id AND d.deleted_at IS NULL
+     WHERE mi.mission_id = ? AND mi.workspace_id = ?
+       AND mi.status IN ('done', 'dismissed') AND mi.resolved_by_kind = 'agent'
+       AND mi.resolved_by_mission_id <> mi.mission_id
+     ORDER BY mi.resolved_at DESC LIMIT 1`,
+    [scope2.missionId, scope2.workspaceId]
+  );
+  return row?.resolved_at ?? null;
+}
 async function getMissionSummary2(missionRef) {
   const scope2 = await resolveMissionScope(missionRef);
   if (!scope2.eligible) {
-    return { eligible: false, summary: null, evidence: null, watermark: null, seenAt: null };
+    return {
+      eligible: false,
+      summary: null,
+      evidence: null,
+      watermark: null,
+      narrative: null,
+      narrativeWatermark: null,
+      itemsWatermark: null,
+      itemsTruncated: false,
+      seenAt: null
+    };
   }
   const db = requireDatabaseClient();
-  const [runs, openQuestionAt, summaryRow, seenAt, open2, closed] = await Promise.all([
+  const [runs, openQuestionAt, summaryRow, seenAt, open2, closed, narrative, itemStamp] = await Promise.all([
     readMissionSummaryRuns(db, scope2.missionId, { workspaceId: scope2.workspaceId }),
     latestOpenQuestionAt(scope2),
     db.get(
@@ -200411,7 +202963,9 @@ async function getMissionSummary2(missionRef) {
       statuses: ["done", "dismissed"],
       order: "resolved",
       limit: 100
-    })
+    }),
+    readMissionNarrative(db, scope2.missionId),
+    itemsWatermark(scope2)
   ]);
   return {
     eligible: true,
@@ -200420,6 +202974,12 @@ async function getMissionSummary2(missionRef) {
     // Every current-run delivery the response draws on is no newer than the
     // newest source, which is always the first (uncapped) source row.
     watermark: latestTimestamp(runs.latestByObjective[0]?.deliveredAt, openQuestionAt),
+    narrative,
+    // Last narrative text or basis change, acknowledged with the other groups
+    // only once every group of this response was rendered.
+    narrativeWatermark: narrative.changedAt,
+    itemsWatermark: itemStamp,
+    itemsTruncated: closed.truncated,
     seenAt
   };
 }
@@ -200439,7 +202999,16 @@ async function evidenceUpperBound(scope2) {
       LIMIT 1`,
     [scope2.missionId]
   );
-  return latestTimestamp(delivery?.delivered_at, request?.created_at);
+  const narrative = await db.get(
+    `SELECT narrative_changed_at FROM mission_summaries WHERE mission_id = ? AND workspace_id = ?`,
+    [scope2.missionId, scope2.workspaceId]
+  );
+  return latestTimestamp(
+    delivery?.delivered_at,
+    request?.created_at,
+    narrative?.narrative_changed_at ?? null,
+    await itemsWatermark(scope2)
+  );
 }
 function invalidInput3(message2) {
   return new ApiError(400, message2, void 0, "invalid_input");
@@ -200471,236 +203040,12 @@ async function markMissionSummarySeen(missionRef, body) {
   return { seenAt: stored ?? seenAt };
 }
 
-// mission-summary-compose-worker.ts
-var CLAIM_BATCH_SIZE2 = 5;
-var MAX_PASSES_PER_JOB = 3;
-function logSummaryMetric(event, fields) {
-  console.info("[mission-summary-compose-worker]", JSON.stringify({ event, ...fields }));
-}
-function bound2(value2, maxChars) {
-  return value2.length <= maxChars ? value2 : value2.slice(0, maxChars);
-}
-function toMissionSummaryInput(evidence) {
-  const keyOf = (objectiveId) => evidence.objectives.find((objective) => objective.id === objectiveId && !objective.deleted)?.key ?? "unassigned";
-  const latest = new Map(
-    evidence.runs.latestByObjective.map((delivery) => [delivery.objectiveId, delivery])
-  );
-  const newest = evidence.runs.latestByObjective[0] ?? null;
-  return {
-    mission: { title: evidence.mission.title, statusType: evidence.mission.statusType },
-    previousSummary: evidence.previous,
-    objectives: evidence.objectives.filter((objective) => !objective.deleted).slice(0, MISSION_SUMMARY_LIMITS.objectives).map((objective) => {
-      const delivery = latest.get(objective.id);
-      return {
-        key: objective.key,
-        title: objective.title,
-        state: objective.state,
-        latestDelivery: delivery ? {
-          deliveryId: delivery.id,
-          deliveredAt: delivery.deliveredAt,
-          firstParagraph: deliveryFirstParagraph(delivery)
-        } : null
-      };
-    }),
-    newestDelivery: newest ? {
-      objectiveKey: keyOf(newest.objectiveId),
-      markdown: bound2(
-        newest.report.presentation.markdown.trim() || newest.summary,
-        MISSION_SUMMARY_LIMITS.newestDeliveryMarkdown
-      )
-    } : null,
-    openActions: evidence.openItems.filter((item) => item.kind === "human_action").sort((a5, b5) => Number(b5.detail.blocking === true) - Number(a5.detail.blocking === true)).slice(0, MISSION_SUMMARY_LIMITS.openActions).map((item) => ({
-      ref: item.id,
-      objectiveKey: keyOf(item.objectiveId),
-      action: item.text,
-      ...typeof item.detail.reason === "string" ? { reason: item.detail.reason } : {},
-      blocking: item.detail.blocking === true,
-      category: String(item.detail.category ?? "other")
-    })),
-    openQuestions: evidence.openQuestions.map((question) => ({
-      requestId: question.requestId,
-      objectiveKey: keyOf(question.objectiveId),
-      prompt: bound2(question.prompt, MISSION_SUMMARY_LIMITS.questionPrompt)
-    })),
-    pendingSuggestions: evidence.openItems.filter((item) => item.kind === "suggestion").slice(0, MISSION_SUMMARY_LIMITS.suggestions).map((item) => ({ objectiveKey: keyOf(item.objectiveId), title: item.text })),
-    knownRisks: evidence.openItems.filter((item) => item.kind === "risk").slice(0, MISSION_SUMMARY_LIMITS.riskCandidates).map((item) => ({
-      ref: item.id,
-      objectiveKey: keyOf(item.objectiveId),
-      text: bound2(item.text, MISSION_SUMMARY_LIMITS.riskText)
-    })),
-    counts: evidence.counts
-  };
-}
-var MissionSummaryComposeWorker = class extends WorkerJobPoller {
-  generateOverride = null;
-  constructor() {
-    super({
-      workerIdPrefix: "mission-summary-compose",
-      jobTypes: [MISSION_SUMMARY_COMPOSE_JOB_TYPE],
-      logPrefix: "mission-summary-compose-worker",
-      claimBatchSize: CLAIM_BATCH_SIZE2
-    });
-  }
-  /** Test seam: inject a fake Gemini generator. */
-  setGenerateOverride(generate) {
-    this.generateOverride = generate;
-  }
-  shouldPoll() {
-    return process.env.OVERLORD_MISSION_SUMMARY_COMPOSE_DISABLED !== "1";
-  }
-  databaseClient() {
-    return requireDatabaseClient();
-  }
-  /** Test seam: process one claimed job directly. */
-  async processJobForTest(client, job) {
-    await this.processJob(client, job);
-  }
-  async processJob(client, job) {
-    const startedAt = Date.now();
-    let missionId;
-    try {
-      const payload = JSON.parse(job.payload_json);
-      if (typeof payload.missionId !== "string" || !payload.missionId.trim()) {
-        throw new Error("Missing missionId in worker payload");
-      }
-      missionId = payload.missionId.trim();
-    } catch (err) {
-      await this.finishJob(client, job, "failed", `Malformed payload: ${String(err)}`);
-      return;
-    }
-    try {
-      for (let pass2 = 1; pass2 <= MAX_PASSES_PER_JOB; pass2++) {
-        const outcome = await this.composePass(client, missionId, false);
-        if (outcome.kind === "missing") {
-          await completeMissionSummaryComposeJob({
-            db: client,
-            jobId: job.id,
-            missionId,
-            status: "cancelled",
-            lastError: "Mission summary not found"
-          });
-          logSummaryMetric("mission_summary_cancelled", { jobId: job.id, missionId });
-          return;
-        }
-        if (outcome.kind === "stale") {
-          logSummaryMetric("mission_summary_stale", { jobId: job.id, missionId, pass: pass2 });
-          continue;
-        }
-        logSummaryMetric(
-          outcome.result.status === "composed" ? "mission_summary_composed" : "mission_summary_fallback",
-          {
-            jobId: job.id,
-            missionId,
-            attempt: job.attempt_count,
-            pass: pass2,
-            durationMs: Date.now() - startedAt,
-            model: outcome.result.model,
-            inputBytes: outcome.inputBytes,
-            estimatedInputTokens: Math.ceil(outcome.inputBytes / 4)
-          }
-        );
-        break;
-      }
-      const { successorJobId } = await completeMissionSummaryComposeJob({
-        db: client,
-        jobId: job.id,
-        missionId,
-        status: "succeeded"
-      });
-      if (successorJobId) {
-        logSummaryMetric("mission_summary_successor_queued", {
-          jobId: job.id,
-          missionId,
-          successorJobId
-        });
-      }
-    } catch (err) {
-      const message2 = err instanceof Error ? err.message : String(err);
-      console.warn(`[mission-summary-compose-worker] job ${job.id} failed:`, message2);
-      if (job.attempt_count < job.max_attempts) {
-        await this.failOrRetry(client, job, err);
-        logSummaryMetric("mission_summary_failed", {
-          jobId: job.id,
-          missionId,
-          attempt: job.attempt_count,
-          retrying: true,
-          durationMs: Date.now() - startedAt
-        });
-        return;
-      }
-      await this.composePass(client, missionId, true).catch((fallbackErr) => {
-        console.warn("[mission-summary-compose-worker] fallback persist failed", fallbackErr);
-      });
-      await completeMissionSummaryComposeJob({
-        db: client,
-        jobId: job.id,
-        missionId,
-        status: "failed",
-        lastError: message2
-      });
-      logSummaryMetric("mission_summary_failed", {
-        jobId: job.id,
-        missionId,
-        attempt: job.attempt_count,
-        durationMs: Date.now() - startedAt
-      });
-    }
-  }
-  async composePass(client, missionId, forceFallback) {
-    const evidence = await readMissionSummaryEvidence(client, missionId);
-    if (!evidence) return { kind: "missing" };
-    const shared = {
-      objectives: evidence.objectives,
-      runs: evidence.runs,
-      openQuestions: evidence.openQuestions
-    };
-    let result2;
-    let inputBytes = 0;
-    const canGenerate = isGeminiConfigured() || this.generateOverride !== null;
-    if (forceFallback || !canGenerate) {
-      result2 = buildDeterministicMissionSummary(shared);
-    } else {
-      const input2 = toMissionSummaryInput(evidence);
-      inputBytes = Buffer.byteLength(JSON.stringify(input2), "utf8");
-      const generate = this.generateOverride;
-      const draft = await composeMissionSummaryWithGemini({
-        input: input2,
-        ...generate ? {
-          generate: async ({ prompt, systemInstruction }) => generate({ prompt, systemInstruction })
-        } : {}
-      });
-      result2 = reconcileMissionSummaryDraft({
-        ...shared,
-        draft,
-        model: readGeminiConfigFromEnv()?.model ?? null
-      });
-    }
-    const published = await publishMissionSummary({
-      db: client,
-      missionId,
-      generation: evidence.generation,
-      publication: {
-        status: result2.status,
-        headline: result2.headline,
-        summary: result2.summary,
-        sourceDeliveryId: evidence.sourceDeliveryId,
-        generatedBy: result2.generatedBy,
-        model: result2.model
-      }
-    });
-    if (published === "missing") return { kind: "missing" };
-    if (published === "stale") return { kind: "stale" };
-    return { kind: "published", result: result2, inputBytes };
-  }
-};
-var missionSummaryComposeWorker = new MissionSummaryComposeWorker();
-
 // native-github-oauth.ts
-var import_node_crypto45 = require("node:crypto");
+var import_node_crypto48 = require("node:crypto");
 var FLOW_TTL_MS = 10 * 6e4;
 var RECOVERY_TTL_MS = 6e4;
 var MAX_FLOWS = 256;
-var digest5 = (value2) => (0, import_node_crypto45.createHash)("sha256").update(value2).digest("hex");
+var digest5 = (value2) => (0, import_node_crypto48.createHash)("sha256").update(value2).digest("hex");
 function cookieValue(request, name2) {
   const values = (request.headers.get("cookie") ?? "").split(";").map((value2) => value2.trim()).filter((value2) => value2.startsWith(`${name2}=`));
   return values.length === 1 ? values[0].slice(name2.length + 1) : void 0;
@@ -200769,7 +203114,7 @@ function createNativeGitHubOAuth(auth2, baseUrl, options = {}) {
         if (typeof payload.url !== "string") throw new Error("Missing GitHub authorization URL");
         const state2 = new URL(payload.url).searchParams.get("state");
         if (!state2) throw new Error("Missing GitHub OAuth state");
-        const marker = (0, import_node_crypto45.randomBytes)(32).toString("base64url");
+        const marker = (0, import_node_crypto48.randomBytes)(32).toString("base64url");
         const stateCookie = response.headers.getSetCookie().map((value2) => /^((?:__Secure-)?better-auth\.state)=([^;]+)/.exec(value2)).find(Boolean);
         const flow = {
           expiresAt: now2() + FLOW_TTL_MS,
@@ -201069,7 +203414,7 @@ var NotificationDispatcher = class extends WorkerJobPoller {
 var notificationDispatcher = new NotificationDispatcher();
 
 // oauth.ts
-var import_node_crypto46 = require("node:crypto");
+var import_node_crypto49 = require("node:crypto");
 var CLIENT_ID_PREFIX = "ovlc_";
 var AUTH_CODE_PREFIX = "ovla_";
 var AUTH_CODE_TTL_MS = 5 * 60 * 1e3;
@@ -201103,12 +203448,12 @@ function oauthSigningSecret() {
   return process.env.OVERLORD_OAUTH_SIGNING_SECRET?.trim() || process.env.BETTER_AUTH_SECRET?.trim() || "overlord-local-oauth-development-secret";
 }
 function signPayload(payload) {
-  return (0, import_node_crypto46.createHmac)("sha256", oauthSigningSecret()).update(payload).digest("base64url");
+  return (0, import_node_crypto49.createHmac)("sha256", oauthSigningSecret()).update(payload).digest("base64url");
 }
 function fixedTimeEqual(a5, b5) {
   const left = Buffer.from(a5);
   const right = Buffer.from(b5);
-  return left.length === right.length && (0, import_node_crypto46.timingSafeEqual)(left, right);
+  return left.length === right.length && (0, import_node_crypto49.timingSafeEqual)(left, right);
 }
 function jsonError(res, status, error64, description) {
   res.status(status).json({ error: error64, error_description: description });
@@ -201429,7 +203774,7 @@ async function handleOAuthApprove(req, res) {
       issuanceWorkspaceUserId: consent.issuanceWorkspace.workspaceUserId
     }
   );
-  const code = `${AUTH_CODE_PREFIX}${(0, import_node_crypto46.randomBytes)(32).toString("base64url")}`;
+  const code = `${AUTH_CODE_PREFIX}${(0, import_node_crypto49.randomBytes)(32).toString("base64url")}`;
   authorizationCodes.set(code, {
     clientId: parsed.clientId,
     redirectUri: parsed.redirectUri,
@@ -201473,7 +203818,7 @@ async function handleOAuthToken(req, res) {
     jsonError(res, 400, "invalid_target", "OAuth resource does not match the authorization code.");
     return;
   }
-  const challenge = (0, import_node_crypto46.createHash)("sha256").update(codeVerifier).digest("base64url");
+  const challenge = (0, import_node_crypto49.createHash)("sha256").update(codeVerifier).digest("base64url");
   if (!codeVerifier || challenge !== entry.codeChallenge) {
     await revokeOrphanedAccessToken(entry.accessToken);
     jsonError(res, 400, "invalid_grant", "PKCE verification failed.");
@@ -201493,8 +203838,8 @@ async function handleOAuthRevoke(req, res) {
 }
 
 // objective-brief-compose-worker.ts
-var CLAIM_BATCH_SIZE3 = 3;
-var MAX_PASSES_PER_JOB2 = 3;
+var CLAIM_BATCH_SIZE2 = 3;
+var MAX_PASSES_PER_JOB = 3;
 var CATCH_UP_INTERVAL_MS = 5 * 6e4;
 var CATCH_UP_BATCH_SIZE = 25;
 function logBriefMetric(event, fields) {
@@ -201521,7 +203866,7 @@ var ObjectiveBriefComposeWorker = class extends WorkerJobPoller {
       workerIdPrefix: "objective-brief-compose",
       jobTypes: [OBJECTIVE_BRIEF_COMPOSE_JOB_TYPE],
       logPrefix: "objective-brief-compose-worker",
-      claimBatchSize: CLAIM_BATCH_SIZE3
+      claimBatchSize: CLAIM_BATCH_SIZE2
     });
     this.compose = compose;
   }
@@ -201602,7 +203947,7 @@ var ObjectiveBriefComposeWorker = class extends WorkerJobPoller {
     }
     const finalAttempt = job.attempt_count >= job.max_attempts;
     let lastError = null;
-    for (let pass2 = 1; pass2 <= MAX_PASSES_PER_JOB2; pass2++) {
+    for (let pass2 = 1; pass2 <= MAX_PASSES_PER_JOB; pass2++) {
       const outcome = await this.composePass(client, objectiveId, finalAttempt, job, pass2);
       if (outcome.kind === "missing") {
         await completeObjectiveBriefComposeJob({
@@ -201761,40 +204106,40 @@ var objectiveBriefComposeWorker = new ObjectiveBriefComposeWorker();
 // ../packages/core/service/objective-transcript.ts
 var UUID3 = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 var ISO = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
-function invalid3() {
+function invalid4() {
   throw new ServiceError("Invalid objective transcript query", "invalid_request", 400);
 }
 function cursor2(key) {
   return Buffer.from(JSON.stringify([1, key.at, key.id])).toString("base64url");
 }
 function decode4(value2) {
-  if (typeof value2 !== "string" || value2.length > 256 || !/^[\w-]+$/.test(value2)) invalid3();
+  if (typeof value2 !== "string" || value2.length > 256 || !/^[\w-]+$/.test(value2)) invalid4();
   try {
     const key = JSON.parse(Buffer.from(value2, "base64url").toString());
     if (!Array.isArray(key) || key.length !== 3 || key[0] !== 1 || typeof key[1] !== "string" || !ISO.test(key[1]) || !Number.isFinite(Date.parse(key[1])) || new Date(key[1]).toISOString() !== key[1] || typeof key[2] !== "string" || !UUID3.test(key[2]))
-      invalid3();
+      invalid4();
     const result2 = { at: key[1], id: key[2] };
-    if (cursor2(result2) !== value2) invalid3();
+    if (cursor2(result2) !== value2) invalid4();
     return result2;
   } catch {
-    return invalid3();
+    return invalid4();
   }
 }
 function parseTranscriptRead(query) {
-  if (Object.keys(query).some((key) => !["limit", "before", "after", "ids"].includes(key))) invalid3();
+  if (Object.keys(query).some((key) => !["limit", "before", "after", "ids"].includes(key))) invalid4();
   if ([query.before, query.after, query.ids].filter((value2) => value2 !== void 0).length > 1)
-    invalid3();
+    invalid4();
   const rawLimit = query.limit ?? "50";
-  if (typeof rawLimit !== "string" || !/^[1-9]\d{0,2}$/.test(rawLimit)) invalid3();
+  if (typeof rawLimit !== "string" || !/^[1-9]\d{0,2}$/.test(rawLimit)) invalid4();
   const limit2 = Number(rawLimit);
-  if (limit2 > 100) invalid3();
+  if (limit2 > 100) invalid4();
   let ids = null;
   if (query.ids !== void 0) {
     if (typeof query.ids !== "string" || query.ids.length > 3699 || query.limit !== void 0)
-      invalid3();
+      invalid4();
     ids = query.ids.split(",");
     if (ids.length > 100 || ids.some((id2) => !UUID3.test(id2)) || new Set(ids).size !== ids.length)
-      invalid3();
+      invalid4();
   }
   return {
     limit: limit2,
@@ -201932,6 +204277,18 @@ function projectAutomationRouteGuard(req, res, next) {
   if (ALLOWED.some(([method, pattern]) => req.method === method && pattern.test(path29)))
     return next();
   res.status(404).json({ error: "Not found" });
+}
+
+// report-drafts.ts
+async function listObjectiveReportDraftsForOperator(objectiveRef) {
+  const db = requireDatabaseClient();
+  const { objectiveId, workspaceId: workspaceId2 } = await requireObjectivePermission({
+    objectiveId: objectiveRef,
+    permission: PERMISSIONS.MISSION_READ,
+    db
+  });
+  const drafts = await listObjectiveReportDrafts(db, { workspaceId: workspaceId2, objectiveId, limit: 20 });
+  return { objectiveId, drafts };
 }
 
 // repository-reads.ts
@@ -202375,12 +204732,12 @@ var TerminalSessionObserver = class extends PollLoop {
 var terminalSessionObserver = new TerminalSessionObserver();
 
 // webhook-security.ts
-var import_node_crypto47 = require("node:crypto");
+var import_node_crypto50 = require("node:crypto");
 var import_promises6 = __toESM(require("node:dns/promises"), 1);
 var import_node_net = require("node:net");
 function signWebhookPayload(secret, rawBody) {
   const timestamp2 = Math.floor(Date.now() / 1e3);
-  const signature = (0, import_node_crypto47.createHmac)("sha256", secret).update(`${timestamp2}.${rawBody}`).digest("hex");
+  const signature = (0, import_node_crypto50.createHmac)("sha256", secret).update(`${timestamp2}.${rawBody}`).digest("hex");
   return { header: `t=${timestamp2},v1=${signature}`, timestamp: timestamp2 };
 }
 function internalHostPatterns() {
@@ -202484,7 +204841,7 @@ function redactSecretLikeTokens(text) {
 
 // webhook-dispatcher.ts
 var POLL_INTERVAL_MS = 1e3;
-var CLAIM_BATCH_SIZE4 = 10;
+var CLAIM_BATCH_SIZE3 = 10;
 var REQUEST_TIMEOUT_MS = 1e4;
 var RESPONSE_SNIPPET_LIMIT = 1e3;
 var RETRY_BACKOFF_MS2 = [3e4, 12e4, 6e5, 36e5, 216e5, 864e5];
@@ -202504,7 +204861,7 @@ var WebhookDispatcher = class extends PollLoop {
    */
   async runOnce() {
     const client = requireDatabaseClient();
-    for (let i5 = 0; i5 < CLAIM_BATCH_SIZE4 && !this.isStopped; i5++) {
+    for (let i5 = 0; i5 < CLAIM_BATCH_SIZE3 && !this.isStopped; i5++) {
       const row = await claimNextOutboxMessage(client);
       if (!row) break;
       await this.deliver(client, row);
@@ -202717,7 +205074,7 @@ async function recordSubscriptionFailure(client, subscriptionId, currentConsecut
 var webhookDispatcher = new WebhookDispatcher();
 
 // webhooks.ts
-var import_node_crypto48 = require("node:crypto");
+var import_node_crypto51 = require("node:crypto");
 var WEBHOOK_SECRET_SCHEME = "whsec";
 var SUBSCRIPTION_COLUMNS = "id, workspace_id, project_id, name, endpoint_url, secret, event_types_json, payload_mode, created_by_workspace_user_id, enabled, disabled_reason, consecutive_failures, last_success_at, last_failure_at, created_at, updated_at, revision";
 function parseEventTypes(json2) {
@@ -202750,7 +205107,7 @@ function toSubscriptionDto(row) {
   };
 }
 function generateWebhookSecret() {
-  return { secret: `${WEBHOOK_SECRET_SCHEME}_${(0, import_node_crypto48.randomBytes)(24).toString("hex")}` };
+  return { secret: `${WEBHOOK_SECRET_SCHEME}_${(0, import_node_crypto51.randomBytes)(24).toString("hex")}` };
 }
 function normalizeEventTypes(input2) {
   if (!Array.isArray(input2) || input2.length === 0) {
@@ -203344,7 +205701,6 @@ var mutationPollLoops = [
   realtime,
   webhookDispatcher,
   deliveryComposeWorker,
-  missionSummaryComposeWorker,
   objectiveBriefComposeWorker,
   liveActivityDispatcher,
   pushNotificationDispatcher,
@@ -204483,6 +206839,10 @@ app.get(
   )
 );
 var rawAttachmentBody = rawUploadBody(ATTACHMENT_UPLOAD_ROUTE);
+app.get(
+  "/api/objectives/:id/report-drafts",
+  handle3((req) => listObjectiveReportDraftsForOperator(req.params.id))
+);
 app.get(
   "/api/objectives/:id/attachments",
   handle3((req) => listObjectiveAttachments(req.params.id))
