@@ -5,7 +5,6 @@ import type { ServiceContext } from './context.js';
 import { ServiceError } from './errors.js';
 import {
   MISSION_SUMMARY_CLOSE_ITEMS_MAX,
-  type MissionSummaryBaseline,
   parseMissionSummaryInput
 } from './mission-summary-agent.js';
 import { createMissionWithObjectives } from './missions.js';
@@ -20,7 +19,7 @@ import {
   resumeFollowUp
 } from './protocol.js';
 import { createSeededServiceContext } from './test-helpers.js';
-import { enqueueMissionSummaryComposeJob } from './worker-jobs.js';
+import { RETIRED_MISSION_SUMMARY_COMPOSE_JOB_TYPE } from './worker-jobs.js';
 
 /**
  * The agent-facing mission summary surface (coo:1260.shmg): the attach
@@ -119,6 +118,7 @@ describe('parseMissionSummaryInput', () => {
   it('accepts prose with a base, and close entries alone', () => {
     assert.deepEqual(parseMissionSummaryInput(ok, { requireBase: true }), {
       baseContentRevision: 0,
+      baseEvidenceRevision: null,
       narrative: { headline: 'Done.', summary: 'It works.' },
       closeItems: []
     });
@@ -129,6 +129,7 @@ describe('parseMissionSummaryInput', () => {
       ),
       {
         baseContentRevision: null,
+        baseEvidenceRevision: null,
         narrative: null,
         closeItems: [{ id: 'a', status: 'done', reason: 'Fixed.' }]
       }
@@ -142,6 +143,8 @@ describe('parseMissionSummaryInput', () => {
       { ...ok, extra: true },
       { ...ok, baseContentRevision: -1 },
       { ...ok, baseContentRevision: 1.5 },
+      { ...ok, baseEvidenceRevision: -1 },
+      { ...ok, baseEvidenceRevision: '2' },
       { baseContentRevision: 0, headline: 'Only a headline.' },
       { ...ok, headline: '' },
       { ...ok, headline: 'Two\nlines.' },
@@ -193,11 +196,23 @@ describe('mission summary on attach', () => {
     });
     assert.deepEqual(first.missionSummary, {
       contentRevision: 0,
+      evidenceRevision: 0,
+      narrative: {
+        state: 'absent',
+        evidenceRevision: 0,
+        publishedEvidenceRevision: null,
+        deliveryId: null,
+        objectiveId: null,
+        publishedAt: null,
+        changedAt: null,
+        outstandingDeliveryId: null
+      },
       headline: '',
       summary: '',
       author: null,
       openItems: [],
       totalOpenItems: 0,
+      otherMissionOpenItems: 0,
       truncated: false
     });
     assert.ok(first.agentInstructions.includes('## Mission summary'));
@@ -209,7 +224,12 @@ describe('mission summary on attach', () => {
       sessionKey: first.sessionKey,
       summary: 'Added the table.',
       payloadJson: report('first'),
-      missionSummary: { baseContentRevision: 0, headline: 'The table exists.', summary: 'Tested.' }
+      missionSummary: {
+        baseContentRevision: 0,
+        baseEvidenceRevision: 0,
+        headline: 'The table exists.',
+        summary: 'Tested.'
+      }
     });
 
     const second = await attachSession({
@@ -219,6 +239,8 @@ describe('mission summary on attach', () => {
     });
     const baseline = second.missionSummary!;
     assert.equal(baseline.contentRevision, 1);
+    assert.equal(baseline.evidenceRevision, 1);
+    assert.equal(baseline.narrative.state, 'current');
     assert.equal(baseline.headline, 'The table exists.');
     assert.equal(baseline.author, 'agent');
     assert.deepEqual(
@@ -246,6 +268,9 @@ describe('mission summary on attach', () => {
     });
     const resumed = await resumeFollowUp({ ctx, missionId: mission.displayId });
     assert.equal(resumed.missionSummary?.contentRevision, 1);
+    // Second delivery and the follow-up each advanced the basis.
+    assert.equal(resumed.missionSummary?.evidenceRevision, 3);
+    assert.equal(resumed.missionSummary?.narrative.state, 'outdated');
     assert.ok(resumed.agentInstructions.includes('## Mission summary'));
     await db.close();
   });
@@ -518,9 +543,6 @@ describe('mission summary on deliver', () => {
       summary: 'Other.',
       payloadJson: report('other')
     });
-    // A trigger from an earlier delivery left the row pending.
-    await enqueueMissionSummaryComposeJob({ ctx, missionId: mission.id, reason: 'delivery' });
-    assert.equal((await summaryRow(ctx, mission.id))?.status, 'pending');
 
     const [riskId] = await openItemIds(ctx, mission.id, 'risk');
     const [foreignId] = await openItemIds(ctx, other.mission.id, 'risk');
@@ -537,6 +559,7 @@ describe('mission summary on deliver', () => {
       summary: 'Second.',
       missionSummary: {
         baseContentRevision: second.missionSummary!.contentRevision,
+        baseEvidenceRevision: second.missionSummary!.evidenceRevision,
         headline: 'The backfill is fast and tested.',
         summary: 'The backfill now runs in batches. It is tested and not deployed.',
         closeItems: [
@@ -593,96 +616,14 @@ describe('mission summary on deliver', () => {
     );
     assert.equal(JSON.parse(payload!.payload_json).missionSummary, undefined);
 
-    // The fallback composer never overwrites the newest delivery's agent prose.
-    const trigger = await enqueueMissionSummaryComposeJob({
-      ctx,
-      missionId: mission.id,
-      reason: 'delivery'
-    });
-    assert.equal(trigger.triggered, false);
-    assert.equal((await summaryRow(ctx, mission.id))?.status, 'composed');
-    await db.close();
-  });
-
-  it('a stale base rejects the whole parallel delivery with a fresh baseline', async () => {
-    const { db, ctx } = await createSeededServiceContext({ source: 'cli' });
-    const { mission, objectives } = await missionWith(ctx, 'Parallel Conflict', 2);
-    const a = await attachSession({
-      ctx,
-      missionId: mission.displayId,
-      objectiveId: objectives[0]!.id
-    });
-    const b = await attachSession({
-      ctx,
-      missionId: mission.displayId,
-      objectiveId: objectives[1]!.id
-    });
-    assert.equal(a.missionSummary?.contentRevision, 0);
-    assert.equal(b.missionSummary?.contentRevision, 0);
-
-    await deliverSession({
-      ctx,
-      missionId: mission.displayId,
-      sessionKey: a.sessionKey,
-      summary: 'A.',
-      payloadJson: report('a'),
-      missionSummary: { baseContentRevision: 0, headline: 'A landed.', summary: 'A is tested.' }
-    });
-
-    const error = await rejection(
-      deliverSession({
-        ctx,
-        missionId: mission.displayId,
-        sessionKey: b.sessionKey,
-        summary: 'B.',
-        payloadJson: report('b'),
-        missionSummary: { baseContentRevision: 0, headline: 'B landed.', summary: 'B is tested.' }
-      })
+    assert.equal(delivered.missionSummary?.publication?.available, false);
+    assert.equal(delivered.missionSummary?.publication?.withheldReason, null);
+    // No automatic composer exists: no delivery enqueued a narrative job.
+    const jobs = await ctx.db.get<{ n: number | string }>(
+      `SELECT COUNT(*) AS n FROM worker_jobs WHERE type = ?`,
+      [RETIRED_MISSION_SUMMARY_COMPOSE_JOB_TYPE]
     );
-    assert.equal(error.code, 'mission_summary_conflict');
-    assert.match(
-      error.message,
-      /deliver without headline and summary and say so in the delivery summary/
-    );
-    assert.equal(error.status, 409);
-    const details = error.details as {
-      baseContentRevision: number;
-      missionSummary: MissionSummaryBaseline;
-    };
-    assert.equal(details.baseContentRevision, 0);
-    assert.equal(details.missionSummary.contentRevision, 1);
-    assert.equal(details.missionSummary.headline, 'A landed.');
-    // The baseline never shows rows of the rejected delivery.
-    assert.ok(
-      details.missionSummary.openItems.every(item => item.objective === objectives[0]!.displayId)
-    );
-
-    const deliveries = await ctx.db.all<{ objective_id: string }>(
-      `SELECT objective_id FROM deliveries WHERE mission_id = ?`,
-      [mission.id]
-    );
-    assert.deepEqual(
-      deliveries.map(row => row.objective_id),
-      [objectives[0]!.id]
-    );
-    const state = await ctx.db.get<{ state: string }>(`SELECT state FROM objectives WHERE id = ?`, [
-      objectives[1]!.id
-    ]);
-    assert.equal(state?.state, 'executing');
-
-    // Retry once from the fresh base; the delivery then succeeds.
-    const retried = await deliverSession({
-      ctx,
-      missionId: mission.displayId,
-      sessionKey: b.sessionKey,
-      summary: 'B.',
-      missionSummary: {
-        baseContentRevision: details.missionSummary.contentRevision,
-        headline: 'A and B landed.',
-        summary: 'Both are tested.'
-      }
-    });
-    assert.equal(retried.missionSummary?.contentRevision, 2);
+    assert.equal(Number(jobs?.n), 0);
     await db.close();
   });
 
@@ -700,7 +641,12 @@ describe('mission summary on deliver', () => {
       sessionKey: a.sessionKey,
       summary: 'A.',
       payloadJson: report('a'),
-      missionSummary: { baseContentRevision: 0, headline: 'A landed.', summary: 'Tested.' }
+      missionSummary: {
+        baseContentRevision: 0,
+        baseEvidenceRevision: 0,
+        headline: 'A landed.',
+        summary: 'Tested.'
+      }
     });
     const [actionId] = await openItemIds(ctx, mission.id, 'human_action');
     const b = await attachSession({
@@ -720,6 +666,14 @@ describe('mission summary on deliver', () => {
     assert.deepEqual(delivered.missionSummary?.closedItemIds, [actionId]);
     assert.equal(delivered.missionSummary?.narrativeWritten, false);
     assert.equal(delivered.missionSummary?.contentRevision, 1);
+    assert.deepEqual(
+      {
+        available: delivered.missionSummary?.publication?.available,
+        reason: delivered.missionSummary?.publication?.withheldReason
+      },
+      { available: true, reason: 'absent' }
+    );
+    assert.equal(delivered.missionSummary?.baseline?.narrative.state, 'outdated');
     assert.equal((await summaryRow(ctx, mission.id))?.headline, 'A landed.');
     await db.close();
   });
@@ -757,6 +711,7 @@ describe('mission summary on deliver', () => {
       summary: 'Done.',
       missionSummary: {
         baseContentRevision: 0,
+        baseEvidenceRevision: 0,
         headline: "It's done.",
         summary: 'The import works; the export is next.'
       }
@@ -794,8 +749,13 @@ describe('mission summary on record-work', () => {
       objective: 'Fix the import.',
       summary: 'Fixed the import.'
     });
-    assert.equal(plain.missionSummary, undefined);
-    assert.equal(await summaryRow(ctx, plain.mission.id), undefined);
+    // Omitted prose leaves one sessionless publication opportunity; nothing is generated.
+    assert.equal(plain.missionSummary?.narrativeWritten, false);
+    assert.equal(plain.missionSummary?.publication?.available, true);
+    assert.equal(plain.missionSummary?.publication?.withheldReason, 'absent');
+    assert.match(plain.instruction ?? '', /publish-delivery-summary/);
+    assert.doesNotMatch(plain.instruction ?? '', /--session-key/);
+    assert.equal((await summaryRow(ctx, plain.mission.id))?.headline, '');
     await db.close();
   });
 });

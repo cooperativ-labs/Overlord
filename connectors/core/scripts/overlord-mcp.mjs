@@ -465,6 +465,245 @@ const tools = [
     }
   },
   {
+    name: 'overlord_delivery_receipt',
+    title: 'Read delivery receipt',
+    description:
+      'Use this to confirm whether your own deliver or record-work attempt was accepted, for example after a lost response. Give exactly one of deliveryId or operationId (with operationKind record_work for record-work). Returns the immutable accepted receipt; only the member who delivered can read it. A not-found answer does not prove a concurrent attempt failed: retry the original call with the same operationId instead of choosing a new one.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        missionId: {
+          type: 'string',
+          description: 'Optional mission UUID or display id the receipt must belong to.'
+        },
+        deliveryId: {
+          type: 'string',
+          description: 'Delivery id from an accepted delivery.'
+        },
+        operationId: {
+          type: 'string',
+          description: 'The operationId you sent with deliver or record-work.'
+        },
+        operationKind: {
+          type: 'string',
+          enum: ['deliver', 'record_work'],
+          description: 'Namespace of operationId. Defaults to deliver.'
+        }
+      },
+      required: [],
+      additionalProperties: false
+    },
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      openWorldHint: false
+    }
+  },
+  {
+    name: 'overlord_report_draft',
+    title: 'Read report draft',
+    description:
+      'Use this before delivering when your session recorded draft evidence with overlord_update_session reportDraft. Returns your draft (state open, sealed or abandoned; revision; active entries; withdrawn entries when requested) and, while open, the final inspection: the normalized report deliver would seal now with exclusion warnings. Also lists abandoned drafts of the objective whose entries you may import explicitly. Read-only; drafts are provisional and never mission items.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        missionId: {
+          type: 'string',
+          description:
+            'Mission UUID or workspace display id. Optional when objectiveId is a display id.'
+        },
+        objectiveId: {
+          type: 'string',
+          description: 'Objective UUID or display id such as coo:756.k7xm.'
+        },
+        sessionKey: {
+          type: 'string',
+          description: 'Session key returned by overlord_attach_session.'
+        },
+        draftId: {
+          type: 'string',
+          description:
+            'Optional. Read an abandoned or sealed draft of the same objective instead of your own.'
+        },
+        includeWithdrawn: {
+          type: 'boolean',
+          description: 'Include withdrawn entries.'
+        }
+      },
+      required: ['sessionKey'],
+      additionalProperties: false
+    },
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      openWorldHint: false
+    }
+  },
+  {
+    name: 'overlord_delivery_summary_context',
+    title: 'Read delivery summary context',
+    description:
+      'Use this after your own accepted delivery when its mission summary was withheld or omitted. Returns the delivery publication opportunity (available, state, supersededReason), a fresh editing baseline with contentRevision and evidenceRevision, and an instruction. It grants no execution rights and works after the session ended. There is no deadline: the opportunity ends only when newer work, a follow-up or a reopen supersedes it, or it is published.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        missionId: {
+          type: 'string',
+          description: 'Mission UUID or display id of the delivery.'
+        },
+        deliveryId: {
+          type: 'string',
+          description: 'The accepted delivery id. Give this or publicationId.'
+        },
+        publicationId: {
+          type: 'string',
+          description: 'missionSummary.publication.id from the delivery result.'
+        },
+        sessionKey: {
+          type: 'string',
+          description:
+            'The key of the session that delivered. Not needed for a record-work delivery.'
+        }
+      },
+      required: ['missionId'],
+      additionalProperties: false
+    },
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      openWorldHint: false
+    }
+  },
+  {
+    name: 'overlord_publish_delivery_summary',
+    title: 'Publish delivery summary',
+    description:
+      'Use this once to publish a reconciled headline and summary for the whole mission, for your own accepted delivery whose summary was withheld or omitted. Read overlord_delivery_summary_context first and send its baseline contentRevision and evidenceRevision as bases. Writes only the narrative: no item closes, report fields or objective changes. On mission_summary_conflict nothing was written: reconcile from error details.missionSummary and try once more, then stop and say the summary is not updated. mission_summary_publication_superseded means newer work owns the next summary; do not deliver again or resume execution to update it.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        missionId: {
+          type: 'string',
+          description: 'Mission UUID or display id of the delivery.'
+        },
+        deliveryId: {
+          type: 'string',
+          description: 'The accepted delivery id. Give this or publicationId.'
+        },
+        publicationId: {
+          type: 'string',
+          description: 'missionSummary.publication.id from the delivery result.'
+        },
+        sessionKey: {
+          type: 'string',
+          description:
+            'The key of the session that delivered. Not needed for a record-work delivery.'
+        },
+        operationId: {
+          type: 'string',
+          description:
+            'Required retry identity for this publication: 8-128 letters, digits, ".", "_", ":" or "-". Choose it before the first call and reuse it on every retry of this publication; the same value and text after success returns the original result.'
+        },
+        baseContentRevision: {
+          type: 'integer',
+          minimum: 0,
+          description: 'baseline.contentRevision from overlord_delivery_summary_context.'
+        },
+        baseEvidenceRevision: {
+          type: 'integer',
+          minimum: 0,
+          description: 'baseline.evidenceRevision from overlord_delivery_summary_context.'
+        },
+        headline: {
+          type: 'string',
+          description: 'One sentence, at most 140 characters.'
+        },
+        summary: {
+          type: 'string',
+          description:
+            'Markdown, at most 1,200 characters, rewritten for the whole mission to be true now. Say whether claims are implemented, tested or deployed.'
+        }
+      },
+      required: [
+        'missionId',
+        'operationId',
+        'baseContentRevision',
+        'baseEvidenceRevision',
+        'headline',
+        'summary'
+      ],
+      additionalProperties: false
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      openWorldHint: false
+    }
+  },
+  {
+    name: 'overlord_project_items',
+    title: 'Discover project open items',
+    description:
+      'Use this to discover accepted live open items in the attached session project, excluding its own mission by default. Ranks by the live objective change ledger plus explicit paths: strong full path, medium directory, weak non-generic basename, then newest delivery. Default 20, max 100; scans at most 2,000 rows with scanTruncated. query is a case-insensitive text substring, not an id lookup. Returns bounded text and at most five matched paths; ledger.captureGap suggests supplying paths. Draft observations are excluded. Restart paging after concurrent writes. Verify resolution in code before closing through overlord_close_items or delivery closeItems.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        missionId: {
+          type: 'string',
+          description: 'Mission UUID or display id; optional with objective display id.'
+        },
+        objectiveId: {
+          type: 'string',
+          description: 'Must match the attached session objective.'
+        },
+        sessionKey: {
+          type: 'string',
+          description: 'Live matching attached session key; ended sessions denied.'
+        },
+        kinds: {
+          type: 'array',
+          minItems: 1,
+          items: {
+            type: 'string',
+            enum: ['risk', 'human_action', 'suggestion']
+          }
+        },
+        query: {
+          type: 'string',
+          maxLength: 200
+        },
+        paths: {
+          type: 'array',
+          maxItems: 200,
+          items: {
+            type: 'string',
+            maxLength: 1000
+          }
+        },
+        includeOwnMission: {
+          type: 'boolean'
+        },
+        limit: {
+          type: 'integer',
+          minimum: 1,
+          maximum: 100,
+          default: 20
+        },
+        offset: {
+          type: 'integer',
+          minimum: 0
+        }
+      },
+      required: ['sessionKey'],
+      additionalProperties: false
+    },
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      openWorldHint: false
+    }
+  },
+  {
     name: 'overlord_mission_items',
     title: 'Read full mission items',
     description:
@@ -507,7 +746,7 @@ const tools = [
     name: 'overlord_close_items',
     title: 'Close verified mission items',
     description:
-      'Use this to close verified open items of the attached session’s mission as done or dismissed, with a reason, without delivering. Uses delivery closeItems rules and warnings. Returns closedItemIds and warnings; skipped entries carry recovery instructions. Repeat for more than 50 closures.',
+      'Use this to close verified open items of any mission in the attached session’s project as done or dismissed, with a reason, without delivering. Uses delivery closeItems rules and warnings. Returns closedItemIds and warnings; skipped entries carry recovery instructions. Repeat for more than 50 closures.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -532,7 +771,8 @@ const tools = [
             properties: {
               id: {
                 type: 'string',
-                description: 'Open item id from attach or the mission-items read.'
+                description:
+                  'Open item id from attach, project-items or an authorized mission read.'
               },
               status: {
                 type: 'string',
@@ -1103,7 +1343,7 @@ const tools = [
         },
         summary: {
           type: 'string',
-          description: 'Update text.'
+          description: 'Update text. Optional when reportDraft is sent.'
         },
         phase: {
           type: 'string',
@@ -1122,9 +1362,76 @@ const tools = [
             description:
               'Canonical repository-relative path. Deleted and renamed paths (both endpoints) are valid.'
           }
+        },
+        reportDraft: {
+          type: 'object',
+          properties: {
+            operationId: {
+              type: 'string',
+              description:
+                'Required. Your id for this batch (8-128 letters, digits, ".", "_", ":" or "-"). Choose it before the first call and send the same value on every retry of this batch; the server then returns the original receipt instead of applying it again, even after later batches or delivery.'
+            },
+            expectedRevision: {
+              type: 'integer',
+              minimum: 0,
+              description:
+                'The draft revision you last saw: 0 before your first batch, then reportDraft.revision from the previous result or overlord_report_draft. A stale value applies nothing and fails with report_draft_conflict carrying the fresh draft.'
+            },
+            operations: {
+              type: 'array',
+              maxItems: 50,
+              description:
+                '1-50 operations, at most one per entryId. At most 12 active entries per kind.',
+              items: {
+                type: 'object',
+                properties: {
+                  op: {
+                    type: 'string',
+                    enum: ['upsert', 'withdraw', 'import']
+                  },
+                  entryId: {
+                    type: 'string',
+                    description:
+                      'Your stable id for one observation (1-100 letters, digits, ".", "_", ":" or "-"). Upsert the same id to amend it; its kind never changes.'
+                  },
+                  kind: {
+                    type: 'string',
+                    enum: ['human_action', 'tradeoff', 'known_risk', 'deferred_work', 'assumption'],
+                    description: 'upsert only.'
+                  },
+                  content: {
+                    type: 'object',
+                    additionalProperties: true,
+                    description:
+                      'upsert only. human_action, tradeoff and deferred_work use the deliver item shapes (humanActions, tradeoffsMade, deferredWork); known_risk and assumption use { text }.'
+                  },
+                  reason: {
+                    type: 'string',
+                    description:
+                      'withdraw only. Why the observation no longer applies, at most 280 characters.'
+                  },
+                  sourceDraftId: {
+                    type: 'string',
+                    description:
+                      'import only. An abandoned draft of this objective (from overlord_report_draft abandoned[]).'
+                  },
+                  sourceEntryId: {
+                    type: 'string',
+                    description: 'import only. The active entry of that draft to copy.'
+                  }
+                },
+                required: ['op'],
+                additionalProperties: false
+              }
+            }
+          },
+          required: ['operationId', 'expectedRevision', 'operations'],
+          additionalProperties: false,
+          description:
+            'Optional, opt-in provisional report evidence for this session (ADR 0078). Batch discoveries instead of reporting after every tool call. Draft entries never become mission items, obligations or badges; deliver seals them into the accepted report.'
         }
       },
-      required: ['sessionKey', 'summary'],
+      required: ['sessionKey'],
       additionalProperties: false
     },
     annotations: {
@@ -1326,7 +1633,13 @@ const tools = [
               type: 'integer',
               minimum: 0,
               description:
-                'missionSummary.contentRevision from attach. Required with headline and summary; a stale value rejects the whole delivery with mission_summary_conflict and a fresh baseline.'
+                'missionSummary.contentRevision from attach. Required with headline and summary. If it is stale, the delivery is still accepted and your headline and summary are withheld.'
+            },
+            baseEvidenceRevision: {
+              type: 'integer',
+              minimum: 0,
+              description:
+                'missionSummary.evidenceRevision from attach. Without it, or if other accepted work changed the mission since, the delivery is still accepted and your headline and summary are withheld.'
             },
             headline: {
               type: 'string',
@@ -1366,7 +1679,74 @@ const tools = [
           required: [],
           additionalProperties: false,
           description:
-            'Optional agent-written mission summary for people: a replacement headline and summary based on the attach baseline, and open items to close. On mission_summary_conflict nothing is delivered: rewrite from error details.missionSummary and retry once, then deliver without headline and summary.'
+            'Optional agent-written mission summary for people: a replacement headline and summary based on the attach baseline, and open items to close. Nothing else writes it. Stale or absent prose never rejects the delivery: missionSummary.publication and instruction then say how to publish once with overlord_publish_delivery_summary.'
+        },
+        operationId: {
+          type: 'string',
+          description:
+            'Optional retry identity for this delivery: 8-128 letters, digits, ".", "_", ":" or "-". Choose it yourself before the first call and send the same value on every retry of this attempt (for example after a timeout or lost response); the server then returns the original result instead of delivering again. The same value with a different request is refused with delivery_operation_conflict. Without it, retries are not deduplicated (a second delivery of the session is still refused).'
+        },
+        reportDraft: {
+          type: 'object',
+          properties: {
+            expectedRevision: {
+              type: 'integer',
+              minimum: 0,
+              description:
+                'The draft revision from your last overlord_report_draft read or update result.'
+            },
+            operations: {
+              type: 'array',
+              maxItems: 50,
+              description:
+                'Optional final draft operations applied before sealing (same shapes as overlord_update_session; no batch operationId: operationId above identifies this delivery).',
+              items: {
+                type: 'object',
+                properties: {
+                  op: {
+                    type: 'string',
+                    enum: ['upsert', 'withdraw', 'import']
+                  },
+                  entryId: {
+                    type: 'string',
+                    description:
+                      'Your stable id for one observation (1-100 letters, digits, ".", "_", ":" or "-"). Upsert the same id to amend it; its kind never changes.'
+                  },
+                  kind: {
+                    type: 'string',
+                    enum: ['human_action', 'tradeoff', 'known_risk', 'deferred_work', 'assumption'],
+                    description: 'upsert only.'
+                  },
+                  content: {
+                    type: 'object',
+                    additionalProperties: true,
+                    description:
+                      'upsert only. human_action, tradeoff and deferred_work use the deliver item shapes (humanActions, tradeoffsMade, deferredWork); known_risk and assumption use { text }.'
+                  },
+                  reason: {
+                    type: 'string',
+                    description:
+                      'withdraw only. Why the observation no longer applies, at most 280 characters.'
+                  },
+                  sourceDraftId: {
+                    type: 'string',
+                    description:
+                      'import only. An abandoned draft of this objective (from overlord_report_draft abandoned[]).'
+                  },
+                  sourceEntryId: {
+                    type: 'string',
+                    description: 'import only. The active entry of that draft to copy.'
+                  }
+                },
+                required: ['op'],
+                additionalProperties: false
+              }
+            }
+          },
+          required: ['expectedRevision'],
+          additionalProperties: false,
+          description:
+            'Required when this session recorded a report draft: read overlord_report_draft first, then send its revision. Without it, or with a stale revision, nothing is delivered (report_draft_conflict). Active entries become the accepted report, followed by humanActions/tradeoffsMade/knownRisks/deferredWork/assumptions items that match no entry; amend or remove entries by entryId, not by omission. More than 12 items of a kind is refused, never truncated.'
         }
       },
       required: ['sessionKey', 'summary'],
@@ -1562,7 +1942,12 @@ const tools = [
           required: [],
           additionalProperties: false,
           description:
-            'Optional agent-written mission summary for the new mission: headline and summary.'
+            'Optional agent-written mission summary for the new mission: headline and summary. Without it, the result says how to publish once later with overlord_publish_delivery_summary.'
+        },
+        operationId: {
+          type: 'string',
+          description:
+            'Optional retry identity for this record: 8-128 letters, digits, ".", "_", ":" or "-". Choose it yourself before the first call and send the same value on every retry of this attempt (for example after a timeout or lost response); the server then returns the original result instead of recording the work twice. Use a new value only for intentionally separate work. The same value with a different request is refused with delivery_operation_conflict. Without it, retries are not deduplicated.'
         }
       },
       required: ['projectId', 'objective', 'summary'],
@@ -1781,6 +2166,18 @@ async function callOverlordTool(name, args) {
   }
   if (name === 'overlord_list_deliveries') {
     return runProtocol('list-deliveries', missionScopeFlags(args));
+  }
+  if (name === 'overlord_project_items') {
+    return runProtocol('project-items', {
+      ...missionScopeFlags(args),
+      'session-key': requiredString(args, 'sessionKey'),
+      ...(args.kinds !== undefined ? { kind: args.kinds.join(',') } : {}),
+      ...(args.query !== undefined ? { query: args.query } : {}),
+      ...(args.paths !== undefined ? { path: args.paths.join(',') } : {}),
+      ...(args.includeOwnMission === true ? { 'include-own-mission': true } : {}),
+      ...(args.limit !== undefined ? { limit: String(args.limit) } : {}),
+      ...(args.offset !== undefined ? { offset: String(args.offset) } : {})
+    });
   }
   if (name === 'overlord_mission_items') {
     return runProtocol('mission-items', {
@@ -2047,7 +2444,10 @@ async function callOverlordTool(name, args) {
     return runProtocol('update', {
       ...missionScopeFlags(args),
       'session-key': requiredString(args, 'sessionKey'),
-      summary: requiredString(args, 'summary'),
+      // Optional with a report draft batch (ADR 0078).
+      ...(optionalString(args, 'summary') ? { summary: requiredString(args, 'summary') } : {}),
+      // The batch operationId is caller-retained inside reportDraft; never minted here.
+      ...(isPlainObject(args.reportDraft) ? { 'report-draft': args.reportDraft } : {}),
       ...(optionalString(args, 'phase') ? { phase: requiredString(args, 'phase') } : {}),
       ...(optionalString(args, 'eventType')
         ? { 'event-type': requiredString(args, 'eventType') }
@@ -2062,7 +2462,68 @@ async function callOverlordTool(name, args) {
       summary: requiredString(args, 'summary'),
       ...(Array.isArray(args.artifacts) ? { 'artifacts-json': args.artifacts } : {}),
       ...(Array.isArray(args.declaredPaths) ? { 'declared-paths-json': args.declaredPaths } : {}),
+      // Caller-retained retry identity (ADR 0075); never minted here.
+      ...(optionalString(args, 'operationId')
+        ? { 'operation-id': requiredString(args, 'operationId') }
+        : {}),
+      ...(isPlainObject(args.reportDraft) ? { 'report-draft': args.reportDraft } : {}),
       ...deliverPayload(args)
+    });
+  }
+  if (name === 'overlord_report_draft') {
+    return runProtocol('report-draft', {
+      ...missionScopeFlags(args),
+      'session-key': requiredString(args, 'sessionKey'),
+      ...(optionalString(args, 'draftId') ? { 'draft-id': requiredString(args, 'draftId') } : {}),
+      ...(args.includeWithdrawn === true ? { 'include-withdrawn': true } : {})
+    });
+  }
+  if (
+    name === 'overlord_delivery_summary_context' ||
+    name === 'overlord_publish_delivery_summary'
+  ) {
+    const flags = {
+      'mission-id': requiredString(args, 'missionId'),
+      'connection-method': 'mcp',
+      ...(optionalString(args, 'deliveryId')
+        ? { 'delivery-id': requiredString(args, 'deliveryId') }
+        : {}),
+      ...(optionalString(args, 'publicationId')
+        ? { 'publication-id': requiredString(args, 'publicationId') }
+        : {}),
+      ...(optionalString(args, 'sessionKey')
+        ? { 'session-key': requiredString(args, 'sessionKey') }
+        : {})
+    };
+    if (name === 'overlord_delivery_summary_context') {
+      return runProtocol('delivery-summary-context', flags);
+    }
+    // Caller-retained retry identity (ADR 0076); never minted here.
+    return runProtocol('publish-delivery-summary', {
+      ...flags,
+      'operation-id': requiredString(args, 'operationId'),
+      'payload-json': JSON.stringify({
+        baseContentRevision: args.baseContentRevision,
+        baseEvidenceRevision: args.baseEvidenceRevision,
+        headline: requiredString(args, 'headline'),
+        summary: requiredString(args, 'summary')
+      })
+    });
+  }
+  if (name === 'overlord_delivery_receipt') {
+    return runProtocol('delivery-receipt', {
+      ...(optionalString(args, 'missionId')
+        ? { 'mission-id': requiredString(args, 'missionId') }
+        : {}),
+      ...(optionalString(args, 'deliveryId')
+        ? { 'delivery-id': requiredString(args, 'deliveryId') }
+        : {}),
+      ...(optionalString(args, 'operationId')
+        ? { 'operation-id': requiredString(args, 'operationId') }
+        : {}),
+      ...(optionalString(args, 'operationKind')
+        ? { 'operation-kind': requiredString(args, 'operationKind') }
+        : {})
     });
   }
 
@@ -2105,6 +2566,12 @@ async function callOverlordTool(name, args) {
   if (name === 'overlord_record_work') {
     return runProtocol('record-work', {
       'project-id': requiredString(args, 'projectId'),
+      // With the caller's id the CLI replays that attempt. Without one, each tool
+      // call is separate work (the legacy guarantee): no id is reused or invented
+      // as a retry identity.
+      ...(optionalString(args, 'operationId')
+        ? { 'operation-id': requiredString(args, 'operationId') }
+        : { 'new-operation': true }),
       payload: {
         objective: requiredString(args, 'objective'),
         summary: requiredString(args, 'summary'),
@@ -2128,7 +2595,7 @@ process.stdin.on('data', async chunk => {
         result: {
           protocolVersion: PROTOCOL_VERSION,
           capabilities: { tools: { listChanged: false } },
-          serverInfo: { name: 'overlord-__OVERLORD_ADAPTER_KEY__', version: '0.3.70' }
+          serverInfo: { name: 'overlord-__OVERLORD_ADAPTER_KEY__', version: '0.3.74' }
         }
       });
       continue;

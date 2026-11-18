@@ -165,6 +165,10 @@ Use `idempotency_keys` to guard request/response replay for protocol, REST, hook
 
 If the same idempotency scope/key is reused with a different `request_hash`, the operation must fail with a conflict. It must not replay a cached response for a different request body.
 
+Protocol finalization (`deliver`, `record-work`) does not rely on `idempotency_keys`: its
+replay receipt is the durable `delivery_finalizations` row committed with the delivery
+(ADR 0075), so request-cache expiry can never reopen finalization.
+
 ## Soft Delete, Foreign Keys, And Tombstones
 
 - `deleted_at` is the single tombstone for soft-deletable rows. Status columns may include operational values such as `active`, `archived`, `disabled`, or `revoked`, but must not duplicate removal with `deleted` or `removed`.
@@ -1496,6 +1500,128 @@ removed persisted presentation items whose provenance was the retired
 top-level payload keys such as `changeRationales` remain as inert, never-read
 history.
 
+### `delivery_finalizations`
+
+Durable, immutable acceptance receipt of one protocol finalization (ADR 0075): a session
+`deliver` or a sessionless `record-work`. Inserted in the same transaction as its
+delivery; never updated (an update trigger rejects it on both editions) and kept as long as
+the delivery. Historical deliveries have no receipt and are not backfilled.
+
+| Column                    | Type         | Required | Notes                                                                                                                                         |
+| ------------------------- | ------------ | -------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                      | Id           | yes      |                                                                                                                                               |
+| `workspace_id`            | Id           | yes      | FK to `workspaces`.                                                                                                                           |
+| `project_id`              | Id           | yes      | FK to `projects`, cascade.                                                                                                                    |
+| `mission_id`              | Id           | yes      | FK to `missions`, cascade.                                                                                                                    |
+| `objective_id`            | Id           | yes      | FK to `objectives`, cascade.                                                                                                                  |
+| `delivery_id`             | Id           | yes      | FK to `deliveries`, cascade. Unique.                                                                                                          |
+| `actor_workspace_user_id` | Id           | yes      | FK to `workspace_users`, cascade. The member who finalized; only that member can replay or read the receipt.                                  |
+| `session_id`              | Id           | no       | FK to `agent_sessions`, cascade. Required for `deliver`, null for `record_work`. Unique when non-null: one finalization per session.          |
+| `operation_kind`          | text         | yes      | Closed: `deliver`, `record_work`.                                                                                                             |
+| `operation_id`            | text         | no       | Caller-retained operation id, 8-128 characters; null for clients that send none.                                                              |
+| `request_digest`          | text         | yes      | `v1:` + SHA-256 hex of the canonical semantic request (sorted keys, array order kept); never secrets, diagnostics or derived presentation.    |
+| `result_json`             | Json         | yes      | Object: the accepted protocol response, immutable.                                                                                            |
+| `accepted_at`             | TimestampUTC | yes      | Equals the delivery's `delivered_at`.                                                                                                         |
+| `created_at`              | TimestampUTC | yes      |                                                                                                                                               |
+
+Indexes:
+
+- Unique `(workspace_id, actor_workspace_user_id, operation_kind, operation_id)` where `operation_id` is not null.
+- Unique `(session_id)` where `session_id` is not null.
+- Unique `(delivery_id)`.
+- `(mission_id, accepted_at)`.
+
+Rules: a same-scope retry with the same operation id and digest returns `result_json`
+without writes; a different digest is 409 `delivery_operation_conflict`. A session that
+already delivered (receipt or historical `agent_sessions.delivery_state = 'delivered'`)
+answers 409 `delivery_already_accepted`. Concurrent record-work with one operation id
+serializes on the operation index and the losing transaction rolls back its whole mission
+creation. Required follow-on jobs (`worker_jobs`, `notifications`, `outbox_messages`,
+`mission_events`) are written in the same transaction.
+
+### `delivery_report_drafts`
+
+Provisional delivery-report evidence of one protocol session (ADR 0078), written through
+`update` `reportDraft` batches and sealed by that session's accepted `deliver`. A draft
+creates no `mission_items`, no human obligation, no seen-state change and no lifecycle
+meaning. Its state is derived: `sealed` when `sealed_at` is set, `open` while the session
+is live, `abandoned` once the session ended unsealed.
+
+| Column                    | Type         | Required | Notes                                                                                                             |
+| ------------------------- | ------------ | -------- | ----------------------------------------------------------------------------------------------------------------- |
+| `id`                      | Id           | yes      |                                                                                                                   |
+| `workspace_id`            | Id           | yes      | FK to `workspaces`.                                                                                               |
+| `project_id`              | Id           | yes      | FK to `projects`, cascade.                                                                                        |
+| `mission_id`              | Id           | yes      | FK to `missions`, cascade.                                                                                        |
+| `objective_id`            | Id           | yes      | FK to `objectives`, cascade.                                                                                      |
+| `session_id`              | Id           | yes      | FK to `agent_sessions`, cascade. Unique: one draft per session.                                                   |
+| `owner_workspace_user_id` | Id           | yes      | FK to `workspace_users`, cascade. Only this member writes the draft.                                              |
+| `revision`                | Int          | yes      | >= 1. The CAS revision agents send as `expectedRevision`; +1 per accepted batch, final operation set and seal.     |
+| `batch_count`             | Int          | yes      | 0..1000 accepted update batches retained.                                                                         |
+| `entry_count`             | Int          | yes      | 0..1000 distinct entry ids, withdrawn ones included.                                                              |
+| `sealed_at`               | TimestampUTC | no       | Set once by the accepted delivery.                                                                                |
+| `sealed_delivery_id`      | Id           | no       | FK to `deliveries`, set null if that row is hard-deleted. Requires `sealed_at`.                                   |
+| `created_at`              | TimestampUTC | yes      |                                                                                                                   |
+| `updated_at`              | TimestampUTC | yes      |                                                                                                                   |
+
+Indexes: unique `(session_id)`; `(objective_id, updated_at)`; `(sealed_delivery_id)` where
+set. An update trigger rejects every change to a sealed row except the foreign-key action
+that clears `sealed_delivery_id`.
+
+### `delivery_report_draft_entries`
+
+One observation of a draft, identified by the agent's stable `entry_id`.
+
+| Column                   | Type         | Required | Notes                                                                                                                     |
+| ------------------------ | ------------ | -------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `id`                     | Id           | yes      |                                                                                                                           |
+| `draft_id`               | Id           | yes      | FK to `delivery_report_drafts`, cascade.                                                                                  |
+| `workspace_id`           | Id           | yes      | FK to `workspaces`.                                                                                                       |
+| `entry_id`               | text         | yes      | Client id, 1-100 characters. Unique per draft. Not a `mission_items.id` or delivery-local item id.                         |
+| `kind`                   | text         | yes      | Closed: `human_action`, `tradeoff`, `known_risk`, `deferred_work`, `assumption`. Never changes.                           |
+| `content_json`           | Json         | yes      | Object, at most 8,000 characters: the kind's V1 input shape (`{ text }` for risks and assumptions), validated on write.   |
+| `position`               | Int          | yes      | >= 0, assigned at first insert; the seal order.                                                                           |
+| `withdrawn_at`           | TimestampUTC | no       | Set with `withdrawn_reason` (1-280 characters); withdrawn entries stay as audit data and leave the active count.          |
+| `withdrawn_reason`       | text         | no       |                                                                                                                           |
+| `source_event_id`        | Id           | no       | The update (or delivery) event of the last change; soft reference.                                                        |
+| `imported_from_draft_id` | Id           | no       | With `imported_from_entry_id`: the abandoned draft entry this one was explicitly imported from; soft references.          |
+| `imported_from_entry_id` | text         | no       |                                                                                                                           |
+| `sealed_ref`             | text         | no       | The accepted V1 item the entry became at seal (`human-action-N`, `tradeoff-N`, deferred-work id, `knownRisks[i]`, `assumptions[i]`). |
+| `revision`               | Int          | yes      | >= 1.                                                                                                                     |
+| `created_at`             | TimestampUTC | yes      |                                                                                                                           |
+| `updated_at`             | TimestampUTC | yes      |                                                                                                                           |
+
+Indexes: unique `(draft_id, entry_id)`; `(draft_id, position)`. Insert and update triggers
+reject any change once the draft is sealed. At most 12 active entries per kind per draft
+(service-enforced).
+
+### `delivery_report_draft_batches`
+
+Immutable receipt of one accepted `update` draft batch, written atomically with its entry
+changes and its attributable `update` event and retained for the draft's lifetime.
+
+| Column            | Type         | Required | Notes                                                                                           |
+| ----------------- | ------------ | -------- | ----------------------------------------------------------------------------------------------- |
+| `id`              | Id           | yes      |                                                                                                 |
+| `draft_id`        | Id           | yes      | FK to `delivery_report_drafts`, cascade.                                                        |
+| `workspace_id`    | Id           | yes      | FK to `workspaces`.                                                                             |
+| `operation_id`    | text         | yes      | Caller-retained batch id, 8-128 characters. Unique per draft.                                   |
+| `request_digest`  | text         | yes      | `v1:` + SHA-256 of the canonical batch request (session, prose, payload, revision, operations). |
+| `result_revision` | Int          | yes      | The draft revision this batch produced.                                                         |
+| `event_id`        | Id           | yes      | The attributable `update` mission event; soft reference.                                        |
+| `operation_count` | Int          | yes      | 1..50.                                                                                          |
+| `accepted_at`     | TimestampUTC | yes      |                                                                                                 |
+| `created_at`      | TimestampUTC | yes      |                                                                                                 |
+
+Indexes: unique `(draft_id, operation_id)`. An update trigger rejects every change. Rules:
+the same draft, operation id and digest replays `{ event_id, result_revision }` before the
+revision check and without writes, also after sealing or session end; a different digest is
+409 `report_draft_operation_conflict`. No more than 1,000 rows per draft are accepted and
+none are pruned.
+
+Every draft write and seal appends an `entity_changes` row with `entity_type =
+'delivery_report_draft'`, `entity_id` the draft id and the mission and objective ids.
+
 ### `human_action_resolutions` (removed)
 
 Replaced by `mission_items` in v173 (ADR 0060). The runtime step of
@@ -1598,28 +1724,34 @@ The agent-maintained mission summary (coo:1202): one row per mission whose
 `missions.summary_enabled` is true, replaced in place. It is never part of `load-context` or
 `connect`; `attach` and `resume-follow-up` return it only as the agent's editing baseline. From contract v173 (ADR 0060, amending ADR 0046) the delivering agent may
 write the headline and summary; `content_revision` is the concurrency token for those writes.
-Not indexed in `search_documents`.
+From contract 175 (ADR 0076) only agents write the headline and summary: there is no automatic
+model or deterministic writer, and `evidence_revision` names the delivery/execution basis the
+prose must cover. Not indexed in `search_documents`.
 
 | Column                 | Type         | Required | Notes                                                                                                   |
 | ---------------------- | ------------ | -------- | ------------------------------------------------------------------------------------------------------- |
 | `mission_id`           | Id           | yes      | Primary key; FK to `missions`, cascade delete.                                                          |
 | `workspace_id`         | Id           | yes      | FK to `workspaces`; denormalized from the mission.                                                      |
 | `project_id`           | Id           | yes      | FK to `projects`; denormalized from the mission.                                                        |
-| `revision`             | integer      | yes      | Increments on every write, including a pending notification.                                            |
-| `requested_generation` | integer      | yes      | Increments transactionally on every compose trigger, including while a job is queued or running.        |
-| `completed_generation` | integer      | yes      | Generation represented by the last published result; `0` until the first publication.                  |
-| `status`               | text         | yes      | Closed: `pending`, `composed`, `fallback`.                                                              |
-| `headline`             | text         | yes      | One sentence; empty in the first pending shell.                                                         |
-| `summary_markdown`     | text         | yes      | Two to five sentences of Markdown; empty in the first pending shell.                                    |
-| `source_delivery_id`   | Id           | no       | Delivery whose compose triggered this pass; null for any other trigger. Soft reference.                 |
-| `generated_by`         | text         | yes      | Closed: `deterministic`, `gemini`, `agent`. With `agent`, `model` holds the delivering objective's agent model id. |
-| `generated_at`         | TimestampUTC | no       | Null in the first pending shell.                                                                        |
+| `revision`             | integer      | yes      | Increments on every write, including evidence-basis changes.                                            |
+| `requested_generation` | integer      | yes      | Historical (retired composer). Never incremented after ADR 0076.                                        |
+| `completed_generation` | integer      | yes      | Historical. Set equal to `requested_generation` by the cutover migration and on every agent write.      |
+| `status`               | text         | yes      | Closed: `pending`, `composed`, `fallback`. Historical vocabulary kept for older consumers; new writes are always `composed`, and the cutover migration turned every `pending` row into `composed`. A database fence drops any write of `pending`. |
+| `headline`             | text         | yes      | One sentence; empty until an agent publishes (an empty state row is not authored text).                 |
+| `summary_markdown`     | text         | yes      | Two to five sentences of Markdown; empty until an agent publishes.                                      |
+| `source_delivery_id`   | Id           | no       | Delivery whose agent published the current prose; historical rows may name a compose source. Soft reference. |
+| `generated_by`         | text         | yes      | Closed: `deterministic`, `gemini`, `agent`. New writes and new empty state rows are always `agent`; existing model and deterministic rows keep their real provenance. With `agent`, `model` holds the delivering session's agent model id. |
+| `generated_at`         | TimestampUTC | no       | When the current prose was written; null in an empty state row.                                         |
 | `model`                | text         | no       |                                                                                                         |
 | `created_at`           | TimestampUTC | yes      |                                                                                                         |
 | `updated_at`           | TimestampUTC | yes      |                                                                                                         |
-| `content_revision`     | integer      | yes      | Default `0`. Increments only when the headline or summary is written; the optimistic-concurrency token for agent narrative writes. `revision` cannot serve: it also moves on every pending notification. |
+| `content_revision`     | integer      | yes      | Default `0`. Increments only when the headline and summary are published; the optimistic-concurrency token for agent narrative writes. |
 | `narrative_delivery_id` | Id          | no       | The delivery whose author wrote the current headline and summary. Soft reference.                      |
 | `narrative_objective_id` | Id         | no       | That delivery's objective, for the provenance line. Soft reference.                                    |
+| `evidence_revision`    | integer      | yes      | Default `0`. Monotonic narrative basis (ADR 0076); see "Narrative basis" below.                        |
+| `published_evidence_revision` | integer | no     | The `evidence_revision` the current prose was published against; null for no prose or for legacy prose without a provable basis. |
+| `narrative_published_at` | TimestampUTC | no     | When the current prose was published through the agent publication boundary; null for legacy prose.   |
+| `narrative_changed_at` | TimestampUTC | no       | Last narrative text or basis change (the `narrativeWatermark`), server-issued and strictly later than the previous value at millisecond precision. Display ordering only; revisions decide races. |
 
 Indexes:
 
@@ -1631,24 +1763,81 @@ never from the narrative or delivery JSON. Closed (`done`, `dismissed`) rows are
 `closedItems`, capped at 100, newest resolution first. Superseded rows are omitted.
 The drop migration also removes `risks_json` and `suggestions_json` from `mission_summaries`.
 
-A trigger is a no-op (no status change or job) while `narrative_delivery_id` names a live
-(not soft-deleted) delivery of the mission, whichever delivery is newest, so a later delivery
-that sent no prose never replaces agent prose. Otherwise it increments `requested_generation`, sets `status = 'pending'`, bumps `revision`,
-and keeps the previous content in the transaction of the write it follows; the first trigger
-inserts a pending shell. Triggers: a delivery presentation persisted as `composed` or
-`fallback`; a deferred-work resolution create or delete; an agent request of kind `question`
-or `choice` on creation and on every transition out of `open`; an objective reopening. The worker publishes only while `requested_generation` still equals
-the generation it captured and `narrative_delivery_id` does not name a live delivery.
-It writes headline and summary only, sets `completed_generation`, increments `content_revision`,
-and clears the narrative author references. It never writes item lists. An agent narrative
-write (protocol `deliver` / `record-work` `missionSummary`) runs in the delivery transaction:
-it inserts an empty shell when no row exists, takes the row lock, and on `deliver` compares
-`content_revision` with the agent's base before any delivery row is written. It then sets
-`headline`, `summary_markdown`, `status = 'composed'`, `generated_by = 'agent'`, `model`,
-`generated_at`, `source_delivery_id` and both `narrative_*` references to the delivery,
-`completed_generation = requested_generation`, and increments `content_revision` and
-`revision`. Every write appends an `entity_changes` row with `entity_type = 'mission_summary'`,
+**Narrative basis.** Under the canonical mission lock, then the summary row lock,
+`evidence_revision` increments (with `revision`, a strictly later `narrative_changed_at` and an
+`entity_changes` row naming `evidence_revision`) on every accepted delivery and `record-work`, an
+explicit `resume-follow-up`, an objective reopen (a new `reopened_at` run boundary), and a
+source-delivery deletion that invalidates the published basis. The same write supersedes every
+outstanding `delivery_summary_publications` row of the mission. An empty state row is inserted
+for an eligible mission on its first such mutation. Draft observations, progress, heartbeats,
+item closes or restores, agent requests and their transitions, and delivery presentation rewrites
+never move it. Mission move and deletion are handled by scope: a publication whose bound project
+no longer matches the mission's, or whose source is deleted, is not found.
+
+**Agent narrative write.** The only writer of `headline` and `summary_markdown`. It runs either in
+the delivery transaction (inline prose whose `baseContentRevision` and `baseEvidenceRevision` both
+equal the pre-delivery `content_revision` and `evidence_revision`; `record-work` publishes without a
+base) or in `publish-delivery-summary` (both bases equal the current values and the publication is
+still outstanding). It sets `headline`, `summary_markdown`, `status = 'composed'`,
+`generated_by = 'agent'`, `model`, `generated_at`, `source_delivery_id` and both `narrative_*`
+references to the publication's delivery, `published_evidence_revision` to the publication's
+evidence revision, `narrative_published_at = narrative_changed_at = generated_at`,
+`completed_generation = requested_generation`, and increments `content_revision` and `revision`.
+Every write appends an `entity_changes` row with `entity_type = 'mission_summary'`,
 `entity_id = mission_id`, and `mission_id` set.
+
+**Derived freshness.** Reads expose `narrative.state`: `absent` (no prose), `legacy` (prose with a
+null `published_evidence_revision`), `current` (equal to `evidence_revision` and its source
+delivery live) or `outdated`. These are narrative descriptors, not objective statuses.
+
+**Agent-only write fence.** Migration `20261118140000_agent_only_mission_narrative` installs, in
+both editions, triggers that silently drop (SQLite `RAISE(IGNORE)`, Postgres `BEFORE` trigger
+returning null): an insert or update of a `mission_summaries` row to `status = 'pending'`; a
+non-empty insert, or a `headline`/`summary_markdown`/`content_revision` change, with
+`generated_by` other than `agent`; an insert of a queued or running
+`overlord.mission.summary.compose.v1` worker job; and any update of a cancelled one. An agent prose
+write that does not set a new `narrative_published_at` (an older replica's inline write) has its
+`published_evidence_revision` cleared, so it reads as `legacy`. A write the fence drops does not
+fail the statement, so an older replica's delivery still commits during a rollout.
+
+**Cutover.** The same migration cancels queued and running `overlord.mission.summary.compose.v1`
+jobs (`status = 'cancelled'`, audit rows kept), converts `pending` rows to `composed`, sets
+`completed_generation = requested_generation`, and sets `narrative_changed_at` to the prose time
+of rows that have prose. Existing prose, provenance, source reports and items are unchanged and
+read as `legacy`; no coverage is fabricated.
+
+### `delivery_summary_publications`
+
+One mission-summary publication opportunity per accepted delivery of a summary-eligible mission
+(ADR 0076). Created in the finalization transaction of `deliver` and `record-work`; the acceptance
+receipt's result references its id. There is no deadline or expiry column, and no job expires it.
+
+| Column | Type | Required | Notes |
+| --- | --- | --- | --- |
+| `id` | Id | yes | Primary key. A non-secret reference. |
+| `workspace_id` | Id | yes | FK to `workspaces`. |
+| `project_id` | Id | yes | FK to `projects`; the scope the opportunity is bound to. |
+| `mission_id` | Id | yes | FK to `missions`, cascade delete. |
+| `objective_id` | Id | yes | FK to `objectives`, cascade delete. |
+| `delivery_id` | Id | yes | FK to `deliveries`, cascade delete. Unique. |
+| `actor_workspace_user_id` | Id | no | Originating workspace member; only that member publishes. Null (no actor) is never publishable. |
+| `session_id` | Id | no | The delivering session; null for `record-work`. A session-bound publication requires that session's key and its `delivered` state. |
+| `evidence_revision` | integer | yes | The `mission_summaries.evidence_revision` the delivery advanced to. |
+| `proposed_headline`, `proposed_summary` | text | no | The original inline proposal, both or neither. Immutable. |
+| `withheld_reason` | text | no | Closed: `absent`, `stale_content`, `stale_evidence`, `missing_evidence_base`; null when the inline prose published. Immutable. |
+| `published_headline`, `published_summary`, `published_content_revision`, `published_at` | text / integer / TimestampUTC | no | The successful publication, all or none. Immutable once set. |
+| `publish_operation_id`, `publish_request_digest` | text | no | The narrow publication's operation id and canonical digest, for replay; null for inline publication. |
+| `superseded_at`, `superseded_reason` | TimestampUTC / text | no | Both or neither. Closed reasons: `newer_delivery`, `follow_up`, `reopened`, `source_deleted`. Never set on a published row. |
+| `revision` | integer | yes | Mutable row revision. |
+| `created_at`, `updated_at` | TimestampUTC | yes | |
+
+Indexes: unique `(delivery_id)`; partial `(mission_id, evidence_revision)` where unpublished and
+not superseded. A trigger rejects changes to identity, binding, evidence revision, the proposal, the
+withheld reason or a published row, and rejects superseding a published row. An opportunity is
+outstanding while it is neither published nor superseded, its evidence revision equals the
+mission's, its objective is `complete`, its delivery and objective are live and its project still
+matches. Writes append no `entity_changes` row of their own; the accompanying `mission_summary`
+change carries the notice.
 
 ### `mission_summary_seen`
 
@@ -1659,13 +1848,21 @@ new-since-last-visit marker.
 | ------------------- | ------------ | -------- | --------------------------------------------------------------------- |
 | `mission_id`        | Id           | yes      | FK to `missions`, cascade delete. Part of the primary key.            |
 | `workspace_user_id` | Id           | yes      | FK to `workspace_users`, cascade delete. Part of the primary key.     |
-| `seen_at`           | TimestampUTC | yes      | Evidence watermark; written as `max(existing, watermark)`, never back. |
+| `seen_at`           | TimestampUTC | yes      | Evidence watermark; written as `max(existing, watermark)`, never back. A written value may not exceed the newest live delivery, question or choice request, retained `mission_summaries.narrative_changed_at`, or the newest live cross-mission agent item `resolved_at` of the mission. |
 
 Indexes:
 
 - Primary key `(mission_id, workspace_user_id)`.
 
-Writes append no `entity_changes` row; the value affects only the caller's own view.
+Writes append no `entity_changes` row; the value affects only the caller's own view. It stays
+one scalar (ADR 0076): clients acknowledge the maximum of the response's `watermark`,
+`narrativeWatermark` and `itemsWatermark` only after every evidence group of that
+response was rendered, so a newer visible group never acknowledges an older hidden one.
+`itemsWatermark` uses live source deliveries, done/dismissed agent rows and
+`resolved_by_mission_id <> mission_id`; person and own-mission closes are excluded.
+The partial `idx_mission_items_cross_close_seen` index on
+`(mission_id, workspace_id, resolved_at DESC)` uses that predicate in both editions (ADR 0080).
+A capped closed list (`itemsTruncated`) cannot acknowledge a partial snapshot.
 
 ### `artifacts`
 
@@ -1884,11 +2081,10 @@ delivery-presentation composition. Its `payload_json` carries `{ "deliveryId": "
 only. Protocol delivery (`deliverSession` / `recordWork`) enqueues one job in the same
 transaction as the delivery insert; the backend composition worker claims, retries with
 lock expiry, and updates only `deliveries.payload_json.deliveryReport.presentation`.
-Delivery success never waits on the worker or Gemini. Core type
-`overlord.mission.summary.compose.v1` carries `{ "missionId": "<id>" }` only;
-it is enqueued for summary-eligible missions in the transaction of each trigger write (see
-`mission_summaries`), coalesced by mission, and never loses a trigger because the counter lives
-on the summary row rather than in the job. Core type
+Delivery success never waits on the worker or Gemini. The former core type
+`overlord.mission.summary.compose.v1` is retired (ADR 0076): nothing enqueues or claims it, the
+cutover migration cancelled remaining jobs while keeping their rows, and the agent-only fence
+(see `mission_summaries`) drops any new one. Core type
 `overlord.objective.brief.compose.v1` (ADR 0058) carries `{ "objectiveId": "<id>" }` only; it is
 enqueued in the transaction of each write that leaves `objectives.title_status` or
 `objectives.description_status` pending, reused while queued (automatic requests push `run_after`
@@ -3635,3 +3831,36 @@ core values are ended_by_person, exited, objective_delivered, machine_went_away 
 No new execution request or objective status is introduced. Forget archives an ended mapping
 as metadata_json.endedTerminalSession so the history read retains it until mission deletion
 under the existing deletion policy; no recordings or credentials are retained.
+
+
+### Cross-mission item provenance (ADR 0079)
+
+Both editions add these nullable `mission_items` columns:
+
+| Column | Type | Meaning |
+| --- | --- | --- |
+| `resolved_by_mission_id` | Id, missions FK ON DELETE SET NULL | Resolving agent's mission, set for own and foreign closes; existing agent decisions backfill from `resolved_by_objective_id`. |
+| `resolved_by_session_id` | Id, agent_sessions FK ON DELETE SET NULL | Attached resolving session; null for sessionless record-work. |
+| `restored_at` | TimestampUTC | Last person restore of an agent decision. Never cleared. |
+
+A CHECK requires resolver mission/session ids to be null unless
+`resolved_by_kind = 'agent'`. Resolver-session/unlinked-delivery and resolver-delivery
+indexes support first-acceptance linkage and live projection. Restoring clears current
+resolver fields while retaining `restored_at`. Foreign agents cannot reclose a
+person-restored row; same-mission agents retain their current open-only rights.
+
+Before storing the first delivery acceptance receipt, link every still-closed,
+agent-resolved, unlinked row of that session and resolving mission in authorized
+workspace/project/live-source scope. Increment each item revision and append its
+entity change. Receipt replay never repeats linking. Sessionless record-work writes
+its new delivery id directly and links no session history. The complete affected
+mission lock set and retry rule are specified in architecture.md.
+
+Resolver reads expose nullable missionId, missionDisplayId, objectiveDisplayId and
+sessionId plus crossMission. Display joins use live missions/objectives in the item's
+workspace/project. Delivery reads add `closedElsewhere`, at most 50 rows ordered by
+target mission id then item id, carrying itemId, kind, text, missionDisplayId, status
+and reason. This is a live provenance projection: restore, deleted sources or a source
+moving outside project scope may remove rows. Accepted source reports and finalization
+receipts remain immutable. Every target summary/publication field, including evidence
+basis and freshness, remains byte-identical through close, link and restore actions.

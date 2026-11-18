@@ -15,15 +15,13 @@ import {
   restoreMissionItem
 } from '../packages/core/service/mission-items.ts';
 import { lockMissionObjectiveQueue } from '../packages/core/service/objective-queue.ts';
-import { enqueueMissionSummaryComposeJob } from '../packages/core/service/worker-jobs.ts';
 
 import {
   findActiveMembershipId,
   nowIso,
   requireDatabaseClient,
   resolveActiveProfileId,
-  restChangeAttribution,
-  restMissionSummaryTriggerContext
+  restChangeAttribution
 } from './db.ts';
 import { RESOLUTION_STATUSES, toResolverDto } from './deferred-work.ts';
 import { ApiError } from './errors.ts';
@@ -47,6 +45,8 @@ function writeFailure(result: Extract<MissionItemWriteResult, { ok: false }>): A
   switch (result.problem) {
     case 'not_found':
     case 'other_mission':
+    case 'forbidden':
+    case 'restored_by_person':
       return new ApiError(404, 'Mission item not found');
     case 'superseded':
       return new ApiError(
@@ -91,12 +91,6 @@ export async function closeMissionItemAsPerson(input: PersonCloseInput): Promise
       now
     });
     if (!result.ok) throw writeFailure(result);
-    await enqueueMissionSummaryComposeJob({
-      ctx: restMissionSummaryTriggerContext(tx, input.workspaceId, actor),
-      missionId: result.item.missionId,
-      reason: 'mission_item_closed',
-      now
-    });
     return result.item;
   });
 }
@@ -135,14 +129,6 @@ export async function restoreMissionItemAsPerson({
       }
       throw writeFailure(result);
     }
-    if (result.changed) {
-      await enqueueMissionSummaryComposeJob({
-        ctx: restMissionSummaryTriggerContext(tx, workspaceId, actor),
-        missionId: result.item.missionId,
-        reason: 'mission_item_restored',
-        now
-      });
-    }
     return result.item;
   });
 }
@@ -157,7 +143,7 @@ export function toMissionItemDto(item: MissionItem): MissionItemDto {
     text: item.text,
     status: item.status,
     reason: item.statusReason,
-    resolvedBy: item.resolvedBy ? toResolverDto(item.resolvedBy) : null,
+    resolvedBy: item.resolvedBy ? toResolverDto(item.resolvedBy, item.missionId) : null,
     resolvedAt: item.resolvedAt,
     outcome: item.outcome,
     outcomeRef: item.outcome === null ? null : item.outcomeRef,

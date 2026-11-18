@@ -11,7 +11,7 @@ Connector adapters may add harness-specific commands, hooks, MCP tools, or launc
 
 ## After You Attach
 
-Once attached, whether from chat or because Overlord launched the session, follow the instructions in the attach response. They carry the working rules, delivery rules, mission summary rules and recovery steps, and take precedence over this skill. Payload examples, limits and error shapes are in [reference/mission-summary.md](reference/mission-summary.md).
+Once attached, whether from chat or because Overlord launched the session, follow the instructions in the attach response. They carry the working rules, delivery rules, mission summary rules and recovery steps, and take precedence over this skill. Payload examples, limits and error shapes are in [reference/mission-summary.md](reference/mission-summary.md). When attach reports other missions’ open items, use `project-items` / `overlord_project_items` before delivery and verify each resolution before closing. Standalone and delivery closes are both valid. Retain delivery retry identity/body; accepted withheld prose uses fresh publication bases and a separate retained publication operation id, never another close submission.
 
 **`<mission_id>` is always the short display id** (`coo:695`, `1:899`). **`<objective_id>`** is the objective display id (`coo:695.k7xm`) or UUID. Never pass an objective id as `--mission-id`. A full objective display id already names its mission, so `--mission-id` is then optional; an objective UUID still needs `--mission-id`. If you only find a bare UUID, run `ovld protocol search` rather than guessing.
 

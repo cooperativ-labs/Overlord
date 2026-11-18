@@ -1,0 +1,334 @@
+// Cutover rehearsal for coo:1297 (ADR 0075/0076/0078 migrations).
+// Builds a database at the production schema (migrations before 20261118120000),
+// seeds pre-cutover narrative state and compose jobs, applies the new migrations
+// through the production migrator, then replays the production-SHA worker code
+// (worker-jobs.ts at the production tag, loaded verbatim) as an old
+// replica / in-flight worker would. See delivery-process-release-verification.md section 4 for usage.
+import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
+import { createRequire } from 'node:module';
+import { mkdtempSync } from 'node:fs';
+import path from 'node:path';
+
+const ROOT = process.env.OVERLORD_ROOT ?? process.cwd();
+const dbmod = await import(`${ROOT}/database/src/index.ts`);
+const old = await import(process.env.OLD_WORKER_JOBS ?? './old-worker-jobs.ts');
+
+const CUTOFF = '20261118120000';
+const COMPOSE = 'overlord.mission.summary.compose.v1';
+const DELIVERY_COMPOSE = 'overlord.delivery.compose.v1';
+const BRIEF = 'overlord.objective.brief.compose.v1';
+const dialect = process.argv[2] as 'sqlite' | 'postgres';
+const log = (...a: unknown[]) => console.log(`[${dialect}]`, ...a);
+const checks: string[] = [];
+const ok = (name: string) => {
+  checks.push(name);
+  log('PASS', name);
+};
+
+type Db = Awaited<ReturnType<typeof dbmod.openDatabaseClient>>;
+let db: Db;
+let finish: () => Promise<void>;
+let cleanup: () => Promise<void>;
+let ledger: () => Promise<string[]>;
+
+if (dialect === 'sqlite') {
+  const dir = mkdtempSync(path.join(process.env.TMPDIR ?? '/tmp', 'ovld-rehearsal-'));
+  const file = path.join(dir, 'local.sqlite');
+  const raw = dbmod.openDatabase({ databasePath: file });
+  dbmod.migrateDatabase(raw, { stopBeforeVersion: CUTOFF });
+  db = dbmod.createSqliteClient(raw);
+  // Local upgrade: the new server runs the remaining migrations at startup.
+  finish = async () => dbmod.migrateDatabase(raw);
+  cleanup = async () => raw.close();
+  ledger = async () =>
+    (await db.all<{ version: string }>(`SELECT version FROM schema_migrations ORDER BY version`)).map(
+      r => r.version
+    );
+  log('file', file);
+} else {
+  const req = createRequire(`${ROOT}/package.json`);
+  const pg = req('pg');
+  const url = process.env.TEST_DATABASE_URL;
+  if (!url) throw new Error('TEST_DATABASE_URL required');
+  const admin = new pg.Pool({ connectionString: url, max: 1 });
+  const session = await admin.connect();
+  const schema = `rehearsal_${randomUUID().replaceAll('-', '').slice(0, 16)}`;
+  await session.query(`CREATE SCHEMA ${schema}`);
+  const scoped = new pg.Pool({ connectionString: url, options: `-c search_path=${schema}`, max: 6 });
+  db = dbmod.createPostgresClient(scoped, { ownsPool: true });
+  await dbmod.migratePostgres(db, { stopBeforeVersion: CUTOFF });
+  finish = async () => dbmod.migratePostgres(db);
+  cleanup = async () => {
+    await db.close();
+    await session.query(`DROP SCHEMA ${schema} CASCADE`);
+    session.release();
+    await admin.end();
+  };
+  ledger = async () =>
+    (
+      await db.all<{ version: string }>(
+        `SELECT version FROM schema_migrations WHERE adapter = 'postgres' ORDER BY version`
+      )
+    ).map(r => r.version);
+  log('schema', schema);
+}
+
+const t0 = '2026-11-17T10:00:00.000Z';
+const W = 'w-reh';
+const P = 'p-reh';
+try {
+  const before = await ledger();
+  assert.ok(!before.some(v => v >= CUTOFF), 'starts at production schema');
+  ok(`starts at production schema (${before.length} migrations, last ${before.at(-1)})`);
+
+  // ---- Seed pre-cutover state -------------------------------------------------
+  await db.run(`INSERT INTO organizations (id, name, created_at, updated_at) VALUES ('org-reh', 'Org', ?, ?)`, [t0, t0]);
+  await db.run(
+    `INSERT INTO workspaces (id, organization_id, slug, name, kind, created_at, updated_at)
+     VALUES (?, 'org-reh', 'w-reh', 'W', 'local', ?, ?)`,
+    [W, t0, t0]
+  );
+  await db.run(
+    `INSERT INTO projects (id, workspace_id, slug, name, status, created_at, updated_at)
+     VALUES (?, ?, 'p-reh', 'P', 'active', ?, ?)`,
+    [P, W, t0, t0]
+  );
+  await db.run(
+    `INSERT INTO project_statuses (id, workspace_id, project_id, key, name, type, position, is_default, is_terminal, created_at, updated_at)
+     VALUES ('s-reh', ?, ?, 'execute', 'Execute', 'execute', 0, ?, ?, ?, ?)`,
+    [W, P, dbmod.bindBool(db.dialect, true), dbmod.bindBool(db.dialect, false), t0, t0]
+  );
+  const missions = ['A', 'B', 'C', 'D', 'E'];
+  for (const [i, m] of missions.entries()) {
+    await db.run(
+      `INSERT INTO missions (id, workspace_id, project_id, display_id, sequence_number, title, status_id, status_type, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, 's-reh', 'execute', ?, ?)`,
+      [`m-${m}`, W, P, `reh:${i + 1}`, i + 1, `Mission ${m}`, t0, t0]
+    );
+    await db.run(
+      `INSERT INTO objectives (id, workspace_id, project_id, mission_id, display_key, position, title, state, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, 0, 'Objective', 'complete', ?, ?)`,
+      [`o-${m}`, W, P, `m-${m}`, `ab${String.fromCharCode(97 + i)}d`, t0, t0]
+    );
+    await db.run(
+      `INSERT INTO deliveries (id, workspace_id, project_id, mission_id, objective_id, session_id, summary, payload_json,
+         verification_summary, follow_up_notes, delivered_at, delivered_by_workspace_user_id, created_at, updated_at, revision)
+       VALUES (?, ?, ?, ?, ?, NULL, ?, ?, NULL, NULL, ?, NULL, ?, ?, 1)`,
+      [`d-${m}`, W, P, `m-${m}`, `o-${m}`, `Delivered ${m}.`, JSON.stringify({ note: `source ${m}` }), t0, t0, t0]
+    );
+  }
+  const summary = async (
+    m: string,
+    f: { status: string; by: string; headline: string; body: string; req: number; done: number; content: number; narrative?: string }
+  ) =>
+    db.run(
+      `INSERT INTO mission_summaries (mission_id, workspace_id, project_id, revision, requested_generation, completed_generation,
+         status, headline, summary_markdown, source_delivery_id, generated_by, generated_at, model, content_revision,
+         narrative_delivery_id, narrative_objective_id, created_at, updated_at)
+       VALUES (?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        `m-${m}`, W, P, f.req, f.done, f.status, f.headline, f.body, `d-${m}`, f.by,
+        f.headline ? t0 : null, f.by === 'gemini' ? 'gemini-x' : null, f.content,
+        f.narrative ?? null, f.narrative ? `o-${m}` : null, t0, t0
+      ]
+    );
+  await summary('A', { status: 'pending', by: 'deterministic', headline: '', body: '', req: 3, done: 2, content: 0 });
+  await summary('B', { status: 'composed', by: 'gemini', headline: 'Model headline', body: 'Model body', req: 2, done: 2, content: 2 });
+  await summary('C', { status: 'composed', by: 'agent', headline: 'Agent headline', body: 'Agent body', req: 1, done: 0, content: 1, narrative: 'd-C' });
+  await summary('D', { status: 'fallback', by: 'deterministic', headline: 'Fallback headline', body: 'Fallback body', req: 4, done: 3, content: 3 });
+  const future = '2099-01-01T00:00:00.000Z';
+  const past = '2026-11-17T09:00:00.000Z';
+  const job = async (id: string, type: string, status: string, payload: object, lockedUntil: string | null = null) =>
+    db.run(
+      `INSERT INTO worker_jobs (id, workspace_id, type, status, priority, run_after, attempt_count, max_attempts,
+         payload_json, locked_by, locked_until, created_at, updated_at, revision)
+       VALUES (?, ?, ?, ?, 50, ?, ?, 5, ?, ?, ?, ?, ?, 1)`,
+      [id, W, type, status, t0, status === 'queued' ? 0 : 1, JSON.stringify(payload),
+       lockedUntil ? 'old-replica-1' : null, lockedUntil, t0, t0]
+    );
+  await job('j-queued', COMPOSE, 'queued', { missionId: 'm-A' });
+  await job('j-running', COMPOSE, 'running', { missionId: 'm-A' }, future);
+  await job('j-running-stale', COMPOSE, 'running', { missionId: 'm-D' }, past);
+  await job('j-failed', COMPOSE, 'failed', { missionId: 'm-B' });
+  await job('j-succeeded', COMPOSE, 'succeeded', { missionId: 'm-B' });
+  await job('j-delivery', DELIVERY_COMPOSE, 'queued', { deliveryId: 'd-A' });
+  await job('j-brief', BRIEF, 'queued', { objectiveId: 'o-A' });
+
+  const jobsSnap = async () =>
+    Object.fromEntries(
+      (await db.all<{ id: string; status: string; revision: number; last_error: string | null; locked_by: string | null }>(
+        `SELECT id, status, revision, last_error, locked_by FROM worker_jobs ORDER BY id`
+      )).map(r => [r.id, { ...r, revision: Number(r.revision) }])
+    );
+  const deliveriesSnap = async () =>
+    JSON.stringify(
+      await db.all(`SELECT id, summary, payload_json, delivered_at, revision FROM deliveries ORDER BY id`)
+    );
+  const summaries = async () =>
+    Object.fromEntries(
+      (await db.all<Record<string, unknown>>(`SELECT * FROM mission_summaries ORDER BY mission_id`)).map(r => [
+        r.mission_id as string,
+        r
+      ])
+    );
+  const preJobs = await jobsSnap();
+  const preDeliveries = await deliveriesSnap();
+  const preSummaries = await summaries();
+  const backlog = await db.all<{ status: string; n: number }>(
+    `SELECT status, count(*) AS n FROM worker_jobs WHERE type = ? GROUP BY status ORDER BY status`,
+    [COMPOSE]
+  );
+  log('ADR 0076 step 1 backlog before:', JSON.stringify(backlog.map(r => [r.status, Number(r.n)])));
+
+  // ---- Cutover ---------------------------------------------------------------
+  await finish();
+  const after = await ledger();
+  for (const v of ['20261118120000', '20261118140000', '20261118160000']) assert.ok(after.includes(v), v);
+  ok('applied 20261118120000, 20261118140000, 20261118160000 through the production migrator');
+  await finish();
+  assert.deepEqual(await ledger(), after);
+  ok('re-running the migrator is a no-op (idempotent ledger)');
+
+  const postJobs = await jobsSnap();
+  for (const id of ['j-queued', 'j-running', 'j-running-stale']) {
+    assert.equal(postJobs[id].status, 'cancelled', id);
+    assert.match(String(postJobs[id].last_error), /retired/);
+    assert.equal(postJobs[id].locked_by, null);
+  }
+  ok('queued and running (live and stale lease) compose jobs cancelled, leases cleared');
+  assert.equal(Object.keys(postJobs).length, Object.keys(preJobs).length);
+  for (const id of ['j-failed', 'j-succeeded', 'j-delivery', 'j-brief'])
+    assert.deepEqual(postJobs[id], preJobs[id], id);
+  ok('job audit rows retained; failed/succeeded history and delivery/brief jobs untouched');
+  const backlogAfter = await db.all<{ status: string; n: number }>(
+    `SELECT status, count(*) AS n FROM worker_jobs WHERE type = ? GROUP BY status ORDER BY status`,
+    [COMPOSE]
+  );
+  log('ADR 0076 step 3 backlog after:', JSON.stringify(backlogAfter.map(r => [r.status, Number(r.n)])));
+  assert.ok(!backlogAfter.some(r => r.status === 'queued' || r.status === 'running'));
+  const pendingCount = await db.get<{ n: number }>(`SELECT count(*) AS n FROM mission_summaries WHERE status = 'pending'`);
+  assert.equal(Number(pendingCount?.n), 0);
+  ok('ADR 0076 step 3: no queued/running compose jobs, no pending summaries');
+  assert.equal(await deliveriesSnap(), preDeliveries);
+  ok('source deliveries/reports byte-identical across migration');
+
+  const post = await summaries();
+  for (const m of ['m-B', 'm-C', 'm-D']) {
+    for (const col of ['headline', 'summary_markdown', 'generated_by', 'model', 'source_delivery_id'])
+      assert.equal(post[m][col], preSummaries[m][col], `${m}.${col}`);
+    assert.equal(Number(post[m].content_revision), Number(preSummaries[m].content_revision));
+    assert.equal(post[m].published_evidence_revision, null, `${m} legacy`);
+    assert.notEqual(post[m].narrative_changed_at, null, `${m} changed_at`);
+  }
+  ok('historical gemini/agent/fallback prose kept verbatim with provenance; no coverage basis (legacy)');
+  assert.equal(post['m-A'].status, 'composed');
+  assert.equal(post['m-A'].headline, '');
+  assert.equal(post['m-A'].narrative_changed_at, null);
+  assert.equal(Number(post['m-A'].completed_generation), Number(post['m-A'].requested_generation));
+  ok('empty pending shell becomes a non-pending absent row');
+
+  // ---- Old code after cutover ------------------------------------------------
+  const ctx = { db, workspaceId: W, actorWorkspaceUserId: null, actorTokenId: null, source: 'protocol' as const };
+  const snapA = JSON.stringify((await summaries())['m-A']);
+
+  // 1. In-flight worker that claimed j-running before cutover finishes its pass.
+  const gen = await old.readMissionSummaryGeneration(db, 'm-A');
+  const published = await old.publishMissionSummary({
+    db,
+    missionId: 'm-A',
+    generation: Number(gen?.requestedGeneration),
+    publication: { status: 'composed', headline: 'LATE model', summary: 'late', sourceDeliveryId: 'd-A', generatedBy: 'gemini', model: 'g' }
+  });
+  assert.notEqual(published, 'published');
+  const next = await old.publishMissionSummary({
+    db,
+    missionId: 'm-A',
+    generation: Number(gen?.requestedGeneration) + 1,
+    publication: { status: 'composed', headline: 'LATE model 2', summary: 'late', sourceDeliveryId: 'd-A', generatedBy: 'gemini', model: 'g' }
+  });
+  assert.notEqual(next, 'published');
+  const { successorJobId } = await old.completeMissionSummaryComposeJob({ db, jobId: 'j-running', missionId: 'm-A', status: 'succeeded' });
+  assert.equal(successorJobId, null);
+  await old.retryWorkerJob(db, 'j-running', 1, 'provider timeout');
+  await old.finishWorkerJob(db, 'j-running', 'failed', 'x');
+  assert.equal(JSON.stringify((await summaries())['m-A']), snapA);
+  assert.equal((await jobsSnap())['j-running'].status, 'cancelled');
+  ok(`old in-flight worker: publish -> ${published}/${next}, complete -> no successor, retry/finish cannot revive the cancelled job`);
+
+  // 2. Fence level: the old publication UPDATE executed with its generation guard satisfied.
+  for (const [m, by] of [['m-A', 'gemini'], ['m-D', 'deterministic'], ['m-C', 'gemini']] as const) {
+    const pre = JSON.stringify((await summaries())[m]);
+    await db.run(`UPDATE mission_summaries SET requested_generation = completed_generation + 1 WHERE mission_id = ?`, [m]);
+    const row = await old.lockMissionSummaryRow(db, m);
+    await db.run(
+      `UPDATE mission_summaries
+          SET status = ?, headline = ?, summary_markdown = ?, source_delivery_id = ?, generated_by = ?,
+              generated_at = ?, model = ?, completed_generation = ?, revision = ?, updated_at = ?,
+              content_revision = content_revision + 1, narrative_delivery_id = NULL, narrative_objective_id = NULL
+        WHERE mission_id = ? AND requested_generation = ?`,
+      ['fallback', 'LATE fallback', 'late', `d-${m.slice(2)}`, by, '2026-11-18T13:00:00.000Z', null,
+       Number(row?.requested_generation), Number(row?.revision) + 1, '2026-11-18T13:00:00.000Z', m, Number(row?.requested_generation)]
+    );
+    const postRow = (await summaries())[m];
+    const preRow = JSON.parse(pre);
+    for (const col of ['headline', 'summary_markdown', 'generated_by', 'status'])
+      assert.equal(postRow[col], preRow[col], `${m}.${col}`);
+    assert.equal(Number(postRow.content_revision), Number(preRow.content_revision));
+  }
+  ok('fence drops the production publication UPDATE (gemini and deterministic) even with its generation guard satisfied');
+
+  // 3. Old replica handles a delivery/question/item trigger after cutover.
+  const preB = JSON.stringify((await summaries())['m-B']);
+  const trigB = await old.enqueueMissionSummaryComposeJob({ ctx, missionId: 'm-B', reason: 'delivery' as never, sourceDeliveryId: 'd-B' });
+  const trigE = await old.enqueueMissionSummaryComposeJob({ ctx, missionId: 'm-E', reason: 'delivery' as never, sourceDeliveryId: 'd-E' });
+  log('old trigger results', JSON.stringify({ trigB, trigE }));
+  assert.equal(JSON.stringify((await summaries())['m-B']), preB);
+  assert.equal((await summaries())['m-E'], undefined);
+  const enq = await old.enqueueWorkerJob({ db, workspaceId: W, type: COMPOSE, dedupeBy: { field: 'missionId', value: 'm-E' }, payload: { missionId: 'm-E' } });
+  const live = await db.all(`SELECT id FROM worker_jobs WHERE type = ? AND status IN ('queued', 'running')`, [COMPOSE]);
+  assert.equal(live.length, 0, JSON.stringify({ enq, live }));
+  ok('old replica trigger + direct successor enqueue leave no queued/running compose job and no pending shell');
+
+  // 4. Old poller (stale-lease reclaim + claim) finds nothing to run.
+  const claimed = await old.claimNextWorkerJob({ db, jobType: COMPOSE, workerId: 'old-replica-2', now: '2099-06-01T00:00:00.000Z' });
+  assert.equal(claimed, null);
+  assert.equal((await jobsSnap())['j-running-stale'].status, 'cancelled');
+  ok('old poller cannot reclaim or claim any compose job');
+
+  // 5. Unrelated workers keep working through the same old claim/finish code.
+  for (const type of [DELIVERY_COMPOSE, BRIEF]) {
+    const c = await old.claimNextWorkerJob({ db, jobType: type, workerId: 'w', now: '2099-06-01T00:00:00.000Z' });
+    assert.ok(c, type);
+    await old.finishWorkerJob(db, c!.id, 'succeeded', null);
+  }
+  const fin = await jobsSnap();
+  assert.equal(fin['j-delivery'].status, 'succeeded');
+  assert.equal(fin['j-brief'].status, 'succeeded');
+  ok('delivery-presentation and objective-brief jobs still claim and finish');
+
+  // 6. New agent publication still writes under the fence (server-issued timestamp).
+  await db.run(
+    `UPDATE mission_summaries SET headline = 'New agent headline', summary_markdown = 'x', generated_by = 'agent',
+       content_revision = content_revision + 1, narrative_published_at = ?, narrative_changed_at = ?,
+       published_evidence_revision = evidence_revision
+     WHERE mission_id = 'm-B'`,
+    ['2026-11-18T14:00:00.000Z', '2026-11-18T14:00:00.000Z']
+  );
+  const nb = (await summaries())['m-B'];
+  assert.equal(nb.headline, 'New agent headline');
+  assert.notEqual(nb.published_evidence_revision, null);
+  // ...while an old replica's inline agent write (no new publication time) is downgraded to legacy.
+  await db.run(
+    `UPDATE mission_summaries SET headline = 'Old replica inline agent', generated_by = 'agent',
+       content_revision = content_revision + 1 WHERE mission_id = 'm-B'`
+  );
+  const ob = (await summaries())['m-B'];
+  assert.equal(ob.headline, 'Old replica inline agent');
+  assert.equal(ob.published_evidence_revision, null);
+  ok('agent publication allowed; old-replica inline agent prose kept but downgraded to legacy');
+
+  log(`ALL ${checks.length} CHECKS PASSED`);
+} finally {
+  await cleanup();
+}

@@ -53,6 +53,53 @@ it('requires an observed quarter of the evidence to be visible before counting i
   }
 });
 
+it('observes an element that mounts after the hook, and stops counting one that leaves', () => {
+  const original = globalThis.IntersectionObserver;
+  const observers: Array<{ notify: IntersectionObserverCallback; node: Element | null }> = [];
+  globalThis.IntersectionObserver = class {
+    entry: { notify: IntersectionObserverCallback; node: Element | null };
+    constructor(callback: IntersectionObserverCallback) {
+      this.entry = { notify: callback, node: null };
+      observers.push(this.entry);
+    }
+    observe(node: Element) {
+      this.entry.node = node;
+    }
+    disconnect() {}
+  } as unknown as typeof IntersectionObserver;
+  try {
+    // The Summary header is rendered only while its tab is selected: no node at first.
+    const ref: { current: HTMLElement | null } = { current: null };
+    const hook = renderHook(({ enabled }) => useForegroundVisible(ref, enabled), {
+      initialProps: { enabled: false }
+    });
+    assert.equal(observers.length, 0);
+    ref.current = document.createElement('div');
+    hook.rerender({ enabled: true });
+    assert.equal(observers.length, 1, 'selecting the tab attaches an observer to the new node');
+    act(() =>
+      observers[0]?.notify(
+        [{ isIntersecting: true, intersectionRatio: 1 } as IntersectionObserverEntry],
+        {} as IntersectionObserver
+      )
+    );
+    assert.equal(hook.result.current, true);
+    ref.current = null;
+    hook.rerender({ enabled: false });
+    assert.equal(hook.result.current, false);
+    ref.current = document.createElement('div');
+    hook.rerender({ enabled: true });
+    assert.equal(
+      hook.result.current,
+      false,
+      'a re-selected tab waits for its own observation instead of reusing the old one'
+    );
+    hook.unmount();
+  } finally {
+    globalThis.IntersectionObserver = original;
+  }
+});
+
 const first = '2026-10-01T00:00:00.000Z';
 const second = '2026-10-02T00:00:00.000Z';
 const third = '2026-10-03T00:00:00.000Z';
@@ -60,6 +107,17 @@ const response = (watermark: string, seenAt: string | null): MissionSummaryRespo
   eligible: true,
   summary: null,
   watermark,
+  narrative: {
+    state: 'absent',
+    evidenceRevision: 0,
+    publishedEvidenceRevision: null,
+    deliveryId: null,
+    objectiveId: null,
+    publishedAt: null,
+    changedAt: null,
+    outstandingDeliveryId: null
+  },
+  narrativeWatermark: null,
   seenAt,
   evidence: {
     actions: [],
@@ -98,10 +156,9 @@ it('acknowledges only a snapshot displayed for two seconds; new evidence and unm
     ({ value, displayed }) =>
       useAcknowledgeMissionSummary({
         missionId: 'mission',
-        response: value,
-        displayed,
-        visible: true,
-        coverageComplete: true
+        target: value.watermark,
+        due: displayed && value.eligible && value.watermark !== value.seenAt,
+        visible: true
       }),
     {
       wrapper,
@@ -146,10 +203,9 @@ it('never acknowledges while evidence is uncovered, hidden or occluded (plan §6
     ({ visible, coverageComplete }) =>
       useAcknowledgeMissionSummary({
         missionId: 'mission',
-        response: response(second, first),
-        displayed: true,
-        visible,
-        coverageComplete
+        target: second,
+        due: coverageComplete,
+        visible
       }),
     { wrapper, initialProps: { visible: true, coverageComplete: false } }
   );

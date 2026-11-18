@@ -1,55 +1,107 @@
-import { formatObjectiveDisplayId } from '@overlord/contract';
+import type { DeliveryReportPayloadV1 } from '@overlord/contract';
 import type { DatabaseClient } from '@overlord/database';
 
 import { readDeliveryReport } from './delivery-report.js';
 import { listMissionItems, type MissionItem } from './mission-items.js';
-import {
-  currentRunDeliveryPredicateSql,
-  type MissionSummaryDeliveryEvidence,
-  type MissionSummaryObjectiveEvidence,
-  type MissionSummaryQuestionEvidence,
-  type MissionSummaryRuns,
-  splitMissionSummaryRuns
-} from './mission-summary-compose.js';
-import { readMissionSummaryGeneration } from './worker-jobs.js';
 
 /**
- * Database half of the mission summary (coo:1202): the one reader of
- * current-run delivery evidence, shared by the compose worker and the
- * operator read route. Deliveries are selected in the database by current-run
- * eligibility before any limit (plan §4.4a), then split in memory by
- * {@link splitMissionSummaryRuns}, for prose and source history only. Item supersession is stored by the item service.
+ * Retained mission summary evidence helpers (coo:1202; ADR 0076 removed the
+ * automatic narrative composer and kept these): the narrative and display
+ * limits, the current-run delivery rule, and the database readers used by the
+ * operator summary read and the agent baseline. Deliveries are selected in the
+ * database by current-run eligibility before any limit, then split in memory
+ * by {@link splitMissionSummaryRuns}, for source history only. Item
+ * supersession is stored by the item service.
  */
 
-/** Evidence for one compose pass, read together with the generation it serves. */
-export type MissionSummaryEvidence = {
-  generation: number;
-  sourceDeliveryId: string | null;
-  previous: { headline: string; summary: string } | null;
-  mission: { title: string; statusType: string; displayId: string };
-  objectives: MissionSummaryObjectiveEvidence[];
-  runs: MissionSummaryRuns;
-  openQuestions: MissionSummaryQuestionEvidence[];
-  openItems: MissionItem[];
-  counts: { deliveries: number; filePaths: number };
-};
+/** Agent narrative bounds and operator display caps. */
+export const MISSION_SUMMARY_LIMITS = {
+  headline: 140,
+  summary: 1_200,
+  risks: 8,
+  suggestions: 50
+} as const;
 
-type ObjectiveRow = {
+export interface MissionSummaryObjectiveEvidence {
   id: string;
-  display_key: string;
-  title: string | null;
-  state: string;
-  reopened_at: string | null;
-  deleted_at: string | null;
-};
+  reopenedAt: string | null;
+}
+
+export interface MissionSummaryDeliveryEvidence {
+  id: string;
+  objectiveId: string;
+  deliveredAt: string;
+  summary: string;
+  report: DeliveryReportPayloadV1;
+}
+
+export interface MissionSummaryRuns {
+  /** Every current-run delivery, newest first. */
+  currentRun: MissionSummaryDeliveryEvidence[];
+  /** The latest current-run delivery of each objective, newest first. */
+  latestByObjective: MissionSummaryDeliveryEvidence[];
+  /** Deliveries that contribute nothing: before a reopen, or replaced by a newer one. */
+  superseded: MissionSummaryDeliveryEvidence[];
+}
+
+function newestFirst(
+  left: MissionSummaryDeliveryEvidence,
+  right: MissionSummaryDeliveryEvidence
+): number {
+  const byTime = Date.parse(right.deliveredAt) - Date.parse(left.deliveredAt);
+  if (byTime !== 0) return byTime;
+  return left.id < right.id ? 1 : left.id > right.id ? -1 : 0;
+}
+
+/**
+ * SQL form of the reopenedAt rule, for selecting current-run deliveries in the
+ * database before any limit. `delivery` and `objective` are the aliases of
+ * `deliveries` and its LEFT JOINed objective; they are interpolated verbatim
+ * and must be trusted identifiers. A delivery whose objective row is gone has
+ * no boundary. {@link splitMissionSummaryRuns} applies the same rule in memory.
+ */
+export function currentRunDeliveryPredicateSql(delivery = 'd', objective = 'o'): string {
+  return `(${objective}.reopened_at IS NULL OR ${delivery}.delivered_at >= ${objective}.reopened_at)`;
+}
+
+/** Splits deliveries into current-run and superseded per the reopenedAt rule. */
+export function splitMissionSummaryRuns({
+  objectives,
+  deliveries
+}: {
+  objectives: MissionSummaryObjectiveEvidence[];
+  deliveries: MissionSummaryDeliveryEvidence[];
+}): MissionSummaryRuns {
+  const reopenedAt = new Map(objectives.map(objective => [objective.id, objective.reopenedAt]));
+  const sorted = [...deliveries].sort(newestFirst);
+  const currentRun: MissionSummaryDeliveryEvidence[] = [];
+  const latestByObjective: MissionSummaryDeliveryEvidence[] = [];
+  const superseded: MissionSummaryDeliveryEvidence[] = [];
+  const seenObjectives = new Set<string>();
+  for (const delivery of sorted) {
+    const boundary = reopenedAt.get(delivery.objectiveId) ?? null;
+    if (boundary !== null && Date.parse(delivery.deliveredAt) < Date.parse(boundary)) {
+      superseded.push(delivery);
+      continue;
+    }
+    currentRun.push(delivery);
+    if (seenObjectives.has(delivery.objectiveId)) {
+      superseded.push(delivery);
+    } else {
+      seenObjectives.add(delivery.objectiveId);
+      latestByObjective.push(delivery);
+    }
+  }
+  return { currentRun, latestByObjective, superseded };
+}
+
+type ObjectiveRow = { id: string; reopened_at: string | null };
 
 /** Every objective of the mission, deleted ones included: they keep their run boundary. */
 function readObjectiveRows(db: DatabaseClient, missionId: string): Promise<ObjectiveRow[]> {
-  return db.all<ObjectiveRow>(
-    `SELECT id, display_key, title, state, reopened_at, deleted_at
-       FROM objectives WHERE mission_id = ?`,
-    [missionId]
-  );
+  return db.all<ObjectiveRow>(`SELECT id, reopened_at FROM objectives WHERE mission_id = ?`, [
+    missionId
+  ]);
 }
 
 function reportFromPayload(payloadJson: string | null, summary: string) {
@@ -67,7 +119,7 @@ function reportFromPayload(payloadJson: string | null, summary: string) {
 async function readRuns(
   db: DatabaseClient,
   missionId: string,
-  objectives: Array<Pick<MissionSummaryObjectiveEvidence, 'id' | 'reopenedAt'>>,
+  objectives: MissionSummaryObjectiveEvidence[],
   workspaceId: string | undefined
 ): Promise<MissionSummaryRuns> {
   const workspaceGuard = workspaceId === undefined ? '' : ' AND d.workspace_id = ?';
@@ -111,95 +163,6 @@ export async function readMissionSummaryRuns(
     reopenedAt: row.reopened_at
   }));
   return readRuns(db, missionId, objectives, workspaceId);
-}
-
-/**
- * Loads the evidence for one compose pass in a single transaction, so the
- * generation and the evidence form one consistent snapshot: every current-run
- * delivery of the mission, whose count is bounded by the run boundaries
- * rather than by a presentation page.
- */
-export async function readMissionSummaryEvidence(
-  db: DatabaseClient,
-  missionId: string,
-  { workspaceId }: { workspaceId?: string } = {}
-): Promise<MissionSummaryEvidence | null> {
-  return db.transaction(async tx => {
-    const generation = await readMissionSummaryGeneration(tx, missionId);
-    if (!generation) return null;
-    const mission = await tx.get<{
-      title: string;
-      status_type: string;
-      display_id: string;
-      summary_enabled: unknown;
-    }>(
-      `SELECT title, status_type, display_id, summary_enabled FROM missions
-        WHERE id = ? AND deleted_at IS NULL`,
-      [missionId]
-    );
-    if (!mission) return null;
-
-    const objectives: MissionSummaryObjectiveEvidence[] = (
-      await readObjectiveRows(tx, missionId)
-    ).map(row => ({
-      id: row.id,
-      key: formatObjectiveDisplayId({
-        missionDisplayId: mission.display_id,
-        displayKey: row.display_key
-      }),
-      title: row.title?.trim() || 'Untitled objective',
-      state: row.state,
-      reopenedAt: row.reopened_at,
-      deleted: row.deleted_at !== null
-    }));
-    const runs = await readRuns(tx, missionId, objectives, workspaceId);
-
-    const openItems = await readMissionSummaryOpenItems(tx, missionId, workspaceId);
-
-    const questionRows = await tx.all<{
-      id: string;
-      objective_id: string | null;
-      summary: string;
-      created_at: string;
-    }>(
-      `SELECT id, objective_id, summary, created_at FROM agent_requests
-        WHERE mission_id = ? AND deleted_at IS NULL AND status = 'open'
-          AND kind IN ('question', 'choice')
-        ORDER BY created_at DESC
-        LIMIT 20`,
-      [missionId]
-    );
-
-    const filePathCount = await tx.get<{ total: number | string }>(
-      `SELECT COUNT(DISTINCT file_path) AS total FROM changed_files
-        WHERE mission_id = ? AND deleted_at IS NULL`,
-      [missionId]
-    );
-
-    return {
-      generation: generation.requestedGeneration,
-      sourceDeliveryId: generation.sourceDeliveryId,
-      previous: generation.previous,
-      mission: {
-        title: mission.title,
-        statusType: mission.status_type,
-        displayId: mission.display_id
-      },
-      objectives,
-      runs,
-      openQuestions: questionRows.map(row => ({
-        requestId: row.id,
-        objectiveId: row.objective_id,
-        prompt: row.summary,
-        createdAt: row.created_at
-      })),
-      openItems,
-      counts: {
-        deliveries: runs.currentRun.length,
-        filePaths: Number(filePathCount?.total ?? 0)
-      }
-    };
-  });
 }
 
 /** Read every open item before display dedupe and caps, so a busy delivery cannot hide others. */

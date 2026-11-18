@@ -615,6 +615,98 @@ export interface Deliveries {
   workspace_id: string;
 }
 
+export interface DeliveryFinalizations {
+  accepted_at: string;
+  actor_workspace_user_id: string;
+  created_at: string;
+  delivery_id: string;
+  id: string | null;
+  mission_id: string;
+  objective_id: string;
+  operation_id: string | null;
+  operation_kind: string;
+  project_id: string;
+  request_digest: string;
+  result_json: string;
+  session_id: string | null;
+  workspace_id: string;
+}
+
+export interface DeliveryReportDraftBatches {
+  accepted_at: string;
+  created_at: string;
+  draft_id: string;
+  event_id: string;
+  id: string | null;
+  operation_count: number;
+  operation_id: string;
+  request_digest: string;
+  result_revision: number;
+  workspace_id: string;
+}
+
+export interface DeliveryReportDraftEntries {
+  content_json: string;
+  created_at: string;
+  draft_id: string;
+  entry_id: string;
+  id: string | null;
+  imported_from_draft_id: string | null;
+  imported_from_entry_id: string | null;
+  kind: string;
+  position: number;
+  revision: Generated<number>;
+  sealed_ref: string | null;
+  source_event_id: string | null;
+  updated_at: string;
+  withdrawn_at: string | null;
+  withdrawn_reason: string | null;
+  workspace_id: string;
+}
+
+export interface DeliveryReportDrafts {
+  batch_count: Generated<number>;
+  created_at: string;
+  entry_count: Generated<number>;
+  id: string | null;
+  mission_id: string;
+  objective_id: string;
+  owner_workspace_user_id: string;
+  project_id: string;
+  revision: Generated<number>;
+  sealed_at: string | null;
+  sealed_delivery_id: string | null;
+  session_id: string;
+  updated_at: string;
+  workspace_id: string;
+}
+
+export interface DeliverySummaryPublications {
+  actor_workspace_user_id: string | null;
+  created_at: string;
+  delivery_id: string;
+  evidence_revision: number;
+  id: string | null;
+  mission_id: string;
+  objective_id: string;
+  project_id: string;
+  proposed_headline: string | null;
+  proposed_summary: string | null;
+  publish_operation_id: string | null;
+  publish_request_digest: string | null;
+  published_at: string | null;
+  published_content_revision: number | null;
+  published_headline: string | null;
+  published_summary: string | null;
+  revision: Generated<number>;
+  session_id: string | null;
+  superseded_at: string | null;
+  superseded_reason: string | null;
+  updated_at: string;
+  withheld_reason: string | null;
+  workspace_id: string;
+}
+
 export interface DevicePushTokens {
   app_version: string | null;
   bundle_id: string;
@@ -1039,8 +1131,11 @@ export interface MissionItems {
   resolved_at: string | null;
   resolved_by_delivery_id: string | null;
   resolved_by_kind: string | null;
+  resolved_by_mission_id: string | null;
   resolved_by_objective_id: string | null;
+  resolved_by_session_id: string | null;
   resolved_by_workspace_user_id: string | null;
+  restored_at: string | null;
   revision: Generated<number>;
   status: Generated<string>;
   status_reason: string | null;
@@ -1108,14 +1203,18 @@ export interface MissionSummaries {
   completed_generation: Generated<number>;
   content_revision: Generated<number>;
   created_at: string;
+  evidence_revision: Generated<number>;
   generated_at: string | null;
   generated_by: string;
   headline: Generated<string>;
   mission_id: string | null;
   model: string | null;
+  narrative_changed_at: string | null;
   narrative_delivery_id: string | null;
   narrative_objective_id: string | null;
+  narrative_published_at: string | null;
   project_id: string;
+  published_evidence_revision: number | null;
   requested_generation: Generated<number>;
   revision: Generated<number>;
   source_delivery_id: string | null;
@@ -1842,6 +1941,11 @@ export interface DB {
   chat_work_receipt_missions: ChatWorkReceiptMissions;
   chat_work_receipts: ChatWorkReceipts;
   deliveries: Deliveries;
+  delivery_finalizations: DeliveryFinalizations;
+  delivery_report_draft_batches: DeliveryReportDraftBatches;
+  delivery_report_draft_entries: DeliveryReportDraftEntries;
+  delivery_report_drafts: DeliveryReportDrafts;
+  delivery_summary_publications: DeliverySummaryPublications;
   device_push_tokens: DevicePushTokens;
   devices: Devices;
   entity_changes: EntityChanges;

@@ -44,7 +44,7 @@ const OBJECTIVES = [
   { id: 'obj-1', displayId: 'coo:1.abcd', title: 'Build the chip' }
 ] as unknown as ObjectiveDto[];
 
-function renderChip(sessions: TerminalSessionDto[]) {
+function renderChip(sessions: TerminalSessionDto[], objectives = OBJECTIVES) {
   const qc = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Infinity, gcTime: Infinity } }
   });
@@ -54,7 +54,7 @@ function renderChip(sessions: TerminalSessionDto[]) {
     <QueryClientProvider client={qc}>
       <div className="@container/mission-panel">
         <MissionLatchSessionProvider missionId="mission-1" workspaceId="ws-1" sessions={sessions}>
-          <MissionLatchChip sessions={sessions} objectives={OBJECTIVES} />
+          <MissionLatchChip sessions={sessions} objectives={objectives} />
           <button type="button">Outside</button>
         </MissionLatchSessionProvider>
       </div>
@@ -101,6 +101,28 @@ describe('MissionLatchChip', () => {
     assert.ok(screen.getByRole('button', { name: /Copy attach command/ }));
     assert.ok(screen.getByRole('button', { name: 'End session' }));
     assert.ok(screen.getByText('previous session'));
+  });
+
+  it('shows the newest session even when it belongs to another objective', () => {
+    renderChip(
+      [
+        session({
+          providerSessionId: 'older-running',
+          objectiveId: 'obj-2',
+          createdAt: '2026-11-17T12:00:00.000Z'
+        }),
+        session({
+          providerSessionId: 'new-lost',
+          objectiveId: 'obj-1',
+          createdAt: '2026-11-16T12:00:00.000Z',
+          lastObservedState: 'lost'
+        })
+      ],
+      [
+        { id: 'obj-1', displayId: 'coo:1.abcd', title: 'Build the chip', state: 'executing' }
+      ] as ObjectiveDto[]
+    );
+    assert.ok(screen.getByRole('button', { name: 'Latch session, running' }));
   });
 
   it('follows the newest live session when every session has exited', () => {

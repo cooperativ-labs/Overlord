@@ -14,6 +14,9 @@ Returned by `attach` and `resume-follow-up` when the mission has a summary. `loa
 {
   "missionSummary": {
     "contentRevision": 7,
+    "evidenceRevision": 15,
+    "narrative": { "state": "outdated", "evidenceRevision": 15, "publishedEvidenceRevision": 14,
+                   "outstandingDeliveryId": null, "…": "…" },
     "headline": "Current headline, or empty before the first write.",
     "summary": "Current summary Markdown, or empty.",
     "author": "agent",
@@ -27,8 +30,10 @@ Returned by `attach` and `resume-follow-up` when the mission has a summary. `loa
 }
 ```
 
-`author` is `agent`, `gemini`, `deterministic`, or `null` before the first write. `openItems`
-holds at most 60 entries; `truncated: true` means more are open.
+`author` is `agent`, `gemini`, `deterministic`, or `null` when there is no prose. `openItems`
+holds at most 60 entries; `truncated: true` means more are open. `narrative.state` is `absent`,
+`current`, `outdated` (later work changed the mission) or `legacy` (older text with no recorded
+basis). Only agents write the summary; nothing generates or repairs it.
 
 ## Delivery payload
 
@@ -37,6 +42,7 @@ holds at most 60 entries; `truncated: true` means more are open.
   "summary": "Narrative for the reviewer: what this objective did and how it was verified.",
   "missionSummary": {
     "baseContentRevision": 7,
+    "baseEvidenceRevision": 15,
     "headline": "At most 140 characters.",
     "summary": "Markdown, at most 1,200 characters.",
     "closeItems": [
@@ -59,13 +65,14 @@ holds at most 60 entries; `truncated: true` means more are open.
 
 ```bash
 ovld protocol deliver --session-key <sessionKey> --objective-id $OBJECTIVE_ID --payload-file - <<'EOF'
-{ "summary": "…", "missionSummary": { "baseContentRevision": 7, "headline": "…", "summary": "…", "closeItems": [] } }
+{ "summary": "…", "missionSummary": { "baseContentRevision": 7, "baseEvidenceRevision": 15, "headline": "…", "summary": "…", "closeItems": [] } }
 EOF
 ```
 
 Limits and validation:
 
 - `baseContentRevision` is required with `headline` and `summary`; those two go together.
+  Send `baseEvidenceRevision` too: without it the prose is withheld.
   `closeItems` may be sent alone (at most 50 entries, `reason` at most 280 characters).
 - `--mission-summary-file <path|->` sends the same object on its own and wins over the payload
   field. Only one `--*-file` flag may read stdin.
@@ -74,16 +81,42 @@ Limits and validation:
 - `record-work` accepts the same `missionSummary` object without `baseContentRevision`
   (see [record-work.md](record-work.md)).
 
-Deliver response: `missionSummary { contentRevision, narrativeWritten, closedItemIds, warnings }`.
-Warnings never block: `mission_summary_item_skipped`, `mission_summary_style`,
-`mission_summary_disabled`.
+Deliver response: `missionSummary { contentRevision, narrativeWritten, closedItemIds, warnings,
+publication: { id, available, withheldReason }, baseline? }`. Warnings never block:
+`mission_summary_item_skipped`, `mission_summary_style`, `mission_summary_disabled`,
+`mission_summary_withheld`.
 
-## Conflict error
+## Withheld or omitted prose
 
-409 `mission_summary_conflict`; nothing is delivered. The CLI exits non-zero and prints
-`{ "code": "mission_summary_conflict", "baseContentRevision": …, "missionSummary": { … } }` on
-stdout. Over MCP the error text carries `{ code, details }` and `details.missionSummary` is the
-fresh baseline in the attach shape.
+A stale `baseContentRevision` or `baseEvidenceRevision` (other work was accepted since your
+baseline), a missing `baseEvidenceRevision`, or no prose never rejects the delivery. The delivery
+and closes are accepted, the existing text stays, and `publication.available` is `true`
+(`withheldReason`: `stale_content`, `stale_evidence`, `missing_evidence_base` or `absent`). The
+instruction in the response leads with the publication step:
+
+```bash
+ovld protocol delivery-summary-context --mission-id <mission> --delivery-id <deliveryId> --session-key <sessionKey>
+ovld protocol publish-delivery-summary --mission-id <mission> --delivery-id <deliveryId> \
+  --session-key <sessionKey> --payload-file - <<'JSON'
+{ "baseContentRevision": 8, "baseEvidenceRevision": 16, "headline": "…", "summary": "…" }
+JSON
+```
+
+Over MCP: `overlord_delivery_summary_context` and `overlord_publish_delivery_summary` (choose an
+`operationId` yourself and reuse it on retries). Rewrite for the whole mission from the returned
+baseline. One publication per delivery; the same operation id and text replays. `record-work`
+deliveries need no session key. There is no deadline.
+
+Errors (nothing is written):
+
+- 409 `mission_summary_conflict`: bases are stale. The CLI prints `{ code, missionSummary,
+  publication, instruction }` on stdout; MCP error details carry the same. Reconcile and try once
+  more, then stop and say the summary is not updated.
+- 409 `mission_summary_publication_superseded`: newer work, a follow-up or a reopen owns the next
+  summary. Say the mission summary is outdated.
+- 409 `mission_summary_already_published`; 404 `mission_summary_publication_not_found`.
+
+Never deliver again or resume follow-up only to update the mission summary.
 
 ## Delivery report items
 
@@ -168,3 +201,26 @@ EOF
   checkout with the same `OVLD_HOME` to restore native capture.
 - Retired inputs: `--change-rationales-*`, `--changed-files-*`, and the `changeRationales` /
   `changedFiles` payload fields are rejected.
+
+## Other missions' unresolved items
+
+Attach includes only `missionSummary.otherMissionOpenItems`. When positive, run
+`ovld protocol project-items --mission-id <id>` (MCP `overlord_project_items`)
+before delivery. It uses your live objective change ledger plus comma-separated
+`--path` evidence to rank accepted open items from other missions in this project.
+`--query` is a case-insensitive text substring, never an id lookup. Filter with
+`--kind risk,human_action,suggestion`; default limit is 20, max 100, with `--offset`.
+`--include-own-mission` includes your own items. Draft observations never count.
+`scanTruncated` means only the newest 2,000 rows were scanned; `ledger.captureGap`
+means supply explicit paths. Restart pages after concurrent changes. Full detail
+requires an authorized mission read; compact matches are leads, not proof.
+
+Verify in code that the work resolved or obsoleted an item before closing it, with
+a reason naming the verified change. Both standalone `close-items` and delivery
+`missionSummary.closeItems` are valid for same-project items. Retain the exact
+delivery operation id and semantic body for uncertain-response replay. If accepted
+prose is withheld, use delivery-summary-context and publish-delivery-summary with
+fresh content/evidence bases and a separate retained publication operation id.
+Never resend closes to publication or redeliver to repair accepted prose.
+Opt-in report drafts remain provisional: retain batch ids/digests on retry, rebase
+CAS refusals, inspect current revision and seal at delivery; discovery reads no drafts.

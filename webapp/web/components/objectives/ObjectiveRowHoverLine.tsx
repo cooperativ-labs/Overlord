@@ -2,7 +2,6 @@ import type { MissionDetailDto, ObjectiveDto } from '@overlord/contract';
 import {
   type FocusEvent,
   type PointerEvent,
-  type ReactNode,
   type SyntheticEvent,
   useCallback,
   useEffect,
@@ -143,10 +142,6 @@ type ObjectiveRowHoverLineProps = {
   objective: ObjectiveDto;
   mission: MissionDetailDto | null;
   agent: ObjectiveRowAgentSelection;
-  /** The row's Run Queue trigger, moved here while the line is open. */
-  queueControl: ReactNode;
-  /** The row's identifier copy button, moved here while the line is open. */
-  idControl: ReactNode;
   /** Reports whether a popup, launch or launch error must keep the line open. */
   onHeldChange: (held: boolean) => void;
   /** Launch and resource errors, shown in the row's error slot. Null clears it. */
@@ -155,8 +150,10 @@ type ObjectiveRowHoverLineProps = {
 
 /**
  * The second line of a not-started objective row (objective-row-hover-toolbar.md): resource,
- * agent/model, then — after a spacer — the Run Queue trigger, the identifier and the split Run
- * button. It mirrors the composer toolbar so a draft can be set up and run from the list.
+ * agent/model, then — after a spacer — the split Run button. Run Queue and the identifier stay on
+ * the first row. Run is inset from the right by the menu button and its gap (`pr-7.5`), so its
+ * right edge lines up with the agent icon column above. It mirrors the composer toolbar so a
+ * draft can be set up and run from the list.
  *
  * The reveal is the grid-rows pattern of `MissionCardHoverFooter`. While closed the line is
  * `inert`, so its controls are neither focusable nor announced. Every control stops pointerdown
@@ -167,8 +164,6 @@ export function ObjectiveRowHoverLine({
   objective,
   mission,
   agent,
-  queueControl,
-  idControl,
   onHeldChange,
   onError
 }: ObjectiveRowHoverLineProps) {
@@ -232,7 +227,7 @@ export function ObjectiveRowHoverLine({
         <div
           role="group"
           aria-label="Objective actions"
-          className="flex min-w-0 items-center gap-1 pb-1.5 pl-9"
+          className="flex min-w-0 items-center gap-1 pb-1.5 pl-9 pr-7.5"
         >
           <ObjectiveResourcePicker
             resources={resources}
@@ -265,9 +260,7 @@ export function ObjectiveRowHoverLine({
             onOpenChange={setAgentOpen}
           />
           <span className="min-w-0 flex-1" aria-hidden="true" />
-          {queueControl}
-          {idControl}
-          <div className="ml-2 shrink-0">
+          <div className="shrink-0">
             <AgentLaunchButton
               objective={objective}
               selection={agent.selection}

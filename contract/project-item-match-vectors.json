@@ -1,0 +1,142 @@
+{
+  "algorithmVersion": 1,
+  "vectors": [
+    {
+      "name": "full",
+      "text": "Fix backend/services/retry.ts.",
+      "paths": [
+        "backend/services/retry.ts"
+      ],
+      "expected": {
+        "paths": [
+          "backend/services/retry.ts"
+        ],
+        "strength": "strong"
+      }
+    },
+    {
+      "name": "prefix",
+      "text": "backend/services/other.ts",
+      "paths": [
+        "backend/services/retry.ts"
+      ],
+      "expected": {
+        "paths": [
+          "backend/services/retry.ts"
+        ],
+        "strength": "medium"
+      }
+    },
+    {
+      "name": "basename",
+      "text": "Fix retry.ts",
+      "paths": [
+        "backend/services/retry.ts"
+      ],
+      "expected": {
+        "paths": [
+          "backend/services/retry.ts"
+        ],
+        "strength": "weak"
+      }
+    },
+    {
+      "name": "generic",
+      "text": "index.ts README.md package.json mod.rs",
+      "paths": [
+        "backend/index.ts",
+        "docs/README.md",
+        "web/package.json",
+        "src/mod.rs"
+      ],
+      "expected": {
+        "paths": [],
+        "strength": "none"
+      }
+    },
+    {
+      "name": "one-directory",
+      "text": "backend/other.ts",
+      "paths": [
+        "backend/retry.ts"
+      ],
+      "expected": {
+        "paths": [],
+        "strength": "none"
+      }
+    },
+    {
+      "name": "boundaries",
+      "text": "backend/services/retry.tsx",
+      "paths": [
+        "backend/services/retry.ts"
+      ],
+      "expected": {
+        "paths": [
+          "backend/services/retry.ts"
+        ],
+        "strength": "medium"
+      }
+    },
+    {
+      "name": "normalize",
+      "text": "backend/services/retry.ts",
+      "paths": [
+        "./backend\\services\\retry.ts"
+      ],
+      "expected": {
+        "paths": [
+          "backend/services/retry.ts"
+        ],
+        "strength": "strong"
+      }
+    },
+    {
+      "name": "case",
+      "text": "BACKEND/SERVICES/RETRY.TS",
+      "paths": [
+        "backend/services/retry.ts"
+      ],
+      "expected": {
+        "paths": [],
+        "strength": "none"
+      }
+    },
+    {
+      "name": "invalid",
+      "text": "secret.ts",
+      "paths": [
+        "/secret.ts",
+        "../secret.ts",
+        "C:\\secret.ts"
+      ],
+      "expected": {
+        "paths": [],
+        "strength": "none"
+      }
+    },
+    {
+      "name": "cap",
+      "text": "backend/services/file0.ts backend/services/file1.ts backend/services/file2.ts backend/services/file3.ts backend/services/file4.ts backend/services/file5.ts backend/services/file6.ts",
+      "paths": [
+        "backend/services/file0.ts",
+        "backend/services/file1.ts",
+        "backend/services/file2.ts",
+        "backend/services/file3.ts",
+        "backend/services/file4.ts",
+        "backend/services/file5.ts",
+        "backend/services/file6.ts"
+      ],
+      "expected": {
+        "paths": [
+          "backend/services/file0.ts",
+          "backend/services/file1.ts",
+          "backend/services/file2.ts",
+          "backend/services/file3.ts",
+          "backend/services/file4.ts"
+        ],
+        "strength": "strong"
+      }
+    }
+  ]
+}

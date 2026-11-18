@@ -3,6 +3,7 @@ import type {
   ObjectiveAttachmentDto,
   ObjectiveDto,
   ObjectivePromptDto,
+  ObjectiveReportDraftList,
   ReorderObjectivesBody,
   UpdateObjectiveBody
 } from '@overlord/contract';
@@ -25,6 +26,13 @@ export const objectivesApi = {
   deleteObjective: (id: string) => request<{ ok: true }>('DELETE', `/api/objectives/${id}`),
   getObjectivePrompt: (id: string) =>
     request<ObjectivePromptDto>('GET', `/api/objectives/${id}/prompt`),
+
+  /**
+   * Read-only provisional draft evidence for one objective (ADR 0078). Never mission items,
+   * obligations, seen state or completion; people cannot edit drafts.
+   */
+  listObjectiveReportDrafts: (objectiveId: string) =>
+    request<ObjectiveReportDraftList>('GET', `/api/objectives/${objectiveId}/report-drafts`),
 
   listObjectiveAttachments: (objectiveId: string) =>
     request<ObjectiveAttachmentDto[]>('GET', `/api/objectives/${objectiveId}/attachments`),

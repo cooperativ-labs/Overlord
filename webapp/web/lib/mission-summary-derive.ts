@@ -15,6 +15,10 @@
  * `closedItems`. The client only merges questions, dedupes actions by
  * normalised text, marks new items and names objectives and people.
  *
+ * Since contract v175 (ADR 0076) only agents write the headline and summary.
+ * The server's `narrative` envelope says whether that prose is absent, current,
+ * outdated or legacy; nothing generates it, so no state here waits for prose.
+ *
  * The iOS port (`OverlordCore/MissionSummaryDerive.swift`) mirrors these rules
  * and is tested against the same fixture,
  * `contract/mission-summary-derive-fixtures.json`.
@@ -26,6 +30,7 @@ import type {
   HumanActionCategory,
   HumanAgentRequestDto,
   MissionItemResolverDto,
+  MissionNarrativeDto,
   MissionSummaryClosedItemDto,
   MissionSummaryDto,
   MissionSummaryDuplicateDto,
@@ -41,13 +46,6 @@ export interface SummaryObjective {
   displayId: string;
   title: string | null;
   state: ObjectiveState;
-}
-
-/** The delivery fields used to date suggestions and risks. */
-export interface SummaryDeliveryStamp {
-  id: string;
-  objectiveId: string;
-  deliveredAt: string;
 }
 
 // ---- Status chip ----
@@ -615,14 +613,14 @@ export interface SummaryMember {
   isOperator: boolean;
 }
 
-/** Who wrote the headline and summary. */
+/** Who wrote the headline and summary: the recorded author, never inferred from freshness. */
 export type SummaryProvenance =
-  /** An agent wrote it at delivery. `objectiveKey` is null once that objective is deleted. */
+  /** An agent wrote it. `objectiveKey` is null once that objective is deleted or unknown. */
   | { kind: 'agent'; objectiveKey: string | null }
-  /** The fallback composer (model or deterministic) wrote it. */
+  /** The retired automatic composer (model or deterministic) wrote it. */
   | { kind: 'automatic' };
 
-/** The provenance line under the post: the authoring objective, or an automatic label. */
+/** The recorded author of the summary row's prose. */
 export function missionSummaryProvenance(
   summary: MissionSummaryDto,
   objectives: readonly SummaryObjective[]
@@ -633,12 +631,164 @@ export function missionSummaryProvenance(
   return { kind: 'agent', objectiveKey: objective?.displayId ?? null };
 }
 
+// ---- Narrative freshness (contract v175, ADR 0076) ----
+
+/**
+ * The server's `narrative.state`, or `unknown` when an older server sent no envelope: then no
+ * freshness is claimed either way.
+ */
+export type SummaryNarrativeFreshness = MissionNarrativeDto['state'] | 'unknown';
+
+/** Shown with existing prose when a later delivery, follow-up or reopen changed the basis. */
+export const NARRATIVE_OUTDATED_NOTICE = 'Summary not updated for the latest delivery';
+/** Shown when accepted work exists but no prose does. */
+export const NARRATIVE_ABSENT_NOTICE = 'Summary not yet provided';
+/** Label of retained prose that predates recorded coverage. */
+export const NARRATIVE_LEGACY_LABEL = 'Earlier summary';
+
+/** The newest accepted work, for the link beside a missing or outdated summary. */
+export interface SummaryLatestWork {
+  deliveryId: string;
+  objectiveId: string;
+  /** Display id of the live objective; null once it is deleted. */
+  objectiveKey: string | null;
+  deliveredAt: string;
+}
+
+export interface SummaryNarrativeView {
+  freshness: SummaryNarrativeFreshness;
+  /** Trimmed prose; empty strings when there is none. */
+  headline: string;
+  summary: string;
+  hasProse: boolean;
+  /** The recorded author of the prose; null without prose. */
+  provenance: SummaryProvenance | null;
+  /** `Summary not updated…` or `Summary not yet provided`; null when neither applies. */
+  notice: string | null;
+  /** Retained prose without recorded coverage: labelled `Earlier summary`. */
+  legacy: boolean;
+  /**
+   * When the prose was written: the publication time for prose published through the delivery
+   * boundary, otherwise the row's historical `generatedAt`. Null without prose.
+   */
+  writtenAt: string | null;
+  /** The accepted work the notice links to; null when there is no live accepted delivery. */
+  latestWork: SummaryLatestWork | null;
+}
+
+/** The narrative envelope of an eligible response, or null from an older server. */
+export function responseNarrative(
+  response: MissionSummaryResponse | undefined
+): MissionNarrativeDto | null {
+  if (!response?.eligible) return null;
+  // Older servers omit the field entirely; never invent an envelope for them.
+  return (response as { narrative?: MissionNarrativeDto | null }).narrative ?? null;
+}
+
+/** The response's `narrativeWatermark`, or null from an older server. */
+export function responseNarrativeWatermark(
+  response: MissionSummaryResponse | undefined
+): string | null {
+  if (!response?.eligible) return null;
+  return (response as { narrativeWatermark?: string | null }).narrativeWatermark ?? null;
+}
+
+function latestAcceptedWork(
+  evidence: MissionSummaryEvidenceDto,
+  narrative: MissionNarrativeDto | null,
+  live: Map<string, SummaryObjective>
+): SummaryLatestWork | null {
+  const sources = [...evidence.sources].sort(
+    (a, b) => timeOf(b.deliveredAt) - timeOf(a.deliveredAt)
+  );
+  // The delivery whose publication opportunity is still open is the newest accepted work.
+  const outstanding = narrative?.outstandingDeliveryId
+    ? sources.find(source => source.deliveryId === narrative.outstandingDeliveryId)
+    : undefined;
+  const source = outstanding ?? sources[0];
+  if (!source) return null;
+  return {
+    deliveryId: source.deliveryId,
+    objectiveId: source.objectiveId,
+    objectiveKey: live.get(source.objectiveId)?.displayId ?? null,
+    deliveredAt: source.deliveredAt
+  };
+}
+
+/**
+ * What the summary header shows (plan §5.4). Prose keeps its recorded author; `legacy` prose is
+ * labelled as earlier text and never called agent-authored on the strength of the envelope;
+ * `outdated` prose says a later delivery is not covered; with accepted work and no prose the
+ * header says so instead of waiting. Live status, questions and items never depend on this.
+ */
+export function missionNarrativeView({
+  response,
+  objectives
+}: {
+  response: MissionSummaryResponse | undefined;
+  objectives: readonly SummaryObjective[];
+}): SummaryNarrativeView | null {
+  if (!response?.eligible) return null;
+  const live = liveObjectiveMap(objectives);
+  const narrative = responseNarrative(response);
+  const summary = response.summary;
+  const headline = summary?.headline.trim() ?? '';
+  const body = summary?.summary.trim() ?? '';
+  const hasProse = headline.length > 0 || body.length > 0;
+  const freshness: SummaryNarrativeFreshness = narrative?.state ?? 'unknown';
+  const latestWork = latestAcceptedWork(response.evidence, narrative, live);
+  const acceptedWork =
+    latestWork !== null ||
+    (narrative?.evidenceRevision ?? 0) > 0 ||
+    responseNarrativeWatermark(response) !== null;
+
+  let provenance: SummaryProvenance | null = null;
+  if (hasProse && summary) {
+    if (freshness === 'current' || freshness === 'outdated') {
+      // Published through the delivery boundary: always agent prose, named by its delivery.
+      const objectiveId = narrative?.objectiveId ?? summary.author.objectiveId;
+      provenance = {
+        kind: 'agent',
+        objectiveKey: (objectiveId ? live.get(objectiveId)?.displayId : undefined) ?? null
+      };
+    } else {
+      provenance = missionSummaryProvenance(summary, objectives);
+    }
+  }
+  const legacy = hasProse && freshness === 'legacy';
+  let notice: string | null = null;
+  if (hasProse && freshness === 'outdated') notice = NARRATIVE_OUTDATED_NOTICE;
+  else if (!hasProse && acceptedWork) notice = NARRATIVE_ABSENT_NOTICE;
+  const writtenAt = hasProse
+    ? ((freshness === 'current' || freshness === 'outdated' ? narrative?.publishedAt : null) ??
+      summary?.generatedAt ??
+      null)
+    : null;
+  return {
+    freshness,
+    headline,
+    summary: hasProse ? (summary?.summary ?? '') : '',
+    hasProse,
+    provenance,
+    notice,
+    legacy,
+    writtenAt,
+    latestWork: notice !== null || legacy ? latestWork : null
+  };
+}
+
 /** Who closed an item, ready to name. */
 export type SummaryResolver =
   /** `name` is `you` for the viewer, the member's name, or `a person` when unknown. */
   | { kind: 'person'; name: string }
   /** `objectiveKey` is null once the closing objective is deleted. */
-  | { kind: 'agent'; objectiveKey: string | null };
+  | {
+      kind: 'agent';
+      objectiveKey: string | null;
+      missionKey?: string | null;
+      crossMission?: boolean;
+      notDelivered?: boolean;
+    };
 
 function memberName(member: SummaryMember): string {
   if (member.isOperator) return 'you';
@@ -657,7 +807,17 @@ export function missionItemResolver(
     const objective = resolvedBy.objectiveId
       ? liveObjectiveMap(objectives).get(resolvedBy.objectiveId)
       : undefined;
-    return { kind: 'agent', objectiveKey: objective?.displayId ?? null };
+    return {
+      kind: 'agent',
+      objectiveKey: resolvedBy.objectiveDisplayId ?? objective?.displayId ?? null,
+      ...(resolvedBy.crossMission
+        ? {
+            missionKey: resolvedBy.missionDisplayId ?? null,
+            crossMission: true,
+            notDelivered: resolvedBy.deliveryId === null
+          }
+        : {})
+    };
   }
   const member = resolvedBy.workspaceUserId
     ? members.find(candidate => candidate.workspaceUserId === resolvedBy.workspaceUserId)
@@ -733,6 +893,22 @@ export function missionSummaryClosedItems({
     resolvedAt: item.resolvedAt,
     objectiveKey: live.get(item.objectiveId)?.displayId ?? null
   }));
+}
+
+/** Current cross-mission rows, including all provenance and linkage, form one coverage group. */
+export function summaryItemsSignature(
+  summary: MissionSummaryDto | null,
+  watermark: string | null = null
+): string | null {
+  const rows = summary?.closedItems.filter(item => item.resolvedBy?.crossMission) ?? [];
+  if (watermark !== null && !rows.some(row => row.resolvedAt === watermark)) return null;
+  return rows.length ? JSON.stringify(rows) : null;
+}
+
+export function responseItemsWatermark(
+  response: MissionSummaryResponse | undefined
+): string | null {
+  return response?.eligible ? (response.itemsWatermark ?? null) : null;
 }
 
 // ---- Files changed ----
@@ -837,53 +1013,34 @@ export type MissionSummarySectionState =
   /** Ineligible mission, or the envelope has not loaded: render nothing. */
   | { kind: 'hidden' }
   | { kind: 'error' }
-  /** Eligible, no summary row yet. `running` holds any running sentences. */
+  /** Eligible, with neither prose nor accepted work yet. `running` holds any running sentences. */
   | { kind: 'awaiting'; running: string[] }
-  /** First pending shell: updating strip, no generated text. */
-  | { kind: 'first_pending'; running: string[] }
-  /** `pending` with retained content, or a published summary. */
-  | { kind: 'summary'; summary: MissionSummaryDto; updating: boolean };
+  /**
+   * The header has something true to show: prose (current, outdated, legacy or from an older
+   * server) or a notice that accepted work has no summary. Never a waiting or updating state:
+   * no automatic writer exists (ADR 0076).
+   */
+  | { kind: 'summary'; summary: MissionSummaryDto | null; narrative: SummaryNarrativeView };
 
 /** Which §5.4 state the section is in. */
 export function missionSummarySectionState({
   response,
   isError,
-  runningSentences
+  runningSentences,
+  objectives = []
 }: {
   response: MissionSummaryResponse | undefined;
   isError: boolean;
   runningSentences: readonly string[];
+  objectives?: readonly SummaryObjective[];
 }): MissionSummarySectionState {
   if (!response) return isError ? { kind: 'error' } : { kind: 'hidden' };
   if (!response.eligible) return { kind: 'hidden' };
-  const summary = response.summary;
-  if (!summary) return { kind: 'awaiting', running: [...runningSentences] };
-  const hasContent = summary.headline.trim().length > 0 || summary.summary.trim().length > 0;
-  if (summary.status === 'pending' && !hasContent) {
-    return { kind: 'first_pending', running: [...runningSentences] };
+  const narrative = missionNarrativeView({ response, objectives });
+  if (!narrative || (!narrative.hasProse && narrative.notice === null)) {
+    return { kind: 'awaiting', running: [...runningSentences] };
   }
-  return { kind: 'summary', summary, updating: summary.status === 'pending' };
-}
-
-/** Objective named by the updating strip: the source delivery's objective, when known. */
-export function updatingSourceObjective({
-  summary,
-  evidence,
-  deliveries,
-  objectives
-}: {
-  summary: MissionSummaryDto | null;
-  evidence: MissionSummaryEvidenceDto;
-  deliveries: readonly SummaryDeliveryStamp[];
-  objectives: readonly SummaryObjective[];
-}): SummaryObjective | null {
-  const sourceId = summary?.sourceDeliveryId;
-  if (!sourceId) return null;
-  const objectiveId =
-    evidence.sources.find(source => source.deliveryId === sourceId)?.objectiveId ??
-    deliveries.find(delivery => delivery.id === sourceId)?.objectiveId;
-  if (!objectiveId) return null;
-  return objectives.find(objective => objective.id === objectiveId) ?? null;
+  return { kind: 'summary', summary: response.summary, narrative };
 }
 
 // ---- Seen watermark ----
@@ -918,10 +1075,14 @@ export function watermarkNeedsAck(watermark: string | null, seenAt: string | nul
   return timeOf(watermark) > timeOf(seenAt);
 }
 
-// ---- Displayed-evidence coverage (mission-panel-redesign plan §6.1) ----
+// ---- Displayed-evidence coverage (mission-panel-redesign plan §6.1, ADR 0076) ----
 
-/** The evidence-bearing tab groups whose items carry new-since-last-visit markers. */
-export type SummaryEvidenceGroup = 'for_you' | 'risks' | 'suggested';
+/**
+ * The evidence groups of one response whose content carries new-since-last-visit markers.
+ * `narrative` is the summary header: prose, its freshness notice, or the missing-summary notice.
+ * `items` is reserved for cross-mission item decisions (coo:1278) once the panel renders them.
+ */
+export type SummaryEvidenceGroup = 'for_you' | 'risks' | 'suggested' | 'narrative' | 'items';
 
 /** Group → signature of the content it shows now. Absent groups have nothing to show. */
 export type SummaryCoverageRequirements = Partial<Record<SummaryEvidenceGroup, string>>;
@@ -932,6 +1093,27 @@ export function summaryEvidenceSignature(parts: readonly string[]): string {
 }
 
 /**
+ * Signature of the summary header. Freshness, the basis and content revisions and the change time
+ * are all part of it, so a basis invalidation or a new publication invalidates earlier coverage
+ * even when two changes share a millisecond.
+ */
+export function summaryNarrativeSignature(
+  response: MissionSummaryResponse | undefined,
+  view: SummaryNarrativeView | null
+): string | null {
+  if (!response?.eligible || !view || (!view.hasProse && view.notice === null)) return null;
+  const narrative = responseNarrative(response);
+  return [
+    `state=${view.freshness}`,
+    `notice=${view.notice ?? ''}`,
+    `content=${response.summary?.contentRevision ?? ''}`,
+    `evidence=${narrative?.evidenceRevision ?? ''}`,
+    `published=${narrative?.publishedEvidenceRevision ?? ''}`,
+    `changed=${narrative?.changedAt ?? response.summary?.generatedAt ?? ''}`
+  ].join('|');
+}
+
+/**
  * What the current snapshot requires to have been displayed before its watermark may be
  * acknowledged. A nonempty group must be covered with exactly this signature, so new or changed
  * evidence invalidates earlier coverage. Groups without content require nothing.
@@ -939,11 +1121,17 @@ export function summaryEvidenceSignature(parts: readonly string[]): string {
 export function summaryCoverageRequirements({
   actionRows,
   riskRows,
-  suggestionRows
+  suggestionRows,
+  narrativeSignature = null,
+  itemsSignature = null
 }: {
   actionRows: readonly Pick<SummaryActionRow, 'key' | 'introducedAt'>[];
   riskRows: readonly Pick<SummaryRiskRow, 'key'>[];
   suggestionRows: readonly Pick<SummarySuggestionRow, 'id'>[];
+  /** `summaryNarrativeSignature` of the response; null when the header shows nothing. */
+  narrativeSignature?: string | null;
+  /** Signature of rendered cross-mission item decisions (coo:1278); null when not rendered. */
+  itemsSignature?: string | null;
 }): SummaryCoverageRequirements {
   const required: SummaryCoverageRequirements = {};
   if (actionRows.length > 0) {
@@ -955,6 +1143,8 @@ export function summaryCoverageRequirements({
   if (suggestionRows.length > 0) {
     required.suggested = summaryEvidenceSignature(suggestionRows.map(row => row.id));
   }
+  if (narrativeSignature !== null) required.narrative = narrativeSignature;
+  if (itemsSignature !== null) required.items = itemsSignature;
   return required;
 }
 
@@ -966,4 +1156,105 @@ export function summaryCoverageComplete(
   return (Object.entries(required) as Array<[SummaryEvidenceGroup, string]>).every(
     ([group, signature]) => covered[group] === signature
   );
+}
+
+/**
+ * The one scalar a fully displayed snapshot acknowledges (ADR 0076, review R2): the latest of the
+ * delivery/question `watermark`, the `narrativeWatermark`, and the coo:1278 `itemsWatermark` when
+ * its group is rendered. Null when the snapshot has no evidence time.
+ */
+export function summaryAcknowledgementTarget({
+  watermark,
+  narrativeWatermark,
+  itemsWatermark = null
+}: {
+  watermark: string | null;
+  narrativeWatermark: string | null;
+  itemsWatermark?: string | null;
+}): string | null {
+  return laterWatermark(laterWatermark(watermark, narrativeWatermark), itemsWatermark);
+}
+
+/**
+ * Whether every watermark that feeds the target is backed by evidence in the displayed snapshot:
+ * the delivery/question watermark by a rendered source, action or question at least as new, the
+ * narrative watermark by a required narrative group, and the items watermark by a required items
+ * group. A newer time that nothing on screen stands for is never acknowledged.
+ */
+export function summaryAcknowledgementBacked({
+  watermark,
+  narrativeWatermark,
+  itemsWatermark = null,
+  evidence,
+  questions,
+  required
+}: {
+  watermark: string | null;
+  narrativeWatermark: string | null;
+  itemsWatermark?: string | null;
+  evidence: MissionSummaryEvidenceDto;
+  questions: readonly Pick<HumanAgentRequestDto, 'createdAt'>[];
+  required: SummaryCoverageRequirements;
+}): boolean {
+  if (watermark === null && narrativeWatermark === null && itemsWatermark === null) return false;
+  if (watermark !== null && !summaryWatermarkIsDisplayed(watermark, evidence, questions)) {
+    return false;
+  }
+  if (narrativeWatermark !== null && required.narrative === undefined) return false;
+  if (itemsWatermark !== null && required.items === undefined) return false;
+  return true;
+}
+
+/**
+ * The acknowledgement decision for one response: its combined target, sent only when the snapshot
+ * is rendered and loaded, every required group was covered with its current signature, the target
+ * is backed by displayed evidence, and it is newer than the stored `seenAt`. Hidden groups keep
+ * the whole snapshot unacknowledged, in both directions: a newer visible narrative never clears
+ * older hidden risks or actions, and newer visible items never clear an older hidden narrative.
+ */
+export function summaryAcknowledgement({
+  watermark,
+  narrativeWatermark,
+  itemsWatermark = null,
+  seenAt,
+  evidence,
+  questions,
+  required,
+  covered,
+  loaded
+}: {
+  watermark: string | null;
+  narrativeWatermark: string | null;
+  itemsWatermark?: string | null;
+  seenAt: string | null;
+  evidence: MissionSummaryEvidenceDto;
+  questions: readonly Pick<HumanAgentRequestDto, 'createdAt'>[];
+  required: SummaryCoverageRequirements;
+  covered: Readonly<Record<string, string>>;
+  /** The response and the open-request collection loaded completely, without error. */
+  loaded: boolean;
+}): { target: string | null; due: boolean } {
+  const target = summaryAcknowledgementTarget({ watermark, narrativeWatermark, itemsWatermark });
+  const due =
+    loaded &&
+    target !== null &&
+    summaryAcknowledgementBacked({
+      watermark,
+      narrativeWatermark,
+      itemsWatermark,
+      evidence,
+      questions,
+      required
+    }) &&
+    summaryCoverageComplete(required, covered) &&
+    watermarkNeedsAck(target, seenAt);
+  return { target, due };
+}
+
+/** The summary header carries evidence newer than the visit baseline. */
+export function summaryNarrativeIsNew(
+  narrativeWatermark: string | null,
+  baseline: string | null
+): boolean {
+  return narrativeWatermark !== null && isLater(narrativeWatermark, baseline);
 }

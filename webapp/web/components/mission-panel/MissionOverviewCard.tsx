@@ -1,8 +1,9 @@
 import type { DeliveryDto, MissionDetailDto, MissionSummaryEvidenceDto } from '@overlord/contract';
-import { CheckCircle2, CircleSlash, Clock, HelpCircle, Loader2, Rocket } from 'lucide-react';
+import { CheckCircle2, CircleSlash, Clock, HelpCircle, History, Rocket } from 'lucide-react';
 import {
   type KeyboardEvent,
   type ReactNode,
+  type RefObject,
   useCallback,
   useEffect,
   useId,
@@ -24,20 +25,24 @@ import {
   missionSummaryActions,
   missionSummaryClosedItems,
   missionSummaryFiles,
-  missionSummaryProvenance,
   missionSummaryRisks,
   missionSummaryRunningSentences,
   missionSummarySectionState,
   missionSummarySuggestions,
   missionSummaryTradeoffs,
+  NARRATIVE_LEGACY_LABEL,
   openSummaryQuestions,
-  summaryCoverageComplete,
+  responseItemsWatermark,
+  responseNarrativeWatermark,
+  summaryAcknowledgement,
   summaryCoverageRequirements,
   type SummaryEvidenceGroup,
+  summaryItemsSignature,
   type SummaryMember,
-  type SummaryObjective,
-  summaryWatermarkIsDisplayed,
-  updatingSourceObjective
+  summaryNarrativeIsNew,
+  summaryNarrativeSignature,
+  type SummaryNarrativeView,
+  type SummaryObjective
 } from '../../lib/mission-summary-derive.ts';
 import {
   useMissionDeliveries,
@@ -51,7 +56,7 @@ import { KindBadge } from '../activity-feed/ActivityFeedCardChrome.tsx';
 import { Markdown } from '../Markdown.tsx';
 import { MissionSummaryActions } from '../mission-summary/MissionSummaryActions.tsx';
 import { MissionSummaryFiles } from '../mission-summary/MissionSummaryFiles.tsx';
-import { NewDot } from '../mission-summary/MissionSummaryParts.tsx';
+import { NewDot, ObjectiveKeyLink } from '../mission-summary/MissionSummaryParts.tsx';
 import { MissionSummaryProvenanceLine } from '../mission-summary/MissionSummaryPost.tsx';
 import { MissionSummaryResolved } from '../mission-summary/MissionSummaryResolved.tsx';
 import { MissionSummaryRisks } from '../mission-summary/MissionSummaryRisks.tsx';
@@ -105,7 +110,8 @@ function useMinuteClock(): string {
  * The mission's live status, shown apart from the agent-written summary: a labelled badge plus the
  * reason. It is derived from live mission, objective, request and item state (`missionLiveStatus`),
  * so closing the last blocking action or answering the last question changes it on the next
- * refresh, without a delivery. It is a polite live region (a labelled group, so the updating strip stays the only `status`) and the change is announced.
+ * refresh, without a delivery. It is a polite live region (a labelled group) and the change is
+ * announced.
  */
 function LiveStatusLine({ status }: { status: MissionLiveStatus }) {
   const badge = (() => {
@@ -172,11 +178,96 @@ function LiveStatusLine({ status }: { status: MissionLiveStatus }) {
   );
 }
 
-function UpdatingStrip({ label }: { label: ReactNode }) {
+/**
+ * The summary header (plan §5.4, ADR 0076): agent prose with its recorded author, or a plain
+ * notice that accepted work has no summary. Outdated prose says the latest delivery is not
+ * covered; legacy prose is labelled as an earlier summary with its actual provenance. Nothing here
+ * waits for or promises an automatic update: no writer exists. The newest accepted work is linked
+ * so it can be read without the prose.
+ */
+function NarrativeHeader({
+  view,
+  missionId,
+  missionTitle,
+  now,
+  isNew,
+  headerRef
+}: {
+  view: SummaryNarrativeView;
+  missionId: string;
+  missionTitle: string;
+  now: string;
+  /** The header carries a narrative change newer than the visit baseline. */
+  isNew: boolean;
+  headerRef: RefObject<HTMLDivElement | null>;
+}) {
+  const headline = view.headline || missionTitle;
+  const latest = view.latestWork;
   return (
-    <div className="flex items-center gap-2.5 border-b border-sky-200 bg-sky-50 px-4 py-2.5 text-sm text-sky-950 dark:border-sky-500/40 dark:bg-sky-500/10 dark:text-sky-100">
-      <Loader2 className="size-3.5 shrink-0 animate-spin" aria-hidden="true" />
-      <span className="min-w-0 wrap-anywhere">{label}</span>
+    <div ref={headerRef} data-narrative-state={view.freshness} className="grid min-w-0 gap-2 p-4">
+      {view.hasProse ? (
+        <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs text-(--color-ink-dim)">
+          {isNew ? <NewDot /> : null}
+          {view.legacy ? (
+            <span className="inline-flex items-center gap-1 font-medium">
+              <History className="size-3" aria-hidden="true" />
+              {NARRATIVE_LEGACY_LABEL}
+            </span>
+          ) : null}
+          {view.writtenAt ? (
+            <span
+              className="inline-flex items-center gap-1"
+              title={formatTimestamp(view.writtenAt)}
+            >
+              {view.legacy ? null : <Clock className="size-3" aria-hidden="true" />}
+              {view.legacy ? 'Written' : 'Summary updated'}{' '}
+              {relativeTime(view.writtenAt, now, { immediate: 'just now' })}
+            </span>
+          ) : null}
+        </div>
+      ) : null}
+      <div className="flex min-w-0 items-center gap-2">
+        {!view.hasProse && isNew ? <NewDot /> : null}
+        <h2
+          id={`mission-summary-headline-${missionId}`}
+          className="min-w-0 flex-1 truncate text-base font-semibold text-(--color-ink)"
+          title={headline}
+        >
+          {headline}
+        </h2>
+      </div>
+      {view.hasProse && view.summary.trim() ? (
+        <div className="grid min-w-0 gap-1 text-sm text-(--color-ink)">
+          <Markdown text={view.summary} />
+        </div>
+      ) : null}
+      {view.notice ? (
+        <p
+          data-narrative-notice=""
+          className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-amber-800 dark:text-amber-200"
+        >
+          <span className="font-medium">{view.notice}.</span>
+          {latest ? (
+            <>
+              <span>Latest delivery:</span>
+              <ObjectiveKeyLink
+                objectiveKey={latest.objectiveKey}
+                ariaLabel={
+                  latest.objectiveKey
+                    ? `Open objective ${latest.objectiveKey}, the latest accepted delivery`
+                    : undefined
+                }
+              />
+              <span title={formatTimestamp(latest.deliveredAt)}>
+                {relativeTime(latest.deliveredAt, now, { immediate: 'just now' })}
+              </span>
+            </>
+          ) : null}
+        </p>
+      ) : null}
+      {view.provenance ? (
+        <MissionSummaryProvenanceLine provenance={view.provenance} legacy={view.legacy} />
+      ) : null}
     </div>
   );
 }
@@ -247,12 +338,15 @@ function OverviewTabs({
  * state badge, headline, full summary) over a tab row whose selection replaces the lower half.
  * The Objectives tab holds the objective list; the other tabs reuse the summary components
  * headless. The card never hides, because it carries the objective list, so every summary state
- * (ineligible, awaiting, error, first pending/updating, summary) has a header form.
+ * (ineligible, awaiting, error, summary) has a header form. The summary header shows only what is
+ * true now: agent prose and its freshness, or that accepted work has no summary (ADR 0076).
  *
- * Seen acknowledgement is gated by displayed coverage (§6.1): the existing monotonic watermark is
- * acknowledged only once the header and every nonempty evidence tab of the current snapshot have
- * each been on screen, in the foreground and not under the objective dialog, for two seconds.
- * Hidden tabs, loading/partial/failed data and occluded content never count.
+ * Seen acknowledgement is gated by displayed coverage (§6.1, review R2): the one scalar seen marker
+ * advances to the response's combined watermark (deliveries/questions and narrative) only once the
+ * summary header and every nonempty evidence tab of that same response have each been on screen,
+ * in the foreground and not under the objective dialog, for two seconds with their current
+ * content. Hidden tabs, loading/partial/failed data and occluded content never count, so a newer
+ * visible group never acknowledges an older hidden one, across remounts and cold reads.
  *
  * Mount with `key={mission.id}`: the new-item baseline is frozen per visit and the selected tab
  * returns to Objectives.
@@ -298,7 +392,8 @@ export function MissionOverviewCard({
   const state = missionSummarySectionState({
     response,
     isError: summaryQ.isError,
-    runningSentences
+    runningSentences,
+    objectives
   });
   const evidence = response?.eligible ? (response.evidence ?? EMPTY_EVIDENCE) : EMPTY_EVIDENCE;
   const summary = response?.eligible ? response.summary : null;
@@ -312,12 +407,10 @@ export function MissionOverviewCard({
     () => (summary ? missionSummarySuggestions({ summary, objectives, baseline }) : []),
     [summary, objectives, baseline]
   );
+  // Risks and other items are live state, independent of whether any prose exists.
   const riskRows = useMemo(
-    () =>
-      summary && state.kind === 'summary'
-        ? missionSummaryRisks({ summary, objectives, baseline })
-        : [],
-    [summary, objectives, baseline, state.kind]
+    () => (summary ? missionSummaryRisks({ summary, objectives, baseline }) : []),
+    [summary, objectives, baseline]
   );
   const closedRows = useMemo(
     () => (summary ? missionSummaryClosedItems({ summary, objectives, members }) : []),
@@ -331,10 +424,6 @@ export function MissionOverviewCard({
       }),
     [deliveriesQ.data, objectives]
   );
-  const provenance = useMemo(
-    () => (summary ? missionSummaryProvenance(summary, objectives) : null),
-    [summary, objectives]
-  );
   const files = useMemo(
     () =>
       missionSummaryFiles(fileChangesQ.data?.items ?? [], {
@@ -342,6 +431,15 @@ export function MissionOverviewCard({
       }),
     [fileChangesQ.data]
   );
+
+  const itemsWatermark = responseItemsWatermark(response);
+  const itemsIsNew =
+    itemsWatermark !== null &&
+    (baseline === null ||
+      (baseline !== undefined && Date.parse(itemsWatermark) > Date.parse(baseline)));
+  const narrativeWatermark = responseNarrativeWatermark(response);
+  const narrativeIsNew =
+    state.kind === 'summary' && summaryNarrativeIsNew(narrativeWatermark, baseline);
 
   // ---- Tabs ----
   const completedCount = mission.objectives.filter(o => o.state === 'complete').length;
@@ -367,7 +465,7 @@ export function MissionOverviewCard({
       label: 'Summary',
       count: '',
       tone: 'grey',
-      hasNew: riskRows.some(row => row.isNew)
+      hasNew: riskRows.some(row => row.isNew) || narrativeIsNew || itemsIsNew
     });
   }
   if (actionRows.length > 0) {
@@ -401,11 +499,26 @@ export function MissionOverviewCard({
     [baseId]
   );
 
-  // ---- Displayed-evidence coverage and acknowledgement (plan §6.1) ----
+  // ---- Displayed-evidence coverage and acknowledgement (plan §6.1, ADR 0076 / review R2) ----
   const requestsComplete = openRequests.authoritative;
+  const narrativeSignature = useMemo(
+    () => summaryNarrativeSignature(response, state.kind === 'summary' ? state.narrative : null),
+    [response, state]
+  );
+  const itemsSignature = useMemo(
+    () => summaryItemsSignature(summary, itemsWatermark),
+    [summary, itemsWatermark]
+  );
   const required = useMemo(
-    () => summaryCoverageRequirements({ actionRows, riskRows, suggestionRows }),
-    [actionRows, riskRows, suggestionRows]
+    () =>
+      summaryCoverageRequirements({
+        actionRows,
+        riskRows,
+        suggestionRows,
+        narrativeSignature,
+        itemsSignature
+      }),
+    [actionRows, riskRows, suggestionRows, narrativeSignature, itemsSignature]
   );
   const [covered, setCovered] = useState<Record<string, string>>({});
   const markCovered = useCallback((group: string, signature: string) => {
@@ -413,32 +526,61 @@ export function MissionOverviewCard({
       current[group] === signature ? current : { ...current, [group]: signature }
     );
   }, []);
-  const headerVisible = useForegroundVisible(headerRef, true);
+  const [coveredItems, setCoveredItems] = useState<Record<string, string>>({});
+  const markItemCovered = useCallback((id: string, signature: string) => {
+    setCoveredItems(current =>
+      current[id] === signature ? current : { ...current, [id]: signature }
+    );
+  }, []);
+  useEffect(() => {
+    const rows = summary?.closedItems.filter(item => item.resolvedBy?.crossMission) ?? [];
+    if (
+      itemsSignature &&
+      rows.length &&
+      rows.every(item => coveredItems[item.id] === itemsSignature)
+    ) {
+      markCovered('items', itemsSignature);
+    }
+  }, [summary, itemsSignature, coveredItems, markCovered]);
+  // The header exists only while the Summary tab is selected; observe it from then on.
+  const headerVisible = useForegroundVisible(headerRef, selectedTab === 'summary');
   const lowerVisible = useForegroundVisible(lowerRef, true);
   const selectedGroup = TAB_EVIDENCE_GROUP[selectedTab] ?? null;
+  const summaryLoaded = summaryStable && response?.eligible === true;
   // For you mixes summary evidence with open questions, so it counts only when both are
   // complete; Summary (its risks) and Suggested need a successfully loaded summary.
   const selectedGroupReady =
-    selectedGroup === 'for_you'
-      ? requestsComplete && summaryStable
-      : summaryStable && state.kind === 'summary';
+    selectedGroup === 'for_you' ? requestsComplete && summaryLoaded : summaryLoaded;
   useEvidenceGroupCoverage({
     group: selectedGroup,
     signature: selectedGroup ? (required[selectedGroup] ?? null) : null,
     active: selectedGroupReady && lowerVisible && !occluded,
     onCovered: markCovered
   });
-  const displayed =
-    (state.kind === 'summary' || state.kind === 'first_pending') &&
-    summaryStable &&
-    requestsComplete &&
-    summaryWatermarkIsDisplayed(response?.watermark ?? null, evidence, openQuestions);
+  // The summary header (prose or notice) is its own group: seeing the risks below it, or any other
+  // tab, never stands in for it.
+  useEvidenceGroupCoverage({
+    group: 'narrative',
+    signature: required.narrative ?? null,
+    active: summaryLoaded && selectedTab === 'summary' && headerVisible && !occluded,
+    onCovered: markCovered
+  });
+  const acknowledgement = summaryAcknowledgement({
+    watermark: response?.eligible ? response.watermark : null,
+    narrativeWatermark,
+    itemsWatermark,
+    seenAt: response?.eligible ? response.seenAt : null,
+    evidence,
+    questions: openQuestions,
+    required,
+    covered,
+    loaded: summaryLoaded && requestsComplete && !response?.itemsTruncated
+  });
   useAcknowledgeMissionSummary({
     missionId: mission.id,
-    response,
-    displayed,
-    visible: headerVisible && !occluded,
-    coverageComplete: summaryCoverageComplete(required, covered)
+    target: acknowledgement.target,
+    due: acknowledgement.due,
+    visible: lowerVisible && !occluded
   });
 
   // ---- Header ----
@@ -452,40 +594,12 @@ export function MissionOverviewCard({
       }),
     [mission.statusType, objectives, openQuestions, actionRows]
   );
-  const updating = state.kind === 'first_pending' || (state.kind === 'summary' && state.updating);
-  const sourceObjective = updating
-    ? updatingSourceObjective({
-        summary,
-        evidence,
-        deliveries: deliveriesQ.data?.items ?? NO_DELIVERIES,
-        objectives
-      })
-    : null;
-  const stripLabel = sourceObjective ? (
-    <>
-      Updating from the delivery for{' '}
-      <span className="font-mono text-xs">{sourceObjective.displayId}</span>
-      {sourceObjective.title?.trim() ? `, ${sourceObjective.title.trim()}` : ''}…
-    </>
-  ) : (
-    'Updating the summary…'
-  );
-  const headline =
-    state.kind === 'summary' && state.summary.headline.trim()
-      ? state.summary.headline.trim()
-      : mission.title;
-  const generatedAt = summary?.generatedAt ?? null;
-
   return (
     <section
       aria-label="Mission summary"
-      aria-busy={updating}
       data-mission-overview=""
       className="flex min-w-0 flex-col overflow-hidden rounded-xl border border-(--color-border) bg-background"
     >
-      <div role="status" aria-live="polite">
-        {updating ? <UpdatingStrip label={stripLabel} /> : null}
-      </div>
       <div className="grid min-w-0 gap-2 px-4 pt-4">
         {openRequests.state === 'error' || openRequests.state === 'partial' ? (
           // Never imply questions are gone: the last successful list stays, with a retry.
@@ -532,69 +646,40 @@ export function MissionOverviewCard({
           >
             {selectedTab === 'summary' ? (
               <>
-                <div ref={headerRef} className="grid min-w-0 gap-2 p-4">
-                  {state.kind === 'summary' ? (
-                    <>
-                      {generatedAt ? (
-                        <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs text-(--color-ink-dim)">
-                          <span
-                            className="inline-flex items-center gap-1"
-                            title={formatTimestamp(generatedAt)}
-                          >
-                            <Clock className="size-3" aria-hidden="true" />
-                            Summary updated{' '}
-                            {relativeTime(generatedAt, now, { immediate: 'just now' })}
-                          </span>
-                        </div>
-                      ) : null}
-                      <div className="flex min-w-0 items-center gap-2">
-                        <h2
-                          id={`mission-summary-headline-${mission.id}`}
-                          className={cn(
-                            'min-w-0 flex-1 truncate text-base font-semibold text-(--color-ink)',
-                            state.updating && 'opacity-55'
-                          )}
-                          title={headline}
-                        >
-                          {headline}
-                        </h2>
-                      </div>
-                      <div
-                        className={cn(
-                          'grid min-w-0 gap-1 text-sm text-(--color-ink)',
-                          state.updating && 'opacity-55'
-                        )}
-                      >
-                        {state.summary.summary.trim() ? (
-                          <Markdown text={state.summary.summary} />
-                        ) : null}
-                      </div>
-                      <MissionSummaryProvenanceLine
-                        provenance={provenance ?? { kind: 'automatic' }}
-                      />
-                    </>
-                  ) : state.kind === 'error' ? (
-                    <p className="text-sm text-red-600 dark:text-red-400">
-                      Could not load the mission summary:{' '}
-                      {(summaryQ.error as Error)?.message ?? 'unknown error'}
-                    </p>
-                  ) : null}
-                </div>
-                {showRisks ? (
-                  <MissionSummaryRisks
-                    rows={riskRows}
+                {state.kind === 'summary' ? (
+                  <NarrativeHeader
+                    view={state.narrative}
                     missionId={mission.id}
-                    dimmed={state.kind === 'summary' && state.updating}
+                    missionTitle={mission.title}
+                    now={now}
+                    isNew={narrativeIsNew}
+                    headerRef={headerRef}
                   />
+                ) : state.kind === 'error' ? (
+                  <p className="p-4 text-sm text-red-600 dark:text-red-400">
+                    Could not load the mission summary:{' '}
+                    {(summaryQ.error as Error)?.message ?? 'unknown error'}
+                  </p>
                 ) : null}
-                {showTradeoffs ? (
-                  <MissionSummaryTradeoffs
-                    rows={tradeoffRows}
-                    dimmed={state.kind === 'summary' && state.updating}
-                  />
-                ) : null}
+                {showRisks ? <MissionSummaryRisks rows={riskRows} missionId={mission.id} /> : null}
+                {showTradeoffs ? <MissionSummaryTradeoffs rows={tradeoffRows} /> : null}
                 {showResolved ? (
-                  <MissionSummaryResolved rows={closedRows} missionId={mission.id} now={now} />
+                  <MissionSummaryResolved
+                    rows={closedRows}
+                    missionId={mission.id}
+                    now={now}
+                    isNew={itemsIsNew}
+                    truncated={response?.itemsTruncated ?? false}
+                    coverage={
+                      itemsSignature
+                        ? {
+                            active: summaryLoaded && !occluded,
+                            signature: itemsSignature,
+                            onCovered: markItemCovered
+                          }
+                        : undefined
+                    }
+                  />
                 ) : null}
                 {showFiles ? (
                   <MissionSummaryFiles files={files} projectId={mission.projectId} />

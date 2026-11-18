@@ -1,6 +1,7 @@
 import type {
   FileChangeDto,
   HumanAgentRequestDto,
+  MissionNarrativeDto,
   MissionSummaryDto,
   MissionSummaryEvidenceDto,
   MissionSummaryResponse,
@@ -16,6 +17,7 @@ import {
   missionItemResolver,
   missionItemResolverText,
   missionLiveStatus,
+  missionNarrativeView,
   missionSummaryActions,
   missionSummaryClosedItems,
   missionSummaryFiles,
@@ -28,28 +30,33 @@ import {
   missionSummarySuggestions,
   normaliseSummaryText,
   openSummaryQuestions,
+  responseItemsWatermark,
   SUMMARY_FILE_CHIP_LIMIT,
+  summaryAcknowledgement,
   summaryCoverageComplete,
+  type SummaryCoverageRequirements,
   summaryCoverageRequirements,
-  type SummaryDeliveryStamp,
   summaryGroupResolveNote,
+  summaryItemsSignature,
   type SummaryMember,
+  summaryNarrativeIsNew,
+  summaryNarrativeSignature,
   type SummaryObjective,
   summaryWatermarkIsDisplayed,
-  updatingSourceObjective,
   watermarkNeedsAck
 } from './mission-summary-derive.ts';
 
 /** The fixture shared with the iOS derivation tests (plan §5.6, §6.3). */
-const fixture = JSON.parse(
+const fixtureFile = JSON.parse(
   readFileSync(
     new URL('../../../contract/mission-summary-derive-fixtures.json', import.meta.url),
     'utf8'
   )
-).reviewMission as {
+);
+const fixture = fixtureFile.reviewMission as {
   input: {
     mission: { id: string; statusType: StatusType; objectives: SummaryObjective[] };
-    deliveries: SummaryDeliveryStamp[];
+    deliveries: Array<{ id: string; objectiveId: string; deliveredAt: string }>;
     summaryResponse: Extract<MissionSummaryResponse, { eligible: true }>;
     agentRequests: HumanAgentRequestDto[];
     members: SummaryMember[];
@@ -217,20 +224,16 @@ test('fixture: files are distinct paths, newest first, with provenance badges', 
   assert.equal(Math.max(0, files.total - SUMMARY_FILE_CHIP_LIMIT), expected.files.hiddenCount);
 });
 
-test('fixture: section state, trailer, updating source and watermark', () => {
+test('fixture: section state, trailer and watermark', () => {
   const state = missionSummarySectionState({
     response: input.summaryResponse,
     isError: false,
-    runningSentences: missionSummaryRunningSentences(objectives, openQuestions)
+    runningSentences: missionSummaryRunningSentences(objectives, openQuestions),
+    objectives
   });
   assert.equal(state.kind, expected.sectionState);
   assert.equal(summary.generatedAt, expected.trailer.generatedAt);
   assert.equal(evidence.totals.currentRunDeliveries, expected.trailer.currentRunDeliveries);
-  assert.equal(
-    updatingSourceObjective({ summary, evidence, deliveries: input.deliveries, objectives })
-      ?.displayId ?? null,
-    expected.updatingSourceObjectiveKey
-  );
   assert.equal(input.summaryResponse.watermark, expected.watermark);
   assert.equal(
     watermarkNeedsAck(input.summaryResponse.watermark, baseline),
@@ -247,27 +250,24 @@ const emptyEvidence: MissionSummaryEvidenceDto = {
   truncated: { actions: false, sources: false }
 };
 
-function pendingSummary(overrides: Partial<MissionSummaryDto> = {}): MissionSummaryDto {
-  return {
-    ...summary,
-    status: 'pending',
-    headline: '',
-    summary: '',
-    risks: [],
-    suggestions: [],
-    generatedAt: null,
-    model: null,
-    ...overrides
-  };
-}
-
 test('a null baseline gives no dots on the first visit', () => {
   const rows = missionSummaryActions({ evidence, openQuestions, objectives, baseline: null });
   assert.ok(rows.every(row => !row.isNew));
   assert.ok(missionSummaryRisks({ summary, objectives, baseline: null }).every(row => !row.isNew));
 });
 
-test('section states follow §5.4', () => {
+const absentNarrative = {
+  state: 'absent',
+  evidenceRevision: 0,
+  publishedEvidenceRevision: null,
+  deliveryId: null,
+  objectiveId: null,
+  publishedAt: null,
+  changedAt: null,
+  outstandingDeliveryId: null
+} as const;
+
+test('section states follow §5.4: no waiting or updating state exists', () => {
   const running = ['Write the docs is running.'];
   assert.deepEqual(
     missionSummarySectionState({ response: undefined, isError: false, runningSentences: [] }),
@@ -279,7 +279,15 @@ test('section states follow §5.4', () => {
   );
   assert.deepEqual(
     missionSummarySectionState({
-      response: { eligible: false, summary: null, evidence: null, watermark: null, seenAt: null },
+      response: {
+        eligible: false,
+        summary: null,
+        evidence: null,
+        watermark: null,
+        narrative: null,
+        narrativeWatermark: null,
+        seenAt: null
+      },
       isError: false,
       runningSentences: running
     }),
@@ -292,6 +300,8 @@ test('section states follow §5.4', () => {
         summary: null,
         evidence: emptyEvidence,
         watermark: null,
+        narrative: absentNarrative,
+        narrativeWatermark: null,
         seenAt: null
       },
       isError: false,
@@ -299,35 +309,202 @@ test('section states follow §5.4', () => {
     }),
     { kind: 'awaiting', running }
   );
-  assert.deepEqual(
-    missionSummarySectionState({
-      response: {
-        eligible: true,
-        summary: pendingSummary(),
-        evidence: emptyEvidence,
-        watermark: null,
-        seenAt: null
-      },
+  // An old `pending` shell from before the cutover is just absent prose: no spinner.
+  const shell: MissionSummaryDto = {
+    ...summary,
+    status: 'pending',
+    headline: '',
+    summary: '',
+    generatedAt: null
+  };
+  const state = missionSummarySectionState({
+    response: { ...input.summaryResponse, summary: shell },
+    isError: false,
+    runningSentences: running,
+    objectives
+  });
+  assert.equal(state.kind, 'summary');
+  assert.equal(state.kind === 'summary' && state.narrative.notice, 'Summary not yet provided');
+  assert.equal(state.kind === 'summary' && state.narrative.freshness, 'unknown');
+});
+
+// ---- Narrative freshness and seen coverage (contract v175, ADR 0076) ----
+
+type NarrativeCase = {
+  name: string;
+  summaryPatch?: Partial<MissionSummaryDto>;
+  summary?: null;
+  evidenceSources?: MissionSummaryEvidenceDto['sources'];
+  narrative?: Extract<MissionSummaryResponse, { eligible: true }>['narrative'];
+  narrativeWatermark?: string | null;
+  omitNarrative?: boolean;
+  expected: {
+    sectionState: string;
+    freshness: string;
+    hasProse: boolean;
+    notice: string | null;
+    legacy: boolean;
+    provenance: unknown;
+    writtenAt: string | null;
+    latestWork: { deliveryId: string; objectiveKey: string | null } | null;
+  };
+};
+
+/** Builds a fixture case's response exactly as the fixture describes it. */
+function narrativeCaseResponse(c: NarrativeCase): MissionSummaryResponse {
+  const base = structuredClone(input.summaryResponse) as Record<string, unknown> & {
+    summary: MissionSummaryDto | null;
+    evidence: MissionSummaryEvidenceDto;
+  };
+  if (c.summary === null) base.summary = null;
+  else if (c.summaryPatch)
+    base.summary = { ...(base.summary as MissionSummaryDto), ...c.summaryPatch };
+  if (c.evidenceSources) base.evidence = { ...base.evidence, sources: c.evidenceSources };
+  if (c.omitNarrative) {
+    delete base.narrative;
+    delete base.narrativeWatermark;
+  } else {
+    base.narrative = c.narrative;
+    base.narrativeWatermark = c.narrativeWatermark ?? null;
+  }
+  return base as unknown as MissionSummaryResponse;
+}
+
+for (const c of fixtureFile.narrativeFreshness.cases as NarrativeCase[]) {
+  test(`fixture narrative: ${c.name}`, () => {
+    const response = narrativeCaseResponse(c);
+    const state = missionSummarySectionState({
+      response,
       isError: false,
-      runningSentences: running
-    }),
-    { kind: 'first_pending', running }
+      runningSentences: [],
+      objectives
+    });
+    assert.equal(state.kind, c.expected.sectionState);
+    const view = missionNarrativeView({ response, objectives });
+    assert.ok(view);
+    assert.equal(view.freshness, c.expected.freshness);
+    assert.equal(view.hasProse, c.expected.hasProse);
+    assert.equal(view.notice, c.expected.notice);
+    assert.equal(view.legacy, c.expected.legacy);
+    assert.deepEqual(view.provenance, c.expected.provenance);
+    assert.equal(view.writtenAt, c.expected.writtenAt);
+    assert.deepEqual(
+      view.latestWork
+        ? { deliveryId: view.latestWork.deliveryId, objectiveKey: view.latestWork.objectiveKey }
+        : null,
+      c.expected.latestWork
+    );
+  });
+}
+
+type SeenCase = {
+  name: string;
+  watermark: string | null;
+  narrativeWatermark: string | null;
+  itemsWatermark?: string | null;
+  seenAt: string | null;
+  displayedStamps: string[];
+  required: SummaryCoverageRequirements;
+  covered: Record<string, string>;
+  loaded: boolean;
+  expected: { target: string | null; due: boolean };
+};
+
+for (const c of fixtureFile.seenCoverage.cases as SeenCase[]) {
+  test(`fixture seen coverage: ${c.name}`, () => {
+    const displayed: MissionSummaryEvidenceDto = {
+      ...emptyEvidence,
+      sources: c.displayedStamps.map((deliveredAt, index) => ({
+        objectiveId: `obj-${index}`,
+        deliveryId: `delivery-${index}`,
+        deliveredAt
+      }))
+    };
+    assert.deepEqual(
+      summaryAcknowledgement({
+        watermark: c.watermark,
+        narrativeWatermark: c.narrativeWatermark,
+        itemsWatermark: c.itemsWatermark ?? null,
+        seenAt: c.seenAt,
+        evidence: displayed,
+        questions: [],
+        required: c.required,
+        covered: c.covered,
+        loaded: c.loaded
+      }),
+      c.expected
+    );
+  });
+}
+
+test('the narrative signature changes with every basis or content change, even in one millisecond', () => {
+  const at = '2026-10-23T10:05:00.000Z';
+  const current: MissionNarrativeDto = {
+    state: 'current',
+    evidenceRevision: 4,
+    publishedEvidenceRevision: 4,
+    deliveryId: 'delivery-c4',
+    objectiveId: 'obj-c',
+    publishedAt: at,
+    changedAt: at,
+    outstandingDeliveryId: null
+  };
+  const signatureOf = (patch: {
+    narrative?: Partial<MissionNarrativeDto>;
+    contentRevision?: number;
+  }) => {
+    const response = {
+      ...input.summaryResponse,
+      summary: { ...summary, contentRevision: patch.contentRevision ?? summary.contentRevision },
+      narrative: { ...current, ...patch.narrative },
+      narrativeWatermark: at
+    } as MissionSummaryResponse;
+    return summaryNarrativeSignature(response, missionNarrativeView({ response, objectives }));
+  };
+  const base = signatureOf({});
+  assert.ok(base);
+  assert.notEqual(signatureOf({ contentRevision: summary.contentRevision + 1 }), base);
+  assert.notEqual(signatureOf({ narrative: { evidenceRevision: 5, state: 'outdated' } }), base);
+  assert.notEqual(
+    signatureOf({ narrative: { publishedEvidenceRevision: 5, evidenceRevision: 5 } }),
+    base
   );
-  const retained = pendingSummary({ headline: 'Old headline.', summary: 'Old text.' });
-  assert.deepEqual(
-    missionSummarySectionState({
-      response: {
-        eligible: true,
-        summary: retained,
-        evidence: emptyEvidence,
-        watermark: null,
-        seenAt: null
-      },
-      isError: false,
-      runningSentences: []
-    }),
-    { kind: 'summary', summary: retained, updating: true }
+  assert.equal(signatureOf({}), base, 'an unchanged snapshot keeps its coverage');
+  // No header content means no narrative group to cover.
+  const empty = {
+    ...input.summaryResponse,
+    summary: null,
+    evidence: emptyEvidence,
+    narrative: { ...absentNarrative },
+    narrativeWatermark: null
+  } as MissionSummaryResponse;
+  assert.equal(
+    summaryNarrativeSignature(empty, missionNarrativeView({ response: empty, objectives })),
+    null
   );
+});
+
+test('the summary header is new only when its narrative time is after the visit baseline', () => {
+  assert.equal(summaryNarrativeIsNew('2026-10-23T10:05:00.000Z', '2026-10-21T12:00:00.000Z'), true);
+  assert.equal(
+    summaryNarrativeIsNew('2026-10-20T10:05:00.000Z', '2026-10-21T12:00:00.000Z'),
+    false
+  );
+  assert.equal(summaryNarrativeIsNew('2026-10-23T10:05:00.000Z', null), false, 'first visit');
+  assert.equal(summaryNarrativeIsNew(null, '2026-10-21T12:00:00.000Z'), false);
+});
+
+test('coverage requirements add the narrative and items groups only when rendered', () => {
+  const required = summaryCoverageRequirements({
+    actionRows: [],
+    riskRows: [],
+    suggestionRows: [],
+    narrativeSignature: 'n',
+    itemsSignature: null
+  });
+  assert.deepEqual(required, { narrative: 'n' });
+  assert.equal(summaryCoverageComplete(required, {}), false);
+  assert.equal(summaryCoverageComplete(required, { narrative: 'n' }), true);
 });
 
 test('a choice request reads as a choice and a question without an objective stays generic', () => {
@@ -572,4 +749,52 @@ test('risks and suggestions carry the records they stand for from the server gro
 
   const plain = missionSummarySuggestions({ summary, objectives, baseline });
   assert.ok(plain.every(row => row.group.count === 1 && row.group.itemIds[0] === row.id));
+});
+
+test('cross-mission row signatures invalidate on status reason resolver and delivery linkage', () => {
+  const summary = structuredClone(fixture.input.summaryResponse.summary!);
+  const item = summary.closedItems[0]!;
+  item.resolvedBy = {
+    kind: 'agent',
+    workspaceUserId: null,
+    objectiveId: 'other-objective',
+    deliveryId: null,
+    missionId: 'other-mission',
+    missionDisplayId: 'coo:901',
+    objectiveDisplayId: 'coo:901.abcd',
+    crossMission: true
+  };
+  const before = summaryItemsSignature(summary);
+  assert.ok(before);
+  for (const change of [
+    () => {
+      item.resolvedBy!.deliveryId = 'accepted-delivery';
+    },
+    () => {
+      item.resolvedBy!.objectiveDisplayId = 'coo:901.efgh';
+    },
+    () => {
+      item.reason = 'Changed reason';
+    },
+    () => {
+      item.status = 'dismissed';
+    }
+  ]) {
+    const prior = summaryItemsSignature(summary);
+    change();
+    assert.notEqual(summaryItemsSignature(summary), prior);
+  }
+  assert.equal(
+    summaryItemsSignature(summary, '2099-01-01T00:00:00.000Z'),
+    null,
+    'unrepresented stamp cannot be covered'
+  );
+  summary.closedItems = [];
+  assert.equal(summaryItemsSignature(summary), null);
+  assert.equal(responseItemsWatermark(undefined), null);
+  assert.equal(
+    responseItemsWatermark(fixture.input.summaryResponse),
+    null,
+    'old servers omit the optional watermark'
+  );
 });

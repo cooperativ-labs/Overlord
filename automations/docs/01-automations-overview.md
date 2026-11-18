@@ -51,8 +51,10 @@ Both summarization automations and `compose-delivery` return `null` when `OPENRO
 
 `src/writing/ste.ts` holds the STE-inspired writing rules for model-written text that people read.
 
-- `WRITING_RULES` is the base profile. `compose-delivery` and `compose-mission-summary` use it
-  unchanged; a test pins its text, so editing it is a deliberate change to both composers.
+- `WRITING_RULES` is the base profile. `compose-delivery` uses it unchanged; a test pins its
+  text, so editing it is a deliberate change to that composer. No automation writes mission
+  headlines or summaries: ADR 0076 removed `compose-mission-summary`, and only agents author
+  mission narrative.
 - `OBJECTIVE_WRITING_RULES` extends it for objective titles and summaries only: "must"/"can"
   instead of ambiguous modals, condition before command, `CAUTION:` before the step, no
   contractions or semicolons, the confidence vocabulary ("probably … because …", "It is possible

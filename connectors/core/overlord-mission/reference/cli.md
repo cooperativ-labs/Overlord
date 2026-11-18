@@ -40,6 +40,38 @@ After attach, follow the instructions in the attach response.
 ovld protocol update --session-key <sessionKey> --mission-id $MISSION_ID --summary "What you did and why." --phase execute
 ```
 
+### Draft report evidence (opt-in)
+
+When the attach instructions or the user opt you in, record report evidence while you work
+instead of reconstructing it at delivery. Batch discoveries (a few per update), not one
+call per tool use. Each batch carries **your own** `operationId`: choose it before sending
+and keep it in the file you send, so re-running the same command after a timeout replays
+the original result instead of applying it twice.
+
+```bash
+cat > /tmp/draft-batch.json <<'JSON'
+{ "operationId": "risks-0001", "expectedRevision": 0,
+  "operations": [
+    { "op": "upsert", "entryId": "risk-cache", "kind": "known_risk",
+      "content": { "text": "Cache invalidation is untested on Postgres." } } ] }
+JSON
+ovld protocol update --session-key <sessionKey> --mission-id $MISSION_ID \
+  --report-draft-file /tmp/draft-batch.json
+```
+
+- Kinds: `human_action`, `tradeoff`, `deferred_work` (the deliver report shapes) and
+  `known_risk`, `assumption` (`{ "text" }`). Upsert the same `entryId` to amend an
+  observation; `withdraw` it with a reason once resolved. At most 12 active entries per kind.
+- Send the revision from the previous result as `expectedRevision`. `409
+  report_draft_conflict` means nothing was applied; the printed details carry the fresh draft.
+- Before delivering, read it once: `ovld protocol report-draft --session-key <sessionKey>
+  --mission-id $MISSION_ID`. Fix what the `inspection` warns about, then deliver with
+  `--expected-draft-revision <revision>`. A session with a draft cannot deliver without it.
+- Draft entries are provisional: they become mission items only when deliver seals them.
+- After `attach`, `reportDraft.abandoned` lists drafts an earlier execution of this objective
+  left behind; import the observations that still apply with `{ "op": "import",
+  "sourceDraftId": "...", "sourceEntryId": "..." }`.
+
 ## Heartbeat
 
 ```bash
@@ -100,6 +132,25 @@ Larger inline `--*-json` values are rejected; stream them through the correspond
 flag.
 
 If `heartbeat` succeeds but `deliver` or `update` fails, the session is likely fine — retry with the corresponding `--*-file -` flag instead of inline `--*-json`.
+
+### Lost responses and retries
+
+`deliver` and `record-work` are safe to retry. Before sending, the CLI saves an owner-only
+attempt record with an operation id. If the command times out or the process restarts, run
+the **same command again**: it reuses that operation id and Overlord returns the original
+result (`"replayed": true`) instead of delivering or recording twice. Never work around a
+timeout by changing the request or starting a new operation.
+
+- `--retry-operation <id>` resumes a saved attempt by id (the stderr warning names it); a
+  different request is refused.
+- `--operation-id <id>` sends an id you keep yourself (8-128 of `A-Z a-z 0-9 . _ : -`).
+- `--new-operation` starts separate work, for example recording identical `record-work`
+  twice on purpose. An identical `record-work` that was already accepted is otherwise refused.
+- `ovld protocol delivery-receipt --operation-id <id>` (or `--delivery-id`) shows your
+  accepted receipt. A not-found answer does not prove the attempt failed: retry the same
+  operation instead.
+- A session delivers once. `409 delivery_already_accepted` prints the existing `deliveryId`:
+  do not deliver again; use `resume-follow-up` for new work.
 
 ### Delivery payloads
 

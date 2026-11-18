@@ -36,6 +36,8 @@ export type ServiceContext = {
    * this unset; the REST layer supplies the active token.
    */
   actorTokenId?: string | null;
+  /** Request authorizer, including immutable role and token-consent snapshots. */
+  canUpdateMissionItems?: () => Promise<boolean>;
   /** Null for ordinary callers; empty for an automation token with no live projects. */
   allowedProjectIds?: readonly string[] | null;
   /** Client machine identity (browser/desktop/CLI). Required on hosted backends. */

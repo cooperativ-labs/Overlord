@@ -226,7 +226,17 @@ test('delivery cards keep resolving suggestions and report an agent close', asyn
     outcome: null,
     outcomeRef: null,
     reason: 'Streaming landed in the export objective.',
-    resolvedBy: { kind: 'agent', workspaceUserId: null, objectiveId: objective.id, deliveryId }
+    resolvedBy: {
+      kind: 'agent',
+      workspaceUserId: null,
+      objectiveId: objective.id,
+      deliveryId,
+      missionId: mission.id,
+      missionDisplayId: mission.displayId,
+      objectiveDisplayId: objective.displayId,
+      sessionId: null,
+      crossMission: false
+    }
   });
 
   // A person overrides the agent from the card, and the item route sees the same row.

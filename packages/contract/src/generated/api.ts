@@ -5,10 +5,10 @@
 import { z } from 'zod';
 
 /** The contract version (contract/VERSION) this API description belongs to. */
-export const contractVersion = "174.2.0";
+export const contractVersion = "178.1.0";
 
 /** The API description's own version (OpenAPI `info.version`). */
-export const apiVersion = "4.14.0";
+export const apiVersion = "5.1.0";
 
 /** A non-JSON request or response body: raw bytes (G3). */
 export type BinaryBody = Uint8Array | ArrayBuffer | Blob;
@@ -618,6 +618,84 @@ export interface ObjectiveAttachmentDto {
   createdAt: DateTime;
 }
 export const objectiveAttachmentDtoSchema: z.ZodType<ObjectiveAttachmentDto> = z.object({ "id": z.string(), "workspaceId": z.string(), "projectId": z.string().nullable(), "missionId": z.string().nullable(), "objectiveId": z.string().nullable(), "inboxItemId": z.string().nullable(), "bucketKey": z.literal("attachments"), "storageKey": z.string(), "filename": z.string(), "contentType": z.string().nullable(), "sizeBytes": z.int().min(1).nullable(), "uploadStatus": z.enum(["prepared", "uploaded", "available", "failed", "deleted"]), "url": z.string(), "createdAt": dateTimeSchema });
+
+/**
+ * Closed vocabulary of draft entry kinds, one per V1 agent-report array (ADR 0078).
+ */
+export type ReportDraftKind = "human_action" | "tradeoff" | "known_risk" | "deferred_work" | "assumption";
+export const reportDraftKindSchema: z.ZodType<ReportDraftKind> = z.enum(["human_action", "tradeoff", "known_risk", "deferred_work", "assumption"]);
+
+export interface ReportDraftCounts {
+  human_action: number;
+  tradeoff: number;
+  known_risk: number;
+  deferred_work: number;
+  assumption: number;
+}
+export const reportDraftCountsSchema: z.ZodType<ReportDraftCounts> = z.object({ "human_action": z.int().min(0), "tradeoff": z.int().min(0), "known_risk": z.int().min(0), "deferred_work": z.int().min(0), "assumption": z.int().min(0) });
+
+/**
+ * One provisional observation, identified by the agent's stable `entryId`. `content` has the kind's V1 input shape: a human action, a tradeoff, a deferred-work item, or `{ text }` for a known risk or assumption.
+ */
+export interface ReportDraftEntryDto {
+  entryId: string;
+  kind: ReportDraftKind;
+  content: { [key: string]: unknown };
+  position: number;
+  state: "active" | "withdrawn";
+  withdrawnAt: DateTime | null;
+  withdrawnReason: string | null;
+  /**
+   * The abandoned draft entry this entry was explicitly imported from.
+   */
+  importedFrom: {
+    draftId: string;
+    entryId: string;
+  } | null;
+  /**
+   * The accepted V1 item this entry became when its draft was sealed (`human-action-2`, `tradeoff-1`, a deferred-work id, `knownRisks[0]`, `assumptions[1]`); null while provisional or when excluded at seal.
+   */
+  sealedRef: string | null;
+  revision: number;
+  createdAt: DateTime;
+  updatedAt: DateTime;
+}
+export const reportDraftEntryDtoSchema: z.ZodType<ReportDraftEntryDto> = z.object({ "entryId": z.string(), "kind": reportDraftKindSchema, "content": z.record(z.string(), z.unknown()), "position": z.int().min(0), "state": z.enum(["active", "withdrawn"]), "withdrawnAt": dateTimeSchema.nullable(), "withdrawnReason": z.string().nullable(), "importedFrom": z.object({ "draftId": z.string(), "entryId": z.string() }).nullable(), "sealedRef": z.string().nullable(), "revision": z.int().min(1), "createdAt": dateTimeSchema, "updatedAt": dateTimeSchema });
+
+export interface ReportDraftDto {
+  id: string;
+  missionId: string;
+  objectiveId: string;
+  /**
+   * The protocol session that owns (or owned) the draft.
+   */
+  sessionId: string;
+  state: "open" | "sealed" | "abandoned";
+  revision: number;
+  batchCount: number;
+  entryCount: number;
+  activeCounts: ReportDraftCounts;
+  withdrawnCount: number;
+  sealedAt: DateTime | null;
+  sealedDeliveryId: string | null;
+  createdAt: DateTime;
+  updatedAt: DateTime;
+  /**
+   * Active entries in position order.
+   */
+  entries: ReportDraftEntryDto[];
+  /**
+   * Withdrawn entries, kept as audit data.
+   */
+  withdrawn?: ReportDraftEntryDto[];
+}
+export const reportDraftDtoSchema: z.ZodType<ReportDraftDto> = z.object({ "id": z.string(), "missionId": z.string(), "objectiveId": z.string(), "sessionId": z.string(), "state": z.enum(["open", "sealed", "abandoned"]), "revision": z.int().min(1), "batchCount": z.int().min(0).max(1000), "entryCount": z.int().min(0).max(1000), "activeCounts": reportDraftCountsSchema, "withdrawnCount": z.int().min(0), "sealedAt": dateTimeSchema.nullable(), "sealedDeliveryId": z.string().nullable(), "createdAt": dateTimeSchema, "updatedAt": dateTimeSchema, "entries": z.array(reportDraftEntryDtoSchema), "withdrawn": z.exactOptional(z.array(reportDraftEntryDtoSchema)) });
+
+export interface ObjectiveReportDraftList {
+  objectiveId: string;
+  drafts: ReportDraftDto[];
+}
+export const objectiveReportDraftListSchema: z.ZodType<ObjectiveReportDraftList> = z.object({ "objectiveId": z.string(), "drafts": z.array(reportDraftDtoSchema).max(20) });
 
 export type ObjectiveAttachmentList = ObjectiveAttachmentDto[];
 export const objectiveAttachmentListSchema: z.ZodType<ObjectiveAttachmentList> = z.array(objectiveAttachmentDtoSchema);
@@ -1372,8 +1450,13 @@ export interface MissionItemResolverDto {
   workspaceUserId: string | null;
   objectiveId: string | null;
   deliveryId: string | null;
+  missionId?: string | null;
+  missionDisplayId?: string | null;
+  objectiveDisplayId?: string | null;
+  sessionId?: string | null;
+  crossMission?: boolean;
 }
-export const missionItemResolverDtoSchema: z.ZodType<MissionItemResolverDto> = z.object({ "kind": z.enum(["person", "agent"]), "workspaceUserId": z.string().nullable(), "objectiveId": z.string().nullable(), "deliveryId": z.string().nullable() });
+export const missionItemResolverDtoSchema: z.ZodType<MissionItemResolverDto> = z.object({ "kind": z.enum(["person", "agent"]), "workspaceUserId": z.string().nullable(), "objectiveId": z.string().nullable(), "deliveryId": z.string().nullable(), "missionId": z.exactOptional(z.string().nullable()), "missionDisplayId": z.exactOptional(z.string().nullable()), "objectiveDisplayId": z.exactOptional(z.string().nullable()), "sessionId": z.exactOptional(z.string().nullable()), "crossMission": z.exactOptional(z.boolean()) });
 
 /**
  * The decision on a suggestion (deferred-work item), read from its `mission_items` row. An agent's close has a null `resolvedByWorkspaceUserId`, `resolvedBy.kind` `agent` and a `reason`.
@@ -1430,6 +1513,17 @@ export interface DeliveryDeferredWorkItemDto {
 export const deliveryDeferredWorkItemDtoSchema: z.ZodType<DeliveryDeferredWorkItemDto> = z.object({ "actionId": z.string(), "title": z.string(), "change": z.string(), "location": z.string(), "doneWhen": z.string(), "resolution": humanActionResolutionDtoSchema.nullable() });
 
 export interface DeliveryDto {
+  /**
+   * Live resolver projection, ordered by target mission id then item id; not part of the immutable report or acceptance receipt. Restore or source deletion can remove rows.
+   */
+  closedElsewhere?: Array<{
+    itemId: string;
+    kind: "risk" | "human_action" | "suggestion";
+    text: string;
+    missionDisplayId: string;
+    status: "done" | "dismissed";
+    reason: string;
+  }>;
   id: string;
   missionId: string;
   objectiveId: string;
@@ -1446,7 +1540,7 @@ export interface DeliveryDto {
    */
   deferredWorkItems: DeliveryDeferredWorkItemDto[];
 }
-export const deliveryDtoSchema: z.ZodType<DeliveryDto> = z.object({ "id": z.string(), "missionId": z.string(), "objectiveId": z.string(), "sessionId": z.string().nullable(), "summary": z.string(), "verificationSummary": z.string().nullable(), "followUpNotes": z.string().nullable(), "report": deliveryReportPayloadV1Schema, "deliveredAt": dateTimeSchema, "agentIdentifier": z.string().nullable(), "modelIdentifier": z.string().nullable(), "deferredWorkItems": z.array(deliveryDeferredWorkItemDtoSchema) });
+export const deliveryDtoSchema: z.ZodType<DeliveryDto> = z.object({ "closedElsewhere": z.exactOptional(z.array(z.object({ "itemId": z.string(), "kind": z.enum(["risk", "human_action", "suggestion"]), "text": z.string(), "missionDisplayId": z.string(), "status": z.enum(["done", "dismissed"]), "reason": z.string() })).max(50)), "id": z.string(), "missionId": z.string(), "objectiveId": z.string(), "sessionId": z.string().nullable(), "summary": z.string(), "verificationSummary": z.string().nullable(), "followUpNotes": z.string().nullable(), "report": deliveryReportPayloadV1Schema, "deliveredAt": dateTimeSchema, "agentIdentifier": z.string().nullable(), "modelIdentifier": z.string().nullable(), "deferredWorkItems": z.array(deliveryDeferredWorkItemDtoSchema) });
 
 export interface MissionDeliveriesDto {
   /**
@@ -1464,6 +1558,9 @@ export interface MissionDeliveriesDto {
 }
 export const missionDeliveriesDtoSchema: z.ZodType<MissionDeliveriesDto> = z.object({ "items": z.array(deliveryDtoSchema).max(200), "total": z.int().min(0), "limit": z.int() });
 
+/**
+ * Historical vocabulary kept for older consumers. New writes are always `composed`; `pending` and `fallback` no longer mean a job runs (ADR 0076). Use the summary response's `narrative.state` to decide whether prose exists or needs updating.
+ */
 export type MissionSummaryStatus = "pending" | "composed" | "fallback";
 export const missionSummaryStatusSchema: z.ZodType<MissionSummaryStatus> = z.enum(["pending", "composed", "fallback"]);
 
@@ -1548,7 +1645,7 @@ export interface MissionSummaryDto {
   closedItems: MissionSummaryClosedItemDto[];
   status: MissionSummaryStatus;
   /**
-   * One sentence; empty in the first pending shell.
+   * One sentence; empty when no agent has published prose (`narrative.state` absent).
    */
   headline: string;
   /**
@@ -1613,11 +1710,42 @@ export interface MissionSummaryEvidenceDto {
 }
 export const missionSummaryEvidenceDtoSchema: z.ZodType<MissionSummaryEvidenceDto> = z.object({ "actions": z.array(missionSummaryActionDtoSchema).max(100), "sources": z.array(missionSummarySourceDtoSchema).max(100), "totals": z.object({ "actions": z.int().min(0), "sources": z.int().min(0), "currentRunDeliveries": z.int().min(0) }), "truncated": z.object({ "actions": z.boolean(), "sources": z.boolean() }) });
 
+/**
+ * Server-derived freshness of the agent-authored mission headline and summary (ADR 0076). Not an objective status. `absent`: no prose. `current`: agent prose published through the delivery publication boundary against the present evidence basis. `outdated`: a later accepted delivery, follow-up or reopen changed the basis since. `legacy`: retained prose (model, deterministic or earlier agent text) with no verifiable basis. Items, actions and questions do not move the basis and stay independently visible. No automatic writer exists; prose that is absent or outdated stays so until an agent publishes.
+ */
+export interface MissionNarrativeDto {
+  state: "absent" | "current" | "outdated" | "legacy";
+  evidenceRevision: number;
+  publishedEvidenceRevision: number | null;
+  /**
+   * The delivery whose author wrote the current prose; null when absent or unknown.
+   */
+  deliveryId: string | null;
+  objectiveId: string | null;
+  /**
+   * When the current prose was published through this boundary; null for legacy or absent prose.
+   */
+  publishedAt: DateTime | null;
+  /**
+   * Last narrative text or evidence-basis change; equals `narrativeWatermark`.
+   */
+  changedAt: DateTime | null;
+  /**
+   * The accepted delivery whose publication opportunity is still open, if any.
+   */
+  outstandingDeliveryId: string | null;
+}
+export const missionNarrativeDtoSchema: z.ZodType<MissionNarrativeDto> = z.object({ "state": z.enum(["absent", "current", "outdated", "legacy"]), "evidenceRevision": z.int().min(0), "publishedEvidenceRevision": z.int().min(0).nullable(), "deliveryId": z.string().nullable(), "objectiveId": z.string().nullable(), "publishedAt": dateTimeSchema.nullable(), "changedAt": dateTimeSchema.nullable(), "outstandingDeliveryId": z.string().nullable() });
+
 export type MissionSummaryResponse = {
   eligible: false;
   summary: null;
   evidence: null;
   watermark: null;
+  narrative: null;
+  narrativeWatermark: null;
+  itemsWatermark?: null;
+  itemsTruncated?: false;
   seenAt: null;
 } | {
   eligible: true;
@@ -1627,13 +1755,26 @@ export type MissionSummaryResponse = {
    * Newest `deliveredAt` of the current-run deliveries drawn on, or `createdAt` of an open question or choice request.
    */
   watermark: DateTime | null;
+  narrative: MissionNarrativeDto;
+  /**
+   * Last narrative text or basis change (`narrative.changedAt`). Clients acknowledge the maximum of `watermark`, `narrativeWatermark` and other evidence watermarks with the scalar seen marker only after every group of this response was rendered.
+   */
+  narrativeWatermark: DateTime | null;
+  /**
+   * Newest resolvedAt of a live item closed by another mission's agent; excludes own-mission and person decisions. Older servers may omit it.
+   */
+  itemsWatermark?: DateTime | null;
+  /**
+   * Closed rows exceed the 100-row cap; clients must not acknowledge a partial snapshot.
+   */
+  itemsTruncated?: boolean;
   seenAt: DateTime | null;
 };
-export const missionSummaryResponseSchema: z.ZodType<MissionSummaryResponse> = z.union([z.object({ "eligible": z.literal(false), "summary": z.null(), "evidence": z.null(), "watermark": z.null(), "seenAt": z.null() }), z.object({ "eligible": z.literal(true), "summary": missionSummaryDtoSchema.nullable(), "evidence": missionSummaryEvidenceDtoSchema, "watermark": dateTimeSchema.nullable(), "seenAt": dateTimeSchema.nullable() })]);
+export const missionSummaryResponseSchema: z.ZodType<MissionSummaryResponse> = z.union([z.object({ "eligible": z.literal(false), "summary": z.null(), "evidence": z.null(), "watermark": z.null(), "narrative": z.null(), "narrativeWatermark": z.null(), "itemsWatermark": z.exactOptional(z.null()), "itemsTruncated": z.exactOptional(z.literal(false)), "seenAt": z.null() }), z.object({ "eligible": z.literal(true), "summary": missionSummaryDtoSchema.nullable(), "evidence": missionSummaryEvidenceDtoSchema, "watermark": dateTimeSchema.nullable(), "narrative": missionNarrativeDtoSchema, "narrativeWatermark": dateTimeSchema.nullable(), "itemsWatermark": z.exactOptional(dateTimeSchema.nullable()), "itemsTruncated": z.exactOptional(z.boolean()), "seenAt": dateTimeSchema.nullable() })]);
 
 export interface MarkMissionSummarySeenBody {
   /**
-   * A `watermark` from a summary read; any `Date.parse`-able text, stored normalized to UTC.
+   * A watermark from a summary read (`watermark`, `narrativeWatermark`, `itemsWatermark` or their maximum); any `Date.parse`-able text, stored normalized to UTC. It must not be later than the newest delivery, question or choice request, retained narrative change, or live cross-mission agent close of the mission.
    */
   watermark: string;
 }
@@ -8000,6 +8141,14 @@ export interface GetObjectivesByIdEffectiveLaunchConfigQueryParams {
 }
 export const getObjectivesByIdEffectiveLaunchConfigQueryParamsSchema: z.ZodType<GetObjectivesByIdEffectiveLaunchConfigQueryParams> = z.object({ "agent": z.string(), "executionTargetId": z.exactOptional(z.string()) });
 
+export interface GetObjectivesByIdReportDraftsPathParams {
+  /**
+   * Objective UUID, or full display id (`coo:756.k7xm`) resolved within the caller's organization; an ambiguous display id answers 409.
+   */
+  id: string;
+}
+export const getObjectivesByIdReportDraftsPathParamsSchema: z.ZodType<GetObjectivesByIdReportDraftsPathParams> = z.object({ "id": z.string() });
+
 export interface GetObjectivesByIdAttachmentsPathParams {
   /**
    * Objective UUID, or full display id (`coo:756.k7xm`) resolved within the caller's organization; an ambiguous display id answers 409.
@@ -12940,6 +13089,25 @@ export const apiOperations = {
     parameters: { path: getObjectivesByIdEffectiveLaunchConfigPathParamsSchema, query: getObjectivesByIdEffectiveLaunchConfigQueryParamsSchema, header: null },
     requestBody: null,
     responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: objectiveEffectiveLaunchConfigDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "500": apiResponses.InternalError }
+  },
+  /**
+   * GET /api/objectives/{id}/report-drafts: List an objective's provisional report drafts
+   */
+  getObjectivesByIdReportDrafts: {
+    operationId: "getObjectivesByIdReportDrafts",
+    method: "GET",
+    path: "/api/objectives/{id}/report-drafts",
+    tags: ["objectives"],
+    deprecated: false,
+    permission: "mission:read",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["mobile","webapp"],
+    extension: null,
+    security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
+    parameters: { path: getObjectivesByIdReportDraftsPathParamsSchema, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: objectiveReportDraftListSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "500": apiResponses.InternalError }
   },
   /**
    * GET /api/objectives/{id}/attachments: List an objective's attachments

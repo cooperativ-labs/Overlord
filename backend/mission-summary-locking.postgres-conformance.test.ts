@@ -97,6 +97,7 @@ test(
         const input = parseMissionSummaryInput(
           {
             baseContentRevision: 1,
+            baseEvidenceRevision: 1,
             headline: 'Verified narrative.',
             summary: 'Concurrent verification.',
             closeItems: [{ id: item.id, status: 'done', reason: 'Verified by agent.' }]
@@ -106,13 +107,14 @@ test(
         const prepared = await prepareMissionSummaryWrite(tx, {
           mission,
           input,
-          checkBase: true
+          mode: 'deliver'
         }).finally(release);
         await applyMissionSummaryWrite(tx, {
           prepared,
           mission,
           objectiveId: item.objective_id,
-          deliveryId: recorded.deliveryId,
+          // The lock order is what matters here; no second publication row.
+          deliveryId: null,
           model: null,
           attribution: { actorWorkspaceUserId: null, source: 'protocol' }
         });

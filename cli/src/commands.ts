@@ -58,16 +58,24 @@ import {
 } from './discover-project-local.js';
 import {
   CliError,
+  finalizationErrorOutput,
   formatExecutionRequestAlreadyLinkedDiagnostic,
   isExecutionRequestAlreadyLinkedError,
   isUnlinkableExecutionRequestError,
-  missionSummaryConflictOutput
+  missionSummaryConflictOutput,
+  reportDraftErrorOutput
 } from './errors.js';
 import { launchAgent } from './launch.js';
 import { recoverLaunchBootstrapFromProjectTmp } from './launch-bootstrap.js';
 import { fetchLaunchSettings } from './launch-settings.js';
 import { buildLocalObjectiveChanges } from './local-objective-changes.js';
 import { resolveNativeSessionId } from './native-session.js';
+import {
+  attemptKindFor,
+  markAttemptAccepted,
+  prepareOperationAttempt,
+  settleFailedAttempt
+} from './operation-attempts.js';
 import { runOrgSetupCommand } from './org-setup.js';
 import { printJson, printKeyValue } from './output.js';
 import {
@@ -657,6 +665,7 @@ const PROTOCOL_FILE_FLAGS = [
   '--changes-file',
   '--declared-paths-file',
   '--mission-summary-file',
+  '--report-draft-file',
   '--close-items-file',
   '--paths-file',
   '--value-file',
@@ -674,7 +683,9 @@ const PROTOCOL_FILE_FLAGS = [
 
 /** Protocol subcommands that require a session key the cache can auto-inject. */
 const SESSION_KEY_SUBCOMMANDS = new Set([
+  'project-items',
   'mission-items',
+  'report-draft',
   'close-items',
   'add-artifact',
   'update',
@@ -698,10 +709,12 @@ const SESSION_KEY_SUBCOMMANDS = new Set([
  */
 const OBJECTIVE_SCOPED_SUBCOMMANDS = new Set([
   'add-artifact',
+  'report-draft',
   'ask',
   'attachment-download-url',
   'attachment-list',
   'changes',
+  'project-items',
   'mission-items',
   'close-items',
   'connect',
@@ -1290,6 +1303,19 @@ export async function runProtocolCommand({
     isSessionLive: sessionLivenessCheck(readActiveSessions(workingDirectory))
   });
 
+  // Retry identity is fixed and saved before anything is sent (ADR 0075), from
+  // the request as the caller wrote it, before local evidence is appended.
+  const attemptKind = attemptKindFor(subcommand);
+  const attempt = attemptKind
+    ? prepareOperationAttempt({
+        kind: attemptKind,
+        flags,
+        fileInputs,
+        positional: parsed.positional,
+        backendUrl: runtime.backend.baseUrl
+      })
+    : null;
+
   let lifecycleActive: { missionId: string; objectiveId: string; sessionKey: string } | undefined;
   if ((subcommand === 'deliver' || subcommand === 'update') && missionId) {
     const sessionKey = typeof flags['--session-key'] === 'string' ? flags['--session-key'] : null;
@@ -1371,6 +1397,11 @@ export async function runProtocolCommand({
       body: protocolBody
     });
   } catch (error) {
+    if (attempt) {
+      settleFailedAttempt(attempt, error);
+      const refusal = finalizationErrorOutput(error);
+      if (refusal) printJson(refusal);
+    }
     // Agent-pod / `agp` recovers OVERLORD_EXECUTION_REQUEST_ID from the launch
     // script. If the runner already cleared that request, attach would otherwise
     // fail before writeActiveSession, and the objective capture hook would stay inert.
@@ -1391,10 +1422,15 @@ export async function runProtocolCommand({
       // baseline on stdout so the agent can rewrite and deliver again.
       const conflict = missionSummaryConflictOutput(error);
       if (conflict) printJson(conflict);
+      // A draft refusal (ADR 0078) carries the fresh draft and revision; print it
+      // so the agent rebases instead of guessing.
+      const draftRefusal = reportDraftErrorOutput(error);
+      if (draftRefusal) printJson(draftRefusal);
       throw error;
     }
   }
 
+  if (attempt) markAttemptAccepted(attempt, result);
   const resultRecord = asRecord(result);
 
   if (subcommand === 'sync-changes' && missionId && explicitSyncIdentity) {

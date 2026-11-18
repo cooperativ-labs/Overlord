@@ -519,7 +519,11 @@ describe('closing and restoring items', () => {
     assert.deepEqual(closed.item.resolvedBy, {
       kind: 'agent',
       objectiveId: 'ob',
-      deliveryId: 'dB2'
+      deliveryId: 'dB2',
+      missionId,
+      sessionId: null,
+      missionDisplayId: 'w-items:1',
+      objectiveDisplayId: 'w-items:1.bbbb'
     });
     assert.ok(closed.item.resolvedAt);
     assert.equal(closed.item.revision, 2);

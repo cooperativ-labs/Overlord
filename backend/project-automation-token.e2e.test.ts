@@ -425,7 +425,6 @@ before(async () => {
     OVERLORD_MCP_ENABLED: 'true',
     // Keep the denied-request row-count invariant isolated from asynchronous composers.
     OVERLORD_DELIVERY_COMPOSE_DISABLED: '1',
-    OVERLORD_MISSION_SUMMARY_COMPOSE_DISABLED: '1',
     OVERLORD_OBJECTIVE_BRIEF_COMPOSE_DISABLED: '1',
     BETTER_AUTH_SECRET:
       process.env.BETTER_AUTH_SECRET ?? 'project-automation-e2e-secret-32-chars-minimum',

@@ -7,8 +7,9 @@ import test, { after } from 'node:test';
 /**
  * The agent-facing mission summary through the protocol dispatch
  * (coo:1260.shmg): the attach baseline, a delivery that writes the summary and
- * closes items, the parallel-objective conflict, and fallback composition for
- * a delivery without an agent summary.
+ * closes items, and the agent-only narrative boundary (ADR 0076): stale prose
+ * is accepted and withheld, then published once through the narrow commands;
+ * nothing composes prose for a delivery without it.
  */
 
 const tempDir = mkdtempSync(path.join(tmpdir(), 'overlord-protocol-mission-summary-'));
@@ -19,17 +20,16 @@ const { requireDatabaseClient } = await import('./db.ts');
 const { createMission, createObjective, createProject } = await import('./repository.ts');
 const { runProtocolSubcommand } = await import('./protocol.ts');
 const { getMissionSummary } = await import('./mission-summary.ts');
-const { missionSummaryComposeWorker } = await import('./mission-summary-compose-worker.ts');
 const { ServiceError } = await import('../packages/core/service/errors.ts');
-const { enqueueMissionSummaryComposeJob } = await import('../packages/core/service/worker-jobs.ts');
 
 after(() => {
-  missionSummaryComposeWorker.setGenerateOverride(null);
   rmSync(tempDir, { recursive: true, force: true });
 });
 
 type Baseline = {
   contentRevision: number;
+  evidenceRevision: number;
+  narrative: { state: string; outstandingDeliveryId: string | null };
   headline: string;
   summary: string;
   author: string | null;
@@ -44,7 +44,10 @@ type DeliverResult = {
     narrativeWritten: boolean;
     closedItemIds: string[];
     warnings: Array<{ code: string; itemId?: string }>;
+    publication?: { id: string; available: boolean; withheldReason: string | null };
+    baseline?: Baseline;
   };
+  instruction: string;
 };
 
 const report = (tag: string) => ({
@@ -106,11 +109,23 @@ test('attach returns the baseline; load-context and connect do not', async () =>
   const attached = await attach(first.displayId);
   assert.deepEqual(attached.missionSummary, {
     contentRevision: 0,
+    evidenceRevision: 0,
+    narrative: {
+      state: 'absent',
+      evidenceRevision: 0,
+      publishedEvidenceRevision: null,
+      deliveryId: null,
+      objectiveId: null,
+      publishedAt: null,
+      changedAt: null,
+      outstandingDeliveryId: null
+    },
     headline: '',
     summary: '',
     author: null,
     openItems: [],
     totalOpenItems: 0,
+    otherMissionOpenItems: 0,
     truncated: false
   });
   assert.ok(attached.agentInstructions.includes('## Mission summary'));
@@ -184,12 +199,13 @@ test('a delivery with missionSummary shows agent prose at once and closes own it
   await deliver(first.displayId, a.sessionKey, { deliveryReport: report('first') });
   const o = await attach(other.first.displayId);
   await deliver(other.first.displayId, o.sessionKey, { deliveryReport: report('other') });
-  const foreignRisk = (await getMissionSummary(other.mission.id)).summary;
+  const foreign = await getMissionSummary(other.mission.id);
   const foreignRiskId = (await requireDatabaseClient().get<{ id: string }>(
     `SELECT id FROM mission_items WHERE mission_id = ? AND kind = 'risk'`,
     [other.mission.id]
   ))!.id;
-  assert.equal(foreignRisk, null, 'no summary row before the fallback composer runs');
+  assert.equal(foreign.summary?.headline, '', 'nothing composes prose for a delivery without it');
+  assert.equal(foreign.narrative?.state, 'absent');
 
   const b = await attach(second.displayId);
   const risk = b.missionSummary!.openItems.find(item => item.kind === 'risk')!;
@@ -205,6 +221,7 @@ test('a delivery with missionSummary shows agent prose at once and closes own it
       fileInputs: {
         '--mission-summary-file': JSON.stringify({
           baseContentRevision: b.missionSummary!.contentRevision,
+          baseEvidenceRevision: b.missionSummary!.evidenceRevision,
           headline: 'The export is fast and tested.',
           summary: 'The export streams rows. It is tested and not deployed.',
           closeItems: [
@@ -245,62 +262,82 @@ test('a delivery with missionSummary shows agent prose at once and closes own it
   assert.equal(closed?.reason, 'Streaming removed the slow path.');
   assert.equal(closed?.resolvedBy?.kind, 'agent');
 
-  const foreign = await requireDatabaseClient().get<{ status: string }>(
+  const foreignItem = await requireDatabaseClient().get<{ status: string }>(
     `SELECT status FROM mission_items WHERE id = ?`,
     [foreignRiskId]
   );
-  assert.equal(foreign?.status, 'open', "another mission's item is never closed");
-
-  // The delivery compose worker's trigger never dims or overwrites the agent text.
-  const trigger = await enqueueMissionSummaryComposeJob({
-    ctx: {
-      db: requireDatabaseClient(),
-      workspaceId: mission.workspaceId,
-      actorWorkspaceUserId: null,
-      source: 'runner'
-    },
-    missionId: mission.id,
-    reason: 'delivery_presented'
-  });
-  assert.equal(trigger.triggered, false);
-  assert.equal((await getMissionSummary(mission.id)).summary?.status, 'composed');
+  assert.equal(foreignItem?.status, 'open', "another mission's item is never closed");
+  assert.equal(response.narrative?.state, 'current');
+  assert.equal(response.narrativeWatermark, response.narrative?.changedAt);
+  assert.ok(response.narrativeWatermark);
 });
 
-test('a second parallel delivery with a stale base receives 409 with a fresh baseline', async () => {
+test('stale parallel prose is accepted and withheld, then published once through the narrow commands', async () => {
   const { mission, first, second } = await missionFixture('Parallel');
   const a = await attach(first.displayId);
   const b = await attach(second.displayId);
 
   await deliver(first.displayId, a.sessionKey, {
     deliveryReport: report('a'),
-    missionSummary: { baseContentRevision: 0, headline: 'A landed.', summary: 'A is tested.' }
+    missionSummary: {
+      baseContentRevision: 0,
+      baseEvidenceRevision: 0,
+      headline: 'A landed.',
+      summary: 'A is tested.'
+    }
   });
 
-  await assert.rejects(
-    deliver(second.displayId, b.sessionKey, {
-      deliveryReport: report('b'),
-      missionSummary: { baseContentRevision: 0, headline: 'B landed.', summary: 'B is tested.' }
-    }),
-    (error: unknown) => {
-      assert.ok(error instanceof ServiceError);
-      assert.equal(error.status, 409);
-      assert.equal(error.code, 'mission_summary_conflict');
-      const details = error.details as { missionSummary: Baseline };
-      assert.equal(details.missionSummary.contentRevision, 1);
-      assert.equal(details.missionSummary.headline, 'A landed.');
-      assert.equal(details.missionSummary.author, 'agent');
-      return true;
+  const delivered = await deliver(second.displayId, b.sessionKey, {
+    deliveryReport: report('b'),
+    missionSummary: {
+      baseContentRevision: 0,
+      baseEvidenceRevision: 0,
+      headline: 'B landed.',
+      summary: 'B is tested.'
     }
-  );
+  });
+  assert.equal(delivered.missionSummary?.narrativeWritten, false);
+  assert.equal(delivered.missionSummary?.publication?.withheldReason, 'stale_content');
+  assert.equal(delivered.missionSummary?.baseline?.headline, 'A landed.');
+  assert.match(delivered.instruction, /ovld protocol publish-delivery-summary/);
   const deliveries = await requireDatabaseClient().all<{ objective_id: string }>(
     `SELECT objective_id FROM deliveries WHERE mission_id = ?`,
     [mission.id]
   );
-  assert.deepEqual(
-    deliveries.map(row => row.objective_id),
-    [first.id],
-    'nothing of the rejected delivery was written'
-  );
+  assert.equal(deliveries.length, 2, 'both deliveries were accepted');
+  const outdated = await getMissionSummary(mission.id);
+  assert.equal(outdated.narrative?.state, 'outdated');
+  assert.equal(outdated.narrative?.outstandingDeliveryId, delivered.deliveryId);
+
+  const context = (await runProtocolSubcommand('delivery-summary-context', {
+    flags: {
+      '--mission-id': mission.displayId,
+      '--delivery-id': delivered.deliveryId,
+      '--session-key': b.sessionKey
+    }
+  })) as { publication: { available: boolean }; baseline: Baseline };
+  assert.equal(context.publication.available, true);
+
+  const published = (await runProtocolSubcommand('publish-delivery-summary', {
+    flags: {
+      '--mission-id': mission.displayId,
+      '--delivery-id': delivered.deliveryId,
+      '--session-key': b.sessionKey,
+      '--operation-id': 'publish-parallel-b1',
+      '--payload-json': JSON.stringify({
+        baseContentRevision: context.baseline.contentRevision,
+        baseEvidenceRevision: context.baseline.evidenceRevision,
+        headline: 'A and B landed.',
+        summary: 'Both are tested and not deployed.'
+      })
+    }
+  })) as { contentRevision: number; publication: { state: string } };
+  assert.equal(published.contentRevision, 2);
+  assert.equal(published.publication.state, 'published');
+  const current = await getMissionSummary(mission.id);
+  assert.equal(current.summary?.headline, 'A and B landed.');
+  assert.equal(current.narrative?.state, 'current');
+  assert.equal(current.narrative?.outstandingDeliveryId, null);
 });
 
 test('malformed missionSummary is a 400 before any write', async () => {
@@ -320,33 +357,33 @@ test('malformed missionSummary is a 400 before any write', async () => {
   assert.equal(Number(count?.n), 0);
 });
 
-test('a delivery without missionSummary succeeds and keeps the agent prose', async () => {
+test('a delivery without missionSummary succeeds, keeps the agent prose and marks it outdated', async () => {
   const { mission, first, second } = await missionFixture('Fallback');
   const a = await attach(first.displayId);
   await deliver(first.displayId, a.sessionKey, {
-    missionSummary: { baseContentRevision: 0, headline: 'A landed.', summary: 'A is tested.' }
+    missionSummary: {
+      baseContentRevision: 0,
+      baseEvidenceRevision: 0,
+      headline: 'A landed.',
+      summary: 'A is tested.'
+    }
   });
   const b = await attach(second.displayId);
   // An older client: no missionSummary field at all.
   const delivered = await deliver(second.displayId, b.sessionKey, { deliveryReport: report('b') });
-  assert.equal(delivered.missionSummary, undefined);
+  assert.equal(delivered.missionSummary?.narrativeWritten, false);
+  assert.equal(delivered.missionSummary?.publication?.available, true);
 
-  const trigger = await enqueueMissionSummaryComposeJob({
-    ctx: {
-      db: requireDatabaseClient(),
-      workspaceId: mission.workspaceId,
-      actorWorkspaceUserId: null,
-      source: 'runner'
-    },
-    missionId: mission.id,
-    reason: 'delivery_presented'
-  });
-  assert.equal(trigger.triggered, false, 'agent prose is not replaced by a delivery without prose');
-
-  const summary = (await getMissionSummary(mission.id)).summary!;
+  const response = await getMissionSummary(mission.id);
+  const summary = response.summary!;
   assert.equal(summary.generatedBy, 'agent');
   assert.equal(summary.headline, 'A landed.');
   assert.equal(summary.contentRevision, 1);
+  assert.equal(response.narrative?.state, 'outdated');
+  const jobs = await requireDatabaseClient().get<{ n: number }>(
+    `SELECT COUNT(*) AS n FROM worker_jobs WHERE type = 'overlord.mission.summary.compose.v1'`
+  );
+  assert.equal(Number(jobs?.n), 0, 'no automatic narrative job exists');
 });
 
 test('record-work accepts missionSummary without a base', async () => {
@@ -414,4 +451,138 @@ test('item commands read full detail and close with file input without deliverin
     second.id
   ]);
   assert.equal(session.ended_at, null);
+});
+
+test('cross-mission protocol checks real token grants and exposes live resolver and delivery projections', async () => {
+  const { createUserToken, listMissionDeliveries } = await import('./repository.ts');
+  const { setActiveTokenAuth, getActorWorkspaceUserId } = await import('./db.ts');
+  const workspaceUserId = getActorWorkspaceUserId();
+  const project = await createProject({ name: 'Cross-mission protocol grants' });
+  const target = await createMission({
+    projectId: project.id,
+    firstObjective: 'Report target risk'
+  });
+  const targetSession = await attach(target.objectives[0]!.displayId);
+  await deliver(target.objectives[0]!.displayId, targetSession.sessionKey, {
+    deliveryReport: report('foreign')
+  });
+  const source = await createMission({
+    projectId: project.id,
+    firstObjective: 'Resolve foreign risk'
+  });
+  const attached = await attach(source.objectives[0]!.displayId);
+  const ownId = (
+    await requireDatabaseClient().all<{ id: string }>(
+      'SELECT id FROM mission_items WHERE mission_id = ? ORDER BY id',
+      [target.id]
+    )
+  )[0]!.id;
+  const { token: lifecycle } = await createUserToken({
+    label: 'Lifecycle close',
+    scope: 'mission_lifecycle'
+  });
+  const { token: full } = await createUserToken({ label: 'Full close', scope: 'full' });
+  const { token: automation } = await createUserToken({
+    label: 'Automation denied',
+    scope: 'project_automation',
+    projectIds: [project.id]
+  });
+  const flags = {
+    '--mission-id': source.id,
+    '--session-key': attached.sessionKey,
+    '--close-items-json': JSON.stringify([
+      { id: ownId, status: 'done', reason: 'Verified project fix.' }
+    ])
+  };
+  try {
+    setActiveTokenAuth({
+      workspaceUserId,
+      tokenId: full.id,
+      scopeGrants: ['event:create', 'mission:read']
+    });
+    const skipped = (await runProtocolSubcommand('close-items', { flags })) as {
+      closedItemIds: string[];
+      warnings: { message: string }[];
+    };
+    assert.deepEqual(skipped.closedItemIds, []);
+    assert.match(skipped.warnings[0]!.message, /mission:update/);
+    setActiveTokenAuth({
+      workspaceUserId,
+      tokenId: automation.id,
+      scopeGrants: automation.scopeGrants,
+      projectIds: [project.id]
+    });
+    await assert.rejects(runProtocolSubcommand('close-items', { flags }));
+    setActiveTokenAuth({
+      workspaceUserId,
+      tokenId: lifecycle.id,
+      scopeGrants: lifecycle.scopeGrants
+    });
+    const closed = (await runProtocolSubcommand('close-items', { flags })) as {
+      closedItemIds: string[];
+    };
+    assert.deepEqual(closed.closedItemIds, [ownId]);
+    setActiveTokenAuth({ workspaceUserId, tokenId: full.id, scopeGrants: full.scopeGrants });
+    const accepted = await deliver(source.objectives[0]!.displayId, attached.sessionKey, {});
+    const deliveries = await listMissionDeliveries(source.id);
+    assert.equal(
+      deliveries.items.find(d => d.id === accepted.deliveryId)!.closedElsewhere![0]!.itemId,
+      ownId
+    );
+    const targetSummary = await getMissionSummary(target.id);
+    const resolver = targetSummary.summary!.closedItems!.find(i => i.id === ownId)!.resolvedBy!;
+    assert.equal(resolver.missionDisplayId, source.displayId);
+    assert.equal(resolver.objectiveDisplayId, source.objectives[0]!.displayId);
+    assert.equal(resolver.crossMission, true);
+    assert.equal(resolver.deliveryId, accepted.deliveryId);
+    const item = targetSummary.summary!.closedItems!.find(i => i.id === ownId)!;
+    assert.equal(targetSummary.itemsWatermark, item.resolvedAt);
+    assert.equal(targetSummary.itemsTruncated, false);
+  } finally {
+    setActiveTokenAuth({ workspaceUserId, tokenId: null, scopeGrants: null });
+  }
+});
+
+test('project-items dispatch requires read authority and excludes automation tokens', async () => {
+  const project = await createProject({ name: 'Discovery dispatch' });
+  const target = await createMission({
+    projectId: project.id,
+    title: 'Discovery target',
+    firstObjective: 'Target'
+  });
+  const attached = await attach(target.objectives[0]!.displayId);
+  const flags = {
+    '--mission-id': target.id,
+    '--session-key': attached.sessionKey,
+    '--kind': 'risk,suggestion',
+    '--path': 'backend/service/retry.ts'
+  };
+  const page = (await runProtocolSubcommand('project-items', { flags })) as any;
+  assert.equal(page.responseShapeVersion, 1);
+  assert.equal(page.limit, 20);
+  assert.deepEqual(page.items, []);
+  await assert.rejects(
+    runProtocolSubcommand('project-items', { flags: { ...flags, '--limit': '101' } })
+  );
+  const { createUserToken } = await import('./repository.ts');
+  const { setActiveTokenAuth } = await import('./db.ts');
+  const { workspaceUserId } = await requireDatabaseClient().get<any>(
+    'SELECT id AS workspaceUserId FROM workspace_users LIMIT 1'
+  );
+  const { token } = await createUserToken({
+    label: 'Discovery denied',
+    scope: 'project_automation',
+    projectIds: [project.id]
+  });
+  try {
+    setActiveTokenAuth({
+      workspaceUserId,
+      tokenId: token.id,
+      scopeGrants: ['mission:read'],
+      projectIds: [project.id]
+    });
+    await assert.rejects(runProtocolSubcommand('project-items', { flags }), /Not found/);
+  } finally {
+    setActiveTokenAuth({ workspaceUserId, tokenId: null, scopeGrants: null });
+  }
 });

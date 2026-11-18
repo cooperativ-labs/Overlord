@@ -481,6 +481,46 @@ describe('ObjectiveDetail (plan §9)', () => {
     assert.equal(screen.queryByRole('button', { name: /^Run$/ }), null);
   });
 
+  it('shows collapsed draft evidence on started objectives and fetches it only when opened', async () => {
+    const draftReads = () => requests.filter(req => req.path.endsWith('/report-drafts'));
+    respond = req =>
+      req.path === '/api/objectives/a/report-drafts'
+        ? { status: 200, body: { objectiveId: 'a', drafts: [] } }
+        : null;
+
+    // Not started: no draft section at all.
+    const first = await renderDetail(
+      [objective({ id: 'a' })],
+      '/missions/mission-1?objective=coo:1.a'
+    );
+    await dialog();
+    assert.equal(screen.queryByRole('button', { name: 'Draft evidence — not delivered' }), null);
+    first.unmount();
+
+    // Executing: collapsed, with no request until the operator opens it.
+    const second = await renderDetail(
+      [objective({ id: 'a', state: 'executing', startedAt: '2026-11-15T10:00:00.000Z' })],
+      '/missions/mission-1?objective=coo:1.a'
+    );
+    await dialog();
+    const trigger = screen.getByRole('button', { name: 'Draft evidence — not delivered' });
+    assert.equal(draftReads().length, 0);
+    fireEvent.click(trigger);
+    await screen.findByText('No draft evidence was recorded for this objective.');
+    assert.equal(draftReads().length, 1);
+    second.unmount();
+
+    // Reverted to draft after running, with no other evidence: abandoned drafts stay reachable
+    // instead of a "Nothing has run yet" claim.
+    await renderDetail(
+      [objective({ id: 'a', state: 'draft', startedAt: '2026-11-15T10:00:00.000Z' })],
+      '/missions/mission-1?objective=coo:1.a'
+    );
+    await dialog();
+    assert.ok(screen.getByRole('button', { name: 'Draft evidence — not delivered' }));
+    assert.equal(screen.queryByText(/Nothing has run yet/), null);
+  });
+
   it('dismissing the top notification keeps the request in Blocking questions', async () => {
     openRequests = [request({ id: 'req-1' })];
     await renderDetail(

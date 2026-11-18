@@ -1,4 +1,4 @@
-import { type Permission } from '@overlord/auth';
+import { type Permission, PERMISSIONS } from '@overlord/auth';
 import { missionDisplayIdFromObjectiveRef } from '@overlord/contract';
 
 import { resolveObjectiveRef, type ServiceContext } from '../packages/core/service/context.ts';
@@ -28,6 +28,7 @@ import {
   serviceDatabaseClient
 } from './db.ts';
 import { ApiError } from './errors.ts';
+import { actorCan } from './rbac.ts';
 import {
   requireAnyWorkspacePermission,
   requirePermission,
@@ -275,6 +276,11 @@ export async function runProtocolSubcommand(
   try {
     const ctx = await buildProtocolContext(body, requiredPermission);
     await validateObjectiveAddressing({ ctx, body, subcommand });
+    ctx.canUpdateMissionItems = () =>
+      actorCan(PERMISSIONS.MISSION_UPDATE, {
+        workspaceId: ctx.workspace.id,
+        workspaceUserId: ctx.actorWorkspaceUserId
+      });
     return await entry.handler(ctx, body);
   } catch (error) {
     // A project name that matches in two workspaces is a question for the user,

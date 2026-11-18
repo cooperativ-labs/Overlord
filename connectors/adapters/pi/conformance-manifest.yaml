@@ -1,4 +1,4 @@
-contractVersion: "174.2.0"
+contractVersion: "178.1.0"
 componentType: connector
 componentKey: pi
 label: "PI Connector"

@@ -1,6 +1,11 @@
 import { PERMISSIONS } from '@overlord/auth';
 import type { CaptureBindingState } from '@overlord/contract';
 
+import { readDeliveryReceipt } from '../../packages/core/service/delivery-finalization.ts';
+import {
+  publishDeliverySummary,
+  readDeliverySummaryContext
+} from '../../packages/core/service/delivery-summary-publication.ts';
 import {
   askQuestion,
   ATTACH_CONNECTION_METHODS,
@@ -10,11 +15,13 @@ import {
   deliverSession,
   heartbeatSession,
   readAgentMissionItems,
+  readAgentProjectItems,
   recordHookEvent,
   resumeFollowUp,
   syncChanges,
   updateSession
 } from '../../packages/core/service/protocol.ts';
+import { readReportDraft } from '../../packages/core/service/report-draft.ts';
 import { ApiError } from '../errors.ts';
 
 import {
@@ -36,6 +43,11 @@ import {
   strFlag,
   type SubcommandTable
 } from './flags.ts';
+
+/** `--connection-method mcp` words publication instructions for MCP tools. */
+function publicationStyleFlag(body: Parameters<typeof strFlag>[0]): 'cli' | 'mcp' {
+  return strFlag(body, '--connection-method') === 'mcp' ? 'mcp' : 'cli';
+}
 
 // ---- Session lifecycle protocol subcommands -------------------------------
 //
@@ -76,7 +88,63 @@ function declaredPathsInput(body: Parameters<typeof strFlag>[0]): unknown[] | un
   );
 }
 
+/**
+ * `--report-draft-json|--report-draft-file` (ADR 0078): the reportDraft object.
+ * On deliver, `--expected-draft-revision <n>` is shorthand for
+ * `{ "expectedRevision": n }` with no final operations.
+ */
+export function reportDraftInput(
+  body: Parameters<typeof strFlag>[0],
+  { allowRevisionShorthand }: { allowRevisionShorthand: boolean }
+): Record<string, unknown> | undefined {
+  const input = parseJsonObjectInput(
+    body,
+    '--report-draft-json',
+    '--report-draft-file',
+    'reportDraft'
+  );
+  const revision = allowRevisionShorthand ? strFlag(body, '--expected-draft-revision') : undefined;
+  if (revision === undefined) return input;
+  if (input !== undefined) {
+    throw new ApiError(
+      400,
+      'Use either --expected-draft-revision or --report-draft-json/--report-draft-file, not both',
+      undefined,
+      'invalid_input'
+    );
+  }
+  if (!/^\d+$/.test(revision)) {
+    throw new ApiError(
+      400,
+      '--expected-draft-revision must be a non-negative integer',
+      undefined,
+      'invalid_input'
+    );
+  }
+  return { expectedRevision: Number(revision) };
+}
+
 export const sessionSubcommands: SubcommandTable = {
+  'project-items': {
+    permission: PERMISSIONS.MISSION_READ,
+    handler: (ctx, body) =>
+      readAgentProjectItems({
+        ctx,
+        missionId: missionRefFlag(body),
+        objectiveId: objectiveRefFlag(body) ?? undefined,
+        sessionKey: requireFlag(body, '--session-key'),
+        kinds: strFlag(body, '--kind')
+          ?.split(',')
+          .map(s => s.trim()),
+        query: strFlag(body, '--query'),
+        paths: strFlag(body, '--path')
+          ?.split(',')
+          .map(s => s.trim()),
+        includeOwnMission: boolFlag(body, '--include-own-mission'),
+        limit: Number(strFlag(body, '--limit') ?? 20),
+        offset: Number(strFlag(body, '--offset') ?? 0)
+      })
+  },
   'mission-items': {
     permission: PERMISSIONS.MISSION_READ,
     handler: (ctx, body) =>
@@ -160,7 +228,8 @@ export const sessionSubcommands: SubcommandTable = {
         externalSessionId: externalSessionId(body),
         beginFollowUpWork: boolFlag(body, '--begin-follow-up-work'),
         followUpIntent: strFlag(body, '--follow-up-intent') ?? null,
-        declaredPaths: declaredPathsInput(body)
+        declaredPaths: declaredPathsInput(body),
+        reportDraft: reportDraftInput(body, { allowRevisionShorthand: false })
       });
     }
   },
@@ -244,7 +313,78 @@ export const sessionSubcommands: SubcommandTable = {
         verificationSummary:
           strFlag(body, '--verification-summary') ?? envelope.verificationSummary ?? null,
         followUpNotes: strFlag(body, '--follow-up-notes') ?? envelope.followUpNotes ?? null,
-        missionSummary: envelope.missionSummary
+        missionSummary: envelope.missionSummary,
+        operationId: envelope.operationId,
+        reportDraft: reportDraftInput(body, { allowRevisionShorthand: true })
+      });
+    }
+  },
+
+  // The caller's own report draft (ADR 0078), with its final inspection while
+  // open; --draft-id reads an abandoned or sealed draft of the same objective.
+  'report-draft': {
+    permission: PERMISSIONS.MISSION_READ,
+    handler: (ctx, body) =>
+      readReportDraft({
+        ctx,
+        missionId: missionRefFlag(body),
+        sessionKey: requireFlag(body, '--session-key'),
+        draftId: strFlag(body, '--draft-id') ?? null,
+        includeWithdrawn: boolFlag(body, '--include-withdrawn')
+      })
+  },
+
+  // Scoped read of the caller's own finalization receipt (ADR 0075), by
+  // delivery id or by operation id; available after the session ended.
+  'delivery-receipt': {
+    permission: PERMISSIONS.MISSION_READ,
+    handler: (ctx, body) =>
+      readDeliveryReceipt({
+        ctx,
+        missionId: strFlag(body, '--mission-id') ?? null,
+        deliveryId: strFlag(body, '--delivery-id') ?? null,
+        operationId: strFlag(body, '--operation-id') ?? null,
+        operationKind: strFlag(body, '--operation-kind') ?? null
+      })
+  },
+
+  // Narrow post-delivery narrative surface (ADR 0076): the originating agent
+  // reads its delivery's publication opportunity and publishes once. The
+  // delivered, ended session is accepted here only; no other ended-session
+  // authority is granted.
+  'delivery-summary-context': {
+    permission: PERMISSIONS.EVENT_CREATE,
+    handler: (ctx, body) =>
+      readDeliverySummaryContext({
+        ctx,
+        missionId: missionRefFlag(body),
+        deliveryId: strFlag(body, '--delivery-id') ?? null,
+        publicationId: strFlag(body, '--publication-id') ?? null,
+        sessionKey: strFlag(body, '--session-key') ?? null,
+        style: publicationStyleFlag(body)
+      })
+  },
+
+  'publish-delivery-summary': {
+    permission: PERMISSIONS.EVENT_CREATE,
+    handler: (ctx, body) => {
+      const payload =
+        parseJsonObjectInput(
+          body,
+          '--payload-json',
+          '--payload-file',
+          'publish-delivery-summary payload'
+        ) ?? {};
+      const { operationId: payloadOperationId, ...narrative } = payload;
+      return publishDeliverySummary({
+        ctx,
+        missionId: missionRefFlag(body),
+        deliveryId: strFlag(body, '--delivery-id') ?? null,
+        publicationId: strFlag(body, '--publication-id') ?? null,
+        sessionKey: strFlag(body, '--session-key') ?? null,
+        operationId: strFlag(body, '--operation-id') ?? payloadOperationId,
+        narrative,
+        style: publicationStyleFlag(body)
       });
     }
   },

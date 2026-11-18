@@ -168,6 +168,7 @@ export function createBackendClient(): BackendClient {
           errorMessageFromJson(payload) ??
           `Backend request failed: ${method} ${path} (${response.status})`;
         throw new CliError({
+          status: response.status,
           message:
             `${detail}\n` +
             (auth.fromStored
@@ -180,7 +181,8 @@ export function createBackendClient(): BackendClient {
         message:
           errorMessageFromJson(payload) ??
           `Backend request failed: ${method} ${path} (${response.status})`,
-        payload
+        payload,
+        status: response.status
       });
     }
     return payload as T;

@@ -1,8 +1,13 @@
+import { Link } from '@tanstack/react-router';
 import { Check, ChevronDown, ChevronRight, RotateCcw, X } from 'lucide-react';
-import { useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 
 import { ApiRequestError } from '../../lib/api.ts';
 import { relativeTime } from '../../lib/format-date.ts';
+import {
+  useEvidenceGroupCoverage,
+  useForegroundVisible
+} from '../../lib/hooks/use-mission-summary-seen.ts';
 import {
   missionItemResolverText,
   type SummaryClosedItemRow,
@@ -15,6 +20,40 @@ import { ObjectiveKeyLink, summaryFocusRing } from './MissionSummaryParts.tsx';
 
 /** `by coo:1.abcd` (a link to the closing objective), `by you`, `by Dana`, `by an agent`. */
 export function ResolverName({ resolver }: { resolver: SummaryResolver }) {
+  if (resolver.kind === 'agent' && resolver.crossMission) {
+    return (
+      <>
+        by{' '}
+        {resolver.missionKey ? (
+          <Link
+            to="/feed/missions/$missionId"
+            params={{ missionId: resolver.missionKey }}
+            search={{ objective: resolver.objectiveKey ?? undefined }}
+            className="hover:underline font-mono"
+          >
+            {resolver.objectiveKey ?? resolver.missionKey}
+          </Link>
+        ) : (
+          missionItemResolverText(resolver)
+        )}
+        {resolver.objectiveKey && resolver.missionKey ? (
+          <span>
+            {' '}
+            on{' '}
+            <Link
+              to="/feed/missions/$missionId"
+              params={{ missionId: resolver.missionKey }}
+              search={{}}
+              className="hover:underline font-mono"
+            >
+              {resolver.missionKey}
+            </Link>
+          </span>
+        ) : null}
+        {resolver.notDelivered ? <span> · Not delivered yet</span> : null}
+      </>
+    );
+  }
   if (resolver.kind === 'agent' && resolver.objectiveKey) {
     return (
       <>
@@ -39,12 +78,26 @@ function restoreError(cause: unknown): string {
 function ResolvedRow({
   row,
   missionId,
-  now
+  now,
+  coverage
 }: {
   row: SummaryClosedItemRow;
   missionId: string;
   now: string;
+  coverage?: {
+    active: boolean;
+    signature: string;
+    onCovered: (id: string, signature: string) => void;
+  };
 }) {
+  const ref = useRef<HTMLLIElement>(null);
+  const visible = useForegroundVisible(ref, coverage?.active ?? false);
+  useEvidenceGroupCoverage({
+    group: row.id,
+    signature: coverage?.signature ?? null,
+    active: visible,
+    onCovered: coverage?.onCovered ?? (() => {})
+  });
   const restore = useRestoreMissionItem();
   const [error, setError] = useState<string | null>(null);
   const StatusIcon = row.status === 'dismissed' ? X : Check;
@@ -59,7 +112,10 @@ function ResolvedRow({
   }
 
   return (
-    <li className="grid grid-cols-[16px_minmax(0,1fr)_auto] items-start gap-3 border-t border-(--color-ink)/[0.07] py-2 text-sm first:border-t-0">
+    <li
+      ref={ref}
+      className="grid grid-cols-[16px_minmax(0,1fr)_auto] items-start gap-3 border-t border-(--color-ink)/[0.07] py-2 text-sm first:border-t-0"
+    >
       <StatusIcon
         className="mt-0.5 size-3.5 text-(--color-ink-dim)"
         strokeWidth={3}
@@ -116,7 +172,10 @@ export function MissionSummaryResolved({
   rows,
   missionId,
   now,
-  headless = false
+  headless = false,
+  isNew = false,
+  coverage,
+  truncated = false
 }: {
   rows: readonly SummaryClosedItemRow[];
   missionId: string;
@@ -126,8 +185,18 @@ export function MissionSummaryResolved({
    * list is shown, since selecting the tab is the person's request to see it.
    */
   headless?: boolean;
+  isNew?: boolean;
+  truncated?: boolean;
+  coverage?: {
+    active: boolean;
+    signature: string;
+    onCovered: (id: string, signature: string) => void;
+  };
 }) {
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(isNew);
+  useEffect(() => {
+    if (isNew) setExpanded(true);
+  }, [isNew, coverage?.signature]);
   const listId = useId();
   if (rows.length === 0) return null;
   if (headless) {
@@ -135,7 +204,17 @@ export function MissionSummaryResolved({
       <section aria-label="Resolved items" className="grid gap-1.5 px-5 py-2.5">
         <ul id={listId} className="grid">
           {rows.map(row => (
-            <ResolvedRow key={row.id} row={row} missionId={missionId} now={now} />
+            <ResolvedRow
+              key={row.id}
+              row={row}
+              missionId={missionId}
+              now={now}
+              coverage={
+                coverage
+                  ? { ...coverage, active: coverage.active && (headless || expanded) }
+                  : undefined
+              }
+            />
           ))}
         </ul>
       </section>
@@ -162,11 +241,30 @@ export function MissionSummaryResolved({
           <ChevronRight className="size-3" aria-hidden="true" />
         )}
         <span>Resolved</span>
-        <span>{rows.length}</span>
+        <span>
+          {rows.length}
+          {truncated ? '+' : ''}
+        </span>
+        {isNew ? <span className="text-sky-500">New</span> : null}
       </button>
+      {truncated ? (
+        <p className="text-xs text-(--color-ink-dim)">
+          Showing the latest 100 resolved items. This partial snapshot will remain unread.
+        </p>
+      ) : null}
       <ul id={listId} hidden={!expanded} className="grid">
         {rows.map(row => (
-          <ResolvedRow key={row.id} row={row} missionId={missionId} now={now} />
+          <ResolvedRow
+            key={row.id}
+            row={row}
+            missionId={missionId}
+            now={now}
+            coverage={
+              coverage
+                ? { ...coverage, active: coverage.active && (headless || expanded) }
+                : undefined
+            }
+          />
         ))}
       </ul>
     </section>

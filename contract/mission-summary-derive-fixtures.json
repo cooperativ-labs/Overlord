@@ -1,6 +1,6 @@
 {
-  "description": "Shared fixture for the Mission summary client derivations. The web tests (webapp/web/lib/mission-summary-derive.test.ts, webapp/web/components/mission-summary/MissionSummarySection.test.tsx) and the iOS tests (OverlordTests/MissionSummaryDeriveTests.swift) load this file and assert the `expected` block. A review mission with four deliveries across three objectives: objective obj-x was deleted (its delivery renders as the unassigned `Delivery` row), and obj-c has one open question. seenAt sits between the second and third delivery so the new-item dot is exercised. The unstarted objectives form the draft queue (contract v172, ADR 0056): a submitted objective, a blank draft and an authored draft, none of which is running or a source. Since contract v173 (ADR 0060) risks, actions and suggestions are mission_items rows with ids: the envelope holds only open items, already superseded and resolved by the server, and closedItems lists done and dismissed items, newest first. The headline and summary were written by the agent of obj-c (author.kind agent). Closed items cover an agent close with a reason, a close by the viewer (`you`), a person's promotion of a suggestion with its outcome, and a close by an agent whose objective was deleted. The client merges questions, dedupes actions by normalised text, marks new items, and names the author and who closed each item.",
-  "contractVersion": 173,
+  "description": "Shared fixture for the Mission summary client derivations. The web tests (webapp/web/lib/mission-summary-derive.test.ts, webapp/web/components/mission-summary/MissionSummarySection.test.tsx) and the iOS tests (OverlordTests/MissionSummaryDeriveTests.swift) load this file and assert the `expected` block. A review mission with four deliveries across three objectives: objective obj-x was deleted (its delivery renders as the unassigned `Delivery` row), and obj-c has one open question. seenAt sits between the second and third delivery so the new-item dot is exercised. The unstarted objectives form the draft queue (contract v172, ADR 0056): a submitted objective, a blank draft and an authored draft, none of which is running or a source. Since contract v173 (ADR 0060) risks, actions and suggestions are mission_items rows with ids: the envelope holds only open items, already superseded and resolved by the server, and closedItems lists done and dismissed items, newest first. The headline and summary were written by the agent of obj-c (author.kind agent). Closed items cover an agent close with a reason, a close by the viewer (`you`), a person's promotion of a suggestion with its outcome, and a close by an agent whose objective was deleted. The client merges questions, dedupes actions by normalised text, marks new items, and names the author and who closed each item. Since contract v175 (ADR 0076) the narrativeFreshness and seenCoverage sections pin the summary header and seen acknowledgement; `expected.updatingSourceObjectiveKey` is retained only for clients that have not yet dropped their updating strip, and no current client shows one.",
+  "contractVersion": "178.0.0",
   "reviewMission": {
     "input": {
       "mission": {
@@ -127,7 +127,7 @@
               "title": "Record when the summary was last seen",
               "state": "open",
               "change": "Store a per-user seen marker and mark newer items.",
-              "location": "missions table · mission detail route",
+              "location": "missions table \u00b7 mission detail route",
               "doneWhen": "Items newer than the marker show a dot.",
               "resolution": null,
               "id": "item-suggestion-x3"
@@ -645,5 +645,709 @@
       "watermark": "2026-10-23T11:00:00.000Z",
       "watermarkNeedsAck": true
     }
+  },
+  "narrativeFreshness": {
+    "description": "Summary header derivation since contract v175 (ADR 0076): only agents write the headline and summary, and the server's `narrative` envelope reports absent, current, outdated or legacy prose. Each case starts from reviewMission.input.summaryResponse and its objectives: `summaryPatch` is merged into `summary` (or `summary` replaces it), `evidenceSources` replaces `evidence.sources`, `narrative` and `narrativeWatermark` are set, and `omitNarrative` removes both fields as an older server would. Clients show the recorded author (legacy model prose stays automatic, never agent-authored), the outdated or absent notice, and the newest accepted delivery (the outstanding publication's delivery when listed, else the newest source) beside a notice or legacy prose. No case has an updating or generating state. `writtenAt` is the publication time for current or outdated prose, else the row's generatedAt.",
+    "cases": [
+      {
+        "name": "older server without a narrative envelope claims no freshness",
+        "omitNarrative": true,
+        "expected": {
+          "sectionState": "summary",
+          "freshness": "unknown",
+          "hasProse": true,
+          "notice": null,
+          "legacy": false,
+          "provenance": {
+            "kind": "agent",
+            "objectiveKey": "coo:900.cccc"
+          },
+          "writtenAt": "2026-10-23T10:05:00.000Z",
+          "latestWork": null
+        }
+      },
+      {
+        "name": "current agent prose",
+        "narrative": {
+          "state": "current",
+          "evidenceRevision": 4,
+          "publishedEvidenceRevision": 4,
+          "deliveryId": "delivery-c4",
+          "objectiveId": "obj-c",
+          "publishedAt": "2026-10-23T10:05:00.000Z",
+          "changedAt": "2026-10-23T10:05:00.000Z",
+          "outstandingDeliveryId": null
+        },
+        "narrativeWatermark": "2026-10-23T10:05:00.000Z",
+        "expected": {
+          "sectionState": "summary",
+          "freshness": "current",
+          "hasProse": true,
+          "notice": null,
+          "legacy": false,
+          "provenance": {
+            "kind": "agent",
+            "objectiveKey": "coo:900.cccc"
+          },
+          "writtenAt": "2026-10-23T10:05:00.000Z",
+          "latestWork": null
+        }
+      },
+      {
+        "name": "outdated prose names its author and links the newer delivery",
+        "summaryPatch": {
+          "author": {
+            "kind": "agent",
+            "objectiveId": "obj-a",
+            "deliveryId": "delivery-a2"
+          },
+          "sourceDeliveryId": "delivery-a2",
+          "generatedAt": "2026-10-21T10:05:00.000Z"
+        },
+        "narrative": {
+          "state": "outdated",
+          "evidenceRevision": 5,
+          "publishedEvidenceRevision": 4,
+          "deliveryId": "delivery-a2",
+          "objectiveId": "obj-a",
+          "publishedAt": "2026-10-21T10:05:00.000Z",
+          "changedAt": "2026-10-23T10:00:00.001Z",
+          "outstandingDeliveryId": "delivery-c4"
+        },
+        "narrativeWatermark": "2026-10-23T10:00:00.001Z",
+        "expected": {
+          "sectionState": "summary",
+          "freshness": "outdated",
+          "hasProse": true,
+          "notice": "Summary not updated for the latest delivery",
+          "legacy": false,
+          "provenance": {
+            "kind": "agent",
+            "objectiveKey": "coo:900.aaaa"
+          },
+          "writtenAt": "2026-10-21T10:05:00.000Z",
+          "latestWork": {
+            "deliveryId": "delivery-c4",
+            "objectiveKey": "coo:900.cccc"
+          }
+        }
+      },
+      {
+        "name": "prose whose source delivery was deleted reads outdated with no live author key",
+        "summaryPatch": {
+          "author": {
+            "kind": "agent",
+            "objectiveId": "obj-x",
+            "deliveryId": "delivery-x9"
+          }
+        },
+        "narrative": {
+          "state": "outdated",
+          "evidenceRevision": 4,
+          "publishedEvidenceRevision": 4,
+          "deliveryId": "delivery-x9",
+          "objectiveId": "obj-x",
+          "publishedAt": "2026-10-22T10:05:00.000Z",
+          "changedAt": "2026-10-22T10:05:00.000Z",
+          "outstandingDeliveryId": null
+        },
+        "narrativeWatermark": "2026-10-22T10:05:00.000Z",
+        "expected": {
+          "sectionState": "summary",
+          "freshness": "outdated",
+          "hasProse": true,
+          "notice": "Summary not updated for the latest delivery",
+          "legacy": false,
+          "provenance": {
+            "kind": "agent",
+            "objectiveKey": null
+          },
+          "writtenAt": "2026-10-22T10:05:00.000Z",
+          "latestWork": {
+            "deliveryId": "delivery-c4",
+            "objectiveKey": "coo:900.cccc"
+          }
+        }
+      },
+      {
+        "name": "accepted work without prose says so instead of waiting",
+        "summaryPatch": {
+          "headline": "",
+          "summary": "",
+          "author": {
+            "kind": "deterministic",
+            "objectiveId": null,
+            "deliveryId": null
+          },
+          "generatedBy": "deterministic",
+          "generatedAt": null,
+          "model": null,
+          "sourceDeliveryId": null
+        },
+        "narrative": {
+          "state": "absent",
+          "evidenceRevision": 3,
+          "publishedEvidenceRevision": null,
+          "deliveryId": null,
+          "objectiveId": null,
+          "publishedAt": null,
+          "changedAt": "2026-10-23T10:00:00.000Z",
+          "outstandingDeliveryId": "delivery-c4"
+        },
+        "narrativeWatermark": "2026-10-23T10:00:00.000Z",
+        "expected": {
+          "sectionState": "summary",
+          "freshness": "absent",
+          "hasProse": false,
+          "notice": "Summary not yet provided",
+          "legacy": false,
+          "provenance": null,
+          "writtenAt": null,
+          "latestWork": {
+            "deliveryId": "delivery-c4",
+            "objectiveKey": "coo:900.cccc"
+          }
+        }
+      },
+      {
+        "name": "no prose and no accepted work awaits the first delivery",
+        "summary": null,
+        "evidenceSources": [],
+        "narrative": {
+          "state": "absent",
+          "evidenceRevision": 0,
+          "publishedEvidenceRevision": null,
+          "deliveryId": null,
+          "objectiveId": null,
+          "publishedAt": null,
+          "changedAt": null,
+          "outstandingDeliveryId": null
+        },
+        "narrativeWatermark": null,
+        "expected": {
+          "sectionState": "awaiting",
+          "freshness": "absent",
+          "hasProse": false,
+          "notice": null,
+          "legacy": false,
+          "provenance": null,
+          "writtenAt": null,
+          "latestWork": null
+        }
+      },
+      {
+        "name": "legacy model prose keeps its automatic provenance",
+        "summaryPatch": {
+          "author": {
+            "kind": "gemini",
+            "objectiveId": null,
+            "deliveryId": null
+          },
+          "generatedBy": "gemini",
+          "model": "gemini-2.5-flash"
+        },
+        "narrative": {
+          "state": "legacy",
+          "evidenceRevision": 3,
+          "publishedEvidenceRevision": null,
+          "deliveryId": null,
+          "objectiveId": null,
+          "publishedAt": null,
+          "changedAt": "2026-10-23T10:05:00.000Z",
+          "outstandingDeliveryId": null
+        },
+        "narrativeWatermark": "2026-10-23T10:05:00.000Z",
+        "expected": {
+          "sectionState": "summary",
+          "freshness": "legacy",
+          "hasProse": true,
+          "notice": null,
+          "legacy": true,
+          "provenance": {
+            "kind": "automatic"
+          },
+          "writtenAt": "2026-10-23T10:05:00.000Z",
+          "latestWork": {
+            "deliveryId": "delivery-c4",
+            "objectiveKey": "coo:900.cccc"
+          }
+        }
+      },
+      {
+        "name": "legacy agent prose is an earlier summary by its recorded author",
+        "summaryPatch": {
+          "author": {
+            "kind": "agent",
+            "objectiveId": "obj-a",
+            "deliveryId": "delivery-a2"
+          }
+        },
+        "narrative": {
+          "state": "legacy",
+          "evidenceRevision": 3,
+          "publishedEvidenceRevision": null,
+          "deliveryId": "delivery-a2",
+          "objectiveId": "obj-a",
+          "publishedAt": null,
+          "changedAt": "2026-10-23T10:05:00.000Z",
+          "outstandingDeliveryId": null
+        },
+        "narrativeWatermark": "2026-10-23T10:05:00.000Z",
+        "expected": {
+          "sectionState": "summary",
+          "freshness": "legacy",
+          "hasProse": true,
+          "notice": null,
+          "legacy": true,
+          "provenance": {
+            "kind": "agent",
+            "objectiveKey": "coo:900.aaaa"
+          },
+          "writtenAt": "2026-10-23T10:05:00.000Z",
+          "latestWork": {
+            "deliveryId": "delivery-c4",
+            "objectiveKey": "coo:900.cccc"
+          }
+        }
+      }
+    ]
+  },
+  "seenCoverage": {
+    "description": "Scalar seen acknowledgement with whole-snapshot coverage (ADR 0076, review R2). Groups are the evidence groups of one response: `for_you` (actions and questions), `risks`, `suggested`, `narrative` (the summary header: prose or its notice) and `items` (coo:1278 cross-mission decisions, once rendered). `required` maps each nonempty group to the signature of its current content and `covered` to the signature last displayed for two seconds in this visit; coverage lives in memory, so a remount or cold read starts empty. `displayedStamps` are the rendered source, action and question times backing `watermark`. The target is the latest of `watermark`, `narrativeWatermark` and `itemsWatermark`; it is due only when the data loaded completely, every required group is covered with its current signature, each contributing watermark is backed (the delivery/question watermark by a displayed stamp at least as new, the narrative and items watermarks by their required groups) and the target is later than `seenAt`.",
+    "cases": [
+      {
+        "name": "every group of the snapshot covered acknowledges the combined maximum",
+        "watermark": "2026-10-23T11:00:00.000Z",
+        "narrativeWatermark": "2026-10-23T12:00:00.000Z",
+        "seenAt": "2026-10-21T12:00:00.000Z",
+        "displayedStamps": [
+          "2026-10-23T11:00:00.000Z"
+        ],
+        "required": {
+          "for_you": "a",
+          "risks": "r",
+          "narrative": "n"
+        },
+        "covered": {
+          "for_you": "a",
+          "risks": "r",
+          "narrative": "n"
+        },
+        "loaded": true,
+        "expected": {
+          "target": "2026-10-23T12:00:00.000Z",
+          "due": true
+        }
+      },
+      {
+        "name": "a newer visible narrative does not clear older hidden actions",
+        "watermark": "2026-10-23T11:00:00.000Z",
+        "narrativeWatermark": "2026-10-23T12:00:00.000Z",
+        "seenAt": "2026-10-21T12:00:00.000Z",
+        "displayedStamps": [
+          "2026-10-23T11:00:00.000Z"
+        ],
+        "required": {
+          "for_you": "a",
+          "narrative": "n"
+        },
+        "covered": {
+          "narrative": "n"
+        },
+        "loaded": true,
+        "expected": {
+          "target": "2026-10-23T12:00:00.000Z",
+          "due": false
+        }
+      },
+      {
+        "name": "newer visible actions do not clear an older hidden narrative",
+        "watermark": "2026-10-23T12:00:00.000Z",
+        "narrativeWatermark": "2026-10-23T11:00:00.000Z",
+        "seenAt": "2026-10-21T12:00:00.000Z",
+        "displayedStamps": [
+          "2026-10-23T12:00:00.000Z"
+        ],
+        "required": {
+          "for_you": "a",
+          "narrative": "n"
+        },
+        "covered": {
+          "for_you": "a"
+        },
+        "loaded": true,
+        "expected": {
+          "target": "2026-10-23T12:00:00.000Z",
+          "due": false
+        }
+      },
+      {
+        "name": "a narrative change in the same millisecond invalidates its coverage",
+        "watermark": "2026-10-23T11:00:00.000Z",
+        "narrativeWatermark": "2026-10-23T12:00:00.000Z",
+        "seenAt": "2026-10-21T12:00:00.000Z",
+        "displayedStamps": [
+          "2026-10-23T11:00:00.000Z"
+        ],
+        "required": {
+          "narrative": "state=current|content=4"
+        },
+        "covered": {
+          "narrative": "state=current|content=3"
+        },
+        "loaded": true,
+        "expected": {
+          "target": "2026-10-23T12:00:00.000Z",
+          "due": false
+        }
+      },
+      {
+        "name": "a remount or cold read starts with no coverage",
+        "watermark": "2026-10-23T11:00:00.000Z",
+        "narrativeWatermark": "2026-10-23T12:00:00.000Z",
+        "seenAt": "2026-10-21T12:00:00.000Z",
+        "displayedStamps": [
+          "2026-10-23T11:00:00.000Z"
+        ],
+        "required": {
+          "risks": "r",
+          "narrative": "n"
+        },
+        "covered": {},
+        "loaded": true,
+        "expected": {
+          "target": "2026-10-23T12:00:00.000Z",
+          "due": false
+        }
+      },
+      {
+        "name": "a narrative time with no rendered header is not acknowledged",
+        "watermark": "2026-10-23T11:00:00.000Z",
+        "narrativeWatermark": "2026-10-23T12:00:00.000Z",
+        "seenAt": "2026-10-21T12:00:00.000Z",
+        "displayedStamps": [
+          "2026-10-23T11:00:00.000Z"
+        ],
+        "required": {
+          "for_you": "a"
+        },
+        "covered": {
+          "for_you": "a"
+        },
+        "loaded": true,
+        "expected": {
+          "target": "2026-10-23T12:00:00.000Z",
+          "due": false
+        }
+      },
+      {
+        "name": "a retained narrative time is acknowledged after its source delivery was deleted",
+        "watermark": null,
+        "narrativeWatermark": "2026-10-23T12:00:00.000Z",
+        "seenAt": "2026-10-21T12:00:00.000Z",
+        "displayedStamps": [],
+        "required": {
+          "narrative": "n"
+        },
+        "covered": {
+          "narrative": "n"
+        },
+        "loaded": true,
+        "expected": {
+          "target": "2026-10-23T12:00:00.000Z",
+          "due": true
+        }
+      },
+      {
+        "name": "an already acknowledged snapshot is not sent again",
+        "watermark": "2026-10-23T11:00:00.000Z",
+        "narrativeWatermark": "2026-10-23T12:00:00.000Z",
+        "seenAt": "2026-10-23T12:00:00.000Z",
+        "displayedStamps": [
+          "2026-10-23T11:00:00.000Z"
+        ],
+        "required": {
+          "narrative": "n"
+        },
+        "covered": {
+          "narrative": "n"
+        },
+        "loaded": true,
+        "expected": {
+          "target": "2026-10-23T12:00:00.000Z",
+          "due": false
+        }
+      },
+      {
+        "name": "partial or failed data never acknowledges",
+        "watermark": "2026-10-23T11:00:00.000Z",
+        "narrativeWatermark": "2026-10-23T12:00:00.000Z",
+        "seenAt": "2026-10-21T12:00:00.000Z",
+        "displayedStamps": [
+          "2026-10-23T11:00:00.000Z"
+        ],
+        "required": {
+          "narrative": "n"
+        },
+        "covered": {
+          "narrative": "n"
+        },
+        "loaded": false,
+        "expected": {
+          "target": "2026-10-23T12:00:00.000Z",
+          "due": false
+        }
+      },
+      {
+        "name": "a delivery or question time that no rendered row stands for is not acknowledged",
+        "watermark": "2026-10-23T11:00:00.000Z",
+        "narrativeWatermark": null,
+        "seenAt": "2026-10-21T12:00:00.000Z",
+        "displayedStamps": [
+          "2026-10-23T10:00:00.000Z"
+        ],
+        "required": {
+          "for_you": "a"
+        },
+        "covered": {
+          "for_you": "a"
+        },
+        "loaded": true,
+        "expected": {
+          "target": "2026-10-23T11:00:00.000Z",
+          "due": false
+        }
+      },
+      {
+        "name": "an items watermark counts only with its rendered group",
+        "watermark": "2026-10-23T11:00:00.000Z",
+        "narrativeWatermark": "2026-10-23T12:00:00.000Z",
+        "itemsWatermark": "2026-10-23T13:00:00.000Z",
+        "seenAt": "2026-10-21T12:00:00.000Z",
+        "displayedStamps": [
+          "2026-10-23T11:00:00.000Z"
+        ],
+        "required": {
+          "narrative": "n"
+        },
+        "covered": {
+          "narrative": "n"
+        },
+        "loaded": true,
+        "expected": {
+          "target": "2026-10-23T13:00:00.000Z",
+          "due": false
+        }
+      },
+      {
+        "name": "a covered items group joins the combined maximum",
+        "watermark": "2026-10-23T11:00:00.000Z",
+        "narrativeWatermark": "2026-10-23T12:00:00.000Z",
+        "itemsWatermark": "2026-10-23T13:00:00.000Z",
+        "seenAt": "2026-10-21T12:00:00.000Z",
+        "displayedStamps": [
+          "2026-10-23T11:00:00.000Z"
+        ],
+        "required": {
+          "narrative": "n",
+          "items": "i"
+        },
+        "covered": {
+          "narrative": "n",
+          "items": "i"
+        },
+        "loaded": true,
+        "expected": {
+          "target": "2026-10-23T13:00:00.000Z",
+          "due": true
+        }
+      },
+      {
+        "name": "newer items never clear older hidden narrative actions risks or suggestions",
+        "watermark": "2026-10-23T11:00:00.000Z",
+        "narrativeWatermark": "2026-10-23T12:00:00.000Z",
+        "itemsWatermark": "2026-10-23T13:00:00.000Z",
+        "seenAt": "2026-10-21T12:00:00.000Z",
+        "displayedStamps": [
+          "2026-10-23T11:00:00.000Z"
+        ],
+        "required": {
+          "items": "i",
+          "narrative": "n",
+          "for_you": "a",
+          "risks": "r",
+          "suggested": "s"
+        },
+        "covered": {
+          "items": "i"
+        },
+        "loaded": true,
+        "expected": {
+          "target": "2026-10-23T13:00:00.000Z",
+          "due": false
+        }
+      },
+      {
+        "name": "newer narrative never clears older hidden item decisions",
+        "watermark": "2026-10-23T11:00:00.000Z",
+        "narrativeWatermark": "2026-10-23T13:00:00.000Z",
+        "itemsWatermark": "2026-10-23T12:00:00.000Z",
+        "seenAt": "2026-10-21T12:00:00.000Z",
+        "displayedStamps": [
+          "2026-10-23T11:00:00.000Z"
+        ],
+        "required": {
+          "items": "i",
+          "narrative": "n"
+        },
+        "covered": {
+          "narrative": "n"
+        },
+        "loaded": true,
+        "expected": {
+          "target": "2026-10-23T13:00:00.000Z",
+          "due": false
+        }
+      },
+      {
+        "name": "remount loses every group including items",
+        "watermark": "2026-10-23T11:00:00.000Z",
+        "narrativeWatermark": "2026-10-23T12:00:00.000Z",
+        "itemsWatermark": "2026-10-23T13:00:00.000Z",
+        "seenAt": "2026-10-21T12:00:00.000Z",
+        "displayedStamps": [
+          "2026-10-23T11:00:00.000Z"
+        ],
+        "required": {
+          "items": "i",
+          "narrative": "n"
+        },
+        "covered": {},
+        "loaded": true,
+        "expected": {
+          "target": "2026-10-23T13:00:00.000Z",
+          "due": false
+        }
+      },
+      {
+        "name": "delivery linkage changes require the current item signature",
+        "watermark": "2026-10-23T11:00:00.000Z",
+        "narrativeWatermark": "2026-10-23T12:00:00.000Z",
+        "itemsWatermark": "2026-10-23T13:00:00.000Z",
+        "seenAt": "2026-10-21T12:00:00.000Z",
+        "displayedStamps": [
+          "2026-10-23T11:00:00.000Z"
+        ],
+        "required": {
+          "items": "linked",
+          "narrative": "n"
+        },
+        "covered": {
+          "items": "standalone",
+          "narrative": "n"
+        },
+        "loaded": true,
+        "expected": {
+          "target": "2026-10-23T13:00:00.000Z",
+          "due": false
+        }
+      },
+      {
+        "name": "changed resolver provenance requires redisplay",
+        "watermark": "2026-10-23T11:00:00.000Z",
+        "narrativeWatermark": "2026-10-23T12:00:00.000Z",
+        "itemsWatermark": "2026-10-23T13:00:00.000Z",
+        "seenAt": "2026-10-21T12:00:00.000Z",
+        "displayedStamps": [
+          "2026-10-23T11:00:00.000Z"
+        ],
+        "required": {
+          "items": "new-resolver",
+          "narrative": "n"
+        },
+        "covered": {
+          "items": "old-resolver",
+          "narrative": "n"
+        },
+        "loaded": true,
+        "expected": {
+          "target": "2026-10-23T13:00:00.000Z",
+          "due": false
+        }
+      },
+      {
+        "name": "capped resolved rows are a partial snapshot",
+        "watermark": "2026-10-23T11:00:00.000Z",
+        "narrativeWatermark": "2026-10-23T12:00:00.000Z",
+        "itemsWatermark": "2026-10-23T13:00:00.000Z",
+        "seenAt": "2026-10-21T12:00:00.000Z",
+        "displayedStamps": [
+          "2026-10-23T11:00:00.000Z"
+        ],
+        "required": {
+          "items": "i",
+          "narrative": "n"
+        },
+        "covered": {
+          "items": "i",
+          "narrative": "n"
+        },
+        "loaded": false,
+        "expected": {
+          "target": "2026-10-23T13:00:00.000Z",
+          "due": false
+        }
+      },
+      {
+        "name": "all item narrative and other groups covered acknowledge latest item",
+        "watermark": "2026-10-23T11:00:00.000Z",
+        "narrativeWatermark": "2026-10-23T12:00:00.000Z",
+        "itemsWatermark": "2026-10-23T13:00:00.000Z",
+        "seenAt": "2026-10-21T12:00:00.000Z",
+        "displayedStamps": [
+          "2026-10-23T11:00:00.000Z"
+        ],
+        "required": {
+          "items": "i",
+          "narrative": "n",
+          "for_you": "a",
+          "risks": "r",
+          "suggested": "s"
+        },
+        "covered": {
+          "items": "i",
+          "narrative": "n",
+          "for_you": "a",
+          "risks": "r",
+          "suggested": "s"
+        },
+        "loaded": true,
+        "expected": {
+          "target": "2026-10-23T13:00:00.000Z",
+          "due": true
+        }
+      },
+      {
+        "name": "restored last foreign close removes item requirement and watermark",
+        "watermark": "2026-10-23T11:00:00.000Z",
+        "narrativeWatermark": "2026-10-23T12:00:00.000Z",
+        "itemsWatermark": null,
+        "seenAt": "2026-10-21T12:00:00.000Z",
+        "displayedStamps": [
+          "2026-10-23T11:00:00.000Z"
+        ],
+        "required": {
+          "narrative": "n"
+        },
+        "covered": {
+          "narrative": "n"
+        },
+        "loaded": true,
+        "expected": {
+          "target": "2026-10-23T12:00:00.000Z",
+          "due": true
+        }
+      }
+    ]
   }
 }

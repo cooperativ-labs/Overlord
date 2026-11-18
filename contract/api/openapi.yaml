@@ -3,10 +3,10 @@ info:
   title: Overlord API
   # info.version is the API description's own Semantic Version; it changes when
   # this document changes and is never compared with the contract version.
-  version: 4.14.0
+  version: 5.1.0
   # The contract version (contract/VERSION) this document belongs to. Written
   # only by `yarn version:contract`.
-  x-overlord-contract-version: 174.2.0
+  x-overlord-contract-version: 178.1.0
   description: >-
     Normative description of Overlord's REST surface (ADR 0006): one operation for every
     method and path the backend registers, at the path it is served (ADR 0007), excluding
@@ -9574,6 +9574,45 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
         '500': { $ref: '#/components/responses/InternalError' }
+  "/api/objectives/{id}/report-drafts":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: >-
+          Objective UUID, or full display id (`coo:756.k7xm`) resolved within the caller's organization;
+          an ambiguous display id answers 409.
+        schema: { type: string }
+    get:
+      operationId: getObjectivesByIdReportDrafts
+      tags: [objectives]
+      x-overlord-permission: mission:read
+      x-overlord-edition: both
+      x-overlord-consumers: [mobile, webapp]
+      summary: List an objective's provisional report drafts
+      description: >-
+        Requires `mission:read` in the objective's workspace. Read-only operator projection of the
+        draft delivery evidence agents recorded through `update` (ADR 0078): newest 20 drafts, one per
+        protocol session, each with its active entries in position order and its withdrawn entries.
+        `state` is `open` (its session is live), `abandoned` (its session ended without delivering it)
+        or `sealed` (an accepted delivery sealed it; `sealedDeliveryId` names it, and each entry's
+        `sealedRef` names the accepted V1 item it became). Draft evidence is provisional: it is never a
+        mission item, risk, action or suggestion, never a human obligation, never changes seen state
+        and never completes an objective. Changes arrive as `delivery_report_draft` entity changes
+        scoped to the objective. People cannot edit drafts.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      responses:
+        '200':
+          description: The objective's drafts, newest first.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ObjectiveReportDraftList' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '500': { $ref: '#/components/responses/InternalError' }
   "/api/objectives/{id}/attachments":
     parameters:
       - name: id
@@ -10644,6 +10683,13 @@ paths:
         specified by contract/protocol-commands.yaml and contract/protocol.md. Attach and resume-follow-up
         use ProtocolAttachResponse (attach-response-v4): compact sibling objectives and current-objective
         directives replace history and the previous/future split; load-context keeps its full shape.
+        Cross-mission close-items and finalization closeItems (ADR 0079) require
+        event:create (or the finalization gate) on the source; same-project foreign
+        targets additionally require mission:update intersected with token consent.
+        Out-of-scope ids are not_found; forbidden and restored_by_person skip foreign
+        entries without rejecting acceptance. Results add targets [{missionDisplayId,
+        closed}]; skipped warnings carry problem and, for scoped closed/restored rows,
+        currentStatus and resolvedBy. Target narrative/publication state is unchanged.
         Authorization is
         per subcommand: the dispatch table (`backend/protocol/*.ts`) names the RBAC action checked before
         dispatch, in the workspace derived from the flags (an execution request, session key, objective,
@@ -10669,10 +10715,28 @@ paths:
         '200':
           description: >-
             The subcommand's result, whose shape protocol-commands.yaml specifies per subcommand.
+            `project-items` returns version-1 ranked compact accepted open items in the session
+            project, total, limit, offset, nextOffset, truncated, scanTruncated and ledger capture
+            metadata; requires a live undelivered matching session and mission:read. Drafts are
+            excluded. Compact attach adds only missionSummary.otherMissionOpenItems count.
             `mission-items` returns full open item detail, total, limit, offset, truncated and
             nextOffset for a matching live session. `close-items` returns closedItemIds and
             warnings using delivery closure validation and agent objective provenance, without
-            a delivery or narrative write. Both preserve workspace/project/session scope. A
+            a delivery or narrative write. Both preserve workspace/project/session scope.
+            `deliver` and `record-work` accept a caller-retained `operationId` (ADR 0075): a retry
+            with the same id and request returns the stored acceptance receipt with `replayed:
+            true`; the same id with a different request answers 409 `delivery_operation_conflict`,
+            and a session that already finalized answers 409 `delivery_already_accepted` with
+            `details.deliveryId`. `delivery-receipt` returns `{ receipt }` for the caller's own
+            finalization by delivery id or operation id, or 404 `delivery_receipt_not_found`. From
+            contract 175 (ADR 0076) stale, legacy or absent mission-summary prose never rejects
+            `deliver`: the delivery and closes are accepted, the prose is withheld, and
+            `missionSummary.publication` names the delivery's publication opportunity.
+            `delivery-summary-context` returns `{ publication, baseline, instruction }` and
+            `publish-delivery-summary` writes one reconciled narrative for that opportunity, or answers
+            409 `mission_summary_conflict` (stale bases, with the current baseline),
+            `mission_summary_publication_superseded`, `mission_summary_already_published`, or 404
+            `mission_summary_publication_not_found`. A
             project reference that matches in several workspaces instead answers `{ status:
             'project_selection_required', message, projectRef, projects: [{ id, name, slug, workspaceId,
             workspaceName, workspaceSlug }] }`.
@@ -12338,6 +12402,136 @@ components:
           type: string
           description: Server-relative URL serving the bytes (`/api/storage/attachments/<storageKey>`).
         createdAt: { $ref: '#/components/schemas/DateTime' }
+    ReportDraftKind:
+      description: Closed vocabulary of draft entry kinds, one per V1 agent-report array (ADR 0078).
+      type: string
+      enum: [ human_action, tradeoff, known_risk, deferred_work, assumption ]
+    ReportDraftCounts:
+      type: object
+      required: [ human_action, tradeoff, known_risk, deferred_work, assumption ]
+      properties:
+        human_action: { type: integer, minimum: 0 }
+        tradeoff: { type: integer, minimum: 0 }
+        known_risk: { type: integer, minimum: 0 }
+        deferred_work: { type: integer, minimum: 0 }
+        assumption: { type: integer, minimum: 0 }
+    ReportDraftEntryDto:
+      description: >-
+        One provisional observation, identified by the agent's stable `entryId`. `content` has the
+        kind's V1 input shape: a human action, a tradeoff, a deferred-work item, or `{ text }` for a
+        known risk or assumption.
+      type: object
+      required:
+        [
+          entryId,
+          kind,
+          content,
+          position,
+          state,
+          withdrawnAt,
+          withdrawnReason,
+          importedFrom,
+          sealedRef,
+          revision,
+          createdAt,
+          updatedAt
+        ]
+      properties:
+        entryId: { type: string }
+        kind: { $ref: '#/components/schemas/ReportDraftKind' }
+        content:
+          type: object
+          additionalProperties: true
+        position: { type: integer, minimum: 0 }
+        state: { type: string, enum: [ active, withdrawn ] }
+        withdrawnAt:
+          oneOf:
+            - $ref: '#/components/schemas/DateTime'
+            - type: 'null'
+        withdrawnReason:
+          oneOf:
+            - type: string
+            - type: 'null'
+        importedFrom:
+          description: The abandoned draft entry this entry was explicitly imported from.
+          oneOf:
+            - type: object
+              required: [ draftId, entryId ]
+              properties:
+                draftId: { type: string }
+                entryId: { type: string }
+            - type: 'null'
+        sealedRef:
+          description: >-
+            The accepted V1 item this entry became when its draft was sealed (`human-action-2`,
+            `tradeoff-1`, a deferred-work id, `knownRisks[0]`, `assumptions[1]`); null while
+            provisional or when excluded at seal.
+          oneOf:
+            - type: string
+            - type: 'null'
+        revision: { type: integer, minimum: 1 }
+        createdAt: { $ref: '#/components/schemas/DateTime' }
+        updatedAt: { $ref: '#/components/schemas/DateTime' }
+    ReportDraftDto:
+      type: object
+      required:
+        [
+          id,
+          missionId,
+          objectiveId,
+          sessionId,
+          state,
+          revision,
+          batchCount,
+          entryCount,
+          activeCounts,
+          withdrawnCount,
+          sealedAt,
+          sealedDeliveryId,
+          createdAt,
+          updatedAt,
+          entries
+        ]
+      properties:
+        id: { type: string }
+        missionId: { type: string }
+        objectiveId: { type: string }
+        sessionId:
+          type: string
+          description: The protocol session that owns (or owned) the draft.
+        state: { type: string, enum: [ open, sealed, abandoned ] }
+        revision: { type: integer, minimum: 1 }
+        batchCount: { type: integer, minimum: 0, maximum: 1000 }
+        entryCount: { type: integer, minimum: 0, maximum: 1000 }
+        activeCounts: { $ref: '#/components/schemas/ReportDraftCounts' }
+        withdrawnCount: { type: integer, minimum: 0 }
+        sealedAt:
+          oneOf:
+            - $ref: '#/components/schemas/DateTime'
+            - type: 'null'
+        sealedDeliveryId:
+          oneOf:
+            - type: string
+            - type: 'null'
+        createdAt: { $ref: '#/components/schemas/DateTime' }
+        updatedAt: { $ref: '#/components/schemas/DateTime' }
+        entries:
+          description: Active entries in position order.
+          type: array
+          items: { $ref: '#/components/schemas/ReportDraftEntryDto' }
+        withdrawn:
+          description: Withdrawn entries, kept as audit data.
+          type: array
+          items: { $ref: '#/components/schemas/ReportDraftEntryDto' }
+    ObjectiveReportDraftList:
+      type: object
+      required: [ objectiveId, drafts ]
+      properties:
+        objectiveId: { type: string }
+        drafts:
+          type: array
+          maxItems: 20
+          items: { $ref: '#/components/schemas/ReportDraftDto' }
     ObjectiveAttachmentList:
       type: array
       items: { $ref: '#/components/schemas/ObjectiveAttachmentDto' }
@@ -13501,6 +13695,23 @@ components:
           oneOf:
             - type: string
             - type: 'null'
+        missionId:
+          oneOf:
+            - type: string
+            - type: 'null'
+        missionDisplayId:
+          oneOf:
+            - type: string
+            - type: 'null'
+        objectiveDisplayId:
+          oneOf:
+            - type: string
+            - type: 'null'
+        sessionId:
+          oneOf:
+            - type: string
+            - type: 'null'
+        crossMission: { type: boolean }
     MissionItemDto:
       type: object
       description: >-
@@ -13593,6 +13804,21 @@ components:
           deferredWorkItems
         ]
       properties:
+        closedElsewhere:
+          type: array
+          maxItems: 50
+          description: Live resolver projection, ordered by target mission id then item id; not part of the immutable report or acceptance receipt. Restore or source deletion can remove rows.
+          items:
+            type: object
+            required: [itemId, kind, text, missionDisplayId, status, reason]
+            properties:
+              itemId: { type: string }
+              kind: { type: string, enum: [risk, human_action, suggestion] }
+              text: { type: string }
+              missionDisplayId: { type: string }
+              status: { type: string, enum: [done, dismissed] }
+              reason: { type: string }
+
         id: { type: string, format: uuid }
         missionId: { type: string, format: uuid }
         objectiveId: { type: string, format: uuid }
@@ -13640,6 +13866,10 @@ components:
           type: integer
           description: The applied cap (200).
     MissionSummaryStatus:
+      description: >-
+        Historical vocabulary kept for older consumers. New writes are always `composed`; `pending` and
+        `fallback` no longer mean a job runs (ADR 0076). Use the summary response's `narrative.state` to
+        decide whether prose exists or needs updating.
       type: string
       enum: [ pending, composed, fallback ]
     MissionSummaryDuplicateDto:
@@ -13748,7 +13978,7 @@ components:
         status: { $ref: '#/components/schemas/MissionSummaryStatus' }
         headline:
           type: string
-          description: One sentence; empty in the first pending shell.
+          description: One sentence; empty when no agent has published prose (`narrative.state` absent).
         summary:
           type: string
           description: Markdown, two to five sentences; empty in the first pending shell.
@@ -13861,18 +14091,74 @@ components:
           properties:
             actions: { type: boolean }
             sources: { type: boolean }
+    MissionNarrativeDto:
+      description: >-
+        Server-derived freshness of the agent-authored mission headline and summary (ADR 0076). Not an
+        objective status. `absent`: no prose. `current`: agent prose published through the delivery
+        publication boundary against the present evidence basis. `outdated`: a later accepted delivery,
+        follow-up or reopen changed the basis since. `legacy`: retained prose (model, deterministic or
+        earlier agent text) with no verifiable basis. Items, actions and questions do not move the basis
+        and stay independently visible. No automatic writer exists; prose that is absent or outdated
+        stays so until an agent publishes.
+      type: object
+      required:
+        [
+          state,
+          evidenceRevision,
+          publishedEvidenceRevision,
+          deliveryId,
+          objectiveId,
+          publishedAt,
+          changedAt,
+          outstandingDeliveryId
+        ]
+      properties:
+        state: { type: string, enum: [ absent, current, outdated, legacy ] }
+        evidenceRevision: { type: integer, minimum: 0 }
+        publishedEvidenceRevision:
+          oneOf:
+            - { type: integer, minimum: 0 }
+            - type: 'null'
+        deliveryId:
+          description: The delivery whose author wrote the current prose; null when absent or unknown.
+          oneOf:
+            - type: string
+            - type: 'null'
+        objectiveId:
+          oneOf:
+            - type: string
+            - type: 'null'
+        publishedAt:
+          description: When the current prose was published through this boundary; null for legacy or absent prose.
+          oneOf:
+            - $ref: '#/components/schemas/DateTime'
+            - type: 'null'
+        changedAt:
+          description: Last narrative text or evidence-basis change; equals `narrativeWatermark`.
+          oneOf:
+            - $ref: '#/components/schemas/DateTime'
+            - type: 'null'
+        outstandingDeliveryId:
+          description: The accepted delivery whose publication opportunity is still open, if any.
+          oneOf:
+            - type: string
+            - type: 'null'
     MissionSummaryResponse:
       oneOf:
         - type: object
-          required: [ eligible, summary, evidence, watermark, seenAt ]
+          required: [ eligible, summary, evidence, watermark, narrative, narrativeWatermark, seenAt ]
           properties:
             eligible: { const: false }
             summary: { type: 'null' }
             evidence: { type: 'null' }
             watermark: { type: 'null' }
+            narrative: { type: 'null' }
+            narrativeWatermark: { type: 'null' }
+            itemsWatermark: { type: 'null' }
+            itemsTruncated: { const: false }
             seenAt: { type: 'null' }
         - type: object
-          required: [ eligible, summary, evidence, watermark, seenAt ]
+          required: [ eligible, summary, evidence, watermark, narrative, narrativeWatermark, seenAt ]
           properties:
             eligible: { const: true }
             summary:
@@ -13886,6 +14172,23 @@ components:
               oneOf:
                 - $ref: '#/components/schemas/DateTime'
                 - type: 'null'
+            narrative: { $ref: '#/components/schemas/MissionNarrativeDto' }
+            narrativeWatermark:
+              description: >-
+                Last narrative text or basis change (`narrative.changedAt`). Clients acknowledge the maximum of
+                `watermark`, `narrativeWatermark` and other evidence watermarks with the scalar seen marker
+                only after every group of this response was rendered.
+              oneOf:
+                - $ref: '#/components/schemas/DateTime'
+                - type: 'null'
+            itemsWatermark:
+              description: Newest resolvedAt of a live item closed by another mission's agent; excludes own-mission and person decisions. Older servers may omit it.
+              oneOf:
+                - $ref: '#/components/schemas/DateTime'
+                - type: 'null'
+            itemsTruncated:
+              type: boolean
+              description: Closed rows exceed the 100-row cap; clients must not acknowledge a partial snapshot.
             seenAt:
               oneOf:
                 - $ref: '#/components/schemas/DateTime'
@@ -13896,7 +14199,10 @@ components:
       properties:
         watermark:
           type: string
-          description: A `watermark` from a summary read; any `Date.parse`-able text, stored normalized to UTC.
+          description: >-
+            A watermark from a summary read (`watermark`, `narrativeWatermark`, `itemsWatermark` or their maximum); any
+            `Date.parse`-able text, stored normalized to UTC. It must not be later than the newest
+            delivery, question or choice request, retained narrative change, or live cross-mission agent close of the mission.
     MissionSummarySeenResponse:
       type: object
       required: [ seenAt ]

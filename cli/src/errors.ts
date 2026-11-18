@@ -4,20 +4,25 @@ export class CliError extends Error {
   readonly exitCode: number;
   /** The backend's JSON error body, when the error came from a backend response. */
   readonly payload: unknown;
+  /** HTTP status of the backend response, when the error came from one. */
+  readonly status: number | undefined;
 
   constructor({
     message,
     exitCode = 1,
-    payload
+    payload,
+    status
   }: {
     message: string;
     exitCode?: number;
     payload?: unknown;
+    status?: number;
   }) {
     super(message);
     this.name = 'CliError';
     this.exitCode = exitCode;
     this.payload = payload;
+    this.status = status;
   }
 }
 
@@ -25,7 +30,8 @@ export const MISSION_SUMMARY_CONFLICT_CODE = 'mission_summary_conflict';
 
 /**
  * The fresh mission summary baseline carried by a 409 `mission_summary_conflict`
- * delivery rejection, printed to stdout so the agent can reconcile and retry.
+ * from `publish-delivery-summary` (ADR 0076; a delivery is never rejected for
+ * stale prose), printed to stdout so the agent can reconcile and retry once.
  */
 export function missionSummaryConflictOutput(error: unknown): Record<string, unknown> | null {
   if (!(error instanceof CliError) || !error.payload || typeof error.payload !== 'object') {
@@ -40,8 +46,66 @@ export function missionSummaryConflictOutput(error: unknown): Record<string, unk
   return {
     error: record.error ?? null,
     code: MISSION_SUMMARY_CONFLICT_CODE,
-    baseContentRevision: details.baseContentRevision ?? null,
-    missionSummary: details.missionSummary ?? null
+    missionSummary: details.missionSummary ?? null,
+    ...(details.publication ? { publication: details.publication } : {}),
+    ...(details.instruction ? { instruction: details.instruction } : {})
+  };
+}
+
+const REPORT_DRAFT_ERROR_CODES = new Set([
+  'report_draft_conflict',
+  'report_draft_operation_conflict',
+  'report_draft_sealed',
+  'report_draft_limit_exceeded',
+  'report_draft_not_found',
+  'report_draft_forbidden'
+]);
+
+/**
+ * A report-draft refusal (ADR 0078), printed to stdout with its details (for
+ * a conflict: the current revision and the fresh draft) so the agent can
+ * rebase its batch or delivery.
+ */
+export function reportDraftErrorOutput(error: unknown): Record<string, unknown> | null {
+  if (!(error instanceof CliError) || !error.payload || typeof error.payload !== 'object') {
+    return null;
+  }
+  const record = error.payload as Record<string, unknown>;
+  if (typeof record.code !== 'string' || !REPORT_DRAFT_ERROR_CODES.has(record.code)) return null;
+  return {
+    error: record.error ?? null,
+    code: record.code,
+    ...(record.details && typeof record.details === 'object'
+      ? { details: record.details as Record<string, unknown> }
+      : {})
+  };
+}
+
+const FINALIZATION_ERROR_CODES = new Set([
+  'delivery_already_accepted',
+  'delivery_operation_conflict',
+  'delivery_receipt_not_found',
+  'mission_summary_publication_superseded',
+  'mission_summary_already_published',
+  'mission_summary_publication_not_found'
+]);
+
+/**
+ * A finalization refusal (ADR 0075), printed to stdout so the agent sees the
+ * already accepted delivery id instead of delivering again.
+ */
+export function finalizationErrorOutput(error: unknown): Record<string, unknown> | null {
+  if (!(error instanceof CliError) || !error.payload || typeof error.payload !== 'object') {
+    return null;
+  }
+  const record = error.payload as Record<string, unknown>;
+  if (typeof record.code !== 'string' || !FINALIZATION_ERROR_CODES.has(record.code)) return null;
+  return {
+    error: record.error ?? null,
+    code: record.code,
+    ...(record.details && typeof record.details === 'object'
+      ? { details: record.details as Record<string, unknown> }
+      : {})
   };
 }
 

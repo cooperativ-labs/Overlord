@@ -76,6 +76,10 @@ The current tool catalog is mission-first:
 - `overlord_create_inbox_item`
 - `overlord_load_mission_context` — returns objective assignment fields for the agent, model, thinking level, and resource
 - `overlord_changes` — read one objective's synchronized changed-file evidence (`ObjectiveFileChangesDto`, server scope, capped at 200)
+- `overlord_delivery_receipt` — read your own accepted deliver/record-work receipt by `operationId` or `deliveryId` (for example after a lost response)
+- `overlord_report_draft` — read your session's provisional report draft and what deliver would seal from it
+- `overlord_delivery_summary_context` — read your own accepted delivery's mission-summary publication opportunity and a fresh baseline (after the summary was withheld or omitted)
+- `overlord_publish_delivery_summary` — publish one reconciled mission headline and summary for that delivery, with a required `operationId` you choose and reuse; stale prose never rejects a delivery, and nothing generates the summary for you
 - `overlord_list_deliveries` — read a `{ items, total, limit }` page of normalized delivery summaries, verification/follow-up notes, and authoritative delivery evidence for one mission
 - `overlord_launch_objective` — explicitly queue the normal execution request for one objective; this is distinct from attaching the MCP agent to work
 - `overlord_reorder_objectives` — explicitly replace one mission's complete order of unstarted (draft/submitted) objectives
@@ -182,6 +186,23 @@ publish artifacts mid-turn with `overlord_add_artifact` (Protocol `add-artifact`
 REST `POST /api/missions/:id/artifacts`) without delivering; artifacts are
 validated and persisted by the existing Protocol/REST service layer, never
 directly by MCP.
+
+`overlord_deliver_session` and `overlord_record_work` accept an optional
+`operationId`: a retry identity the caller chooses before the first call and sends
+unchanged on every retry of that attempt. A retry then returns the original result
+(`replayed: true`) instead of delivering or recording twice; the same id with a
+different request fails with `delivery_operation_conflict`. The tools never generate
+an id themselves. `overlord_delivery_receipt` reads the caller's accepted receipt by
+`operationId` or `deliveryId`.
+
+Draft report evidence is opt-in: `overlord_update_session` accepts `reportDraft
+{ operationId, expectedRevision, operations }` (with it, `summary` is optional) to
+record provisional risks, human actions, tradeoffs, deferred work and assumptions by
+stable `entryId`. The caller chooses the batch `operationId` and resends the same batch
+on retry; the server returns the original receipt instead of applying it twice. Read
+`overlord_report_draft` before delivering and pass its `revision` as
+`reportDraft.expectedRevision` on `overlord_deliver_session`, which seals the draft.
+Drafts never become mission items before that.
 
 `overlord_update_session`, `overlord_deliver_session`, and `overlord_record_work`
 accept optional `declaredPaths`: canonical repository-relative paths written by

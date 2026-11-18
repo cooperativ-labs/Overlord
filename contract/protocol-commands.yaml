@@ -63,6 +63,17 @@ requestEnvelope:
       - changedFiles
 
 sessionLifecycle:
+  project-items:
+    requiredFlags: [--session-key]
+    optionalFlags: [--mission-id, --objective-id, --kind, --query, --path, --include-own-mission, --limit, --offset]
+    responseShapeVersion: 1
+    sideEffects: []
+    notes:
+      - 'Requires mission:read and a live undelivered attached session matching mission and optional objective; project_automation denied. Publication ended-session exception does not apply.'
+      - 'Accepted live open items in the same workspace/project, excluding own mission by default. Draft observations never contribute results or counts.'
+      - '--kind is comma-separated risk,human_action,suggestion. --query is a case-insensitive substring over text and suggestion change/location/doneWhen, at most 200 characters; never id lookup. --path is comma-separated repo-relative ranking paths (at most 200, each at most 1000 characters).'
+      - 'Scan at most 2000 newest-delivery open rows before filtering and ranking. Full path strong, directory prefix of at least two segments medium, non-generic basename weak; matched then newest (project-item-match-vectors.json). Explicit paths augment the live objective ledger, not a mandatory path filter.'
+      - 'Response: responseShapeVersion 1, projectId, excludedMissionId (null when including own), total (filtered scanned rows), items, limit (default 20, 1..100), offset (default 0), nextOffset, truncated, scanTruncated, ledger {paths: number, captureGap: boolean}. Each item has id, kind, mission {displayId,title}, objective display id, text (at most 240 characters), optional textTruncated true and location (at most 240), blocking boolean or null, reportedAt and match {paths (at most five), strength: strong|medium|weak|none}. Restart paging after writes.'
   mission-items:
     requiredFlags: [--session-key]
     optionalFlags: [--mission-id, --objective-id, --limit, --offset]
@@ -78,7 +89,7 @@ sessionLifecycle:
     sideEffects: [mission_item_update, entity_change_append]
     notes:
       - 'Requires event:create and a live attached session matching the mission; delivered sessions must resume follow-up.'
-      - 'Requires 1..50 close entries with delivery validation and warnings. Agent provenance uses attached objective and null delivery id. Returns contentRevision, narrativeWritten false, closedItemIds and warnings.'
+      - 'Requires 1..50 close entries with delivery validation and warnings. Agent provenance uses attached objective and null delivery id. Returns contentRevision, narrativeWritten false, closedItemIds, warnings and foreign targets [{missionDisplayId, closed}]. Same-project foreign items require mission:update; out-of-scope ids are not_found, denied entries forbidden, person-restored foreign entries restored_by_person. Provenance includes mission/session and links once at first delivery acceptance.'
   attach:
     description: 'Start a working session; return compact execution context plus agent instructions'
     requiredFlags: []
@@ -116,7 +127,7 @@ sessionLifecycle:
       - binds-session-channel
 
   update:
-    description: 'Post progress event; optionally declare shell/script-written paths the native hook could not name'
+    description: 'Post progress event; optionally record a batch of draft report evidence (ADR 0078) and declare shell/script-written paths the native hook could not name'
     requiredFlags: []
     requiresSessionKey: true
     optionalFlags:
@@ -140,6 +151,19 @@ sessionLifecycle:
       - --paths-file
       - --begin-follow-up-work
       - --follow-up-intent
+      # Opt-in draft evidence batch (ADR 0078); also accepted as reportDraft in --payload-json.
+      - --report-draft-json
+      - --report-draft-file
+    reportDraftInput:
+      shape: '{ operationId, expectedRevision, operations: [ { op: upsert, entryId, kind, content } | { op: withdraw, entryId, reason } | { op: import, sourceDraftId, sourceEntryId, entryId? } ] }'
+      rules:
+        - 'Optional and opt-in. With a batch, --summary may be omitted; the event summary is then derived from the operation counts. Cannot be combined with --begin-follow-up-work (400 invalid_input). Never stored in the event payload; the event carries only bounded metadata reportDraft { draftId, operationId, revision, upserted, withdrawn, imported }.'
+        - 'operationId is the caller-retained batch identity (8-128 characters of letters, digits, ".", "_", ":" or "-"), chosen before sending and reused for every retry of the batch; clients never mint one per retry. expectedRevision is a non-negative integer, 0 when the session has no draft. operations holds 1-50 operations with distinct entry ids. Entry ids are 1-100 characters starting alphanumeric. kind is the closed set human_action|tradeoff|known_risk|deferred_work|assumption; content is validated with the delivery-report item schemas and bounds ({ text } for known_risk and assumption). Malformed input answers 400 invalid_input before any write.'
+        - 'Under the mission lock the receipt of the same session draft and operationId is looked up before the session must be live and before the revision check: the same digest returns the original eventId and reportDraft { draftId, operationId, revision, replayed: true, currentRevision } with no writes, also after sealing or session end (a receipt read, never update authority); a different request answers 409 report_draft_operation_conflict.'
+        - 'Otherwise the session must be live and undelivered (409 delivery_boundary for a delivered session), the caller must be the session owner (403 report_draft_forbidden), the draft must not be sealed (409 report_draft_sealed), and expectedRevision must equal the current revision; a mismatch applies nothing and answers 409 report_draft_conflict with details { currentRevision, draft }.'
+        - 'A batch applies atomically with its immutable delivery_report_draft_batches receipt and its update event, and increments the draft revision once. upsert creates or replaces an entry (re-activating a withdrawn one) and never changes its kind; withdraw keeps the entry as audit data; import copies an active entry of an abandoned draft (session ended, unsealed) of the same objective and records its source.'
+        - 'Bounds: at most 12 active entries per kind; at most 1,000 accepted batches and 1,000 distinct entry ids per draft. Beyond a bound the write answers 409 report_draft_limit_exceeded; receipts, reads and finalization keep working; nothing is pruned.'
+        - 'Draft entries never create mission_items, human obligations, badges or seen-state changes.'
     validPhases:
       - draft
       - execute
@@ -159,6 +183,8 @@ sessionLifecycle:
       - appends-optional-generator-output-ledger-evidence
       - records-optional-agent-declared-changed-files
       - emits-scoped-changed-file-entity-changes
+      - writes-optional-report-draft-batch-and-receipt
+      - emits-scoped-delivery-report-draft-entity-changes
 
   hookEvent:
     description: 'Record connector lifecycle events such as UserPromptSubmit without requiring a live agent session'
@@ -200,6 +226,8 @@ sessionLifecycle:
       - objective-state-complete-to-pending-delivery
       - mission-status-to-execute
       - appends-mission-event
+      # ADR 0076: supersedes outstanding mission-summary publication opportunities.
+      - advances-mission-narrative-evidence
 
   heartbeat:
     description: 'Update session liveness without creating a mission event'
@@ -305,17 +333,44 @@ sessionLifecycle:
       - --paths-file
       # Agent-authored mission summary write (ADR 0060); wins over payload missionSummary.
       - --mission-summary-file
+      # Caller-retained finalization operation id (ADR 0075); wins over payload operationId.
+      - --operation-id
+      # Draft-aware delivery (ADR 0078): { expectedRevision, operations? }, or the shorthand
+      # --expected-draft-revision <n>; also accepted as reportDraft in --payload-json.
+      - --report-draft-json
+      - --report-draft-file
+      - --expected-draft-revision
+    reportDraftInput:
+      shape: '{ expectedRevision, operations? } (operations as for update; no batch operationId)'
+      rules:
+        - 'Required when the session has a report draft: a missing or stale expectedRevision answers 409 report_draft_conflict with details { currentRevision, draft } before any write. Sessions without a draft keep the full-report behavior unchanged. --expected-draft-revision and --report-draft-json/file are mutually exclusive (400 invalid_input). Never stored in the delivery payload; part of the finalization digest.'
+        - 'Inside the finalization transaction the final operations apply with the update rules; the accepted V1 report is the active entries in position order followed by deliveryReport items whose canonical kind and content match no active entry. Entries are amended or removed only through their ids. More than 12 items of a kind answers 409 report_draft_limit_exceeded; nothing is truncated or selected by a model. Normalization, human-action filtering and deferred-work eligibility are the ones shared with non-draft deliveries and record-work.'
+        - 'Acceptance records each active entry''s accepted V1 reference (human-action-N, tradeoff-N, the deferred-work id, knownRisks[i], assumptions[i]), seals the draft and links the delivery; the response adds reportDraft { draftId, revision, sealed: true, activeEntries, refs: [{ entryId, ref }] }. A failed delivery leaves the draft open. A replay returns the original sealed result and never reseals. Sealed drafts, their entries and batch receipts are immutable in both editions.'
+    operationIdInput:
+      sources:
+        - --operation-id
+        - 'operationId field of --payload-json / --payload-file (never stored in the delivery payload)'
+      rules:
+        - 'Optional. 8-128 characters of letters, digits, ".", "_", ":" or "-", starting with a letter or digit; anything else answers 400 invalid_input before any write. It is a non-secret reference, not a credential.'
+        - 'The finalization transaction commits a durable, immutable delivery_finalizations receipt with the delivery: the canonical digest of the validated semantic request and the accepted result. Receipts live as long as their delivery and are never request-cache entries.'
+        - 'A retry with the same actor, kind and operation id and the same semantic request returns the stored accepted result with replayed: true and writes nothing, also after the session ended. The caller''s current membership, permission and project scope are checked again first.'
+        - 'The same operation id with a different semantic request (or another mission/session) answers 409 delivery_operation_conflict with details { operationId, operationKind, deliveryId }.'
+        - 'A session finalizes at most once. Under the mission lock the service rechecks that the session is live and undelivered; a session that already delivered, with or without a receipt (historical deliveries keep none), answers 409 delivery_already_accepted with details { deliveryId } instead of a second delivery. This also applies to requests without an operation id.'
+        - 'Clients choose the id before sending and reuse it for every retry of the same logical attempt; they never mint a new id on a timeout. An id minted inside a tool handler per invocation is not a retry guarantee. A not-found delivery-receipt read alone does not prove a concurrent attempt cannot commit; retry the same operation id instead.'
     missionSummaryInput:
-      shape: '{ baseContentRevision, headline, summary, closeItems: [{ id, status: done|dismissed, reason }] }'
+      shape: '{ baseContentRevision, baseEvidenceRevision, headline, summary, closeItems: [{ id, status: done|dismissed, reason }] }'
       sources:
         - --mission-summary-file
         - 'missionSummary field of --payload-json / --payload-file'
       rules:
-        - 'Validated before any write; malformed input, headline and summary not sent together, a headline that is empty, multi-line or over 140 characters, a summary empty or over 1,200 characters, prose without baseContentRevision, more than 50 closeItems, or a close entry without status done|dismissed and a reason of at most 280 characters answers 400 invalid_input'
-        - 'The base revision is compared with mission_summaries.content_revision under the summary row lock before any delivery row is written; a stale base rejects the whole delivery with 409 mission_summary_conflict, writes nothing, and returns details { baseContentRevision, missionSummary } with a fresh baseline in the attach shape. The CLI prints that object on stdout before failing'
-        - 'closeItems close only open items of the delivering mission with agent provenance; unknown, foreign, duplicate, superseded or already-closed ids are skipped with bounded mission_summary_item_skipped warnings and never reject the delivery. Each warning message states the cause and what the agent does next: when the intended item may stay open, it says to name that item and why in the final message'
-        - 'The narrative is written with generated_by agent, status composed, the narrative_* references and content_revision + 1, visible at once; the response carries missionSummary { contentRevision, narrativeWritten, closedItemIds, warnings } with advisory mission_summary_style warnings'
-        - 'The field is never stored in the delivery payload. A delivery without it behaves as before and gets fallback prose'
+        - 'Validated before any write; malformed input, headline and summary not sent together, a headline that is empty, multi-line or over 140 characters, a summary empty or over 1,200 characters, prose without baseContentRevision, a negative or non-integer base, more than 50 closeItems, or a close entry without status done|dismissed and a reason of at most 280 characters answers 400 invalid_input'
+        - 'Agent-only narrative (ADR 0076): nothing else writes mission headline or summary. For a summary-eligible mission, under the mission lock and then the summary row lock and before any delivery row is written, both bases are compared with the pre-delivery mission_summaries.content_revision and evidence_revision. Only when both match does the prose publish, against the evidence revision this delivery advances to'
+        - 'Stale, legacy or absent prose never rejects the delivery: a stale content base (stale_content), a stale evidence base (stale_evidence), a missing baseEvidenceRevision from an older client (missing_evidence_base) or no prose (absent) accepts the delivery and its closes, keeps the existing text, and leaves this delivery''s publication opportunity outstanding. Withheld prose adds a bounded mission_summary_withheld warning. 409 mission_summary_conflict is no longer a deliver response'
+        - 'Every accepted delivery of an eligible mission advances evidence_revision, supersedes older outstanding publication opportunities of the mission (superseded_reason newer_delivery) and creates one delivery_summary_publications row holding the immutable original proposal; the acceptance receipt references it'
+        - 'closeItems close open same-project items with agent mission/session provenance (ADR 0079); foreign targets require mission:update, restored_by_person protects foreign person-restored rows, and out-of-scope ids read as not_found. Unknown, unauthorized, restored, duplicate, superseded or already-closed ids are skipped with bounded mission_summary_item_skipped warnings and never reject the delivery. Each warning message states the cause and what the agent does next: when the intended item may stay open, it says to name that item and why in the final message'
+        - 'Published prose is written with generated_by agent, status composed, the narrative_* references, published_evidence_revision, server-issued narrative_published_at / narrative_changed_at strictly after the previous narrative change, and content_revision + 1, visible at once'
+        - 'For an eligible mission the response always carries missionSummary { contentRevision, narrativeWritten, closedItemIds, targets, warnings, publication: { id, available, withheldReason } } plus baseline (the attach shape, with evidenceRevision and narrative) when the publication stays available; the instruction then leads with the publication step, worded for the connection method, and says not to deliver again or resume execution. An ineligible mission without input gets no missionSummary; prose sent to it is dropped with mission_summary_disabled'
+        - 'The field is never stored in the delivery payload. A delivery without it is accepted; no prose is generated for it'
     clientCapture:
       - 'The client CLI drains every pending bounded batch from the attached objective ledger through sync-changes before delivery. It never derives or injects file paths from a worktree delta.'
       - 'Optional bounded --paths (comma list) and --paths-file (JSON string array; commas are path characters) append agent-known shell/script/generator outputs, deletes, and both rename endpoints to the attached objective ledger as agent_declared before the drain. They are normalized against the session checkout (absent targets valid; traversal, out-of-checkout symlinks, ignored and Overlord-managed paths rejected with a reason) and are not a changed-file reconciliation input.'
@@ -326,18 +381,100 @@ sessionLifecycle:
       - '--payload-json / --payload-file may carry an additive deliveryReport object with schemaVersion: 1 and agentReport.{humanActions,tradeoffsMade,knownRisks,deferredWork,assumptions}; omitted or malformed advisory items normalize independently with bounded warnings, except deferredWork: since contract v166, string items, malformed objects, and overlong fields reject the submission with invalid_input'
       - 'Human actions are bounded and filter Git operations plus routine review/testing instructions before they are persisted in deliveryReport.presentation'
       - 'Each human action has a required action, expected reason and category, optional blocking, and optional command, verify, and link fields; link accepts only an HTTP(S) URL or a repository-relative path, and an item with an invalid link is discarded with a bounded warning'
-      - 'The compose worker always appends deterministic_rule actions derived from changed paths (migrations, .env examples, deployment configs, dependency manifests, CI workflow files) to deliveryReport.presentation.humanActions when neither the agent report nor the composed draft already carries them'
+      - 'The delivery compose worker always appends deterministic_rule actions derived from changed paths (migrations, .env examples, deployment configs, dependency manifests, CI workflow files) to deliveryReport.presentation.humanActions when neither the agent report nor the composed draft already carries them'
       - 'deliveryReport.presentation starts as an immediate deterministic/pending fallback; a durable overlord.delivery.compose.v1 worker job may asynchronously replace only presentation while delivery success and latency never depend on an automation provider'
       - 'Changed-file provenance and capture diagnostics are objective-scoped review metadata aggregated across sessions (and no-session record-work records); none can reject delivery.'
       - 'Delivery is the final work boundary — no implementation after delivery without explicit follow-up'
       - 'The response carries instruction: the post-delivery rule worded by the session connection_method. A cli session is told to run resume-follow-up with the delivered mission and objective display ids before more work; an mcp session is told to ask the user to start follow-up work from Overlord (coo:1294 D6)'
+      - 'Required follow-on scheduling (Run Queue dispatch job, next-draft awaiting_approval event, awaiting-review notification and its dispatch job, webhooks, delivery-presentation compose job) is written inside the finalization transaction, so it exists exactly when the delivery does and a replay never repeats it; no post-commit failure can turn an accepted delivery into a rejection (ADR 0075). Queue selection and the parallel-objective rule are unchanged.'
     sideEffects:
       - records-optional-agent-declared-changed-files
       - emits-scoped-changed-file-entity-changes
       - stores-delivery-record
+      - stores-delivery-finalization-receipt
+      - seals-optional-report-draft
+      - advances-mission-narrative-evidence-and-creates-publication-opportunity
       - objective-state-to-complete
       - mission-status-to-review
       - may-trigger-auto-advance-for-next-objective
+
+  delivery-receipt:
+    description: 'Read the caller''s own durable finalization receipt (ADR 0075)'
+    requiredFlags: []
+    optionalFlags:
+      - --mission-id
+      - --delivery-id
+      - --operation-id
+      # deliver (default) or record_work; selects the operation-id namespace.
+      - --operation-kind
+    responseShapeVersion: 1
+    responseShape: '{ receipt: { operationKind, operationId, missionId, missionDisplayId, objectiveId, deliveryId, acceptedAt, result } }'
+    rules:
+      - 'Exactly one of --delivery-id or --operation-id; otherwise 400 invalid_input. Requires mission:read; available after the session ended and needs no session key.'
+      - 'Only the workspace member who finalized can read a receipt, and its mission must be in the caller''s current workspace/project scope. An unknown, foreign, deleted or out-of-scope receipt answers the same 404 delivery_receipt_not_found. A project_automation USER_TOKEN is denied (404).'
+      - 'result is the immutable accepted response, including what was true at acceptance; it is never rewritten by later events.'
+    sideEffects: []
+
+  report-draft:
+    description: 'Read the caller''s own provisional report draft and its final inspection, or an abandoned or sealed draft of the same objective (ADR 0078)'
+    requiredFlags:
+      - --session-key
+    optionalFlags:
+      - --mission-id
+      - --objective-id
+      - --draft-id
+      - --include-withdrawn
+    responseShapeVersion: 1
+    responseShape: '{ draft: ReportDraft | null, revision, inspection: { agentReport, entries: [{ entryId, kind, ref, excludedReason? }], warnings } | null, abandoned: [{ draftId, sessionId, state, revision, activeEntryCount, updatedAt }], limits }'
+    rules:
+      - 'Requires mission:read and a session key of the mission (live or ended). Without --draft-id it reads the session''s own draft; revision is 0 and draft null when none exists.'
+      - 'inspection is present only for the caller''s own open draft: the normalized, eligibility-filtered agent report deliver would seal now, each active entry''s V1 reference or exclusion reason, and warnings.'
+      - '--draft-id reads an abandoned (session ended without delivering it) or sealed draft of the same objective; an open draft of another session, or any other id, answers 404 report_draft_not_found.'
+      - 'withdrawn entries are included only with --include-withdrawn; abandoned lists up to ten abandoned drafts of the objective, newest first.'
+    sideEffects: []
+
+  delivery-summary-context:
+    description: 'Read the publication opportunity of the caller''s own accepted delivery and a fresh mission-summary baseline (ADR 0076)'
+    requiredFlags:
+      - --mission-id
+    optionalFlags:
+      - --delivery-id
+      - --publication-id
+      # The key of the session that delivered; omitted for record-work deliveries.
+      - --session-key
+      - --connection-method
+    responseShapeVersion: 1
+    responseShape: '{ publication: { id, missionId, missionDisplayId, objectiveId, objectiveDisplayId, deliveryId, evidenceRevision, available, state: outstanding|published|superseded|ineligible, supersededReason, publishedAt, publishedContentRevision }, baseline, instruction }'
+    rules:
+      - 'Exactly one of --delivery-id or --publication-id. Requires event:create, current membership and project scope; a project_automation USER_TOKEN is denied (404).'
+      - 'Only the originating workspace member reads it. A session-bound opportunity also requires the original session key of the session that delivered it; that session''s delivered, ended state is accepted for this command and publish-delivery-summary only. A record-work opportunity has no session and is bound to its originating member.'
+      - 'An unknown, foreign, other-member, deleted-source or out-of-scope (including a mission moved to another project) publication answers 404 mission_summary_publication_not_found without revealing existence.'
+      - 'No deadline: availability follows the evidence basis, not elapsed time. A read is not proof a later write succeeds.'
+    sideEffects: []
+
+  publish-delivery-summary:
+    description: 'Publish one reconciled mission headline and summary for the caller''s own accepted delivery (ADR 0076)'
+    requiredFlags:
+      - --mission-id
+      - --operation-id
+    optionalFlags:
+      - --delivery-id
+      - --publication-id
+      - --session-key
+      - --payload-json
+      - --payload-file
+      - --connection-method
+    payloadShape: '{ baseContentRevision, baseEvidenceRevision, headline, summary } (operationId may be sent here instead of the flag)'
+    responseShapeVersion: 1
+    responseShape: '{ publication, operationId, contentRevision, evidenceRevision, publishedAt, warnings, instruction, replayed? }'
+    rules:
+      - 'Same addressing and authority as delivery-summary-context. Both bases, headline and summary are required and validated like deliver missionSummary; closeItems or any other field answers 400 invalid_input. No closes, paths, artifacts, report fields, objective or session changes.'
+      - 'The operation id is required and caller-retained. One successful publication per opportunity: the same operation id and content after success replays the result with replayed: true; any other publication after success answers 409 mission_summary_already_published.'
+      - 'Under the mission lock, then the summary row and publication row locks: an opportunity superseded by a newer accepted delivery, an explicit follow-up, an objective reopen or source deletion, or whose evidence revision is no longer current or whose objective is not complete, answers 409 mission_summary_publication_superseded with no route to resurrect it. Stale bases answer 409 mission_summary_conflict with details { publication, missionSummary, instruction } and consume nothing.'
+      - 'No timer, expiry worker or attempt limit. Clients retry a conflict once immediately and then report that the summary is not updated.'
+    sideEffects:
+      - writes-agent-mission-narrative
+      - fulfils-delivery-summary-publication
 
 missionDiscovery:
   create:
@@ -730,15 +867,21 @@ missionDiscovery:
       - --project-id
       - --assigned-to
       - --mission-summary-file
+      - --operation-id
     rules:
       - 'Requires --project-id; completed work always records a normal project mission and never discovers a project implicitly.'
       - 'For work already done in chat, not for in-progress work'
       - '--assigned-to resolves one workspace member by the same rules as on create; an unresolvable member is rejected rather than silently left unassigned'
       - 'Explicit declaredPaths are stored as sessionless agent_declared rows with a null resource; record-work does not inspect a current checkout and accepts no VCS status.'
       - 'Denied for a project_automation USER_TOKEN before any write (contract v151): record-work creates a completed objective and a delivery, which exceed mission:create'
-      - 'Accepts the deliver missionSummary input (payload field or --mission-summary-file) with the same validation and close rules; the mission is new, so no base revision is checked'
+      - 'Accepts the deliver missionSummary input (payload field or --mission-summary-file) with the same validation and close rules; the mission is new, so no base revision is checked and prose publishes at creation (ADR 0076 new-mission exception). Without prose the new mission gets one sessionless publication opportunity bound to the originating member, and the response carries missionSummary.publication and an instruction for publish-delivery-summary'
+      - 'Sessionless: record-work has no report draft. A reportDraft payload field answers 400 invalid_input; send the final deliveryReport arrays instead (ADR 0078).'
+      - 'Accepts the deliver operationId input (--operation-id or payload operationId) with the same validation and receipt rules (ADR 0075). Mission, completed objective, source report and receipt commit in one transaction; a concurrent request with the same id serializes on the receipt unique index, the loser rolls back its whole creation and answers from the winning receipt, so a logical retry returns the same mission and delivery.'
+      - 'Without an operation id the server cannot distinguish a retry from intentionally separate identical work: each call creates a new mission (the documented weaker legacy guarantee). Identical text is never deduplicated by hash.'
     sideEffects:
       - creates-mission-in-review-status
+      - stores-delivery-finalization-receipt
+      - advances-mission-narrative-evidence-and-creates-publication-opportunity
       - creates-completed-objective
       - creates-delivery-record-without-session-attribution
       - records-explicit-declared-paths
@@ -992,6 +1135,7 @@ responseShapes:
       - agentInstructions
     optionalTopLevelFields:
       projectResources: 'Project resource manifest for the current execution target, grouped by logical resource key.'
+      reportDraft: 'ADR 0078, attach and resume-follow-up only, omitted when empty: { current: { draftId, revision, activeCounts, withdrawnCount } | null, abandoned: [{ draftId, sessionId, state, revision, activeEntryCount, updatedAt }] }. current is the attaching execution''s own open draft on re-attach of the same session; abandoned lists up to five abandoned drafts of the objective that may be imported explicitly.'
     sessionRequiredFields:
       - sessionKey
       - state

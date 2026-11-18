@@ -15,7 +15,7 @@ import {
 
 for (const adapter of conformanceAdapters()) {
   describe(`delivery presentation service [${adapter}]`, () => {
-    it('loads compose evidence, ignores a lost CAS, and triggers summary only for a committed presentation', async () => {
+    it('loads compose evidence, ignores a lost CAS, and never touches mission narrative state', async () => {
       const { db, cleanup } = await createConformanceDatabase(adapter, 'delivery_present');
       try {
         await bindWebappDatabaseClient({ client: db });
@@ -121,13 +121,21 @@ for (const adapter of conformanceAdapters()) {
           changedFields: ['payload_json', 'presentation'],
           resolveChangeAttribution
         });
-        assert.equal(
-          await db.get('SELECT mission_id FROM mission_summaries WHERE mission_id = ?', [
-            mission.id
-          ]),
-          undefined,
-          'a committed pending presentation does not trigger summary'
-        );
+        const narrativeState = () =>
+          db.get<{ evidence_revision: number | string; revision: number | string }>(
+            'SELECT evidence_revision, revision FROM mission_summaries WHERE mission_id = ?',
+            [mission.id]
+          );
+        const composeJobs = async () =>
+          Number(
+            (
+              await db.get<{ n: number | string }>(
+                `SELECT COUNT(*) AS n FROM worker_jobs WHERE type = 'overlord.mission.summary.compose.v1'`
+              )
+            )?.n ?? 0
+          );
+        const initialNarrative = await narrativeState();
+        assert.equal(await composeJobs(), 0, 'a pending presentation never composes narrative');
 
         const current = await readDeliveryComposeContext(db, `delivery-${adapter}`);
         assert.ok(current);
@@ -142,11 +150,11 @@ for (const adapter of conformanceAdapters()) {
           changedFields: ['payload_json', 'presentation'],
           resolveChangeAttribution
         });
-        assert.ok(
-          await db.get('SELECT mission_id FROM mission_summaries WHERE mission_id = ?', [
-            mission.id
-          ]),
-          'a committed fallback presentation triggers summary composition'
+        assert.equal(await composeJobs(), 0, 'a fallback presentation never composes narrative');
+        assert.deepEqual(
+          await narrativeState(),
+          initialNarrative,
+          'presentation rewrites never touch narrative state (ADR 0076)'
         );
         const change = await db.get<{ changed_fields_json: string; source: string }>(
           `SELECT changed_fields_json, source FROM entity_changes
@@ -156,10 +164,6 @@ for (const adapter of conformanceAdapters()) {
         assert.deepEqual(JSON.parse(change!.changed_fields_json), ['payload_json', 'presentation']);
         assert.equal(change!.source, 'webapp');
         const presented = (await readDeliveryComposeContext(db, context.delivery.id))!;
-        const before = await db.get<{ requested_generation: number }>(
-          'SELECT requested_generation FROM mission_summaries WHERE mission_id = ?',
-          [mission.id]
-        );
         await persistDeliveryPresentation({
           db,
           delivery: presented.delivery,
@@ -167,15 +171,8 @@ for (const adapter of conformanceAdapters()) {
           changedFields: ['payload_json', 'presentation'],
           resolveChangeAttribution
         });
-        const after = await db.get<{ requested_generation: number }>(
-          'SELECT requested_generation FROM mission_summaries WHERE mission_id = ?',
-          [mission.id]
-        );
-        assert.equal(
-          after!.requested_generation,
-          before!.requested_generation + 1,
-          'a committed composed presentation requests a new summary generation'
-        );
+        assert.equal(await composeJobs(), 0, 'a composed presentation never composes narrative');
+        assert.deepEqual(await narrativeState(), initialNarrative);
       } finally {
         await cleanup();
       }

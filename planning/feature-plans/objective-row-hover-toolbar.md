@@ -11,6 +11,7 @@ Implementation notes:
 - `AgentModelChooserButton` gained `fullLabel` and `collapsibleClassName`; `ObjectiveResourcePicker` gained `labelClassName`. The line uses `@max-[480px]/objective-list` on the `@container/objective-list` list root.
 - Line controls are 32px high (the `sm` size of the existing toolbar controls), not 28px.
 - Open question §9.1 is not implemented: the selected row also opens its line on hover.
+- Revised 2026-11-18 (coo:1301.4xd1): Run Queue and the identifier no longer move into the line; they stay on the first row so nothing there shifts on hover. The first-row agent icon keeps its slot but is `invisible` while the line is open. The line ends with Run, inset from the right by `pr-7.5` (menu button 28px + 2px gap), so Run's right edge lines up with the agent icon column. Sections 1, 3 and 4.4 below describe the original design where they differ.
 
 The page https://claude.ai/artifact/LzV9BVDJsVuzPNqZh2rK8a shows the approved look, with hoverable sample rows.
 

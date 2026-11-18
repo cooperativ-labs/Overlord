@@ -95,6 +95,13 @@ export const keys = {
   /** Inbound instructions queued from Overlord into a mission's live session. */
   missionAgentSessionInputs: (id: string) => ['mission', id, 'agent-session-inputs'] as const,
   objectiveAttachments: (objectiveId: string) => ['objective', objectiveId, 'attachments'] as const,
+  /**
+   * Provisional draft evidence for one objective (`GET /api/objectives/:id/report-drafts`).
+   * Outside every mission prefix on purpose: a draft write refreshes only this read, never the
+   * mission, summary, badges or seen state.
+   */
+  objectiveReportDrafts: (objectiveId: string) =>
+    ['objective', objectiveId, 'report-drafts'] as const,
   objectiveEffectiveLaunchConfig: (
     objectiveId: string,
     agent: string,

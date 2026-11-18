@@ -358,14 +358,29 @@ Owns:
   Re-deciding overwrites an earlier decision, including an agent's. Restore applies to `done` and
   `dismissed` items, clears the resolver, reason and outcome, and re-applies the supersede rules;
   restoring a `superseded` item answers 409 `mission_item_superseded`. Both return
-  `MissionItemDto`, emit a `mission_item` entity change and request a mission summary compose in
-  the same transaction. Operator surface only: no Protocol, CLI or MCP counterpart.
+  `MissionItemDto` and emit a `mission_item` entity change in the same transaction; they never
+  touch the mission narrative or its evidence basis (ADR 0076). Operator surface only: no Protocol, CLI or MCP counterpart.
 - **Mission summary** (`getMissionsByIdSummary`, `putMissionsByIdSummarySeen`; operator read
   surface, exempt from MCP parity, no Protocol, CLI or MCP read counterpart). Agents receive the
   summary only as the attach and resume-follow-up editing baseline and write it only through
-  `deliver` / `record-work` `missionSummary` (protocol.md, ADR 0060); an agent narrative write
-  sets `generated_by = 'agent'` and the `narrative_*` references and increments
-  `content_revision` in the delivery transaction. Evidence is selected in
+  `deliver` / `record-work` `missionSummary` or `publish-delivery-summary` (protocol.md, ADR 0060,
+  ADR 0076); an agent narrative write sets `generated_by = 'agent'`, the `narrative_*` references
+  and `published_evidence_revision`, and increments `content_revision`. No automatic writer
+  exists. The read returns `narrative` (`absent` | `current` | `outdated` | `legacy`, evidence and
+  published revisions, author delivery and objective, publication and change times, outstanding
+  delivery) and `narrativeWatermark`; lists, actions and questions stay available without prose.
+  The seen acknowledgement stays one scalar written only after every group of a response was
+  rendered. Optional `itemsWatermark` is the newest `resolved_at` of a live source-delivery item
+  closed by another mission's agent, excluding own-mission and person closes (ADR 0080).
+  `itemsTruncated` marks a closed list exceeding 100: this partial snapshot cannot acknowledge
+  evidence. Web/Electron use the existing `items` group with a signature of all cross-mission
+  rows and their status, provenance and linkage. Every row must be displayed for two seconds;
+  header-only coverage is insufficient. Changed rows/links invalidate coverage; remount clears
+  it. New decisions auto-open Resolved with a count/new marker. Acknowledge the maximum of
+  `watermark`, `narrativeWatermark` and `itemsWatermark` only after every required group's
+  current signature is covered and every watermark has displayed backing. Resolver navigation,
+  Done/Dismissed, reason, not-delivered-yet and Restore are live projections; delivery cards
+  render `closedElsewhere` without modifying sealed reports or receipts. Evidence is selected in
   the database before limits and capped at `MISSION_SUMMARY_EVIDENCE_LIMIT` with pre-cap totals
   and truncation flags. Risks, suggestions and evidence actions come only from open
   `mission_items` rows and carry their stable item `id`; open risks with the same normalized text,
@@ -389,8 +404,9 @@ Owns:
   `question` or `choice` request. Marking seen refuses (`invalid_input`) a watermark later than
   the caller's current evidence maximum or any watermark on an ineligible mission, upserts
   `max(existing, watermark)` for the calling workspace user and records no entity change. The
-  evidence maximum is the newest `delivered_at` of any live delivery or `created_at` of any
-  `question` or `choice` request of the mission, whatever its status, so answering a request or
+  evidence maximum is the newest `delivered_at` of any live delivery, `created_at` of any
+  `question` or `choice` request of the mission (whatever its status), retained
+  `narrative_changed_at`, or the live cross-mission agent-close `itemsWatermark`, so answering a request or
   reopening an objective after the read cannot reject the acknowledgement of evidence that was
   displayed.
 - **Delivery read projection** (`getMissionsByIdDeliveries`): delivery mission events expose
@@ -711,7 +727,7 @@ Owns:
 - Pluggable automation interface (`Automation`) and built-in automation registry
 - Provider configuration for optional Gemini-backed tools (`OPENROUTER_API_KEY`, model selection)
 - Reference summarization tools (text summarization, objective title generation)
-- Shared writing rules for model-written human-facing text: the base STE-inspired profile used by the delivery and mission-summary composers, the stricter objective profile for objective titles and summaries, and the advisory `lintSte` checker (ADR 0058)
+- Shared writing rules for model-written human-facing text: the base STE-inspired profile used by the delivery composer (and as advisory lint for agent mission summaries), the stricter objective profile for objective titles and summaries, and the advisory `lintSte` checker (ADR 0058)
 - The `objective-brief` composer: one provider call for an objective's generated title and/or summary, with deterministic assembly, fidelity checks and one bounded rewrite (ADR 0058)
 - Built-in `compose-delivery` automation for schema-constrained delivery presentation drafts
 - Fire-and-forget automation helpers that callers invoke through injected persistence callbacks
@@ -900,7 +916,7 @@ Specified in [protocol.md](protocol.md).
 - **Local liveness**: A `local` target is reachable when at least one of its non-deleted runner registrations is `healthy`/`degraded` with a heartbeat inside the reachability TTL. The 25-second claim long poll carries the heartbeat; there is no second polling loop. For upgrade compatibility a target that has **never** had a runner registration continues to fall back to `devices.last_seen_at`, so a pre-upgrade install stays selectable until its runner publishes its first heartbeat; once any runner has registered for a target, `devices.last_seen_at` no longer affects its reachability
 - **State transitions**: `queued → claimed → launching → launched|failed`; active requests may be cleared; stale claims, launched-without-attach requests, and a `launching` request whose runner never reported `launched` within the launch TTL may move to `expired`; other terminal statuses are sinks unless a new request is explicitly queued. The launch TTL is measured from `execution_requests.launch_started_at`, which is written when the request enters `launching`. Expiry never re-queues — a runner that died mid-launch may already have spawned an agent the backend cannot see, so expiring the row plus the runner's own reported failure is what preserves launch-at-most-once. Because a very slow launch can be expired underneath itself, `POST /api/runner/requests/:id/launched` must tolerate the resulting conflict on an already-`expired` request rather than treat it as an unexpected error
 - **Attach correlation**: Protocol attach links the launched request to `agent_sessions` via `execution_requests.launched_session_id` when the launched context supplies an execution request id
-- **Terminal-session projection**: `MissionDetailDto.terminalSessions` returns bounded Latch provider-session mappings from all non-deleted execution requests for the mission, including target/device label, stored session name, claim-time executable/viewer, the claim-time window-or-tab shape (`viewerOpenAs`, absent meaning `window`), and last observed state. It never exposes launch environment, terminal output, conversation data, credentials, socket tokens, or attachment grants. A mapping Latch has already reclaimed (`LATCH_SESSION_ABSENT`) is omitted from the projection after `forget` drops `metadata_json.providerSession`; the panel does not keep a tombstone card. The mission panel presents remaining sessions as one card — the newest session for the active objective, else the newest overall — with the rest collapsed into an accordion whose trigger counts the other running Latch connections. Mission and objective lifecycle mutations never stop a terminal session. Protocol attach is the binding record and does not depend on Latch.
+- **Terminal-session projection**: `MissionDetailDto.terminalSessions` returns bounded Latch provider-session mappings from all non-deleted execution requests for the mission, including target/device label, stored session name, claim-time executable/viewer, the claim-time window-or-tab shape (`viewerOpenAs`, absent meaning `window`), and last observed state. It never exposes launch environment, terminal output, conversation data, credentials, socket tokens, or attachment grants. A mapping Latch has already reclaimed (`LATCH_SESSION_ABSENT`) is omitted from the projection after `forget` drops `metadata_json.providerSession`; the panel does not keep a tombstone card. Mission-level session controls lead with the most recently created remaining session, regardless of objective or observed state; other sessions remain separately accessible. Objective-specific controls select from that objective's sessions. Mission and objective lifecycle mutations never stop a terminal session. Protocol attach is the binding record and does not depend on Latch.
 - **Explicit terminal end (ADR 0062)**: `POST /api/missions/:id/terminal-sessions/end`
   requires `mission:update` in the owning workspace and addresses a mapped execution
   request. Before dispatch, the unfinished current attempt moves to `submitted`,
@@ -1806,3 +1822,52 @@ entity change feed. The mission detail retains all live mappings plus at most fi
 ended mappings; the mission-authorized terminal-sessions/history read supplies bounded pages.
 Metadata retention, human stop reason precedence and observation fallback are defined in
 ADR 0064 and data/README.md. No direct client-to-Latch or backend-host execution is added.
+
+
+### Cross-mission item decision transactions (ADR 0079)
+
+The shared close path serves standalone close-items, delivery and record-work.
+The target is a live item in the source mission's workspace and project, bounded by
+token scope and target mission:update (authorization.md). Per-entry refusal never
+rejects valid own closes or delivery. Item decisions do not write target narrative,
+summary, publication, evidence-basis or freshness fields and schedule no narrative job.
+
+At the OUTER transaction boundary, pre-read all scoped explicit target missions and
+targets of prior still-closed unlinked session decisions. Acquire objective queue locks
+for that complete set plus the source in globally ascending mission id order BEFORE
+summary, publication or item locks. Never lock source first and then foreign missions.
+Re-read the set under locks; restart the whole transaction if membership changed.
+Revalidate source project, session, scope, item relationships, restore state and
+permissions under locks. Source locking serializes standalone session decisions with
+first-acceptance linking, so a concurrent new target forces retry rather than an
+unlocked write. A sessionless record-work source is newly inserted and private;
+existing target locks precede its summary/item locks.
+
+First acceptance links prior session decisions once, appending entity changes before
+receipt storage (data/README.md). Same operation/body replay returns the immutable
+original receipt without closes, linkage, draft sealing or handoff. Preserve ADR 0076:
+stale content/evidence, missing evidence basis or absent prose accept valid closes and
+withhold prose only. Publication retries are prose-only and gain no item authority.
+Preserve ADR 0078's reportDraft CAS and atomic sealing: failed validation/CAS rolls back
+unaccepted delivery work. Target and resolving-delivery projections are live reads,
+never mutations of accepted source reports/receipts; restore or source deletion can
+remove projection rows. Target UI and item seen-watermark behavior are separate phases.
+
+### Project item matching (ADR 0081)
+
+New additive algorithm `matchProjectItem`, implemented in core
+`service/project-items.ts`, is pinned to `project-item-match-vectors.json` for
+future local implementations. Existing seen/coverage algorithms are unchanged.
+Paths normalize backslashes and leading `./`, collapse repeated separators and
+strip trailing separators; reject absolute paths and dot traversal. Matching is
+case-sensitive with token boundaries. Tokens contain letters, digits, `_@.~-`
+and path separators; trailing prose periods are stripped. Compare full paths
+(strong=3), shared directory prefixes with at least two segments (medium=2),
+then basename (weak=1), excluding case-insensitive generic basenames `index.ts`,
+`index.tsx`, `index.js`, `index.jsx`, `README.md`, `package.json`, `mod.rs`,
+`lib.rs`, `main.rs`, `__init__.py`, `index.md`. Item input combines text, detail
+JSON and mission title. Best strength wins; matched paths sort by descending
+strength then code-unit path order, capped at five. Rows sort by best strength,
+then newest delivery (delivery timestamp/id descending), kind, position and id
+ascending. The 2,000-row scan precedes kind/query filtering. No search index,
+new data vocabulary or migration is introduced.

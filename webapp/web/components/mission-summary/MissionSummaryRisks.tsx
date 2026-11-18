@@ -69,13 +69,10 @@ function RiskRow({ row, missionId }: { row: SummaryRiskRow; missionId: string })
 export function MissionSummaryRisks({
   rows,
   missionId,
-  dimmed,
   headless = false
 }: {
   rows: readonly SummaryRiskRow[];
   missionId: string;
-  /** Previous content under the updating strip. */
-  dimmed: boolean;
   /** Rendered inside a tab that already names it: no top border and no heading. */
   headless?: boolean;
 }) {
@@ -85,8 +82,7 @@ export function MissionSummaryRisks({
       <div
         className={cn(
           'flex items-center gap-2.5 px-5 py-2.5 text-xs text-(--color-ink-dim)',
-          !headless && 'border-t border-(--color-border)',
-          dimmed && 'opacity-55'
+          !headless && 'border-t border-(--color-border)'
         )}
       >
         {headless ? null : <SummaryBlockHeading id={headingId} label="Risks" />}
@@ -100,8 +96,7 @@ export function MissionSummaryRisks({
       aria-label={headless ? 'Risks' : undefined}
       className={cn(
         'grid gap-1.5 px-5 pb-2.5 pt-3',
-        !headless && 'border-t border-(--color-border)',
-        dimmed && 'opacity-55'
+        !headless && 'border-t border-(--color-border)'
       )}
     >
       {headless ? null : (

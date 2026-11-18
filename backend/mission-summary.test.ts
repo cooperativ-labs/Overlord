@@ -15,6 +15,25 @@ const { getMissionSummary, markMissionSummarySeen } = await import('./mission-su
 const { resolveDeferredWork } = await import('./deferred-work-resolutions.ts');
 const { buildDeliveryReport } = await import('../packages/core/service/delivery-report.ts');
 
+/**
+ * Writes a row as it existed before migration 20261118140000 (ADR 0076):
+ * model-written prose that the agent-only fence would now drop. The fence
+ * triggers are removed for this write only and restored from their own SQL.
+ */
+function writeHistoricalSummaryRow(sql: string, ...params: unknown[]): void {
+  const triggers = db
+    .prepare(
+      `SELECT name, sql FROM sqlite_master WHERE type = 'trigger' AND tbl_name = 'mission_summaries'`
+    )
+    .all() as Array<{ name: string; sql: string }>;
+  for (const trigger of triggers) db.exec(`DROP TRIGGER ${trigger.name}`);
+  try {
+    db.prepare(sql).run(...params);
+  } finally {
+    for (const trigger of triggers) db.exec(trigger.sql);
+  }
+}
+
 function newId(prefix: string): string {
   return `${prefix}-${Math.random().toString(36).slice(2, 10)}`;
 }
@@ -84,6 +103,10 @@ test('an ineligible mission returns an all-null envelope and rejects seen writes
     summary: null,
     evidence: null,
     watermark: null,
+    narrative: null,
+    narrativeWatermark: null,
+    itemsWatermark: null,
+    itemsTruncated: false,
     seenAt: null
   });
   await assert.rejects(
@@ -203,16 +226,21 @@ test('the envelope projects current-run evidence, risks, suggestions, and the se
     outcomeRef: 'coo:99'
   });
 
-  db.prepare(
-    // The resolutions above already created the pending shell; replace it.
-    `INSERT OR REPLACE INTO mission_summaries
+  // A legacy model-written row as the migration left it: composed, with its
+  // last change time and no coverage basis.
+  writeHistoricalSummaryRow(
+    `INSERT INTO mission_summaries
        (mission_id, workspace_id, project_id, revision, requested_generation, completed_generation,
         status, headline, summary_markdown, source_delivery_id,
-        generated_by, generated_at, model, created_at, updated_at)
-     VALUES (?, ?, ?, 4, 3, 2, 'pending', 'Backfill is waiting on you.', 'Objective one shipped.',
+        generated_by, generated_at, model, created_at, updated_at, narrative_changed_at)
+     VALUES (?, ?, ?, 4, 3, 3, 'composed', 'Backfill is waiting on you.', 'Objective one shipped.',
              ?, 'gemini', '2026-10-21T10:01:00.000Z', 'gemini-test',
-             '2026-10-21T08:01:00.000Z', '2026-10-21T10:02:00.000Z')`
-  ).run(mission.id, mission.workspaceId, project.id, firstNew.id);
+             '2026-10-21T08:01:00.000Z', '2026-10-21T10:02:00.000Z', '2026-10-21T10:01:00.000Z')`,
+    mission.id,
+    mission.workspaceId,
+    project.id,
+    firstNew.id
+  );
 
   const countSummaryChanges = () =>
     (
@@ -220,9 +248,9 @@ test('the envelope projects current-run evidence, risks, suggestions, and the se
         .prepare(`SELECT COUNT(*) AS n FROM entity_changes WHERE entity_type = 'mission_summary'`)
         .get() as { n: number }
     ).n;
-  // The two resolutions above each triggered a recompose.
+  // Item decisions never touch the narrative (ADR 0076): no summary change.
   const changesBeforeReads = countSummaryChanges();
-  assert.equal(changesBeforeReads, 2);
+  assert.equal(changesBeforeReads, 0);
 
   const response = await getMissionSummary(mission.id);
   assert.equal(response.eligible, true);
@@ -231,7 +259,18 @@ test('the envelope projects current-run evidence, risks, suggestions, and the se
   const summary = response.summary!;
   assert.equal(summary.missionId, mission.id);
   assert.equal(summary.revision, 4);
-  assert.equal(summary.status, 'pending');
+  assert.equal(summary.status, 'composed');
+  assert.deepEqual(response.narrative, {
+    state: 'legacy',
+    evidenceRevision: 0,
+    publishedEvidenceRevision: null,
+    deliveryId: null,
+    objectiveId: null,
+    publishedAt: null,
+    changedAt: '2026-10-21T10:01:00.000Z',
+    outstandingDeliveryId: null
+  });
+  assert.equal(response.narrativeWatermark, '2026-10-21T10:01:00.000Z');
   assert.equal(summary.headline, 'Backfill is waiting on you.');
   assert.equal(summary.summary, 'Objective one shipped.');
   assert.equal(summary.sourceDeliveryId, firstNew.id);
@@ -306,6 +345,15 @@ test('the envelope projects current-run evidence, risks, suggestions, and the se
     { seenAt: '2026-10-21T10:00:00.000Z' }
   );
   assert.equal((await getMissionSummary(mission.id)).seenAt, '2026-10-21T10:00:00.000Z');
+  // The retained narrative change bounds the marker too, and nothing later is accepted.
+  await assert.rejects(
+    markMissionSummarySeen(mission.id, { watermark: '2026-10-21T10:01:00.001Z' }),
+    (error: { code?: string }) => error.code === 'invalid_input'
+  );
+  assert.deepEqual(
+    await markMissionSummarySeen(mission.id, { watermark: response.narrativeWatermark! }),
+    { seenAt: '2026-10-21T10:01:00.000Z' }
+  );
   assert.equal(
     countSummaryChanges(),
     changesBeforeReads,
@@ -367,7 +415,9 @@ test('item closures update risks and actions immediately and resolved history is
     };
     insert.run(...columns.map(key => row[key as keyof typeof row]));
   }
-  const history = (await getMissionSummary(mission.id)).summary!.closedItems;
+  const capped = await getMissionSummary(mission.id);
+  assert.equal(capped.itemsTruncated, true);
+  const history = capped.summary!.closedItems;
   assert.equal(history.length, 100);
   assert.equal(history[0]!.id, 'closed-104');
   assert.equal(history[99]!.id, 'closed-5');
@@ -434,7 +484,7 @@ test('equal open risks and same-scope suggestions group into one row; different 
   });
   db.prepare(
     `INSERT INTO mission_summaries (mission_id, workspace_id, project_id, status, generated_by, headline,
-    created_at, updated_at) VALUES (?, ?, ?, 'composed', 'deterministic', 'Grouped.', ?, ?)`
+    created_at, updated_at) VALUES (?, ?, ?, 'composed', 'agent', 'Grouped.', ?, ?)`
   ).run(
     mission.id,
     mission.workspaceId,
@@ -477,5 +527,72 @@ test('equal open risks and same-scope suggestions group into one row; different 
   assert.deepEqual(
     afterAll.risks.map(risk => risk.text),
     ['A different risk.']
+  );
+});
+
+test('cross-mission live decisions extend seen without advancing narrative or delivery watermarks', async () => {
+  const { mission, objective } = await seedMission('Cross decision seen');
+  const source = await createMission({
+    projectId: mission.projectId,
+    firstObjective: 'Fix target risk'
+  });
+  const delivery = seedDelivery({
+    mission,
+    objectiveId: objective.id,
+    deliveredAt: '2026-10-21T10:00:00.000Z',
+    knownRisks: ['Target risk']
+  });
+  // seedDeliveryRow already materializes mission items in the test helper.
+  const item = db
+    .prepare('SELECT id FROM mission_items WHERE delivery_id = ?')
+    .get(delivery.id) as { id: string };
+  assert.ok(item);
+  const at = '2026-10-24T12:00:00.000Z';
+  db.prepare(
+    `UPDATE mission_items SET status = 'dismissed', status_reason = 'Verified elsewhere',
+    resolved_by_kind = 'agent', resolved_by_objective_id = ?, resolved_by_mission_id = ?, resolved_at = ? WHERE id = ?`
+  ).run(source.objectives[0]!.id, source.id, at, item.id);
+  const before = await getMissionSummary(mission.id);
+  assert.equal(before.itemsWatermark, at);
+  assert.equal(before.itemsTruncated, false);
+  assert.equal(before.watermark, '2026-10-21T10:00:00.000Z');
+  assert.equal(before.narrativeWatermark, null);
+  await assert.rejects(
+    markMissionSummarySeen(mission.id, { watermark: '2026-10-24T12:00:00.001Z' })
+  );
+  assert.equal((await markMissionSummarySeen(mission.id, { watermark: at })).seenAt, at);
+  db.prepare('UPDATE mission_items SET resolved_by_mission_id = ? WHERE id = ?').run(
+    mission.id,
+    item.id
+  );
+  assert.equal(
+    (await getMissionSummary(mission.id)).itemsWatermark,
+    null,
+    'own-mission close excluded'
+  );
+  db.prepare('UPDATE mission_items SET resolved_by_mission_id = ? WHERE id = ?').run(
+    source.id,
+    item.id
+  );
+  db.prepare(
+    "UPDATE mission_items SET status = 'open', status_reason = NULL, resolved_by_kind = NULL, resolved_by_mission_id = NULL, resolved_by_objective_id = NULL, resolved_at = NULL WHERE id = ?"
+  ).run(item.id);
+  assert.equal(
+    (await getMissionSummary(mission.id)).itemsWatermark,
+    null,
+    'restore removes watermark'
+  );
+  db.prepare(
+    `UPDATE mission_items SET status = 'done', resolved_by_kind = 'person', resolved_at = ? WHERE id = ?`
+  ).run(at, item.id);
+  assert.equal((await getMissionSummary(mission.id)).itemsWatermark, null, 'person close excluded');
+  db.prepare(
+    `UPDATE mission_items SET status_reason = 'Verified', resolved_by_kind = 'agent', resolved_by_objective_id = ?, resolved_by_mission_id = ? WHERE id = ?`
+  ).run(source.objectives[0]!.id, source.id, item.id);
+  db.prepare('UPDATE deliveries SET deleted_at = ? WHERE id = ?').run(at, delivery.id);
+  assert.equal(
+    (await getMissionSummary(mission.id)).itemsWatermark,
+    null,
+    'deleted source evidence excluded'
   );
 });

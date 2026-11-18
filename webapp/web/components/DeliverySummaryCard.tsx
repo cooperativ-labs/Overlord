@@ -1,4 +1,5 @@
 import type { DeliveryDto } from '@overlord/contract';
+import { Link } from '@tanstack/react-router';
 import { AlertTriangle, Clock3, Lightbulb, ListChecks, Package, Scale } from 'lucide-react';
 import { createContext, type ReactNode, useContext, useState } from 'react';
 
@@ -227,6 +228,31 @@ export function DeliveryPresentation({
                     objectiveId: delivery.objectiveId
                   }}
                 />
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+      {(delivery.closedElsewhere?.length ?? 0) > 0 ? (
+        <section
+          aria-label="Closed on other missions"
+          className="rounded-md border border-(--color-border) p-3"
+        >
+          <h4 className="text-sm font-semibold">Closed on other missions</h4>
+          <ul className="mt-2 grid gap-2 text-sm">
+            {delivery.closedElsewhere!.map(item => (
+              <li key={item.itemId}>
+                <span className="font-medium">{item.status === 'done' ? 'Done' : 'Dismissed'}</span>
+                : {item.text} ·{' '}
+                <Link
+                  to="/feed/missions/$missionId"
+                  params={{ missionId: item.missionDisplayId }}
+                  search={{}}
+                  className="font-mono hover:underline"
+                >
+                  {item.missionDisplayId}
+                </Link>
+                <p className="text-xs">{item.reason}</p>
               </li>
             ))}
           </ul>

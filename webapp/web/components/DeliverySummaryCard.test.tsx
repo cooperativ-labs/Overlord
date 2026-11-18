@@ -1,6 +1,12 @@
 import type { DeliveryDto } from '@overlord/contract';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import {
+  createMemoryHistory,
+  createRootRoute,
+  createRouter,
+  RouterProvider
+} from '@tanstack/react-router';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import assert from 'node:assert/strict';
 import { afterEach, describe, it } from 'node:test';
 import type { ReactNode } from 'react';
@@ -13,6 +19,8 @@ import {
   type DeliveryPresentationVariant,
   deliveryVariantForEligibility
 } from './DeliverySummaryCard.tsx';
+
+Object.defineProperty(globalThis, 'self', { configurable: true, value: window });
 
 const clients: QueryClient[] = [];
 afterEach(() => {
@@ -220,4 +228,38 @@ describe('deferredWorkPromotion', () => {
         'Done when: The test passes 20 consecutive runs.'
     });
   });
+});
+
+it('renders closedElsewhere as live delivery data without changing the accepted report', async () => {
+  const value = delivery();
+  value.closedElsewhere = [
+    {
+      itemId: 'foreign-close',
+      kind: 'risk',
+      text: 'Fixed elsewhere',
+      missionDisplayId: 'coo:901',
+      status: 'dismissed',
+      reason: 'No longer applies'
+    }
+  ];
+  const immutableReport = JSON.stringify(value.report);
+  const route = createRootRoute({
+    component: () =>
+      withQueryClient(<DeliveryPresentation delivery={value} summaryText={value.summary} />)
+  });
+  const router = createRouter({
+    routeTree: route,
+    history: createMemoryHistory({ initialEntries: ['/'] })
+  });
+  await act(async () => {
+    await router.load();
+    render(<RouterProvider router={router} />);
+  });
+  assert.ok(screen.getByText('Closed on other missions'));
+  assert.ok(screen.getByText('Dismissed'));
+  assert.ok(screen.getByText('No longer applies'));
+  assert.ok(
+    screen.getByRole('link', { name: 'coo:901' }).getAttribute('href')?.includes('coo%3A901')
+  );
+  assert.equal(JSON.stringify(value.report), immutableReport);
 });

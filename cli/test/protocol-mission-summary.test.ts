@@ -103,7 +103,7 @@ test('deliver forwards --mission-summary-file to the backend', async () => {
   assert.equal(posted!.body.fileInputs['--mission-summary-file'], summaryJson);
 });
 
-test('a mission_summary_conflict prints the fresh baseline on stdout and fails', async () => {
+test('a publish-delivery-summary conflict prints the fresh baseline on stdout and fails', async () => {
   const baseline = {
     contentRevision: 3,
     headline: 'Another objective landed.',
@@ -115,7 +115,11 @@ test('a mission_summary_conflict prints the fresh baseline on stdout and fails',
   const payload = {
     error: 'The mission summary changed since you attached.',
     code: 'mission_summary_conflict',
-    details: { baseContentRevision: 2, missionSummary: baseline }
+    details: {
+      missionSummary: baseline,
+      publication: { id: 'pub-1', available: true },
+      instruction: 'Reconcile and publish once more.'
+    }
   };
   const runtime = runtimeWithPost(async () => {
     throw new CliError({ message: `${payload.error} — (${payload.code})`, payload });
@@ -128,15 +132,17 @@ test('a mission_summary_conflict prints the fresh baseline on stdout and fails',
         () =>
           runProtocolCommand({
             runtime,
-            subcommand: 'deliver',
+            subcommand: 'publish-delivery-summary',
             args: [
               '--mission-id',
               'coo:1',
+              '--delivery-id',
+              'delivery-1',
               '--session-key',
               'sess_x',
-              '--summary',
-              'Delivered.',
-              '--mission-summary-file',
+              '--operation-id',
+              'publish-conflict-1',
+              '--payload-file',
               '-'
             ],
             stdin: summaryJson
@@ -148,8 +154,9 @@ test('a mission_summary_conflict prints the fresh baseline on stdout and fails',
   });
   const printed = JSON.parse(stdout.slice(stdout.indexOf('{')));
   assert.equal(printed.code, 'mission_summary_conflict');
-  assert.equal(printed.baseContentRevision, 2);
   assert.deepEqual(printed.missionSummary, baseline);
+  assert.equal(printed.publication.id, 'pub-1');
+  assert.equal(printed.instruction, 'Reconcile and publish once more.');
 });
 
 test('other errors print no conflict output', () => {
@@ -184,4 +191,41 @@ test('close-items accepts closures streamed on stdin and forwards them', async (
   });
   assert.equal(posted.path, '/api/protocol/close-items');
   assert.equal(posted.body.fileInputs['--close-items-file'], input);
+});
+
+test('project-items forwards comma-separated ranking paths and filters', async () => {
+  let posted: any;
+  const runtime = runtimeWithPost(async ({ path, body }) => {
+    posted = { path, body };
+    return {} as never;
+  });
+  await inWorkspace(async () => {
+    await captureStdout(() =>
+      runProtocolCommand({
+        runtime,
+        subcommand: 'project-items',
+        args: [
+          '--objective-id',
+          'coo:1.abcd',
+          '--session-key',
+          'key',
+          '--kind',
+          'risk,suggestion',
+          '--path',
+          'backend/services/retry.ts,cli/src/retry.ts',
+          '--query',
+          'retry',
+          '--limit',
+          '20',
+          '--offset',
+          '0',
+          '--include-own-mission'
+        ]
+      })
+    );
+  });
+  assert.equal(posted.path, '/api/protocol/project-items');
+  assert.equal(posted.body.flags['--path'], 'backend/services/retry.ts,cli/src/retry.ts');
+  assert.equal(posted.body.flags['--kind'], 'risk,suggestion');
+  assert.equal(posted.body.flags['--include-own-mission'], true);
 });

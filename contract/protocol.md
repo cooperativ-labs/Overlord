@@ -171,8 +171,10 @@ Command names, flags and response shapes are in
   `cli`; MCP servers send `mcp`), and the CLI-local `changes` read uses CLI wording.
   `deliver` returns `instruction` with the post-delivery rule worded by the session's
   connection method (CLI: `resume-follow-up` with the delivered ids; MCP: ask the user to
-  start follow-up work). `mission_summary_conflict` and `mission_summary_item_skipped`
-  messages state their own next step. `agentInstructions` keeps one pointer per rule.
+  start follow-up work); when the delivery's mission summary was withheld or omitted it
+  leads with the `publish-delivery-summary` step in the same wording.
+  `mission_summary_withheld`, `mission_summary_item_skipped` and the publication errors
+  state their own next step. `agentInstructions` keeps one pointer per rule.
 - **Delivery.** A summary is the only required delivery content; delivery-report
   evidence and artifacts are optional annotations. The CLI drains objective-ledger
   evidence before delivery; sync warnings, unavailable hooks, and missing paths never
@@ -186,31 +188,65 @@ Command names, flags and response shapes are in
   `changed_files` row with `agent_declared` provenance and no resource for every explicit
   `declaredPaths` entry, stores delivery and changed-file records without an
   `agent_sessions` row (session attribution is null), and enqueues the standard delivery
-  compose job exactly as a normal `deliver` does. It accepts the whole submission as a
+  presentation compose job exactly as a normal `deliver` does (never a mission narrative
+  job). It accepts the whole submission as a
   single `--payload-json` / `--payload-file` envelope
-  (`{ objective, summary, title, declaredPaths, artifacts, deliveryReport, missionSummary }`),
-  with explicit flags overriding envelope fields.
-- **Mission summary (ADR 0060).** `attach` and `resume-follow-up` return a top-level
-  `missionSummary` editing baseline for summary-enabled missions: `contentRevision`, the
-  current `headline` and `summary`, `author` (`agent`, `gemini`, `deterministic`, or null
-  before the first write), up to 60 `openItems` (`id`, `kind`, objective display id,
-  `text`, `blocking` for human actions), `totalOpenItems` and `truncated`. Blocking human
-  actions precede other items; within each group newest delivery then report order applies. `load-context` and `connect` never
-  carry it, and the seen marker stays operator-only. `deliver` and `record-work` accept an
-  optional `missionSummary { baseContentRevision, headline, summary, closeItems }` in the
-  payload envelope or through `--mission-summary-file`; headline and summary travel
-  together, and `closeItems` may travel alone. Input is validated before any write
-  (400 `invalid_input`). On `deliver`, prose requires `baseContentRevision`; the base is
-  compared under the summary row lock before the delivery is written, and a stale base
-  rejects the whole delivery with 409 `mission_summary_conflict` whose `details` carry the
-  fresh baseline. The agent rewrites from it and retries once; on a second conflict it
-  delivers without prose, which lets the fallback composer write. `record-work` creates a
-  new mission and never checks a base. Close entries close only open items of the
-  delivering mission, with agent provenance and a required reason; other ids produce
-  bounded warnings and never reject the delivery. Agent prose is visible at once with
-  `generated_by = 'agent'`; the fallback composer never overwrites it while its delivery
-  is the newest. Style issues come back as advisory warnings. An installed client that
-  omits the field delivers as before and gets fallback prose.
+  (`{ objective, summary, title, declaredPaths, artifacts, deliveryReport, missionSummary,
+  operationId }`), with explicit flags overriding envelope fields. Mission, objective,
+  source report and finalization receipt commit in one transaction (ADR 0075).
+- **Mission summary (ADR 0060, ADR 0076).** `attach` and `resume-follow-up` return a
+  top-level `missionSummary` editing baseline for summary-enabled missions:
+  `contentRevision`, `evidenceRevision`, the `narrative` freshness envelope, the current
+  `headline` and `summary`, `author` (`agent`, `gemini`, `deterministic`, or null when no
+  prose exists), up to 60 `openItems` (`id`, `kind`, objective display id, `text`,
+  `blocking` for human actions), `totalOpenItems` and `truncated`. Blocking human actions
+  precede other items; within each group newest delivery then report order applies.
+  `load-context` and `connect` never carry it, and the seen marker stays operator-only.
+  `deliver` and `record-work` accept an optional
+  `missionSummary { baseContentRevision, baseEvidenceRevision, headline, summary,
+  closeItems }` in the payload envelope or through `--mission-summary-file`; headline and
+  summary travel together, and `closeItems` may travel alone. Input is validated before
+  any write (400 `invalid_input`); on `deliver`, prose requires `baseContentRevision`.
+  Close entries close open same-project items under ADR 0079 target authorization, with agent provenance
+  and a required reason; other ids produce bounded warnings and never reject the
+  delivery. Style issues come back as advisory warnings.
+- **Agent-only narrative (ADR 0076).** Only agents with execution context write mission
+  headline and summary; no model or deterministic composer exists, and nothing repairs
+  missing prose. `mission_summaries.evidence_revision` is the narrative basis: it advances
+  under the mission lock on every accepted delivery (and record-work), explicit
+  `resume-follow-up`, objective reopen, and source-delivery deletion. Progress,
+  heartbeats, questions, item closes or restores, and presentation rewrites never move it
+  and grant no publication authority. Every accepted delivery of a summary-eligible
+  mission creates one publication opportunity (`delivery_summary_publications`) bound to
+  the new evidence revision, its originating member and, for `deliver`, its session; it
+  supersedes older outstanding opportunities of the mission. Inline prose publishes only
+  when both bases equal the pre-delivery state under the mission and summary locks.
+  Otherwise (stale content, stale evidence, no evidence base from an older client, or no
+  prose) the delivery and valid closes are accepted, existing text stays, and the
+  opportunity remains outstanding; `missionSummary.publication { id, available,
+  withheldReason }`, a fresh `baseline` and the instruction say how to publish. 409
+  `mission_summary_conflict` never rejects a delivery. `record-work` keeps its new-mission
+  exception: its prose publishes at creation without a base, and without prose it gets a
+  sessionless opportunity bound to its originating member.
+- **Delivery summary publication (ADR 0076).** `delivery-summary-context` reads one
+  opportunity (`publication { available, state, supersededReason, … }`, a fresh baseline
+  and an instruction); `publish-delivery-summary` publishes one reconciled narrative with
+  a required caller-retained operation id and both bases. Authority is live
+  authentication, current membership and project scope, `event:create`, the same
+  originating member and, for a session-bound opportunity, the original session key of
+  the session that delivered; that delivered, ended session is accepted for these two
+  commands only (an ended undelivered or deleted session is invalid), and no other
+  ended-session update, close or edit authority follows. One successful publication per
+  opportunity: the same operation id and content replays (`replayed: true`); anything else
+  after success is 409 `mission_summary_already_published`. Stale bases are 409
+  `mission_summary_conflict` with the current baseline and consume nothing; a superseded
+  opportunity is 409 `mission_summary_publication_superseded`; unknown, foreign or
+  out-of-scope ids are 404 `mission_summary_publication_not_found`. There is no deadline,
+  timer, expiry job or attempt limit: an opportunity valid after a month can publish after
+  a month with fresh bases and current authority. Agents retry a conflict once and then
+  report that the summary is not updated; they never deliver again or resume follow-up
+  only to provide prose. Older clients that ignore these fields still deliver; their
+  mission prose stays absent or outdated until an agent publishes.
 
 ## Interaction Surfaces
 
@@ -341,6 +377,158 @@ answering a decision it is blocked on, and injecting an instruction into it.
   revision, and exposed as additive `dismissed`/`dismissedAt` on human reads; it never
   changes the request, its delivery, the blocking-question seen marker, or answerability.
 
+### Replay-safe finalization (ADR 0075)
+
+`deliver` and `record-work` are finalizations: each acceptance commits, in the same
+transaction as its delivery, an immutable `delivery_finalizations` receipt holding the
+canonical digest of the validated semantic request and the accepted result. Receipts live
+as long as their delivery; they are not request-cache entries and nothing expires them.
+
+- **Operation id.** Both accept an optional caller-retained `operationId` (`--operation-id`
+  or the envelope field; 8-128 characters of letters, digits, `.`, `_`, `:` or `-`). It is
+  a non-secret reference scoped to the workspace member and operation kind, never a
+  credential, and never stored in the delivery payload.
+- **Digest.** The digest covers the validated semantic input: resolved scope ids, summary,
+  artifacts, normalized declared paths, payload (delivery report), verification and
+  follow-up text, mission summary input and, for record-work, objective, title and
+  assignee. It excludes session keys and other secrets, capture diagnostics, timestamps
+  and server-derived presentation. Object keys are sorted; array order is preserved.
+- **Replay.** With an operation id, the service first resolves the caller's current
+  membership, permission and project scope, then looks up the caller's receipt before
+  requiring a live session. The same id and digest returns the stored result with
+  `replayed: true` and writes nothing, also after the session ended or the objective
+  completed. The same id with a different digest, mission or session answers 409
+  `delivery_operation_conflict`. Revoked access, a project moved out of a token's scope or
+  a deleted mission makes the replay fail like any other request; a stolen id grants nothing.
+- **One finalization per session.** Under the mission lock the service rechecks scope,
+  the operation receipt and the session's live, undelivered state. A session that already
+  delivered answers 409 `delivery_already_accepted` with `details.deliveryId`, whether or
+  not the request had an operation id and whether or not the historical delivery has a
+  receipt (receipts are not backfilled). A unique index on the receipt's session is the
+  storage backstop.
+- **Record-work.** Before a mission exists there is nothing to lock: concurrent requests
+  with the same operation id serialize on the receipt's unique index; the loser's whole
+  creation (mission, objective, delivery, items) rolls back and it answers from the
+  winner's receipt. Without an operation id each call creates new work: the server cannot
+  tell a retry from intentionally separate identical work and never deduplicates by text.
+- **Durable side effects.** Run Queue dispatch, the next-draft `awaiting_approval` event,
+  the awaiting-review notification and its dispatch job, webhooks, live-activity refresh
+  and the delivery-presentation compose job are written in the finalization transaction,
+  each deduplicated by the accepted delivery because a replay writes nothing. A failure
+  after commit cannot turn an acceptance into an apparent rejection. Queue selection and the
+  rule that other active objectives keep the mission executing are unchanged.
+- **Receipt read.** `delivery-receipt` (`--delivery-id` or `--operation-id` with optional
+  `--operation-kind deliver|record_work`) returns `{ receipt }` to the member who
+  finalized, in current scope, after session end; anything else is 404
+  `delivery_receipt_not_found`. A not-found read does not prove that a concurrent attempt
+  cannot commit: retry the same operation id. MCP exposes `overlord_delivery_receipt`.
+
+**Client retry identity.** The logical attempt, not the request text, owns the id:
+
+- The CLI persists an owner-only attempt record (operation id, kind, semantic request
+  digest and addressed scope; no raw body, no session key, no token) under the Overlord
+  home before sending. Re-running the same command after a timeout or restart reuses the
+  pending attempt's id. `--retry-operation <id>` resumes a named attempt and refuses a
+  different request body; `--new-operation` starts a new attempt, which is how
+  intentionally identical `record-work` is recorded twice. An identical `record-work`
+  whose attempt was already accepted is refused locally unless one of those flags says
+  which is meant. `--operation-id <id>` uses a caller-retained id directly. If the attempt
+  cannot be persisted, `record-work` requires an explicit `--operation-id` for the strong
+  guarantee and `deliver` proceeds with a warning (the one-finalization-per-session rule
+  still prevents a second delivery). The CLI never mints a new id for a retry.
+- MCP `overlord_deliver_session` and `overlord_record_work` take `operationId` in typed
+  input. The caller chooses it before the first invocation and reuses it on every retry
+  of that attempt. An id generated inside a tool handler per invocation gives no retry
+  guarantee, so the tools never generate one.
+- Later narrow publication operations (planned narrative publication) follow the same
+  convention: a caller-retained operation id per logical attempt, persisted before
+  sending by the CLI, reused on retry, and replayed from a durable receipt.
+
+### Durable draft report evidence (ADR 0078)
+
+An executing agent may record provisional report evidence while it works and seal it
+once at delivery. Drafts are opt-in: sessions that never write one keep the full-report
+`deliver` behavior and need no extra call.
+
+- **Ownership.** Each protocol session owns at most one draft
+  (`delivery_report_drafts`), created by its first batch. Only the live, undelivered
+  session, called by the workspace member who owns it, may write it (otherwise 403
+  `report_draft_forbidden`). Distinct objectives and sessions have separate drafts; a
+  follow-up session starts a fresh draft.
+- **Batches.** `update` accepts `reportDraft { operationId, expectedRevision,
+  operations }` (`--report-draft-json`, `--report-draft-file` or the `reportDraft` field
+  of `--payload-json`; never stored in the event payload). `--summary` is optional with a
+  batch. `operationId` (8-128 characters as for finalization) is the caller-retained batch
+  identity, separate from entry ids: the caller chooses it before sending and reuses it for
+  every retry of the batch; neither the CLI nor an MCP handler mints one.
+  `expectedRevision` is the draft revision the batch was prepared against (0 before the
+  first batch). `operations` holds 1-50 operations, at most one per entry:
+  `upsert { entryId, kind, content }`, `withdraw { entryId, reason <= 280 }` or
+  `import { sourceDraftId, sourceEntryId, entryId? }`. Entry ids are stable client ids
+  (1-100 characters, letters, digits, `.`, `_`, `:`, `-`); an entry's kind never changes.
+  Kinds are the closed set `human_action`, `tradeoff`, `known_risk`, `deferred_work`,
+  `assumption`; content reuses the delivery-report input schemas and bounds, with
+  `{ text }` for risks and assumptions. Unknown fields, kinds or values answer 400
+  `invalid_input` before any read or write.
+- **Atomicity and replay.** Under the mission lock, a batch applies all of its operations
+  or none, increments the draft revision once, and writes in the same transaction an
+  immutable `delivery_report_draft_batches` receipt (operation id, canonical digest of the
+  batch's semantic request, result revision, attributable event id) and one ordinary
+  `update` mission event whose payload carries only bounded batch metadata
+  (`reportDraft { draftId, operationId, revision, upserted, withdrawn, imported }`), never
+  entry text. Before the revision check and before requiring a live session, the service
+  looks up the receipt: the same id and digest returns the original `eventId` and
+  `reportDraft { revision, replayed: true, currentRevision }` without writing, so a lost
+  response followed by later batches never overwrites them or duplicates the event; the
+  same id with a different request answers 409 `report_draft_operation_conflict`. A replay
+  after sealing or session end is a currently authorized receipt read and never regains
+  update authority. A stale `expectedRevision` applies nothing and answers 409
+  `report_draft_conflict` with `details { currentRevision, draft }`.
+- **Bounds.** At most 12 active entries per kind; withdrawn entries stay readable as audit
+  data and do not count. A draft retains at most 1,000 accepted batches and 1,000 distinct
+  entry ids; beyond either bound new writes answer 409 `report_draft_limit_exceeded` while
+  receipt replays, reads and finalization still work. Nothing is pruned, so every accepted
+  batch replays for the life of the draft.
+- **Inspection.** `report-draft` (`--session-key`, mission or objective scope, optional
+  `--draft-id`, `--include-withdrawn`; `mission:read`) returns `{ draft, revision,
+  inspection, abandoned, limits }`. For the caller's own open draft, `inspection` is the
+  normalized, eligibility-filtered report `deliver` would seal now, each active entry's V1
+  reference and any exclusion warnings (Git or routine-QA human actions, deferred work kept
+  out of out-of-mission work). It works after session end. `--draft-id` reads an abandoned
+  (session ended unsealed) or sealed draft of the same objective; another live session's
+  open draft is 404 `report_draft_not_found`. MCP exposes `overlord_report_draft`.
+- **Attach.** `attach` and `resume-follow-up` add an optional compact `reportDraft
+  { current, abandoned }` baseline: the attaching execution's own open draft (revision,
+  active and withdrawn counts) on re-attach of the same session, and up to five abandoned
+  drafts of the objective. A replacement execution may import selected abandoned entries
+  explicitly with `import`; it never inherits the old session's write rights and never
+  seals the old draft.
+- **Seal.** `deliver` takes `reportDraft { expectedRevision, operations? }`
+  (`--report-draft-json|file`, the payload field, or `--expected-draft-revision <n>`). When
+  the session has a draft, a missing or stale revision answers 409 `report_draft_conflict`
+  before any write, so a resumed older client cannot silently ignore recorded evidence.
+  Inside the finalization transaction the service applies the final operations, then
+  builds the authored V1 report from the active entries in position order followed by
+  `deliveryReport` items whose canonical kind and content match no active entry. Entries
+  are amended or removed only through their ids, never by omission. More than 12 items of a
+  kind answers 409 `report_draft_limit_exceeded`; nothing is truncated or chosen by a
+  model. Normalization and eligibility are the ones shared with record-work and non-draft
+  deliveries; V1 item ids and digests follow the existing position rules. Acceptance
+  records each active entry's V1 reference (`sealedRef`), seals the draft and links the
+  delivery; the response adds `reportDraft { draftId, revision, sealed, activeEntries,
+  refs }`. A failed delivery leaves the draft open; a replayed delivery returns the
+  original sealed result and cannot reseal or change it. Sealed drafts, their entries and
+  batch receipts are immutable in both database editions.
+- **No live meaning.** Draft entries are not `mission_items`, not delivery-local item refs,
+  not human obligations and not composer input. They cannot close or supersede anything,
+  never change seen state and never complete an objective. Only the accepted delivery's
+  report creates items, and the existing reconciliation and supersede services own them.
+  `record-work` stays sessionless and rejects `reportDraft` with 400 `invalid_input`.
+- **Operator projection.** `GET /api/objectives/{id}/report-drafts` (`mission:read`)
+  returns the objective's newest 20 drafts with active and withdrawn entries, read-only.
+  Draft writes and seals append `delivery_report_draft` entity changes scoped to the
+  objective.
+
 ### Agent mission item inspection and closure (ADR 0073)
 
 `mission-items` and `close-items` require an attached live session key matching the
@@ -366,3 +554,69 @@ Both accept `--mission-id` or an objective display id through `--objective-id`.
 MCP exposes `overlord_mission_items` (`missionId` or `objectiveId`, `sessionKey`,
 `limit`, `offset`) and `overlord_close_items` (same scope and key, `closeItems`).
 Attach instructions name the read and closure by the caller's connection method.
+
+
+### Cross-mission item decisions (ADR 0079)
+
+The existing standalone close-items command and delivery/record-work
+`missionSummary.closeItems` accept items of any live mission in the source project.
+Entries remain `{ id, status: done|dismissed, reason }`, 1..50 per standalone call,
+reason required and at most 280 characters. Invalid input is 400 `invalid_input`
+before writes. Prose and its content/evidence bases concern the source mission only.
+Publication accepts no closeItems.
+
+Own entries retain their current rights. Foreign entries require mission:update
+intersected with token consent; denial yields `forbidden` for those entries while own
+closes and delivery proceed. Workspace/project/token-scope violations, unknown ids
+and deleted sources are `not_found`. The old `other_mission` agent skip is removed.
+Agents remain open-only: closed or superseded items yield `not_open` or `superseded`.
+Foreign person-restored rows yield `restored_by_person`. Repeated ids yield `duplicate`.
+Skipped warnings retain code `mission_summary_item_skipped` and itemId/message, adding
+`problem` and, for scoped closed/restored rows, `currentStatus` and `resolvedBy`.
+
+Results keep closedItemIds and warnings and add
+`targets: [{ missionDisplayId, closed }]`, successfully closed foreign entries grouped
+and sorted by mission display id. Every close records resolving mission, objective,
+session when attached, and delivery when available. Standalone decisions get their
+first accepted delivery link once; sessionless record-work uses its new delivery id.
+Resolver reads and delivery `closedElsewhere` follow the live data projection rules
+in data/README.md and OpenAPI; accepted reports and receipts stay immutable.
+
+No item action changes the target's narrative/publication state or schedules narrative
+work. Stale/missing/absent prose still accepts valid closes (ADR 0076); draft CAS and
+validation failure still roll back unaccepted work (ADR 0078). Retry uncertain delivery
+with the same operation id/body for the original receipt without repeat writes. Accepted
+withheld prose uses fresh publication bases and its own retained publication operation
+id, containing prose only. Lock order and changed-set retry are in architecture.md.
+
+### Project item discovery (ADR 0081)
+
+`project-items` / MCP `overlord_project_items` requires `mission:read` and a live,
+undelivered attached session matching the addressed mission and optional objective.
+The `project_automation` preset is denied; ADR 0076 grants no discovery authority.
+Only accepted live open items in that workspace and project qualify. Draft report
+observations never enter results or counts. Own-mission rows are excluded unless
+`--include-own-mission` is set.
+
+`--kind` is comma-separated (`risk,human_action,suggestion`). `--query` is a
+case-insensitive substring of text and suggestion change/location/doneWhen, at
+most 200 characters, never an id lookup. `--path` is comma-separated repo-relative
+ranking evidence (max 200 paths, 1000 characters each), added to the objective's
+live ledger. Paths reject absolute paths and dot traversal; they do not filter
+out unmatched rows. Limit is 1..100 (default 20), offset non-negative (default 0).
+
+The version-1 response and scan/paging bounds are specified in
+`protocol-commands.yaml`; `total` counts filtered rows within the newest 2,000-row
+scan, and `scanTruncated` signals more eligible rows outside it. `ledger.paths`
+is the number of loaded ledger rows (bounded by objective-changes);
+`ledger.captureGap` is true for capture warnings or a truncated ledger.
+Restart pagination after concurrent writes. Read full details through an
+authorized mission read; verify before closing via standalone `close-items` or
+delivery `missionSummary.closeItems`. Retain the delivery operation id and
+semantic body for uncertain-response replay. Accepted withheld prose uses fresh
+publication bases and a separate retained publication operation id; publication
+never receives closes.
+
+Compact attach adds only `missionSummary.otherMissionOpenItems`, an exact count
+of other missions' accepted live open items. Only a positive count adds discovery
+guidance, in the connection method's CLI or MCP vocabulary. Lists stay out of attach.

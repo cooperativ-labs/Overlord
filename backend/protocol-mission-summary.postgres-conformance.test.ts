@@ -94,75 +94,84 @@ for (const adapter of conformanceAdapters()) {
           sessionKey: a.sessionKey,
           summary: 'A.',
           payloadJson: agentReport,
-          missionSummary: { baseContentRevision: 0, headline: 'A landed.', summary: 'A is tested.' }
+          missionSummary: {
+            baseContentRevision: 0,
+            baseEvidenceRevision: 0,
+            headline: 'A landed.',
+            summary: 'A is tested.'
+          }
         });
         assert.equal(delivered.missionSummary?.contentRevision, 1);
-
-        await assert.rejects(
-          deliverSession({
-            ctx,
-            missionId: mission.id,
-            sessionKey: b.sessionKey,
-            summary: 'B.',
-            payloadJson: agentReport,
-            missionSummary: { baseContentRevision: 0, headline: 'B landed.', summary: 'B.' }
-          }),
-          (error: unknown) => {
-            assert.ok(error instanceof ServiceError);
-            assert.equal(error.code, 'mission_summary_conflict');
-            const details = error.details as {
-              missionSummary: { contentRevision: number; openItems: Array<{ kind: string }> };
-            };
-            assert.equal(details.missionSummary.contentRevision, 1);
-            assert.deepEqual(details.missionSummary.openItems.map(item => item.kind).sort(), [
-              'human_action',
-              'risk'
-            ]);
-            return true;
-          }
-        );
-        const deliveries = await db.all<{ objective_id: string }>(
-          `SELECT objective_id FROM deliveries WHERE mission_id = ?`,
-          [mission.id]
-        );
-        assert.deepEqual(
-          deliveries.map(row => row.objective_id),
-          [first!.id]
-        );
 
         const risk = (await db.get<{ id: string }>(
           `SELECT id FROM mission_items WHERE mission_id = ? AND kind = 'risk'`,
           [mission.id]
         ))!.id;
-        const retried = await deliverSession({
+        // Stale prose is accepted and withheld (ADR 0076): the delivery and closes land.
+        const stale = await deliverSession({
           ctx,
           missionId: mission.id,
           sessionKey: b.sessionKey,
           summary: 'B.',
+          payloadJson: agentReport,
           missionSummary: {
-            baseContentRevision: 1,
-            headline: 'A and B landed.',
-            summary: 'Both are tested.',
+            baseContentRevision: 0,
+            baseEvidenceRevision: 0,
+            headline: 'B landed.',
+            summary: 'B.',
             closeItems: [
               { id: risk, status: 'done', reason: 'Batched in B.' },
               { id: 'missing', status: 'dismissed', reason: 'Unknown.' }
             ]
           }
         });
-        assert.deepEqual(retried.missionSummary?.closedItemIds, [risk]);
-        assert.equal(retried.missionSummary?.contentRevision, 2);
+        assert.deepEqual(stale.missionSummary?.closedItemIds, [risk]);
+        assert.equal(stale.missionSummary?.narrativeWritten, false);
+        assert.equal(stale.missionSummary?.publication?.withheldReason, 'stale_content');
+        assert.equal(stale.missionSummary?.baseline?.contentRevision, 1);
+        assert.deepEqual(stale.missionSummary?.baseline?.openItems.map(item => item.kind).sort(), [
+          'human_action',
+          'human_action',
+          'risk'
+        ]);
+        const deliveries = await db.all<{ objective_id: string }>(
+          `SELECT objective_id FROM deliveries WHERE mission_id = ? ORDER BY delivered_at`,
+          [mission.id]
+        );
+        assert.deepEqual(
+          deliveries.map(row => row.objective_id),
+          [first!.id, second.id]
+        );
+
+        const { publishDeliverySummary } =
+          await import('../packages/core/service/delivery-summary-publication.ts');
+        const published = await publishDeliverySummary({
+          ctx,
+          missionId: mission.id,
+          deliveryId: stale.deliveryId,
+          sessionKey: b.sessionKey,
+          operationId: 'publish-b-conformance',
+          narrative: {
+            baseContentRevision: stale.missionSummary!.baseline!.contentRevision,
+            baseEvidenceRevision: stale.missionSummary!.baseline!.evidenceRevision,
+            headline: 'A and B landed.',
+            summary: 'Both are tested.'
+          }
+        });
+        assert.equal(published.contentRevision, 2);
 
         const summary = (await getMissionSummary(mission.id)).summary!;
         assert.equal(summary.status, 'composed');
         assert.deepEqual(summary.author, {
           kind: 'agent',
           objectiveId: second.id,
-          deliveryId: retried.deliveryId
+          deliveryId: stale.deliveryId
         });
         assert.equal(summary.headline, 'A and B landed.');
         const closed = summary.closedItems.find(item => item.id === risk);
         assert.equal(closed?.reason, 'Batched in B.');
         assert.equal(closed?.resolvedBy?.kind, 'agent');
+        assert.equal((await getMissionSummary(mission.id)).narrative?.state, 'current');
 
         const recorded = await recordWork({
           ctx,

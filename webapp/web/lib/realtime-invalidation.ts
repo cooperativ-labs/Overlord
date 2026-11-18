@@ -142,10 +142,21 @@ function routeChange(change: EntityChangeDto): QueryKey[] | null {
     case 'agent_session': {
       // Capture binding, first callback and health live on the session row and
       // ride on the objective file-change read, so refresh it with the workflow.
+      // A session ending turns its unsealed draft from open to abandoned, and
+      // that state is derived from the session row, so refresh the draft read too.
       const workflowKeys = missionWorkflowKeys(change);
       const missionId = missionIdFor(change);
       if (!missionId) return workflowKeys;
-      return [...(workflowKeys ?? []), keys.missionFileChanges(missionId)];
+      const objectiveId = objectiveIdFor(change);
+      const draftKeys = objectiveId ? [keys.objectiveReportDrafts(objectiveId)] : [];
+      return [...(workflowKeys ?? []), keys.missionFileChanges(missionId), ...draftKeys];
+    }
+    case 'delivery_report_draft': {
+      // Provisional draft evidence (ADR 0078) refreshes only its objective read: it is never a
+      // mission item, summary input, badge, seen marker or completion signal.
+      const objectiveId = objectiveIdFor(change);
+      if (!objectiveId) return null;
+      return [keys.objectiveReportDrafts(objectiveId)];
     }
     case 'execution_request': {
       return missionWorkflowKeys(change);

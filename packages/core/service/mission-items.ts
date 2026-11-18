@@ -51,7 +51,15 @@ export type MissionItemChangeAttribution = Pick<
 
 export type MissionItemResolver =
   | { kind: 'person'; workspaceUserId: string | null }
-  | { kind: 'agent'; objectiveId: string | null; deliveryId: string | null };
+  | {
+      kind: 'agent';
+      objectiveId: string | null;
+      deliveryId: string | null;
+      missionId?: string | null;
+      sessionId?: string | null;
+      missionDisplayId?: string | null;
+      objectiveDisplayId?: string | null;
+    };
 
 export interface MissionItem {
   id: string;
@@ -70,6 +78,7 @@ export interface MissionItem {
   resolvedBy: MissionItemResolver | null;
   outcome: MissionItemOutcome | null;
   outcomeRef: string | null;
+  restoredAt: string | null;
   resolvedAt: string | null;
   reportedAt: string;
   createdAt: string;
@@ -95,6 +104,11 @@ interface MissionItemRow {
   resolved_by_workspace_user_id: string | null;
   resolved_by_objective_id: string | null;
   resolved_by_delivery_id: string | null;
+  resolved_by_mission_id: string | null;
+  resolved_by_session_id: string | null;
+  resolver_mission_display_id: string | null;
+  resolver_objective_display_id: string | null;
+  restored_at: string | null;
   outcome: string | null;
   outcome_ref: string | null;
   resolved_at: string | null;
@@ -112,7 +126,16 @@ const ITEM_COLUMNS = `mission_items.id, mission_items.workspace_id, mission_item
   mission_items.resolved_by_objective_id, mission_items.resolved_by_delivery_id,
   mission_items.outcome, mission_items.outcome_ref, mission_items.resolved_at,
   mission_items.reported_at, mission_items.created_at, mission_items.updated_at,
-  mission_items.revision`;
+  mission_items.revision, mission_items.resolved_by_mission_id,
+  mission_items.resolved_by_session_id, mission_items.restored_at,
+  (SELECT display_id FROM missions rm WHERE rm.id = mission_items.resolved_by_mission_id
+     AND rm.deleted_at IS NULL AND rm.workspace_id = mission_items.workspace_id
+     AND rm.project_id = mission_items.project_id) AS resolver_mission_display_id,
+  (SELECT rm.display_id || '.' || ro.display_key FROM objectives ro
+     JOIN missions rm ON rm.id = ro.mission_id AND rm.deleted_at IS NULL
+       AND rm.workspace_id = mission_items.workspace_id AND rm.project_id = mission_items.project_id
+     WHERE ro.id = mission_items.resolved_by_objective_id AND ro.deleted_at IS NULL)
+     AS resolver_objective_display_id`;
 
 function parseDetail(value: unknown): Record<string, unknown> {
   let parsed: unknown = value;
@@ -136,7 +159,11 @@ function toResolver(row: MissionItemRow): MissionItemResolver | null {
     return {
       kind: 'agent',
       objectiveId: row.resolved_by_objective_id,
-      deliveryId: row.resolved_by_delivery_id
+      deliveryId: row.resolved_by_delivery_id,
+      missionId: row.resolved_by_mission_id,
+      sessionId: row.resolved_by_session_id,
+      missionDisplayId: row.resolver_mission_display_id ?? null,
+      objectiveDisplayId: row.resolver_objective_display_id ?? null
     };
   }
   return null;
@@ -160,6 +187,7 @@ function toMissionItem(row: MissionItemRow): MissionItem {
     resolvedBy: toResolver(row),
     outcome: (row.outcome as MissionItemOutcome | null) ?? null,
     outcomeRef: row.outcome_ref,
+    restoredAt: row.restored_at,
     resolvedAt: row.resolved_at,
     reportedAt: row.reported_at,
     createdAt: row.created_at,
@@ -409,6 +437,8 @@ export type MissionItemWriteProblem =
   | 'not_found'
   /** The item belongs to a mission other than the one the caller is scoped to. */
   | 'other_mission'
+  | 'forbidden'
+  | 'restored_by_person'
   /** The item is not in a status this caller may change it from. */
   | 'not_open'
   /** Superseded items can be neither closed nor restored. */
@@ -504,6 +534,21 @@ export async function closeMissionItem(
   return db.transaction(async tx => {
     const scoped = await scopedItem(tx, itemId, missionId);
     if ('ok' in scoped) return scoped;
+    if (resolver.kind === 'agent' && !resolver.missionId && resolver.objectiveId) {
+      const origin = await tx.get<{ mission_id: string }>(
+        'SELECT mission_id FROM objectives WHERE id = ?',
+        [resolver.objectiveId]
+      );
+      resolver = { ...resolver, missionId: origin?.mission_id ?? null };
+    }
+    if (
+      resolver.kind === 'agent' &&
+      resolver.missionId &&
+      resolver.missionId !== scoped.missionId &&
+      scoped.restoredAt
+    ) {
+      return { ok: false, problem: 'restored_by_person', item: scoped };
+    }
     const from: readonly MissionItemStatus[] =
       resolver.kind === 'agent' ? ['open'] : MISSION_ITEM_STATUSES;
     if (!from.includes(scoped.status)) {
@@ -518,7 +563,7 @@ export async function closeMissionItem(
       `UPDATE mission_items
           SET status = ?, status_reason = ?, resolved_by_kind = ?,
               resolved_by_workspace_user_id = ?, resolved_by_objective_id = ?,
-              resolved_by_delivery_id = ?, outcome = ?, outcome_ref = ?, resolved_at = ?,
+              resolved_by_delivery_id = ?, resolved_by_mission_id = ?, resolved_by_session_id = ?, outcome = ?, outcome_ref = ?, resolved_at = ?,
               updated_at = ?, revision = revision + 1
         WHERE id = ? AND status IN (${sqlPlaceholders(from.length)})`,
       [
@@ -528,6 +573,8 @@ export async function closeMissionItem(
         resolver.kind === 'person' ? resolver.workspaceUserId : null,
         resolver.kind === 'agent' ? resolver.objectiveId : null,
         resolver.kind === 'agent' ? resolver.deliveryId : null,
+        resolver.kind === 'agent' ? (resolver.missionId ?? null) : null,
+        resolver.kind === 'agent' ? (resolver.sessionId ?? null) : null,
         outcome,
         outcome === null ? null : (outcomeRef?.trim() ?? null),
         now,
@@ -579,12 +626,13 @@ export async function restoreMissionItem(
 
     const updated = await tx.run(
       `UPDATE mission_items
-          SET status = 'open', status_reason = NULL, resolved_by_kind = NULL,
+          SET restored_at = CASE WHEN resolved_by_kind = 'agent' THEN ? ELSE restored_at END,
+              status = 'open', status_reason = NULL, resolved_by_kind = NULL,
               resolved_by_workspace_user_id = NULL, resolved_by_objective_id = NULL,
-              resolved_by_delivery_id = NULL, outcome = NULL, outcome_ref = NULL,
+              resolved_by_delivery_id = NULL, resolved_by_mission_id = NULL, resolved_by_session_id = NULL, outcome = NULL, outcome_ref = NULL,
               resolved_at = NULL, updated_at = ?, revision = revision + 1
         WHERE id = ? AND status IN ('done', 'dismissed')`,
-      [now, itemId]
+      [now, now, itemId]
     );
     if (updated.changes === 0) return { ok: false, problem: 'not_open', item: scoped };
     const restored = (await getMissionItem(tx, itemId))!;
@@ -757,4 +805,61 @@ export async function listMissionItems(
     total: Number(count?.total ?? 0),
     truncated: rows.length > limit
   };
+}
+
+/** Link prior standalone decisions only at first acceptance, in the caller's locked transaction. */
+export async function linkSessionMissionItems(
+  db: DatabaseClient,
+  scope: {
+    sessionId: string;
+    missionId: string;
+    workspaceId: string;
+    projectId: string;
+    deliveryId: string;
+    attribution: MissionItemChangeAttribution;
+    now: string;
+  }
+): Promise<void> {
+  const rows = await db.all<{ id: string }>(
+    `SELECT mi.id FROM mission_items mi
+    JOIN deliveries d ON d.id = mi.delivery_id AND d.deleted_at IS NULL
+    JOIN missions m ON m.id = mi.mission_id AND m.deleted_at IS NULL
+    WHERE mi.resolved_by_session_id = ? AND mi.resolved_by_mission_id = ?
+      AND mi.workspace_id = ? AND mi.project_id = ? AND m.project_id = ?
+      AND mi.resolved_by_delivery_id IS NULL AND mi.resolved_by_kind = 'agent'
+      AND mi.status IN ('done', 'dismissed')`,
+    [scope.sessionId, scope.missionId, scope.workspaceId, scope.projectId, scope.projectId]
+  );
+  for (const { id } of rows) {
+    await db.run(
+      `UPDATE mission_items SET resolved_by_delivery_id = ?, updated_at = ?, revision = revision + 1
+      WHERE id = ?`,
+      [scope.deliveryId, scope.now, id]
+    );
+    const item = (await getMissionItem(db, id))!;
+    await recordItemChange(db, item, 'update', item.revision, ['resolved_by'], scope.attribution);
+  }
+}
+
+/** Bounded live projection; accepted source reports and receipts are never rewritten. */
+export async function closedElsewhere(db: DatabaseClient, deliveryId: string, missionId: string) {
+  return db.all<{
+    itemId: string;
+    kind: MissionItemKind;
+    text: string;
+    missionDisplayId: string;
+    status: MissionItemClosedStatus;
+    reason: string;
+  }>(
+    `SELECT mi.id AS "itemId", mi.kind, mi.text,
+      m.display_id AS "missionDisplayId", mi.status, mi.status_reason AS reason
+    FROM mission_items mi JOIN missions m ON m.id = mi.mission_id AND m.deleted_at IS NULL
+    JOIN deliveries d ON d.id = mi.delivery_id AND d.deleted_at IS NULL
+    JOIN deliveries source ON source.id = mi.resolved_by_delivery_id AND source.deleted_at IS NULL
+    WHERE mi.resolved_by_delivery_id = ? AND mi.mission_id <> ?
+      AND mi.workspace_id = source.workspace_id AND mi.project_id = source.project_id
+      AND m.project_id = source.project_id AND mi.resolved_by_kind = 'agent'
+      AND mi.status IN ('done', 'dismissed') ORDER BY mi.mission_id, mi.id LIMIT 50`,
+    [deliveryId, missionId]
+  );
 }

@@ -48,6 +48,7 @@ import {
   ObjectiveEvidenceSections
 } from '../objectives/ObjectiveEvidenceSections.tsx';
 import { ObjectiveMenuButton } from '../objectives/ObjectiveMenuButton.tsx';
+import { ObjectiveReportDrafts } from '../objectives/ObjectiveReportDrafts.tsx';
 import {
   isInFlightObjective,
   isNotStartedObjective,
@@ -603,7 +604,8 @@ function DetailMenu(props: LayoutProps & { triggerClassName?: string }) {
 
 /**
  * The left column (plan §9.4): undismissed request notifications (in flight), Summary and
- * Instructions, attachments, Blocking questions, then deliveries, file changes and earlier runs.
+ * Instructions, attachments, Blocking questions, then deliveries, read-only draft evidence
+ * (ADR 0078), file changes and earlier runs.
  */
 function DetailMainColumn(props: LayoutProps) {
   const { mission, objective, evidence } = props;
@@ -729,6 +731,10 @@ function DetailMainColumn(props: LayoutProps) {
           loading={props.evidenceLoading}
           truncation={props.evidenceTruncation}
         />
+      ) : objective.startedAt !== null ? (
+        // A run that left no delivery, session or file (e.g. reverted to draft) may still have
+        // abandoned draft evidence; the section stays collapsed and fetches only when opened.
+        <ObjectiveReportDrafts objective={objective} />
       ) : notStarted ? (
         <p className="text-sm text-(--color-ink-dim)">
           Nothing has run yet. Deliveries and file changes appear here once this objective starts.

@@ -9,6 +9,7 @@ export const SUPPORTED_PROTOCOL_SUBCOMMANDS = [
   'auth-status',
   'capture-change',
   'changes',
+  'project-items',
   'mission-items',
   'close-items',
   'connect',
@@ -20,6 +21,8 @@ export const SUPPORTED_PROTOCOL_SUBCOMMANDS = [
   'delete-objectives',
   'delete-run-queue',
   'deliver',
+  'delivery-receipt',
+  'delivery-summary-context',
   'discover-project',
   'discuss-objective',
   'heartbeat',
@@ -29,9 +32,11 @@ export const SUPPORTED_PROTOCOL_SUBCOMMANDS = [
   'load-context',
   'objective-changes',
   'prompt',
+  'publish-delivery-summary',
   'read-context',
   'record-work',
   'register-target',
+  'report-draft',
   'reorder-objectives',
   'reorder-project-run-queues',
   'reorder-run-queue',
@@ -125,17 +130,24 @@ Subcommands:
   create                 Create a draft mission without attaching
   prompt                 Create a mission and attach to it immediately
   record-work            Record completed-from-chat work as a review mission (no attach)
-  update                 Post progress and activity events; optionally declare shell/script paths
+  update                 Post progress events; optionally record draft report evidence or declare paths
   heartbeat              Send a liveness ping without creating a mission event
   ask                    Post a blocking question and move the mission to review
   deliver                Finish work, send artifacts, and move the mission to review
+  delivery-receipt       Read your accepted deliver/record-work receipt (after a lost response)
+  report-draft           Read your session's provisional report draft and its final inspection
+  delivery-summary-context
+                         Read your delivery's mission-summary publication opportunity and baseline
+  publish-delivery-summary
+                         Publish one reconciled mission summary for your accepted delivery
   resume-follow-up       Reopen a completed objective for post-delivery follow-up work
   hook-event             Record a connector lifecycle hook (e.g. UserPromptSubmit)
   capture-change         Local-only: append direct-path hook evidence to an objective ledger
   changes                Local-only: sync and read this checkout's evidence for one objective
                          (synced + pending paths, capture/sync warnings); never arbitrate peers
+  project-items         Discover ranked project open items (default 20); requires a live session
   mission-items         Page full open-item detail (--limit 1..200 --offset 0); requires a session
-  close-items           Close verified items (--close-items-json or --close-items-file); requires a session
+  close-items           Close verified same-project items (--close-items-json or --close-items-file); requires a session
   objective-changes      Read the objective's synchronized evidence across sessions and devices
   read-context           Read shared persistent context for this mission
   write-context          Write shared persistent context for future sessions
@@ -316,6 +328,128 @@ list-deliveries:
     DeliveryDto records including summary, verification, follow-up notes, and
     normalized delivery report evidence, capped at 200. total is the matching
     row count before that cap.
+
+project-items:
+  Purpose:
+    Discover accepted open items of the attached session project ranked by changed paths.
+  --kind risk,human_action,suggestion --query <text substring, max 200 chars>
+  --path <comma-separated repo-relative paths> --include-own-mission
+  --limit <1..100, default 20> --offset <non-negative integer>
+  Ranks accepted open items against the live objective ledger plus --path. Drafts excluded.
+  scanTruncated signals the 2,000-row bound; ledger.captureGap suggests passing --path.
+  Restart paging after concurrent writes. Verify before closing.
+
+mission-items:
+  Purpose:
+    Read every open item (risk, human action, suggestion) of the attached session's
+    mission with full text and detail, without loading mission history.
+  Required:
+    --session-key <key>         Live attached session of the mission
+  Optional:
+    --mission-id <id>           Or --objective-id with a display id
+    --objective-id <id>
+    --limit <n>                 1..200, default 60
+    --offset <n>                Default 0
+  Returns:
+    { missionId, items, total, limit, offset, truncated, nextOffset }. Blocking human
+    actions come first. Follow nextOffset until null; restart at 0 if items change.
+
+close-items:
+  Purpose:
+    Close verified open items in the same project, without ending the session.
+  Required:
+    --session-key <key>         Live attached session of the mission
+    --close-items-json <json> / --close-items-file <path|->
+                                1..50 entries { id, status: done|dismissed, reason <= 280 }
+  Optional:
+    --mission-id <id>           Or --objective-id with a display id
+    --objective-id <id>
+  Returns:
+    contentRevision, narrativeWritten false, closedItemIds, warnings and targets
+    [{ missionDisplayId, closed }]. Other missions require mission:update. Out-of-scope,
+    already-closed and person-restored foreign items are skipped. Delivered sessions
+    must resume follow-up first. Standalone closes link at first delivery acceptance.
+
+report-draft:
+  Purpose:
+    Read this session's provisional report draft (ADR 0078) and, while it is open, its
+    final inspection: the normalized evidence deliver would seal right now plus exclusion
+    warnings. Read it once before delivering.
+  Required:
+    --session-key <key>         Your session (live or ended)
+    --mission-id <id>           Or --objective-id with a display id
+  Optional:
+    --objective-id <id>
+    --draft-id <id>             Read an abandoned or sealed draft of the same objective
+                                instead (another live session's draft is never readable)
+    --include-withdrawn         Include withdrawn entries
+  Returns:
+    { draft: { id, state: open|sealed|abandoned, revision, activeCounts, entries,
+      withdrawn? } | null, revision, inspection: { agentReport, entries, warnings } | null,
+      abandoned: [{ draftId, sessionId, activeEntryCount, ... }], limits }.
+    Send revision as expectedRevision on your next update batch or deliver. To keep an
+    observation of an abandoned draft, import it explicitly with an import operation.
+
+delivery-receipt:
+  Purpose:
+    Read your own accepted deliver or record-work receipt, for example after a lost
+    response. Works after the session ended; needs no session key.
+  Required (exactly one):
+    --delivery-id <id>
+    --operation-id <id>
+  Optional:
+    --operation-kind deliver | record_work   Namespace of --operation-id (default deliver)
+    --mission-id <id>           Require the receipt to belong to this mission
+  Returns:
+    { receipt: { operationKind, operationId, missionId, missionDisplayId, objectiveId,
+      deliveryId, acceptedAt, result } }; result is the original accepted response.
+    404 delivery_receipt_not_found does not prove a concurrent attempt failed: re-run
+    the original command with the same operation id instead.
+
+delivery-summary-context:
+  Purpose:
+    Read the mission-summary publication opportunity of your own accepted delivery and a
+    fresh editing baseline. No attach and no execution rights.
+  Required:
+    --mission-id <id>
+    --delivery-id <id> or --publication-id <id>
+    --session-key <key>         The key of the session that delivered (not needed for
+                                record-work deliveries)
+  Optional:
+    --connection-method cli|mcp Tool vocabulary of instruction (default cli)
+  Returns:
+    { publication: { id, missionId, missionDisplayId, objectiveId, deliveryId,
+      evidenceRevision, available, state: outstanding|published|superseded|ineligible,
+      supersededReason, publishedAt, publishedContentRevision }, baseline, instruction }.
+    There is no deadline: an opportunity stays available until newer work, a follow-up
+    or a reopen supersedes it, or it is published.
+
+publish-delivery-summary:
+  Purpose:
+    Publish one reconciled headline and summary for the whole mission, for your own
+    accepted delivery. Writes nothing else: no closes, report fields or objective state.
+  Required:
+    --mission-id <id>
+    --delivery-id <id> or --publication-id <id>
+    --session-key <key>         The delivering session's key (not for record-work)
+    --payload-json <json> / --payload-file <path|->
+                                { "baseContentRevision", "baseEvidenceRevision",
+                                  "headline", "summary" } from delivery-summary-context
+  Optional:
+    --connection-method cli|mcp Tool vocabulary of instruction (default cli)
+  Retry identity:
+    Same attempt rules as deliver: the CLI saves and reuses an operation id
+    (--operation-id, --retry-operation, --new-operation). The same id and text after
+    success returns the original result ("replayed": true).
+  Returns:
+    { publication, operationId, contentRevision, evidenceRevision, publishedAt, warnings,
+      instruction }.
+  Errors:
+    409 mission_summary_conflict: the bases are stale; nothing was written. The CLI
+    prints details.missionSummary; reconcile and publish once more, then stop.
+    409 mission_summary_publication_superseded: newer work owns the next summary; say
+    the summary is outdated. 409 mission_summary_already_published: one publication per
+    delivery. 404 mission_summary_publication_not_found: not your delivery or not in scope.
 
 objective-changes:
   Purpose:
@@ -756,7 +890,22 @@ record-work:
                                 JSON array of repository-relative paths the work changed
     --payload-json / --payload-file <path|->   (single envelope; see Notes)
     --mission-summary-file <path|->   Headline, summary and closeItems as for deliver;
-                                no baseContentRevision is needed for the new mission
+                                no base revision is needed for the new mission. Without
+                                prose, the response's instruction says how to publish
+                                once later with publish-delivery-summary (no session key).
+  Retry identity (ADR 0075):
+    The CLI saves an owner-only attempt record (operation id, request digest and
+    target digest; never the body, session key or token) under $OVLD_HOME before
+    sending. If the response is lost (timeout, restart), run the SAME command again:
+    it reuses the saved operation id and the server returns the original result
+    ("replayed": true) instead of finalizing twice. Never start a new operation to
+    retry.
+    --operation-id <id>         Use your own retained id (8-128 of A-Z a-z 0-9 . _ : -)
+    --retry-operation <id>      Resume a saved attempt; a different request is refused
+    --new-operation             Start a new attempt for intentionally separate work
+    An identical record-work that was already accepted is refused locally until you
+    choose --retry-operation <id> (same result) or --new-operation (separate work).
+    If the attempt cannot be saved, pass --operation-id <id> yourself.
   Notes:
     Efficient form: stream one JSON object on stdin via \`--payload-file -\` carrying
     { objective, summary, title?, declaredPaths?, artifacts?, missionSummary? }.
@@ -767,12 +916,16 @@ record-work:
 
 update:
   Purpose:
-    Post progress or activity events during execution.
+    Post progress or activity events during execution, and optionally record
+    provisional report evidence in this session's draft (opt-in, ADR 0078).
   Required:
     --session-key <key>
     --mission-id <id>
-    --summary or --summary-file <path|->
+    --summary or --summary-file <path|->   (optional when a report draft batch is sent)
   Optional:
+    --report-draft-json <json> / --report-draft-file <path|->
+                                One draft batch (see Report draft below); also accepted as
+                                reportDraft inside --payload-json
     --declared-paths-json <json> / --declared-paths-file <path|->
                                 Repository-relative paths as a JSON string array
     --phase draft | execute | review | deliver | complete | blocked | cancelled
@@ -789,6 +942,30 @@ update:
     Pass --summary-file - to read the summary from stdin and avoid shell quoting issues.
     Inline --*-json values larger than ~8 KB are rejected; use the paired --*-file - flag.
     After delivery, pass --begin-follow-up-work before posting execution updates.
+  Report draft (opt-in; record discoveries in batches, not after every tool call):
+    {
+      "operationId": "risk-batch-0001",  // required. YOUR batch id: choose it before sending
+                                         // and reuse it for every retry of this batch
+      "expectedRevision": 0,             // the draft revision you last saw (0 = no draft yet)
+      "operations": [                    // 1..50
+        { "op": "upsert", "entryId": "risk-cache", "kind": "known_risk",
+          "content": { "text": "Cache invalidation is untested on Postgres." } },
+        { "op": "upsert", "entryId": "env-flag", "kind": "human_action",
+          "content": { "action": "...", "reason": "...", "category": "environment" } },
+        { "op": "withdraw", "entryId": "assume-1", "reason": "Confirmed during testing." },
+        { "op": "import", "sourceDraftId": "<abandoned draft id>", "sourceEntryId": "risk-x" }
+      ]
+    }
+    Kinds and content: human_action and tradeoff and deferred_work use the deliver
+    deliveryReport item shapes; known_risk and assumption use { "text" }. Each entryId is
+    your stable id for one observation: upsert the same id to amend it, withdraw it when
+    resolved; its kind never changes. At most 12 active entries per kind, 1,000 batches and
+    1,000 entry ids per draft; writes beyond a bound are refused (nothing is pruned).
+    A lost response: re-run the SAME command. The server returns the original receipt
+    (reportDraft.replayed true, original eventId) without applying it again, even after a
+    later batch or after delivery. 409 report_draft_conflict means your expectedRevision is
+    stale and nothing was applied; the response details carry the fresh draft. Draft
+    entries are provisional: they never become mission items until deliver seals them.
 
 heartbeat:
   Purpose:
@@ -859,9 +1036,36 @@ deliver:
     --mission-summary-file <path|->
                                 The mission summary write as one JSON object (see below);
                                 wins over a missionSummary field in --payload-json
+    --expected-draft-revision <n>
+                                Seal this session's report draft at revision n (ADR 0078)
+    --report-draft-json <json> / --report-draft-file <path|->
+                                { expectedRevision, operations? }: seal with final draft
+                                operations (same shapes as update; no batch operationId)
+  Report draft (only when this session recorded one with update):
+    Read report-draft first and check its inspection. A session with a draft must send
+    its current revision (--expected-draft-revision or reportDraft.expectedRevision);
+    otherwise deliver answers 409 report_draft_conflict and nothing is delivered. The
+    active entries become the accepted report, followed by deliveryReport items that
+    match no entry. Amend or remove entries by entryId; omitting them from
+    deliveryReport does not remove them. More than 12 items of a kind is refused, never
+    truncated. Acceptance seals the draft; the response lists each entry's accepted ref.
+  Retry identity (ADR 0075):
+    The CLI saves an owner-only attempt record (operation id, request digest and
+    target digest; never the body, session key or token) under $OVLD_HOME before
+    sending. If the response is lost (timeout, restart), run the SAME command again:
+    it reuses the saved operation id and the server returns the original result
+    ("replayed": true) instead of finalizing twice. Never start a new operation to
+    retry.
+    --operation-id <id>         Use your own retained id (8-128 of A-Z a-z 0-9 . _ : -)
+    --retry-operation <id>      Resume a saved attempt; a different request is refused
+    --new-operation             Start a new attempt for intentionally separate work
+    A session delivers once: another delivery of it fails with 409
+    delivery_already_accepted and the CLI prints the existing deliveryId as JSON.
+    Do not deliver again; use resume-follow-up for new work.
   Mission summary (optional; missionSummary in the payload or --mission-summary-file):
     {
       "baseContentRevision": 7,   // missionSummary.contentRevision from attach; required with prose
+      "baseEvidenceRevision": 15, // missionSummary.evidenceRevision from attach
       "headline": "One sentence, at most 140 characters.",
       "summary":  "Markdown, at most 1,200 characters: what the mission now provides, current limits, what a person must do.",
       "closeItems": [{ "id": "<openItems[].id>", "status": "done" | "dismissed", "reason": "Why, at most 280 characters." }]
@@ -870,10 +1074,13 @@ deliver:
     summary to be true now. Close an item only after checking it; done = addressed,
     dismissed = no longer applies. Unknown, foreign or already-closed ids are skipped with
     a warning. Style issues come back as advisory warnings in missionSummary.warnings.
-    A stale baseContentRevision rejects the whole delivery with 409
-    mission_summary_conflict and nothing is written; the CLI prints the fresh baseline as
-    JSON on stdout. Rewrite from it and deliver again once; if it conflicts again, deliver
-    without headline and summary and say so in the delivery summary.
+    Nothing generates the mission summary for you (ADR 0076). Stale prose never rejects
+    a delivery: when either base no longer matches (another delivery, follow-up or reopen
+    happened since your baseline) or baseEvidenceRevision is missing, the delivery and
+    closes are accepted, the headline and summary are withheld, and
+    missionSummary.publication plus the instruction tell you to publish once with
+    publish-delivery-summary. Without prose the same opportunity is returned. Do not
+    deliver again or resume follow-up only to update the summary.
   Notes:
     A normal delivery requires only --summary: explain the outcome, why, verification,
     and limitations by behavior or component. No per-file explanation exists. The CLI

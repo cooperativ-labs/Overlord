@@ -28,6 +28,7 @@ identical across the CLI (`--payload-file -`) and the hosted MCP tool
   "artifacts": [
     { "type": "next_steps", "label": "Next steps", "content": "…" } // optional
   ],
+  "operationId": "rw-2026-11-18-parser-fix",              // optional; your retry identity
   "missionSummary": {                                     // optional
     "headline": "One sentence for people, at most 140 characters.",
     "summary": "Markdown, at most 1,200 characters: what the work provides, limits, what a person must do."
@@ -36,6 +37,12 @@ identical across the CLI (`--payload-file -`) and the hosted MCP tool
 ```
 
 ### Field rules
+
+- **`operationId`** (optional) — the retry identity of this submission. Send the same value
+  when retrying after a timeout or lost response and Overlord returns the original mission
+  instead of creating a second one; use a new value only for separate work. The CLI saves
+  and reuses an attempt id for you (`--retry-operation <id>`, `--new-operation`); on MCP,
+  choose it yourself before the first call. Without it, every call creates a new mission.
 
 - **`objective`** (required) — the completed objective text. May also be passed as
   `--objective`/positional on the CLI; a flag always wins over the envelope.
@@ -107,6 +114,8 @@ Call `overlord_record_work` with the same fields as first-class arguments
 }
 ```
 
-The tool returns the created review-column mission and the `deliveryId` whose Gemini
-summary is composing asynchronously. The same `missionSummary` object is accepted as a
+The tool returns the created review-column mission and the `deliveryId` whose delivery
+presentation is composing asynchronously. Nothing writes the mission headline and summary for
+you: without `missionSummary`, the result's `instruction` says how to publish it once later
+with `publish-delivery-summary` (no session key). The same `missionSummary` object is accepted as a
 first-class argument.

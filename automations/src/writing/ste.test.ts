@@ -3,22 +3,19 @@ import { createHash } from 'node:crypto';
 import { describe, it } from 'node:test';
 
 import { WRITING_RULES as DELIVERY_WRITING_RULES } from '../compose-delivery/compose.js';
-import { MISSION_SUMMARY_SYSTEM_INSTRUCTION } from '../compose-mission-summary/compose.js';
 
 import { lintSte, OBJECTIVE_WRITING_RULES, WRITING_RULES } from './ste.js';
 
 const codes = (text: string) => lintSte(text).map(violation => violation.code);
 
 describe('shared writing rules', () => {
-  it('keeps the base profile byte-identical for delivery and mission-summary composers', () => {
-    // Moving the rules must not change delivery or mission-summary behavior.
+  it('keeps the base profile byte-identical for the delivery composer', () => {
+    // Moving the rules must not change delivery behavior.
     assert.equal(
       createHash('sha256').update(WRITING_RULES).digest('hex'),
       '1d5afd88437fadd2d69eb12291e9c4dd468024bd06d3ee6c9c44f210207272fc'
     );
     assert.equal(DELIVERY_WRITING_RULES, WRITING_RULES);
-    assert.ok(MISSION_SUMMARY_SYSTEM_INSTRUCTION.endsWith(WRITING_RULES));
-    assert.doesNotMatch(MISSION_SUMMARY_SYSTEM_INSTRUCTION, /Decision needed/);
   });
 
   it('extends the base profile for objectives', () => {

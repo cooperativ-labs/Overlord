@@ -437,7 +437,7 @@ describe('agent item inspection and standalone closure', () => {
         closeItems: [{ id: suggestion.id, status: 'dismissed', reason: 'Foreign item.' }]
       });
       assert.equal(skipped.closedItemIds.length, 0);
-      assert.match(skipped.warnings[0]!.message, /another mission/);
+      assert.match(skipped.warnings[0]!.message, /no item has this id/);
       await assert.rejects(
         readAgentMissionItems({ ...scope, ctx: { ...ctx, allowedProjectIds: ['other-project'] } })
       );

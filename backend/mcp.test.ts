@@ -899,17 +899,18 @@ test('MCP deliver and record-work pass missionSummary through to Protocol', () =
     summary: 'Tested.'
   });
 
-  for (const name of ['overlord_deliver_session', 'overlord_record_work']) {
+  for (const [name, keys] of [
+    [
+      'overlord_deliver_session',
+      ['baseContentRevision', 'baseEvidenceRevision', 'closeItems', 'headline', 'summary']
+    ],
+    ['overlord_record_work', ['baseContentRevision', 'closeItems', 'headline', 'summary']]
+  ] as const) {
     const tool = hostedMcpToolDefinitions.find(definition => definition.name === name)!;
     const schema = (tool.inputSchema as { properties: Record<string, any> }).properties
       .missionSummary;
     assert.ok(schema, `${name} accepts missionSummary`);
-    assert.deepEqual(Object.keys(schema.properties).sort(), [
-      'baseContentRevision',
-      'closeItems',
-      'headline',
-      'summary'
-    ]);
+    assert.deepEqual(Object.keys(schema.properties).sort(), keys);
     assert.deepEqual(schema.properties.closeItems.items.required, ['id', 'status', 'reason']);
   }
 });
@@ -954,4 +955,224 @@ test('local MCP item tools forward paging and closure payloads', async () => {
     assert.ok(tool);
     assert.ok((tool.inputSchema.required as string[]).includes('sessionKey'));
   }
+});
+
+test('MCP finalization tools carry only a caller-retained operationId (ADR 0075)', async () => {
+  // Hosted: the caller's id travels unchanged; without one the handler invents none.
+  const deliver = deliverSessionProtocolBody({
+    objectiveId: 'coo:1.abcd',
+    sessionKey: 'sess_x',
+    summary: 'Delivered.',
+    operationId: 'caller-op-0001'
+  });
+  assert.equal(deliver.flags?.['--operation-id'], 'caller-op-0001');
+  const deliverAgain = deliverSessionProtocolBody({
+    objectiveId: 'coo:1.abcd',
+    sessionKey: 'sess_x',
+    summary: 'Delivered.',
+    operationId: 'caller-op-0001'
+  });
+  assert.deepEqual(deliverAgain, deliver, 'a repeated invocation sends the same retry identity');
+  const anonymous = deliverSessionProtocolBody({
+    objectiveId: 'coo:1.abcd',
+    sessionKey: 'sess_x',
+    summary: 'Delivered.'
+  });
+  assert.equal('--operation-id' in (anonymous.flags ?? {}), false);
+
+  const recorded = recordWorkProtocolBody({
+    projectId: 'project',
+    objective: 'Fixed it.',
+    summary: 'Fixed it.',
+    operationId: 'caller-op-0002'
+  });
+  assert.equal(JSON.parse(recorded.fileInputs!['--payload-file']!).operationId, 'caller-op-0002');
+  const recordedAnonymous = recordWorkProtocolBody({
+    projectId: 'project',
+    objective: 'Fixed it.',
+    summary: 'Fixed it.'
+  });
+  assert.equal(
+    'operationId' in JSON.parse(recordedAnonymous.fileInputs!['--payload-file']!),
+    false
+  );
+
+  for (const name of ['overlord_deliver_session', 'overlord_record_work']) {
+    const tool = hostedMcpToolDefinitions.find(definition => definition.name === name)!;
+    const properties = (tool.inputSchema as { properties: Record<string, any> }).properties;
+    assert.equal(properties.operationId.type, 'string', `${name} exposes operationId`);
+    assert.match(properties.operationId.description, /same value on every retry/);
+    assert.equal((tool.inputSchema.required as string[]).includes('operationId'), false);
+  }
+  const receiptTool = hostedMcpToolDefinitions.find(
+    definition => definition.name === 'overlord_delivery_receipt'
+  );
+  assert.ok(receiptTool);
+  assert.equal(receiptTool.annotations?.readOnlyHint, true);
+
+  // Local shim: forwards the caller's id; record-work without one is explicitly new work.
+  const localDeliver = await callLocalShimTool('overlord_deliver_session', {
+    objectiveId: 'coo:1.abcd',
+    sessionKey: 'session-key',
+    summary: 'Delivered.',
+    operationId: 'caller-op-0003'
+  });
+  assert.equal(
+    flagValue(localDeliver.structuredContent.argv as string[], '--operation-id'),
+    'caller-op-0003'
+  );
+  const localRecord = await callLocalShimTool('overlord_record_work', {
+    projectId: 'project',
+    objective: 'Fixed it.',
+    summary: 'Fixed it.'
+  });
+  const recordArgv = localRecord.structuredContent.argv as string[];
+  assert.ok(recordArgv.includes('--new-operation'));
+  assert.equal(recordArgv.includes('--operation-id'), false);
+  const localReceipt = await callLocalShimTool('overlord_delivery_receipt', {
+    operationId: 'caller-op-0003'
+  });
+  const receiptArgv = localReceipt.structuredContent.argv as string[];
+  assert.equal(receiptArgv[1], 'delivery-receipt');
+  assert.equal(flagValue(receiptArgv, '--operation-id'), 'caller-op-0003');
+});
+
+test('MCP narrow narrative tools address one delivery and carry a caller-retained operationId (ADR 0076)', async () => {
+  const context = hostedMcpToolDefinitions.find(
+    definition => definition.name === 'overlord_delivery_summary_context'
+  )!;
+  assert.equal(context.annotations?.readOnlyHint, true);
+  const publish = hostedMcpToolDefinitions.find(
+    definition => definition.name === 'overlord_publish_delivery_summary'
+  )!;
+  assert.equal(publish.annotations?.readOnlyHint, false);
+  const required = publish.inputSchema.required as string[];
+  for (const field of ['operationId', 'baseContentRevision', 'baseEvidenceRevision']) {
+    assert.ok(required.includes(field), `${field} is required`);
+  }
+  assert.equal(
+    'closeItems' in (publish.inputSchema as { properties: Record<string, unknown> }).properties,
+    false,
+    'publication writes only narrative'
+  );
+
+  const local = await callLocalShimTool('overlord_publish_delivery_summary', {
+    missionId: 'coo:1',
+    deliveryId: 'delivery-1',
+    sessionKey: 'session-key',
+    operationId: 'caller-pub-0001',
+    baseContentRevision: 2,
+    baseEvidenceRevision: 5,
+    headline: 'Done.',
+    summary: 'Tested.'
+  });
+  const argv = local.structuredContent.argv as string[];
+  assert.equal(argv[1], 'publish-delivery-summary');
+  assert.equal(flagValue(argv, '--operation-id'), 'caller-pub-0001');
+  assert.equal(flagValue(argv, '--delivery-id'), 'delivery-1');
+  assert.equal(flagValue(argv, '--connection-method'), 'mcp');
+  assert.deepEqual(JSON.parse(flagValue(argv, '--payload-json')!), {
+    baseContentRevision: 2,
+    baseEvidenceRevision: 5,
+    headline: 'Done.',
+    summary: 'Tested.'
+  });
+  const read = await callLocalShimTool('overlord_delivery_summary_context', {
+    missionId: 'coo:1',
+    publicationId: 'publication-1'
+  });
+  const readArgv = read.structuredContent.argv as string[];
+  assert.equal(readArgv[1], 'delivery-summary-context');
+  assert.equal(flagValue(readArgv, '--publication-id'), 'publication-1');
+  assert.equal(readArgv.includes('--session-key'), false);
+});
+
+test('MCP draft evidence tools carry a caller-retained batch id and never mint one (ADR 0078)', async () => {
+  const update = hostedMcpToolDefinitions.find(
+    definition => definition.name === 'overlord_update_session'
+  )!;
+  const updateProps = (update.inputSchema as { properties: Record<string, any> }).properties;
+  assert.deepEqual(updateProps.reportDraft.required, [
+    'operationId',
+    'expectedRevision',
+    'operations'
+  ]);
+  assert.match(
+    updateProps.reportDraft.properties.operationId.description,
+    /same value on every retry/
+  );
+  assert.equal((update.inputSchema.required as string[]).includes('summary'), false);
+  const deliver = hostedMcpToolDefinitions.find(
+    definition => definition.name === 'overlord_deliver_session'
+  )!;
+  const deliverDraft = (deliver.inputSchema as { properties: Record<string, any> }).properties
+    .reportDraft;
+  assert.deepEqual(deliverDraft.required, ['expectedRevision']);
+  assert.equal('operationId' in deliverDraft.properties, false);
+  const read = hostedMcpToolDefinitions.find(
+    definition => definition.name === 'overlord_report_draft'
+  );
+  assert.ok(read);
+  assert.equal(read.annotations?.readOnlyHint, true);
+
+  const hosted = deliverSessionProtocolBody({
+    objectiveId: 'coo:1.abcd',
+    sessionKey: 'session-key',
+    summary: 'Delivered.',
+    reportDraft: { expectedRevision: 3 }
+  });
+  assert.deepEqual(JSON.parse(String(hosted.flags?.['--report-draft-json'])), {
+    expectedRevision: 3
+  });
+
+  const batch = {
+    operationId: 'caller-batch-0001',
+    expectedRevision: 0,
+    operations: [{ op: 'upsert', entryId: 'r1', kind: 'known_risk', content: { text: 'x' } }]
+  };
+  const localUpdate = await callLocalShimTool('overlord_update_session', {
+    objectiveId: 'coo:1.abcd',
+    sessionKey: 'session-key',
+    reportDraft: batch
+  });
+  const updateArgv = localUpdate.structuredContent.argv as string[];
+  assert.equal(updateArgv[1], 'update');
+  assert.deepEqual(JSON.parse(flagValue(updateArgv, '--report-draft-json')!), batch);
+  assert.equal(updateArgv.includes('--summary'), false);
+  const localRead = await callLocalShimTool('overlord_report_draft', {
+    objectiveId: 'coo:1.abcd',
+    sessionKey: 'session-key',
+    includeWithdrawn: true
+  });
+  const readArgv = localRead.structuredContent.argv as string[];
+  assert.equal(readArgv[1], 'report-draft');
+  assert.ok(readArgv.includes('--include-withdrawn'));
+});
+
+test('project item MCP catalog and local flags preserve discovery filters', async () => {
+  const tool = hostedMcpToolDefinitions.find(tool => tool.name === 'overlord_project_items')!;
+  assert.ok(tool);
+  assert.equal(tool.annotations?.readOnlyHint, true);
+  const props = tool.inputSchema.properties as Record<string, any>;
+  assert.equal(props.limit.default, 20);
+  assert.equal(props.limit.maximum, 100);
+  assert.equal(props.query.maxLength, 200);
+  const result = await callLocalShimTool('overlord_project_items', {
+    objectiveId: 'coo:1.abcd',
+    sessionKey: 'key',
+    kinds: ['risk', 'suggestion'],
+    query: 'retry',
+    paths: ['backend/services/retry.ts', 'cli/src/retry.ts'],
+    includeOwnMission: true,
+    limit: 9,
+    offset: 20
+  });
+  const argv = result.structuredContent.argv as string[];
+  assert.equal(argv[1], 'project-items');
+  assert.equal(flagValue(argv, '--kind'), 'risk,suggestion');
+  assert.equal(flagValue(argv, '--query'), 'retry');
+  assert.equal(flagValue(argv, '--limit'), '9');
+  assert.equal(flagValue(argv, '--offset'), '20');
+  assert.ok(argv.includes('--include-own-mission'));
+  assert.equal(flagValue(argv, '--path'), 'backend/services/retry.ts,cli/src/retry.ts');
 });

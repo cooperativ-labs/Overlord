@@ -132,8 +132,9 @@ export type ObjectiveRowProps = {
  * each stops propagation so it never opens the detail.
  *
  * Not-started rows also open a hover line under the row (objective-row-hover-toolbar.md) with
- * resource, agent, Run Queue, identifier and the split Run button. While it is open the first
- * row keeps only the state icon, the title and the menu.
+ * resource, agent and the split Run button. Run Queue and the identifier stay on the first row,
+ * so nothing there moves on hover; the agent icon keeps its slot but is hidden while the line
+ * shows the labelled agent selector.
  */
 export function ObjectiveRow(props: ObjectiveRowProps) {
   return isNotStartedObjective(props.objective.state) ? (
@@ -248,7 +249,7 @@ function ObjectiveRowView({
       anchor={queueFromMenu || queueTrigger === 'none' ? rowRef : undefined}
       triggerClassName={cn(
         'h-7 w-7 justify-center px-0',
-        // In the hover line the trigger is always visible; on the first row an unqueued
+        // While the hover line is open the trigger is always visible; otherwise an unqueued
         // trigger shows on hover/focus only.
         !lineOpen &&
           queueTrigger === 'hover' &&
@@ -325,15 +326,15 @@ function ObjectiveRowView({
       </button>
 
       <div className="relative z-[1] flex shrink-0 items-center gap-0.5">
-        {lineOpen ? null : queueControl}
-        {lineOpen ? null : idControl}
+        {queueControl}
+        {idControl}
 
         {agent ? (
           <NotStartedRowTail
             objective={objective}
             mission={mission}
             agent={agent}
-            showAgentIcon={!lineOpen}
+            agentIconHidden={lineOpen}
             menuProps={menuProps}
             onRowError={setRowError}
           />
@@ -350,8 +351,6 @@ function ObjectiveRowView({
           objective={objective}
           mission={mission}
           agent={agent}
-          queueControl={lineOpen ? queueControl : null}
-          idControl={lineOpen ? idControl : null}
           onHeldChange={line.setHeld}
           onError={setRowError}
         />
@@ -371,21 +370,22 @@ function ObjectiveRowView({
 
 /**
  * Not started: the agent icon opens the agent/model selector (hidden while the hover line shows
- * the labelled one), and the menu adds Run and the Resource submenu (coo:1289). All use the
+ * the labelled one, keeping its slot so the controls beside it do not shift), and the menu adds Run and the Resource submenu (coo:1289). All use the
  * row's one agent selection, so Run launches with the agent the chooser shows.
  */
 function NotStartedRowTail({
   objective,
   mission,
   agent,
-  showAgentIcon,
+  agentIconHidden,
   menuProps,
   onRowError
 }: {
   objective: ObjectiveDto;
   mission: MissionDetailDto | null;
   agent: ObjectiveRowAgentSelection;
-  showAgentIcon: boolean;
+  /** The hover line shows the labelled selector: hide the icon but keep its width. */
+  agentIconHidden: boolean;
   menuProps: ComponentProps<typeof ObjectiveMenuButton>;
   onRowError: (message: string | null) => void;
 }) {
@@ -411,7 +411,10 @@ function NotStartedRowTail({
 
   return (
     <>
-      {showAgentIcon ? (
+      <span
+        className={cn('inline-flex shrink-0', agentIconHidden && 'invisible')}
+        data-agent-icon-hidden={agentIconHidden ? 'true' : undefined}
+      >
         <AgentModelChooserButton
           iconOnly
           catalog={catalog}
@@ -422,7 +425,7 @@ function NotStartedRowTail({
           onUseInheritedDefault={useInheritedLaunchConfig}
           launchConfigSourceHint={launchConfigSourceHint}
         />
-      ) : null}
+      </span>
       <ObjectiveMenuButton
         {...menuProps}
         run={{

@@ -906,6 +906,7 @@ export const missionSubcommands: SubcommandTable = {
         declaredPaths: declaredPaths ?? envelope.declaredPaths,
         payloadJson: restPayload,
         missionSummary: envelope.missionSummary,
+        operationId: envelope.operationId,
         ...(assignedTo !== undefined ? { assignedTo } : {})
       });
     }

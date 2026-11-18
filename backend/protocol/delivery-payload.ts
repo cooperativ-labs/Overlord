@@ -1,6 +1,6 @@
 import { ApiError } from '../errors.ts';
 
-import { hasFlag, parseJsonObjectInput, type ProtocolRequestBody } from './flags.ts';
+import { hasFlag, parseJsonObjectInput, type ProtocolRequestBody, strFlag } from './flags.ts';
 
 /** File flag for the agent-authored mission summary write (contract: deliver, record-work). */
 export const MISSION_SUMMARY_FILE_FLAG = '--mission-summary-file';
@@ -95,6 +95,11 @@ type DeliveryPayloadEnvelope = {
   followUpNotes?: string | null;
   /** The agent's summary write; never stored in the delivery payload. */
   missionSummary?: unknown;
+  /**
+   * Caller-retained finalization operation id (ADR 0075): `--operation-id`, or
+   * `operationId` in the envelope. Never stored in the delivery payload.
+   */
+  operationId?: unknown;
   payloadJson?: Record<string, unknown>;
 };
 
@@ -104,8 +109,14 @@ type DeliveryPayloadEnvelope = {
  */
 export function parseDeliveryPayloadEnvelope(body: ProtocolRequestBody): DeliveryPayloadEnvelope {
   const fromFlag = parseMissionSummaryFlag(body);
+  const operationIdFlag = strFlag(body, '--operation-id');
   const input = parseJsonObjectInput(body, '--payload-json', '--payload-file', 'delivery payload');
-  if (input === undefined) return fromFlag === undefined ? {} : { missionSummary: fromFlag };
+  if (input === undefined) {
+    return {
+      ...(fromFlag === undefined ? {} : { missionSummary: fromFlag }),
+      ...(operationIdFlag === undefined ? {} : { operationId: operationIdFlag })
+    };
+  }
 
   const {
     summary,
@@ -114,6 +125,7 @@ export function parseDeliveryPayloadEnvelope(body: ProtocolRequestBody): Deliver
     verificationSummary,
     followUpNotes,
     missionSummary,
+    operationId,
     ...payloadJson
   } = input;
   if (summary !== undefined && typeof summary !== 'string') {
@@ -148,6 +160,12 @@ export function parseDeliveryPayloadEnvelope(body: ProtocolRequestBody): Deliver
       ? { missionSummary: fromFlag }
       : missionSummary !== undefined
         ? { missionSummary }
+        : {}),
+    // The flag wins over the envelope field; the service validates the value.
+    ...(operationIdFlag !== undefined
+      ? { operationId: operationIdFlag }
+      : operationId !== undefined
+        ? { operationId }
         : {}),
     payloadJson
   };

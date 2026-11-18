@@ -11,13 +11,26 @@ import {
 import { ServiceError } from './errors.js';
 import {
   closeMissionItem,
+  getMissionItem,
+  linkSessionMissionItems,
   listMissionItems,
+  type MissionItem,
   type MissionItemChangeAttribution,
   type MissionItemWriteProblem
 } from './mission-items.js';
-import { MISSION_SUMMARY_LIMITS } from './mission-summary-compose.js';
+import {
+  advanceMissionNarrativeEvidence,
+  createDeliveryPublication,
+  ensureMissionSummaryRow,
+  isSummaryEnabled,
+  type MissionNarrative,
+  type NarrativeWithheldReason,
+  readMissionNarrative,
+  writeAgentNarrative
+} from './mission-narrative.js';
+import { MISSION_SUMMARY_LIMITS } from './mission-summary-evidence.js';
 import { nowIso, sqlPlaceholders } from './util.js';
-import { lockMissionSummaryRow, recordMissionSummaryChange } from './worker-jobs.js';
+import { lockMissionSummaryRow } from './worker-jobs.js';
 
 /**
  * The agent-facing mission summary surface (coo:1260, ADR 0060, plan 3.2-3.4).
@@ -29,9 +42,13 @@ import { lockMissionSummaryRow, recordMissionSummaryChange } from './worker-jobs
  *   summary, written with `generated_by = 'agent'`, and `closeItems` that close
  *   this mission's open items with agent provenance. Both are written in the
  *   delivery transaction under the summary row lock.
- * - A stale `baseContentRevision` rejects the whole delivery with 409
- *   `mission_summary_conflict` and a fresh baseline. A skipped close entry only
- *   produces a warning.
+ * - Agent-only narrative (ADR 0076): every accepted delivery of a
+ *   summary-eligible mission advances the narrative evidence basis and gets one
+ *   publication opportunity. Inline prose publishes only when both
+ *   `baseContentRevision` and `baseEvidenceRevision` match the pre-delivery
+ *   state; stale, legacy (no evidence base) or absent prose never rejects the
+ *   delivery: it is withheld and the opportunity stays outstanding for
+ *   `publish-delivery-summary`. A skipped close entry only produces a warning.
  */
 
 /** Open items returned in the attach baseline, at most this many. */
@@ -60,12 +77,18 @@ export type MissionSummaryBaselineItem = {
 /** The editing baseline: the attach shape and the conflict body. */
 export type MissionSummaryBaseline = {
   contentRevision: number;
+  /** The narrative evidence basis; send it back as `baseEvidenceRevision`. */
+  evidenceRevision: number;
+  /** Server-derived freshness of the current headline and summary. */
+  narrative: MissionNarrative;
   headline: string;
   summary: string;
   /** Who wrote the current headline and summary; null before the first write. */
   author: MissionSummaryAuthorKind | null;
   openItems: MissionSummaryBaselineItem[];
   totalOpenItems: number;
+  /** Count only, attached execution context; draft observations excluded. */
+  otherMissionOpenItems?: number;
   /** More open items exist than `openItems` carries. */
   truncated: boolean;
 };
@@ -79,17 +102,35 @@ export type MissionSummaryCloseEntry = {
 /** Validated `missionSummary` delivery input. */
 export type MissionSummaryWriteInput = {
   baseContentRevision: number | null;
+  /** Absent from legacy clients: their prose is withheld, never published. */
+  baseEvidenceRevision: number | null;
   narrative: { headline: string; summary: string } | null;
   closeItems: MissionSummaryCloseEntry[];
 };
 
 export type MissionSummaryWarning = {
-  code: 'mission_summary_item_skipped' | 'mission_summary_style' | 'mission_summary_disabled';
+  code:
+    | 'mission_summary_item_skipped'
+    | 'mission_summary_style'
+    | 'mission_summary_disabled'
+    | 'mission_summary_withheld';
   message: string;
   itemId?: string;
+  problem?: MissionItemWriteProblem | 'duplicate';
+  currentStatus?: MissionItem['status'];
+  resolvedBy?: MissionItem['resolvedBy'];
   rule?: string;
   excerpt?: string;
   suggestion?: string;
+};
+
+/** The publication opportunity an accepted delivery received, as of acceptance. */
+export type MissionSummaryPublicationRef = {
+  id: string;
+  /** True while it can still be published (the inline prose was withheld or absent). */
+  available: boolean;
+  /** Why inline prose was not published; null when it was. */
+  withheldReason: NarrativeWithheldReason | null;
 };
 
 /** Outcome of a `missionSummary` write, returned on deliver and record-work. */
@@ -99,11 +140,12 @@ export type MissionSummaryWriteResult = {
   narrativeWritten: boolean;
   closedItemIds: string[];
   warnings: MissionSummaryWarning[];
+  targets?: { missionDisplayId: string; closed: number }[];
+  /** Eligible accepted deliveries only. Absent for close-only writes. */
+  publication?: MissionSummaryPublicationRef;
+  /** Fresh editing baseline after acceptance, for reconciliation. */
+  baseline?: MissionSummaryBaseline;
 };
-
-function isSummaryEnabled(value: unknown): boolean {
-  return value === true || Number(value) === 1;
-}
 
 function invalidInput(message: string): ServiceError {
   return new ServiceError(`missionSummary: ${message}`, 'invalid_input', 400);
@@ -129,14 +171,16 @@ export async function readMissionSummaryBaseline(
 
   const row = await db.get<{
     content_revision: number | string;
+    evidence_revision: number | string;
     headline: string;
     summary_markdown: string;
     generated_by: string;
   }>(
-    `SELECT content_revision, headline, summary_markdown, generated_by
+    `SELECT content_revision, evidence_revision, headline, summary_markdown, generated_by
        FROM mission_summaries WHERE mission_id = ?`,
     [missionId]
   );
+  const narrative = await readMissionNarrative(db, missionId);
   const { items, truncated, total } = await listMissionItems(db, {
     missionId,
     limit: MISSION_SUMMARY_BASELINE_ITEM_LIMIT,
@@ -163,6 +207,8 @@ export async function readMissionSummaryBaseline(
   const hasProse = Boolean(row && (row.headline.trim() || row.summary_markdown.trim()));
   return {
     contentRevision: Number(row?.content_revision ?? 0),
+    evidenceRevision: Number(row?.evidence_revision ?? 0),
+    narrative,
     headline: row?.headline ?? '',
     summary: row?.summary_markdown ?? '',
     author: hasProse ? (row!.generated_by as MissionSummaryAuthorKind) : null,
@@ -178,7 +224,13 @@ export async function readMissionSummaryBaseline(
   };
 }
 
-const INPUT_KEYS = new Set(['baseContentRevision', 'headline', 'summary', 'closeItems']);
+const INPUT_KEYS = new Set([
+  'baseContentRevision',
+  'baseEvidenceRevision',
+  'headline',
+  'summary',
+  'closeItems'
+]);
 const CLOSE_KEYS = new Set(['id', 'status', 'reason']);
 
 /**
@@ -208,6 +260,14 @@ export function parseMissionSummaryInput(
       throw invalidInput('baseContentRevision must be a non-negative integer');
     }
     baseContentRevision = base;
+  }
+  let baseEvidenceRevision: number | null = null;
+  if (input.baseEvidenceRevision !== undefined && input.baseEvidenceRevision !== null) {
+    const base = input.baseEvidenceRevision;
+    if (typeof base !== 'number' || !Number.isInteger(base) || base < 0) {
+      throw invalidInput('baseEvidenceRevision must be a non-negative integer');
+    }
+    baseEvidenceRevision = base;
   }
 
   const hasHeadline = input.headline !== undefined && input.headline !== null;
@@ -283,7 +343,7 @@ export function parseMissionSummaryInput(
   }
 
   if (!narrative && closeItems.length === 0) return null;
-  return { baseContentRevision, narrative, closeItems };
+  return { baseContentRevision, baseEvidenceRevision, narrative, closeItems };
 }
 
 /** Advisory Simplified Technical English warnings for agent prose. Never blocking. */
@@ -302,66 +362,44 @@ export function missionSummaryStyleWarnings(narrative: {
     }));
 }
 
-/**
- * Raised inside the delivery transaction when the base revision is stale. The
- * caller rolls back, reads a fresh baseline and rethrows it with
- * {@link missionSummaryConflictError}, so the baseline never shows rows of the
- * rejected delivery.
- */
-export class MissionSummaryConflict extends Error {
-  constructor(
-    readonly missionId: string,
-    readonly baseContentRevision: number,
-    readonly currentContentRevision: number
-  ) {
-    super('mission_summary_conflict');
-    this.name = 'MissionSummaryConflict';
-  }
-}
-
-/** The 409 returned to the agent: nothing was written; reconcile and retry once. */
-export async function missionSummaryConflictError(
-  db: DatabaseClient,
-  conflict: MissionSummaryConflict
-): Promise<ServiceError> {
-  const baseline = await readMissionSummaryBaseline(db, conflict.missionId);
-  return new ServiceError(
-    `The mission summary changed since you attached (base content revision ${conflict.baseContentRevision}, current ${conflict.currentContentRevision}). Nothing was delivered. Rewrite the headline and summary from details.missionSummary and deliver again with its contentRevision as baseContentRevision; if this happens twice, deliver without headline and summary and say so in the delivery summary.`,
-    'mission_summary_conflict',
-    409,
-    {
-      baseContentRevision: conflict.baseContentRevision,
-      missionSummary: baseline
-    }
-  );
-}
-
 type MissionScope = { id: string; workspaceId: string; projectId: string };
 
-/** A prepared write: the base check passed and the summary row is locked. */
+/**
+ * How a write uses the narrative basis: `deliver` checks both bases,
+ * `record_work` publishes on its new mission without a base, and `close_only`
+ * (live-session closes) never touches narrative or evidence.
+ */
+export type MissionSummaryWriteMode = 'deliver' | 'record_work' | 'close_only';
+
+/** A prepared write: the summary row is locked and the inline decision is made. */
 export type PreparedMissionSummaryWrite = {
-  input: MissionSummaryWriteInput;
+  input: MissionSummaryWriteInput | null;
+  mode: MissionSummaryWriteMode;
   enabled: boolean;
   created: boolean;
+  /** Null when inline prose will publish; otherwise why not (eligible deliveries only). */
+  withheldReason: NarrativeWithheldReason | null;
 };
 
 /**
- * First step inside the delivery transaction, before any delivery row is
- * written. When prose is sent to a summary-enabled mission, ensures the summary
- * row exists, takes its lock and compares `baseContentRevision` (when
- * `checkBase`). A stale base throws {@link MissionSummaryConflict}.
+ * First step inside the delivery transaction, after the mission lock and
+ * before any delivery row is written. For an eligible delivery it ensures the
+ * summary row, takes its lock and compares both bases with the pre-delivery
+ * state (R1): inline prose publishes only when `baseContentRevision` and
+ * `baseEvidenceRevision` both match. A mismatch, a missing evidence base or
+ * absent prose never throws; the delivery is accepted and its prose withheld.
  */
 export async function prepareMissionSummaryWrite(
   tx: DatabaseClient,
   {
     mission,
     input,
-    checkBase,
+    mode,
     now = nowIso()
   }: {
     mission: MissionScope;
-    input: MissionSummaryWriteInput;
-    checkBase: boolean;
+    input: MissionSummaryWriteInput | null;
+    mode: MissionSummaryWriteMode;
     now?: string;
   }
 ): Promise<PreparedMissionSummaryWrite> {
@@ -370,36 +408,41 @@ export async function prepareMissionSummaryWrite(
     [mission.id]
   );
   const enabled = isSummaryEnabled(row?.summary_enabled);
-  if (!enabled || !input.narrative) return { input, enabled, created: false };
+  if (!enabled || mode === 'close_only') {
+    return { input, mode, enabled, created: false, withheldReason: null };
+  }
 
-  // The shell insert serializes two first writers on the primary key; the
-  // second then locks the row the first committed and sees its revision.
-  const inserted = await tx.run(
-    `INSERT INTO mission_summaries
-         (mission_id, workspace_id, project_id, revision, requested_generation,
-          completed_generation, status, headline, summary_markdown,
-          source_delivery_id, generated_by, generated_at, model, created_at, updated_at)
-       VALUES (?, ?, ?, 1, 0, 0, 'composed', '', '', NULL, 'deterministic', NULL, NULL, ?, ?)
-       ON CONFLICT (mission_id) DO NOTHING`,
-    [mission.id, mission.workspaceId, mission.projectId, now, now]
-  );
-  await lockMissionSummaryRow(tx, mission.id);
-  if (checkBase && input.baseContentRevision !== null) {
-    const current = await tx.get<{ content_revision: number | string }>(
-      `SELECT content_revision FROM mission_summaries WHERE mission_id = ?`,
-      [mission.id]
-    );
-    const currentRevision = Number(current?.content_revision ?? 0);
-    if (currentRevision !== input.baseContentRevision) {
-      throw new MissionSummaryConflict(mission.id, input.baseContentRevision, currentRevision);
+  const { created } = await ensureMissionSummaryRow(tx, mission, now);
+  const current = await lockMissionSummaryRow(tx, mission.id);
+  let withheldReason: NarrativeWithheldReason | null = null;
+  if (!input?.narrative) {
+    withheldReason = 'absent';
+  } else if (mode === 'deliver') {
+    if (input.baseContentRevision !== (current?.content_revision ?? 0)) {
+      withheldReason = 'stale_content';
+    } else if (input.baseEvidenceRevision === null) {
+      withheldReason = 'missing_evidence_base';
+    } else if (input.baseEvidenceRevision !== (current?.evidence_revision ?? 0)) {
+      withheldReason = 'stale_evidence';
     }
   }
-  return { input, enabled, created: inserted.changes > 0 };
+  return { input, mode, enabled, created, withheldReason };
 }
+
+const WITHHELD_MESSAGES: Record<Exclude<NarrativeWithheldReason, 'absent'>, string> = {
+  stale_content:
+    'The mission summary changed since your baseline (baseContentRevision is stale), so your headline and summary were not published.',
+  stale_evidence:
+    'Other accepted work changed the mission since your baseline (baseEvidenceRevision is stale), so your headline and summary were not published.',
+  missing_evidence_base:
+    'The headline and summary were sent without baseEvidenceRevision, so they could not be verified against the current mission and were not published.'
+};
 
 const SKIP_MESSAGES: Record<MissionItemWriteProblem | 'duplicate', string> = {
   not_found: 'no item has this id',
   other_mission: 'the item belongs to another mission',
+  forbidden: 'mission:update permission is required on the target',
+  restored_by_person: 'a person restored this item; only a person or its own mission may close it',
   not_open: 'the item is no longer open',
   superseded: 'the item was superseded by a later delivery of its objective',
   duplicate: 'the id is listed more than once'
@@ -412,6 +455,8 @@ const SKIP_MESSAGES: Record<MissionItemWriteProblem | 'duplicate', string> = {
 const STAYS_OPEN = 'Say in your final message which item stays open and why.';
 const SKIP_ACTIONS: Record<MissionItemWriteProblem | 'duplicate', string> = {
   not_found: `If you meant an open item of this mission, it stays open. ${STAYS_OPEN}`,
+  forbidden: STAYS_OPEN,
+  restored_by_person: STAYS_OPEN,
   other_mission: `If you meant an open item of this mission, it stays open. ${STAYS_OPEN}`,
   not_open: 'No action is needed.',
   superseded: `Its replacement from the later delivery may still be open. ${STAYS_OPEN}`,
@@ -421,9 +466,11 @@ const SKIP_ACTIONS: Record<MissionItemWriteProblem | 'duplicate', string> = {
 /**
  * Second step inside the delivery transaction, after the delivery and its
  * items are written: closes the listed open items of this mission with agent
- * provenance, then writes the narrative (`generated_by = 'agent'`,
- * `narrative_*`, `content_revision + 1`). Skipped close entries become bounded
- * warnings and never reject the delivery.
+ * provenance. For an eligible delivery it then advances the narrative evidence
+ * basis (superseding older outstanding opportunities), creates this delivery's
+ * publication row, and publishes the inline prose when the prepare step
+ * allowed it. Skipped close entries and withheld prose are bounded warnings
+ * and never reject the delivery.
  */
 export async function applyMissionSummaryWrite(
   tx: DatabaseClient,
@@ -432,6 +479,8 @@ export async function applyMissionSummaryWrite(
     mission,
     objectiveId,
     deliveryId,
+    sessionId = null,
+    canCloseForeign = false,
     model,
     attribution,
     now = nowIso()
@@ -440,96 +489,145 @@ export async function applyMissionSummaryWrite(
     mission: MissionScope;
     objectiveId: string;
     deliveryId: string | null;
+    sessionId?: string | null;
+    canCloseForeign?: boolean;
     model: string | null;
     attribution: MissionItemChangeAttribution;
     now?: string;
   }
 ): Promise<MissionSummaryWriteResult> {
-  const { input, enabled } = prepared;
+  const { input, enabled, mode } = prepared;
   const warnings: MissionSummaryWarning[] = [];
   const closedItemIds: string[] = [];
   const seen = new Set<string>();
+  const targets = new Map<string, number>();
 
-  for (const entry of input.closeItems) {
+  for (const entry of input?.closeItems ?? []) {
     let problem: MissionItemWriteProblem | 'duplicate' | null = null;
+    let current: MissionItem | null = null;
     if (seen.has(entry.id)) {
       problem = 'duplicate';
     } else {
       seen.add(entry.id);
-      const result = await closeMissionItem(tx, {
-        itemId: entry.id,
-        missionId: mission.id,
-        status: entry.status,
-        reason: entry.reason,
-        resolver: { kind: 'agent', objectiveId, deliveryId },
-        attribution,
-        now
-      });
-      if (result.ok) closedItemIds.push(entry.id);
-      else problem = result.problem;
+      const item = await getMissionItem(tx, entry.id);
+      const target = item
+        ? await tx.get<{ display_id: string }>(
+            `SELECT m.display_id FROM missions m
+        JOIN deliveries d ON d.id = ? AND d.deleted_at IS NULL
+        WHERE m.id = ? AND m.workspace_id = ? AND m.project_id = ? AND m.deleted_at IS NULL`,
+            [item.deliveryId, item.missionId, mission.workspaceId, mission.projectId]
+          )
+        : undefined;
+      if (
+        !item ||
+        !target ||
+        item.workspaceId !== mission.workspaceId ||
+        item.projectId !== mission.projectId
+      ) {
+        problem = 'not_found';
+      } else if (item.missionId !== mission.id && !canCloseForeign) {
+        problem = 'forbidden';
+      } else {
+        const result = await closeMissionItem(tx, {
+          itemId: entry.id,
+          missionId: item.missionId,
+          status: entry.status,
+          reason: entry.reason,
+          resolver: { kind: 'agent', objectiveId, deliveryId, missionId: mission.id, sessionId },
+          attribution,
+          now
+        });
+        if (result.ok) {
+          closedItemIds.push(entry.id);
+          if (item.missionId !== mission.id)
+            targets.set(target.display_id, (targets.get(target.display_id) ?? 0) + 1);
+        } else {
+          problem = result.problem;
+          current = result.item;
+        }
+      }
     }
     if (problem !== null) {
       warnings.push({
         code: 'mission_summary_item_skipped',
         itemId: cut(entry.id, 80),
+        problem,
+        ...(current ? { currentStatus: current.status, resolvedBy: current.resolvedBy } : {}),
         message: `Item ${cut(entry.id, 80)} was not closed: ${SKIP_MESSAGES[problem]}. ${SKIP_ACTIONS[problem]}`
       });
     }
   }
 
+  if (mode === 'deliver' && deliveryId && sessionId) {
+    await linkSessionMissionItems(tx, {
+      sessionId,
+      missionId: mission.id,
+      workspaceId: mission.workspaceId,
+      projectId: mission.projectId,
+      deliveryId,
+      attribution,
+      now
+    });
+  }
   let contentRevision: number | null = null;
   let narrativeWritten = false;
-  if (input.narrative && !enabled) {
+  let publication: MissionSummaryPublicationRef | undefined;
+  if (input?.narrative && !enabled) {
     warnings.push({
       code: 'mission_summary_disabled',
       message: 'This mission has no summary, so the headline and summary were not stored.'
     });
-  } else if (input.narrative) {
-    const updated = await tx.get<{ revision: number | string; content_revision: number | string }>(
-      `UPDATE mission_summaries
-          SET status = 'composed', headline = ?, summary_markdown = ?,
-              source_delivery_id = ?, generated_by = 'agent', generated_at = ?, model = ?,
-              narrative_delivery_id = ?, narrative_objective_id = ?,
-              content_revision = content_revision + 1, revision = revision + 1,
-              completed_generation = requested_generation, updated_at = ?
-        WHERE mission_id = ?
-        RETURNING revision, content_revision`,
-      [
-        input.narrative.headline,
-        input.narrative.summary,
-        deliveryId,
-        now,
-        model,
+  } else if (enabled && mode !== 'close_only' && deliveryId) {
+    const advanced = await advanceMissionNarrativeEvidence(tx, {
+      mission,
+      reason: 'delivery',
+      attribution,
+      now
+    });
+    const evidenceRevision = advanced?.evidenceRevision ?? 0;
+    const created = await createDeliveryPublication(tx, {
+      mission,
+      objectiveId,
+      deliveryId,
+      actorWorkspaceUserId: attribution.actorWorkspaceUserId,
+      sessionId,
+      evidenceRevision,
+      proposal: input?.narrative ?? null,
+      withheldReason: prepared.withheldReason,
+      now
+    });
+    if (prepared.withheldReason === null && input?.narrative) {
+      const written = await writeAgentNarrative(tx, {
+        mission,
+        narrative: input.narrative,
         deliveryId,
         objectiveId,
-        now,
-        mission.id
-      ]
-    );
-    if (updated) {
-      narrativeWritten = true;
-      contentRevision = Number(updated.content_revision);
-      await recordMissionSummaryChange(tx, {
-        workspaceId: mission.workspaceId,
-        projectId: mission.projectId,
-        missionId: mission.id,
-        revision: Number(updated.revision),
-        operation: prepared.created ? 'insert' : 'update',
-        changedFields: [
-          'status',
-          'headline',
-          'summary_markdown',
-          'generated_by',
-          'content_revision',
-          'narrative_delivery_id',
-          'narrative_objective_id'
-        ],
-        actorWorkspaceUserId: attribution.actorWorkspaceUserId,
-        actorTokenId: attribution.actorTokenId ?? null,
-        source: attribution.source
+        model,
+        evidenceRevision,
+        publicationId: created.id,
+        publishOperation: null,
+        attribution,
+        created: prepared.created,
+        now
       });
+      narrativeWritten = true;
+      contentRevision = written.contentRevision;
       warnings.push(...missionSummaryStyleWarnings(input.narrative));
+    } else if (
+      input?.narrative &&
+      prepared.withheldReason &&
+      prepared.withheldReason !== 'absent'
+    ) {
+      warnings.push({
+        code: 'mission_summary_withheld',
+        message: `${WITHHELD_MESSAGES[prepared.withheldReason]} The delivery and item closes were accepted. Read the current summary and publish once for this delivery.`
+      });
     }
+    publication = {
+      id: created.id,
+      available: !narrativeWritten,
+      withheldReason: prepared.withheldReason
+    };
   }
   if (contentRevision === null && enabled) {
     const row = await tx.get<{ content_revision: number | string }>(
@@ -543,6 +641,10 @@ export async function applyMissionSummaryWrite(
     contentRevision,
     narrativeWritten,
     closedItemIds,
-    warnings: warnings.slice(0, MISSION_SUMMARY_MAX_WARNINGS)
+    targets: [...targets]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([missionDisplayId, closed]) => ({ missionDisplayId, closed })),
+    warnings: warnings.slice(0, MISSION_SUMMARY_MAX_WARNINGS),
+    ...(publication ? { publication } : {})
   };
 }

@@ -7,8 +7,13 @@ import { jsonTextFieldSql, newId, nowIso } from './util.js';
 /** Core-documented worker job type for asynchronous delivery presentation composition. */
 export const DELIVERY_COMPOSE_JOB_TYPE = 'overlord.delivery.compose.v1';
 
-/** Core-documented worker job type for the operator-only mission summary (coo:1202). */
-export const MISSION_SUMMARY_COMPOSE_JOB_TYPE = 'overlord.mission.summary.compose.v1';
+/**
+ * Retired worker job type of the automatic mission summary composer (coo:1202).
+ * ADR 0076 removed every producer and consumer; migration
+ * `20261118140000_agent_only_mission_narrative` cancelled remaining jobs and a
+ * database fence drops any new one. Kept only so tests and audits can name it.
+ */
+export const RETIRED_MISSION_SUMMARY_COMPOSE_JOB_TYPE = 'overlord.mission.summary.compose.v1';
 
 /**
  * Core-documented worker job type for objective briefs: the generated title
@@ -244,38 +249,6 @@ export async function enqueueDeliveryComposeJob({
   return result;
 }
 
-/** Why a mission summary compose was requested; logged as a bounded metric only. */
-export type MissionSummaryComposeReason =
-  | 'delivery_presented'
-  | 'mission_item_closed'
-  | 'mission_item_restored'
-  | 'agent_request_opened'
-  | 'agent_request_closed'
-  | 'objective_reopened';
-
-/**
- * The write context a mission summary trigger records its change under. The
- * protocol path passes its ServiceContext; the REST layer, which has no
- * ServiceContext, passes the same fields explicitly.
- */
-export type MissionSummaryTriggerContext =
-  | ServiceContext
-  | {
-      db: DatabaseClient;
-      workspaceId: string;
-      actorWorkspaceUserId: string | null;
-      actorTokenId?: string | null;
-      source: ServiceContext['source'];
-    };
-
-function triggerWorkspaceId(ctx: MissionSummaryTriggerContext): string {
-  return 'workspace' in ctx ? ctx.workspace.id : ctx.workspaceId;
-}
-
-function isSummaryEnabled(value: unknown): boolean {
-  return value === true || Number(value) === 1;
-}
-
 export async function recordMissionSummaryChange(
   db: DatabaseClient,
   fields: {
@@ -305,321 +278,46 @@ export async function recordMissionSummaryChange(
   });
 }
 
-/**
- * Requests a fresh mission summary. Call it inside the transaction of the
- * write it follows. A no-op for an ineligible (pre-cutover) or missing mission.
- *
- * Never discards a trigger: `requested_generation` increments atomically on
- * every call, even while a job is queued or running, and the row moves to
- * `pending` while keeping its previous content. The first trigger creates an
- * empty pending shell. The upsert takes the summary row lock before the active
- * job check, and job completion ({@link completeMissionSummaryComposeJob})
- * takes the same lock before finishing the job, so a trigger either sees an
- * active job that will notice the newer generation or leaves a queued job.
- */
-export async function enqueueMissionSummaryComposeJob({
-  ctx,
-  missionId,
-  reason,
-  sourceDeliveryId = null,
-  now = nowIso(),
-  maxAttempts = DEFAULT_MAX_ATTEMPTS,
-  priority = DEFAULT_PRIORITY
-}: {
-  ctx: MissionSummaryTriggerContext;
-  missionId: string;
-  reason: MissionSummaryComposeReason;
-  sourceDeliveryId?: string | null;
-  now?: string;
-  maxAttempts?: number;
-  priority?: number;
-}): Promise<{ triggered: boolean; generation: number | null; jobId: string | null }> {
-  const db = ctx.db;
-  const workspaceId = triggerWorkspaceId(ctx);
-  const mission = await db.get<{ project_id: string; summary_enabled: unknown }>(
-    `SELECT project_id, summary_enabled FROM missions
-      WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
-    [missionId, workspaceId]
-  );
-  if (!mission || !isSummaryEnabled(mission.summary_enabled)) {
-    return { triggered: false, generation: null, jobId: null };
-  }
-
-  // All triggers serialize on the summary row, including the no-op for agent prose.
-  const current = await lockMissionSummaryRow(db, missionId);
-  if (current && (await hasCurrentNarrative(db, missionId, current.narrative_delivery_id))) {
-    return { triggered: false, generation: null, jobId: null };
-  }
-
-  const row = await db.get<{ revision: number; requested_generation: number }>(
-    `INSERT INTO mission_summaries
-         (mission_id, workspace_id, project_id, revision, requested_generation,
-          completed_generation, status, headline, summary_markdown,
-          source_delivery_id, generated_by, generated_at, model,
-          created_at, updated_at)
-       VALUES (?, ?, ?, 1, 1, 0, 'pending', '', '', ?, 'deterministic', NULL, NULL, ?, ?)
-       ON CONFLICT (mission_id) DO UPDATE SET
-         requested_generation = mission_summaries.requested_generation + 1,
-         revision = mission_summaries.revision + 1,
-         status = 'pending',
-         source_delivery_id = excluded.source_delivery_id,
-         updated_at = excluded.updated_at
-       WHERE mission_summaries.narrative_delivery_id IS NULL
-          OR NOT EXISTS (SELECT 1 FROM deliveries
-               WHERE id = mission_summaries.narrative_delivery_id AND mission_id = ? AND deleted_at IS NULL)
-       RETURNING revision, requested_generation`,
-    [missionId, workspaceId, mission.project_id, sourceDeliveryId, now, now, missionId]
-  );
-  if (!row) return { triggered: false, generation: null, jobId: null };
-  const revision = Number(row?.revision ?? 1);
-  const generation = Number(row?.requested_generation ?? 1);
-  await recordMissionSummaryChange(db, {
-    workspaceId,
-    projectId: mission.project_id,
-    missionId,
-    revision,
-    operation: revision === 1 ? 'insert' : 'update',
-    changedFields: ['status', 'requested_generation'],
-    actorWorkspaceUserId: ctx.actorWorkspaceUserId,
-    actorTokenId: ctx.actorTokenId ?? null,
-    source: ctx.source
-  });
-
-  const result = await enqueueWorkerJob({
-    db,
-    workspaceId,
-    type: MISSION_SUMMARY_COMPOSE_JOB_TYPE,
-    dedupeBy: { field: 'missionId', value: missionId },
-    payload: { missionId },
-    priority,
-    maxAttempts,
-    now
-  });
-  // Structured operational metric only; summary content is never logged.
-  console.info(
-    '[mission-summary-compose-worker]',
-    JSON.stringify({
-      event: 'mission_summary_requested',
-      missionId,
-      reason,
-      generation,
-      jobId: result.jobId,
-      enqueued: result.enqueued
-    })
-  );
-  return { triggered: true, generation, jobId: result.jobId };
-}
-
-/** The generation a compose pass works towards, read with its evidence snapshot. */
-export type MissionSummaryGeneration = {
-  workspaceId: string;
-  projectId: string;
-  requestedGeneration: number;
-  completedGeneration: number;
-  sourceDeliveryId: string | null;
-  previous: { headline: string; summary: string } | null;
+/** The summary row fields read under its lock. */
+export type LockedMissionSummaryRow = {
+  workspace_id: string;
+  project_id: string;
+  revision: number;
+  content_revision: number;
+  evidence_revision: number;
+  published_evidence_revision: number | null;
+  narrative_delivery_id: string | null;
+  narrative_changed_at: string | null;
 };
 
-export async function readMissionSummaryGeneration(
-  db: DatabaseClient,
+/**
+ * Locks one mission's summary row (Postgres `FOR UPDATE`; SQLite serializes
+ * writers already). Take the canonical mission lock first.
+ */
+export async function lockMissionSummaryRow(
+  tx: DatabaseClient,
   missionId: string
-): Promise<MissionSummaryGeneration | null> {
-  const row = await db.get<{
-    workspace_id: string;
-    project_id: string;
-    requested_generation: number;
-    completed_generation: number;
-    source_delivery_id: string | null;
-    headline: string;
-    summary_markdown: string;
-  }>(
-    `SELECT workspace_id, project_id, requested_generation, completed_generation,
-            source_delivery_id, headline, summary_markdown
-       FROM mission_summaries WHERE mission_id = ?`,
+): Promise<LockedMissionSummaryRow | null> {
+  const lockClause = tx.dialect === 'postgres' ? 'FOR UPDATE' : '';
+  const row = await tx.get<LockedMissionSummaryRow>(
+    `SELECT workspace_id, project_id, revision, content_revision, evidence_revision,
+            published_evidence_revision, narrative_delivery_id, narrative_changed_at
+       FROM mission_summaries WHERE mission_id = ? ${lockClause}`,
     [missionId]
   );
   if (!row) return null;
   return {
-    workspaceId: row.workspace_id,
-    projectId: row.project_id,
-    requestedGeneration: Number(row.requested_generation),
-    completedGeneration: Number(row.completed_generation),
-    sourceDeliveryId: row.source_delivery_id,
-    previous: row.headline.trim() ? { headline: row.headline, summary: row.summary_markdown } : null
+    ...row,
+    revision: Number(row.revision),
+    content_revision: Number(row.content_revision),
+    evidence_revision: Number(row.evidence_revision),
+    published_evidence_revision:
+      row.published_evidence_revision === null ? null : Number(row.published_evidence_revision),
+    narrative_changed_at:
+      row.narrative_changed_at === null
+        ? null
+        : new Date(String(row.narrative_changed_at as unknown)).toISOString()
   };
-}
-
-export async function lockMissionSummaryRow(
-  tx: DatabaseClient,
-  missionId: string
-): Promise<{
-  workspace_id: string;
-  project_id: string;
-  revision: number;
-  requested_generation: number;
-  completed_generation: number;
-  narrative_delivery_id: string | null;
-} | null> {
-  const lockClause = tx.dialect === 'postgres' ? 'FOR UPDATE' : '';
-  return (
-    (await tx.get<{
-      workspace_id: string;
-      project_id: string;
-      revision: number;
-      requested_generation: number;
-      completed_generation: number;
-      narrative_delivery_id: string | null;
-    }>(
-      `SELECT workspace_id, project_id, revision, requested_generation, completed_generation, narrative_delivery_id
-         FROM mission_summaries WHERE mission_id = ? ${lockClause}`,
-      [missionId]
-    )) ?? null
-  );
-}
-
-/**
- * True while agent prose exists and its source delivery is still live. A later
- * delivery that sent no prose does not lift the guard, so the fallback never
- * replaces mission-wide agent prose with text about one delivery.
- */
-async function hasCurrentNarrative(
-  db: DatabaseClient,
-  missionId: string,
-  narrativeDeliveryId: string | null
-): Promise<boolean> {
-  if (narrativeDeliveryId === null) return false;
-  const source = await db.get<{ id: string }>(
-    `SELECT id FROM deliveries WHERE id = ? AND mission_id = ? AND deleted_at IS NULL`,
-    [narrativeDeliveryId, missionId]
-  );
-  return source !== undefined && source !== null;
-}
-
-/** Prose written by a guarded fallback publication. */
-export type MissionSummaryPublication = {
-  status: 'composed' | 'fallback';
-  headline: string;
-  summary: string;
-  sourceDeliveryId: string | null;
-  generatedBy: 'deterministic' | 'gemini';
-  model: string | null;
-};
-
-/**
- * Publishes a compose result only if no trigger arrived since `generation` was
- * captured. Returns `stale` without writing when the counter moved, so the
- * caller composes again from current evidence instead of publishing an older
- * result over a newer request.
- */
-export async function publishMissionSummary({
-  db,
-  missionId,
-  generation,
-  publication,
-  now = nowIso()
-}: {
-  db: DatabaseClient;
-  missionId: string;
-  generation: number;
-  publication: MissionSummaryPublication;
-  now?: string;
-}): Promise<'published' | 'stale' | 'missing'> {
-  return db.transaction(async tx => {
-    const row = await lockMissionSummaryRow(tx, missionId);
-    if (!row) return 'missing';
-    if (await hasCurrentNarrative(tx, missionId, row.narrative_delivery_id)) return 'stale';
-    if (
-      Number(row.requested_generation) !== generation ||
-      Number(row.completed_generation) >= generation
-    )
-      return 'stale';
-    const revision = Number(row.revision) + 1;
-    await tx.run(
-      `UPDATE mission_summaries
-          SET status = ?, headline = ?, summary_markdown = ?,
-              source_delivery_id = ?, generated_by = ?,
-              generated_at = ?, model = ?, completed_generation = ?, revision = ?,
-              updated_at = ?, content_revision = content_revision + 1,
-              narrative_delivery_id = NULL, narrative_objective_id = NULL
-        WHERE mission_id = ? AND requested_generation = ?`,
-      [
-        publication.status,
-        publication.headline,
-        publication.summary,
-        publication.sourceDeliveryId,
-        publication.generatedBy,
-        now,
-        publication.model,
-        generation,
-        revision,
-        now,
-        missionId,
-        generation
-      ]
-    );
-    await recordMissionSummaryChange(tx, {
-      workspaceId: row.workspace_id,
-      projectId: row.project_id,
-      missionId,
-      revision,
-      operation: 'update',
-      changedFields: [
-        'status',
-        'headline',
-        'summary_markdown',
-        'content_revision',
-        'narrative_delivery_id',
-        'narrative_objective_id',
-        'completed_generation'
-      ],
-      actorWorkspaceUserId: null,
-      source: 'runner'
-    });
-    return 'published';
-  });
-}
-
-/**
- * Finishes a mission summary job under the summary row lock. If a trigger
- * arrived after the last publication (`requested_generation` ahead of
- * `completed_generation`), a successor job is queued in the same transaction,
- * so no trigger is lost between publication and job completion.
- */
-export async function completeMissionSummaryComposeJob({
-  db,
-  jobId,
-  missionId,
-  status,
-  lastError = null,
-  now = nowIso()
-}: {
-  db: DatabaseClient;
-  jobId: string;
-  missionId: string;
-  status: 'succeeded' | 'failed' | 'cancelled';
-  lastError?: string | null;
-  now?: string;
-}): Promise<{ successorJobId: string | null }> {
-  return db.transaction(async tx => {
-    const row = await lockMissionSummaryRow(tx, missionId);
-    await finishWorkerJob(tx, jobId, status, lastError, now);
-    if (
-      !row ||
-      Number(row.requested_generation) <= Number(row.completed_generation) ||
-      (await hasCurrentNarrative(tx, missionId, row.narrative_delivery_id))
-    ) {
-      return { successorJobId: null };
-    }
-    const successor = await enqueueWorkerJob({
-      db: tx,
-      workspaceId: row.workspace_id,
-      type: MISSION_SUMMARY_COMPOSE_JOB_TYPE,
-      dedupeBy: { field: 'missionId', value: missionId },
-      payload: { missionId },
-      now
-    });
-    return { successorJobId: successor.jobId };
-  });
 }
 
 /**

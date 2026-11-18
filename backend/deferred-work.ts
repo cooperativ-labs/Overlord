@@ -55,7 +55,10 @@ export function findResolution(
   return resolutions.get(`${deliveryId}:${entry.id}`);
 }
 
-export function toResolverDto(resolver: MissionItemResolver): MissionItemResolverDto {
+export function toResolverDto(
+  resolver: MissionItemResolver,
+  itemMissionId?: string
+): MissionItemResolverDto {
   return resolver.kind === 'person'
     ? {
         kind: 'person',
@@ -67,7 +70,14 @@ export function toResolverDto(resolver: MissionItemResolver): MissionItemResolve
         kind: 'agent',
         workspaceUserId: null,
         objectiveId: resolver.objectiveId,
-        deliveryId: resolver.deliveryId
+        deliveryId: resolver.deliveryId,
+        missionId: resolver.missionId ?? null,
+        missionDisplayId: resolver.missionDisplayId ?? null,
+        objectiveDisplayId: resolver.objectiveDisplayId ?? null,
+        sessionId: resolver.sessionId ?? null,
+        crossMission: Boolean(
+          resolver.missionId && itemMissionId && resolver.missionId !== itemMissionId
+        )
       };
 }
 
@@ -89,7 +99,7 @@ export function toResolution(item: MissionItem | undefined): HumanActionResoluti
     outcome: item.outcome,
     outcomeRef: item.outcome === null ? null : item.outcomeRef,
     reason: item.statusReason,
-    resolvedBy: toResolverDto(resolvedBy)
+    resolvedBy: toResolverDto(resolvedBy, item.missionId)
   };
 }
 

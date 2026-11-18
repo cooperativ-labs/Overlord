@@ -128,10 +128,12 @@ import {
   loadMissionBranchObservationsForMissions,
   mergeMissionBranchObservation
 } from '../packages/core/service/mission-branch-observations.ts';
+import { closedElsewhere } from '../packages/core/service/mission-items.ts';
 import {
   applyMissionItemSupersedeRules,
   repointMissionItemsProject
 } from '../packages/core/service/mission-items.ts';
+import { advanceMissionNarrativeEvidence } from '../packages/core/service/mission-narrative.ts';
 import { searchMissionReferencesInProject } from '../packages/core/service/mission-reference-search.ts';
 import {
   clearMissionSchedule as clearMissionScheduleService,
@@ -207,10 +209,7 @@ import {
   slugify,
   toCreatedByKind
 } from '../packages/core/service/util.ts';
-import {
-  enqueueMissionSummaryComposeJob,
-  enqueueObjectiveBriefComposeJob
-} from '../packages/core/service/worker-jobs.ts';
+import { enqueueObjectiveBriefComposeJob } from '../packages/core/service/worker-jobs.ts';
 
 import { generateCommitMessageFromDiff } from './automation/commit-message-automation.ts';
 import {
@@ -246,8 +245,7 @@ import {
   recordChange,
   requireDatabaseClient,
   resolveActiveProfileId,
-  restChangeAttribution,
-  restMissionSummaryTriggerContext
+  restChangeAttribution
 } from './db.ts';
 import {
   deferredWorkEntries,
@@ -4694,6 +4692,14 @@ export async function listMissionDeliveries(
     [mission.id, mission.workspace_id, limit]
   )) as DeliveryRow[];
   const resolutions = await loadResolutions(rows.map(row => row.id));
+  const crossCloses = new Map(
+    await Promise.all(
+      rows.map(
+        async row =>
+          [row.id, await closedElsewhere(requireDatabaseClient(), row.id, row.mission_id)] as const
+      )
+    )
+  );
 
   return {
     items: rows.map(row => {
@@ -4710,6 +4716,7 @@ export async function listMissionDeliveries(
         deliveredAt: row.delivered_at,
         agentIdentifier: row.agent_identifier,
         modelIdentifier: row.model_identifier,
+        closedElsewhere: crossCloses.get(row.id) ?? [],
         deferredWorkItems: deferredWorkEntries(report).map(entry =>
           deferredWorkItemDto(entry, findResolution(resolutions, row.id, entry))
         )
@@ -7408,10 +7415,12 @@ async function updateObjectiveTx(
         attribution: await restChangeAttribution(workspaceId, tx, workspaceUserId),
         now
       });
-      await enqueueMissionSummaryComposeJob({
-        ctx: restMissionSummaryTriggerContext(tx, workspaceId, workspaceUserId),
-        missionId: existing.mission_id,
-        reason: 'objective_reopened',
+      // A reopen starts a new narrative basis: earlier publication
+      // opportunities are superseded and current prose becomes outdated.
+      await advanceMissionNarrativeEvidence(tx, {
+        mission: { id: existing.mission_id },
+        reason: 'reopened',
+        attribution: await restChangeAttribution(workspaceId, tx, workspaceUserId),
         now
       });
     }

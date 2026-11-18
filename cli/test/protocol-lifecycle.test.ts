@@ -2,8 +2,10 @@ import { createMissionWithObjectives } from '@overlord/core/service/missions';
 import { addProjectResource, createProject } from '@overlord/core/service/projects';
 import {
   attachSession,
+  closeAgentMissionItems,
   deliverSession,
   recordHookEvent,
+  recordWork,
   updateSession
 } from '@overlord/core/service/protocol';
 import { createIsolatedCheckout } from '@overlord/core/service/test-checkout';
@@ -257,6 +259,7 @@ test('protocol lifecycle: attach baseline → deliver with missionSummary → ne
     summary: 'Built the export.',
     missionSummary: {
       baseContentRevision: first.missionSummary!.contentRevision,
+      baseEvidenceRevision: first.missionSummary!.evidenceRevision,
       headline: 'The export is built and tested.',
       summary: 'The export writes CSV files. It is tested and not deployed.'
     }
@@ -274,4 +277,53 @@ test('protocol lifecycle: attach baseline → deliver with missionSummary → ne
   assert.equal(second.missionSummary?.author, 'agent');
 
   await db.close();
+});
+
+test('protocol lifecycle links a verified foreign close through the public core exports', async () => {
+  const { ctx, db } = await createSeededCliContext({ source: 'protocol' });
+  const project = await createProject({ ctx, name: 'Cross-mission lifecycle' });
+  const target = await recordWork({
+    ctx,
+    projectId: project.id,
+    objective: 'Report risk',
+    summary: 'Verified risk.',
+    payloadJson: {
+      deliveryReport: { schemaVersion: 1, agentReport: { knownRisks: ['Missing retry guard.'] } }
+    }
+  });
+  const source = await createMissionWithObjectives({
+    ctx,
+    projectId: project.id,
+    objectives: [{ objective: 'Add retry guard' }]
+  });
+  const attached = await attachSession({
+    ctx,
+    missionId: source.mission.id,
+    objectiveId: source.objectives[0]!.id
+  });
+  const item = (await db.get<{ id: string }>('SELECT id FROM mission_items WHERE mission_id = ?', [
+    target.mission.id
+  ]))!;
+  const closed = await closeAgentMissionItems({
+    ctx,
+    missionId: source.mission.id,
+    sessionKey: attached.sessionKey,
+    closeItems: [{ id: item.id, status: 'dismissed', reason: 'The retry guard is verified.' }]
+  });
+  assert.deepEqual(closed.targets, [{ missionDisplayId: target.mission.displayId, closed: 1 }]);
+  const request = {
+    ctx,
+    missionId: source.mission.id,
+    sessionKey: attached.sessionKey,
+    summary: 'Verified guard.',
+    operationId: 'op-cli-cross-mission-001'
+  };
+  const accepted = await deliverSession(request);
+  assert.equal((await deliverSession(request)).replayed, true);
+  const row = await db.get<{ resolved_by_delivery_id: string; resolved_by_mission_id: string }>(
+    'SELECT resolved_by_delivery_id, resolved_by_mission_id FROM mission_items WHERE id = ?',
+    [item.id]
+  );
+  assert.equal(row!.resolved_by_delivery_id, accepted.deliveryId);
+  assert.equal(row!.resolved_by_mission_id, source.mission.id);
 });

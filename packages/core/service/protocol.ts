@@ -3,9 +3,10 @@ import {
   CAPTURE_GAP_CODES,
   type CaptureBindingState,
   type FileChangeSource,
-  MAX_CAPTURE_HEALTH_CODES
+  MAX_CAPTURE_HEALTH_CODES,
+  type ReportDraftAttachBaselineV1
 } from '@overlord/contract';
-import { UPDATE_EVENT_TYPES, UPDATE_PHASES } from '@overlord/database';
+import { type DatabaseClient, UPDATE_EVENT_TYPES, UPDATE_PHASES } from '@overlord/database';
 import { createHash } from 'node:crypto';
 
 import {
@@ -21,6 +22,7 @@ import {
 import { type AgentRequestOption, createRequest } from './agent-session/requests.js';
 import { emitNotification } from './notifications/notifications.js';
 import { recordChange } from './change-feed.js';
+import { listObjectiveFileChanges } from './changes.js';
 import type { ServiceContext } from './context.js';
 import { resolveMissionId, resolveObjectiveRef, resolveProjectId } from './context.js';
 import {
@@ -28,10 +30,24 @@ import {
   deriveDeterministicActionCandidates
 } from './delivery-compose.js';
 import {
+  assertReplayMatches,
+  deliveryAlreadyAcceptedError,
+  type FinalizationReceiptRow,
+  finalizationRequestDigest,
+  findReceiptByOperation,
+  findReceiptBySession,
+  historicalSessionDeliveryId,
+  insertFinalizationReceipt,
+  isUniqueViolation,
+  parseOperationId,
+  receiptResult
+} from './delivery-finalization.js';
+import {
   buildDeliveryReport,
   deferredWorkInputProblem,
   markDeliveryPresentationPending
 } from './delivery-report.js';
+import { publicationInstruction } from './delivery-summary-publication.js';
 import { ServiceError } from './errors.js';
 import { linkExecutionRequestToSession } from './execution-requests.js';
 import { findActingDeviceExecutionTargetId } from './execution-targets.js';
@@ -40,16 +56,16 @@ import {
   enqueueLiveActivityRefreshForMission,
   enqueueLiveActivityStartForMission
 } from './live-activity-jobs.js';
+import { canCloseForeignItems, withMissionItemLocks } from './mission-item-locks.js';
 import {
   insertDeliveryMissionItems,
   listMissionItems,
   type MissionItemChangeAttribution
 } from './mission-items.js';
+import { advanceMissionNarrativeEvidence } from './mission-narrative.js';
 import {
   applyMissionSummaryWrite,
   type MissionSummaryBaseline,
-  MissionSummaryConflict,
-  missionSummaryConflictError,
   type MissionSummaryWriteResult,
   parseMissionSummaryInput,
   type PreparedMissionSummaryWrite,
@@ -83,11 +99,37 @@ import { countActiveMissionObjectives } from './objective-parallelism.js';
 import { lockMissionObjectiveQueue } from './objective-queue.js';
 import { loadAgentInstructionsForWorkspaceUser } from './profiles.js';
 import {
+  countOtherMissionOpenItems,
+  listProjectItemCandidates,
+  type ProjectItemOptions
+} from './project-items.js';
+import {
   buildProjectResourceManifest,
   formatProjectResourcesInstructions,
   type ProjectResourceManifestEntry
 } from './project-resource-manifest.js';
 import { findPrimaryProjectResource, findProjectResourceByKey } from './projects.js';
+import {
+  activeCountsOf,
+  activeEntryInputs,
+  applyDraftOperations,
+  assertBatchReplayMatches,
+  findDraftBatch,
+  insertDraftBatchReceipt,
+  loadDraftEntries,
+  loadSessionDraft,
+  mergeDraftEvidence,
+  type ParsedReportDraftWrite,
+  parseReportDraftInput,
+  readReportDraftAttachBaseline,
+  replayedBatch,
+  REPORT_DRAFT_FORBIDDEN,
+  reportDraftBatchDigest,
+  type ReportDraftBatchResult,
+  reportDraftConflict,
+  reportDraftSealedError,
+  sealDraft
+} from './report-draft.js';
 import { enqueueRunQueueDispatch, retireEmptyRunQueues } from './run-queue.js';
 import { generateSessionKey, hashSessionKey, newId, nowIso } from './util.js';
 import { enqueueWebhookEvent } from './webhook-events.js';
@@ -121,6 +163,12 @@ export type MissionContextResponse = {
    * summary-enabled missions only). Never on load-context or connect.
    */
   missionSummary?: MissionSummaryBaseline;
+  /**
+   * Compact report-draft baseline (attach and resume-follow-up only, ADR 0078):
+   * this execution's own open draft on re-attach, and abandoned drafts of the
+   * objective it may import from. Omitted when there is neither.
+   */
+  reportDraft?: ReportDraftAttachBaselineV1;
 };
 
 /** Compact execution context; ordinary objective and load-context reads stay full. */
@@ -514,8 +562,9 @@ export function missionSummaryInstructions(style: InstructionStyle): string {
       ? 'Send them as `missionSummary` on `overlord_deliver_session`:'
       : 'Send them as `missionSummary` in the delivery payload (`--payload-file` or `--mission-summary-file`):';
   return `At delivery, update the mission summary for the whole mission, not only this objective. The
-current text, its \`contentRevision\` and the open items with their ids are in the top-level
-\`missionSummary\` field of this response.
+current text, its \`contentRevision\` and \`evidenceRevision\`, and the open items with their ids
+are in the top-level \`missionSummary\` field of this response. Only agents write this summary;
+nothing generates it for you.
 
 1. Check every item in \`missionSummary.openItems\` against the work you verified. Close it as
    \`done\` if the work is complete, or \`dismissed\` if it no longer applies, with a reason of at
@@ -527,9 +576,12 @@ current text, its \`contentRevision\` and the open items with their ids are in t
    outcomes that still hold and remove claims that later work replaced. Say whether each claim is
    implemented, tested or deployed. State only durable limits; do not repeat open items.
 4. ${send}
-   { "baseContentRevision": <missionSummary.contentRevision>, "headline": "...", "summary": "...",
+   { "baseContentRevision": <missionSummary.contentRevision>,
+     "baseEvidenceRevision": <missionSummary.evidenceRevision>, "headline": "...", "summary": "...",
      "closeItems": [{ "id": "<item id>", "status": "done" | "dismissed", "reason": "..." }] }
-   \`closeItems\` (at most 50) may be sent alone.
+   \`closeItems\` (at most 50) may be sent alone. If other work changed the mission since your
+   baseline, the delivery is still accepted but your headline and summary are withheld; the
+   response then tells you how to publish once for this delivery.
 
 For full detail or overflow, ${
     style === 'mcp'
@@ -589,6 +641,7 @@ function assembleAgentInstructions({
   agentInstructions,
   projectResourcesSection = null,
   missionSummary = false,
+  otherMissionOpenItems = 0,
   attachments = [],
   style = 'cli',
   compactContext = false
@@ -599,6 +652,7 @@ function assembleAgentInstructions({
   agentInstructions: string | null;
   projectResourcesSection?: string | null;
   missionSummary?: boolean;
+  otherMissionOpenItems?: number;
   attachments?: AttachmentSummary[];
   style?: InstructionStyle;
   compactContext?: boolean;
@@ -641,6 +695,9 @@ function assembleAgentInstructions({
     missionSummary ? '## Mission summary' : null,
     missionSummary ? missionSummaryInstructions(style) : null,
     missionSummary ? '' : null,
+    otherMissionOpenItems > 0
+      ? `Other missions in this project have ${otherMissionOpenItems} open items. Before delivery, run ${mcp ? 'overlord_project_items' : '`ovld protocol project-items`'} once. Verify in code that work resolved or obsoleted each item before closing; similarity is insufficient. Give a reason naming the verified change. Close with ${mcp ? 'overlord_close_items' : '`close-items`'} while working or delivery missionSummary.closeItems. Retain the same delivery operation id and semantic body for uncertain-response replay. Accepted withheld prose uses ${mcp ? 'overlord_delivery_summary_context and overlord_publish_delivery_summary' : '`delivery-summary-context` and `publish-delivery-summary`'} with fresh content/evidence bases and a separate retained publication operation id; never resend closes to publication.`
+      : null,
     '## Important Notes',
     `- Other agents may be working on the same branch as you, so you may notice file changes that are not yours. EXCLUDE THESE FROM THE FILE CHANGES YOU REPORT.`,
     agentInstructions ? '' : null,
@@ -850,6 +907,14 @@ async function contextForObjective({
     ? await readMissionSummaryBaseline(ctx.db, mission.id)
     : null;
 
+  const otherMissionOpenItems = includeMissionSummary
+    ? await countOtherMissionOpenItems(ctx.db, {
+        workspaceId: ctx.workspace.id,
+        projectId: mission.projectId,
+        missionId: mission.id
+      })
+    : 0;
+
   // `agentInstructions` is the first key so a harness that cuts long tool
   // output still shows the rules (plan coo:1294, condition 2). Callers spread
   // this object first, so overriding a later key keeps this order.
@@ -861,6 +926,7 @@ async function contextForObjective({
       agentInstructions,
       projectResourcesSection,
       missionSummary: missionSummary !== null,
+      otherMissionOpenItems,
       attachments,
       style,
       compactContext: includeMissionSummary
@@ -887,7 +953,7 @@ async function contextForObjective({
     attachments,
     sharedState,
     ...(projectResources.length > 0 ? { projectResources } : {}),
-    ...(missionSummary ? { missionSummary } : {})
+    ...(missionSummary ? { missionSummary: { ...missionSummary, otherMissionOpenItems } } : {})
   };
 }
 
@@ -1082,8 +1148,14 @@ export async function attachSession({
         agentIdentifier
       });
     }
+    const reattachDraft = await readReportDraftAttachBaseline(ctx.db, {
+      workspaceId: ctx.workspace.id,
+      objectiveId: existing.objective_id,
+      sessionId: existing.id
+    });
     return {
       ...refreshedContext,
+      ...(reattachDraft ? { reportDraft: reattachDraft } : {}),
       session: {
         id: existing.id,
         sessionKey: existingSessionKey,
@@ -1250,8 +1322,14 @@ export async function attachSession({
     style: instructionStyleFor(connectionMethod)
   });
 
+  const abandonedDrafts = await readReportDraftAttachBaseline(ctx.db, {
+    workspaceId: ctx.workspace.id,
+    objectiveId: objective.id,
+    sessionId: null
+  });
   return {
     ...refreshedContext,
+    ...(abandonedDrafts ? { reportDraft: abandonedDrafts } : {}),
     mission: refreshedMission,
     objective: refreshedObjective,
     session: {
@@ -1530,6 +1608,8 @@ export async function resumeFollowUp({
 
   await ctx.db.transaction(async tx => {
     const txCtx = { ...ctx, db: tx };
+    // Mission lock first, as delivery and publication take it (ADR 0076).
+    await lockMissionObjectiveQueue(tx, mission.id);
     await txCtx.db.run(
       `UPDATE objectives
          SET state = 'pending_delivery', completed_at = NULL, updated_at = ?, revision = revision + 1
@@ -1586,6 +1666,15 @@ export async function resumeFollowUp({
 
     await moveMissionToExecute({ ctx: txCtx, missionId: mission.id });
 
+    // Explicit follow-up starts a new basis: the objective's accepted
+    // delivery can no longer publish mission prose (ADR 0076).
+    await advanceMissionNarrativeEvidence(tx, {
+      mission: { id: mission.id },
+      reason: 'follow_up',
+      attribution: missionItemAttribution(ctx),
+      now
+    });
+
     await recordChange({
       ctx: txCtx,
       entityType: 'objective',
@@ -1630,8 +1719,15 @@ export async function resumeFollowUp({
     style: instructionStyleFor(connectionMethod)
   });
 
+  // A follow-up session starts a fresh draft; abandoned earlier drafts stay importable.
+  const followUpDrafts = await readReportDraftAttachBaseline(ctx.db, {
+    workspaceId: ctx.workspace.id,
+    objectiveId: selectedObjective.id,
+    sessionId: null
+  });
   return {
     ...context,
+    ...(followUpDrafts ? { reportDraft: followUpDrafts } : {}),
     session: {
       id: sessionId,
       sessionKey: rawKey,
@@ -2391,6 +2487,12 @@ export async function syncChanges({
   }
 }
 
+export type UpdateSessionResult = {
+  eventId: string;
+  /** Present when the update carried a reportDraft batch (ADR 0078). */
+  reportDraft?: ReportDraftBatchResult;
+};
+
 export async function updateSession({
   ctx,
   missionId,
@@ -2398,12 +2500,13 @@ export async function updateSession({
   summary,
   phase,
   eventType = 'update',
-  payloadJson,
+  payloadJson: rawPayloadJson,
   externalUrl,
   externalSessionId,
   beginFollowUpWork = false,
   followUpIntent,
-  declaredPaths
+  declaredPaths,
+  reportDraft
 }: {
   ctx: ServiceContext;
   missionId: string;
@@ -2418,33 +2521,57 @@ export async function updateSession({
   followUpIntent?: string | null;
   /** Known shell/script outputs, deletes, or renames the native hook could not name. */
   declaredPaths?: unknown;
-}): Promise<{ eventId: string }> {
+  /** Optional draft evidence batch `{ operationId, expectedRevision, operations }` (ADR 0078). */
+  reportDraft?: unknown;
+}): Promise<UpdateSessionResult> {
+  // reportDraft may also arrive inside the payload; it is never stored in the event payload.
+  const { reportDraft: payloadReportDraft, ...payloadRest } = rawPayloadJson ?? {};
+  const payloadJson = rawPayloadJson ? payloadRest : rawPayloadJson;
+  if (reportDraft !== undefined && payloadReportDraft !== undefined) {
+    throw new ServiceError(
+      'Send reportDraft once: as the reportDraft input or inside the payload, not both',
+      'invalid_input',
+      400
+    );
+  }
+  const draftWrite = parseReportDraftInput(reportDraft ?? payloadReportDraft, 'update');
   const trimmedSummary = summary.trim();
-  if (!trimmedSummary) {
+  if (!trimmedSummary && !draftWrite) {
     throw new ServiceError('Update summary is required', 'validation_error');
+  }
+  if (draftWrite && beginFollowUpWork) {
+    throw new ServiceError(
+      'reportDraft cannot be combined with begin-follow-up-work; a follow-up session records its own draft',
+      'invalid_input',
+      400
+    );
   }
 
   const mission = await resolveMissionId(ctx, missionId);
+  if (draftWrite) {
+    return await updateSessionWithDraft({
+      ctx,
+      mission,
+      sessionKey,
+      summary: trimmedSummary,
+      phase,
+      eventType,
+      payloadJson,
+      externalUrl,
+      externalSessionId,
+      declaredPaths,
+      write: draftWrite
+    });
+  }
   const session = await getSessionByKey(ctx, sessionKey);
   if (session.mission_id !== mission.id) {
     throw new ServiceError('Session key does not match mission', 'invalid_session', 401);
   }
 
   if (session.delivery_state === 'delivered' && !beginFollowUpWork) {
-    throw new ServiceError(
-      'Mission was delivered. Use --begin-follow-up-work before posting execution updates.',
-      'delivery_boundary',
-      409
-    );
+    throw deliveryBoundaryError();
   }
-
-  if (phase && !UPDATE_PHASES.includes(phase as (typeof UPDATE_PHASES)[number])) {
-    throw new ServiceError(`Invalid phase: ${phase}`, 'validation_error');
-  }
-
-  if (eventType && !UPDATE_EVENT_TYPES.includes(eventType as (typeof UPDATE_EVENT_TYPES)[number])) {
-    throw new ServiceError(`Invalid event type: ${eventType}`, 'validation_error');
-  }
+  assertUpdatePhaseAndType(phase, eventType);
 
   const now = nowIso();
   const eventId = newId();
@@ -2466,70 +2593,342 @@ export async function updateSession({
         [now, session.id]
       );
     }
-
-    await txCtx.db.run(
-      `INSERT INTO mission_events
-           (id, workspace_id, project_id, mission_id, objective_id, session_id,
-            type, phase, summary, payload_json, external_url, source,
-            actor_workspace_user_id, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        eventId,
-        ctx.workspace.id,
-        mission.projectId,
-        mission.id,
-        session.objective_id,
-        session.id,
-        eventType ?? 'update',
-        phase ?? null,
-        trimmedSummary,
-        JSON.stringify({
-          ...(payloadJson ?? {}),
-          ...(followUpIntent ? { followUpIntent } : {}),
-          ...(declared.warnings.length > 0 ? { declaredPathWarnings: declared.warnings } : {})
-        }),
-        externalUrl ?? null,
-        ctx.source,
-        ctx.actorWorkspaceUserId,
-        now
-      ]
-    );
-    await recordChange({
-      ctx: txCtx,
-      entityType: 'mission_event',
-      entityId: eventId,
-      operation: 'insert',
-      projectId: mission.projectId,
-      missionId: mission.id,
-      objectiveId: session.objective_id
-    });
-
-    await applyDeclaredPaths({
-      ctx: txCtx,
+    await writeUpdateEvent(txCtx, {
       mission,
-      objectiveId: session.objective_id,
-      sessionId: session.id,
-      resourceId: declaredResourceId,
-      paths: declared.paths,
+      session,
+      eventId,
+      summary: trimmedSummary,
+      phase,
+      eventType,
+      payload: {
+        ...(payloadJson ?? {}),
+        ...(followUpIntent ? { followUpIntent } : {})
+      },
+      declared,
+      declaredResourceId,
+      externalUrl,
+      externalSessionId,
       now
     });
-
-    if (externalSessionId !== undefined) {
-      await txCtx.db.run(
-        `UPDATE agent_sessions SET external_session_id = ?, updated_at = ?, revision = revision + 1
-           WHERE id = ?`,
-        [externalSessionId, now, session.id]
-      );
-    }
-
-    if (phase) {
-      await txCtx.db.run(
-        `UPDATE agent_sessions SET phase = ?, updated_at = ?, revision = revision + 1 WHERE id = ?`,
-        [phase, now, session.id]
-      );
-    }
   });
   return { eventId };
+}
+
+function deliveryBoundaryError(): ServiceError {
+  return new ServiceError(
+    'Mission was delivered. Use --begin-follow-up-work before posting execution updates.',
+    'delivery_boundary',
+    409
+  );
+}
+
+function assertUpdatePhaseAndType(
+  phase: string | null | undefined,
+  eventType: string | null | undefined
+): void {
+  if (phase && !UPDATE_PHASES.includes(phase as (typeof UPDATE_PHASES)[number])) {
+    throw new ServiceError(`Invalid phase: ${phase}`, 'validation_error');
+  }
+  if (eventType && !UPDATE_EVENT_TYPES.includes(eventType as (typeof UPDATE_EVENT_TYPES)[number])) {
+    throw new ServiceError(`Invalid event type: ${eventType}`, 'validation_error');
+  }
+}
+
+/** The attributable update event and its ordinary side effects, inside the caller's transaction. */
+async function writeUpdateEvent(
+  txCtx: ServiceContext,
+  {
+    mission,
+    session,
+    eventId,
+    summary,
+    phase,
+    eventType,
+    payload,
+    declared,
+    declaredResourceId,
+    externalUrl,
+    externalSessionId,
+    now
+  }: {
+    mission: { id: string; projectId: string };
+    session: SessionRow;
+    eventId: string;
+    summary: string;
+    phase?: string | null;
+    eventType?: string | null;
+    payload: Record<string, unknown>;
+    declared: { paths: string[]; warnings: string[] };
+    declaredResourceId: string | null;
+    externalUrl?: string | null;
+    externalSessionId?: string | null;
+    now: string;
+  }
+): Promise<void> {
+  await txCtx.db.run(
+    `INSERT INTO mission_events
+         (id, workspace_id, project_id, mission_id, objective_id, session_id,
+          type, phase, summary, payload_json, external_url, source,
+          actor_workspace_user_id, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      eventId,
+      txCtx.workspace.id,
+      mission.projectId,
+      mission.id,
+      session.objective_id,
+      session.id,
+      eventType ?? 'update',
+      phase ?? null,
+      summary,
+      JSON.stringify({
+        ...payload,
+        ...(declared.warnings.length > 0 ? { declaredPathWarnings: declared.warnings } : {})
+      }),
+      externalUrl ?? null,
+      txCtx.source,
+      txCtx.actorWorkspaceUserId,
+      now
+    ]
+  );
+  await recordChange({
+    ctx: txCtx,
+    entityType: 'mission_event',
+    entityId: eventId,
+    operation: 'insert',
+    projectId: mission.projectId,
+    missionId: mission.id,
+    objectiveId: session.objective_id
+  });
+
+  await applyDeclaredPaths({
+    ctx: txCtx,
+    mission,
+    objectiveId: session.objective_id,
+    sessionId: session.id,
+    resourceId: declaredResourceId,
+    paths: declared.paths,
+    now
+  });
+
+  if (externalSessionId !== undefined) {
+    await txCtx.db.run(
+      `UPDATE agent_sessions SET external_session_id = ?, updated_at = ?, revision = revision + 1
+         WHERE id = ?`,
+      [externalSessionId, now, session.id]
+    );
+  }
+
+  if (phase) {
+    await txCtx.db.run(
+      `UPDATE agent_sessions SET phase = ?, updated_at = ?, revision = revision + 1 WHERE id = ?`,
+      [phase, now, session.id]
+    );
+  }
+}
+
+function draftEventSummary(applied: {
+  upserted: string[];
+  withdrawn: string[];
+  imported: string[];
+}): string {
+  const parts = [
+    applied.upserted.length ? `${applied.upserted.length} recorded` : '',
+    applied.withdrawn.length ? `${applied.withdrawn.length} withdrawn` : '',
+    applied.imported.length ? `${applied.imported.length} imported` : ''
+  ].filter(Boolean);
+  return `Draft report evidence: ${parts.join(', ') || 'no change'}.`;
+}
+
+/**
+ * `update` with a reportDraft batch (ADR 0078). The batch receipt is looked up
+ * before the session must still be live and before the revision check, so a
+ * lost-response retry returns its original receipt (also after sealing or
+ * session end) without writing, overwriting a later batch or duplicating its
+ * event. New batches are applied under the mission lock, which also
+ * serializes them with deliver's seal.
+ */
+async function updateSessionWithDraft({
+  ctx,
+  mission,
+  sessionKey,
+  summary,
+  phase,
+  eventType,
+  payloadJson,
+  externalUrl,
+  externalSessionId,
+  declaredPaths,
+  write
+}: {
+  ctx: ServiceContext;
+  mission: { id: string; projectId: string; displayId: string };
+  sessionKey: string;
+  summary: string;
+  phase?: string | null;
+  eventType?: string | null;
+  payloadJson?: Record<string, unknown> | null;
+  externalUrl?: string | null;
+  externalSessionId?: string | null;
+  declaredPaths?: unknown;
+  write: ParsedReportDraftWrite;
+}): Promise<UpdateSessionResult> {
+  const operationId = write.operationId as string;
+  const actor = ctx.actorWorkspaceUserId;
+  if (!actor) {
+    throw new ServiceError(
+      'reportDraft requires an authenticated workspace member',
+      'invalid_input',
+      400
+    );
+  }
+  const session = await getSessionByKeyMaybeEnded(ctx, sessionKey, { includeEnded: true });
+  if (!session) {
+    throw new ServiceError('Invalid or expired session key', 'invalid_session', 401);
+  }
+  if (session.mission_id !== mission.id) {
+    throw new ServiceError('Session key does not match mission', 'invalid_session', 401);
+  }
+  assertUpdatePhaseAndType(phase, eventType);
+  const declared = normalizeDeclaredPaths(declaredPaths);
+  const digest = reportDraftBatchDigest({
+    sessionId: session.id,
+    summary,
+    phase: phase ?? null,
+    eventType: eventType ?? 'update',
+    payload: payloadJson ?? null,
+    declaredPaths: declared.paths,
+    externalUrl: externalUrl ?? null,
+    expectedRevision: write.expectedRevision,
+    operations: write.operations
+  });
+  const replayFrom = async (db: DatabaseClient) => {
+    const draft = await loadSessionDraft(db, session.id);
+    if (!draft) return undefined;
+    const batch = await findDraftBatch(db, draft.id, operationId);
+    if (!batch) return undefined;
+    assertBatchReplayMatches(batch, digest);
+    return replayedBatch(batch, draft);
+  };
+
+  // A replay is a currently authorized receipt read; it never regains update rights.
+  const earlier = await replayFrom(ctx.db);
+  if (earlier) return earlier;
+  if (session.ended_at) {
+    if (session.delivery_state === 'delivered') throw deliveryBoundaryError();
+    throw new ServiceError('Invalid or expired session key', 'invalid_session', 401);
+  }
+  if (session.delivery_state === 'delivered') throw deliveryBoundaryError();
+
+  const declaredResourceId =
+    declared.paths.length > 0 ? await resolveSessionResourceId({ ctx, session, mission }) : null;
+  const now = nowIso();
+  const eventId = newId();
+  try {
+    return await ctx.db.transaction(async tx => {
+      const txCtx = { ...ctx, db: tx };
+      await lockMissionObjectiveQueue(tx, mission.id);
+      const concurrent = await replayFrom(tx);
+      if (concurrent) return concurrent;
+      const live = await tx.get<{
+        ended_at: string | null;
+        delivery_state: string | null;
+        created_by_workspace_user_id: string | null;
+      }>(
+        `SELECT ended_at, delivery_state, created_by_workspace_user_id
+           FROM agent_sessions WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
+        [session.id, ctx.workspace.id]
+      );
+      if (!live) throw new ServiceError('Invalid or expired session key', 'invalid_session', 401);
+      if (live.delivery_state === 'delivered') throw deliveryBoundaryError();
+      if (live.ended_at) {
+        throw new ServiceError('Invalid or expired session key', 'invalid_session', 401);
+      }
+
+      const draft = await loadSessionDraft(tx, session.id);
+      if (draft?.sealed_at) throw reportDraftSealedError(draft);
+      const owner = draft?.owner_workspace_user_id ?? live.created_by_workspace_user_id ?? actor;
+      if (owner !== actor) {
+        throw new ServiceError(
+          'Only the workspace member who owns this session may write its report draft',
+          REPORT_DRAFT_FORBIDDEN,
+          403
+        );
+      }
+      const currentRevision = draft ? Number(draft.revision) : 0;
+      if (write.expectedRevision !== currentRevision) {
+        throw await reportDraftConflict(
+          tx,
+          draft,
+          `reportDraft.expectedRevision ${write.expectedRevision} does not match the current draft revision ${currentRevision}. Nothing was applied: read report-draft, rebase the batch and send it again.`
+        );
+      }
+
+      const applied = await applyDraftOperations(tx, {
+        ctx: txCtx,
+        scope: {
+          workspaceId: ctx.workspace.id,
+          projectId: mission.projectId,
+          missionId: mission.id,
+          objectiveId: session.objective_id,
+          sessionId: session.id,
+          ownerWorkspaceUserId: owner
+        },
+        draft,
+        operations: write.operations,
+        eventId,
+        countBatch: true,
+        now
+      });
+      await insertDraftBatchReceipt(tx, {
+        draft: applied.draft,
+        operationId,
+        digest,
+        eventId,
+        operationCount: write.operations.length,
+        now
+      });
+      await writeUpdateEvent(txCtx, {
+        mission,
+        session,
+        eventId,
+        summary: summary || draftEventSummary(applied),
+        phase,
+        eventType,
+        // Bounded operation metadata only; entry text lives in the draft, not the event.
+        payload: {
+          ...(payloadJson ?? {}),
+          reportDraft: {
+            draftId: applied.draft.id,
+            operationId,
+            revision: Number(applied.draft.revision),
+            upserted: applied.upserted,
+            withdrawn: applied.withdrawn,
+            imported: applied.imported
+          }
+        },
+        declared,
+        declaredResourceId,
+        externalUrl,
+        externalSessionId,
+        now
+      });
+      return {
+        eventId,
+        reportDraft: {
+          draftId: applied.draft.id,
+          operationId,
+          revision: Number(applied.draft.revision),
+          activeCounts: activeCountsOf(applied.entries)
+        }
+      };
+    });
+  } catch (error) {
+    if (!isUniqueViolation(error)) throw error;
+    const winner = await replayFrom(ctx.db);
+    if (winner) return winner;
+    throw error;
+  }
 }
 
 export async function askQuestion({
@@ -2756,22 +3155,162 @@ function missionItemAttribution(ctx: ServiceContext): MissionItemChangeAttributi
 }
 
 /**
- * Runs a delivery transaction and turns a stale summary base into the 409
- * `mission_summary_conflict` error with a fresh baseline, read after the
- * rollback so it never shows rows of the rejected delivery.
+ * Applies the prepared summary write and, for an eligible delivery, attaches
+ * the fresh post-acceptance baseline the agent reconciles from. Returns
+ * undefined when there is nothing to report (ineligible mission, no input).
  */
-async function withMissionSummaryConflict<T>(
-  ctx: ServiceContext,
-  run: () => Promise<T>
-): Promise<T> {
-  try {
-    return await run();
-  } catch (error) {
-    if (error instanceof MissionSummaryConflict) {
-      throw await missionSummaryConflictError(ctx.db, error);
-    }
-    throw error;
+async function finishMissionSummaryWrite(
+  tx: DatabaseClient,
+  args: Parameters<typeof applyMissionSummaryWrite>[1]
+): Promise<MissionSummaryWriteResult | undefined> {
+  const result = await applyMissionSummaryWrite(tx, args);
+  if (!result.publication) {
+    return args.prepared.input ? result : undefined;
   }
+  return {
+    ...result,
+    ...(result.publication.available
+      ? { baseline: (await readMissionSummaryBaseline(tx, args.mission.id)) ?? undefined }
+      : {})
+  };
+}
+
+/** Appends the narrow publication step when an accepted delivery's prose was not published. */
+function withPublicationInstruction(
+  instruction: string,
+  summary: MissionSummaryWriteResult | undefined,
+  {
+    style,
+    missionDisplayId,
+    deliveryId
+  }: { style: InstructionStyle; missionDisplayId: string; deliveryId: string }
+): string {
+  if (!summary?.publication?.available) return instruction;
+  const lead =
+    summary.publication.withheldReason === 'absent'
+      ? 'Delivery accepted without a mission summary.'
+      : 'Delivery accepted; your mission summary was not published because the mission changed since your baseline.';
+  return `${lead} ${publicationInstruction(style, {
+    state: 'outstanding',
+    available: true,
+    missionDisplayId,
+    deliveryId
+  })} ${instruction}`;
+}
+
+export type DeliverSessionResult = {
+  deliveryId: string;
+  eventId: string;
+  /** The caller's operation id, echoed when one was sent. */
+  operationId?: string;
+  missionSummary?: MissionSummaryWriteResult;
+  /** What to do after delivery, worded for the session's connection method. */
+  instruction: string;
+  /** True when this response is the stored receipt of an earlier acceptance. */
+  replayed?: true;
+  /** The report draft this delivery sealed, with each active entry's accepted V1 reference. */
+  reportDraft?: {
+    draftId: string;
+    revision: number;
+    sealed: true;
+    activeEntries: number;
+    refs: Array<{ entryId: string; ref: string | null }>;
+  };
+};
+
+/**
+ * Draft-aware part of deliver, inside the finalization transaction (ADR 0078).
+ * Undefined for a session without a draft and without reportDraft input,
+ * which keeps the full-report behavior unchanged.
+ */
+async function prepareDraftDelivery(
+  tx: DatabaseClient,
+  {
+    ctx,
+    mission,
+    session,
+    draftFinal,
+    legacyDeliveryReport,
+    eventId,
+    now
+  }: {
+    ctx: ServiceContext;
+    mission: { id: string; projectId: string };
+    session: SessionRow;
+    draftFinal: ParsedReportDraftWrite | undefined;
+    legacyDeliveryReport: unknown;
+    eventId: string;
+    now: string;
+  }
+) {
+  let draft = await loadSessionDraft(tx, session.id);
+  if (!draft && !draftFinal) return undefined;
+  if (draft?.sealed_at) throw reportDraftSealedError(draft);
+  const currentRevision = draft ? Number(draft.revision) : 0;
+  if (!draftFinal) {
+    throw await reportDraftConflict(
+      tx,
+      draft,
+      `This session has a report draft at revision ${currentRevision}. Read report-draft, then deliver with reportDraft.expectedRevision ${currentRevision} so no recorded evidence is silently ignored.`
+    );
+  }
+  if (draftFinal.expectedRevision !== currentRevision) {
+    throw await reportDraftConflict(
+      tx,
+      draft,
+      `reportDraft.expectedRevision ${draftFinal.expectedRevision} does not match the current draft revision ${currentRevision}. Nothing was delivered: read report-draft and deliver again.`
+    );
+  }
+  let entries = draft ? await loadDraftEntries(tx, draft.id) : [];
+  if (draftFinal.operations.length > 0) {
+    const actor = ctx.actorWorkspaceUserId;
+    const owner = draft?.owner_workspace_user_id ?? actor;
+    if (!actor || owner !== actor) {
+      throw new ServiceError(
+        'Only the workspace member who owns this session may write its report draft',
+        REPORT_DRAFT_FORBIDDEN,
+        403
+      );
+    }
+    const applied = await applyDraftOperations(tx, {
+      ctx,
+      scope: {
+        workspaceId: ctx.workspace.id,
+        projectId: mission.projectId,
+        missionId: mission.id,
+        objectiveId: session.objective_id,
+        sessionId: session.id,
+        ownerWorkspaceUserId: owner
+      },
+      draft,
+      operations: draftFinal.operations,
+      eventId,
+      countBatch: false,
+      now
+    });
+    draft = applied.draft;
+    entries = applied.entries;
+  }
+  return {
+    draft,
+    entries,
+    merge: mergeDraftEvidence(activeEntryInputs(entries), legacyDeliveryReport)
+  };
+}
+
+/** 409 naming the accepted delivery of a session that already finalized. */
+async function alreadyAcceptedForSession(
+  db: DatabaseClient,
+  sessionId: string
+): Promise<ServiceError> {
+  const receipt = await findReceiptBySession(db, sessionId);
+  return deliveryAlreadyAcceptedError(
+    receipt?.delivery_id ?? (await historicalSessionDeliveryId(db, sessionId))
+  );
+}
+
+function replayedDelivery(receipt: FinalizationReceiptRow): DeliverSessionResult {
+  return { ...receiptResult<DeliverSessionResult>(receipt), replayed: true };
 }
 
 export async function deliverSession({
@@ -2781,10 +3320,12 @@ export async function deliverSession({
   summary,
   artifacts = [],
   declaredPaths,
-  payloadJson,
+  payloadJson: rawPayloadJson,
   verificationSummary,
   followUpNotes,
-  missionSummary
+  missionSummary,
+  operationId: rawOperationId,
+  reportDraft
 }: {
   ctx: ServiceContext;
   missionId: string;
@@ -2798,39 +3339,94 @@ export async function deliverSession({
   followUpNotes?: string | null;
   /** Optional agent-authored summary write (plan 3.3); validated before any write. */
   missionSummary?: unknown;
-}): Promise<{
-  deliveryId: string;
-  eventId: string;
-  missionSummary?: MissionSummaryWriteResult;
-  /** What to do after delivery, worded for the session's connection method. */
-  instruction: string;
-}> {
+  /**
+   * Caller-retained logical operation id (ADR 0075). A retry with the same id
+   * and the same request returns the accepted receipt, even after the session ended.
+   */
+  operationId?: unknown;
+  /**
+   * Draft-aware delivery (ADR 0078): `{ expectedRevision, operations? }`. Required
+   * when the session has a report draft; the draft is sealed on acceptance.
+   */
+  reportDraft?: unknown;
+}): Promise<DeliverSessionResult> {
   const trimmedSummary = summary.trim();
   if (!trimmedSummary) {
     throw new ServiceError('Delivery summary is required', 'validation_error');
   }
+  // reportDraft may also arrive inside the payload envelope; it is never stored there.
+  const { reportDraft: payloadReportDraft, ...payloadRest } = rawPayloadJson ?? {};
+  const payloadJson = rawPayloadJson ? payloadRest : rawPayloadJson;
+  if (reportDraft !== undefined && payloadReportDraft !== undefined) {
+    throw new ServiceError(
+      'Send reportDraft once: as the reportDraft input or inside the payload, not both',
+      'invalid_input',
+      400
+    );
+  }
   assertDeferredWorkInput(payloadJson?.deliveryReport);
+  const draftFinal = parseReportDraftInput(reportDraft ?? payloadReportDraft, 'deliver');
   const summaryInput = parseMissionSummaryInput(missionSummary, { requireBase: true });
+  const operationId = parseOperationId(rawOperationId);
+  const actor = ctx.actorWorkspaceUserId;
+  if (operationId && !actor) {
+    throw new ServiceError(
+      'operationId requires an authenticated workspace member',
+      'invalid_input',
+      400
+    );
+  }
 
   const mission = await resolveMissionId(ctx, missionId);
-  const session = await getSessionByKey(ctx, sessionKey);
+  // An ended session is resolved too: an accepted operation replays after the
+  // session ended, before any requirement that execution is still live.
+  const session = await getSessionByKeyMaybeEnded(ctx, sessionKey, { includeEnded: true });
+  if (!session) {
+    throw new ServiceError('Invalid or expired session key', 'invalid_session', 401);
+  }
   if (session.mission_id !== mission.id) {
     throw new ServiceError('Session key does not match mission', 'invalid_session', 401);
   }
 
   const declared = normalizeDeclaredPaths(declaredPaths);
+  const normalizedArtifacts = validateProtocolArtifacts(artifacts);
+  const digest = finalizationRequestDigest('deliver', {
+    missionId: mission.id,
+    objectiveId: session.objective_id,
+    sessionId: session.id,
+    summary: trimmedSummary,
+    artifacts: normalizedArtifacts,
+    declaredPaths: declared.paths,
+    payload: payloadJson ?? null,
+    verificationSummary: verificationSummary ?? null,
+    followUpNotes: followUpNotes ?? null,
+    missionSummary: summaryInput ?? null,
+    ...(draftFinal ? { reportDraft: draftFinal } : {})
+  });
+  const findOwnReceipt = (db: DatabaseClient) =>
+    operationId && actor
+      ? findReceiptByOperation(db, {
+          workspaceId: ctx.workspace.id,
+          actorWorkspaceUserId: actor,
+          kind: 'deliver',
+          operationId
+        })
+      : Promise.resolve(undefined);
+
+  const earlier = await findOwnReceipt(ctx.db);
+  if (earlier) {
+    assertReplayMatches(earlier, { digest, missionId: mission.id, sessionId: session.id });
+    return replayedDelivery(earlier);
+  }
+  if (session.ended_at) {
+    if (session.delivery_state === 'delivered') {
+      throw await alreadyAcceptedForSession(ctx.db, session.id);
+    }
+    throw new ServiceError('Invalid or expired session key', 'invalid_session', 401);
+  }
+
   const declaredResourceId =
     declared.paths.length > 0 ? await resolveSessionResourceId({ ctx, session, mission }) : null;
-  const normalizedArtifacts = validateProtocolArtifacts(artifacts);
-  const deliveryReport = appendDeliveryWarnings(
-    markDeliveryPresentationPending(
-      buildDeliveryReport({
-        summary: trimmedSummary,
-        deliveryReport: payloadJson?.deliveryReport
-      })
-    ),
-    declared.warnings
-  );
   const missionObjectives = await listObjectives({ ctx, missionId: mission.id });
   const currentObjectiveRow = missionObjectives.find(
     objective => objective.id === session.objective_id
@@ -2852,7 +3448,7 @@ export async function deliverSession({
     workspaceId: ctx.workspace.id,
     projectId: mission.projectId
   };
-  const sessionModel = summaryInput
+  const sessionModel = summaryInput?.narrative
     ? ((
         await ctx.db.get<{ model_identifier: string | null }>(
           `SELECT model_identifier FROM agent_sessions WHERE id = ?`,
@@ -2860,239 +3456,397 @@ export async function deliverSession({
         )
       )?.model_identifier ?? null)
     : null;
-  let summaryResult: MissionSummaryWriteResult | undefined;
+  const instruction = postDeliveryInstruction({
+    style: instructionStyleFor(session.connection_method),
+    missionDisplayId: mission.displayId,
+    objectiveDisplayId: currentObjectiveRow?.displayId ?? session.objective_id
+  });
 
-  await withMissionSummaryConflict(ctx, () =>
-    ctx.db.transaction(async tx => {
-      const txCtx = { ...ctx, db: tx };
-      // Serialize on the mission before summary/item locks, including older payloads.
-      await lockMissionObjectiveQueue(tx, mission.id);
-      // The base revision is checked under the summary row lock before anything
-      // is written, so a stale base rejects the whole delivery.
-      const preparedSummary: PreparedMissionSummaryWrite | null = summaryInput
-        ? await prepareMissionSummaryWrite(tx, {
-            mission: missionScope,
-            input: summaryInput,
-            checkBase: true,
-            now
-          })
-        : null;
-      // Declarations are evidence, not a delivery gate; they land before the
-      // deterministic operator actions are derived from the objective's paths.
-      await applyDeclaredPaths({
-        ctx: txCtx,
-        mission,
-        objectiveId: session.objective_id,
+  let outcome: { replay: FinalizationReceiptRow } | { result: DeliverSessionResult };
+  try {
+    outcome = await withMissionItemLocks(
+      ctx,
+      {
+        missionId: mission.id,
+        projectId: mission.projectId,
         sessionId: session.id,
-        resourceId: declaredResourceId,
-        paths: declared.paths,
-        now: nowIso()
-      });
-      const objectiveChangedFiles = (await txCtx.db.all(
-        `SELECT file_path FROM changed_files
-         WHERE objective_id = ? AND deleted_at IS NULL`,
-        [session.objective_id]
-      )) as Array<{ file_path: string }>;
-      const eligibleDeliveryReport = applyDeferredWorkEligibility({
-        report: deliveryReport,
-        currentObjective: currentObjectiveRow
-          ? { title: currentObjectiveRow.title, instruction: currentObjectiveRow.objective }
-          : null,
-        plannedObjectives,
-        candidateActions: deriveDeterministicActionCandidates({
-          filePaths: objectiveChangedFiles.map(row => row.file_path)
-        })
-      });
+        itemIds: summaryInput?.closeItems.map(e => e.id) ?? []
+      },
+      async tx => {
+        const txCtx = { ...ctx, db: tx };
+        // The outer boundary holds the complete, globally ordered mission set.
+        // Everything that decides acceptance is rechecked under the lock: a
+        // concurrent finalization of this operation or this session has
+        // either committed (and is visible now) or has not started.
+        const inScope = await resolveMissionId(txCtx, mission.id);
+        if (inScope.projectId !== mission.projectId) {
+          throw new ServiceError(`Mission not found: ${missionId}`, 'mission_not_found', 404);
+        }
+        const concurrent = await findOwnReceipt(tx);
+        if (concurrent) {
+          assertReplayMatches(concurrent, {
+            digest,
+            missionId: mission.id,
+            sessionId: session.id
+          });
+          return { replay: concurrent };
+        }
+        const live = await tx.get<{
+          mission_id: string;
+          objective_id: string;
+          ended_at: string | null;
+          delivery_state: string | null;
+        }>(
+          `SELECT mission_id, objective_id, ended_at, delivery_state
+             FROM agent_sessions WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
+          [session.id, ctx.workspace.id]
+        );
+        if (!live || live.mission_id !== mission.id || live.objective_id !== session.objective_id) {
+          throw new ServiceError('Invalid or expired session key', 'invalid_session', 401);
+        }
+        if (live.ended_at) {
+          if (live.delivery_state === 'delivered') {
+            throw await alreadyAcceptedForSession(tx, session.id);
+          }
+          throw new ServiceError('Invalid or expired session key', 'invalid_session', 401);
+        }
 
-      await txCtx.db.run(
-        `INSERT INTO deliveries
-           (id, workspace_id, project_id, mission_id, objective_id, session_id,
-            summary, payload_json, verification_summary, follow_up_notes,
-            delivered_at, delivered_by_workspace_user_id, created_at, updated_at, revision)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
-        [
-          deliveryId,
-          ctx.workspace.id,
-          mission.projectId,
-          mission.id,
-          session.objective_id,
-          session.id,
-          trimmedSummary,
-          JSON.stringify({
-            ...(payloadJson ?? {}),
-            deliveryReport: eligibleDeliveryReport
-          }),
-          verificationSummary ?? null,
-          followUpNotes ?? null,
-          now,
-          ctx.actorWorkspaceUserId,
-          now,
+        // Both narrative bases are compared with the pre-delivery state under
+        // the summary row lock before anything is written (ADR 0076). Stale,
+        // legacy or absent prose never rejects the delivery; it is withheld.
+        const preparedSummary: PreparedMissionSummaryWrite = await prepareMissionSummaryWrite(tx, {
+          mission: missionScope,
+          input: summaryInput,
+          mode: 'deliver',
           now
-        ]
-      );
-
-      // The delivery's risks, human actions and suggestions become open
-      // mission items; the objective's earlier open human actions are superseded.
-      await insertDeliveryMissionItems(txCtx.db, {
-        delivery: {
-          id: deliveryId,
-          workspaceId: ctx.workspace.id,
-          projectId: mission.projectId,
-          missionId: mission.id,
+        });
+        // A session with a report draft must deliver against the revision it
+        // inspected; final operations apply here, then the active entries merge
+        // with any legacy final arrays. Nothing is sealed unless this commits.
+        const draftDelivery = await prepareDraftDelivery(tx, {
+          ctx: txCtx,
+          mission,
+          session,
+          draftFinal,
+          legacyDeliveryReport: payloadJson?.deliveryReport,
+          eventId,
+          now
+        });
+        const deliveryReport = appendDeliveryWarnings(
+          markDeliveryPresentationPending(
+            buildDeliveryReport({
+              summary: trimmedSummary,
+              deliveryReport: draftDelivery
+                ? draftDelivery.merge.deliveryReport
+                : payloadJson?.deliveryReport
+            })
+          ),
+          [...declared.warnings, ...(draftDelivery?.merge.warnings ?? [])]
+        );
+        // Declarations are evidence, not a delivery gate; they land before the
+        // deterministic operator actions are derived from the objective's paths.
+        await applyDeclaredPaths({
+          ctx: txCtx,
+          mission,
           objectiveId: session.objective_id,
-          deliveredAt: now
-        },
-        report: eligibleDeliveryReport,
-        attribution: missionItemAttribution(ctx),
-        now
-      });
-      if (preparedSummary) {
-        summaryResult = await applyMissionSummaryWrite(tx, {
+          sessionId: session.id,
+          resourceId: declaredResourceId,
+          paths: declared.paths,
+          now: nowIso()
+        });
+        const objectiveChangedFiles = (await txCtx.db.all(
+          `SELECT file_path FROM changed_files
+           WHERE objective_id = ? AND deleted_at IS NULL`,
+          [session.objective_id]
+        )) as Array<{ file_path: string }>;
+        const eligibleDeliveryReport = applyDeferredWorkEligibility({
+          report: deliveryReport,
+          currentObjective: currentObjectiveRow
+            ? { title: currentObjectiveRow.title, instruction: currentObjectiveRow.objective }
+            : null,
+          plannedObjectives,
+          candidateActions: deriveDeterministicActionCandidates({
+            filePaths: objectiveChangedFiles.map(row => row.file_path)
+          })
+        });
+
+        await txCtx.db.run(
+          `INSERT INTO deliveries
+             (id, workspace_id, project_id, mission_id, objective_id, session_id,
+              summary, payload_json, verification_summary, follow_up_notes,
+              delivered_at, delivered_by_workspace_user_id, created_at, updated_at, revision)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+          [
+            deliveryId,
+            ctx.workspace.id,
+            mission.projectId,
+            mission.id,
+            session.objective_id,
+            session.id,
+            trimmedSummary,
+            JSON.stringify({
+              ...(payloadJson ?? {}),
+              deliveryReport: eligibleDeliveryReport
+            }),
+            verificationSummary ?? null,
+            followUpNotes ?? null,
+            now,
+            ctx.actorWorkspaceUserId,
+            now,
+            now
+          ]
+        );
+
+        // The delivery's risks, human actions and suggestions become open
+        // mission items; the objective's earlier open human actions are superseded.
+        await insertDeliveryMissionItems(txCtx.db, {
+          delivery: {
+            id: deliveryId,
+            workspaceId: ctx.workspace.id,
+            projectId: mission.projectId,
+            missionId: mission.id,
+            objectiveId: session.objective_id,
+            deliveredAt: now
+          },
+          report: eligibleDeliveryReport,
+          attribution: missionItemAttribution(ctx),
+          now
+        });
+        const sealed = draftDelivery?.draft
+          ? await sealDraft(tx, {
+              ctx: txCtx,
+              draft: draftDelivery.draft,
+              refs: draftDelivery.merge.refs,
+              entries: draftDelivery.entries,
+              deliveryId,
+              now
+            })
+          : undefined;
+        const summaryResult = await finishMissionSummaryWrite(tx, {
+          canCloseForeign: await canCloseForeignItems(txCtx),
           prepared: preparedSummary,
           mission: missionScope,
           objectiveId: session.objective_id,
           deliveryId,
+          sessionId: session.id,
           model: sessionModel,
           attribution: missionItemAttribution(ctx),
           now
         });
-      }
 
-      for (const artifact of normalizedArtifacts) {
-        await insertArtifactRow({
+        for (const artifact of normalizedArtifacts) {
+          await insertArtifactRow({
+            ctx: txCtx,
+            workspaceId: ctx.workspace.id,
+            projectId: mission.projectId,
+            missionId: mission.id,
+            objectiveId: session.objective_id,
+            sessionId: session.id,
+            deliveryId,
+            type: artifact.type,
+            label: artifact.label,
+            contentText: artifact.content ?? null,
+            externalUrl: artifact.url ?? null,
+            now
+          });
+        }
+
+        await txCtx.db.run(
+          `INSERT INTO mission_events
+             (id, workspace_id, project_id, mission_id, objective_id, session_id,
+              type, phase, summary, payload_json, source, actor_workspace_user_id, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, 'delivery', 'deliver', ?, ?, ?, ?, ?)`,
+          [
+            eventId,
+            ctx.workspace.id,
+            mission.projectId,
+            mission.id,
+            session.objective_id,
+            session.id,
+            trimmedSummary,
+            JSON.stringify({ deliveryId, ...(operationId ? { operationId } : {}) }),
+            ctx.source,
+            ctx.actorWorkspaceUserId,
+            now
+          ]
+        );
+        await recordChange({
           ctx: txCtx,
-          workspaceId: ctx.workspace.id,
+          entityType: 'mission_event',
+          entityId: eventId,
+          operation: 'insert',
+          projectId: mission.projectId,
+          missionId: mission.id,
+          objectiveId: session.objective_id
+        });
+        await enqueueWebhookEvent(txCtx, {
+          type: 'mission.delivered',
+          projectId: mission.projectId,
+          entity: {
+            missionId: mission.id,
+            objectiveId: session.objective_id,
+            sessionId: session.id,
+            deliveryId
+          }
+        });
+        await enqueueDeliveryComposeJob({ ctx: txCtx, deliveryId, now });
+
+        await txCtx.db.run(
+          `UPDATE objectives SET state = 'complete', ${OBJECTIVE_COMPLETED_AT_ASSIGNMENT}, updated_at = ?, revision = revision + 1
+           WHERE id = ?`,
+          [now, now, session.objective_id]
+        );
+        await txCtx.db.run(
+          `UPDATE run_queue_entries SET deleted_at = ?, updated_at = ?, revision = revision + 1
+           WHERE objective_id = ? AND deleted_at IS NULL`,
+          [now, now, session.objective_id]
+        );
+        // A completed queue no longer needs to exist.
+        await retireEmptyRunQueues(txCtx.db, mission.projectId);
+        const objectiveRevision = (
+          (await txCtx.db.get(`SELECT revision FROM objectives WHERE id = ?`, [
+            session.objective_id
+          ])) as { revision: number } | undefined
+        )?.revision;
+        await recordChange({
+          ctx: txCtx,
+          entityType: 'objective',
+          entityId: session.objective_id,
+          operation: 'update',
+          entityRevision: objectiveRevision ?? null,
           projectId: mission.projectId,
           missionId: mission.id,
           objectiveId: session.objective_id,
-          sessionId: session.id,
-          deliveryId,
-          type: artifact.type,
-          label: artifact.label,
-          contentText: artifact.content ?? null,
-          externalUrl: artifact.url ?? null,
+          changedFields: ['state', 'completed_at']
+        });
+        await enqueueWebhookEvent(txCtx, {
+          type: 'objective.completed',
+          projectId: mission.projectId,
+          entity: {
+            missionId: mission.id,
+            objectiveId: session.objective_id,
+            sessionId: session.id,
+            deliveryId
+          }
+        });
+        await enqueueLiveActivityRefreshForMission({
+          db: txCtx.db,
+          workspaceId: ctx.workspace.id,
+          missionId: mission.id,
           now
         });
-      }
 
-      await txCtx.db.run(
-        `INSERT INTO mission_events
-           (id, workspace_id, project_id, mission_id, objective_id, session_id,
-            type, phase, summary, payload_json, source, actor_workspace_user_id, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, 'delivery', 'deliver', ?, ?, ?, ?, ?)`,
-        [
+        await txCtx.db.run(
+          `UPDATE agent_sessions
+           SET delivery_state = 'delivered', phase = 'review', ended_at = ?, updated_at = ?, revision = revision + 1
+           WHERE id = ?`,
+          [now, now, session.id]
+        );
+        const sessionRevision = (
+          (await txCtx.db.get(`SELECT revision FROM agent_sessions WHERE id = ?`, [session.id])) as
+            | { revision: number }
+            | undefined
+        )?.revision;
+        await recordChange({
+          ctx: txCtx,
+          entityType: 'agent_session',
+          entityId: session.id,
+          operation: 'update',
+          entityRevision: sessionRevision ?? null,
+          projectId: mission.projectId,
+          missionId: mission.id,
+          objectiveId: session.objective_id,
+          changedFields: ['delivery_state', 'phase', 'ended_at']
+        });
+
+        const remainingActive = await countActiveMissionObjectives({
+          ctx: txCtx,
+          missionId: mission.id
+        });
+        if (remainingActive === 0) {
+          await moveMissionToReview({ ctx: txCtx, missionId: mission.id });
+        }
+
+        // Required follow-on scheduling is handed off durably in this same
+        // transaction (ADR 0075): it exists exactly when the delivery does, a
+        // replay writes none of it again, and nothing after commit can turn
+        // an accepted delivery into an apparent rejection.
+        await scheduleDeliveryFollowOn({
+          ctx: txCtx,
+          mission,
+          deliveredObjectiveId: session.objective_id,
+          missionNowIdle: remainingActive === 0
+        });
+
+        const result: DeliverSessionResult = {
+          deliveryId,
           eventId,
-          ctx.workspace.id,
-          mission.projectId,
-          mission.id,
-          session.objective_id,
-          session.id,
-          trimmedSummary,
-          JSON.stringify({ deliveryId }),
-          ctx.source,
-          ctx.actorWorkspaceUserId,
-          now
-        ]
-      );
-      await recordChange({
-        ctx: txCtx,
-        entityType: 'mission_event',
-        entityId: eventId,
-        operation: 'insert',
-        projectId: mission.projectId,
-        missionId: mission.id,
-        objectiveId: session.objective_id
-      });
-      await enqueueWebhookEvent(txCtx, {
-        type: 'mission.delivered',
-        projectId: mission.projectId,
-        entity: {
-          missionId: mission.id,
-          objectiveId: session.objective_id,
-          sessionId: session.id,
-          deliveryId
+          ...(operationId ? { operationId } : {}),
+          ...(summaryResult ? { missionSummary: summaryResult } : {}),
+          ...(sealed ? { reportDraft: { ...sealed, sealed: true as const } } : {}),
+          instruction: withPublicationInstruction(instruction, summaryResult, {
+            style: instructionStyleFor(session.connection_method),
+            missionDisplayId: mission.displayId,
+            deliveryId
+          })
+        };
+        if (actor) {
+          await insertFinalizationReceipt(tx, {
+            workspaceId: ctx.workspace.id,
+            projectId: mission.projectId,
+            missionId: mission.id,
+            objectiveId: session.objective_id,
+            deliveryId,
+            actorWorkspaceUserId: actor,
+            sessionId: session.id,
+            kind: 'deliver',
+            operationId: operationId ?? null,
+            digest,
+            result,
+            acceptedAt: now
+          });
         }
-      });
-      await enqueueDeliveryComposeJob({ ctx: txCtx, deliveryId, now });
-
-      await txCtx.db.run(
-        `UPDATE objectives SET state = 'complete', ${OBJECTIVE_COMPLETED_AT_ASSIGNMENT}, updated_at = ?, revision = revision + 1
-         WHERE id = ?`,
-        [now, now, session.objective_id]
-      );
-      await txCtx.db.run(
-        `UPDATE run_queue_entries SET deleted_at = ?, updated_at = ?, revision = revision + 1
-         WHERE objective_id = ? AND deleted_at IS NULL`,
-        [now, now, session.objective_id]
-      );
-      // A completed queue no longer needs to exist.
-      await retireEmptyRunQueues(txCtx.db, mission.projectId);
-      const objectiveRevision = (
-        (await txCtx.db.get(`SELECT revision FROM objectives WHERE id = ?`, [
-          session.objective_id
-        ])) as { revision: number } | undefined
-      )?.revision;
-      await recordChange({
-        ctx: txCtx,
-        entityType: 'objective',
-        entityId: session.objective_id,
-        operation: 'update',
-        entityRevision: objectiveRevision ?? null,
-        projectId: mission.projectId,
-        missionId: mission.id,
-        objectiveId: session.objective_id,
-        changedFields: ['state', 'completed_at']
-      });
-      await enqueueWebhookEvent(txCtx, {
-        type: 'objective.completed',
-        projectId: mission.projectId,
-        entity: {
-          missionId: mission.id,
-          objectiveId: session.objective_id,
-          sessionId: session.id,
-          deliveryId
-        }
-      });
-      await enqueueLiveActivityRefreshForMission({
-        db: txCtx.db,
-        workspaceId: ctx.workspace.id,
-        missionId: mission.id,
-        now
-      });
-
-      await txCtx.db.run(
-        `UPDATE agent_sessions
-         SET delivery_state = 'delivered', phase = 'review', ended_at = ?, updated_at = ?, revision = revision + 1
-         WHERE id = ?`,
-        [now, now, session.id]
-      );
-      const sessionRevision = (
-        (await txCtx.db.get(`SELECT revision FROM agent_sessions WHERE id = ?`, [session.id])) as
-          | { revision: number }
-          | undefined
-      )?.revision;
-      await recordChange({
-        ctx: txCtx,
-        entityType: 'agent_session',
-        entityId: session.id,
-        operation: 'update',
-        entityRevision: sessionRevision ?? null,
-        projectId: mission.projectId,
-        missionId: mission.id,
-        objectiveId: session.objective_id,
-        changedFields: ['delivery_state', 'phase', 'ended_at']
-      });
-
-      const remainingActive = await countActiveMissionObjectives({
-        ctx: txCtx,
-        missionId: mission.id
-      });
-      if (remainingActive === 0) {
-        await moveMissionToReview({ ctx: txCtx, missionId: mission.id });
+        return { result };
       }
-    })
-  );
+    );
+  } catch (error) {
+    // A concurrent writer won a uniqueness race that the mission lock did not
+    // serialize (same operation id on another mission, or SQLite/Postgres
+    // backstop). This transaction rolled back completely; answer from the winner.
+    if (!isUniqueViolation(error)) throw error;
+    const winner = await findOwnReceipt(ctx.db);
+    if (winner) {
+      assertReplayMatches(winner, { digest, missionId: mission.id, sessionId: session.id });
+      return replayedDelivery(winner);
+    }
+    if (await findReceiptBySession(ctx.db, session.id)) {
+      throw await alreadyAcceptedForSession(ctx.db, session.id);
+    }
+    throw error;
+  }
 
+  if ('replay' in outcome) return replayedDelivery(outcome.replay);
+  return outcome.result;
+}
+
+/**
+ * Follow-on work of an accepted delivery, written inside its finalization
+ * transaction: the project's durable Run Queue dispatch job, the awaiting
+ * approval event for the next runnable draft, and the awaiting-review
+ * notification (whose fan-out is its own durable job). Queue selection and
+ * the parallel-objective rule are unchanged; only the timing moved inside.
+ */
+async function scheduleDeliveryFollowOn({
+  ctx,
+  mission,
+  deliveredObjectiveId,
+  missionNowIdle
+}: {
+  ctx: ServiceContext;
+  mission: { id: string; projectId: string };
+  deliveredObjectiveId: string;
+  missionNowIdle: boolean;
+}): Promise<void> {
   // Run Queue membership is authoritative; its durable project-deduped worker
   // owns target/config resolution and launch retries.
   await enqueueRunQueueDispatch(ctx.db, mission.projectId, ctx.workspace.id);
@@ -3101,20 +3855,14 @@ export async function deliverSession({
   // instruction text, wherever it sits relative to the delivered objective —
   // objectives can launch out of order (coo:1274). Submitted objectives and
   // blank drafts are skipped; Run Queue membership stays authoritative.
-  const nextObjective = (await ctx.db.get(
+  const nextObjective = await ctx.db.get<{ id: string; title: string }>(
     `SELECT id, title
        FROM objectives
        WHERE mission_id = ? AND deleted_at IS NULL
          AND state = 'draft' AND TRIM(COALESCE(instruction_text, '')) <> ''
        ORDER BY position ASC, created_at ASC, id ASC LIMIT 1`,
     [mission.id]
-  )) as
-    | {
-        id: string;
-        title: string;
-      }
-    | undefined;
-
+  );
   if (nextObjective) {
     const queued = await ctx.db.get<{ id: string }>(
       'SELECT id FROM run_queue_entries WHERE objective_id = ? AND deleted_at IS NULL',
@@ -3141,30 +3889,15 @@ export async function deliverSession({
     }
   }
 
-  const remainingActive = await countActiveMissionObjectives({
-    ctx,
-    missionId: mission.id
-  });
-  if (remainingActive === 0) {
+  if (missionNowIdle) {
     await emitNotification({
       db: ctx.db,
       workspaceId: ctx.workspace.id,
       missionId: mission.id,
       type: 'mission_awaiting_review',
-      objectiveId: session.objective_id
+      objectiveId: deliveredObjectiveId
     });
   }
-
-  return {
-    deliveryId,
-    eventId,
-    ...(summaryResult ? { missionSummary: summaryResult } : {}),
-    instruction: postDeliveryInstruction({
-      style: instructionStyleFor(session.connection_method),
-      missionDisplayId: mission.displayId,
-      objectiveDisplayId: currentObjectiveRow?.displayId ?? session.objective_id
-    })
-  };
 }
 
 export async function protocolCreate({
@@ -3274,6 +4007,18 @@ export async function protocolPrompt({
   });
 }
 
+export type RecordWorkResult = {
+  mission: MissionSummary;
+  deliveryId: string;
+  /** The caller's operation id, echoed when one was sent. */
+  operationId?: string;
+  missionSummary?: MissionSummaryWriteResult;
+  /** Present when the new mission's summary can still be published for this delivery. */
+  instruction?: string;
+  /** True when this response is the stored receipt of an earlier acceptance. */
+  replayed?: true;
+};
+
 export async function recordWork({
   ctx,
   projectId,
@@ -3284,7 +4029,8 @@ export async function recordWork({
   declaredPaths,
   payloadJson,
   assignedTo,
-  missionSummary
+  missionSummary,
+  operationId: rawOperationId
 }: {
   ctx: ServiceContext;
   projectId?: string | null;
@@ -3299,17 +4045,36 @@ export async function recordWork({
   assignedTo?: string | null;
   /** Optional agent-authored summary; a new mission has no base revision to check. */
   missionSummary?: unknown;
-}): Promise<{
-  mission: MissionSummary;
-  deliveryId: string;
-  missionSummary?: MissionSummaryWriteResult;
-}> {
+  /**
+   * Caller-retained logical operation id (ADR 0075). The same id and request
+   * returns the one mission and delivery it created; without an id the server
+   * cannot tell a retry from intentionally separate identical work.
+   */
+  operationId?: unknown;
+}): Promise<RecordWorkResult> {
   const trimmedSummary = summary.trim();
   if (!trimmedSummary) {
     throw new ServiceError('Summary is required for record-work', 'validation_error');
   }
+  if (payloadJson && Object.prototype.hasOwnProperty.call(payloadJson, 'reportDraft')) {
+    // Record-work is sessionless: it has no draft to seal (ADR 0078).
+    throw new ServiceError(
+      'record-work does not accept reportDraft; send the final deliveryReport arrays instead',
+      'invalid_input',
+      400
+    );
+  }
   assertDeferredWorkInput(payloadJson?.deliveryReport);
   const summaryInput = parseMissionSummaryInput(missionSummary, { requireBase: false });
+  const operationId = parseOperationId(rawOperationId);
+  const actor = ctx.actorWorkspaceUserId;
+  if (operationId && !actor) {
+    throw new ServiceError(
+      'operationId requires an authenticated workspace member',
+      'invalid_input',
+      400
+    );
+  }
   const declared = normalizeDeclaredPaths(declaredPaths);
   const normalizedArtifacts = validateProtocolArtifacts(artifacts);
   const deliveryReport = appendDeliveryWarnings(
@@ -3335,157 +4100,248 @@ export async function recordWork({
     );
   }
   const resolvedProjectId = await resolveProjectId(ctx, projectId);
+  const digest = finalizationRequestDigest('record_work', {
+    projectId: resolvedProjectId,
+    objective,
+    title: title ?? null,
+    summary: trimmedSummary,
+    artifacts: normalizedArtifacts,
+    declaredPaths: declared.paths,
+    payload: payloadJson ?? null,
+    assignedTo: assignedTo ?? null,
+    missionSummary: summaryInput ?? null
+  });
+  const findOwnReceipt = (db: DatabaseClient) =>
+    operationId && actor
+      ? findReceiptByOperation(db, {
+          workspaceId: ctx.workspace.id,
+          actorWorkspaceUserId: actor,
+          kind: 'record_work',
+          operationId
+        })
+      : Promise.resolve(undefined);
+  /** Replays a stored acceptance after rechecking the caller's current access. */
+  const replay = async (receipt: FinalizationReceiptRow): Promise<RecordWorkResult> => {
+    assertReplayMatches(receipt, { digest });
+    try {
+      await resolveMissionId(ctx, receipt.mission_id);
+    } catch {
+      throw new ServiceError('Delivery receipt not found', 'delivery_receipt_not_found', 404);
+    }
+    return { ...receiptResult<RecordWorkResult>(receipt), replayed: true };
+  };
+
+  const earlier = await findOwnReceipt(ctx.db);
+  if (earlier) return await replay(earlier);
 
   const assignedWorkspaceUserId = await resolveAgentMissionAssignee({ ctx, assignedTo });
-  const created = await createMissionWithObjectives({
-    ctx,
-    projectId: resolvedProjectId,
-    objectives: [{ objective }],
-    statusType: 'review',
-    assignedWorkspaceUserId,
-    ...(title !== undefined ? { title } : {})
-  });
 
-  const now = nowIso();
-  const deliveryId = newId();
-  const objectiveId = created.objectives[0]?.id;
-  if (!objectiveId) {
-    throw new ServiceError('Failed to create objective for record-work', 'internal_error', 500);
-  }
+  let outcome: { replay: FinalizationReceiptRow } | { result: RecordWorkResult };
+  try {
+    // Mission, completed objective, source report and receipt commit together.
+    // There is no mission to lock before it exists: a concurrent request with
+    // the same operation id serializes on the receipt's unique index, and the
+    // loser's whole creation rolls back below.
+    outcome = await withMissionItemLocks(
+      ctx,
+      { projectId: resolvedProjectId, itemIds: summaryInput?.closeItems.map(e => e.id) ?? [] },
+      async tx => {
+        const txCtx = { ...ctx, db: tx };
+        const concurrent = await findOwnReceipt(tx);
+        if (concurrent) return { replay: concurrent };
 
-  const missionScope = {
-    id: created.mission.id,
-    workspaceId: ctx.workspace.id,
-    projectId: resolvedProjectId
-  };
-  let summaryResult: MissionSummaryWriteResult | undefined;
+        const created = await createMissionWithObjectives({
+          ctx: txCtx,
+          projectId: resolvedProjectId,
+          objectives: [{ objective }],
+          statusType: 'review',
+          assignedWorkspaceUserId,
+          ...(title !== undefined ? { title } : {})
+        });
 
-  await ctx.db.transaction(async tx => {
-    const txCtx = { ...ctx, db: tx };
-    await lockMissionObjectiveQueue(tx, created.mission.id);
-    const preparedSummary: PreparedMissionSummaryWrite | null = summaryInput
-      ? await prepareMissionSummaryWrite(tx, {
+        const now = nowIso();
+        const deliveryId = newId();
+        const objectiveId = created.objectives[0]?.id;
+        if (!objectiveId) {
+          throw new ServiceError(
+            'Failed to create objective for record-work',
+            'internal_error',
+            500
+          );
+        }
+
+        const missionScope = {
+          id: created.mission.id,
+          workspaceId: ctx.workspace.id,
+          projectId: resolvedProjectId
+        };
+        await lockMissionObjectiveQueue(tx, created.mission.id);
+        // A new mission has no earlier basis: record-work prose publishes at
+        // creation without a base (ADR 0076 keeps this exception).
+        const preparedSummary: PreparedMissionSummaryWrite = await prepareMissionSummaryWrite(tx, {
           mission: missionScope,
           input: summaryInput,
-          checkBase: false,
+          mode: 'record_work',
           now
-        })
-      : null;
-    await txCtx.db.run(
-      `INSERT INTO deliveries
-           (id, workspace_id, project_id, mission_id, objective_id, session_id,
-            summary, payload_json, delivered_at, delivered_by_workspace_user_id,
-            created_at, updated_at, revision)
-         VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, 1)`,
-      [
-        deliveryId,
-        ctx.workspace.id,
-        resolvedProjectId,
-        created.mission.id,
-        objectiveId,
-        trimmedSummary,
-        JSON.stringify({ ...(payloadJson ?? {}), deliveryReport }),
-        now,
-        ctx.actorWorkspaceUserId,
-        now,
-        now
-      ]
+        });
+        await txCtx.db.run(
+          `INSERT INTO deliveries
+             (id, workspace_id, project_id, mission_id, objective_id, session_id,
+              summary, payload_json, delivered_at, delivered_by_workspace_user_id,
+              created_at, updated_at, revision)
+           VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, 1)`,
+          [
+            deliveryId,
+            ctx.workspace.id,
+            resolvedProjectId,
+            created.mission.id,
+            objectiveId,
+            trimmedSummary,
+            JSON.stringify({ ...(payloadJson ?? {}), deliveryReport }),
+            now,
+            ctx.actorWorkspaceUserId,
+            now,
+            now
+          ]
+        );
+        await insertDeliveryMissionItems(txCtx.db, {
+          delivery: {
+            id: deliveryId,
+            workspaceId: ctx.workspace.id,
+            projectId: resolvedProjectId,
+            missionId: created.mission.id,
+            objectiveId,
+            deliveredAt: now
+          },
+          report: deliveryReport,
+          attribution: missionItemAttribution(ctx),
+          now
+        });
+        const summaryResult = await finishMissionSummaryWrite(tx, {
+          canCloseForeign: await canCloseForeignItems(txCtx),
+          prepared: preparedSummary,
+          mission: missionScope,
+          objectiveId,
+          deliveryId,
+          sessionId: null,
+          model: null,
+          attribution: missionItemAttribution(ctx),
+          now
+        });
+
+        for (const artifact of normalizedArtifacts) {
+          await insertArtifactRow({
+            ctx: txCtx,
+            workspaceId: ctx.workspace.id,
+            projectId: resolvedProjectId,
+            missionId: created.mission.id,
+            objectiveId,
+            sessionId: null,
+            deliveryId,
+            type: artifact.type,
+            label: artifact.label,
+            contentText: artifact.content ?? null,
+            externalUrl: artifact.url ?? null,
+            now
+          });
+        }
+
+        // record-work has no attached session, so its explicit paths are sessionless
+        // declarations with no resolved resource. They never claim native capture.
+        await applyDeclaredPaths({
+          ctx: txCtx,
+          mission: { id: created.mission.id, projectId: resolvedProjectId },
+          objectiveId,
+          sessionId: null,
+          resourceId: null,
+          paths: declared.paths,
+          now
+        });
+
+        await txCtx.db.run(
+          `INSERT INTO mission_events
+             (id, workspace_id, project_id, mission_id, objective_id,
+              type, phase, summary, payload_json, source, actor_workspace_user_id, created_at)
+           VALUES (?, ?, ?, ?, ?, 'delivery', 'deliver', ?, ?, ?, ?, ?)`,
+          [
+            newId(),
+            ctx.workspace.id,
+            resolvedProjectId,
+            created.mission.id,
+            objectiveId,
+            trimmedSummary,
+            JSON.stringify({
+              deliveryId,
+              recordWork: true,
+              ...(operationId ? { operationId } : {})
+            }),
+            ctx.source,
+            ctx.actorWorkspaceUserId,
+            now
+          ]
+        );
+        await enqueueWebhookEvent(txCtx, {
+          type: 'mission.delivered',
+          projectId: resolvedProjectId,
+          entity: { missionId: created.mission.id, objectiveId, deliveryId }
+        });
+        await enqueueWebhookEvent(txCtx, {
+          type: 'objective.completed',
+          projectId: resolvedProjectId,
+          entity: { missionId: created.mission.id, objectiveId, deliveryId }
+        });
+        await enqueueDeliveryComposeJob({ ctx: txCtx, deliveryId, now });
+        await enqueueLiveActivityRefreshForMission({
+          db: txCtx.db,
+          workspaceId: ctx.workspace.id,
+          missionId: created.mission.id,
+          now
+        });
+
+        const result: RecordWorkResult = {
+          mission: created.mission,
+          deliveryId,
+          ...(operationId ? { operationId } : {}),
+          ...(summaryResult ? { missionSummary: summaryResult } : {}),
+          ...(summaryResult?.publication?.available
+            ? {
+                instruction: publicationInstruction('cli', {
+                  state: 'outstanding',
+                  available: true,
+                  missionDisplayId: created.mission.displayId,
+                  deliveryId
+                }).replace(' --session-key <key>', '')
+              }
+            : {})
+        };
+        if (actor) {
+          await insertFinalizationReceipt(tx, {
+            workspaceId: ctx.workspace.id,
+            projectId: resolvedProjectId,
+            missionId: created.mission.id,
+            objectiveId,
+            deliveryId,
+            actorWorkspaceUserId: actor,
+            sessionId: null,
+            kind: 'record_work',
+            operationId: operationId ?? null,
+            digest,
+            result,
+            acceptedAt: now
+          });
+        }
+        return { result };
+      }
     );
-    await insertDeliveryMissionItems(txCtx.db, {
-      delivery: {
-        id: deliveryId,
-        workspaceId: ctx.workspace.id,
-        projectId: resolvedProjectId,
-        missionId: created.mission.id,
-        objectiveId,
-        deliveredAt: now
-      },
-      report: deliveryReport,
-      attribution: missionItemAttribution(ctx),
-      now
-    });
-    if (preparedSummary) {
-      summaryResult = await applyMissionSummaryWrite(tx, {
-        prepared: preparedSummary,
-        mission: missionScope,
-        objectiveId,
-        deliveryId,
-        model: null,
-        attribution: missionItemAttribution(ctx),
-        now
-      });
-    }
+  } catch (error) {
+    if (!isUniqueViolation(error)) throw error;
+    const winner = await findOwnReceipt(ctx.db);
+    if (!winner) throw error;
+    return await replay(winner);
+  }
 
-    for (const artifact of normalizedArtifacts) {
-      await insertArtifactRow({
-        ctx: txCtx,
-        workspaceId: ctx.workspace.id,
-        projectId: resolvedProjectId,
-        missionId: created.mission.id,
-        objectiveId,
-        sessionId: null,
-        deliveryId,
-        type: artifact.type,
-        label: artifact.label,
-        contentText: artifact.content ?? null,
-        externalUrl: artifact.url ?? null,
-        now
-      });
-    }
-
-    // record-work has no attached session, so its explicit paths are sessionless
-    // declarations with no resolved resource. They never claim native capture.
-    await applyDeclaredPaths({
-      ctx: txCtx,
-      mission: { id: created.mission.id, projectId: resolvedProjectId },
-      objectiveId,
-      sessionId: null,
-      resourceId: null,
-      paths: declared.paths,
-      now
-    });
-
-    await txCtx.db.run(
-      `INSERT INTO mission_events
-           (id, workspace_id, project_id, mission_id, objective_id,
-            type, phase, summary, payload_json, source, actor_workspace_user_id, created_at)
-         VALUES (?, ?, ?, ?, ?, 'delivery', 'deliver', ?, ?, ?, ?, ?)`,
-      [
-        newId(),
-        ctx.workspace.id,
-        resolvedProjectId,
-        created.mission.id,
-        objectiveId,
-        trimmedSummary,
-        JSON.stringify({ deliveryId, recordWork: true }),
-        ctx.source,
-        ctx.actorWorkspaceUserId,
-        now
-      ]
-    );
-    await enqueueWebhookEvent(txCtx, {
-      type: 'mission.delivered',
-      projectId: resolvedProjectId,
-      entity: { missionId: created.mission.id, objectiveId, deliveryId }
-    });
-    await enqueueWebhookEvent(txCtx, {
-      type: 'objective.completed',
-      projectId: resolvedProjectId,
-      entity: { missionId: created.mission.id, objectiveId, deliveryId }
-    });
-    await enqueueDeliveryComposeJob({ ctx: txCtx, deliveryId, now });
-    await enqueueLiveActivityRefreshForMission({
-      db: txCtx.db,
-      workspaceId: ctx.workspace.id,
-      missionId: created.mission.id,
-      now
-    });
-  });
-  return {
-    mission: created.mission,
-    deliveryId,
-    ...(summaryResult ? { missionSummary: summaryResult } : {})
-  };
+  if ('replay' in outcome) return await replay(outcome.replay);
+  return outcome.result;
 }
 
 export function authStatus({ ctx }: { ctx: ServiceContext }): {
@@ -3580,33 +4436,97 @@ export async function closeAgentMissionItems({
 }): Promise<MissionSummaryWriteResult> {
   const input = parseMissionSummaryInput({ closeItems }, { requireBase: true });
   if (!input) throw new ServiceError('closeItems must contain 1..50 entries', 'invalid_input', 400);
-  return ctx.db.transaction(async tx => {
-    const txCtx = { ...ctx, db: tx };
+  const source = await resolveMissionId(ctx, missionId);
+  return withMissionItemLocks(
+    ctx,
+    { missionId: source.id, projectId: source.projectId, itemIds: input.closeItems.map(e => e.id) },
+    async tx => {
+      const txCtx = { ...ctx, db: tx };
+      const mission = await resolveMissionId(txCtx, missionId);
+      const session = await getSessionByKey(txCtx, sessionKey);
+      if (session.mission_id !== mission.id) {
+        throw new ServiceError('Session key does not match mission', 'invalid_session', 401);
+      }
+      if (session.delivery_state === 'delivered') {
+        throw new ServiceError(
+          'Resume follow-up work before closing items',
+          'delivery_boundary',
+          409
+        );
+      }
+      if (mission.projectId !== source.projectId) {
+        throw new ServiceError('Mission not found', 'mission_not_found', 404);
+      }
+      const scope = { ...mission, workspaceId: ctx.workspace.id };
+      const prepared = await prepareMissionSummaryWrite(tx, {
+        mission: scope,
+        input,
+        mode: 'close_only'
+      });
+      return applyMissionSummaryWrite(tx, {
+        canCloseForeign: await canCloseForeignItems(txCtx),
+        sessionId: session.id,
+        prepared,
+        mission: scope,
+        objectiveId: session.objective_id,
+        deliveryId: null,
+        model: null,
+        attribution: missionItemAttribution(ctx)
+      });
+    }
+  );
+}
+
+/** Discovery never uses publication's ended-session exception. */
+export async function readAgentProjectItems({
+  ctx,
+  missionId,
+  sessionKey,
+  objectiveId,
+  ...options
+}: {
+  ctx: ServiceContext;
+  missionId: string;
+  sessionKey: string;
+  objectiveId?: string;
+} & Omit<ProjectItemOptions, 'workspaceId' | 'projectId' | 'missionId'>) {
+  return ctx.db.transaction(async db => {
+    const txCtx = { ...ctx, db };
     const mission = await resolveMissionId(txCtx, missionId);
     const session = await getSessionByKey(txCtx, sessionKey);
-    if (session.mission_id !== mission.id) {
-      throw new ServiceError('Session key does not match mission', 'invalid_session', 401);
-    }
-    if (session.delivery_state === 'delivered') {
+    if (session.mission_id !== mission.id || session.delivery_state === 'delivered') {
       throw new ServiceError(
-        'Resume follow-up work before closing items',
-        'delivery_boundary',
-        409
+        'Discovery requires a live matching attached session',
+        'invalid_session',
+        401
       );
     }
-    const scope = { ...mission, workspaceId: ctx.workspace.id };
-    const prepared = await prepareMissionSummaryWrite(tx, {
-      mission: scope,
-      input,
-      checkBase: false
+    if (objectiveId) {
+      const objective = await resolveObjectiveRef({
+        ctx: txCtx,
+        missionId: mission.id,
+        ref: objectiveId
+      });
+      if (objective.id !== session.objective_id)
+        throw new ServiceError('Objective does not match session', 'invalid_session', 401);
+    }
+    const ledger = await listObjectiveFileChanges({
+      ctx: txCtx,
+      missionId: mission.id,
+      objectiveId: session.objective_id
     });
-    return applyMissionSummaryWrite(tx, {
-      prepared,
-      mission: scope,
-      objectiveId: session.objective_id,
-      deliveryId: null,
-      model: null,
-      attribution: missionItemAttribution(ctx)
-    });
+    return listProjectItemCandidates(
+      db,
+      {
+        ...options,
+        workspaceId: ctx.workspace.id,
+        projectId: mission.projectId,
+        missionId: mission.id
+      },
+      {
+        paths: ledger.items.map(i => i.filePath),
+        captureGap: ledger.capture.warnings.length > 0 || ledger.truncated
+      }
+    );
   });
 }

@@ -15,9 +15,10 @@ import {
 } from '@overlord/contract';
 
 import { listMissionItems, type MissionItem } from '../packages/core/service/mission-items.ts';
-import type { MissionSummaryRuns } from '../packages/core/service/mission-summary-compose.ts';
-import { MISSION_SUMMARY_LIMITS } from '../packages/core/service/mission-summary-compose.ts';
+import { readMissionNarrative } from '../packages/core/service/mission-narrative.ts';
 import {
+  MISSION_SUMMARY_LIMITS,
+  type MissionSummaryRuns,
   readMissionSummaryOpenItems,
   readMissionSummaryRuns
 } from '../packages/core/service/mission-summary-evidence.ts';
@@ -27,7 +28,11 @@ import { toResolverDto } from './deferred-work.ts';
 import { ApiError } from './errors.ts';
 import { requireMissionPermission } from './rbac.ts';
 
-/** Operator read projection: prose plus live mission_items and the seen watermark. */
+/**
+ * Operator read projection: agent prose with its server-derived `narrative`
+ * freshness (ADR 0076), live mission_items, and the seen watermarks. Nothing
+ * here composes or repairs prose.
+ */
 
 interface MissionScope {
   missionId: string;
@@ -250,7 +255,7 @@ function projectSummary(
       objectiveId: item.objectiveId,
       status: item.status as 'done' | 'dismissed',
       reason: item.statusReason,
-      resolvedBy: item.resolvedBy ? toResolverDto(item.resolvedBy) : null,
+      resolvedBy: item.resolvedBy ? toResolverDto(item.resolvedBy, item.missionId) : null,
       resolvedAt: item.resolvedAt,
       outcome: item.outcome,
       outcomeRef: item.outcomeRef
@@ -270,33 +275,60 @@ async function loadSeenAt(scope: MissionScope): Promise<string | null> {
   return row?.seen_at ?? null;
 }
 
+/** Live cross-mission decisions only; the source delivery must still be visible. */
+async function itemsWatermark(scope: MissionScope): Promise<string | null> {
+  const row = await requireDatabaseClient().get<{ resolved_at: string }>(
+    `SELECT mi.resolved_at FROM mission_items mi
+     JOIN deliveries d ON d.id = mi.delivery_id AND d.deleted_at IS NULL
+     WHERE mi.mission_id = ? AND mi.workspace_id = ?
+       AND mi.status IN ('done', 'dismissed') AND mi.resolved_by_kind = 'agent'
+       AND mi.resolved_by_mission_id <> mi.mission_id
+     ORDER BY mi.resolved_at DESC LIMIT 1`,
+    [scope.missionId, scope.workspaceId]
+  );
+  return row?.resolved_at ?? null;
+}
+
 /** `GET /api/missions/:id/summary`. Mission read authorization. */
 export async function getMissionSummary(missionRef: string): Promise<MissionSummaryResponse> {
   const scope = await resolveMissionScope(missionRef);
   if (!scope.eligible) {
-    return { eligible: false, summary: null, evidence: null, watermark: null, seenAt: null };
+    return {
+      eligible: false,
+      summary: null,
+      evidence: null,
+      watermark: null,
+      narrative: null,
+      narrativeWatermark: null,
+      itemsWatermark: null,
+      itemsTruncated: false,
+      seenAt: null
+    };
   }
   const db = requireDatabaseClient();
-  const [runs, openQuestionAt, summaryRow, seenAt, open, closed] = await Promise.all([
-    readMissionSummaryRuns(db, scope.missionId, { workspaceId: scope.workspaceId }),
-    latestOpenQuestionAt(scope),
-    db.get(
-      `SELECT mission_id, revision, content_revision, narrative_delivery_id, narrative_objective_id,
+  const [runs, openQuestionAt, summaryRow, seenAt, open, closed, narrative, itemStamp] =
+    await Promise.all([
+      readMissionSummaryRuns(db, scope.missionId, { workspaceId: scope.workspaceId }),
+      latestOpenQuestionAt(scope),
+      db.get(
+        `SELECT mission_id, revision, content_revision, narrative_delivery_id, narrative_objective_id,
               status, headline, summary_markdown, source_delivery_id, generated_by, generated_at, model
          FROM mission_summaries
         WHERE mission_id = ? AND workspace_id = ?`,
-      [scope.missionId, scope.workspaceId]
-    ) as Promise<MissionSummaryRow | undefined>,
-    loadSeenAt(scope),
-    readMissionSummaryOpenItems(db, scope.missionId, scope.workspaceId),
-    listMissionItems(db, {
-      missionId: scope.missionId,
-      workspaceId: scope.workspaceId,
-      statuses: ['done', 'dismissed'],
-      order: 'resolved',
-      limit: 100
-    })
-  ]);
+        [scope.missionId, scope.workspaceId]
+      ) as Promise<MissionSummaryRow | undefined>,
+      loadSeenAt(scope),
+      readMissionSummaryOpenItems(db, scope.missionId, scope.workspaceId),
+      listMissionItems(db, {
+        missionId: scope.missionId,
+        workspaceId: scope.workspaceId,
+        statuses: ['done', 'dismissed'],
+        order: 'resolved',
+        limit: 100
+      }),
+      readMissionNarrative(db, scope.missionId),
+      itemsWatermark(scope)
+    ]);
   return {
     eligible: true,
     summary: summaryRow ? projectSummary(summaryRow, open, closed.items) : null,
@@ -304,14 +336,22 @@ export async function getMissionSummary(missionRef: string): Promise<MissionSumm
     // Every current-run delivery the response draws on is no newer than the
     // newest source, which is always the first (uncapped) source row.
     watermark: latestTimestamp(runs.latestByObjective[0]?.deliveredAt, openQuestionAt),
+    narrative,
+    // Last narrative text or basis change, acknowledged with the other groups
+    // only once every group of this response was rendered.
+    narrativeWatermark: narrative.changedAt,
+    itemsWatermark: itemStamp,
+    itemsTruncated: closed.truncated,
     seenAt
   };
 }
 
 /**
  * Upper bound a seen watermark may take: the newest evidence that could have
- * been displayed. Uses every live delivery and every question or choice request
- * of the mission, whatever its current status, so a request answered or a
+ * been displayed. Uses every live delivery, every question or choice request
+ * of the mission, whatever its current status, and the retained last
+ * narrative change (kept on the summary row even if its source is deleted), plus
+ * live cross-mission agent closes, so a request answered or a
  * delivery superseded after the read does not reject the acknowledgement of
  * what was shown, while evidence that does not exist yet can never be
  * acknowledged.
@@ -332,7 +372,16 @@ async function evidenceUpperBound(scope: MissionScope): Promise<string | null> {
       LIMIT 1`,
     [scope.missionId]
   )) as { created_at: string } | undefined;
-  return latestTimestamp(delivery?.delivered_at, request?.created_at);
+  const narrative = (await db.get(
+    `SELECT narrative_changed_at FROM mission_summaries WHERE mission_id = ? AND workspace_id = ?`,
+    [scope.missionId, scope.workspaceId]
+  )) as { narrative_changed_at: string | null } | undefined;
+  return latestTimestamp(
+    delivery?.delivered_at,
+    request?.created_at,
+    narrative?.narrative_changed_at ?? null,
+    await itemsWatermark(scope)
+  );
 }
 
 function invalidInput(message: string): ApiError {

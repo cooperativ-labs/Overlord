@@ -892,24 +892,32 @@ describe('ObjectiveRow hover line (coo:1289.94nr)', () => {
     }
   });
 
-  it('moves the queue, identifier and agent controls into the line while open', async () => {
+  it('keeps the queue and identifier on the first row and hides the agent icon in place', async () => {
     const { row } = renderLineRow(objective({ id: 'mv', assignedAgent: 'claude', model: 'opus' }));
     const controls = firstRowControls(row);
-    assert.ok(controls.querySelector('[aria-label="Copy coo:1.mv"]'), 'id on the first row');
+    const idButton = controls.querySelector('[aria-label="Copy coo:1.mv"]');
+    const queueButton = controls.querySelector('[aria-label="Add to Run Queue"]');
+    assert.ok(idButton, 'id on the first row');
+    assert.ok(queueButton, 'queue trigger on the first row');
     assert.ok(controls.querySelector('[aria-label^="Change agent"]'), 'agent icon on first row');
+    assert.equal(controls.querySelector('[data-agent-icon-hidden]'), null, 'agent icon shown');
 
     const line = await hover(row);
     assert.equal(row.querySelectorAll('[aria-label="Copy coo:1.mv"]').length, 1, 'one id button');
-    assert.ok(line.querySelector('[aria-label="Copy coo:1.mv"]'), 'id in the line');
-    assert.ok(line.querySelector('[aria-label="Add to Run Queue"]'), 'queue trigger in the line');
-    assert.equal(controls.querySelectorAll('button').length, 1, 'first row keeps only the menu');
-    assert.equal(controls.querySelector('[aria-label^="Change agent"]'), null);
+    assert.equal(controls.querySelector('[aria-label="Copy coo:1.mv"]'), idButton, 'id stays');
+    assert.equal(controls.querySelector('[aria-label="Add to Run Queue"]'), queueButton);
+    assert.equal(line.querySelector('[aria-label="Copy coo:1.mv"]'), null, 'no id in the line');
+    assert.equal(line.querySelector('[aria-label="Add to Run Queue"]'), null, 'no queue in line');
+    assert.doesNotMatch((queueButton as HTMLElement).className, /opacity-0/, 'queue visible');
+    // The agent icon keeps its slot (so nothing beside it shifts) but is invisible.
+    const hiddenIcon = controls.querySelector('[data-agent-icon-hidden="true"]');
+    assert.ok(hiddenIcon, 'agent icon slot kept');
+    assert.match(hiddenIcon.className, /\binvisible\b/);
 
     await leave(row);
     assert.ok(!isOpen(row), 'line closes after leaving');
     assert.ok(lineOf(row)?.hasAttribute('inert'), 'closed line is inert');
-    assert.ok(controls.querySelector('[aria-label="Copy coo:1.mv"]'), 'id back on the first row');
-    assert.ok(controls.querySelector('[aria-label^="Change agent"]'), 'agent icon back');
+    assert.equal(controls.querySelector('[data-agent-icon-hidden]'), null, 'agent icon back');
   });
 
   it('stays open while the resource picker is open and closes after it', async () => {
@@ -1052,7 +1060,7 @@ describe('ObjectiveRow hover line (coo:1289.94nr)', () => {
     listEvents.length = 0;
     for (const control of [
       line.querySelector('[aria-label="Choose resource: primary"]') as HTMLElement,
-      line.querySelector('[aria-label="Copy coo:1.iso"]') as HTMLElement,
+      line.querySelector('[aria-label^="Choose agent and model"]') as HTMLElement,
       line
     ]) {
       await act(async () => {

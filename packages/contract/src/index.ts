@@ -45,6 +45,7 @@ export {
 } from './agent-launch-flags.js';
 export { normalizeBaseUrl } from './base-url.js';
 export * from './chat.js';
+export * from './report-draft.js';
 // Every REST DTO is generated from contract/api/openapi.yaml (ADR 0006). The
 // chat, search and extension DTOs are re-exported from their own modules.
 export type {
@@ -185,6 +186,7 @@ export type {
   MissionItemDto,
   MissionItemResolverDto,
   MissionList,
+  MissionNarrativeDto,
   MissionPriority,
   MissionScheduleDto,
   MissionSearchV1Response,
@@ -231,6 +233,7 @@ export type {
   ObjectiveLaunchCommandDto,
   ObjectiveList,
   ObjectivePromptDto,
+  ObjectiveReportDraftList,
   ObjectiveRunQueueEntryDto,
   ObjectiveState,
   ObjectiveTranscriptItemDto,
@@ -283,6 +286,9 @@ export type {
   ReorderProjectsBody,
   ReorderProjectStatusesBody,
   ReorderRunQueueBody,
+  ReportDraftCounts,
+  ReportDraftDto,
+  ReportDraftEntryDto,
   ReportMissionBranchObservationsBody,
   ReportResourceObservationsBody,
   RepositoryEntryDto,

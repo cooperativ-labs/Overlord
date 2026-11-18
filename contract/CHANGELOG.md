@@ -5,6 +5,176 @@ is the current version and must equal [VERSION](VERSION); `yarn version:contract
 writes its skeleton. Dates use ISO 8601 and describe the contract change, not
 merely the files edited.
 
+## [178.1.0] - 2026-11-18
+
+Contract impact: minor. Ledger-ranked project item discovery (ADR 0081).
+
+- Add project-items and overlord_project_items with bounded accepted-live-item ranking,
+  filters, paging and capture-gap metadata; pin the new algorithm with golden vectors.
+- Add count-only attach metadata and conditional CLI/MCP discovery guidance.
+- Preserve seen coverage, cross-mission closes, receipts, publication and draft isolation.
+- No schema migration; coordinated coo:1297 release gates remain required.
+
+## [178.0.0] - 2026-11-18
+
+Contract impact: major. Cross-mission decision seen coverage (ADR 0080).
+
+- Add optional `itemsWatermark` and `itemsTruncated` to summary reads; include live foreign
+  agent closes in the seen upper bound with an indexed query in both editions.
+- Extend the shared derive fixtures and existing items coverage group: current row/provenance/
+  link signatures, per-row display, three-watermark acknowledgement, and conservative cap handling.
+- Web/Electron show resolver navigation, not-delivered-yet, status/reason, Restore and new markers;
+  source delivery cards display live closedElsewhere without rewriting accepted reports/receipts.
+- Older clients ignore the additions; updated clients decode older responses. iOS implementation
+  follows in its own objective. No narrative, draft isolation or release gate changes.
+
+## [177.0.0] - 2026-11-18
+
+Contract impact: major. Same-project cross-mission item decisions (ADR 0079).
+
+- `close-items`, delivery and record-work may close another mission's items after
+  target `mission:update`, workspace/project and token-scope checks; denied foreign
+  entries do not fail own closes or acceptance. The old `other_mission` agent skip
+  becomes an authorized close; person-restored foreign items stay protected.
+- Both editions gain resolver mission/session provenance, persistent restore time,
+  objective-derived backfill, and indexes. First acceptance links prior standalone
+  session decisions once; all affected mission locks use global ascending id order.
+- Resolver reads expose live display provenance; delivery reads gain bounded live
+  `closedElsewhere`. Target prose, publication state, accepted reports and receipts
+  remain unchanged. Stale prose accepts closes; replay writes nothing; draft CAS
+  failure rolls back unaccepted work. Publication gains no item authority.
+- Compatibility: own-mission inputs remain valid; old clients ignore optional read
+  fields. Foreign ids no longer reliably skip. No deployment or release-gate waiver.
+  All conformance manifests are restamped to the new major.
+
+## [176.1.0] - 2026-11-18
+
+Contract impact: minor. Durable draft report evidence and atomic report sealing
+(coo:1297.c6h4, ADR 0078). Opt-in and additive: clients that never send `reportDraft`
+keep the existing `update` and full-report `deliver` behavior and need no extra call.
+Migration `20261118160000_delivery_report_drafts` (both editions) adds
+`delivery_report_drafts` (one per session, owner member, CAS `revision`, `batch_count`
+and `entry_count` bounded to 1,000, `sealed_at`, `sealed_delivery_id`),
+`delivery_report_draft_entries` (stable client `entry_id`, closed `kind`
+`human_action|tradeoff|known_risk|deferred_work|assumption`, bounded content JSON,
+position, withdrawal, import source, `sealed_ref`) and `delivery_report_draft_batches`
+(immutable batch receipts: operation id, digest, result revision, event id); triggers make
+sealed drafts, their entries and batch receipts immutable. No existing data changes.
+
+- `update` accepts `reportDraft { operationId, expectedRevision, operations }`
+  (`--report-draft-json|--report-draft-file` or the payload field; `--summary` optional
+  with a batch). Batches of stable-id `upsert`/`withdraw`/`import` operations apply
+  atomically under the mission lock with their receipt and one update event carrying only
+  bounded metadata. The same caller-retained `operationId` and digest replays the original
+  event and revision before the revision check, also after sealing or session end, as a
+  receipt read only. New refusals: 409 `report_draft_conflict` (with the fresh draft),
+  `report_draft_operation_conflict`, `report_draft_sealed`, `report_draft_limit_exceeded`
+  (12 active entries per kind; 1,000 batches and entry ids per draft; nothing pruned),
+  403 `report_draft_forbidden`, 404 `report_draft_not_found`.
+- New protocol command `report-draft` and MCP tool `overlord_report_draft`: the caller's
+  draft with a final inspection, abandoned drafts of the objective, explicit reads of
+  abandoned or sealed drafts. `attach` and `resume-follow-up` add an optional compact
+  `reportDraft { current, abandoned }` baseline (attach-response-v4 optional field).
+- `deliver` accepts `reportDraft { expectedRevision, operations? }`
+  (`--report-draft-json|file`, the payload field or `--expected-draft-revision`), required
+  when the session has a draft. Final operations apply, active entries merge with unmatched
+  legacy report arrays without truncation, and the draft is sealed with per-entry V1
+  references in the finalization transaction; the response adds `reportDraft`. Drafts
+  never create mission items. `record-work` rejects `reportDraft`.
+- MCP `overlord_update_session` gains `reportDraft` and no longer requires `summary`;
+  `overlord_deliver_session` gains `reportDraft`.
+- REST: `GET /api/objectives/{id}/report-drafts` (`mission:read`, OpenAPI 4.17.0), a
+  read-only operator projection; `delivery_report_draft` entity changes.
+
+## [176.0.1] - 2026-11-18
+
+Contract impact: patch. Conformance vectors for the client rules ADR 0076 already requires
+(coo:1297.jwen); no wire, data or authorization change.
+`contract/mission-summary-derive-fixtures.json` gains `narrativeFreshness` (summary header
+for absent, current, outdated and legacy prose and for an older server without the
+`narrative` envelope: recorded author, outdated or missing notice, latest accepted delivery,
+no updating state) and `seenCoverage` (one scalar acknowledgement of the latest of
+`watermark`, `narrativeWatermark` and a rendered coo:1278 `itemsWatermark`, only after every
+evidence group of the same response, the summary header included, was displayed with its
+current signature; hidden older groups stay unread when a newer group is visible, in both
+directions, and coverage does not survive a remount). `expected.updatingSourceObjectiveKey`
+is retained only for clients that still show an updating strip.
+
+- Web and desktop: the mission summary header shows agent prose with its recorded author,
+  "Summary not updated for the latest delivery" for outdated prose, "Summary not yet
+  provided" when accepted work has no prose, and an "Earlier summary" label with its actual
+  (agent or automatic) provenance for legacy prose, each with a link to the latest accepted
+  delivery. The updating strip, its spinner and the dimmed previous content are removed. The
+  header is its own seen-coverage group.
+
+## [176.0.0] - 2026-11-18
+
+Contract impact: major. Mission-level Latch controls lead with the newest mapped
+session across objectives and observed states, replacing the active-objective-first
+rule (ADR 0077). Objective-specific controls remain scoped to their objective.
+
+## [175.0.0] - 2026-11-18
+
+Contract impact: major. Agent-only mission narrative and post-delivery publication
+(coo:1297.7bbk, ADR 0076, amending ADRs 0046, 0060, 0073 and 0075). The automatic mission
+summary composer is retired: its worker, `compose-mission-summary` automation and exports,
+every enqueue path (presentation persistence, item resolve/restore, question and choice
+lifecycle, objective reopen), deterministic narrative synthesis and the
+`OVERLORD_MISSION_SUMMARY_COMPOSE_DISABLED` knob are removed; worker job type
+`overlord.mission.summary.compose.v1` is retired. Delivery-report formatting
+(`overlord.delivery.compose.v1`) is unchanged. Migration
+`20261118140000_agent_only_mission_narrative` (both editions) adds
+`mission_summaries.evidence_revision`, `published_evidence_revision`,
+`narrative_published_at`, `narrative_changed_at` and table
+`delivery_summary_publications` (one publication opportunity per accepted delivery of an
+eligible mission, immutable proposal and publication, closed `withheld_reason` and
+`superseded_reason`, no deadline), cancels queued/running composer jobs, turns `pending`
+rows into `composed`, keeps existing prose as legacy, and installs an agent-only write
+fence (dropped composer jobs, `pending` writes and non-agent prose). Breaking: `deliver`
+no longer rejects stale prose with 409 `mission_summary_conflict`; it compares
+`baseContentRevision` and new `baseEvidenceRevision` with the pre-delivery state and
+accepts the delivery and closes while withholding stale, legacy or absent prose
+(`mission_summary_withheld` warning, `missionSummary.publication`, `baseline`, publication
+instruction). Every accepted delivery of an eligible mission advances the evidence basis,
+as do `resume-follow-up` and objective reopen; record-work keeps its new-mission
+exception. New protocol commands `delivery-summary-context` and
+`publish-delivery-summary` and MCP tools `overlord_delivery_summary_context` and
+`overlord_publish_delivery_summary`: same originating member, delivered session key for
+session-bound opportunities (the delivered, ended session is accepted for these commands
+only), required caller-retained operation id, one successful publication with replay,
+409 `mission_summary_conflict` / `mission_summary_publication_superseded` /
+`mission_summary_already_published`, 404 `mission_summary_publication_not_found`, no timer.
+Attach baselines and the operator summary read carry a `narrative` envelope
+(`absent | current | outdated | legacy`); the read adds `narrativeWatermark`, and the seen
+upper bound includes the retained narrative change time while `seen_at` stays a scalar
+acknowledged only after every rendered group. The CLI applies its attempt records to
+publication. Older clients still deliver; their prose is withheld without an evidence base
+and may stay absent or outdated. Conformance manifests restamped. OpenAPI description
+version 4.16.0.
+
+## [174.3.0] - 2026-11-18
+
+Contract impact: minor. Replay-safe delivery and record-work finalization (coo:1297.hk2v,
+ADR 0075). New core table `delivery_finalizations` (migration
+`20261118120000_delivery_finalizations`, both editions): one immutable receipt per
+accepted `deliver` or `record-work`, committed with the delivery, holding the canonical
+semantic request digest and accepted result. `deliver` and `record-work` accept an
+optional caller-retained `operationId` (`--operation-id` or the envelope field): a
+same-id same-request retry returns the stored result with `replayed: true`, also after
+the session ended, after current access checks; a different request answers 409
+`delivery_operation_conflict`. A session finalizes once: the live/undelivered check moves
+under the mission lock and a repeated delivery answers 409 `delivery_already_accepted`
+with `details.deliveryId` (formerly 401 `invalid_session`), including historical sessions
+without receipts. Record-work creates its mission, objective, report and receipt in one
+transaction; same-id races roll back the loser. Run Queue dispatch, the next-draft
+approval event and the awaiting-review notification move into the finalization
+transaction. New protocol command `delivery-receipt` and MCP tool
+`overlord_delivery_receipt`; `operationId` on `overlord_deliver_session` and
+`overlord_record_work`. The CLI persists owner-only attempt records before sending and
+adds `--retry-operation` and `--new-operation`. Narrative conflict behavior
+(`mission_summary_conflict`) is unchanged. Older clients that send no id keep working
+with the weaker legacy record-work guarantee. OpenAPI description version 4.15.0.
+
 ## [174.2.0] - 2026-11-17
 
 Contract impact: minor. The mission summary read groups equal open items instead of

@@ -14,12 +14,19 @@ const { runProtocolSubcommand, SUBCOMMAND_PERMISSIONS } = await import('./protoc
 // The permission every subcommand carried before the handlers were split into
 // ./protocol/<group>.ts. Moving a handler between groups must not change it.
 const EXPECTED_PERMISSIONS = {
+  'project-items': PERMISSIONS.MISSION_READ,
+  'mission-items': PERMISSIONS.MISSION_READ,
+  'close-items': PERMISSIONS.EVENT_CREATE,
   attach: PERMISSIONS.SESSION_ATTACH,
   update: PERMISSIONS.EVENT_CREATE,
   'sync-changes': PERMISSIONS.EVENT_CREATE,
   heartbeat: PERMISSIONS.EVENT_CREATE,
   ask: PERMISSIONS.EVENT_CREATE,
   deliver: PERMISSIONS.EVENT_CREATE,
+  'delivery-receipt': PERMISSIONS.MISSION_READ,
+  'report-draft': PERMISSIONS.MISSION_READ,
+  'delivery-summary-context': PERMISSIONS.EVENT_CREATE,
+  'publish-delivery-summary': PERMISSIONS.EVENT_CREATE,
   'hook-event': PERMISSIONS.EVENT_CREATE,
   'resume-follow-up': PERMISSIONS.SESSION_ATTACH,
   create: null,

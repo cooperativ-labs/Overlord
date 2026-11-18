@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from 'react';
 import { noteAnsweredAgentRequest } from '../../lib/answered-agent-requests.ts';
 import { useRedeliverAgentRequest, useResolveAgentRequest } from '../../lib/queries.ts';
 import { cn } from '../../lib/utils.ts';
+import { Button } from '../ui/button.tsx';
+import { Input } from '../ui/input.tsx';
 
 import {
   answerErrorText,
@@ -105,15 +107,16 @@ export function QuestionAnswerForm({
       {request.options.length > 0 ? (
         <div className="flex flex-wrap gap-2">
           {request.options.map(option => (
-            <button
+            <Button
               key={option.optionId}
               type="button"
+              variant="outline"
+              size="sm"
               disabled={resolve.isPending}
               onClick={() => answer({ optionId: option.optionId })}
-              className="rounded border border-(--color-line) px-2 py-1 text-xs font-medium disabled:opacity-40"
             >
               {option.label}
-            </button>
+            </Button>
           ))}
         </div>
       ) : null}
@@ -126,21 +129,17 @@ export function QuestionAnswerForm({
             if (trimmed) answer({ text: trimmed });
           }}
         >
-          <input
-            className="min-w-0 flex-1 rounded border border-(--color-line) bg-transparent px-2 py-1.5 text-sm"
+          <Input
+            className="flex-1 bg-background"
             placeholder="Answer the agent…"
             aria-label="Answer the agent"
             value={text}
             disabled={resolve.isPending}
             onChange={event => setText(event.target.value)}
           />
-          <button
-            type="submit"
-            disabled={resolve.isPending || !text.trim()}
-            className="rounded bg-(--color-ink) px-3 py-1.5 text-sm text-(--color-paper) disabled:opacity-40"
-          >
+          <Button type="submit" className="px-3" disabled={resolve.isPending || !text.trim()}>
             {resolve.isPending ? 'Sending…' : 'Reply'}
-          </button>
+          </Button>
         </form>
       ) : null}
       {resolve.isPending ? (
@@ -249,14 +248,15 @@ export function AnswerDeliveryStatus({ request }: { request: HumanAgentRequestDt
       ) : null}
       {outcome.canRedeliver && !outcome.confirmationRequired ? (
         <div>
-          <button
+          <Button
             type="button"
+            variant="outline"
+            size="xs"
             disabled={redeliver.isPending}
             onClick={() => send(false)}
-            className="rounded border border-(--color-line) px-2 py-1 text-xs font-medium disabled:opacity-40"
           >
             {redeliver.isPending ? 'Sending…' : 'Send again'}
-          </button>
+          </Button>
         </div>
       ) : null}
       {outcome.canRedeliver && outcome.confirmationRequired ? (
@@ -267,33 +267,30 @@ export function AnswerDeliveryStatus({ request }: { request: HumanAgentRequestDt
               earlier attempt arrived and sends nothing if it did.
             </p>
             <div className="flex flex-wrap gap-2">
-              <button
+              <Button
                 type="button"
+                size="xs"
                 disabled={redeliver.isPending}
                 onClick={() => send(true)}
-                className="rounded bg-(--color-ink) px-2 py-1 text-xs font-medium text-(--color-paper) disabled:opacity-40"
               >
                 {redeliver.isPending ? 'Checking…' : 'It did not arrive — send again'}
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
+                variant="outline"
+                size="xs"
                 disabled={redeliver.isPending}
                 onClick={() => setConfirming(false)}
-                className="rounded border border-(--color-line) px-2 py-1 text-xs font-medium disabled:opacity-40"
               >
                 Cancel
-              </button>
+              </Button>
             </div>
           </div>
         ) : (
           <div>
-            <button
-              type="button"
-              onClick={() => setConfirming(true)}
-              className="rounded border border-(--color-line) px-2 py-1 text-xs font-medium"
-            >
+            <Button type="button" variant="outline" size="xs" onClick={() => setConfirming(true)}>
               Check and send again…
-            </button>
+            </Button>
           </div>
         )
       ) : null}

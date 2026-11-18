@@ -67,11 +67,21 @@ test('fresh database: new missions are summary-eligible and both summary tables 
     .get(seeded.missionId) as { summary_enabled: number };
   assert.equal(mission.summary_enabled, 1);
 
-  db.prepare(
-    `INSERT INTO mission_summaries
-       (mission_id, workspace_id, project_id, status, generated_by, created_at, updated_at)
-     VALUES (?, ?, ?, 'pending', 'deterministic', ?, ?)`
-  ).run(seeded.missionId, seeded.workspaceId, seeded.projectId, now, now);
+  const insertShell = (status: string) =>
+    db
+      .prepare(
+        `INSERT INTO mission_summaries
+           (mission_id, workspace_id, project_id, status, generated_by, created_at, updated_at)
+         VALUES (?, ?, ?, ?, 'deterministic', ?, ?)`
+      )
+      .run(seeded.missionId, seeded.workspaceId, seeded.projectId, status, now, now);
+  // The ADR 0076 agent-only fence drops `pending` shells without failing the statement.
+  insertShell('pending');
+  assert.equal(
+    db.prepare(`SELECT 1 FROM mission_summaries WHERE mission_id = ?`).get(seeded.missionId),
+    undefined
+  );
+  insertShell('composed');
   const shell = db
     .prepare(`SELECT * FROM mission_summaries WHERE mission_id = ?`)
     .get(seeded.missionId) as Record<string, unknown>;

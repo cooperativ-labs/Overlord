@@ -154,7 +154,6 @@ import {
 import { liveActivityDispatcher } from './live-activity-dispatcher.ts';
 import { resolveMissionItem, restoreMissionItemResolution } from './mission-item-resolutions.ts';
 import { getMissionSummary, markMissionSummarySeen } from './mission-summary.ts';
-import { missionSummaryComposeWorker } from './mission-summary-compose-worker.ts';
 import { createNativeGitHubOAuth } from './native-github-oauth.ts';
 import { notificationDispatcher } from './notification-dispatcher.ts';
 import { dismissNotification, listNotifications, markNotificationRead } from './notifications.ts';
@@ -189,6 +188,7 @@ import {
 } from './push-notifications.ts';
 import { requireAnyWorkspacePermission, requireWorkspacePermission } from './rbac.ts';
 import { readableChangeFeedWorkspaceIds, readChangesAfter, realtime } from './realtime.ts';
+import { listObjectiveReportDraftsForOperator } from './report-drafts.ts';
 import {
   ApiError,
   clearDefaultProjectPreference,
@@ -553,7 +553,6 @@ const mutationPollLoops: readonly PollLoop<unknown>[] = [
   realtime,
   webhookDispatcher,
   deliveryComposeWorker,
-  missionSummaryComposeWorker,
   objectiveBriefComposeWorker,
   liveActivityDispatcher,
   pushNotificationDispatcher,
@@ -1939,6 +1938,12 @@ app.get(
 // header) so the server records it without multipart parsing.
 
 const rawAttachmentBody = rawUploadBody(ATTACHMENT_UPLOAD_ROUTE);
+
+// Provisional report drafts (ADR 0078): read-only, never mission obligations.
+app.get(
+  '/api/objectives/:id/report-drafts',
+  handle(req => listObjectiveReportDraftsForOperator(req.params.id))
+);
 
 app.get(
   '/api/objectives/:id/attachments',

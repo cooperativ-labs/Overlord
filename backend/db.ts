@@ -31,7 +31,6 @@ import {
   type WebhookEntityRefs,
   type WebhookEventType
 } from '../packages/core/service/webhook-events.ts';
-import type { MissionSummaryTriggerContext } from '../packages/core/service/worker-jobs.ts';
 
 import { ENV_PROFILE, REPO_ROOT } from './env-profile.ts';
 
@@ -874,24 +873,6 @@ export async function restChangeAttribution(
     actor = profileId ? await findActiveMembershipId(workspaceId, profileId, client) : null;
   }
   return { actorWorkspaceUserId: actor, actorTokenId: getActiveTokenId(), source: 'webapp' };
-}
-
-/**
- * REST-layer write context for a mission summary trigger
- * (`enqueueMissionSummaryComposeJob`), attributed like `recordChange`.
- */
-export function restMissionSummaryTriggerContext(
-  tx: DatabaseClient,
-  workspaceId: string,
-  actorWorkspaceUserId: string | null
-): MissionSummaryTriggerContext {
-  return {
-    db: tx,
-    workspaceId,
-    actorWorkspaceUserId,
-    actorTokenId: getActiveTokenId(),
-    source: 'webapp'
-  };
 }
 
 // ---- webhook outbox enqueue ----------------------------------------------

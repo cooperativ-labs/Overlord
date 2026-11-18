@@ -24,7 +24,7 @@ function session(
   };
 }
 
-test('leads with the newest live session even when a newer one has already exited', () => {
+test('leads with the newest session even when an older one is live', () => {
   const display = selectLatchSessionDisplay([
     session({
       providerSessionId: 'exited-newest',
@@ -42,12 +42,41 @@ test('leads with the newest live session even when a newer one has already exite
     })
   ]);
 
-  assert.equal(display.current?.providerSessionId, 'live');
+  assert.equal(display.current?.providerSessionId, 'exited-newest');
   assert.deepEqual(
     display.others.map(item => item.providerSessionId),
-    ['exited-newest', 'older-exited']
+    ['live', 'older-exited']
   );
-  assert.equal(display.runningOtherCount, 0);
+  assert.equal(display.runningOtherCount, 1);
+});
+
+test('prefers the newest session across objectives', () => {
+  const display = selectLatchSessionDisplay([
+    session({
+      providerSessionId: 'other',
+      objectiveId: 'obj-2',
+      createdAt: '2026-08-19T00:00:00.000Z'
+    }),
+    session({ providerSessionId: 'old', createdAt: '2026-08-17T00:00:00.000Z' }),
+    session({
+      providerSessionId: 'latest',
+      createdAt: '2026-08-18T00:00:00.000Z',
+      lastObservedState: 'lost'
+    })
+  ]);
+  assert.equal(display.current?.providerSessionId, 'other');
+  assert.deepEqual(
+    display.others.map(item => item.providerSessionId),
+    ['latest', 'old']
+  );
+});
+
+test('orders timestamps chronologically across ISO fractional-second formats', () => {
+  const display = selectLatchSessionDisplay([
+    session({ providerSessionId: 'older', createdAt: '2026-08-17T10:00:00Z' }),
+    session({ providerSessionId: 'newer', createdAt: '2026-08-17T10:00:00.500Z' })
+  ]);
+  assert.equal(display.current?.providerSessionId, 'newer');
 });
 
 test('treats a stopping session as live so it stays on the current card', () => {

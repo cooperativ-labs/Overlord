@@ -35,7 +35,8 @@ const MAX_LINK_LENGTH = DELIVERY_REPORT_MAX_LINK_LENGTH;
 
 const linkSchema = humanActionLinkSchema;
 
-const humanActionSchema = z.strictObject({
+/** Agent-written human action (shared by delivery reports and draft entries). */
+export const humanActionSchema = z.strictObject({
   action: actionTextSchema,
   reason: conciseTextSchema.optional(),
   category: humanActionCategorySchema.optional(),
@@ -50,7 +51,8 @@ export function isValidHumanActionLink(link: string): boolean {
   return linkSchema.safeParse(link).success;
 }
 
-const tradeoffSchema = z.strictObject({
+/** Agent-written tradeoff (shared by delivery reports and draft entries). */
+export const tradeoffSchema = z.strictObject({
   decision: actionTextSchema,
   alternativesConsidered: z.array(conciseTextSchema).max(MAX_ALTERNATIVES).optional(),
   rationale: conciseTextSchema,

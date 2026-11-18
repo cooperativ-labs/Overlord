@@ -95,9 +95,11 @@ test('compose worker updates presentation from a fake provider and emits deliver
   });
 
   assert.equal(
-    await ctx.db.get('SELECT mission_id FROM mission_summaries WHERE mission_id = ?', [mission.id]),
+    await ctx.db.get(
+      `SELECT id FROM worker_jobs WHERE type = 'overlord.mission.summary.compose.v1'`
+    ),
     undefined,
-    'pending delivery presentation does not enqueue a summary'
+    'delivery presentation never enqueues mission narrative composition (ADR 0076)'
   );
   deliveryComposeWorker.setGenerateOverride(async () =>
     JSON.stringify({
@@ -153,7 +155,8 @@ test('compose worker updates presentation from a fake provider and emits deliver
       'SELECT status, source_delivery_id FROM mission_summaries WHERE mission_id = ?',
       [mission.id]
     );
-    assert.deepEqual(summary, { status: 'pending', source_delivery_id: delivered.deliveryId });
+    // Presentation composition never writes or requests mission narrative (ADR 0076).
+    assert.deepEqual(summary, { status: 'composed', source_delivery_id: null });
 
     const change = (await ctx.db.get(
       `SELECT entity_type, changed_fields_json, actor_workspace_user_id, actor_token_id, source FROM entity_changes

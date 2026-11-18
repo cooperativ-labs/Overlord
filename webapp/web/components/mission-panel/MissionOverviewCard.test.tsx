@@ -172,6 +172,29 @@ async function mount(
   return client;
 }
 
+type Narrative = Extract<MissionSummaryResponse, { eligible: true }>['narrative'];
+
+/** A narrative envelope (contract v175) over sensible defaults. */
+function narrative(patch: Partial<Narrative> = {}): Narrative {
+  return {
+    state: 'current',
+    evidenceRevision: 4,
+    publishedEvidenceRevision: 4,
+    deliveryId: 'delivery-c4',
+    objectiveId: 'obj-c',
+    publishedAt: '2026-10-23T10:05:00.000Z',
+    changedAt: '2026-10-23T10:05:00.000Z',
+    outstandingDeliveryId: null,
+    ...patch
+  };
+}
+
+function seenWrites(): string[] {
+  return requests
+    .filter(req => req.method === 'PUT' && req.path.endsWith('/summary/seen'))
+    .map(req => (req.body as { watermark: string }).watermark);
+}
+
 it('keeps old missions to Objectives and For you, and shows the before-first-delivery state', async () => {
   // Its notification was dismissed: For you still lists it (plan §5).
   resetDismissedAgentRequestsForTests();
@@ -181,7 +204,15 @@ it('keeps old missions to Objectives and For you, and shows the before-first-del
       request.id
     );
   }
-  await mount({ eligible: false, summary: null, evidence: null, watermark: null, seenAt: null });
+  await mount({
+    eligible: false,
+    summary: null,
+    evidence: null,
+    watermark: null,
+    narrative: null,
+    narrativeWatermark: null,
+    seenAt: null
+  });
   // The card never hides: it carries the objective list and, on an old summary-ineligible
   // mission, still lists the open question under For you (plan §6.1, decision 13).
   assert.ok(screen.getByText('Objective rows'));
@@ -209,15 +240,15 @@ it('keeps old missions to Objectives and For you, and shows the before-first-del
   assert.ok(screen.getByRole('tab', { name: /Objectives/ }));
 });
 
-it('renders updating evidence, expandable actions, compact promoted suggestions, and persistent visit dots', async () => {
+it('never shows an updating state, and renders expandable actions, compact promoted suggestions, and persistent visit dots', async () => {
+  // A historical `pending` status no longer means a writer runs (ADR 0076).
   const response = structuredClone(fixture.summaryResponse);
   response.summary.status = 'pending';
   const client = await mount(response);
-  assert.equal(
-    screen.getByRole('region', { name: 'Mission summary' }).getAttribute('aria-busy'),
-    'true'
-  );
-  assert.match(screen.getByRole('status').textContent ?? '', /Updating from the delivery/);
+  const region = screen.getByRole('region', { name: 'Mission summary' });
+  assert.equal(region.getAttribute('aria-busy'), null);
+  assert.equal(screen.queryByRole('status'), null);
+  assert.equal(screen.queryByText(/Updating/), null);
   selectTab(/For you/);
   const action = screen.getByRole('button', {
     name: /^Show details: Run the migration on staging/
@@ -282,7 +313,7 @@ it('shows first-compose evidence without an empty post and shows all-clear after
   assert.ok(screen.getByText('Objective rows'));
 });
 
-it('names the authoring objective, and shows no provenance for automatic summaries', async () => {
+it('names the authoring objective, and keeps automatic provenance on earlier summaries', async () => {
   await mount();
   selectTab(/Summary/);
   // Risks, resolved items and files live in the Summary tab, not in tabs of their own.
@@ -306,10 +337,15 @@ it('names the authoring objective, and shows no provenance for automatic summari
   const fallback = structuredClone(fixture.summaryResponse);
   fallback.summary.author = { kind: 'gemini', objectiveId: null, deliveryId: null };
   fallback.summary.generatedBy = 'gemini';
+  fallback.narrative = narrative({ state: 'legacy', changedAt: fallback.summary.generatedAt });
+  fallback.narrativeWatermark = fallback.summary.generatedAt;
   await mount(fallback);
   selectTab(/Summary/);
-  assert.equal(screen.queryByText('Written automatically from deliveries') === null, true);
-  assert.equal(screen.queryByText('Updated by') === null, true);
+  // Historical generated text stays visibly earlier and is never called agent-authored.
+  assert.ok(screen.getByText('Earlier summary'));
+  assert.ok(screen.getByText('Written automatically from deliveries'));
+  assert.equal(screen.queryByText('Updated by'), null);
+  assert.equal(screen.queryByText('Written by'), null);
 });
 
 it('lists reported tradeoffs in their own Summary section, and hides it when there are none', async () => {
@@ -668,4 +704,344 @@ it('does not acknowledge the watermark while an evidence tab was never opened', 
     false
   );
   t.mock.timers.reset();
+});
+
+it('shows outdated prose with its author and the latest accepted work, without a spinner', async () => {
+  const response = structuredClone(fixture.summaryResponse);
+  response.summary.author = { kind: 'agent', objectiveId: 'obj-a', deliveryId: 'delivery-a2' };
+  response.narrative = narrative({
+    state: 'outdated',
+    evidenceRevision: 5,
+    deliveryId: 'delivery-a2',
+    objectiveId: 'obj-a',
+    changedAt: '2026-10-23T10:00:00.001Z',
+    outstandingDeliveryId: 'delivery-c4'
+  });
+  response.narrativeWatermark = '2026-10-23T10:00:00.001Z';
+  await mount(response);
+  selectTab(/Summary/);
+  assert.ok(screen.getByText(fixture.summaryResponse.summary.headline));
+  assert.ok(screen.getByText('Summary not updated for the latest delivery.'));
+  assert.ok(
+    screen.getByRole('button', {
+      name: 'Open objective coo:900.cccc, the latest accepted delivery'
+    })
+  );
+  assert.ok(
+    screen.getByRole('button', { name: 'Open objective coo:900.aaaa, which wrote this summary' })
+  );
+  assert.equal(screen.queryByText('Earlier summary'), null);
+  assert.equal(screen.queryByRole('status'), null);
+  // Live status and items stay independent of the narrative.
+  assert.ok(screen.getByRole('group', { name: 'Mission status' }));
+  assert.ok(screen.getByRole('heading', { name: /^Risks/ }));
+});
+
+it('shows accepted work with no prose as not yet provided, keeping items and live status', async () => {
+  const response = structuredClone(fixture.summaryResponse);
+  response.summary = {
+    ...response.summary,
+    headline: '',
+    summary: '',
+    author: { kind: 'deterministic', objectiveId: null, deliveryId: null },
+    generatedBy: 'deterministic',
+    generatedAt: null,
+    model: null
+  };
+  response.narrative = narrative({
+    state: 'absent',
+    evidenceRevision: 3,
+    publishedEvidenceRevision: null,
+    deliveryId: null,
+    objectiveId: null,
+    publishedAt: null,
+    changedAt: '2026-10-23T10:00:00.000Z',
+    outstandingDeliveryId: 'delivery-c4'
+  });
+  response.narrativeWatermark = '2026-10-23T10:00:00.000Z';
+  await mount(response);
+  selectTab(/Summary/);
+  assert.ok(screen.getByText('Summary not yet provided.'));
+  // With no prose the header falls back to the mission's own title, never a generated line.
+  assert.equal(
+    document.getElementById(`mission-summary-headline-${fixture.mission.id}`)?.textContent ?? '',
+    fixture.mission.title ?? ''
+  );
+  assert.equal(screen.queryByText(fixture.summaryResponse.summary.headline), null);
+  assert.ok(
+    screen.getByRole('button', {
+      name: 'Open objective coo:900.cccc, the latest accepted delivery'
+    })
+  );
+  assert.equal(screen.queryByText(/Updated by|Written by|Written automatically/), null);
+  assert.ok(screen.getByRole('heading', { name: /^Risks/ }));
+  selectTab(/For you/);
+  assert.ok(screen.getByRole('button', { name: /^Show details: Run the migration on staging/ }));
+});
+
+it('renders an older server response without narrative fields and invents no freshness', async () => {
+  const response = structuredClone(fixture.summaryResponse) as Record<string, unknown>;
+  delete response.narrative;
+  delete response.narrativeWatermark;
+  await mount(response as unknown as MissionSummaryResponse);
+  selectTab(/Summary/);
+  assert.ok(screen.getByText(fixture.summaryResponse.summary.headline));
+  assert.equal(screen.queryByText(/Summary not (updated|yet provided)/), null);
+  assert.equal(screen.queryByText('Earlier summary'), null);
+  assert.ok(screen.getByText('Updated by'));
+});
+
+/** Every evidence group of the fixture, displayed for two seconds each. */
+async function coverTabs(t: { mock: { timers: { tick: (ms: number) => void } } }, tabs: RegExp[]) {
+  for (const tab of tabs) {
+    selectTab(tab);
+    await act(async () => t.mock.timers.tick(2_000));
+  }
+}
+
+it('keeps older hidden actions unread while a newer narrative is visible, then acknowledges the combined maximum', async t => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const response = structuredClone(fixture.summaryResponse);
+  // The narrative changed after every delivery and question in this snapshot.
+  const newer = '2026-10-23T12:00:00.000Z';
+  response.narrative = narrative({ changedAt: newer, publishedAt: newer });
+  response.narrativeWatermark = newer;
+  await mount(response);
+  await coverTabs(t, [/Summary/]);
+  await act(async () => t.mock.timers.tick(10_000));
+  assert.deepEqual(seenWrites(), [], 'For you and Suggested were never displayed');
+  await coverTabs(t, [/For you/, /Suggested/]);
+  await act(async () => t.mock.timers.tick(2_000));
+  // settle() runs on real timers.
+  t.mock.timers.reset();
+  await settle();
+  assert.deepEqual(seenWrites(), [newer]);
+  t.mock.timers.reset();
+});
+
+it('keeps an older hidden narrative unread while newer actions are visible, across a remount', async t => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const response = structuredClone(fixture.summaryResponse);
+  const older = '2026-10-22T09:00:00.000Z';
+  response.narrative = narrative({ changedAt: older, publishedAt: older });
+  response.narrativeWatermark = older;
+  await mount(response);
+  await coverTabs(t, [/For you/, /Suggested/]);
+  await act(async () => t.mock.timers.tick(10_000));
+  assert.deepEqual(seenWrites(), [], 'the Summary header was never displayed');
+  // Navigating away and back is a cold read: earlier coverage does not carry over.
+  cleanup();
+  await mount(response);
+  await coverTabs(t, [/Summary/]);
+  await act(async () => t.mock.timers.tick(10_000));
+  assert.deepEqual(seenWrites(), [], 'coverage from the earlier mount was not kept');
+  await coverTabs(t, [/For you/, /Suggested/]);
+  await act(async () => t.mock.timers.tick(2_000));
+  // settle() runs on real timers.
+  t.mock.timers.reset();
+  await settle();
+  assert.deepEqual(seenWrites(), [fixture.summaryResponse.watermark]);
+  t.mock.timers.reset();
+});
+
+it('re-requires the Summary header when the narrative changes, even within one millisecond', async t => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const response = structuredClone(fixture.summaryResponse);
+  const at = '2026-10-23T12:00:00.000Z';
+  response.narrative = narrative({ changedAt: at, publishedAt: at });
+  response.narrativeWatermark = at;
+  const client = await mount(response);
+  await coverTabs(t, [/Summary/, /For you/]);
+  // A new publication lands with the same display time but a new content revision, while the
+  // Suggested tab (the last uncovered group) is open: the changed header is not covered yet.
+  selectTab(/Suggested/);
+  await act(async () =>
+    client.setQueryData(keys.missionSummary(fixture.mission.id), {
+      ...response,
+      summary: { ...response.summary, contentRevision: response.summary.contentRevision + 1 },
+      narrative: narrative({ changedAt: at, publishedAt: at, evidenceRevision: 4 })
+    })
+  );
+  await act(async () => t.mock.timers.tick(10_000));
+  assert.deepEqual(seenWrites(), [], 'the changed header invalidated its earlier coverage');
+  await coverTabs(t, [/Summary/, /Suggested/]);
+  await act(async () => t.mock.timers.tick(2_000));
+  // settle() runs on real timers.
+  t.mock.timers.reset();
+  await settle();
+  assert.deepEqual(seenWrites(), [at]);
+  t.mock.timers.reset();
+});
+
+function crossDecisionResponse(at = '2026-10-23T13:00:00.000Z') {
+  const response = structuredClone(fixture.summaryResponse);
+  response.itemsWatermark = at;
+  response.itemsTruncated = false;
+  const row = response.summary.closedItems[0];
+  row.status = 'dismissed';
+  row.resolvedAt = at;
+  row.reason = 'Verified by the fixing mission';
+  row.resolvedBy = {
+    kind: 'agent',
+    workspaceUserId: null,
+    objectiveId: 'foreign-obj',
+    deliveryId: null,
+    missionId: 'foreign-mission',
+    missionDisplayId: 'coo:901',
+    objectiveDisplayId: 'coo:901.abcd',
+    crossMission: true
+  };
+  return response;
+}
+
+it('auto-opens new cross-mission rows with correct provenance and keeps hidden groups unread', async t => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const response = crossDecisionResponse();
+  await mount(response);
+  selectTab(/Summary/);
+  assert.equal(
+    screen.getByRole('button', { name: /^Resolved.*New$/ }).getAttribute('aria-expanded'),
+    'true'
+  );
+  const links = screen.getAllByRole('link');
+  assert.ok(
+    links.some(
+      link =>
+        link.textContent === 'coo:901.abcd' &&
+        link.getAttribute('href')?.includes('objective=coo%3A901.abcd')
+    )
+  );
+  assert.ok(
+    links.some(
+      link => link.textContent === 'coo:901' && link.getAttribute('href')?.includes('coo%3A901')
+    )
+  );
+  assert.ok(screen.getByText('Not delivered yet', { exact: false }));
+  assert.ok(screen.getByText('Verified by the fixing mission', { exact: false }));
+  await act(async () => t.mock.timers.tick(2_000));
+  await act(async () => t.mock.timers.tick(10_000));
+  assert.deepEqual(seenWrites(), [], 'older actions and suggestions still hidden');
+  await coverTabs(t, [/For you/, /Suggested/]);
+  await act(async () => t.mock.timers.tick(2_000));
+  t.mock.timers.reset();
+  await settle();
+  assert.deepEqual(seenWrites(), [response.itemsWatermark]);
+});
+
+it('newer actions cannot acknowledge collapsed older decisions, and remount clears item coverage', async t => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const response = crossDecisionResponse('2026-10-20T09:00:00.000Z');
+  await mount(response);
+  await coverTabs(t, [/Summary/, /For you/, /Suggested/]);
+  await act(async () => t.mock.timers.tick(10_000));
+  assert.deepEqual(seenWrites(), [], 'old item decision is collapsed and unread');
+  selectTab(/Summary/);
+  fireEvent.click(screen.getByRole('button', { name: /^Resolved\s*\d+$/ }));
+  await act(async () => t.mock.timers.tick(2_000));
+  cleanup();
+  await mount(response);
+  await coverTabs(t, [/For you/, /Suggested/]);
+  await act(async () => t.mock.timers.tick(10_000));
+  assert.deepEqual(seenWrites(), [], 'item and narrative coverage does not survive remount');
+  t.mock.timers.reset();
+});
+
+it('linking a standalone close invalidates item coverage until the new provenance is displayed', async t => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const response = crossDecisionResponse();
+  const client = await mount(response);
+  await coverTabs(t, [/Summary/, /For you/]);
+  const linked = structuredClone(response);
+  linked.summary.closedItems[0].resolvedBy.deliveryId = 'accepted-elsewhere';
+  await act(async () => client.setQueryData(keys.missionSummary(fixture.mission.id), linked));
+  await coverTabs(t, [/Suggested/]);
+  await act(async () => t.mock.timers.tick(10_000));
+  assert.deepEqual(seenWrites(), [], 'prior standalone row coverage is stale');
+  await coverTabs(t, [/Summary/]);
+  await act(async () => t.mock.timers.tick(2_000));
+  t.mock.timers.reset();
+  await settle();
+  assert.deepEqual(seenWrites(), [response.itemsWatermark]);
+  assert.equal(screen.queryByText('Not delivered yet', { exact: false }), null);
+});
+
+it('never acknowledges capped resolved rows, even after every rendered tab is covered', async t => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const response = crossDecisionResponse();
+  response.itemsTruncated = true;
+  await mount(response);
+  await coverTabs(t, [/Summary/, /For you/, /Suggested/]);
+  await act(async () => t.mock.timers.tick(10_000));
+  assert.deepEqual(seenWrites(), []);
+  selectTab(/Summary/);
+  assert.ok(screen.getByText(/partial snapshot will remain unread/));
+  t.mock.timers.reset();
+});
+
+it('a visible resolved header and first row cannot cover another cross-mission row below the viewport', async t => {
+  const original = globalThis.IntersectionObserver;
+  const observers: Array<{
+    notify: IntersectionObserverCallback;
+    node: Element | null;
+    live: boolean;
+  }> = [];
+  globalThis.IntersectionObserver = class {
+    entry: (typeof observers)[number];
+    constructor(notify: IntersectionObserverCallback) {
+      this.entry = { notify, node: null, live: true };
+      observers.push(this.entry);
+    }
+    observe(node: Element) {
+      this.entry.node = node;
+    }
+    disconnect() {
+      this.entry.live = false;
+    }
+  } as unknown as typeof IntersectionObserver;
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  try {
+    const response = crossDecisionResponse();
+    response.summary.closedItems.push({
+      ...structuredClone(response.summary.closedItems[0]),
+      id: 'below-viewport',
+      text: 'Another cross-mission decision below viewport'
+    });
+    await mount(response);
+    const observe = async (includeLast: boolean) =>
+      act(async () => {
+        for (const { notify, node, live } of observers) {
+          if (!live || !node) continue;
+          const hidden =
+            node.tagName === 'LI' && node.textContent?.includes('Another cross-mission decision');
+          const visible = includeLast || !hidden;
+          notify(
+            [
+              {
+                isIntersecting: visible,
+                intersectionRatio: visible ? 1 : 0
+              } as IntersectionObserverEntry
+            ],
+            {} as IntersectionObserver
+          );
+        }
+      });
+    for (const tab of [/Summary/, /For you/, /Suggested/]) {
+      selectTab(tab);
+      await observe(false);
+      await act(async () => t.mock.timers.tick(2_000));
+    }
+    await act(async () => t.mock.timers.tick(10_000));
+    assert.deepEqual(seenWrites(), [], 'one actual decision row has never been displayed');
+    selectTab(/Summary/);
+    await observe(true);
+    await act(async () => t.mock.timers.tick(2_000));
+    await act(async () => t.mock.timers.tick(2_000));
+    t.mock.timers.reset();
+    await settle();
+    assert.deepEqual(seenWrites(), [response.itemsWatermark]);
+  } finally {
+    t.mock.timers.reset();
+    cleanup();
+    globalThis.IntersectionObserver = original;
+  }
 });

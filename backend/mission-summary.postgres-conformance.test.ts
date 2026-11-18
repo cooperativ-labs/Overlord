@@ -6,13 +6,8 @@ import { describe, it } from 'node:test';
 
 import { buildDeliveryReport } from '../packages/core/service/delivery-report.ts';
 import { insertDeliveryMissionItems } from '../packages/core/service/mission-items.ts';
-import {
-  claimNextWorkerJob,
-  completeMissionSummaryComposeJob,
-  enqueueMissionSummaryComposeJob,
-  MISSION_SUMMARY_COMPOSE_JOB_TYPE,
-  publishMissionSummary
-} from '../packages/core/service/worker-jobs.ts';
+import { ensureMissionSummaryRow } from '../packages/core/service/mission-narrative.ts';
+import { RETIRED_MISSION_SUMMARY_COMPOSE_JOB_TYPE } from '../packages/core/service/worker-jobs.ts';
 
 import {
   bindWebappDatabaseClient,
@@ -28,7 +23,6 @@ for (const adapter of conformanceAdapters()) {
       try {
         await bindWebappDatabaseClient({ client: db });
         const { createProject, createMission } = await import('./repository.ts');
-        const { buildWebappServiceContext } = await import('./db.ts');
         const project = await createProject({ name: 'Upgrade summary' });
         const old = await createMission({ projectId: project.id, firstObjective: 'Historical' });
         const report = buildDeliveryReport({
@@ -120,18 +114,20 @@ for (const adapter of conformanceAdapters()) {
         );
         assert.match(search!.body_text, /Keep this risk/);
         assert.doesNotMatch(search!.body_text, /Retired/);
-        const ctx = buildWebappServiceContext();
+        // Historical evidence is read as-is; nothing composes prose for it.
+        const { getMissionSummary } = await import('./mission-summary.ts');
+        const historical = await getMissionSummary(old.id);
+        assert.equal(historical.eligible, false);
+        assert.equal(historical.narrative, null);
         assert.equal(
-          (
-            await db.transaction(tx =>
-              enqueueMissionSummaryComposeJob({
-                ctx: { ...ctx, db: tx },
-                missionId: old.id,
-                reason: 'delivery_presented'
-              })
-            )
-          ).triggered,
-          false
+          Number(
+            (
+              await db.get<{ n: number }>('SELECT COUNT(*) AS n FROM worker_jobs WHERE type = ?', [
+                RETIRED_MISSION_SUMMARY_COMPOSE_JOB_TYPE
+              ])
+            )?.n
+          ),
+          0
         );
       } finally {
         await cleanup();
@@ -144,9 +140,9 @@ for (const adapter of conformanceAdapters()) {
         const { createProject, createMission, createObjective, updateObjective } =
           await import('./repository.ts');
         const { getMissionSummary, markMissionSummarySeen } = await import('./mission-summary.ts');
-        const { readMissionSummaryEvidence } =
+        const { readMissionSummaryRuns } =
           await import('../packages/core/service/mission-summary-evidence.ts');
-        const { buildWebappServiceContext, setActiveWorkspaceUser } = await import('./db.ts');
+        const { setActiveWorkspaceUser } = await import('./db.ts');
         const { resolveDeferredWork, reopenDeferredWork } =
           await import('./deferred-work-resolutions.ts');
         const project = await createProject({ name: 'Summary conformance' });
@@ -232,17 +228,15 @@ for (const adapter of conformanceAdapters()) {
         assert.equal(envelope.evidence?.totals.currentRunDeliveries, 206);
         assert.equal(envelope.evidence?.sources.length, 2);
         assert.ok(envelope.evidence?.actions.some(action => action.deliveryId === quietDelivery));
-        const ctx = buildWebappServiceContext();
-        await db.transaction(tx =>
-          enqueueMissionSummaryComposeJob({
-            ctx: { ...ctx, db: tx },
-            missionId: mission.id,
-            reason: 'delivery_presented'
-          })
-        );
-        const evidence = await readMissionSummaryEvidence(db, mission.id);
-        assert.equal(evidence?.runs.currentRun.length, 206);
-        assert.ok(evidence?.runs.currentRun.some(delivery => delivery.id === quietDelivery));
+        // The empty state row a delivery creates carries no prose.
+        await ensureMissionSummaryRow(db, {
+          id: mission.id,
+          workspaceId: mission.workspaceId,
+          projectId: project.id
+        });
+        const runs = await readMissionSummaryRuns(db, mission.id);
+        assert.equal(runs.currentRun.length, 206);
+        assert.ok(runs.currentRun.some(delivery => delivery.id === quietDelivery));
         // Supersede the old delivery in sources; its suggestion still belongs
         // to this run, despite also being outside the newest 200 deliveries.
         await insert(
@@ -256,17 +250,6 @@ for (const adapter of conformanceAdapters()) {
           objectiveId: quiet.id,
           actionId: report.agentReport.deferredWork[0]!.id
         };
-        const publication = {
-          status: 'fallback' as const,
-          headline: 'Export works.',
-          summary: 'Export works.',
-          risks: [],
-          suggestions: [ref],
-          sourceDeliveryId: null,
-          generatedBy: 'deterministic' as const,
-          model: null
-        };
-        await publishMissionSummary({ db, missionId: mission.id, generation: 1, publication });
         const projected = await getMissionSummary(mission.id);
         assert.equal(projected.summary?.suggestions[0]?.state, 'open');
         assert.equal(projected.summary?.suggestions[0]?.deliveredAt, '2026-10-01T00:00:00.000Z');
@@ -280,7 +263,6 @@ for (const adapter of conformanceAdapters()) {
         assert.deepEqual(resolved.suggestions, []);
         assert.equal(resolved.closedItems[0]!.text, report.presentation.deferredWork[0]!.title);
         assert.equal(resolved.closedItems[0]!.status, 'done');
-        await publishMissionSummary({ db, missionId: mission.id, generation: 2, publication });
         assert.deepEqual((await getMissionSummary(mission.id)).summary?.suggestions, []);
         await reopenDeferredWork(quietDelivery, ref.actionId);
         await resolveDeferredWork(quietDelivery, ref.actionId, { status: 'dismissed' });
@@ -400,23 +382,14 @@ for (const adapter of conformanceAdapters()) {
       }
     });
 
-    it('enables every creation path and recomposes on question/choice lifecycle transitions only', async () => {
-      const { db, cleanup } = await createConformanceDatabase(adapter, 'ovld_summary_triggers');
+    it('enables every creation path with summary eligibility', async () => {
+      const { db, cleanup } = await createConformanceDatabase(adapter, 'ovld_summary_paths');
       try {
         await bindWebappDatabaseClient({ client: db });
         const repo = await import('./repository.ts');
         const { buildWebappServiceContext } = await import('./db.ts');
         const { protocolCreate, protocolPrompt, recordWork } =
           await import('../packages/core/service/protocol.ts');
-        const { createSessionChannel, endChannel } =
-          await import('../packages/core/service/agent-session/channels.ts');
-        const {
-          createRequest,
-          resolveRequest,
-          cancelRequest,
-          releaseRequestToTerminal,
-          releaseExpiredRequests
-        } = await import('../packages/core/service/agent-session/requests.ts');
         const project = await repo.createProject({ name: 'Creation paths' });
         const ctx = buildWebappServiceContext();
         const rest = await repo.createMission({ projectId: project.id, firstObjective: 'REST' });
@@ -469,25 +442,81 @@ for (const adapter of conformanceAdapters()) {
         assert.ok(
           rows.every(row => row.summary_enabled === true || Number(row.summary_enabled) === 1)
         );
-        const missionId = created.mission.id;
-        const generation = async () =>
-          Number(
-            (
-              await db.get<{ n: number }>(
-                'SELECT requested_generation AS n FROM mission_summaries WHERE mission_id = ?',
-                [missionId]
-              )
-            )?.n ?? 0
+        // Record-work without prose leaves one outstanding opportunity and no text.
+        assert.equal(recorded.missionSummary?.publication?.available, true);
+      } finally {
+        await cleanup();
+      }
+    });
+
+    it('questions, item decisions and presentation never touch the narrative; a reopen advances it', async () => {
+      const { db, cleanup } = await createConformanceDatabase(adapter, 'ovld_summary_basis');
+      try {
+        await bindWebappDatabaseClient({ client: db });
+        const repo = await import('./repository.ts');
+        const { buildWebappServiceContext } = await import('./db.ts');
+        const { attachSession, deliverSession } =
+          await import('../packages/core/service/protocol.ts');
+        const { createSessionChannel, endChannel } =
+          await import('../packages/core/service/agent-session/channels.ts');
+        const {
+          createRequest,
+          resolveRequest,
+          cancelRequest,
+          releaseRequestToTerminal,
+          releaseExpiredRequests
+        } = await import('../packages/core/service/agent-session/requests.ts');
+        const { closeMissionItemAsPerson, restoreMissionItemAsPerson } =
+          await import('./mission-item-resolutions.ts');
+        const { persistDeliveryPresentation, readDeliveryComposeContext } =
+          await import('../packages/core/service/delivery-presentation.ts');
+        const ctx = buildWebappServiceContext();
+        const project = await repo.createProject({ name: 'Narrative basis' });
+        const mission = await repo.createMission({ projectId: project.id, firstObjective: 'A' });
+        const objective = mission.objectives[0]!;
+        const other = await repo.createObjective({ missionId: mission.id, instructionText: 'B' });
+        const session = await attachSession({
+          ctx,
+          missionId: mission.id,
+          objectiveId: objective.id
+        });
+        const delivered = await deliverSession({
+          ctx,
+          missionId: mission.id,
+          sessionKey: session.sessionKey,
+          summary: 'A is done.',
+          payloadJson: {
+            deliveryReport: { schemaVersion: 1, agentReport: { knownRisks: ['A risk.'] } }
+          }
+        });
+        assert.equal(delivered.missionSummary?.publication?.available, true);
+
+        const state = async () => {
+          const row = await db.get<{ evidence_revision: number; revision: number }>(
+            'SELECT evidence_revision, revision FROM mission_summaries WHERE mission_id = ?',
+            [mission.id]
           );
+          const jobs = await db.get<{ n: number }>(
+            'SELECT COUNT(*) AS n FROM worker_jobs WHERE type = ?',
+            [RETIRED_MISSION_SUMMARY_COMPOSE_JOB_TYPE]
+          );
+          return {
+            evidence: Number(row?.evidence_revision),
+            revision: Number(row?.revision),
+            jobs: Number(jobs?.n)
+          };
+        };
+        const baseline = await state();
+        assert.deepEqual(baseline, { evidence: 1, revision: baseline.revision, jobs: 0 });
+
         const { channel } = await createSessionChannel({
           ctx,
-          missionId,
+          missionId: mission.id,
           projectId: project.id,
-          objectiveId: created.objectives[0]!.id
+          objectiveId: other.id
         });
         for (const kind of ['question', 'choice'] as const) {
           for (const transition of ['resolved', 'cancelled', 'released', 'timeout'] as const) {
-            const before = await generation();
             const request = await createRequest({
               ctx,
               channel,
@@ -496,271 +525,362 @@ for (const adapter of conformanceAdapters()) {
               allowsFreeText: true,
               windowExpiresAt: transition === 'timeout' ? '2020-01-01T00:00:00.000Z' : null
             });
-            assert.equal(await generation(), before + 1, `${kind} creation`);
             if (transition === 'resolved')
               await resolveRequest({ ctx, requestId: request.id, resolution: { text: 'Proceed' } });
             if (transition === 'cancelled') await cancelRequest({ ctx, requestId: request.id });
             if (transition === 'released')
               await releaseRequestToTerminal({ ctx, requestId: request.id, reason: 'interrupt' });
             if (transition === 'timeout') await releaseExpiredRequests({ ctx });
-            assert.equal(await generation(), before + 2, `${kind} ${transition}`);
-            await cancelRequest({ ctx, requestId: request.id });
-            assert.equal(
-              await generation(),
-              before + 2,
-              'terminal requests are not triggered twice'
-            );
+            assert.deepEqual(await state(), baseline, `${kind} ${transition}`);
           }
         }
-        for (const kind of ['permission', 'retry'] as const) {
-          const before = await generation();
-          const request = await createRequest({
-            ctx,
-            channel,
-            kind,
-            summary: 'Not summary evidence'
-          });
-          await cancelRequest({ ctx, requestId: request.id });
-          assert.equal(await generation(), before);
-        }
         await createRequest({ ctx, channel, kind: 'question', summary: 'Channel closing' });
-        const beforeEnd = await generation();
         await endChannel({ ctx, channelId: channel.id, reason: 'session_ended' });
-        assert.equal(await generation(), beforeEnd + 1);
+        assert.deepEqual(await state(), baseline, 'channel end');
+
+        const risk = (await db.get<{ id: string }>(
+          `SELECT id FROM mission_items WHERE mission_id = ? AND kind = 'risk'`,
+          [mission.id]
+        ))!;
+        await closeMissionItemAsPerson({
+          itemId: risk.id,
+          workspaceId: mission.workspaceId,
+          workspaceUserId: 'operator-workspace-user',
+          status: 'done',
+          reason: 'Fixed.'
+        });
+        await restoreMissionItemAsPerson({
+          itemId: risk.id,
+          workspaceId: mission.workspaceId,
+          workspaceUserId: 'operator-workspace-user'
+        });
+        assert.deepEqual(await state(), baseline, 'item close and restore');
+
+        const compose = (await readDeliveryComposeContext(db, delivered.deliveryId))!;
+        await persistDeliveryPresentation({
+          db,
+          delivery: compose.delivery,
+          nextReport: {
+            ...compose.report,
+            presentation: { ...compose.report.presentation, status: 'composed' }
+          },
+          changedFields: ['payload_json'],
+          resolveChangeAttribution: async () => ({
+            actorWorkspaceUserId: null,
+            actorTokenId: null,
+            source: 'runner'
+          })
+        });
+        assert.deepEqual(await state(), baseline, 'delivery presentation persisted');
+
+        // A REST reopen starts a new basis and supersedes the open opportunity.
+        await repo.updateObjective(objective.id, { state: 'draft' });
+        const reopened = await state();
+        assert.equal(reopened.evidence, 2);
+        assert.equal(reopened.jobs, 0);
+        const publication = await db.get<{ superseded_reason: string | null }>(
+          'SELECT superseded_reason FROM delivery_summary_publications WHERE delivery_id = ?',
+          [delivered.deliveryId]
+        );
+        assert.equal(publication?.superseded_reason, 'reopened');
       } finally {
         await cleanup();
       }
     });
 
-    it('preserves agent prose through triggers and queued worker publication, then resumes fallback for a newer delivery', async () => {
-      const { db, cleanup } = await createConformanceDatabase(adapter, 'ovld_summary_agent_guard');
+    it('fences out automatic jobs and non-agent narrative writes from older replicas', async () => {
+      const { db, cleanup } = await createConformanceDatabase(adapter, 'ovld_summary_fence');
       try {
         await bindWebappDatabaseClient({ client: db });
-        const { createProject, createMission } = await import('./repository.ts');
+        const repo = await import('./repository.ts');
         const { buildWebappServiceContext } = await import('./db.ts');
-        const project = await createProject({ name: 'Agent guard' });
-        const mission = await createMission({ projectId: project.id, firstObjective: 'Work' });
-        const objective = mission.objectives[0]!;
+        const { attachSession, deliverSession } =
+          await import('../packages/core/service/protocol.ts');
+        const { getMissionSummary } = await import('./mission-summary.ts');
         const ctx = buildWebappServiceContext();
-        const insert = (id: string, stamp: string) =>
+        const project = await repo.createProject({ name: 'Fence' });
+        const mission = await repo.createMission({ projectId: project.id, firstObjective: 'A' });
+        const session = await attachSession({
+          ctx,
+          missionId: mission.id,
+          objectiveId: mission.objectives[0]!.id
+        });
+        await deliverSession({
+          ctx,
+          missionId: mission.id,
+          sessionKey: session.sessionKey,
+          summary: 'Done.',
+          missionSummary: {
+            baseContentRevision: 0,
+            baseEvidenceRevision: 0,
+            headline: 'Agent text.',
+            summary: 'Verified.'
+          }
+        });
+        assert.equal((await getMissionSummary(mission.id)).narrative?.state, 'current');
+        const now = '2026-11-18T12:00:00.000Z';
+        const job = (id: string, status: string) =>
           db.run(
-            `INSERT INTO deliveries (id, workspace_id, project_id, mission_id, objective_id, summary, delivered_at, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, 'Delivered.', ?, ?, ?)`,
-            [id, mission.workspaceId, project.id, mission.id, objective.id, stamp, stamp, stamp]
+            `INSERT INTO worker_jobs (id, workspace_id, type, status, priority, run_after, attempt_count,
+               max_attempts, payload_json, created_at, updated_at, revision)
+             VALUES (?, ?, ?, ?, 50, ?, 0, 5, '{"missionId":"x"}', ?, ?, 1)`,
+            [
+              id,
+              mission.workspaceId,
+              RETIRED_MISSION_SUMMARY_COMPOSE_JOB_TYPE,
+              status,
+              now,
+              now,
+              now
+            ]
           );
-        await insert('agent-delivery', '2026-11-01T00:00:00.000Z');
-        const trigger = () =>
-          db.transaction(tx =>
-            enqueueMissionSummaryComposeJob({
-              ctx: { ...ctx, db: tx },
-              missionId: mission.id,
-              reason: 'delivery_presented'
-            })
-          );
-        const queued = await trigger();
-        await db.run(
-          `UPDATE mission_summaries SET generated_by = 'agent', headline = 'Verified.', summary_markdown = 'Verified in code.',
-          status = 'composed', content_revision = 1, narrative_delivery_id = 'agent-delivery', narrative_objective_id = ? WHERE mission_id = ?`,
-          [objective.id, mission.id]
-        );
-        const before = await db.get('SELECT * FROM mission_summaries WHERE mission_id = ?', [
-          mission.id
-        ]);
-        assert.deepEqual(await trigger(), { triggered: false, generation: null, jobId: null });
-        const publication = {
-          status: 'composed' as const,
-          headline: 'Stale.',
-          summary: 'Stale.',
-          sourceDeliveryId: null,
-          generatedBy: 'gemini' as const,
-          model: 'test'
-        };
-        assert.equal(
-          await publishMissionSummary({
-            db,
-            missionId: mission.id,
-            generation: queued.generation!,
-            publication
-          }),
-          'stale'
-        );
-        assert.equal(
-          (
-            await completeMissionSummaryComposeJob({
-              db,
-              missionId: mission.id,
-              jobId: queued.jobId!,
-              status: 'succeeded'
-            })
-          ).successorJobId,
-          null
+        await job('old-queued', 'queued');
+        await job('old-cancelled', 'cancelled');
+        await db.run(`UPDATE worker_jobs SET status = 'succeeded' WHERE id = 'old-cancelled'`);
+        const jobs = await db.all<{ id: string; status: string }>(
+          'SELECT id, status FROM worker_jobs WHERE type = ? ORDER BY id',
+          [RETIRED_MISSION_SUMMARY_COMPOSE_JOB_TYPE]
         );
         assert.deepEqual(
-          await db.get('SELECT * FROM mission_summaries WHERE mission_id = ?', [mission.id]),
-          before
+          jobs.map(row => [row.id, row.status]),
+          [['old-cancelled', 'cancelled']]
         );
-        await insert('legacy-delivery', '2026-11-02T00:00:00.000Z');
-        const next = await trigger();
-        assert.equal(next.triggered, true);
-        assert.equal(
-          await publishMissionSummary({
-            db,
-            missionId: mission.id,
-            generation: next.generation!,
-            publication
-          }),
-          'published'
-        );
-        const row = await db.get<{
-          generated_by: string;
-          content_revision: number;
-          narrative_delivery_id: string | null;
-        }>(
-          'SELECT generated_by, content_revision, narrative_delivery_id FROM mission_summaries WHERE mission_id = ?',
+
+        const row = () =>
+          db.get<{
+            headline: string;
+            status: string;
+            generated_by: string;
+            content_revision: number;
+            published_evidence_revision: number | null;
+          }>(
+            `SELECT headline, status, generated_by, content_revision, published_evidence_revision
+               FROM mission_summaries WHERE mission_id = ?`,
+            [mission.id]
+          );
+        await db.run(
+          `UPDATE mission_summaries SET headline = 'Model text.', generated_by = 'gemini',
+             content_revision = content_revision + 1, narrative_delivery_id = NULL
+           WHERE mission_id = ?`,
           [mission.id]
         );
-        assert.deepEqual(row, {
-          generated_by: 'gemini',
-          content_revision: 2,
-          narrative_delivery_id: null
-        });
-        // Deleting the narrative's delivery also permits fallback: NULL newest id is not a match.
-        await db.run(`UPDATE deliveries SET deleted_at = ? WHERE mission_id = ?`, [
-          '2026-11-03T00:00:00.000Z',
+        await db.run(`UPDATE mission_summaries SET status = 'pending' WHERE mission_id = ?`, [
           mission.id
         ]);
-        await db.run(
-          `UPDATE mission_summaries SET narrative_delivery_id = 'agent-delivery' WHERE mission_id = ?`,
-          [mission.id]
+        const fenced = await row();
+        assert.deepEqual(
+          [
+            fenced?.headline,
+            fenced?.status,
+            fenced?.generated_by,
+            Number(fenced?.content_revision)
+          ],
+          ['Agent text.', 'composed', 'agent', 1]
         );
-        assert.equal((await trigger()).triggered, true);
+        const other = await repo.createMission({ projectId: project.id, firstObjective: 'B' });
+        await db.run(
+          `INSERT INTO mission_summaries (mission_id, workspace_id, project_id, status, generated_by,
+             headline, created_at, updated_at)
+           VALUES (?, ?, ?, 'pending', 'deterministic', '', ?, ?)`,
+          [other.id, other.workspaceId, project.id, now, now]
+        );
+        assert.equal(
+          await db.get('SELECT mission_id FROM mission_summaries WHERE mission_id = ?', [other.id]),
+          undefined
+        );
+
+        // An older replica's inline agent write carries no publication time: legacy.
+        await db.run(
+          `UPDATE mission_summaries SET headline = 'Old replica agent text.',
+             content_revision = content_revision + 1, generated_at = ?
+           WHERE mission_id = ?`,
+          [now, mission.id]
+        );
+        const unverified = await row();
+        assert.equal(unverified?.headline, 'Old replica agent text.');
+        assert.equal(unverified?.published_evidence_revision, null);
+        const response = await getMissionSummary(mission.id);
+        assert.equal(response.narrative?.state, 'legacy');
+        assert.equal(response.narrativeWatermark, now);
       } finally {
         await cleanup();
       }
     });
 
-    it('coalesces triggers without losing publication/completion races and rejects stale attempts', async () => {
-      const { db, cleanup } = await createConformanceDatabase(adapter, 'ovld_summary_race');
+    it('narrative changes strictly advance the watermark and bound the seen marker', async () => {
+      const { db, cleanup } = await createConformanceDatabase(adapter, 'ovld_summary_nwm');
       try {
         await bindWebappDatabaseClient({ client: db });
-        const { createProject, createMission } = await import('./repository.ts');
+        const repo = await import('./repository.ts');
         const { buildWebappServiceContext } = await import('./db.ts');
-        const project = await createProject({ name: 'Race conformance' });
-        const mission = await createMission({ projectId: project.id, firstObjective: 'Work' });
+        const { attachSession, deliverSession } =
+          await import('../packages/core/service/protocol.ts');
+        const { advanceMissionNarrativeEvidence } =
+          await import('../packages/core/service/mission-narrative.ts');
+        const { publishDeliverySummary } =
+          await import('../packages/core/service/delivery-summary-publication.ts');
+        const { getMissionSummary, markMissionSummarySeen } = await import('./mission-summary.ts');
         const ctx = buildWebappServiceContext();
-        const trigger = () =>
+        const project = await repo.createProject({ name: 'Narrative watermark' });
+        const mission = await repo.createMission({ projectId: project.id, firstObjective: 'A' });
+        const session = await attachSession({
+          ctx,
+          missionId: mission.id,
+          objectiveId: mission.objectives[0]!.id
+        });
+        const delivered = await deliverSession({
+          ctx,
+          missionId: mission.id,
+          sessionKey: session.sessionKey,
+          summary: 'Done.'
+        });
+        // Every write below happens in the same millisecond.
+        const now = '2030-01-01T00:00:00.000Z';
+        const changedAt = async () =>
+          (await getMissionSummary(mission.id)).narrativeWatermark as string;
+        const advance = () =>
           db.transaction(tx =>
-            enqueueMissionSummaryComposeJob({
-              ctx: { ...ctx, db: tx },
-              missionId: mission.id,
-              reason: 'delivery_presented'
+            advanceMissionNarrativeEvidence(tx, {
+              mission: { id: mission.id },
+              reason: 'source_deleted',
+              attribution: { actorWorkspaceUserId: null, source: 'webapp' },
+              now
             })
           );
-        const first = await trigger();
-        const second = await trigger();
-        assert.equal(first.jobId, second.jobId);
-        assert.equal(second.generation, 2);
-        const shell = await db.get<{ generated_at: string | null; headline: string }>(
-          'SELECT generated_at, headline FROM mission_summaries WHERE mission_id = ?',
-          [mission.id]
-        );
-        assert.deepEqual(shell, { generated_at: null, headline: '' });
-        const job = await claimNextWorkerJob({
-          db,
-          jobType: MISSION_SUMMARY_COMPOSE_JOB_TYPE,
-          workerId: 'race'
-        });
-        assert.ok(job);
-        const publication = {
-          status: 'composed' as const,
-          headline: 'Current.',
-          summary: 'Current evidence.',
-          risks: [],
-          suggestions: [],
-          sourceDeliveryId: null,
-          generatedBy: 'gemini' as const,
-          model: 'test'
-        };
-        assert.equal(
-          await publishMissionSummary({ db, missionId: mission.id, generation: 1, publication }),
-          'stale'
-        );
-        assert.equal(
-          await publishMissionSummary({ db, missionId: mission.id, generation: 2, publication }),
-          'published'
-        );
-        assert.equal(
-          await publishMissionSummary({
-            db,
-            missionId: mission.id,
-            generation: 2,
-            publication: { ...publication, headline: 'Late retry.' }
-          }),
-          'stale',
-          'an expired attempt cannot replace a result already published for the same generation'
-        );
-        // Trigger after publication, before completion: completion must leave a successor.
-        await trigger();
-        const pending = await db.get<{ status: string; headline: string }>(
-          'SELECT status, headline FROM mission_summaries WHERE mission_id = ?',
-          [mission.id]
-        );
-        assert.deepEqual(pending, { status: 'pending', headline: 'Current.' });
-        const completed = await completeMissionSummaryComposeJob({
-          db,
-          jobId: job.id,
-          missionId: mission.id,
-          status: 'succeeded'
-        });
-        assert.ok(completed.successorJobId);
-        assert.notEqual(completed.successorJobId, job.id);
-        assert.equal(
-          await publishMissionSummary({
-            db,
-            missionId: mission.id,
-            generation: 2,
-            publication: { ...publication, headline: 'Stale.' }
-          }),
-          'stale'
-        );
-        assert.equal(
-          await publishMissionSummary({ db, missionId: mission.id, generation: 3, publication }),
-          'published'
-        );
-        await completeMissionSummaryComposeJob({
-          db,
-          jobId: completed.successorJobId!,
-          missionId: mission.id,
-          status: 'succeeded'
-        });
-        const afterCompletion = await trigger();
-        assert.notEqual(afterCompletion.jobId, completed.successorJobId);
-        assert.equal(afterCompletion.generation, 4);
-        // The trigger and its event/job are atomic with the originating write.
+        await advance();
+        const first = await changedAt();
+        await advance();
+        const second = await changedAt();
+        assert.equal(first, now);
+        assert.equal(Date.parse(second) - Date.parse(first), 1);
+        // The basis moved past the delivery, so its opportunity is gone.
         await assert.rejects(
-          db.transaction(async tx => {
-            await enqueueMissionSummaryComposeJob({
-              ctx: { ...ctx, db: tx },
-              missionId: mission.id,
-              reason: 'objective_reopened'
-            });
-            throw new Error('rollback');
+          publishDeliverySummary({
+            ctx,
+            missionId: mission.id,
+            deliveryId: delivered.deliveryId,
+            sessionKey: session.sessionKey,
+            operationId: 'publish-nwm-0001',
+            narrative: {
+              baseContentRevision: 0,
+              baseEvidenceRevision: 3,
+              headline: 'Late.',
+              summary: 'Late.'
+            },
+            now
           }),
-          /rollback/
+          (error: { code?: string }) => error.code === 'mission_summary_publication_superseded'
         );
-        const row = await db.get<{ requested_generation: number }>(
-          'SELECT requested_generation FROM mission_summaries WHERE mission_id = ?',
-          [mission.id]
+
+        const response = await getMissionSummary(mission.id);
+        assert.equal(response.narrative?.state, 'absent');
+        await assert.rejects(
+          markMissionSummarySeen(mission.id, {
+            watermark: new Date(Date.parse(second) + 1).toISOString()
+          }),
+          (error: { code?: string }) => error.code === 'invalid_input'
         );
-        assert.equal(Number(row?.requested_generation), 4);
-        await db.run('UPDATE missions SET summary_enabled = ? WHERE id = ?', [
-          adapter === 'postgres' ? false : 0,
-          mission.id
-        ]);
-        assert.equal((await trigger()).triggered, false);
+        assert.deepEqual(
+          await markMissionSummarySeen(mission.id, { watermark: response.narrativeWatermark! }),
+          { seenAt: second }
+        );
       } finally {
         await cleanup();
       }
     });
+
+    it(
+      'a publication racing a newer delivery serializes on the mission lock',
+      { skip: adapter !== 'postgres' },
+      async () => {
+        const { db, cleanup } = await createConformanceDatabase(adapter, 'ovld_summary_race');
+        try {
+          await bindWebappDatabaseClient({ client: db });
+          const repo = await import('./repository.ts');
+          const { buildWebappServiceContext } = await import('./db.ts');
+          const { attachSession, deliverSession } =
+            await import('../packages/core/service/protocol.ts');
+          const { publishDeliverySummary } =
+            await import('../packages/core/service/delivery-summary-publication.ts');
+          const { getMissionSummary } = await import('./mission-summary.ts');
+          const ctx = buildWebappServiceContext();
+          const project = await repo.createProject({ name: 'Publication race' });
+          const outcomes = { published: 0, superseded: 0 };
+          for (let round = 0; round < 6; round++) {
+            const mission = await repo.createMission({
+              projectId: project.id,
+              firstObjective: `A${round}`
+            });
+            const second = await repo.createObjective({
+              missionId: mission.id,
+              instructionText: `B${round}`
+            });
+            const a = await attachSession({
+              ctx,
+              missionId: mission.id,
+              objectiveId: mission.objectives[0]!.id
+            });
+            const b = await attachSession({ ctx, missionId: mission.id, objectiveId: second.id });
+            const delivered = await deliverSession({
+              ctx,
+              missionId: mission.id,
+              sessionKey: a.sessionKey,
+              summary: 'A.'
+            });
+            const [publish, newer] = await Promise.allSettled([
+              publishDeliverySummary({
+                ctx,
+                missionId: mission.id,
+                deliveryId: delivered.deliveryId,
+                sessionKey: a.sessionKey,
+                operationId: `publish-race-${round}-0001`,
+                narrative: {
+                  baseContentRevision: 0,
+                  baseEvidenceRevision: 1,
+                  headline: 'A landed.',
+                  summary: 'A is tested.'
+                }
+              }),
+              deliverSession({
+                ctx,
+                missionId: mission.id,
+                sessionKey: b.sessionKey,
+                summary: 'B.'
+              })
+            ]);
+            assert.equal(newer.status, 'fulfilled', 'the newer delivery is always accepted');
+            const response = await getMissionSummary(mission.id);
+            assert.equal(response.narrative?.evidenceRevision, 2);
+            assert.notEqual(response.narrative?.state, 'current');
+            const row = await db.get<{
+              published_at: unknown;
+              superseded_reason: string | null;
+            }>(
+              'SELECT published_at, superseded_reason FROM delivery_summary_publications WHERE delivery_id = ?',
+              [delivered.deliveryId]
+            );
+            if (publish.status === 'fulfilled') {
+              outcomes.published += 1;
+              assert.equal(response.narrative?.state, 'outdated');
+              assert.equal(response.narrative?.publishedEvidenceRevision, 1);
+              assert.ok(row?.published_at);
+              assert.equal(row?.superseded_reason, null);
+            } else {
+              outcomes.superseded += 1;
+              assert.equal(
+                (publish.reason as { code?: string }).code,
+                'mission_summary_publication_superseded'
+              );
+              assert.equal(response.narrative?.state, 'absent');
+              assert.equal(row?.published_at, null);
+              assert.equal(row?.superseded_reason, 'newer_delivery');
+            }
+          }
+          assert.equal(outcomes.published + outcomes.superseded, 6);
+        } finally {
+          await cleanup();
+        }
+      }
+    );
   });
 }

@@ -2,7 +2,6 @@ import { Scale } from 'lucide-react';
 import { useId } from 'react';
 
 import type { SummaryTradeoffRow } from '../../lib/mission-summary-derive.ts';
-import { cn } from '../../lib/utils.ts';
 
 import { ObjectiveKeyLink, SummaryBlockHeading } from './MissionSummaryParts.tsx';
 
@@ -41,23 +40,13 @@ function TradeoffRow({ row }: { row: SummaryTradeoffRow }) {
  * Tradeoffs: decisions the agents reported making across the mission's deliveries, so a
  * person can review them. Optional at delivery; the section is hidden when there are none.
  */
-export function MissionSummaryTradeoffs({
-  rows,
-  dimmed
-}: {
-  rows: readonly SummaryTradeoffRow[];
-  /** Previous content under the updating strip. */
-  dimmed: boolean;
-}) {
+export function MissionSummaryTradeoffs({ rows }: { rows: readonly SummaryTradeoffRow[] }) {
   const headingId = useId();
   if (rows.length === 0) return null;
   return (
     <section
       aria-labelledby={headingId}
-      className={cn(
-        'grid gap-1.5 border-t border-(--color-border) px-5 pb-2.5 pt-3',
-        dimmed && 'opacity-55'
-      )}
+      className="grid gap-1.5 border-t border-(--color-border) px-5 pb-2.5 pt-3"
     >
       <SummaryBlockHeading
         id={headingId}

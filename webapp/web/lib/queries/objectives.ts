@@ -76,6 +76,19 @@ export function useDeleteObjective() {
   });
 }
 
+// ---- Objective report drafts (read-only, ADR 0078) --------------------------
+
+/**
+ * Provisional draft evidence for one objective. Mount it only where the operator asked to see
+ * it (an opened disclosure), so a collapsed objective never fetches drafts. Refreshed by
+ * `delivery_report_draft` and `agent_session` entity changes scoped to the objective.
+ */
+export const useObjectiveReportDrafts = (objectiveId: string) =>
+  useQuery({
+    queryKey: keys.objectiveReportDrafts(objectiveId),
+    queryFn: () => api.listObjectiveReportDrafts(objectiveId)
+  });
+
 // ---- Objective attachments -----------------------------------------------
 
 export const useObjectiveAttachments = (

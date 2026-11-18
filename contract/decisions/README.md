@@ -107,3 +107,13 @@ record and the index disagree.
 
 - [0073 — Agent mission item inspection and standalone closure](0073-agent-mission-item-inspection.md)
 - [0074 — Grouped open items in the mission summary read](0074-grouped-open-items-in-summary-read.md)
+- [0075 — Replay-safe delivery and record-work finalization](0075-replay-safe-delivery-finalization.md)
+- [0076 — Agent-only mission narrative and post-delivery publication](0076-agent-only-mission-narrative.md)
+- [0077 — Lead mission terminal controls with the newest session](0077-newest-mission-terminal.md)
+- [0078 — Durable draft report evidence and atomic report sealing](0078-durable-draft-report-evidence.md)
+
+- [0079: Same-project agent item decisions and live provenance](0079-cross-mission-item-decisions.md)
+
+- [0080: Cross-mission decision seen coverage](0080-cross-mission-item-seen-coverage.md)
+
+- [0081: Ledger-ranked project item discovery](0081-ledger-ranked-project-item-discovery.md)

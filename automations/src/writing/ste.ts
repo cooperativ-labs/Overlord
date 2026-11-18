@@ -4,9 +4,10 @@
  *
  * Two profiles exist:
  *
- * - {@link WRITING_RULES}: the base profile used by the delivery composer and
- *   the mission-summary composer. Its text is pinned by a test so that moving
- *   it here does not change their behavior.
+ * - {@link WRITING_RULES}: the base profile used by the delivery composer. Its
+ *   text is pinned by a test so that moving it here does not change its
+ *   behavior. (The mission-summary composer was removed by ADR 0076; agent
+ *   mission summaries get advisory {@link lintSte} warnings only.)
  * - {@link OBJECTIVE_WRITING_RULES}: the stricter objective profile for
  *   objective titles and summaries (coo:1275). It adds the modal rule, the
  *   confidence and ambiguity vocabulary, CAUTION placement and the
@@ -19,8 +20,8 @@
  */
 
 /**
- * STE-inspired writing rules (loosely based on ASD-STE100), shared with the
- * mission summary composer. Guidance for the model, not a checker.
+ * STE-inspired writing rules (loosely based on ASD-STE100) for the delivery
+ * composer. Guidance for the model, not a checker.
  */
 export const WRITING_RULES = `WRITING rules:
 - One topic per sentence. Keep sentences short: about 20 words for an instruction, about 25 for a description.

@@ -327,6 +327,8 @@ summary:
 {
   "missionSummary": {
     "contentRevision": 7,
+    "evidenceRevision": 15,
+    "narrative": { "state": "outdated", "evidenceRevision": 15, "publishedEvidenceRevision": 14 },
     "headline": "Current headline, or empty before the first write.",
     "summary": "Current summary Markdown, or empty.",
     "author": "agent",
@@ -340,8 +342,11 @@ summary:
 }
 ```
 
-`author` is `agent`, `gemini`, `deterministic`, or `null` before the first write.
-`truncated: true` means more items are open than the 60 listed.
+`author` is `agent`, `gemini`, `deterministic`, or `null` when there is no prose.
+`truncated: true` means more items are open than the 60 listed. `narrative.state`
+is `absent`, `current`, `outdated` (later accepted work, a follow-up or a reopen
+changed the mission) or `legacy` (older text without a recorded basis). Only
+agents write the mission summary; Overlord never generates or repairs it.
 
 Send the rewrite as `missionSummary` in the delivery payload, or as one JSON
 object through `--mission-summary-file <path|->`, which wins over the payload
@@ -354,6 +359,7 @@ ovld protocol deliver --session-key <sessionKey> --objective-id coo:312.k7xm \
   "summary": "Added retry with backoff to the sync worker and covered it with tests.",
   "missionSummary": {
     "baseContentRevision": 7,
+    "baseEvidenceRevision": 15,
     "headline": "Sync survives provider outages; deployment is pending.",
     "summary": "The sync worker retries failed calls with backoff. This is implemented and tested, not deployed.",
     "closeItems": [
@@ -364,8 +370,10 @@ ovld protocol deliver --session-key <sessionKey> --objective-id coo:312.k7xm \
 EOF
 ```
 
-- `baseContentRevision` is `missionSummary.contentRevision` from attach. It is
-  required with `headline` and `summary`.
+- `baseContentRevision` is `missionSummary.contentRevision` and
+  `baseEvidenceRevision` is `missionSummary.evidenceRevision` from attach.
+  `baseContentRevision` is required with `headline` and `summary`; without
+  `baseEvidenceRevision` the prose is withheld.
 - `headline` (one line, at most 140 characters) and `summary` (Markdown, at most
   1,200 characters) are sent together. `closeItems` may be sent alone, at most 50
   entries.
@@ -381,21 +389,40 @@ EOF
   open is skipped with a `mission_summary_item_skipped` warning and never fails
   the delivery.
 - The response carries `missionSummary { contentRevision, narrativeWritten,
-  closedItemIds, warnings }`. `mission_summary_style` warnings are advisory.
+  closedItemIds, warnings, publication }`. `mission_summary_style` warnings are
+  advisory.
 
-If another objective wrote the summary after you attached, the delivery fails
-with 409 `mission_summary_conflict` and **nothing is delivered**. The CLI exits
-non-zero and prints `{ error, code, baseContentRevision, missionSummary }` on
-stdout; MCP returns `{ code, details }` with `details.missionSummary`. That
-`missionSummary` is the fresh baseline. Rewrite from it, keeping what is still
-true, and deliver again once with its `contentRevision`. If that conflicts again,
-deliver without `headline` and `summary` and say so in the delivery summary;
-Overlord then writes the mission summary automatically.
+If other work was accepted after you attached (another objective delivered, a
+follow-up started or an objective was reopened), your delivery and item closes are
+**still accepted**, but your `headline` and `summary` are withheld so they cannot
+claim to cover work you did not read. The same happens without
+`baseEvidenceRevision` or without prose. The response then has
+`missionSummary.publication.available: true`, a fresh `baseline`, and an
+`instruction` that starts with the publication step:
+
+```bash
+ovld protocol delivery-summary-context --mission-id <mission> --delivery-id <deliveryId> \
+  --session-key <sessionKey>
+ovld protocol publish-delivery-summary --mission-id <mission> --delivery-id <deliveryId> \
+  --session-key <sessionKey> --payload-file - <<'JSON'
+{ "baseContentRevision": 8, "baseEvidenceRevision": 16, "headline": "…", "summary": "…" }
+JSON
+```
+
+Rewrite the summary for the whole mission from that baseline. You publish once per
+delivery, with no deadline; the same operation id and text replays the result. If
+the bases are stale again (409 `mission_summary_conflict`, with the current
+baseline), reconcile and try once more, then stop and say the summary is not
+updated. 409 `mission_summary_publication_superseded` means newer work owns the
+next summary. Never deliver again or resume follow-up only to update the summary.
+MCP agents use `overlord_delivery_summary_context` and
+`overlord_publish_delivery_summary` with an `operationId` they choose and reuse.
 
 A delivery without `missionSummary`, for example from an older CLI or connector,
-still succeeds, and Overlord writes the mission summary automatically.
-`record-work` accepts the same object without `baseContentRevision`, because it
-creates a new mission.
+still succeeds; the mission summary then stays missing or outdated until an agent
+publishes one. `record-work` accepts the same object without a base revision,
+because it creates a new mission; without prose it can publish once later without a
+session key.
 
 ### Changed files are captured for you
 
@@ -473,6 +500,61 @@ ovld protocol deliver --session-key <sessionKey> --mission-id coo:312 \
 Refactored `useAccount()` to expose `isLoading`; see $PR for details.
 EOF
 ```
+
+### Retrying after a lost response
+
+`deliver` and `record-work` are safe to retry. Before sending, the CLI saves an
+owner-only attempt record (an operation id plus digests of the request and its
+target — never the body, session key or token). If the command times out or the
+process restarts, run **the same command again**: it reuses the saved operation id,
+and Overlord answers with the original result (`"replayed": true`) instead of
+delivering or recording twice. Do not change the request or start a new operation
+to work around a timeout.
+
+- `--retry-operation <id>` resumes a saved attempt; a different request is refused.
+- `--operation-id <id>` sends an id you retain yourself (8–128 of `A-Z a-z 0-9 . _ : -`).
+- `--new-operation` starts separate work — for example, recording identical
+  `record-work` twice on purpose. Without it, an identical `record-work` that was
+  already accepted is refused locally.
+- `ovld protocol delivery-receipt --operation-id <id>` (or `--delivery-id <id>`)
+  shows your accepted receipt, even after the session ended. A not-found answer does
+  not prove the attempt failed; retry the original command instead.
+- A session delivers once. A second delivery fails with `409
+  delivery_already_accepted` and the existing `deliveryId`; use `resume-follow-up`
+  for new work.
+
+MCP callers pass `operationId` on `overlord_deliver_session` and
+`overlord_record_work`: choose it before the first call and reuse it on every retry
+of that attempt.
+
+### Draft report evidence (opt-in)
+
+An agent may record provisional report evidence during execution and seal it once at
+delivery. Sessions that never write a draft deliver exactly as before.
+
+- `update --report-draft-file <path|->` (or `--report-draft-json`, or `reportDraft` in
+  `--payload-json`) sends one batch: `{ operationId, expectedRevision, operations }`.
+  `--summary` is optional with a batch. `operationId` is your own batch id: re-running
+  the same command after a lost response returns the original receipt (`replayed: true`,
+  original `eventId`) instead of applying the batch again — even after later batches
+  or after delivery.
+- Operations are `upsert { entryId, kind, content }`, `withdraw { entryId, reason }`
+  and `import { sourceDraftId, sourceEntryId }`. Kinds are `human_action`, `tradeoff`,
+  `deferred_work` (the deliver report shapes), `known_risk` and `assumption`
+  (`{ text }`). At most 12 active entries per kind, 1,000 batches and 1,000 entry ids
+  per draft; writes beyond a bound are refused, nothing is pruned.
+- A stale `expectedRevision` applies nothing: `409 report_draft_conflict` carries the
+  fresh draft.
+- `report-draft --session-key <key>` returns the draft and, while it is open, an
+  inspection of exactly what `deliver` would seal, with exclusion warnings.
+- `deliver --expected-draft-revision <n>` (or `--report-draft-json '{ "expectedRevision":
+  n, "operations": [...] }'`) seals the draft. A session with a draft must send its
+  current revision. Active entries come first, then `deliveryReport` items that match no
+  entry; more than 12 of a kind is refused rather than truncated. The response lists each
+  entry's accepted reference.
+- Draft entries are never mission items or obligations until delivery seals them.
+  Abandoned drafts of an objective are listed after attach and can be imported explicitly.
+  `record-work` does not accept drafts.
 
 ## Shared worktree safety
 
@@ -645,10 +727,14 @@ EOF
 | `create` / `prompt`              | Create a draft / create-and-attach a mission. The response returns the persisted mission and objectives so you can verify agent, model, resource, and queue/auto-advance settings. |
 | `add-objectives`                 | Append ordered objectives to a mission; returns each persisted objective's launch settings.        |
 | `update-objective`               | Turn auto-advance on or off, edit instruction text or the description (`--description`, `--description-request`), or reassign with `--objective-agent` (`manual`/`human` for a person). Requires `--objective-id`.|
-| `update`                         | Post progress and decisions; optionally declare uncaptured paths.                                 |
+| `update`                         | Post progress and decisions; optionally record draft report evidence or declare uncaptured paths. |
 | `heartbeat`                      | Liveness ping, no feed event.                                                                     |
 | `ask`                            | Post a blocking question and stop.                                                                |
 | `deliver`                        | Finish: summary, artifacts, optional declared paths and mission summary write, mark complete.      |
+| `delivery-receipt`               | Read your accepted deliver/record-work receipt by operation or delivery id.                       |
+| `report-draft`                   | Read your provisional report draft and what deliver would seal from it.                           |
+| `delivery-summary-context`       | Read your delivery's mission-summary publication opportunity and a fresh baseline.                |
+| `publish-delivery-summary`       | Publish one reconciled mission summary for your accepted delivery.                                |
 | `changes`                        | Local-only read of this checkout's recorded paths for an objective.                               |
 | `objective-changes`              | Server read of an objective's changed files across sessions and devices.                          |
 | `resume-follow-up`               | Reopen a delivered objective for follow-up.                                                       |
@@ -659,3 +745,22 @@ EOF
 For the full CLI surface — management commands, the runner, project linking —
 see the [CLI reference](/cli/). Never invent protocol subcommands; run
 `ovld protocol help` when unsure.
+
+### Discover unresolved items across missions
+
+When attach reports `missionSummary.otherMissionOpenItems > 0`, run
+`ovld protocol project-items --mission-id <id>` before delivery (MCP:
+`overlord_project_items`). It returns at most 20 rows by default, ranked against
+the live objective ledger and optional comma-separated `--path` evidence.
+`--kind risk,human_action,suggestion`, `--query <text substring>` (not id lookup),
+`--include-own-mission`, `--limit 1..100` and `--offset` control the read.
+Only accepted live open items count; provisional report drafts remain isolated.
+`scanTruncated` reports the newest-2,000-row scan bound. `ledger.captureGap`
+suggests passing explicit paths. Restart paging after writes.
+
+Verify resolution in code before closing an item with a reason naming the change.
+Standalone `close-items` and delivery `missionSummary.closeItems` both accept
+same-project items. Retain the same delivery operation id and semantic body for
+uncertain-response replay. Accepted withheld prose uses `delivery-summary-context`
+and `publish-delivery-summary` with fresh content/evidence bases and a separate
+retained publication operation id. Never send closes to publication.

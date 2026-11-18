@@ -102,6 +102,23 @@ function autoAdvanceFlags(args: Record<string, unknown>): Record<string, true> {
   return {};
 }
 
+/** Shared addressing of the narrow post-delivery narrative tools (ADR 0076). */
+function deliverySummaryFlags(args: Record<string, unknown>): Record<string, string> {
+  return {
+    '--mission-id': requiredString(args, 'missionId'),
+    '--connection-method': 'mcp',
+    ...(optionalString(args, 'deliveryId')
+      ? { '--delivery-id': requiredString(args, 'deliveryId') }
+      : {}),
+    ...(optionalString(args, 'publicationId')
+      ? { '--publication-id': requiredString(args, 'publicationId') }
+      : {}),
+    ...(optionalString(args, 'sessionKey')
+      ? { '--session-key': requiredString(args, 'sessionKey') }
+      : {})
+  };
+}
+
 function protocolBody(flags: Record<string, string | boolean>): ProtocolRequestBody {
   return { flags };
 }
@@ -374,7 +391,11 @@ export function recordWorkProtocolBody(args: Record<string, unknown>): ProtocolR
     ...(optionalString(args, 'title') ? { title: requiredString(args, 'title') } : {}),
     ...(Array.isArray(args.declaredPaths) ? { declaredPaths: args.declaredPaths } : {}),
     ...(Array.isArray(args.artifacts) ? { artifacts: args.artifacts } : {}),
-    ...(isRecord(args.missionSummary) ? { missionSummary: args.missionSummary } : {})
+    ...(isRecord(args.missionSummary) ? { missionSummary: args.missionSummary } : {}),
+    // Caller-retained retry identity only: a handler-minted id would promise nothing.
+    ...(optionalString(args, 'operationId')
+      ? { operationId: requiredString(args, 'operationId') }
+      : {})
   };
   return {
     flags: {
@@ -392,9 +413,15 @@ export function deliverSessionProtocolBody(args: Record<string, unknown>): Proto
       ...missionScopeFlags(args),
       '--session-key': requiredString(args, 'sessionKey'),
       '--summary': requiredString(args, 'summary'),
+      ...(optionalString(args, 'operationId')
+        ? { '--operation-id': requiredString(args, 'operationId') }
+        : {}),
       ...(Array.isArray(args.artifacts) ? { '--artifacts-file': true } : {}),
       ...(Array.isArray(args.declaredPaths) ? { '--declared-paths-file': true } : {}),
       ...(isRecord(args.missionSummary) ? { '--mission-summary-file': true } : {}),
+      ...(isRecord(args.reportDraft)
+        ? { '--report-draft-json': JSON.stringify(args.reportDraft) }
+        : {}),
       ...(Array.isArray(args.humanActions) ||
       Array.isArray(args.tradeoffsMade) ||
       Array.isArray(args.knownRisks) ||
@@ -618,6 +645,67 @@ const toolHandlers: Record<string, ToolHandler> = {
     ),
   overlord_list_deliveries: args =>
     runProtocolSubcommand('list-deliveries', protocolBody(missionScopeFlags(args))),
+  overlord_delivery_receipt: args =>
+    runProtocolSubcommand(
+      'delivery-receipt',
+      protocolBody({
+        ...(optionalString(args, 'missionId')
+          ? { '--mission-id': requiredString(args, 'missionId') }
+          : {}),
+        ...(optionalString(args, 'deliveryId')
+          ? { '--delivery-id': requiredString(args, 'deliveryId') }
+          : {}),
+        ...(optionalString(args, 'operationId')
+          ? { '--operation-id': requiredString(args, 'operationId') }
+          : {}),
+        ...(optionalString(args, 'operationKind')
+          ? { '--operation-kind': requiredString(args, 'operationKind') }
+          : {})
+      })
+    ),
+  overlord_report_draft: args =>
+    runProtocolSubcommand(
+      'report-draft',
+      protocolBody({
+        ...missionScopeFlags(args),
+        '--session-key': requiredString(args, 'sessionKey'),
+        ...(optionalString(args, 'draftId')
+          ? { '--draft-id': requiredString(args, 'draftId') }
+          : {}),
+        ...(args.includeWithdrawn === true ? { '--include-withdrawn': true } : {})
+      })
+    ),
+  overlord_delivery_summary_context: args =>
+    runProtocolSubcommand('delivery-summary-context', protocolBody(deliverySummaryFlags(args))),
+  overlord_publish_delivery_summary: args =>
+    runProtocolSubcommand(
+      'publish-delivery-summary',
+      protocolBody({
+        ...deliverySummaryFlags(args),
+        // Caller-retained retry identity (ADR 0076); never minted here.
+        '--operation-id': requiredString(args, 'operationId'),
+        '--payload-json': JSON.stringify({
+          baseContentRevision: args.baseContentRevision,
+          baseEvidenceRevision: args.baseEvidenceRevision,
+          headline: requiredString(args, 'headline'),
+          summary: requiredString(args, 'summary')
+        })
+      })
+    ),
+  overlord_project_items: args =>
+    runProtocolSubcommand(
+      'project-items',
+      protocolBody({
+        ...missionScopeFlags(args),
+        '--session-key': requiredString(args, 'sessionKey'),
+        ...(args.kinds !== undefined ? { '--kind': (args.kinds as string[]).join(',') } : {}),
+        ...(args.query !== undefined ? { '--query': requiredString(args, 'query') } : {}),
+        ...(args.paths !== undefined ? { '--path': (args.paths as string[]).join(',') } : {}),
+        ...(args.includeOwnMission === true ? { '--include-own-mission': true } : {}),
+        ...(args.limit !== undefined ? { '--limit': String(args.limit) } : {}),
+        ...(args.offset !== undefined ? { '--offset': String(args.offset) } : {})
+      })
+    ),
   overlord_mission_items: args =>
     runProtocolSubcommand(
       'mission-items',
@@ -750,8 +838,13 @@ const toolHandlers: Record<string, ToolHandler> = {
       flags: {
         ...missionScopeFlags(args),
         '--session-key': requiredString(args, 'sessionKey'),
-        '--summary': requiredString(args, 'summary'),
+        // Optional with a report draft batch (ADR 0078); the service still requires one otherwise.
+        '--summary': optionalString(args, 'summary') ?? '',
         ...(optionalString(args, 'phase') ? { '--phase': requiredString(args, 'phase') } : {}),
+        // The batch operationId is caller-retained inside reportDraft; never minted here.
+        ...(isRecord(args.reportDraft)
+          ? { '--report-draft-json': JSON.stringify(args.reportDraft) }
+          : {}),
         ...(optionalString(args, 'eventType')
           ? { '--event-type': requiredString(args, 'eventType') }
           : {}),

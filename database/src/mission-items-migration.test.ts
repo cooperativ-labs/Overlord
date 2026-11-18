@@ -66,7 +66,10 @@ test('fresh database: summary columns, the agent author and item constraints', (
     [
       ['content_revision', '0'],
       ['narrative_delivery_id', null],
-      ['narrative_objective_id', null]
+      ['narrative_objective_id', null],
+      // Added by 20261118140000_agent_only_mission_narrative (ADR 0076).
+      ['narrative_published_at', null],
+      ['narrative_changed_at', null]
     ]
   );
   // The later cutover migration runs after the backfill.
@@ -91,6 +94,8 @@ test('fresh database: summary columns, the agent author and item constraints', (
       ['idx_mission_items_mission_status_kind', 0],
       ['idx_mission_items_project_status_kind', 0],
       ['idx_mission_items_objective_status', 0],
+      ['idx_mission_items_resolver_session', 0],
+      ['idx_mission_items_resolver_delivery', 0],
       ['sqlite_autoindex_mission_items_1', 1]
     ])
   );
@@ -255,11 +260,96 @@ test('the storage drop preserves narrative and item decisions after backfill', a
   delete before.suggestions_json;
   const items = db.prepare(SELECT_FIXTURE_ITEMS_SQL).all();
   migrateDatabase(db);
-  assert.deepEqual(db.prepare('SELECT * FROM mission_summaries').get(), before);
+  // ADR 0076 keeps the prose and provenance verbatim and reads it as legacy: no
+  // coverage basis, last changed at its stored time.
+  assert.deepEqual(db.prepare('SELECT * FROM mission_summaries').get(), {
+    ...before,
+    evidence_revision: 0,
+    published_evidence_revision: null,
+    narrative_published_at: null,
+    narrative_changed_at: now
+  });
   assert.deepEqual(db.prepare(SELECT_FIXTURE_ITEMS_SQL).all(), items);
   assert.equal(
     db.prepare(`SELECT name FROM sqlite_schema WHERE name = 'human_action_resolutions'`).get(),
     undefined
   );
   assert.deepEqual(db.prepare('PRAGMA foreign_key_check').all(), []);
+});
+
+test('cross-mission provenance migration backfills objective mission and constrains agent-only columns', async () => {
+  const Database = loadBetterSqlite3();
+  const raw = new Database(':memory:');
+  raw.pragma('foreign_keys = ON');
+  try {
+    migrateDatabase(raw, { stopBeforeVersion: '20261118180000' });
+    const db = createSqliteClient(raw);
+    await seedMissionItemsFixture(db, { legacyResolutions: false });
+    // Backfill current item rows from the fixture's live delivery reports.
+    const delivery = raw.prepare('SELECT * FROM deliveries ORDER BY id LIMIT 1').get() as {
+      id: string;
+      objective_id: string;
+    };
+    const now = '2026-11-18T00:00:00.000Z';
+    raw
+      .prepare(
+        `INSERT INTO mission_items (id, workspace_id, project_id, mission_id,
+      objective_id, delivery_id, kind, item_ref, position, text, detail_json, status,
+      status_reason, resolved_by_kind, resolved_by_objective_id, resolved_at,
+      reported_at, created_at, updated_at) VALUES ('legacy-close', ?, ?, ?, ?, ?,
+      'risk', 'legacy', 0, 'Legacy risk', '{}', 'done', 'Verified', 'agent', ?, ?, ?, ?, ?)`
+      )
+      .run(
+        FIXTURE_IDS.workspaceId,
+        FIXTURE_IDS.projectId,
+        FIXTURE_IDS.missionId,
+        delivery.objective_id,
+        delivery.id,
+        delivery.objective_id,
+        now,
+        now,
+        now,
+        now
+      );
+    migrateDatabase(raw);
+    const expected = raw
+      .prepare('SELECT mission_id FROM objectives WHERE id = ?')
+      .get(delivery.objective_id) as { mission_id: string };
+    assert.deepEqual(
+      raw
+        .prepare(
+          `SELECT resolved_by_mission_id, resolved_by_session_id, restored_at
+      FROM mission_items WHERE id = 'legacy-close'`
+        )
+        .get(),
+      {
+        resolved_by_mission_id: expected.mission_id,
+        resolved_by_session_id: null,
+        restored_at: null
+      }
+    );
+    assert.throws(
+      () =>
+        raw
+          .prepare(
+            `UPDATE mission_items SET resolved_by_kind = 'person'
+      WHERE id = 'legacy-close'`
+          )
+          .run(),
+      /CHECK/
+    );
+    assert.throws(
+      () =>
+        raw
+          .prepare(
+            `UPDATE mission_items SET restored_at = 'invalid'
+      WHERE id = 'legacy-close'`
+          )
+          .run(),
+      /CHECK/
+    );
+    migrateDatabase(raw); // ledger replay does not reapply ALTERs or manufacture sessions.
+  } finally {
+    raw.close();
+  }
 });

@@ -138,6 +138,19 @@ Does NOT own:
   organization and user images).
 - **Last administrator.** A workspace's last `ADMIN` cannot be removed or demoted, and an
   organization's last admin cannot be removed.
+- **Post-delivery narrative publication (ADR 0076).** Protocol `delivery-summary-context`
+  and `publish-delivery-summary` require live user or token authentication, current
+  workspace membership, project scope and `event:create`, and act only on a publication
+  whose originating workspace member is the caller. A session-bound publication also
+  requires the original session key of the session that delivered it; that session's
+  delivered, ended state is accepted for these two commands only, and an ended undelivered
+  or deleted session is invalid. A record-work publication is sessionless and bound to its
+  member. A token rotated by the same member works if its current grants allow; a revoked
+  token never does. Publication and operation ids are non-secret references, not
+  credentials. A `project_automation` token is denied; `full`, `mission_lifecycle` and
+  hosted MCP OAuth grants follow the member's current role. Unknown, foreign, other-member
+  or out-of-scope publications answer the same 404. No other ended-session update, close
+  or edit authority follows, and another agent or person cannot borrow the opportunity.
 
 ### Native GitHub sign-in recovery
 
@@ -189,3 +202,33 @@ Recovery diagnostics log only hashed correlation identifiers and lifecycle event
 - **Exception**: the `deleteUser` `beforeDelete` hook invokes a backend-supplied `onDeleteUser(userId)` callback (`backend/account-deletion.ts`, injected via `CreateAuthOptions`) to hard-purge the `ON DELETE RESTRICT` children of `profiles` and `workspace_users` — `workspace_users`, `user_tokens`, `user_images`, `role_assignments`, `workspace_user_execution_targets`, `project_user_preferences` — before the auth `user` row is hard-deleted, which in turn hard-cascades `session`, `account`, `profiles`, and `user_execution_target_preferences`. `RESTRICT` blocks on row existence regardless of `deleted_at`, so this must be a hard purge, not a tombstone; each purge still emits an `entity_changes` row. The write happens inside the caller-supplied callback, not in Auth Layer code, mirroring the Service → Automations delegation pattern (caller-supplied persistence callbacks)
 - **Email delivery**: sign-up/sign-in verification emails are sent through a backend-supplied `sendVerificationEmail(params)` callback (`backend/email-verification.ts`, injected via `CreateAuthOptions`), the same caller-supplied-callback pattern as `onDeleteUser`. Auth Layer invokes the callback with Better Auth's `{ user, url, token }` plus a minted 6-digit `otp` (when the `emailOTP` plugin is enabled via `sendEmailOTP`); it does not know about or depend on the concrete provider (Resend, configured via `RESEND_API_KEY` and the `notifications.cooperativ.io` domain). The verification email shows the `otp` in its code block and uses `token` only to build the clickable link — the raw `token` is never displayed as a typed code
 - **One-time codes (OTP)**: when `sendEmailOTP` is injected, the `emailOTP` plugin is registered and writes codes to the auth-internal `verification` table (identifier `email-verification-otp-<email>` etc.). It adds `/api/auth/email-otp/*` endpoints; the sign-up confirmation code is minted inside `sendVerificationEmail` (no separate email), while `sendEmailOTP` delivers standalone codes for passwordless sign-in and password reset. Codes are 6 digits and expire after 1 hour
+
+
+### Cross-mission item decisions (ADR 0079)
+
+`close-items`, delivery `missionSummary.closeItems`, and sessionless `record-work`
+retain their source command permission gate. Agent closes on another live mission
+in the same project additionally require `mission:update`, intersecting the owner's
+workspace role grants with token consent. Denial skips foreign entries as `forbidden`;
+own entries and delivery acceptance continue. No new permission or role grant exists.
+
+Explicit workspace, token project scope, live mission and live source-delivery
+predicates apply before target classification. Other projects/workspaces, out-of-scope
+ids and deleted sources read uniformly as `not_found`, without resolver disclosure.
+`project_automation` remains denied before writes. `mission_lifecycle`, full tokens,
+signed-in CLI and hosted MCP use the same role/consent intersection; loopback Local
+operator behavior is unchanged. A foreign item with persistent `restored_at` is
+`restored_by_person`; same-mission agents retain their open-only close rights.
+
+Revalidate scope, relationships, session and target authority under the complete
+mission lock set (architecture.md). Narrow narrative publication accepts no
+`closeItems` and gains no foreign write authority. Item actions change neither target
+narrative/publication state nor evidence/freshness and schedule no narrative work.
+
+### Project item discovery (ADR 0081)
+
+`project-items` requires `mission:read`, workspace/project scope and a live
+undelivered attached session matching the addressed mission and optional objective.
+The project_automation protocol allowlist excludes discovery despite its read grant.
+The ended-session exception is still exclusive to publication/receipt operations;
+no discovery authority is added. Attach counts are scoped to its authorized project.

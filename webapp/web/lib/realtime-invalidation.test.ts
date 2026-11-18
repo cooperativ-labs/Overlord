@@ -83,8 +83,43 @@ test('deduplicates workflow invalidations across objective, request, and session
     ['activity-feed'],
     ['inbox-missions'],
     // Capture diagnostics ride on the objective file-change read.
-    ['mission', 'mission-1', 'file-changes']
+    ['mission', 'mission-1', 'file-changes'],
+    // A session ending turns its unsealed draft from open to abandoned.
+    ['objective', 'objective-1', 'report-drafts']
   ]);
+});
+
+test('routes draft evidence changes only to the objective draft read', () => {
+  const { client, calls } = fakeClient();
+
+  const mode = invalidateRealtimeChanges(client, [
+    change({
+      entityType: 'delivery_report_draft',
+      entityId: 'draft-1',
+      objectiveId: 'objective-1',
+      changedFields: ['revision', 'entries']
+    }),
+    change({
+      entityType: 'delivery_report_draft',
+      entityId: 'draft-1',
+      objectiveId: 'objective-1',
+      changedFields: ['sealed_at', 'sealed_delivery_id']
+    })
+  ]);
+
+  // Provisional evidence never touches the mission, its summary (badges and
+  // seen state), deliveries or lists, and never falls back to a full reload.
+  assert.equal(mode, 'targeted');
+  assert.deepEqual(calls, [['objective', 'objective-1', 'report-drafts']]);
+});
+
+test('a draft change without an objective falls back to a full invalidation', () => {
+  const { client, calls } = fakeClient();
+  const mode = invalidateRealtimeChanges(client, [
+    change({ entityType: 'delivery_report_draft', entityId: 'draft-1', objectiveId: null })
+  ]);
+  assert.equal(mode, 'full');
+  assert.ok(calls.length > 0);
 });
 
 test('routes mission events, deliveries, attachments, and shared context to scoped queries', () => {

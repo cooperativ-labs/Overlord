@@ -9,7 +9,6 @@ import type { DeferredWorkObjectiveRef } from './delivery-compose.js';
 import { reconcileDeliveryMissionItems } from './mission-items.js';
 import { lockMissionObjectiveQueue } from './objective-queue.js';
 import { nowIso } from './util.js';
-import { enqueueMissionSummaryComposeJob } from './worker-jobs.js';
 
 type DeliveryRow = Pick<
   Selectable<Deliveries>,
@@ -173,21 +172,5 @@ export async function persistDeliveryPresentation({
       attribution,
       now
     });
-
-    const status = nextReport.presentation.status;
-    if (status === 'composed' || status === 'fallback') {
-      await enqueueMissionSummaryComposeJob({
-        ctx: {
-          db: tx,
-          workspaceId: delivery.workspace_id,
-          actorWorkspaceUserId: null,
-          source: 'runner'
-        },
-        missionId: delivery.mission_id,
-        reason: 'delivery_presented',
-        sourceDeliveryId: delivery.id,
-        now
-      });
-    }
   });
 }

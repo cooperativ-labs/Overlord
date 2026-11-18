@@ -21,6 +21,7 @@ import {
   ObjectiveEvidenceTruncationNotice
 } from './ObjectiveEvidenceRule.tsx';
 import { ObjectiveFileChanges } from './ObjectiveFileChanges.tsx';
+import { ObjectiveReportDrafts } from './ObjectiveReportDrafts.tsx';
 
 /**
  * Which arrangement of an objective's evidence the objective detail draws
@@ -29,11 +30,17 @@ import { ObjectiveFileChanges } from './ObjectiveFileChanges.tsx';
  * every mode draws only deliveries, file changes and earlier runs:
  *
  * - `complete` — deliveries (each latest-run delivery open, so its summary and
- *   assumptions show) → files changed during this objective → earlier runs.
+ *   assumptions show) → draft evidence → files changed during this objective →
+ *   earlier runs.
  * - `active` — prior deliveries (only when the run already delivered, e.g. a
- *   pending-delivery re-attach) → files changed (live) → earlier runs.
- * - `history` — a reverted draft's previous runs, then the objective's
- *   cumulative file list.
+ *   pending-delivery re-attach) → draft evidence → files changed (live) →
+ *   earlier runs.
+ * - `history` — a reverted draft's previous runs, then draft evidence and the
+ *   objective's cumulative file list.
+ *
+ * Draft evidence (ADR 0078) is a collapsed, lazily fetched, read-only section
+ * for every arrangement: it covers every session of the objective, never
+ * splits by run, and is never accepted delivery evidence.
  *
  * The file list is cumulative per objective, so it appears once and never
  * inside a run; runs split only deliveries and terminal sessions.
@@ -293,6 +300,7 @@ export function ObjectiveEvidenceSections({
             ))}
           </div>
         ) : null}
+        <ObjectiveReportDrafts objective={objective} />
         <ObjectiveFileChanges objective={objective} />
       </div>
     );
@@ -317,6 +325,7 @@ export function ObjectiveEvidenceSections({
           <TruncationNotice notice={truncation.deliveries} />
         </>
       ) : null}
+      <ObjectiveReportDrafts objective={objective} />
       <ObjectiveFileChanges
         objective={objective}
         trailing={mode === 'active' ? <LiveTag /> : undefined}
