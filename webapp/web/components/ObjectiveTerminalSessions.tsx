@@ -1,6 +1,6 @@
 import type { ObjectiveDto, TerminalSessionDto } from '@overlord/contract';
 import { useQueryClient } from '@tanstack/react-query';
-import { Check, Copy, ExternalLink, Loader2, Monitor, Octagon, SquareTerminal } from 'lucide-react';
+import { Loader2, Monitor, SquareTerminal } from 'lucide-react';
 import {
   createContext,
   type ReactNode,
@@ -11,29 +11,18 @@ import {
   useState
 } from 'react';
 
-import { useCopyToClipboard } from '../lib/hooks/use-copy-to-clipboard.ts';
 import {
   forgetAbsentLatchSession,
   isLatchSessionAbsentError,
-  useLatchSessionInspection,
-  useOpenLatchSession,
-  useStopLatchSession
+  useLatchSessionInspection
 } from '../lib/latch-session-client.ts';
 import { selectLatchSessionDisplay } from '../lib/latch-session-display.ts';
 import { useLaunchSettings } from '../lib/queries.ts';
 import { cn } from '../lib/utils.ts';
 
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from './ui/accordion.tsx';
-import { Button } from './ui/button.tsx';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle
-} from './ui/dialog.tsx';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover.tsx';
+import { LatchSessionActions } from './LatchSessionActions.tsx';
 
 const stateTone: Record<TerminalSessionDto['lastObservedState'], string> = {
   running: 'bg-emerald-500',
@@ -41,10 +30,6 @@ const stateTone: Record<TerminalSessionDto['lastObservedState'], string> = {
   exited: 'bg-muted-foreground',
   lost: 'bg-destructive'
 };
-
-function viewerLabel(kind: string): string {
-  return kind === 'iterm' || kind === 'iterm2' ? 'iTerm' : kind;
-}
 
 function sessionRowKey(session: TerminalSessionDto): string {
   return `${session.executionRequestId}:${session.providerSessionId}`;
@@ -140,87 +125,6 @@ function LatchSessionTracker({
   return null;
 }
 
-/** Destructive stop, with its confirmation, shared by the card, the compact rows, and the objective line. */
-function EndSessionButton({
-  session,
-  name,
-  disabled,
-  compact,
-  label,
-  className
-}: {
-  session: TerminalSessionDto;
-  name: string;
-  disabled: boolean;
-  /** Icon-only ghost styling for tight rows. */
-  compact?: boolean;
-  /** Text next to the icon. Defaults to "End session" on the full card, nothing when compact. */
-  label?: string;
-  className?: string;
-}) {
-  const [confirmStop, setConfirmStop] = useState(false);
-  const stopSession = useStopLatchSession(session);
-
-  async function handleStop() {
-    try {
-      await stopSession.mutateAsync();
-      setConfirmStop(false);
-    } catch {
-      // The mutation error stays visible and the confirmation stays open.
-    }
-  }
-
-  return (
-    <>
-      <Button
-        type="button"
-        size={compact && !label ? 'icon-sm' : 'sm'}
-        variant={compact ? 'ghost' : 'destructive'}
-        className={cn(compact && 'text-destructive hover:text-destructive', className)}
-        aria-label={compact && !label ? 'End session' : undefined}
-        title={compact && !label ? 'End session' : undefined}
-        disabled={disabled || stopSession.isPending}
-        onClick={() => setConfirmStop(true)}
-      >
-        <Octagon />
-        {label ?? (compact ? null : 'End session')}
-      </Button>
-      <Dialog open={confirmStop} onOpenChange={setConfirmStop}>
-        <DialogContent showCloseButton={false}>
-          <DialogHeader>
-            <DialogTitle>End terminal session?</DialogTitle>
-            <DialogDescription>
-              This stops the Latch process group for “{name}”. It is destructive and is separate
-              from closing a viewer. Delivering or completing the objective does not stop it.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setConfirmStop(false)}>
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              variant="destructive"
-              disabled={stopSession.isPending}
-              onClick={() => void handleStop()}
-            >
-              {stopSession.isPending ? <Loader2 className="animate-spin" /> : <Octagon />}
-              {stopSession.isPending ? 'Ending…' : 'End terminal session'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-      {stopSession.isError ? (
-        <p className="w-full text-xs text-destructive">
-          {stopSession.error instanceof Error
-            ? stopSession.error.message
-            : 'Latch session action failed.'}
-        </p>
-      ) : null}
-    </>
-  );
-}
-
 /**
  * The full controls for the current Latch session. Borderless: the popover it
  * renders in is already the card (coo:1303).
@@ -242,17 +146,12 @@ function TerminalSessionCard({
   /** Rendered inside the card, below its own controls (the previous-sessions accordion). */
   footer?: ReactNode;
 }) {
-  const { copied, copy } = useCopyToClipboard();
   const { inspection, absent, state, name, reachable, checking } = useLatchSessionTracking({
     session,
     missionId,
     localExecutionTargetId,
     onAbsent
   });
-  const openSession = useOpenLatchSession(session);
-  const attachCommand = `${session.executable} attach ${session.providerSessionId}`;
-  const viewer = viewerLabel(session.viewerKind);
-  const canStop = reachable && state === 'running';
 
   if (absent) return null;
 
@@ -296,34 +195,18 @@ function TerminalSessionCard({
         </div>
       )}
 
-      {/* One primary action, with the secondary ones side by side beneath it (coo:1303). */}
-      <Button
-        type="button"
-        className="mt-3 w-full"
-        disabled={!reachable || openSession.isPending}
-        onClick={() => openSession.mutate()}
-      >
-        {openSession.isPending ? <Loader2 className="animate-spin" /> : <ExternalLink />}
-        Open in {viewer}
-      </Button>
-      <div className="mt-2 flex flex-wrap gap-2">
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          className="flex-1"
-          title={attachCommand}
-          onClick={() => void copy(attachCommand)}
-        >
-          {copied ? <Check /> : <Copy />}
-          {copied ? 'Copied' : 'Copy command'}
-        </Button>
-        <EndSessionButton session={session} name={name} disabled={!canStop} className="flex-1" />
-      </div>
+      <LatchSessionActions
+        session={session}
+        name={name}
+        state={state}
+        reachable={reachable}
+        layout="card"
+        className="mt-3"
+      />
 
-      {inspection.isError || openSession.isError ? (
+      {inspection.isError ? (
         <p className="mt-2 text-xs text-destructive">
-          {(inspection.error ?? openSession.error)?.message ?? 'Latch session action failed.'}
+          {inspection.error?.message ?? 'Latch session action failed.'}
         </p>
       ) : null}
 
@@ -353,13 +236,11 @@ function CompactSessionRow({
     localExecutionTargetId,
     onAbsent
   });
-  const openSession = useOpenLatchSession(session);
-  const viewer = viewerLabel(session.viewerKind);
 
   if (absent) return null;
 
   return (
-    <div className="flex items-center gap-2 rounded-md border border-border/60 bg-muted/30 px-2 py-1.5">
+    <div className="flex flex-wrap items-center gap-2 rounded-md border border-border/60 bg-muted/30 px-2 py-1.5">
       <span className={cn('h-2 w-2 shrink-0 rounded-full', stateTone[state])} />
       <div className="min-w-0 flex-1">
         <p className="truncate text-xs font-medium">
@@ -378,21 +259,12 @@ function CompactSessionRow({
           {state} · {session.deviceLabel ?? 'Unknown device'}
         </p>
       </div>
-      <Button
-        type="button"
-        size="sm"
-        variant="ghost"
-        aria-label={`Open ${name} in ${viewer}`}
-        disabled={!reachable || openSession.isPending}
-        onClick={() => openSession.mutate()}
-      >
-        {openSession.isPending ? <Loader2 className="animate-spin" /> : <ExternalLink />}
-      </Button>
-      <EndSessionButton
+      <LatchSessionActions
         session={session}
         name={name}
-        disabled={!reachable || state !== 'running'}
-        compact
+        state={state}
+        reachable={reachable}
+        layout="inline"
       />
     </div>
   );
@@ -693,7 +565,10 @@ export function MissionLatchChip({
   );
 }
 
-/** The minimal one-line control strip for one session inside its objective row. */
+/**
+ * One session inside its objective's detail: a status line over the minimal
+ * {@link LatchSessionActions} (coo:1303).
+ */
 function ObjectiveSessionLine({
   session,
   missionId,
@@ -705,26 +580,18 @@ function ObjectiveSessionLine({
   localExecutionTargetId: string | null;
   onAbsent?: (providerSessionId: string) => void;
 }) {
-  const { copied, copy } = useCopyToClipboard();
   const { state, name, reachable, absent } = useLatchSessionTracking({
     session,
     missionId,
     localExecutionTargetId,
     onAbsent
   });
-  const openSession = useOpenLatchSession(session);
-  const attachCommand = `${session.executable} attach ${session.providerSessionId}`;
-  const viewer = viewerLabel(session.viewerKind);
 
   if (absent) return null;
 
-  const openLabel = `Open ${name} in ${viewer}`;
-  const copyLabel = copied ? 'Copied attach command' : 'Copy Latch attach command';
-
-  // One non-wrapping row: status on the left (truncates), icon-only actions on the right.
   return (
-    <div className="flex flex-wrap items-center gap-x-1">
-      <div className="flex min-w-0 flex-1 items-center gap-1.5">
+    <div className="grid min-w-0 gap-1.5">
+      <div className="flex min-w-0 items-center gap-1.5">
         <span
           className={cn('h-2 w-2 shrink-0 rounded-full', stateTone[state])}
           aria-hidden="true"
@@ -734,42 +601,13 @@ function ObjectiveSessionLine({
           {session.deviceLabel ? ` · ${session.deviceLabel}` : ''}
         </span>
       </div>
-      <div className="flex shrink-0 items-center">
-        <Button
-          type="button"
-          size="icon-sm"
-          variant="ghost"
-          aria-label={openLabel}
-          title={openLabel}
-          disabled={!reachable || openSession.isPending}
-          onClick={() => openSession.mutate()}
-        >
-          {openSession.isPending ? <Loader2 className="animate-spin" /> : <ExternalLink />}
-        </Button>
-        <Button
-          type="button"
-          size="icon-sm"
-          variant="ghost"
-          aria-label={copyLabel}
-          title={copyLabel}
-          onClick={() => void copy(attachCommand)}
-        >
-          {copied ? <Check /> : <Copy />}
-        </Button>
-        <EndSessionButton
-          session={session}
-          name={name}
-          disabled={!reachable || state !== 'running'}
-          compact
-        />
-      </div>
-      {openSession.isError ? (
-        <p className="w-full text-xs text-destructive">
-          {openSession.error instanceof Error
-            ? openSession.error.message
-            : 'Latch session action failed.'}
-        </p>
-      ) : null}
+      <LatchSessionActions
+        session={session}
+        name={name}
+        state={state}
+        reachable={reachable}
+        layout="minimal"
+      />
     </div>
   );
 }
@@ -778,11 +616,10 @@ function ObjectiveSessionLine({
  * The Latch sessions one objective launched, rendered inside that objective's
  * detail. `sessions` must be newest first.
  *
- * Deliberately minimal (coo:990): the full controls live in the header
- * {@link MissionLatchChip} popover, so the objective detail
- * keeps only what is worth acting on without leaving it — one line per session
- * with an open-in-terminal button, a "Latch attach" copy button, and an
- * end-session button.
+ * Deliberately minimal (coo:990): the full card lives in the header
+ * {@link MissionLatchChip} popover, so the objective detail keeps a status
+ * line per session over the same three controls in their lighter `minimal`
+ * layout (coo:1303).
  */
 export function ObjectiveTerminalSessions({
   sessions,
@@ -802,7 +639,7 @@ export function ObjectiveTerminalSessions({
   return (
     <>
       {heading}
-      <div className="space-y-1">
+      <div className="space-y-3">
         {visible.map(session => (
           <ObjectiveSessionLine
             key={sessionRowKey(session)}
