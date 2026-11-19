@@ -204648,10 +204648,17 @@ var TerminalSessionObserver = class extends PollLoop {
   async runOnce() {
     const db = requireDatabaseClient();
     const field = (name2) => terminalMetadataSql(db.dialect, name2);
-    const rows = await db.all(`SELECT er.id, COALESCE(er.claimed_by_execution_target_id, er.execution_target_id) AS target_id, er.requested_by_workspace_user_id, er.workspace_id, er.project_id, er.mission_id, er.metadata_json
+    const rows = await db.all(`SELECT er.id, COALESCE(er.claimed_by_execution_target_id, er.execution_target_id) AS target_id,
+        er.requested_by_workspace_user_id, er.claimed_by_execution_target_id,
+        owner.id AS claiming_target_owner_id, er.workspace_id, er.project_id, er.mission_id, er.metadata_json
       FROM execution_requests er JOIN missions m ON m.id = er.mission_id AND m.deleted_at IS NULL
       JOIN projects p ON p.id = er.project_id AND p.deleted_at IS NULL
       JOIN workspaces w ON w.id = er.workspace_id AND w.deleted_at IS NULL
+      LEFT JOIN execution_targets et ON er.requested_by_workspace_user_id IS NULL
+        AND et.id = er.claimed_by_execution_target_id AND et.workspace_id = er.workspace_id
+        AND et.type = 'local' AND et.status = 'active' AND et.deleted_at IS NULL
+      LEFT JOIN workspace_users owner ON owner.id = et.owner_workspace_user_id
+        AND owner.workspace_id = er.workspace_id AND owner.status = 'active' AND owner.deleted_at IS NULL
       WHERE er.deleted_at IS NULL AND ${field("provider")} = 'latch'
         AND COALESCE(${field("lastObservedState")}, 'running') <> 'exited'
       ORDER BY COALESCE(${field("lastObservedAt")}, CAST(er.created_at AS TEXT)), er.id LIMIT 20`);
@@ -204667,13 +204674,13 @@ var TerminalSessionObserver = class extends PollLoop {
           ),
           source: "runner"
         };
-        const selection = await getProjectExecutionTargetSelection({
-          ctx,
+        const targetId = mapping.executionTargetId ?? row.target_id;
+        const eligibilityMember = row.requested_by_workspace_user_id ?? (targetId === row.claimed_by_execution_target_id ? row.claiming_target_owner_id : null);
+        const eligibleTargets = eligibilityMember ? await listEligibleProjectExecutionTargets({
+          ctx: { ...ctx, actorWorkspaceUserId: eligibilityMember },
           projectId: row.project_id
-        });
-        const target = selection.eligibleTargets.find(
-          (t) => t.executionTargetId === (mapping.executionTargetId ?? row.target_id)
-        );
+        }) : [];
+        const target = eligibleTargets.find((t) => t.executionTargetId === targetId);
         let state2 = "lost";
         let endedAt = null;
         if (target?.reachable) {
