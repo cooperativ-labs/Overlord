@@ -1822,6 +1822,10 @@ entity change feed. The mission detail retains all live mappings plus at most fi
 ended mappings; the mission-authorized terminal-sessions/history read supplies bounded pages.
 Metadata retention, human stop reason precedence and observation fallback are defined in
 ADR 0064 and data/README.md. No direct client-to-Latch or backend-host execution is added.
+For a launch without a requesting member, the observer checks eligibility and
+reachability of the recorded claiming local target using its active workspace
+owner's current target access (ADR 0082). The mapping must resolve to that same
+target. The probe and its observation retain system attribution.
 
 
 ### Cross-mission item decision transactions (ADR 0079)

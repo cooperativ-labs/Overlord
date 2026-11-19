@@ -3,7 +3,7 @@ import { parseMetadataJson } from '../packages/core/service/execution-requests.t
 import { providerSessionFromMetadata } from '../packages/core/service/latch-launch.ts';
 import { forgetLatchProviderSession } from '../packages/core/service/latch-provider-session.ts';
 import { resolveDefaultLocalTargetProvider } from '../packages/core/service/local-target/default-registry.ts';
-import { getProjectExecutionTargetSelection } from '../packages/core/service/project-execution-target.ts';
+import { listEligibleProjectExecutionTargets } from '../packages/core/service/project-execution-target.ts';
 import { launchSessionSnapshotFromMetadata } from '../packages/core/service/terminal-profile-types.ts';
 import {
   recordTerminalObservation,
@@ -26,15 +26,24 @@ export class TerminalSessionObserver extends PollLoop {
     const rows = await db.all<{
       id: string;
       requested_by_workspace_user_id: string | null;
+      claiming_target_owner_id: string | null;
+      claimed_by_execution_target_id: string | null;
       workspace_id: string;
       project_id: string;
       mission_id: string;
       metadata_json: string;
       target_id: string | null;
-    }>(`SELECT er.id, COALESCE(er.claimed_by_execution_target_id, er.execution_target_id) AS target_id, er.requested_by_workspace_user_id, er.workspace_id, er.project_id, er.mission_id, er.metadata_json
+    }>(`SELECT er.id, COALESCE(er.claimed_by_execution_target_id, er.execution_target_id) AS target_id,
+        er.requested_by_workspace_user_id, er.claimed_by_execution_target_id,
+        owner.id AS claiming_target_owner_id, er.workspace_id, er.project_id, er.mission_id, er.metadata_json
       FROM execution_requests er JOIN missions m ON m.id = er.mission_id AND m.deleted_at IS NULL
       JOIN projects p ON p.id = er.project_id AND p.deleted_at IS NULL
       JOIN workspaces w ON w.id = er.workspace_id AND w.deleted_at IS NULL
+      LEFT JOIN execution_targets et ON er.requested_by_workspace_user_id IS NULL
+        AND et.id = er.claimed_by_execution_target_id AND et.workspace_id = er.workspace_id
+        AND et.type = 'local' AND et.status = 'active' AND et.deleted_at IS NULL
+      LEFT JOIN workspace_users owner ON owner.id = et.owner_workspace_user_id
+        AND owner.workspace_id = er.workspace_id AND owner.status = 'active' AND owner.deleted_at IS NULL
       WHERE er.deleted_at IS NULL AND ${field('provider')} = 'latch'
         AND COALESCE(${field('lastObservedState')}, 'running') <> 'exited'
       ORDER BY COALESCE(${field('lastObservedAt')}, CAST(er.created_at AS TEXT)), er.id LIMIT 20`);
@@ -50,13 +59,19 @@ export class TerminalSessionObserver extends PollLoop {
           )),
           source: 'runner' as const
         };
-        const selection = await getProjectExecutionTargetSelection({
-          ctx,
-          projectId: row.project_id
-        });
-        const target = selection.eligibleTargets.find(
-          t => t.executionTargetId === (mapping.executionTargetId ?? row.target_id)
-        );
+        const targetId = mapping.executionTargetId ?? row.target_id;
+        // Automated launches can have no requester. Check the claiming target's
+        // owner for eligibility, but keep the probe and observation system-attributed.
+        const eligibilityMember =
+          row.requested_by_workspace_user_id ??
+          (targetId === row.claimed_by_execution_target_id ? row.claiming_target_owner_id : null);
+        const eligibleTargets = eligibilityMember
+          ? await listEligibleProjectExecutionTargets({
+              ctx: { ...ctx, actorWorkspaceUserId: eligibilityMember },
+              projectId: row.project_id
+            })
+          : [];
+        const target = eligibleTargets.find(t => t.executionTargetId === targetId);
         let state: 'running' | 'stopping' | 'lost' | 'exited' = 'lost';
         let endedAt: string | null = null;
         if (target?.reachable) {

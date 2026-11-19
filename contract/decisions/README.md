@@ -117,3 +117,4 @@ record and the index disagree.
 - [0080: Cross-mission decision seen coverage](0080-cross-mission-item-seen-coverage.md)
 
 - [0081: Ledger-ranked project item discovery](0081-ledger-ranked-project-item-discovery.md)
+- [0082 — Observe Latch sessions from launches without a requester](0082-observe-automated-latch-sessions.md)

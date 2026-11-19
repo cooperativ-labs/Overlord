@@ -219,6 +219,43 @@ test('observer confirms spontaneous exit through the runner queue and emits a li
   assert.equal((await getMissionDetail(f.mission.id)).terminalSessions[0]!.endReason, 'exited');
 });
 
+test('observer recovers an automated launch with no requester on its claiming target', async () => {
+  const f = await fixture();
+  await client.run(
+    `UPDATE execution_requests
+        SET requested_source = 'run_queue', idempotency_key = id,
+            requested_by_workspace_user_id = NULL, execution_target_id = ?
+      WHERE id = ?`,
+    [f.target.executionTargetId, f.request.id]
+  );
+
+  const observe = () => withRunner(f, () => new TerminalSessionObserver().runOnce());
+  const readState = async () =>
+    (await getMissionDetail(f.mission.id)).terminalSessions[0]?.lastObservedState;
+  await observe();
+  assert.equal(await readState(), 'lost', 'a requested target alone cannot authorize a probe');
+
+  await client.run(
+    'UPDATE execution_requests SET claimed_by_execution_target_id = ? WHERE id = ?',
+    [f.target.executionTargetId, f.request.id]
+  );
+  await observe();
+  assert.equal(await readState(), 'running');
+  const event = await client.get<{ actor_workspace_user_id: string | null }>(
+    "SELECT actor_workspace_user_id FROM mission_events WHERE mission_id = ? AND summary = 'Terminal session running.'",
+    [f.mission.id]
+  );
+  assert.ok(event);
+  assert.equal(event.actor_workspace_user_id, null);
+  const probe = await client.get<{ requested_by_workspace_user_id: string | null }>(
+    `SELECT requested_by_workspace_user_id FROM execution_requests
+      WHERE mission_id = ? AND requested_source = 'local_target_mutation'`,
+    [f.mission.id]
+  );
+  assert.ok(probe);
+  assert.equal(probe.requested_by_workspace_user_id, null);
+});
+
 test('history is bounded, paged, mission scoped and retained when forgotten', async () => {
   const f = await fixture();
   for (let index = 0; index < 7; index++) {

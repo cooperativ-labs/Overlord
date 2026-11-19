@@ -146,7 +146,8 @@ function EndSessionButton({
   name,
   disabled,
   compact,
-  label
+  label,
+  className
 }: {
   session: TerminalSessionDto;
   name: string;
@@ -155,6 +156,7 @@ function EndSessionButton({
   compact?: boolean;
   /** Text next to the icon. Defaults to "End session" on the full card, nothing when compact. */
   label?: string;
+  className?: string;
 }) {
   const [confirmStop, setConfirmStop] = useState(false);
   const stopSession = useStopLatchSession(session);
@@ -174,7 +176,7 @@ function EndSessionButton({
         type="button"
         size={compact && !label ? 'icon-sm' : 'sm'}
         variant={compact ? 'ghost' : 'destructive'}
-        className={cn(compact && 'text-destructive hover:text-destructive')}
+        className={cn(compact && 'text-destructive hover:text-destructive', className)}
         aria-label={compact && !label ? 'End session' : undefined}
         title={compact && !label ? 'End session' : undefined}
         disabled={disabled || stopSession.isPending}
@@ -219,7 +221,10 @@ function EndSessionButton({
   );
 }
 
-/** The full card for the current Latch session. */
+/**
+ * The full controls for the current Latch session. Borderless: the popover it
+ * renders in is already the card (coo:1303).
+ */
 function TerminalSessionCard({
   missionId,
   session,
@@ -252,7 +257,7 @@ function TerminalSessionCard({
   if (absent) return null;
 
   return (
-    <div className="rounded-lg border border-border bg-background p-3">
+    <div>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
@@ -279,33 +284,41 @@ function TerminalSessionCard({
         </div>
       </div>
 
-      <div className="mt-2 flex items-center gap-1.5 text-[11px] text-muted-foreground">
-        {checking ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
-        <span>
-          {reachable
-            ? 'Reachable from this device'
-            : checking
+      {/* Only the problem states are worth a line; a reachable device needs no note. */}
+      {reachable ? null : (
+        <div className="mt-2 flex items-center gap-1.5 text-[11px] text-muted-foreground">
+          {checking ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
+          <span>
+            {checking
               ? 'Checking device reachability…'
               : 'Device is not reachable from this client'}
-        </span>
-      </div>
+          </span>
+        </div>
+      )}
 
-      <div className="mt-3 flex flex-wrap gap-2">
+      {/* One primary action, with the secondary ones side by side beneath it (coo:1303). */}
+      <Button
+        type="button"
+        className="mt-3 w-full"
+        disabled={!reachable || openSession.isPending}
+        onClick={() => openSession.mutate()}
+      >
+        {openSession.isPending ? <Loader2 className="animate-spin" /> : <ExternalLink />}
+        Open in {viewer}
+      </Button>
+      <div className="mt-2 flex flex-wrap gap-2">
         <Button
           type="button"
           size="sm"
           variant="outline"
-          disabled={!reachable || openSession.isPending}
-          onClick={() => openSession.mutate()}
+          className="flex-1"
+          title={attachCommand}
+          onClick={() => void copy(attachCommand)}
         >
-          {openSession.isPending ? <Loader2 className="animate-spin" /> : <ExternalLink />}
-          Open in {viewer}
-        </Button>
-        <Button type="button" size="sm" variant="outline" onClick={() => void copy(attachCommand)}>
           {copied ? <Check /> : <Copy />}
-          {copied ? 'Copied' : 'Copy attach command'}
+          {copied ? 'Copied' : 'Copy command'}
         </Button>
-        <EndSessionButton session={session} name={name} disabled={!canStop} />
+        <EndSessionButton session={session} name={name} disabled={!canStop} className="flex-1" />
       </div>
 
       {inspection.isError || openSession.isError ? (
@@ -558,27 +571,22 @@ function MissionLatchSessionsContent({
 }) {
   const { missionId, localExecutionTargetId, onAbsent } = useLatchSessionContext();
   return (
-    <div className="space-y-2">
-      <p className="text-xs text-muted-foreground">
-        Terminal state is independent from mission and agent-session status.
-      </p>
-      <TerminalSessionCard
-        missionId={missionId}
-        session={current}
-        objectiveLabel={objectiveLabelFor(current, objectives)}
-        localExecutionTargetId={localExecutionTargetId}
-        onAbsent={onAbsent}
-        footer={
-          others.length > 0 ? (
-            <PreviousLatchSessionsAccordion
-              sessions={others}
-              runningOtherCount={runningOtherCount}
-              objectives={objectives}
-            />
-          ) : null
-        }
-      />
-    </div>
+    <TerminalSessionCard
+      missionId={missionId}
+      session={current}
+      objectiveLabel={objectiveLabelFor(current, objectives)}
+      localExecutionTargetId={localExecutionTargetId}
+      onAbsent={onAbsent}
+      footer={
+        others.length > 0 ? (
+          <PreviousLatchSessionsAccordion
+            sessions={others}
+            runningOtherCount={runningOtherCount}
+            objectives={objectives}
+          />
+        ) : null
+      }
+    />
   );
 }
 
@@ -630,12 +638,12 @@ function MissionLatchChipButton({
           aria-hidden="true"
         />
         <SquareTerminal className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-        {/* Narrow panels keep only the dot and the icon (plan §10). */}
+        {/* The dot carries the state (coo:1303); narrow panels keep only the dot and the icon (plan §10). */}
         <span
           className="whitespace-nowrap @max-[480px]/mission-panel:hidden"
           data-latch-chip-label=""
         >
-          Latch · <span className="capitalize">{state}</span>
+          Latch
         </span>
       </PopoverTrigger>
       <PopoverContent

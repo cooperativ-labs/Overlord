@@ -77,7 +77,7 @@ describe('MissionLatchChip', () => {
   it('names the current session state and hides its text on a narrow panel', () => {
     renderChip([session({ providerSessionId: 'live' })]);
     const chip = screen.getByRole('button', { name: 'Latch session, running' });
-    assert.match(chip.textContent ?? '', /Latch · running/);
+    assert.equal(chip.textContent?.trim(), 'Latch');
     const label = chip.querySelector('[data-latch-chip-label]');
     assert.ok(label?.className.includes('@max-[480px]/mission-panel:hidden'));
   });
@@ -93,12 +93,14 @@ describe('MissionLatchChip', () => {
     ]);
     fireEvent.click(screen.getByRole('button', { name: 'Latch session, running' }));
     await settle();
-    assert.ok(
-      screen.getByText('Terminal state is independent from mission and agent-session status.')
+    assert.equal(
+      screen.queryByText('Terminal state is independent from mission and agent-session status.'),
+      null
     );
+    assert.equal(screen.queryByText('Reachable from this device'), null);
     assert.ok(screen.getByText('Build the chip'));
     assert.ok(screen.getByRole('button', { name: /Open in iTerm/ }));
-    assert.ok(screen.getByRole('button', { name: /Copy attach command/ }));
+    assert.ok(screen.getByRole('button', { name: 'Copy command' }));
     assert.ok(screen.getByRole('button', { name: 'End session' }));
     assert.ok(screen.getByText('previous session'));
   });

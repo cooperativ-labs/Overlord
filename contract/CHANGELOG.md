@@ -5,6 +5,13 @@ is the current version and must equal [VERSION](VERSION); `yarn version:contract
 writes its skeleton. Dates use ISO 8601 and describe the contract change, not
 merely the files edited.
 
+## [178.1.1] - 2026-11-19
+
+Contract impact: patch. Correct background Latch observation for launches without
+a requesting member (ADR 0082). Check the recorded claiming local target using
+its active owner's target eligibility and retain system attribution. Existing
+mobile, web and runner interfaces require no updates.
+
 ## [178.1.0] - 2026-11-18
 
 Contract impact: minor. Ledger-ranked project item discovery (ADR 0081).
