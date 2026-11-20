@@ -133997,7 +133997,7 @@ var OBJECTIVE_BRIEF_SCHEMA_VERSION = 1;
 var OBJECTIVE_BRIEF_TITLE_MAX_CHARS = 60;
 var OBJECTIVE_BRIEF_TARGET_WORDS = 120;
 var OBJECTIVE_BRIEF_SOFT_MAX_WORDS = 180;
-var OBJECTIVE_BRIEF_DESCRIPTION_MAX_CHARS = 4e3;
+var OBJECTIVE_BRIEF_SUMMARY_MAX_CHARS = 4e3;
 var OBJECTIVE_BRIEF_EDGE_SENTENCE_MAX_WORDS = 25;
 var OBJECTIVE_BRIEF_MAX_INPUT_CHARS = 4e4;
 var OBJECTIVE_BRIEF_MAX_OUTPUT_TOKENS = 1200;
@@ -134005,7 +134005,7 @@ var OBJECTIVE_BRIEF_MAX_BODY_PARAGRAPHS = 2;
 var OBJECTIVE_BRIEF_MAX_DECISIONS = 4;
 var OBJECTIVE_BRIEF_MISSING_DONE_WHEN = "The instructions do not say how to confirm that the work is complete.";
 var DECISION_PREFIX = "Decision needed:";
-var DESCRIPTION_SCHEMA = {
+var SUMMARY_SCHEMA = {
   type: "object",
   properties: {
     goal: { type: "string" },
@@ -134020,8 +134020,8 @@ function objectiveBriefResponseSchema(fields) {
   const properties = {};
   if (fields.title)
     properties.title = { type: "string" };
-  if (fields.description)
-    properties.description = DESCRIPTION_SCHEMA;
+  if (fields.summary)
+    properties.summary = SUMMARY_SCHEMA;
   return { type: "object", properties, required: Object.keys(properties) };
 }
 var OBJECTIVE_BRIEF_SYSTEM_INSTRUCTION = `You write the title and the summary of one objective in a software project tool.
@@ -134051,7 +134051,7 @@ Faithfulness rules:
 
 ${OBJECTIVE_WRITING_RULES}`;
 function describeRequestedFields(fields) {
-  return [fields.title ? "title" : null, fields.description ? "description" : null].filter(Boolean).join(" and ");
+  return [fields.title ? "title" : null, fields.summary ? "summary" : null].filter(Boolean).join(" and ");
 }
 function buildObjectiveBriefPrompt({ instructionText, fields, feedback }) {
   const parts = [
@@ -134114,23 +134114,23 @@ function parseObjectiveBriefOutput(text, fields) {
   const parsed = {};
   if (fields.title)
     parsed.title = asString(record2.title);
-  if (fields.description) {
-    const description = record2.description;
-    if (!description || typeof description !== "object" || Array.isArray(description)) {
-      parsed.description = null;
+  if (fields.summary) {
+    const summary = record2.summary;
+    if (!summary || typeof summary !== "object" || Array.isArray(summary)) {
+      parsed.summary = null;
     } else {
-      const d5 = description;
+      const d5 = summary;
       const goal = asString(d5.goal);
       const decisions = d5.decisionsNeeded === void 0 ? [] : asStringArray(d5.decisionsNeeded);
       const body = typeof d5.body === "string" ? d5.body.split(/\n\s*\n/) : asStringArray(d5.body ?? []);
       const doneWhen = asString(d5.doneWhen ?? "");
       const doneWhenStated = typeof d5.doneWhenStated === "boolean" ? d5.doneWhenStated : Boolean(doneWhen?.trim());
-      parsed.description = goal === null || decisions === null || body === null || doneWhen === null ? null : { goal, decisionsNeeded: decisions, body, doneWhen, doneWhenStated };
+      parsed.summary = goal === null || decisions === null || body === null || doneWhen === null ? null : { goal, decisionsNeeded: decisions, body, doneWhen, doneWhenStated };
     }
   }
   return parsed;
 }
-function assembleObjectiveDescription(parts) {
+function assembleObjectiveSummary(parts) {
   const goal = endSentence(capitalizeFirst(normalizeBriefFragment(parts.goal)));
   if (!goal)
     return { ok: false, problem: "The goal sentence is empty." };
@@ -134145,10 +134145,10 @@ function assembleObjectiveDescription(parts) {
   const paragraphs = [[goal, ...decisions].join(" "), ...body.map(endSentence)];
   paragraphs[paragraphs.length - 1] = `${paragraphs[paragraphs.length - 1]} ${doneWhen}`;
   const text = paragraphs.join("\n\n");
-  if (text.length > OBJECTIVE_BRIEF_DESCRIPTION_MAX_CHARS) {
+  if (text.length > OBJECTIVE_BRIEF_SUMMARY_MAX_CHARS) {
     return {
       ok: false,
-      problem: `The summary has ${text.length} characters. The limit is ${OBJECTIVE_BRIEF_DESCRIPTION_MAX_CHARS}.`
+      problem: `The summary has ${text.length} characters. The limit is ${OBJECTIVE_BRIEF_SUMMARY_MAX_CHARS}.`
     };
   }
   return { ok: true, text };
@@ -134275,7 +134275,7 @@ function findGoalDecisionOptions(goal, decisionsNeeded) {
 function isRetryStyleIssue(issue2) {
   return issue2.code !== "passive_voice";
 }
-function lintObjectiveDescription(parts, text) {
+function lintObjectiveSummary(parts, text) {
   const issues = lintSte(text);
   const goalWords = countWords(normalizeBriefFragment(parts.goal));
   if (goalWords > OBJECTIVE_BRIEF_EDGE_SENTENCE_MAX_WORDS) {
@@ -134306,7 +134306,7 @@ function lintObjectiveDescription(parts, text) {
   }
   return issues;
 }
-function lintAuthoredObjectiveDescription(text) {
+function lintAuthoredObjectiveSummary(text) {
   const issues = lintSte(text);
   const paragraphs = text.split(/\n\s*\n/).map((paragraph) => paragraph.trim()).filter(Boolean);
   if (paragraphs.length > 3) {
@@ -134370,28 +134370,28 @@ function evaluateAttempt(raw, fields, instructionText) {
       } : { status: "ok", text: title, style: lintObjectiveTitle(title) };
     }
   }
-  if (fields.description) {
-    const parts = parsed?.description ?? null;
+  if (fields.summary) {
+    const parts = parsed?.summary ?? null;
     if (!parts) {
-      result2.description = malformed("description");
+      result2.summary = malformed("summary");
     } else {
-      const assembled = assembleObjectiveDescription(parts);
+      const assembled = assembleObjectiveSummary(parts);
       if (!assembled.ok) {
-        result2.description = {
+        result2.summary = {
           status: "failed",
           code: "invalid_output",
           problems: [assembled.problem]
         };
       } else {
         const fidelity = checkObjectiveBriefFidelity({ instructionText, text: assembled.text });
-        result2.description = fidelity.length ? {
+        result2.summary = fidelity.length ? {
           status: "failed",
           code: "unfaithful_output",
           problems: fidelity.map(describeFidelityIssue)
         } : {
           status: "ok",
           text: assembled.text,
-          style: lintObjectiveDescription(parts, assembled.text)
+          style: lintObjectiveSummary(parts, assembled.text)
         };
       }
     }
@@ -134402,7 +134402,7 @@ function retryProblems(attempt) {
   const problems = [];
   for (const [label, candidate] of [
     ["title", attempt.title],
-    ["summary", attempt.description]
+    ["summary", attempt.summary]
   ]) {
     if (!candidate)
       continue;
@@ -134456,7 +134456,7 @@ async function composeObjectiveBrief({ instructionText, fields, env: env3 = proc
   const tooLong = instruction.length > OBJECTIVE_BRIEF_MAX_INPUT_CHARS;
   const wanted = {
     title: fields.title && instruction.length > 0,
-    description: fields.description && instruction.length > 0 && !tooLong
+    summary: fields.summary && instruction.length > 0 && !tooLong
   };
   const tooLongOutcome = {
     status: "failed",
@@ -134467,12 +134467,12 @@ async function composeObjectiveBrief({ instructionText, fields, env: env3 = proc
   const generator2 = generate ?? defaultGenerate(env3);
   if (!generator2)
     return { kind: "provider_unavailable" };
-  if (!wanted.title && !wanted.description) {
+  if (!wanted.title && !wanted.summary) {
     return {
       kind: "composed",
       schemaVersion: OBJECTIVE_BRIEF_SCHEMA_VERSION,
       title: { status: "not_requested" },
-      description: describe3(fields.description && tooLong, tooLongOutcome),
+      summary: describe3(fields.summary && tooLong, tooLongOutcome),
       attempts: 0,
       model: null,
       inputChars: 0
@@ -134519,7 +134519,7 @@ async function composeObjectiveBrief({ instructionText, fields, env: env3 = proc
     kind: "composed",
     schemaVersion: OBJECTIVE_BRIEF_SCHEMA_VERSION,
     title: wanted.title ? pick2("title") : { status: "not_requested" },
-    description: wanted.description ? pick2("description") : describe3(fields.description && tooLong, tooLongOutcome),
+    summary: wanted.summary ? pick2("summary") : describe3(fields.summary && tooLong, tooLongOutcome),
     attempts: attempts.length,
     model: generate ? null : readGeminiConfigFromEnv(env3)?.model ?? null,
     inputChars: input2.length
@@ -135316,9 +135316,9 @@ var objectiveStateSchema = external_exports.enum(["draft", "submitted", "launchi
 var createdByKindSchema = external_exports.enum(["human", "agent", "automation"]);
 var objectiveBriefSourceSchema = external_exports.enum(["generated", "agent", "user"]);
 var objectiveBriefStatusSchema = external_exports.enum(["pending", "failed"]);
-var objectiveDescriptionFailureCodeSchema = external_exports.enum(["provider_unavailable", "provider_error", "invalid_output", "unfaithful_output"]);
-var objectiveDescriptionInputSchema = external_exports.string().nullable();
-var objectiveDescriptionRequestBodySchema = external_exports.strictObject({ "mode": external_exports.enum(["summarize", "regenerate", "retry"]) });
+var objectiveSummaryFailureCodeSchema = external_exports.enum(["provider_unavailable", "provider_error", "invalid_output", "unfaithful_output"]);
+var objectiveSummaryInputSchema = external_exports.string().nullable();
+var objectiveSummaryRequestBodySchema = external_exports.strictObject({ "mode": external_exports.enum(["summarize", "regenerate", "retry"]) });
 var projectLifecycleSchema = external_exports.enum(["active", "archived"]);
 var projectListLifecycleSchema = external_exports.enum(["active", "archived", "all"]);
 var agentLaunchFlagDtoSchema = external_exports.object({ "name": external_exports.string(), "value": external_exports.exactOptional(external_exports.string().nullable()) });
@@ -135333,7 +135333,7 @@ var projectResourceSourceDtoSchema = external_exports.object({ "id": external_ex
 var projectResourceDtoSchema = external_exports.object({ "id": external_exports.string(), "workspaceId": external_exports.string(), "projectId": external_exports.string(), "executionTargetId": external_exports.string().nullable(), "resourceKey": external_exports.string(), "type": external_exports.string(), "label": external_exports.string().nullable(), "path": external_exports.string(), "isPrimary": external_exports.boolean(), "accessMode": projectResourceAccessModeSchema, "status": external_exports.enum(["active", "missing", "archived"]), "observedAt": dateTimeSchema.nullable(), "observationSource": external_exports.literal("client").nullable(), "createdAt": dateTimeSchema, "updatedAt": dateTimeSchema, "revision": external_exports.int().min(1), "sources": external_exports.array(projectResourceSourceDtoSchema) });
 var missionCreatorTokenDtoSchema = external_exports.object({ "tokenId": external_exports.string(), "label": external_exports.string() });
 var objectiveRunQueueEntryDtoSchema = external_exports.object({ "id": external_exports.string(), "queueId": external_exports.string(), "queueName": external_exports.string(), "position": external_exports.int().min(1), "state": external_exports.enum(["waiting", "blocked", "dispatched", "running"]), "blockedReason": external_exports.string().nullable(), "waitingReason": external_exports.enum(["mission_busy", "resource_disconnected", "retry_pending"]).nullable(), "waitingOnObjectiveId": external_exports.string().nullable(), "waitingOnObjectiveDisplayId": external_exports.string().nullable(), "attemptCount": external_exports.int().min(0), "precededBy": external_exports.null() });
-var objectiveDtoSchema = external_exports.object({ "id": external_exports.string(), "workspaceId": external_exports.string(), "projectId": external_exports.string(), "missionId": external_exports.string(), "position": external_exports.int().min(0), "title": external_exports.string().nullable(), "titleSource": objectiveBriefSourceSchema.nullable(), "titleStatus": objectiveBriefStatusSchema.nullable(), "description": external_exports.string().nullable(), "descriptionSource": objectiveBriefSourceSchema.nullable(), "descriptionStale": external_exports.boolean(), "descriptionStatus": objectiveBriefStatusSchema.nullable(), "descriptionFailureCode": objectiveDescriptionFailureCodeSchema.nullable(), "descriptionSuppressed": external_exports.boolean(), "descriptionEligible": external_exports.boolean(), "descriptionRevision": external_exports.int().min(0), "descriptionUpdatedAt": dateTimeSchema.nullable(), "descriptionAuthorWorkspaceUserId": external_exports.string().nullable(), "descriptionAuthorAgent": external_exports.string().nullable(), "instructionText": external_exports.string(), "state": objectiveStateSchema, "autoAdvance": external_exports.boolean(), "queueEntry": objectiveRunQueueEntryDtoSchema.nullable(), "assignedAgent": external_exports.string().nullable(), "model": external_exports.string().nullable(), "reasoningEffort": external_exports.string().nullable(), "createdAt": dateTimeSchema, "updatedAt": dateTimeSchema, "launchedAt": dateTimeSchema.nullable(), "startedAt": dateTimeSchema.nullable(), "completedAt": dateTimeSchema.nullable(), "reopenedAt": dateTimeSchema.nullable(), "revision": external_exports.int().min(1), "externalSessionId": external_exports.string().nullable(), "branch": external_exports.string().nullable(), "resourceKey": external_exports.string().nullable(), "displayKey": external_exports.string(), "displayId": external_exports.string(), "createdByKind": createdByKindSchema, "createdByAgent": external_exports.string().nullable(), "createdByWorkspaceUserId": external_exports.string().nullable(), "launchConfigOverrides": external_exports.record(external_exports.string(), external_exports.record(external_exports.string(), agentLaunchConfigDtoSchema)) });
+var objectiveDtoSchema = external_exports.object({ "id": external_exports.string(), "workspaceId": external_exports.string(), "projectId": external_exports.string(), "missionId": external_exports.string(), "position": external_exports.int().min(0), "title": external_exports.string().nullable(), "titleSource": objectiveBriefSourceSchema.nullable(), "titleStatus": objectiveBriefStatusSchema.nullable(), "summary": external_exports.string().nullable(), "summarySource": objectiveBriefSourceSchema.nullable(), "summaryStale": external_exports.boolean(), "summaryStatus": objectiveBriefStatusSchema.nullable(), "summaryFailureCode": objectiveSummaryFailureCodeSchema.nullable(), "summarySuppressed": external_exports.boolean(), "summaryEligible": external_exports.boolean(), "summaryRevision": external_exports.int().min(0), "summaryUpdatedAt": dateTimeSchema.nullable(), "summaryAuthorWorkspaceUserId": external_exports.string().nullable(), "summaryAuthorAgent": external_exports.string().nullable(), "instructionText": external_exports.string(), "state": objectiveStateSchema, "autoAdvance": external_exports.boolean(), "queueEntry": objectiveRunQueueEntryDtoSchema.nullable(), "assignedAgent": external_exports.string().nullable(), "model": external_exports.string().nullable(), "reasoningEffort": external_exports.string().nullable(), "createdAt": dateTimeSchema, "updatedAt": dateTimeSchema, "launchedAt": dateTimeSchema.nullable(), "startedAt": dateTimeSchema.nullable(), "completedAt": dateTimeSchema.nullable(), "reopenedAt": dateTimeSchema.nullable(), "revision": external_exports.int().min(1), "externalSessionId": external_exports.string().nullable(), "branch": external_exports.string().nullable(), "resourceKey": external_exports.string().nullable(), "displayKey": external_exports.string(), "displayId": external_exports.string(), "createdByKind": createdByKindSchema, "createdByAgent": external_exports.string().nullable(), "createdByWorkspaceUserId": external_exports.string().nullable(), "launchConfigOverrides": external_exports.record(external_exports.string(), external_exports.record(external_exports.string(), agentLaunchConfigDtoSchema)) });
 var missionDtoShape = { "id": external_exports.string(), "workspaceId": external_exports.string(), "projectId": external_exports.string(), "displayId": external_exports.string(), "sequenceNumber": external_exports.int().min(1), "title": external_exports.string(), "statusId": external_exports.string(), "statusType": statusTypeSchema, "boardPosition": external_exports.int(), "priority": missionPrioritySchema.nullable(), "assignedWorkspaceUserId": external_exports.string().nullable(), "notes": external_exports.string().nullable(), "scheduleId": external_exports.string().nullable(), "dueDatetime": dateTimeSchema.nullable(), "createdAt": dateTimeSchema, "updatedAt": dateTimeSchema, "revision": external_exports.int().min(1), "objectiveCount": external_exports.int().min(0), "completedObjectiveCount": external_exports.int().min(0), "hasExecutingObjective": external_exports.boolean(), "hasCompletedObjective": external_exports.boolean(), "hasPendingObjectiveWithInstructions": external_exports.boolean(), "hasUnseenBlockingQuestion": external_exports.boolean(), "hasUnseenReturnedToExecute": external_exports.boolean(), "allowParallelObjectives": external_exports.boolean(), "draftObjectiveResourceKey": external_exports.string().nullable(), "tags": external_exports.array(projectTagDtoSchema), "createdByKind": createdByKindSchema, "createdByAgent": external_exports.string().nullable(), "createdByWorkspaceUserId": external_exports.string().nullable(), "createdByToken": missionCreatorTokenDtoSchema.nullable(), "objectives": external_exports.exactOptional(external_exports.array(objectiveDtoSchema)) };
 var missionDtoSchema = external_exports.object(missionDtoShape);
 var executionRequestDtoSchema = external_exports.object({ "id": external_exports.string(), "workspaceId": external_exports.string(), "projectId": external_exports.string(), "missionId": external_exports.string().nullable(), "objectiveId": external_exports.string().nullable(), "executionTargetId": external_exports.string().nullable(), "requestedAgent": external_exports.string().nullable(), "requestedModel": external_exports.string().nullable(), "requestedReasoningEffort": external_exports.string().nullable(), "launchConfig": agentLaunchConfigDtoSchema, "status": external_exports.enum(["queued", "claimed", "launching", "launched", "failed", "cleared", "cancelled", "expired"]), "requestedSource": external_exports.string(), "localTargetMutationKind": external_exports.enum(["branch_action", "worktree_purge", "capability_call"]).nullable(), "lastError": external_exports.string().nullable(), "createdAt": dateTimeSchema, "updatedAt": dateTimeSchema });
@@ -135388,7 +135388,7 @@ var searchMatchSchema = external_exports.object({ "entityType": external_exports
 var searchResultV3Schema = external_exports.object({ ...missionSearchResultV2Shape, "anchorOnly": external_exports.boolean(), "matches": external_exports.array(searchMatchSchema).max(10), "matchCounts": external_exports.object({ "objective": external_exports.int().min(0), "delivery": external_exports.int().min(0), "event": external_exports.int().min(0) }) });
 var searchAppliedFiltersV3Schema = external_exports.object({ ...missionSearchAppliedFiltersShape, "entityTypes": external_exports.array(external_exports.enum(["mission", "objective", "delivery"])), "objectiveStates": external_exports.array(objectiveStateSchema), "matchesPerResult": external_exports.int().min(1).max(10) });
 var searchResponseV3Schema = external_exports.object({ "version": external_exports.literal(3), "results": external_exports.array(searchResultV3Schema), "appliedFilters": searchAppliedFiltersV3Schema, "totalMatchedBeforeLimit": external_exports.int().min(0), "entityCounts": external_exports.object({ "mission": external_exports.int().min(0), "objective": external_exports.int().min(0), "delivery": external_exports.int().min(0), "event": external_exports.int().min(0) }), "workspaceCounts": external_exports.array(missionSearchWorkspaceCountSchema), "truncatedCandidates": external_exports.boolean() });
-var createMissionBodySchema = external_exports.object({ "projectId": external_exports.string(), "title": external_exports.exactOptional(external_exports.string()), "priority": external_exports.exactOptional(missionPrioritySchema), "dueDatetime": external_exports.exactOptional(external_exports.string().nullable()), "statusId": external_exports.exactOptional(external_exports.string()), "assignedWorkspaceUserId": external_exports.exactOptional(external_exports.string().nullable()), "firstObjective": external_exports.exactOptional(external_exports.string()), "objectives": external_exports.exactOptional(external_exports.array(external_exports.object({ "objective": external_exports.string(), "title": external_exports.exactOptional(external_exports.string().nullable()), "description": external_exports.exactOptional(objectiveDescriptionInputSchema), "autoAdvance": external_exports.exactOptional(external_exports.boolean()), "agent": external_exports.exactOptional(external_exports.string().nullable()), "model": external_exports.exactOptional(external_exports.string().nullable()), "resourceKey": external_exports.exactOptional(external_exports.string().nullable()) }))), "tagIds": external_exports.exactOptional(external_exports.array(external_exports.string())) });
+var createMissionBodySchema = external_exports.object({ "projectId": external_exports.string(), "title": external_exports.exactOptional(external_exports.string()), "priority": external_exports.exactOptional(missionPrioritySchema), "dueDatetime": external_exports.exactOptional(external_exports.string().nullable()), "statusId": external_exports.exactOptional(external_exports.string()), "assignedWorkspaceUserId": external_exports.exactOptional(external_exports.string().nullable()), "firstObjective": external_exports.exactOptional(external_exports.string()), "objectives": external_exports.exactOptional(external_exports.array(external_exports.object({ "instructions": external_exports.string(), "title": external_exports.exactOptional(external_exports.string().nullable()), "summary": external_exports.exactOptional(objectiveSummaryInputSchema), "autoAdvance": external_exports.exactOptional(external_exports.boolean()), "agent": external_exports.exactOptional(external_exports.string().nullable()), "model": external_exports.exactOptional(external_exports.string().nullable()), "resourceKey": external_exports.exactOptional(external_exports.string().nullable()) }))), "tagIds": external_exports.exactOptional(external_exports.array(external_exports.string())) });
 var updateMissionBodySchema = external_exports.object({ "title": external_exports.exactOptional(external_exports.string()), "priority": external_exports.exactOptional(missionPrioritySchema.nullable()), "projectId": external_exports.exactOptional(external_exports.string()), "statusId": external_exports.exactOptional(external_exports.string()), "assignedWorkspaceUserId": external_exports.exactOptional(external_exports.string().nullable()), "notes": external_exports.exactOptional(external_exports.string().nullable()), "branchOverride": external_exports.exactOptional(external_exports.string().nullable()), "worktreePreference": external_exports.exactOptional(missionWorktreePreferenceSchema.nullable()), "allowParallelObjectives": external_exports.exactOptional(external_exports.boolean()), "resetActiveBranch": external_exports.exactOptional(external_exports.boolean()), "tagIds": external_exports.exactOptional(external_exports.array(external_exports.string())), "dueDatetime": external_exports.exactOptional(external_exports.string().nullable()) });
 var objectiveListSchema = external_exports.array(objectiveDtoSchema);
 var reorderObjectivesBodySchema = external_exports.object({ "orderedObjectiveIds": external_exports.array(external_exports.string()).refine(hasUniqueItems, { error: "Expected unique items" }) });
@@ -135446,8 +135446,8 @@ var generateCommitMessageResultDtoSchema = external_exports.object({ "message": 
 var branchPreparedBodySchema = external_exports.object({ "requestId": external_exports.exactOptional(external_exports.string().nullable()), "branchAutomation": external_exports.object({ "branchName": external_exports.string(), "baseBranch": external_exports.string(), "worktreePath": external_exports.string(), "resourceKey": external_exports.string(), "action": external_exports.enum(["create", "reuse", "new_cycle"]), "cycle": external_exports.exactOptional(external_exports.number()), "isolated": external_exports.exactOptional(external_exports.boolean()) }) });
 var forgetTerminalSessionBodySchema = external_exports.object({ "providerSessionId": external_exports.string(), "executionRequestId": external_exports.exactOptional(external_exports.string().nullable()) });
 var forgetTerminalSessionResultDtoSchema = external_exports.object({ "forgotten": external_exports.boolean(), "executionRequestId": external_exports.string().nullable() });
-var createObjectiveBodySchema = external_exports.object({ "missionId": external_exports.string(), "instructionText": external_exports.string(), "title": external_exports.exactOptional(external_exports.string().nullable()), "description": external_exports.exactOptional(objectiveDescriptionInputSchema), "state": external_exports.exactOptional(objectiveStateSchema), "autoAdvance": external_exports.exactOptional(external_exports.boolean()), "resourceKey": external_exports.exactOptional(external_exports.string().nullable()), "assignedAgent": external_exports.exactOptional(external_exports.string().nullable()), "model": external_exports.exactOptional(external_exports.string().nullable()), "reasoningEffort": external_exports.exactOptional(external_exports.string().nullable()), "launchConfigOverride": external_exports.exactOptional(agentLaunchConfigInputSchema.nullable()), "launchConfigAgent": external_exports.exactOptional(external_exports.string()) });
-var updateObjectiveBodySchema = external_exports.object({ "instructionText": external_exports.exactOptional(external_exports.string()), "title": external_exports.exactOptional(external_exports.string().nullable()), "description": external_exports.exactOptional(objectiveDescriptionInputSchema), "expectedDescriptionRevision": external_exports.exactOptional(external_exports.int().min(0)), "state": external_exports.exactOptional(objectiveStateSchema), "autoAdvance": external_exports.exactOptional(external_exports.boolean()), "position": external_exports.exactOptional(external_exports.int().min(0)), "assignedAgent": external_exports.exactOptional(external_exports.string().nullable()), "model": external_exports.exactOptional(external_exports.string().nullable()), "reasoningEffort": external_exports.exactOptional(external_exports.string().nullable()), "resourceKey": external_exports.exactOptional(external_exports.string().nullable()), "launchConfigOverride": external_exports.exactOptional(agentLaunchConfigInputSchema.nullable()), "launchConfigAgent": external_exports.exactOptional(external_exports.string()) });
+var createObjectiveBodySchema = external_exports.object({ "missionId": external_exports.string(), "instructionText": external_exports.string(), "title": external_exports.exactOptional(external_exports.string().nullable()), "summary": external_exports.exactOptional(objectiveSummaryInputSchema), "state": external_exports.exactOptional(objectiveStateSchema), "autoAdvance": external_exports.exactOptional(external_exports.boolean()), "resourceKey": external_exports.exactOptional(external_exports.string().nullable()), "assignedAgent": external_exports.exactOptional(external_exports.string().nullable()), "model": external_exports.exactOptional(external_exports.string().nullable()), "reasoningEffort": external_exports.exactOptional(external_exports.string().nullable()), "launchConfigOverride": external_exports.exactOptional(agentLaunchConfigInputSchema.nullable()), "launchConfigAgent": external_exports.exactOptional(external_exports.string()) });
+var updateObjectiveBodySchema = external_exports.object({ "instructionText": external_exports.exactOptional(external_exports.string()), "title": external_exports.exactOptional(external_exports.string().nullable()), "summary": external_exports.exactOptional(objectiveSummaryInputSchema), "expectedSummaryRevision": external_exports.exactOptional(external_exports.int().min(0)), "state": external_exports.exactOptional(objectiveStateSchema), "autoAdvance": external_exports.exactOptional(external_exports.boolean()), "position": external_exports.exactOptional(external_exports.int().min(0)), "assignedAgent": external_exports.exactOptional(external_exports.string().nullable()), "model": external_exports.exactOptional(external_exports.string().nullable()), "reasoningEffort": external_exports.exactOptional(external_exports.string().nullable()), "resourceKey": external_exports.exactOptional(external_exports.string().nullable()), "launchConfigOverride": external_exports.exactOptional(agentLaunchConfigInputSchema.nullable()), "launchConfigAgent": external_exports.exactOptional(external_exports.string()) });
 var launchObjectiveBodySchema = external_exports.object({ "agent": external_exports.string(), "model": external_exports.exactOptional(external_exports.string().nullable()), "reasoningEffort": external_exports.exactOptional(external_exports.string().nullable()), "executionTargetId": external_exports.exactOptional(external_exports.string().nullable()), "launchConfigOverride": external_exports.exactOptional(agentLaunchConfigInputSchema.nullable()) });
 var objectivePromptDtoSchema = external_exports.object({ "objectiveId": external_exports.string(), "missionId": external_exports.string(), "prompt": external_exports.string() });
 var objectiveLaunchCommandDtoSchema = external_exports.object({ "objectiveId": external_exports.string(), "missionId": external_exports.string(), "command": external_exports.string() });
@@ -135455,7 +135455,7 @@ var objectiveEffectiveLaunchConfigDtoSchema = external_exports.object({ "objecti
 var resolveMissionItemBodySchema = external_exports.object({ "status": external_exports.enum(["done", "dismissed"]), "reason": external_exports.exactOptional(external_exports.string().max(280).nullable()) });
 var resolveHumanActionBodySchema = external_exports.object({ "status": external_exports.enum(["done", "dismissed"]), "outcome": external_exports.exactOptional(external_exports.enum(["mission_created", "objective_added"])), "outcomeRef": external_exports.exactOptional(external_exports.string().max(64)) });
 var activityFeedMissionObjectiveDtoSchema = external_exports.object({ "objectiveId": external_exports.string(), "displayId": external_exports.string(), "title": external_exports.string().nullable(), "state": objectiveStateSchema, "position": external_exports.int().min(0), "assignedAgent": external_exports.string().nullable(), "autoAdvance": external_exports.boolean(), "blocked": external_exports.boolean() });
-var activityFeedMissionItemDtoSchema = external_exports.object({ "id": external_exports.string(), "kind": external_exports.enum(["mission_run", "mission_delivered"]), "occurredAt": dateTimeSchema, "workspaceId": external_exports.string(), "workspaceName": external_exports.string(), "projectId": external_exports.string(), "projectName": external_exports.string(), "projectColor": external_exports.string().nullable(), "missionId": external_exports.string(), "missionDisplayId": external_exports.string(), "missionTitle": external_exports.string(), "objectiveId": external_exports.string().nullable(), "objectiveDisplayId": external_exports.string().nullable(), "createdByKind": createdByKindSchema, "createdByAgent": external_exports.string().nullable(), "runState": external_exports.enum(["launching", "executing", "delivered"]), "objectives": external_exports.array(activityFeedMissionObjectiveDtoSchema), "activeObjectiveIds": external_exports.array(external_exports.string()), "objectiveTitle": external_exports.string().nullable(), "instructionPreview": external_exports.string(), "descriptionPreview": external_exports.string().nullable(), "agentIdentifier": external_exports.string().nullable(), "modelIdentifier": external_exports.string().nullable(), "branch": external_exports.string().nullable(), "resourceKey": external_exports.string().nullable(), "startedAt": dateTimeSchema.nullable(), "latestEventSummary": external_exports.string().nullable(), "latestEventAt": dateTimeSchema.nullable() });
+var activityFeedMissionItemDtoSchema = external_exports.object({ "id": external_exports.string(), "kind": external_exports.enum(["mission_run", "mission_delivered"]), "occurredAt": dateTimeSchema, "workspaceId": external_exports.string(), "workspaceName": external_exports.string(), "projectId": external_exports.string(), "projectName": external_exports.string(), "projectColor": external_exports.string().nullable(), "missionId": external_exports.string(), "missionDisplayId": external_exports.string(), "missionTitle": external_exports.string(), "objectiveId": external_exports.string().nullable(), "objectiveDisplayId": external_exports.string().nullable(), "createdByKind": createdByKindSchema, "createdByAgent": external_exports.string().nullable(), "runState": external_exports.enum(["launching", "executing", "delivered"]), "objectives": external_exports.array(activityFeedMissionObjectiveDtoSchema), "activeObjectiveIds": external_exports.array(external_exports.string()), "objectiveTitle": external_exports.string().nullable(), "instructionPreview": external_exports.string(), "summaryPreview": external_exports.string().nullable(), "agentIdentifier": external_exports.string().nullable(), "modelIdentifier": external_exports.string().nullable(), "branch": external_exports.string().nullable(), "resourceKey": external_exports.string().nullable(), "startedAt": dateTimeSchema.nullable(), "latestEventSummary": external_exports.string().nullable(), "latestEventAt": dateTimeSchema.nullable() });
 var activityFeedQuestionItemDtoSchema = external_exports.object({ "id": external_exports.string(), "kind": external_exports.literal("blocking_question"), "occurredAt": dateTimeSchema, "workspaceId": external_exports.string(), "workspaceName": external_exports.string(), "projectId": external_exports.string(), "projectName": external_exports.string(), "projectColor": external_exports.string().nullable(), "missionId": external_exports.string(), "missionDisplayId": external_exports.string(), "missionTitle": external_exports.string(), "objectiveId": external_exports.string().nullable(), "objectiveDisplayId": external_exports.string().nullable(), "createdByKind": createdByKindSchema, "createdByAgent": external_exports.string().nullable(), "eventId": external_exports.string(), "agentRequestId": external_exports.string().nullable(), "delivery": external_exports.object({ "mode": external_exports.enum(["latch", "read_only"]) }), "question": external_exports.string(), "agentIdentifier": external_exports.string().nullable(), "askedAt": dateTimeSchema });
 var activityFeedDtoSchema = external_exports.object({ "items": external_exports.array(external_exports.union([activityFeedMissionItemDtoSchema, activityFeedQuestionItemDtoSchema])), "generatedAt": dateTimeSchema, "counts": external_exports.object({ "mission_run": external_exports.int().min(0), "blocking_question": external_exports.int().min(0), "mission_delivered": external_exports.int().min(0) }), "nextBefore": dateTimeSchema.nullable() });
 var objectiveTranscriptItemDtoSchema = external_exports.object({ "id": external_exports.string(), "workspaceId": external_exports.string(), "projectId": external_exports.string(), "missionId": external_exports.string(), "missionDisplayId": external_exports.string(), "missionTitle": external_exports.string(), "missionRevision": external_exports.int().min(1), "statusType": statusTypeSchema, "projectName": external_exports.string(), "projectColor": external_exports.string().nullable(), "projectRevision": external_exports.int().min(1), "title": external_exports.string().nullable(), "instructionText": external_exports.string(), "state": objectiveStateSchema, "assignedAgent": external_exports.string().nullable(), "resourceKey": external_exports.string().nullable(), "createdByKind": createdByKindSchema, "createdByAgent": external_exports.string().nullable(), "createdByWorkspaceUserId": external_exports.string().nullable(), "createdAt": dateTimeSchema, "updatedAt": dateTimeSchema, "revision": external_exports.int().min(1) });
@@ -135958,7 +135958,7 @@ var putMissionsByIdSchedulePathParamsSchema = external_exports.object({ "id": ex
 var deleteMissionsByIdSchedulePathParamsSchema = external_exports.object({ "id": external_exports.string() });
 var deleteObjectivesByIdPathParamsSchema = external_exports.object({ "id": external_exports.string() });
 var patchObjectivesByIdPathParamsSchema = external_exports.object({ "id": external_exports.string() });
-var postObjectivesByIdDescriptionRequestsPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var postObjectivesByIdSummaryRequestsPathParamsSchema = external_exports.object({ "id": external_exports.string() });
 var postObjectivesByIdLaunchPathParamsSchema = external_exports.object({ "id": external_exports.string() });
 var getObjectivesByIdPromptPathParamsSchema = external_exports.object({ "id": external_exports.string() });
 var getObjectivesByIdLaunchCommandPathParamsSchema = external_exports.object({ "id": external_exports.string() });
@@ -140439,12 +140439,12 @@ var apiOperations = {
     responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: objectiveDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
   },
   /**
-   * POST /api/objectives/{id}/description-requests: Request a generated objective summary (Summarize, Regenerate or Retry)
+   * POST /api/objectives/{id}/summary-requests: Request a generated objective summary (Summarize, Regenerate or Retry)
    */
-  postObjectivesByIdDescriptionRequests: {
-    operationId: "postObjectivesByIdDescriptionRequests",
+  postObjectivesByIdSummaryRequests: {
+    operationId: "postObjectivesByIdSummaryRequests",
     method: "POST",
-    path: "/api/objectives/{id}/description-requests",
+    path: "/api/objectives/{id}/summary-requests",
     tags: ["objectives"],
     deprecated: false,
     permission: "objective:update",
@@ -140453,8 +140453,8 @@ var apiOperations = {
     consumers: ["mobile", "webapp"],
     extension: null,
     security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
-    parameters: { path: postObjectivesByIdDescriptionRequestsPathParamsSchema, query: null, header: null },
-    requestBody: { required: true, content: { "application/json": { kind: "json", schema: objectiveDescriptionRequestBodySchema } } },
+    parameters: { path: postObjectivesByIdSummaryRequestsPathParamsSchema, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: objectiveSummaryRequestBodySchema } } },
     responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: objectiveDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
   },
   /**
@@ -144867,6 +144867,56 @@ function mergeWorkspaceSearchV3({
 // ../packages/core/service/objective-brief.ts
 var import_node_crypto10 = require("node:crypto");
 
+// ../packages/core/service/objective-summary-placement.ts
+var OBJECTIVE_SWAP_WARN_RATIO = 1.5;
+var OBJECTIVE_SWAP_WARN_MIN_SUMMARY_CHARS = 240;
+var OBJECTIVE_SWAP_LIKELY_RATIO = 3;
+var OBJECTIVE_SWAP_LIKELY_MIN_SUMMARY_CHARS = 400;
+var OBJECTIVE_SWAP_STRUCTURE_MAX_INSTRUCTION_CHARS = 400;
+var OBJECTIVE_FIELDS_SWAPPED_CODE = "objective_fields_swapped";
+var MARKDOWN_HEADING = /^\s{0,3}#{1,6}\s+\S/m;
+var NUMBERED_STEP = /^\s{0,3}\d{1,3}[.)]\s+\S/gm;
+var DONE_WHEN_LABEL = /^\s{0,3}(?:#{1,6}\s*)?(?:\*\*|__)?done when(?:\*\*|__)?\s*:/im;
+function summaryInstructionStructure(text) {
+  const found = [];
+  if (MARKDOWN_HEADING.test(text)) found.push("Markdown headings");
+  if ((text.match(NUMBERED_STEP) ?? []).length >= 2) found.push("numbered steps");
+  if (DONE_WHEN_LABEL.test(text)) found.push('a "Done when:" label');
+  return found;
+}
+var FIELD_ROLES = 'The instructions (--objective-instructions, or "instructions" in JSON) are the complete brief the executing agent receives. The summary (--objective-summary, or "summary" in JSON) is a short overview for people, one to three paragraphs, and is never sent to the agent.';
+function assessObjectiveSummaryPlacement({
+  instructions,
+  summary
+}) {
+  const instructionChars = instructions.trim().length;
+  const summaryChars = summary.trim().length;
+  if (summaryChars === 0) return { verdict: "ok" };
+  const ratio = summaryChars / Math.max(1, instructionChars);
+  const sizes = `The summary is ${summaryChars} characters; the instructions are ${instructionChars}.`;
+  const fix = "Both texts were stored as written. If they are swapped, move the full brief into the instructions and a short overview into the summary (update-objective --instruction-text-file and --summary).";
+  if (ratio >= OBJECTIVE_SWAP_LIKELY_RATIO && summaryChars >= OBJECTIVE_SWAP_LIKELY_MIN_SUMMARY_CHARS) {
+    return {
+      verdict: "warn",
+      severity: "likely",
+      message: `The objective instructions and summary look swapped: the summary is ${ratio.toFixed(1)} times longer than the instructions. ${sizes} ${FIELD_ROLES} ${fix}`
+    };
+  }
+  const structure = summaryInstructionStructure(summary);
+  const structured = structure.length > 0 && instructionChars < OBJECTIVE_SWAP_STRUCTURE_MAX_INSTRUCTION_CHARS;
+  const longer = ratio > OBJECTIVE_SWAP_WARN_RATIO && summaryChars >= OBJECTIVE_SWAP_WARN_MIN_SUMMARY_CHARS;
+  if (!structured && !longer) return { verdict: "ok" };
+  const reasons = [
+    ...longer ? [`the summary is ${ratio.toFixed(1)} times longer than the instructions`] : [],
+    ...structured ? [`the summary contains ${structure.join(", ")}`] : []
+  ];
+  return {
+    verdict: "warn",
+    severity: "possible",
+    message: `The objective instructions and summary may be swapped: ${reasons.join(" and ")}. ${sizes} ${FIELD_ROLES} ${fix}`
+  };
+}
+
 // ../packages/core/service/worker-jobs.ts
 var DELIVERY_COMPOSE_JOB_TYPE = "overlord.delivery.compose.v1";
 var OBJECTIVE_BRIEF_COMPOSE_JOB_TYPE = "overlord.objective.brief.compose.v1";
@@ -145125,12 +145175,12 @@ async function completeObjectiveBriefComposeJob({
   return db.transaction(async (tx) => {
     const lockClause = tx.dialect === "postgres" ? "FOR UPDATE" : "";
     const row = await tx.get(
-      `SELECT workspace_id, title_status, description_status FROM objectives
+      `SELECT workspace_id, title_status, summary_status FROM objectives
         WHERE id = ? AND deleted_at IS NULL ${lockClause}`,
       [objectiveId]
     );
     await finishWorkerJob(tx, jobId, status, lastError, now2);
-    if (!row || row.title_status !== "pending" && row.description_status !== "pending") {
+    if (!row || row.title_status !== "pending" && row.summary_status !== "pending") {
       return { successorJobId: null };
     }
     const successor = await enqueueObjectiveBriefComposeJob({
@@ -145145,15 +145195,15 @@ async function completeObjectiveBriefComposeJob({
 }
 
 // ../packages/core/service/objective-brief.ts
-var OBJECTIVE_DESCRIPTION_GENERATION_MODES = ["summarize", "regenerate", "retry"];
+var OBJECTIVE_SUMMARY_GENERATION_MODES = ["summarize", "regenerate", "retry"];
 var OBJECTIVE_BRIEF_FAILURE_CODES = [
   "provider_unavailable",
   "provider_error",
   "invalid_output",
   "unfaithful_output"
 ];
-var OBJECTIVE_DESCRIPTION_MAX_CHARS = 4e3;
-var OBJECTIVE_DESCRIPTION_MIN_INSTRUCTION_CHARS = 280;
+var OBJECTIVE_SUMMARY_MAX_CHARS = 4e3;
+var OBJECTIVE_SUMMARY_MIN_INSTRUCTION_CHARS = 280;
 function objectiveBriefActorFromContext(ctx) {
   const origin = resolveOrigin(ctx);
   return {
@@ -145173,36 +145223,36 @@ var OBJECTIVE_BRIEF_COLUMNS = [
   "title_source",
   "title_generation",
   "title_status",
-  "description",
-  "description_source",
-  "description_instruction_hash",
-  "description_author_workspace_user_id",
-  "description_author_agent",
-  "description_updated_at",
-  "description_revision",
-  "description_suppressed",
-  "description_generation",
-  "description_status",
-  "description_request_kind",
-  "description_failure_code",
+  "summary",
+  "summary_source",
+  "summary_instruction_hash",
+  "summary_author_workspace_user_id",
+  "summary_author_agent",
+  "summary_updated_at",
+  "summary_revision",
+  "summary_suppressed",
+  "summary_generation",
+  "summary_status",
+  "summary_request_kind",
+  "summary_failure_code",
   "instruction_author_kind"
 ];
 var EMPTY_OBJECTIVE_BRIEF_STATE = {
   title_source: null,
   title_generation: 0,
   title_status: null,
-  description: null,
-  description_source: null,
-  description_instruction_hash: null,
-  description_author_workspace_user_id: null,
-  description_author_agent: null,
-  description_updated_at: null,
-  description_revision: 0,
-  description_suppressed: false,
-  description_generation: 0,
-  description_status: null,
-  description_request_kind: null,
-  description_failure_code: null,
+  summary: null,
+  summary_source: null,
+  summary_instruction_hash: null,
+  summary_author_workspace_user_id: null,
+  summary_author_agent: null,
+  summary_updated_at: null,
+  summary_revision: 0,
+  summary_suppressed: false,
+  summary_generation: 0,
+  summary_status: null,
+  summary_request_kind: null,
+  summary_failure_code: null,
   instruction_author_kind: null
 };
 function hashObjectiveInstruction(instructionText) {
@@ -145210,48 +145260,52 @@ function hashObjectiveInstruction(instructionText) {
   if (!trimmed9) return null;
   return (0, import_node_crypto10.createHash)("sha256").update(trimmed9, "utf8").digest("hex");
 }
-function isDescriptionEligibleInstruction(instructionText) {
-  return (instructionText ?? "").trim().length >= OBJECTIVE_DESCRIPTION_MIN_INSTRUCTION_CHARS;
+function isSummaryEligibleInstruction(instructionText) {
+  return (instructionText ?? "").trim().length >= OBJECTIVE_SUMMARY_MIN_INSTRUCTION_CHARS;
 }
 var OBJECTIVE_TITLE_MODEL_MIN_INSTRUCTION_CHARS = AI_TITLE_THRESHOLD + 1;
 function isTitleModelEligibleInstruction(instructionText) {
   return (instructionText ?? "").trim().length >= OBJECTIVE_TITLE_MODEL_MIN_INSTRUCTION_CHARS;
 }
-function isObjectiveDescriptionStale(state2, instructionText) {
-  if (state2.description === null) return false;
-  return state2.description_instruction_hash !== hashObjectiveInstruction(instructionText);
+function isObjectiveSummaryStale(state2, instructionText) {
+  if (state2.summary === null) return false;
+  return state2.summary_instruction_hash !== hashObjectiveInstruction(instructionText);
 }
-function normalizeObjectiveDescriptionInput(value2) {
+function normalizeObjectiveSummaryInput(value2) {
   if (value2 === void 0) return { kind: "omit" };
   if (value2 === null) return { kind: "remove" };
   if (typeof value2 !== "string") {
-    throw new ServiceError("description must be a string or null", "validation_error", 400);
+    throw new ServiceError("summary must be a string or null", "validation_error", 400);
   }
   const text = value2.replace(/\r\n?/g, "\n").trim();
   if (!text) return { kind: "remove" };
-  if (text.length > OBJECTIVE_DESCRIPTION_MAX_CHARS) {
+  if (text.length > OBJECTIVE_SUMMARY_MAX_CHARS) {
     throw new ServiceError(
-      `description must be at most ${OBJECTIVE_DESCRIPTION_MAX_CHARS} characters`,
-      "description_too_long",
+      `summary must be at most ${OBJECTIVE_SUMMARY_MAX_CHARS} characters`,
+      "summary_too_long",
       400,
-      { maxLength: OBJECTIVE_DESCRIPTION_MAX_CHARS, length: text.length }
+      { maxLength: OBJECTIVE_SUMMARY_MAX_CHARS, length: text.length }
     );
   }
   return { kind: "set", text };
 }
-var OBJECTIVE_DESCRIPTION_MAX_STYLE_WARNINGS = 10;
-function objectiveDescriptionStyleWarnings(text) {
-  return lintAuthoredObjectiveDescription(text).slice(0, OBJECTIVE_DESCRIPTION_MAX_STYLE_WARNINGS).map((issue2) => ({
-    code: "description_style",
+var OBJECTIVE_SUMMARY_MAX_STYLE_WARNINGS = 10;
+function objectiveSummaryStyleWarnings(text) {
+  return lintAuthoredObjectiveSummary(text).slice(0, OBJECTIVE_SUMMARY_MAX_STYLE_WARNINGS).map((issue2) => ({
+    code: "summary_style",
     rule: issue2.code,
     message: issue2.message,
     ..."excerpt" in issue2 && issue2.excerpt ? { excerpt: issue2.excerpt.slice(0, 300) } : {},
     ..."suggestion" in issue2 && issue2.suggestion ? { suggestion: issue2.suggestion } : {}
   }));
 }
+function objectiveSummaryPlacementWarnings(input2) {
+  const placement = assessObjectiveSummaryPlacement(input2);
+  return placement.verdict === "warn" ? [{ code: OBJECTIVE_FIELDS_SWAPPED_CODE, message: placement.message }] : [];
+}
 var SUPPRESSED_WARNING = {
-  code: "description_suppressed",
-  message: "The summary was removed for this objective. An agent-written description is not stored until a person selects Summarize."
+  code: "summary_suppressed",
+  message: "The summary was removed for this objective. An agent-written summary is not stored until a person selects Summarize."
 };
 function emptyPlan() {
   return {
@@ -145259,7 +145313,7 @@ function emptyPlan() {
     warnings: [],
     titleRequested: false,
     titleDerived: null,
-    descriptionRequested: false
+    summaryRequested: false
   };
 }
 function requestGeneratedTitle(plan, instruction) {
@@ -145273,84 +145327,84 @@ function requestGeneratedTitle(plan, instruction) {
   plan.titleRequested = false;
   plan.titleDerived = instruction ? deriveTitleFromInstructionText(instruction) : null;
 }
-function descriptionSourceFor(actor) {
+function summarySourceFor(actor) {
   return actor.kind === "human" ? "user" : "agent";
 }
 function titleSourceFor(actor) {
   return actor.kind === "human" ? "user" : "agent";
 }
-var CLEARED_DESCRIPTION = {
-  description: null,
-  description_source: null,
-  description_instruction_hash: null,
-  description_author_workspace_user_id: null,
-  description_author_agent: null
+var CLEARED_SUMMARY = {
+  summary: null,
+  summary_source: null,
+  summary_instruction_hash: null,
+  summary_author_workspace_user_id: null,
+  summary_author_agent: null
 };
-function setDescriptionPatch(state2, text, actor, instructionText, now2) {
+function setSummaryPatch(state2, text, actor, instructionText, now2) {
   return {
-    description: text,
-    description_source: descriptionSourceFor(actor),
-    description_instruction_hash: hashObjectiveInstruction(instructionText),
-    description_author_workspace_user_id: actor.workspaceUserId,
-    description_author_agent: actor.kind === "human" ? null : actor.agent,
-    description_updated_at: now2,
-    description_revision: state2.description_revision + 1,
-    description_generation: state2.description_generation + 1,
-    description_status: null,
-    description_request_kind: null,
-    description_failure_code: null
+    summary: text,
+    summary_source: summarySourceFor(actor),
+    summary_instruction_hash: hashObjectiveInstruction(instructionText),
+    summary_author_workspace_user_id: actor.workspaceUserId,
+    summary_author_agent: actor.kind === "human" ? null : actor.agent,
+    summary_updated_at: now2,
+    summary_revision: state2.summary_revision + 1,
+    summary_generation: state2.summary_generation + 1,
+    summary_status: null,
+    summary_request_kind: null,
+    summary_failure_code: null
   };
 }
-function removeDescriptionPatch(state2, now2) {
+function removeSummaryPatch(state2, now2) {
   return {
-    ...CLEARED_DESCRIPTION,
-    description_updated_at: now2,
-    description_revision: state2.description_revision + 1,
-    description_suppressed: true,
-    description_generation: state2.description_generation + 1,
-    description_status: null,
-    description_request_kind: null,
-    description_failure_code: null
+    ...CLEARED_SUMMARY,
+    summary_updated_at: now2,
+    summary_revision: state2.summary_revision + 1,
+    summary_suppressed: true,
+    summary_generation: state2.summary_generation + 1,
+    summary_status: null,
+    summary_request_kind: null,
+    summary_failure_code: null
   };
 }
-function planDescriptionInput(state2, input2, actor, instructionText, now2) {
+function planSummaryInput(state2, input2, actor, instructionText, now2) {
   const plan = emptyPlan();
   if (input2.kind === "omit") return plan;
   if (input2.kind === "remove") {
-    plan.patch = removeDescriptionPatch(state2, now2);
+    plan.patch = removeSummaryPatch(state2, now2);
     return plan;
   }
-  if (state2.description_suppressed && actor.kind !== "human") {
+  if (state2.summary_suppressed && actor.kind !== "human") {
     plan.warnings.push(SUPPRESSED_WARNING);
     return plan;
   }
-  plan.patch = setDescriptionPatch(state2, input2.text, actor, instructionText, now2);
+  plan.patch = setSummaryPatch(state2, input2.text, actor, instructionText, now2);
   return plan;
 }
-function planDescriptionAfterInstructionChange(state2, nextInstruction, actor, now2) {
-  const eligible = isDescriptionEligibleInstruction(nextInstruction);
+function planSummaryAfterInstructionChange(state2, nextInstruction, actor, now2) {
+  const eligible = isSummaryEligibleInstruction(nextInstruction);
   const base = {
-    description_generation: state2.description_generation + 1,
-    description_failure_code: null
+    summary_generation: state2.summary_generation + 1,
+    summary_failure_code: null
   };
   const pending = (kind) => ({
-    patch: { ...base, description_status: "pending", description_request_kind: kind },
+    patch: { ...base, summary_status: "pending", summary_request_kind: kind },
     requested: true
   });
   const idle = (extra = {}) => ({
-    patch: { ...base, description_status: null, description_request_kind: null, ...extra },
+    patch: { ...base, summary_status: null, summary_request_kind: null, ...extra },
     requested: false
   });
-  if (state2.description_suppressed) return idle();
-  const explicitOutstanding = state2.description_status !== null && state2.description_request_kind === "explicit";
-  switch (state2.description_source) {
+  if (state2.summary_suppressed) return idle();
+  const explicitOutstanding = state2.summary_status !== null && state2.summary_request_kind === "explicit";
+  switch (state2.summary_source) {
     case "generated":
     case "agent":
       if (eligible) return pending(explicitOutstanding ? "explicit" : "automatic");
       return idle({
-        ...CLEARED_DESCRIPTION,
-        description_updated_at: now2,
-        description_revision: state2.description_revision + 1
+        ...CLEARED_SUMMARY,
+        summary_updated_at: now2,
+        summary_revision: state2.summary_revision + 1
       });
     case "user":
       return explicitOutstanding && eligible ? pending("explicit") : idle();
@@ -145363,7 +145417,7 @@ function planDescriptionAfterInstructionChange(state2, nextInstruction, actor, n
 function planObjectiveBriefForCreate({
   instructionText,
   titleProvided,
-  description,
+  summary,
   actor,
   now: now2
 }) {
@@ -145375,25 +145429,25 @@ function planObjectiveBriefForCreate({
     instruction_author_kind: instruction ? actor.kind : null,
     ...titleRequested ? { title_status: "pending" } : {}
   };
-  if (description.kind !== "omit") {
-    const authored = planDescriptionInput(state2, description, actor, instruction, now2);
+  if (summary.kind !== "omit") {
+    const authored = planSummaryInput(state2, summary, actor, instruction, now2);
     return {
       patch: { ...patch, ...authored.patch },
       warnings: authored.warnings,
       titleRequested,
       titleDerived: null,
-      descriptionRequested: false
+      summaryRequested: false
     };
   }
-  const after = planDescriptionAfterInstructionChange(state2, instruction, actor, now2);
-  const descriptionPatch = { ...after.patch };
-  delete descriptionPatch.description_generation;
+  const after = planSummaryAfterInstructionChange(state2, instruction, actor, now2);
+  const summaryPatch = { ...after.patch };
+  delete summaryPatch.summary_generation;
   return {
-    patch: { ...patch, ...descriptionPatch },
+    patch: { ...patch, ...summaryPatch },
     warnings: [],
     titleRequested,
     titleDerived: null,
-    descriptionRequested: after.requested
+    summaryRequested: after.requested
   };
 }
 function planObjectiveBriefForUpdate({
@@ -145401,7 +145455,7 @@ function planObjectiveBriefForUpdate({
   currentInstruction,
   instructionText,
   title,
-  description,
+  summary,
   actor,
   now: now2
 }) {
@@ -145424,80 +145478,80 @@ function planObjectiveBriefForUpdate({
         requestGeneratedTitle(plan, nextInstruction);
       }
     }
-    if (description.kind === "omit") {
-      const after = planDescriptionAfterInstructionChange(state2, nextInstruction, actor, now2);
+    if (summary.kind === "omit") {
+      const after = planSummaryAfterInstructionChange(state2, nextInstruction, actor, now2);
       Object.assign(plan.patch, after.patch);
-      plan.descriptionRequested = after.requested;
+      plan.summaryRequested = after.requested;
     }
   }
-  if (description.kind !== "omit") {
-    const authored = planDescriptionInput(state2, description, actor, nextInstruction, now2);
+  if (summary.kind !== "omit") {
+    const authored = planSummaryInput(state2, summary, actor, nextInstruction, now2);
     if (authored.warnings.length > 0 && instructionChanged) {
-      const after = planDescriptionAfterInstructionChange(state2, nextInstruction, actor, now2);
+      const after = planSummaryAfterInstructionChange(state2, nextInstruction, actor, now2);
       Object.assign(plan.patch, after.patch);
-      plan.descriptionRequested = after.requested;
+      plan.summaryRequested = after.requested;
     }
     Object.assign(plan.patch, authored.patch);
     plan.warnings.push(...authored.warnings);
   }
   return plan;
 }
-function planObjectiveDescriptionGenerationRequest({
+function planObjectiveSummaryGenerationRequest({
   state: state2,
   instructionText,
   mode,
   actor
 }) {
   const plan = emptyPlan();
-  if (!isDescriptionEligibleInstruction(instructionText)) {
+  if (!isSummaryEligibleInstruction(instructionText)) {
     throw new ServiceError(
-      `Instructions shorter than ${OBJECTIVE_DESCRIPTION_MIN_INSTRUCTION_CHARS} characters are shown in full and are not summarized`,
-      "description_not_eligible",
+      `Instructions shorter than ${OBJECTIVE_SUMMARY_MIN_INSTRUCTION_CHARS} characters are shown in full and are not summarized`,
+      "summary_not_eligible",
       409
     );
   }
   if (mode === "retry") {
-    if (state2.description_status === "pending") {
-      plan.descriptionRequested = true;
+    if (state2.summary_status === "pending") {
+      plan.summaryRequested = true;
       return plan;
     }
-    if (state2.description_status !== "failed") {
+    if (state2.summary_status !== "failed") {
       throw new ServiceError(
         "There is no failed summary generation to retry",
-        "description_not_failed",
+        "summary_not_failed",
         409
       );
     }
     plan.patch = {
-      description_status: "pending",
-      description_generation: state2.description_generation + 1,
-      description_failure_code: null
+      summary_status: "pending",
+      summary_generation: state2.summary_generation + 1,
+      summary_failure_code: null
     };
-    plan.descriptionRequested = true;
+    plan.summaryRequested = true;
     return plan;
   }
-  if (state2.description_suppressed && actor.kind !== "human") {
+  if (state2.summary_suppressed && actor.kind !== "human") {
     throw new ServiceError(
       "The summary was removed for this objective. Only a person can select Summarize to turn summaries back on.",
-      "description_suppressed",
+      "summary_suppressed",
       409
     );
   }
-  if (state2.description_status === "pending" && !state2.description_suppressed) {
-    plan.descriptionRequested = true;
-    if (state2.description_request_kind !== "explicit") {
-      plan.patch = { description_request_kind: "explicit" };
+  if (state2.summary_status === "pending" && !state2.summary_suppressed) {
+    plan.summaryRequested = true;
+    if (state2.summary_request_kind !== "explicit") {
+      plan.patch = { summary_request_kind: "explicit" };
     }
     return plan;
   }
   plan.patch = {
-    description_suppressed: false,
-    description_status: "pending",
-    description_request_kind: "explicit",
-    description_generation: state2.description_generation + 1,
-    description_failure_code: null
+    summary_suppressed: false,
+    summary_status: "pending",
+    summary_request_kind: "explicit",
+    summary_generation: state2.summary_generation + 1,
+    summary_failure_code: null
   };
-  plan.descriptionRequested = true;
+  plan.summaryRequested = true;
   return plan;
 }
 function planObjectiveBriefPublication({
@@ -145508,7 +145562,7 @@ function planObjectiveBriefPublication({
   const outcome = {
     patch: {},
     title: result2.title ? "stale" : "not_requested",
-    description: result2.description ? "stale" : "not_requested"
+    summary: result2.summary ? "stale" : "not_requested"
   };
   if (row.deleted_at !== null) return outcome;
   const instructionMatches = hashObjectiveInstruction(row.instruction_text) === result2.instructionHash;
@@ -145519,33 +145573,33 @@ function planObjectiveBriefPublication({
       outcome.title = "published";
     }
   }
-  if (result2.description) {
+  if (result2.summary) {
     let text = null;
     try {
-      const input2 = normalizeObjectiveDescriptionInput(result2.description.text);
+      const input2 = normalizeObjectiveSummaryInput(result2.summary.text);
       text = input2.kind === "set" ? input2.text : null;
     } catch {
       text = null;
     }
-    if (row.description_suppressed) {
-      outcome.description = "suppressed";
-    } else if (instructionMatches && row.description_status === "pending" && row.description_generation === result2.description.generation) {
+    if (row.summary_suppressed) {
+      outcome.summary = "suppressed";
+    } else if (instructionMatches && row.summary_status === "pending" && row.summary_generation === result2.summary.generation) {
       if (text === null) {
-        outcome.description = "invalid";
+        outcome.summary = "invalid";
       } else {
         Object.assign(outcome.patch, {
-          description: text,
-          description_source: "generated",
-          description_instruction_hash: result2.instructionHash,
-          description_author_workspace_user_id: null,
-          description_author_agent: null,
-          description_updated_at: now2,
-          description_revision: row.description_revision + 1,
-          description_status: null,
-          description_request_kind: null,
-          description_failure_code: null
+          summary: text,
+          summary_source: "generated",
+          summary_instruction_hash: result2.instructionHash,
+          summary_author_workspace_user_id: null,
+          summary_author_agent: null,
+          summary_updated_at: now2,
+          summary_revision: row.summary_revision + 1,
+          summary_status: null,
+          summary_request_kind: null,
+          summary_failure_code: null
         });
-        outcome.description = "published";
+        outcome.summary = "published";
       }
     }
   }
@@ -145554,15 +145608,15 @@ function planObjectiveBriefPublication({
 var OBJECTIVE_BRIEF_SELECT = `o.id, o.workspace_id, o.project_id, o.mission_id, o.instruction_text,
   o.title, o.revision, o.deleted_at, ${OBJECTIVE_BRIEF_COLUMNS.map((c5) => `o.${c5}`).join(", ")}`;
 function toBriefRow(raw) {
-  const updatedAt = raw.description_updated_at;
+  const updatedAt = raw.summary_updated_at;
   return {
     ...raw,
     title_generation: Number(raw.title_generation),
-    description_revision: Number(raw.description_revision),
-    description_generation: Number(raw.description_generation),
+    summary_revision: Number(raw.summary_revision),
+    summary_generation: Number(raw.summary_generation),
     revision: Number(raw.revision),
-    description_suppressed: isTruthyFlag(raw.description_suppressed),
-    description_updated_at: updatedAt instanceof Date ? updatedAt.toISOString() : typeof updatedAt === "string" ? updatedAt : null
+    summary_suppressed: isTruthyFlag(raw.summary_suppressed),
+    summary_updated_at: updatedAt instanceof Date ? updatedAt.toISOString() : typeof updatedAt === "string" ? updatedAt : null
   };
 }
 async function loadObjectiveBriefRow(db, objectiveId, {
@@ -145587,7 +145641,7 @@ function objectiveBriefPatchAssignments(db, patch) {
     const value2 = patch[column];
     assignments.push(`${column} = ?`);
     columns2.push(column);
-    params.push(column === "description_suppressed" ? bindBool(db.dialect, Boolean(value2)) : value2);
+    params.push(column === "summary_suppressed" ? bindBool(db.dialect, Boolean(value2)) : value2);
   }
   return { assignments, params, columns: columns2 };
 }
@@ -145595,7 +145649,7 @@ function objectiveBriefChangedFields(patch) {
   const fields = /* @__PURE__ */ new Set();
   for (const column of Object.keys(patch)) {
     if (column.startsWith("title_")) fields.add("title_source");
-    else if (column.startsWith("description")) fields.add("description");
+    else if (column.startsWith("summary")) fields.add("summary");
     else if (column === "instruction_author_kind") fields.add("instruction_author_kind");
   }
   return [...fields];
@@ -145639,16 +145693,16 @@ function toObjectiveBriefView(row) {
     title: row.title,
     titleSource: row.title_source,
     titleStatus: row.title_status,
-    description: row.description,
-    descriptionSource: row.description_source,
-    descriptionStale: isObjectiveDescriptionStale(row, row.instruction_text),
-    descriptionStatus: row.description_status,
-    descriptionFailureCode: row.description_failure_code,
-    descriptionSuppressed: row.description_suppressed,
-    descriptionRevision: row.description_revision,
-    descriptionUpdatedAt: row.description_updated_at,
-    descriptionAuthorWorkspaceUserId: row.description_author_workspace_user_id,
-    descriptionAuthorAgent: row.description_author_agent,
+    summary: row.summary,
+    summarySource: row.summary_source,
+    summaryStale: isObjectiveSummaryStale(row, row.instruction_text),
+    summaryStatus: row.summary_status,
+    summaryFailureCode: row.summary_failure_code,
+    summarySuppressed: row.summary_suppressed,
+    summaryRevision: row.summary_revision,
+    summaryUpdatedAt: row.summary_updated_at,
+    summaryAuthorWorkspaceUserId: row.summary_author_workspace_user_id,
+    summaryAuthorAgent: row.summary_author_agent,
     instructionAuthorKind: row.instruction_author_kind
   };
 }
@@ -145663,17 +145717,17 @@ async function resolveBriefRowForCtx(ctx, objectiveRef) {
 async function runInTransaction(ctx, work) {
   return ctx.db.transaction((tx) => work({ ...ctx, db: tx }));
 }
-async function requestObjectiveDescriptionGeneration({
+async function requestObjectiveSummaryGeneration({
   ctx,
   objectiveId,
   mode
 }) {
-  if (!OBJECTIVE_DESCRIPTION_GENERATION_MODES.includes(mode)) {
+  if (!OBJECTIVE_SUMMARY_GENERATION_MODES.includes(mode)) {
     throw new ServiceError(`Unknown summary request: ${String(mode)}`, "validation_error", 400);
   }
   return runInTransaction(ctx, async (tx) => {
     const row = await resolveBriefRowForCtx(tx, objectiveId);
-    const plan = planObjectiveDescriptionGenerationRequest({
+    const plan = planObjectiveSummaryGenerationRequest({
       state: row,
       instructionText: row.instruction_text,
       mode,
@@ -145681,7 +145735,7 @@ async function requestObjectiveDescriptionGeneration({
     });
     const written = await writeObjectiveBriefPatch({ ctx: tx, row, patch: plan.patch });
     if (!written) throw conflictError();
-    if (plan.descriptionRequested) {
+    if (plan.summaryRequested) {
       await enqueueObjectiveBriefComposeJob({
         db: tx.db,
         workspaceId: row.workspace_id,
@@ -145693,7 +145747,7 @@ async function requestObjectiveDescriptionGeneration({
     return {
       brief: toObjectiveBriefView(next),
       warnings: plan.warnings,
-      descriptionRequested: plan.descriptionRequested
+      summaryRequested: plan.summaryRequested
     };
   });
 }
@@ -145717,7 +145771,7 @@ async function publishObjectiveBrief({
     if (!row)
       return {
         title: result2.title ? "stale" : "not_requested",
-        description: result2.description ? "stale" : "not_requested"
+        summary: result2.summary ? "stale" : "not_requested"
       };
     const outcome = planObjectiveBriefPublication({ row, result: result2, now: nowIso() });
     const titleText = outcome.title === "published" ? result2.title.text.trim() : null;
@@ -145727,11 +145781,11 @@ async function publishObjectiveBrief({
       guards.push(` AND title_generation = ? AND title_source = 'generated'`);
       guardParams.push(result2.title.generation);
     }
-    if (outcome.description === "published") {
+    if (outcome.summary === "published") {
       guards.push(
-        ` AND description_generation = ? AND description_status = 'pending' AND description_suppressed = ?`
+        ` AND summary_generation = ? AND summary_status = 'pending' AND summary_suppressed = ?`
       );
-      guardParams.push(result2.description.generation, bindBool(tx.db.dialect, false));
+      guardParams.push(result2.summary.generation, bindBool(tx.db.dialect, false));
     }
     const written = await writeObjectiveBriefPatch({
       guard: guards.join(""),
@@ -145746,13 +145800,13 @@ async function publishObjectiveBrief({
     if (!written) {
       return {
         title: outcome.title === "published" ? "stale" : outcome.title,
-        description: outcome.description === "published" ? "stale" : outcome.description
+        summary: outcome.summary === "published" ? "stale" : outcome.summary
       };
     }
-    return { title: outcome.title, description: outcome.description };
+    return { title: outcome.title, summary: outcome.summary };
   });
 }
-async function failObjectiveDescriptionGeneration({
+async function failObjectiveSummaryGeneration({
   ctx,
   objectiveId,
   generation,
@@ -145766,13 +145820,13 @@ async function failObjectiveDescriptionGeneration({
   }
   return runInTransaction(ctx, async (tx) => {
     const row = await loadObjectiveBriefRow(tx.db, objectiveId, { forUpdate: true });
-    if (!row || row.description_status !== "pending" || row.description_generation !== generation) {
+    if (!row || row.summary_status !== "pending" || row.summary_generation !== generation) {
       return false;
     }
     return writeObjectiveBriefPatch({
       ctx: { ...tx, workspace: { ...tx.workspace, id: row.workspace_id } },
       row,
-      patch: { description_status: "failed", description_failure_code: failureCode }
+      patch: { summary_status: "failed", summary_failure_code: failureCode }
     });
   });
 }
@@ -145784,20 +145838,20 @@ async function listObjectiveBriefCatchUpCandidates(db, { limit: limit2 }) {
       WHERE deleted_at IS NULL
         AND state IN ('draft', 'submitted')
         AND instruction_author_kind = 'agent'
-        AND description IS NULL
-        AND description_status IS NULL
-        AND description_suppressed = ?
+        AND summary IS NULL
+        AND summary_status IS NULL
+        AND summary_suppressed = ?
         AND LENGTH(TRIM(COALESCE(instruction_text, ''))) >= ?
       ORDER BY created_at ASC, id ASC
       LIMIT ?`,
-    [bindBool(db.dialect, false), OBJECTIVE_DESCRIPTION_MIN_INSTRUCTION_CHARS, bounded2]
+    [bindBool(db.dialect, false), OBJECTIVE_SUMMARY_MIN_INSTRUCTION_CHARS, bounded2]
   );
   return rows.map((r5) => r5.id);
 }
 async function markObjectiveBriefCatchUpPending(ctx, objectiveId) {
   return runInTransaction(ctx, async (tx) => {
     const row = await loadObjectiveBriefRow(tx.db, objectiveId, { forUpdate: true });
-    if (!row || row.instruction_author_kind !== "agent" || row.description !== null || row.description_status !== null || row.description_suppressed || !isDescriptionEligibleInstruction(row.instruction_text)) {
+    if (!row || row.instruction_author_kind !== "agent" || row.summary !== null || row.summary_status !== null || row.summary_suppressed || !isSummaryEligibleInstruction(row.instruction_text)) {
       return false;
     }
     const state2 = await tx.db.get("SELECT state FROM objectives WHERE id = ?", [
@@ -145808,10 +145862,10 @@ async function markObjectiveBriefCatchUpPending(ctx, objectiveId) {
       ctx: { ...tx, workspace: { ...tx.workspace, id: row.workspace_id } },
       row,
       patch: {
-        description_status: "pending",
-        description_request_kind: "automatic",
-        description_generation: row.description_generation + 1,
-        description_failure_code: null
+        summary_status: "pending",
+        summary_request_kind: "automatic",
+        summary_generation: row.summary_generation + 1,
+        summary_failure_code: null
       }
     });
     if (written) {
@@ -145853,10 +145907,10 @@ async function clearUnsatisfiableObjectiveBriefIntent(ctx, objectiveId) {
       patch.title_status = null;
       cleared.push("title");
     }
-    if (row.description_status === "pending" && (row.description_suppressed || !isDescriptionEligibleInstruction(row.instruction_text))) {
-      patch.description_status = null;
-      patch.description_request_kind = null;
-      cleared.push("description");
+    if (row.summary_status === "pending" && (row.summary_suppressed || !isSummaryEligibleInstruction(row.instruction_text))) {
+      patch.summary_status = null;
+      patch.summary_request_kind = null;
+      cleared.push("summary");
     }
     if (cleared.length === 0) return [];
     const written = await writeObjectiveBriefPatch({
@@ -145873,7 +145927,7 @@ async function listObjectiveBriefOrphans(db, { limit: limit2 }) {
   const rows = await db.all(
     `SELECT o.id, o.workspace_id FROM objectives o
       WHERE o.deleted_at IS NULL
-        AND (o.title_status = 'pending' OR o.description_status = 'pending')
+        AND (o.title_status = 'pending' OR o.summary_status = 'pending')
         AND NOT EXISTS (
           SELECT 1 FROM worker_jobs j
            WHERE j.workspace_id = o.workspace_id
@@ -154055,9 +154109,10 @@ async function insertObjective({
   reasoningEffort,
   resourceKey = null,
   launchConfigJson = null,
-  description
+  summary
 }) {
   const instruction = instructionText.trim();
+  const summaryInput = normalizeObjectiveSummaryInput(summary);
   const mission = await resolveMissionId(ctx, missionId);
   const normalizedResourceKey = resourceKey?.trim() || null;
   if (normalizedResourceKey) {
@@ -154104,7 +154159,7 @@ async function insertObjective({
   const brief = planObjectiveBriefForCreate({
     instructionText: instruction,
     titleProvided: Boolean(title?.trim()),
-    description: normalizeObjectiveDescriptionInput(description),
+    summary: summaryInput,
     actor: objectiveBriefActorFromContext(ctx),
     now: now2
   });
@@ -154152,7 +154207,7 @@ async function insertObjective({
     missionId: mission.id,
     objectiveId: id2
   });
-  if (brief.titleRequested || brief.descriptionRequested) {
+  if (brief.titleRequested || brief.summaryRequested) {
     await enqueueObjectiveBriefComposeJob({
       db: ctx.db,
       workspaceId: ctx.workspace.id,
@@ -154202,7 +154257,7 @@ async function createMissionWithObjectives({
     throw new ServiceError("At least one objective is required", "validation_error");
   }
   const resolvedProjectId = await resolveProjectId(ctx, projectId);
-  const firstInstruction = objectives[0]?.objective.trim() ?? "";
+  const firstInstruction = objectives[0]?.instructions.trim() ?? "";
   if (objectives.length > 0 && !firstInstruction) {
     throw new ServiceError("First objective instruction is required", "validation_error");
   }
@@ -154265,7 +154320,7 @@ async function createMissionWithObjectives({
     });
     for (let index = 0; index < objectives.length; index++) {
       const item = objectives[index];
-      const instruction = item.objective.trim();
+      const instruction = item.instructions.trim();
       if (!instruction) {
         throw new ServiceError(
           `Objective ${index + 1} instruction is required`,
@@ -154279,7 +154334,7 @@ async function createMissionWithObjectives({
           missionId,
           instructionText: instruction,
           ...item.title !== void 0 ? { title: item.title } : {},
-          ...item.description !== void 0 ? { description: item.description } : {},
+          ...item.summary !== void 0 ? { summary: item.summary } : {},
           state: objectiveState,
           autoAdvance: item.autoAdvance ?? false,
           ...item.agent !== void 0 ? { assignedAgent: item.agent } : {},
@@ -154382,9 +154437,9 @@ async function addObjectivesToMission({
         await insertObjective({
           ctx: txCtx,
           missionId: resolved.id,
-          instructionText: item.objective,
+          instructionText: item.instructions,
           ...item.title !== void 0 ? { title: item.title } : {},
-          ...item.description !== void 0 ? { description: item.description } : {},
+          ...item.summary !== void 0 ? { summary: item.summary } : {},
           autoAdvance: item.autoAdvance ?? false,
           ...item.agent !== void 0 ? { assignedAgent: item.agent } : {},
           ...item.model !== void 0 ? { model: item.model } : {},
@@ -161224,10 +161279,17 @@ function postDeliveryInstruction({
   missionDisplayId,
   objectiveDisplayId: objectiveDisplayId2
 }) {
+  return `Delivered; this session has ended. Do not continue implementation. ${followUpRecoveryInstruction({ style, missionDisplayId, objectiveDisplayId: objectiveDisplayId2 })}`;
+}
+function followUpRecoveryInstruction({
+  style,
+  missionDisplayId,
+  objectiveDisplayId: objectiveDisplayId2
+}) {
   if (style === "mcp") {
-    return "Delivered; this session has ended. Do not continue implementation. These tools cannot begin follow-up work: if the user asks for more work on this objective, ask them to start follow-up work from Overlord.";
+    return "If the user asks for more work on this objective, ask them to start follow-up work from Overlord.";
   }
-  return `Delivered; this session has ended. Do not continue implementation. If the user asks for more work on this objective, first run \`ovld protocol resume-follow-up --mission-id ${missionDisplayId} --objective-id ${objectiveDisplayId2} --summary "<what you will do>"\`, use the session key it returns, and deliver again when done.`;
+  return `If the user asks for more work on this objective, first run \`ovld protocol resume-follow-up --mission-id ${missionDisplayId} --objective-id ${objectiveDisplayId2} --summary "<what you will do>"\`, use the session key it returns, and deliver again when done.`;
 }
 function protocolWorkflow(style) {
   return style === "mcp" ? MCP_PROTOCOL_WORKFLOW : CLI_PROTOCOL_WORKFLOW;
@@ -161321,9 +161383,25 @@ async function getSessionByKeyMaybeEnded(ctx, sessionKey, options = {}) {
     [ctx.workspace.id, hash2]
   );
 }
-async function getSessionByKey(ctx, sessionKey) {
-  const row = await getSessionByKeyMaybeEnded(ctx, sessionKey);
-  if (!row) {
+async function getSessionByKey(ctx, sessionKey, mission) {
+  const row = await getSessionByKeyMaybeEnded(ctx, sessionKey, { includeEnded: true });
+  if (!row || row.ended_at) {
+    if (row?.mission_id === mission.id && row.delivery_state === "delivered") {
+      const objective = (await listObjectives({ ctx, missionId: mission.id })).find(
+        (candidate) => candidate.id === row.objective_id
+      );
+      if (objective?.state === "complete") {
+        throw new ServiceError(
+          `This protocol session ended at delivery. ${followUpRecoveryInstruction({
+            style: instructionStyleFor(row.connection_method),
+            missionDisplayId: mission.displayId,
+            objectiveDisplayId: objective.displayId
+          })}`,
+          "invalid_session",
+          401
+        );
+      }
+    }
     throw new ServiceError("Invalid or expired session key", "invalid_session", 401);
   }
   return row;
@@ -161721,7 +161799,10 @@ async function attachSession({
   const explicitPin = Boolean(objectiveId?.trim() || executionRequestId?.trim());
   let resolvedObjectiveId = objectiveId;
   if (existingSessionKey?.trim() && !explicitPin) {
-    const existing = await getSessionByKey(ctx, existingSessionKey);
+    const existing = await getSessionByKey(ctx, existingSessionKey, mission);
+    if (existing.mission_id !== mission.id) {
+      throw new ServiceError("Session key belongs to a different mission", "invalid_session", 401);
+    }
     resolvedObjectiveId = existing.objective_id;
   }
   const pinned = Boolean(resolvedObjectiveId?.trim() || executionRequestId?.trim());
@@ -161741,7 +161822,7 @@ async function attachSession({
   });
   const context = { mission, objective };
   if (existingSessionKey) {
-    const existing = await getSessionByKey(ctx, existingSessionKey);
+    const existing = await getSessionByKey(ctx, existingSessionKey, mission);
     if (existing.mission_id !== context.mission.id) {
       throw new ServiceError("Session key belongs to a different mission", "invalid_session", 401);
     }
@@ -161845,7 +161926,7 @@ async function attachSession({
   const inheritedDraftAgent = currentObjectiveAssignment?.assigned_agent?.trim() || agentIdentifier;
   await ctx.db.transaction(async (tx) => {
     const txCtx = { ...ctx, db: tx };
-    await txCtx.db.run(
+    const updated = await txCtx.db.run(
       `UPDATE objectives
          SET state = 'executing',
              assigned_agent = COALESCE(assigned_agent, ?),
@@ -161853,9 +161934,27 @@ async function attachSession({
              ${OBJECTIVE_STARTED_AT_ASSIGNMENT},
              updated_at = ?,
              revision = revision + 1
-         WHERE id = ? AND mission_id = ?`,
+         WHERE id = ? AND mission_id = ? AND state <> 'complete' AND deleted_at IS NULL`,
       [inheritedDraftAgent || null, now2, now2, now2, objective.id, context.mission.id]
     );
+    if (updated.changes === 0) {
+      const linked2 = executionRequestId ? await tx.get(
+        `SELECT launched_session_id FROM execution_requests
+              WHERE id = ? AND workspace_id = ? AND mission_id = ? AND objective_id = ?
+                AND deleted_at IS NULL AND launched_session_id IS NOT NULL`,
+        [executionRequestId, ctx.workspace.id, mission.id, objective.id]
+      ) : void 0;
+      const reason = linked2 ? "Execution request is already linked to another session and this objective is complete." : "No active objective at this reference. This objective has already been completed.";
+      throw new ServiceError(
+        `${reason} ${followUpRecoveryInstruction({
+          style: instructionStyleFor(connectionMethod),
+          missionDisplayId: mission.displayId,
+          objectiveDisplayId: objective.displayId
+        })}`,
+        linked2 ? "execution_request_already_linked" : "no_active_objective",
+        409
+      );
+    }
     await recordChange({
       ctx: txCtx,
       entityType: "objective",
@@ -162143,45 +162242,45 @@ async function resumeFollowUp({
 }) {
   const trimmedSummary = summary?.trim() || "Beginning follow-up work.";
   const mission = await getMissionSummary({ ctx, missionId });
-  const objectives = await listObjectives({ ctx, missionId: mission.id });
-  const resolvedObjectiveId = objectiveId ? (await resolveObjectiveRef({ ctx, ref: objectiveId, missionId: mission.id })).id : null;
-  const selectedObjective = resolvedObjectiveId ? objectives.find((objective) => objective.id === resolvedObjectiveId) : latestCompletedObjective(objectives);
-  if (!selectedObjective) {
-    throw new ServiceError(
-      "No completed objective found for follow-up",
-      "no_active_objective",
-      409
-    );
-  }
-  const activeObjective = objectives.find(
-    (objective) => ["executing", "pending_delivery"].includes(objective.state)
-  );
-  if (activeObjective) {
-    throw new ServiceError(
-      "Mission already has active follow-up or execution work",
-      "active_objective_exists",
-      409
-    );
-  }
-  if (selectedObjective.state !== "complete") {
-    throw new ServiceError(
-      "Follow-up resume requires a completed objective",
-      "validation_error",
-      409
-    );
-  }
   const { rawKey: rawKey2, prefix, hash: hash2 } = generateSessionKey();
   const now2 = nowIso();
   const sessionId = newId();
   const eventId = newId();
-  await ctx.db.transaction(async (tx) => {
+  const selectedObjective = await ctx.db.transaction(async (tx) => {
     const txCtx = { ...ctx, db: tx };
     await lockMissionObjectiveQueue(tx, mission.id);
+    const objectives = await listObjectives({ ctx: txCtx, missionId: mission.id });
+    const resolvedObjectiveId = objectiveId ? (await resolveObjectiveRef({ ctx: txCtx, ref: objectiveId, missionId: mission.id })).id : null;
+    const selectedObjective2 = resolvedObjectiveId ? objectives.find((objective) => objective.id === resolvedObjectiveId) : latestCompletedObjective(objectives);
+    if (!selectedObjective2) {
+      throw new ServiceError(
+        "No completed objective found for follow-up",
+        "no_active_objective",
+        409
+      );
+    }
+    const activeObjective = objectives.find(
+      (objective) => ["executing", "pending_delivery"].includes(objective.state)
+    );
+    if (activeObjective) {
+      throw new ServiceError(
+        "Mission already has active follow-up or execution work",
+        "active_objective_exists",
+        409
+      );
+    }
+    if (selectedObjective2.state !== "complete") {
+      throw new ServiceError(
+        "Follow-up resume requires a completed objective",
+        "validation_error",
+        409
+      );
+    }
     await txCtx.db.run(
       `UPDATE objectives
          SET state = 'pending_delivery', completed_at = NULL, updated_at = ?, revision = revision + 1
          WHERE id = ? AND mission_id = ? AND state = 'complete'`,
-      [now2, selectedObjective.id, mission.id]
+      [now2, selectedObjective2.id, mission.id]
     );
     await txCtx.db.run(
       `INSERT INTO agent_sessions
@@ -162195,7 +162294,7 @@ async function resumeFollowUp({
         ctx.workspace.id,
         mission.projectId,
         mission.id,
-        selectedObjective.id,
+        selectedObjective2.id,
         prefix,
         hash2,
         agentIdentifier,
@@ -162219,7 +162318,7 @@ async function resumeFollowUp({
         ctx.workspace.id,
         mission.projectId,
         mission.id,
-        selectedObjective.id,
+        selectedObjective2.id,
         sessionId,
         trimmedSummary,
         JSON.stringify({ followUpIntent: "execution", reactivated: true }),
@@ -162238,11 +162337,11 @@ async function resumeFollowUp({
     await recordChange({
       ctx: txCtx,
       entityType: "objective",
-      entityId: selectedObjective.id,
+      entityId: selectedObjective2.id,
       operation: "update",
       projectId: mission.projectId,
       missionId: mission.id,
-      objectiveId: selectedObjective.id,
+      objectiveId: selectedObjective2.id,
       changedFields: ["state", "completed_at"]
     });
     await recordChange({
@@ -162253,8 +162352,9 @@ async function resumeFollowUp({
       entityRevision: 1,
       projectId: mission.projectId,
       missionId: mission.id,
-      objectiveId: selectedObjective.id
+      objectiveId: selectedObjective2.id
     });
+    return selectedObjective2;
   });
   const refreshedMission = await getMissionSummary({ ctx, missionId: mission.id });
   const refreshedObjective = (await listObjectives({ ctx, missionId: mission.id })).find(
@@ -162304,7 +162404,7 @@ async function heartbeatSession({
   note
 }) {
   const mission = await resolveMissionId(ctx, missionId);
-  const session = await getSessionByKey(ctx, sessionKey);
+  const session = await getSessionByKey(ctx, sessionKey, mission);
   if (session.mission_id !== mission.id) {
     throw new ServiceError("Session key does not match mission", "invalid_session", 401);
   }
@@ -162889,7 +162989,7 @@ async function updateSession2({
       write: draftWrite
     });
   }
-  const session = await getSessionByKey(ctx, sessionKey);
+  const session = await getSessionByKey(ctx, sessionKey, mission);
   if (session.mission_id !== mission.id) {
     throw new ServiceError("Session key does not match mission", "invalid_session", 401);
   }
@@ -163209,7 +163309,7 @@ async function askQuestion({
     );
   }
   const mission = await resolveMissionId(ctx, missionId);
-  const session = await getSessionByKey(ctx, sessionKey);
+  const session = await getSessionByKey(ctx, sessionKey, mission);
   if (session.mission_id !== mission.id) {
     throw new ServiceError("Session key does not match mission", "invalid_session", 401);
   }
@@ -164098,7 +164198,7 @@ async function recordWork({
         const created = await createMissionWithObjectives({
           ctx: txCtx,
           projectId: resolvedProjectId,
-          objectives: [{ objective }],
+          objectives: [{ instructions: objective }],
           statusType: "review",
           assignedWorkspaceUserId,
           ...title !== void 0 ? { title } : {}
@@ -164292,7 +164392,7 @@ async function readAgentMissionItems({
   offset = 0
 }) {
   const mission = await resolveMissionId(ctx, missionId);
-  const session = await getSessionByKey(ctx, sessionKey);
+  const session = await getSessionByKey(ctx, sessionKey, mission);
   if (session.mission_id !== mission.id) {
     throw new ServiceError("Session key does not match mission", "invalid_session", 401);
   }
@@ -164335,7 +164435,7 @@ async function closeAgentMissionItems({
     async (tx) => {
       const txCtx = { ...ctx, db: tx };
       const mission = await resolveMissionId(txCtx, missionId);
-      const session = await getSessionByKey(txCtx, sessionKey);
+      const session = await getSessionByKey(txCtx, sessionKey, mission);
       if (session.mission_id !== mission.id) {
         throw new ServiceError("Session key does not match mission", "invalid_session", 401);
       }
@@ -164378,7 +164478,7 @@ async function readAgentProjectItems({
   return ctx.db.transaction(async (db) => {
     const txCtx = { ...ctx, db };
     const mission = await resolveMissionId(txCtx, missionId);
-    const session = await getSessionByKey(txCtx, sessionKey);
+    const session = await getSessionByKey(txCtx, sessionKey, mission);
     if (session.mission_id !== mission.id || session.delivery_state === "delivered") {
       throw new ServiceError(
         "Discovery requires a live matching attached session",
@@ -170645,7 +170745,7 @@ function toObjectiveDto(r5) {
 }
 var BRIEF_SOURCES = /* @__PURE__ */ new Set(["generated", "agent", "user"]);
 var BRIEF_STATUSES = /* @__PURE__ */ new Set(["pending", "failed"]);
-var DESCRIPTION_FAILURE_CODES = /* @__PURE__ */ new Set([
+var SUMMARY_FAILURE_CODES = /* @__PURE__ */ new Set([
   "provider_unavailable",
   "provider_error",
   "invalid_output",
@@ -170655,25 +170755,25 @@ function briefEnum(value2, allowed) {
   return value2 && allowed.has(value2) ? value2 : null;
 }
 function toObjectiveBriefDtoFields(r5) {
-  const description = r5.description ?? null;
-  const updatedAt = r5.description_updated_at;
+  const summary = r5.summary ?? null;
+  const updatedAt = r5.summary_updated_at;
   return {
     titleSource: briefEnum(r5.title_source, BRIEF_SOURCES),
     titleStatus: briefEnum(r5.title_status, BRIEF_STATUSES),
-    description,
-    descriptionSource: description === null ? null : briefEnum(r5.description_source, BRIEF_SOURCES),
-    descriptionStale: isObjectiveDescriptionStale(
-      { description, description_instruction_hash: r5.description_instruction_hash ?? null },
+    summary,
+    summarySource: summary === null ? null : briefEnum(r5.summary_source, BRIEF_SOURCES),
+    summaryStale: isObjectiveSummaryStale(
+      { summary, summary_instruction_hash: r5.summary_instruction_hash ?? null },
       r5.instruction_text
     ),
-    descriptionStatus: briefEnum(r5.description_status, BRIEF_STATUSES),
-    descriptionFailureCode: r5.description_status === "failed" ? briefEnum(r5.description_failure_code, DESCRIPTION_FAILURE_CODES) : null,
-    descriptionSuppressed: isTruthyFlag(r5.description_suppressed),
-    descriptionEligible: isDescriptionEligibleInstruction(r5.instruction_text),
-    descriptionRevision: Number(r5.description_revision ?? 0),
-    descriptionUpdatedAt: updatedAt instanceof Date ? updatedAt.toISOString() : updatedAt ?? null,
-    descriptionAuthorWorkspaceUserId: description === null ? null : r5.description_author_workspace_user_id ?? null,
-    descriptionAuthorAgent: description === null ? null : r5.description_author_agent ?? null
+    summaryStatus: briefEnum(r5.summary_status, BRIEF_STATUSES),
+    summaryFailureCode: r5.summary_status === "failed" ? briefEnum(r5.summary_failure_code, SUMMARY_FAILURE_CODES) : null,
+    summarySuppressed: isTruthyFlag(r5.summary_suppressed),
+    summaryEligible: isSummaryEligibleInstruction(r5.instruction_text),
+    summaryRevision: Number(r5.summary_revision ?? 0),
+    summaryUpdatedAt: updatedAt instanceof Date ? updatedAt.toISOString() : updatedAt ?? null,
+    summaryAuthorWorkspaceUserId: summary === null ? null : r5.summary_author_workspace_user_id ?? null,
+    summaryAuthorAgent: summary === null ? null : r5.summary_author_agent ?? null
   };
 }
 async function assertObjectiveResourceKeyOnProject(db, projectId, resourceKey) {
@@ -173173,8 +173273,8 @@ async function updateArtifact(missionRef, artifactId, body) {
 }
 async function createMissionTx(body, client = requireDatabaseClient(), alreadyInTransaction = false) {
   const execute2 = async (tx) => {
-    const objectiveInputs2 = body.objectives && body.objectives.length > 0 ? body.objectives : body.firstObjective ? [{ objective: body.firstObjective }] : [];
-    const instruction = (objectiveInputs2[0]?.objective ?? body.title ?? "").trim();
+    const objectiveInputs2 = body.objectives && body.objectives.length > 0 ? body.objectives : body.firstObjective ? [{ instructions: body.firstObjective }] : [];
+    const instruction = (objectiveInputs2[0]?.instructions ?? body.title ?? "").trim();
     if (!instruction) {
       throw new ApiError(400, "Describe the work to be done (title or first objective)");
     }
@@ -173192,7 +173292,7 @@ async function createMissionTx(body, client = requireDatabaseClient(), alreadyIn
       throw new ApiError(400, "dueDatetime must be a valid ISO-8601 datetime or null");
     }
     for (const [index, item] of objectiveInputs2.entries()) {
-      for (const key of ["agent", "model", "description"]) {
+      for (const key of ["agent", "model", "summary"]) {
         const value2 = item[key];
         if (value2 !== void 0 && value2 !== null && typeof value2 !== "string") {
           throw new ApiError(400, `objectives[${index}].${key} must be a string or null`);
@@ -173206,9 +173306,9 @@ async function createMissionTx(body, client = requireDatabaseClient(), alreadyIn
       ctx,
       projectId: body.projectId,
       objectives: objectiveInputs2.map((item) => ({
-        objective: item.objective,
+        instructions: item.instructions,
         ...item.title !== void 0 ? { title: item.title } : {},
-        ...item.description !== void 0 ? { description: item.description } : {},
+        ...item.summary !== void 0 ? { summary: item.summary } : {},
         autoAdvance: item.autoAdvance ?? false,
         ...item.agent !== void 0 ? { agent: item.agent } : {},
         ...item.model !== void 0 ? { model: item.model } : {},
@@ -173439,7 +173539,7 @@ async function promoteInboxItem(id2, projectId) {
       {
         projectId,
         title: item.title,
-        objectives: objectives.map((objective) => ({ objective })),
+        objectives: objectives.map((instructions) => ({ instructions })),
         dueDatetime: item.due_datetime,
         ...item.priority ? { priority: item.priority } : {}
       },
@@ -174532,7 +174632,7 @@ async function insertObjective2(db, ctx, body) {
     missionId: body.missionId,
     instructionText: body.instructionText ?? "",
     ...body.title !== void 0 ? { title: body.title } : {},
-    ...body.description !== void 0 ? { description: body.description } : {},
+    ...body.summary !== void 0 ? { summary: body.summary } : {},
     ...body.state !== void 0 ? { state: body.state } : {},
     autoAdvance: body.autoAdvance ?? false,
     ...body.assignedAgent !== void 0 ? { assignedAgent: body.assignedAgent } : {},
@@ -174563,12 +174663,12 @@ function createObjectiveTx(body) {
 async function createObjective(body) {
   return createObjectiveTx(body);
 }
-function readExpectedDescriptionRevision(value2) {
+function readExpectedSummaryRevision(value2) {
   if (value2 === void 0 || value2 === null) return void 0;
   if (typeof value2 !== "number" || !Number.isInteger(value2) || value2 < 0) {
     throw new ApiError(
       400,
-      "expectedDescriptionRevision must be a non-negative integer",
+      "expectedSummaryRevision must be a non-negative integer",
       void 0,
       "validation_error"
     );
@@ -174576,10 +174676,8 @@ function readExpectedDescriptionRevision(value2) {
   return value2;
 }
 async function updateObjectiveTx(idRef, body, options = {}) {
-  const descriptionInput = normalizeObjectiveDescriptionInput(body.description);
-  const expectedDescriptionRevision = readExpectedDescriptionRevision(
-    body.expectedDescriptionRevision
-  );
+  const summaryInput = normalizeObjectiveSummaryInput(body.summary);
+  const expectedSummaryRevision = readExpectedSummaryRevision(body.expectedSummaryRevision);
   return requireDatabaseClient().transaction(async (tx) => {
     const {
       workspaceId: workspaceId2,
@@ -174702,16 +174800,16 @@ async function updateObjectiveTx(idRef, body, options = {}) {
       setParams.push(nextLaunchConfigJson);
       changed.push("launch_config_json");
     }
-    if (fields.length === 0 && descriptionInput.kind === "omit") {
+    if (fields.length === 0 && summaryInput.kind === "omit") {
       return { objective: toObjectiveDto(existing), warnings: [] };
     }
     const briefRow = await loadObjectiveBriefRow(tx, id2);
-    if (descriptionInput.kind !== "omit" && expectedDescriptionRevision !== void 0 && briefRow.description_revision !== expectedDescriptionRevision) {
+    if (summaryInput.kind !== "omit" && expectedSummaryRevision !== void 0 && briefRow.summary_revision !== expectedSummaryRevision) {
       throw new ServiceError(
         "The summary changed after you started editing it. Reload it and try again.",
-        "description_conflict",
+        "summary_conflict",
         409,
-        { descriptionRevision: briefRow.description_revision, description: briefRow.description }
+        { summaryRevision: briefRow.summary_revision, summary: briefRow.summary }
       );
     }
     const briefPlan = planObjectiveBriefForUpdate({
@@ -174719,7 +174817,7 @@ async function updateObjectiveTx(idRef, body, options = {}) {
       currentInstruction: existing.instruction_text,
       instructionText: body.instructionText,
       title: body.title,
-      description: descriptionInput,
+      summary: summaryInput,
       actor: objectiveBriefActorFromOrigin(
         options.origin ?? { kind: "human" },
         workspaceUserId ?? null
@@ -174791,7 +174889,7 @@ async function updateObjectiveTx(idRef, body, options = {}) {
          WHERE id = ? AND workspace_id = ?`,
       [...setParams, now2, revision3, id2, workspaceId2]
     );
-    if (briefPlan.titleRequested || briefPlan.descriptionRequested) {
+    if (briefPlan.titleRequested || briefPlan.summaryRequested) {
       await enqueueObjectiveBriefComposeJob({ db: tx, workspaceId: workspaceId2, objectiveId: id2 });
     }
     await recordChange2(
@@ -174909,7 +175007,7 @@ async function updateObjective2(id2, body, options = {}) {
 async function updateObjectiveWithWarnings(id2, body, options = {}) {
   return updateObjectiveTx(id2, body, options);
 }
-async function requestObjectiveDescription(idRef, body, options = {}) {
+async function requestObjectiveSummary(idRef, body, options = {}) {
   const mode = body?.mode;
   if (mode !== "summarize" && mode !== "regenerate" && mode !== "retry") {
     throw new ApiError(
@@ -174926,7 +175024,7 @@ async function requestObjectiveDescription(idRef, body, options = {}) {
       db: tx
     });
     const ctx = await buildWebappServiceContextForWorkspace(workspaceId2, tx, workspaceUserId);
-    await requestObjectiveDescriptionGeneration({
+    await requestObjectiveSummaryGeneration({
       ctx: { ...ctx, origin: options.origin ?? { kind: "human" } },
       objectiveId,
       mode
@@ -176354,7 +176452,7 @@ async function assertDraftOnProtocolSurface(objectiveRef, what) {
   const db = requireDatabaseClient();
   const resolved = await resolveObjectiveIdForRest({ ref: objectiveRef, db });
   const row = await db.get(
-    `SELECT state FROM objectives
+    `SELECT state, instruction_text FROM objectives
       WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
     [resolved.id, resolved.workspaceId]
   );
@@ -176364,11 +176462,12 @@ async function assertDraftOnProtocolSurface(objectiveRef, what) {
   if (row.state !== "draft") {
     throw new ApiError(
       400,
-      what === "description" ? "An agent can change an objective description or request a summary only in draft state" : "Objective instruction text can only be edited in draft state",
+      what === "summary" ? "An agent can change an objective summary or request a summary only in draft state" : "Objective instruction text can only be edited in draft state",
       void 0,
-      what === "description" ? "description_not_editable" : void 0
+      what === "summary" ? "summary_not_editable" : void 0
     );
   }
+  return { instructionText: row.instruction_text ?? "" };
 }
 function objectiveAssignmentUpdate(body) {
   const hasAgent = hasFlag(body, "--objective-agent");
@@ -176442,19 +176541,57 @@ async function searchExactReference(body, reference) {
     limit: limit2
   });
 }
-function objectiveText(body) {
-  const flag = strFlag(body, "--objective");
+var RENAMED_OBJECTIVE_FLAGS = {
+  "--objective": "--objective-instructions",
+  "--objective-description": "--objective-summary",
+  "--objective-description-file": "--objective-summary-file",
+  "--description": "--summary",
+  "--description-file": "--summary-file",
+  "--description-request": "--summary-request"
+};
+var RETIRED_CREATE_FLAGS = [
+  "--objective",
+  "--objective-description",
+  "--objective-description-file"
+];
+var RETIRED_UPDATE_OBJECTIVE_FLAGS = [
+  "--description",
+  "--description-file",
+  "--description-request"
+];
+var RENAMED_OBJECTIVE_ITEM_KEYS = {
+  objective: "instructions",
+  description: "summary"
+};
+function rejectRenamedObjectiveFlags(body, flags) {
+  const present = flags.filter((flag) => hasFlag(body, flag));
+  if (present.length === 0) return;
+  throw new ApiError(
+    400,
+    `Renamed protocol flag(s): ${present.map((flag) => `${flag} is now ${RENAMED_OBJECTIVE_FLAGS[flag]}`).join(
+      "; "
+    )}. --objective-instructions is the complete brief for the executing agent; --objective-summary is a short overview for people.`,
+    void 0,
+    "invalid_input"
+  );
+}
+function objectiveInstructions(body) {
+  const given = hasFlag(body, "--objective-instructions") || hasFlag(body, "--objective-instructions-file");
+  const flag = given ? resolveInput(body, "--objective-instructions", "--objective-instructions-file") : void 0;
   if (flag !== void 0 && flag.trim() !== "") return flag;
   const positional = (body.positional ?? []).join(" ").trim();
   if (positional) return positional;
-  throw new ApiError(400, "Missing objective text (use --objective or a positional argument)");
+  throw new ApiError(
+    400,
+    "Missing objective instructions (use --objective-instructions, --objective-instructions-file or a positional argument)"
+  );
 }
 var MAX_PROTOCOL_OBJECTIVES = 100;
 var MAX_PROTOCOL_DELETIONS = 100;
 var OBJECTIVE_INPUT_KEYS = /* @__PURE__ */ new Set([
-  "objective",
+  "instructions",
   "title",
-  "description",
+  "summary",
   "autoAdvance",
   "agent",
   "model",
@@ -176481,6 +176618,17 @@ function parseObjectiveArrayInput(body) {
       throw new ApiError(400, `objectives[${index}] must be an object`, void 0, "invalid_input");
     }
     const item = value2;
+    const renamed = Object.keys(item).filter((key) => key in RENAMED_OBJECTIVE_ITEM_KEYS);
+    if (renamed.length > 0) {
+      throw new ApiError(
+        400,
+        `objectives[${index}] uses renamed field(s): ${renamed.map((key) => `"${key}" is now "${RENAMED_OBJECTIVE_ITEM_KEYS[key]}"`).join(
+          "; "
+        )}. "instructions" is the complete brief for the executing agent; "summary" is a short overview for people.`,
+        void 0,
+        "invalid_input"
+      );
+    }
     if (Object.keys(item).some((key) => !OBJECTIVE_INPUT_KEYS.has(key))) {
       throw new ApiError(
         400,
@@ -176489,15 +176637,15 @@ function parseObjectiveArrayInput(body) {
         "invalid_input"
       );
     }
-    if (typeof item.objective !== "string" || !item.objective.trim()) {
+    if (typeof item.instructions !== "string" || !item.instructions.trim()) {
       throw new ApiError(
         400,
-        `objectives[${index}].objective must be a non-empty string`,
+        `objectives[${index}].instructions must be a non-empty string`,
         void 0,
         "invalid_input"
       );
     }
-    for (const key of ["title", "description", "agent", "model", "resourceKey"]) {
+    for (const key of ["title", "summary", "agent", "model", "resourceKey"]) {
       if (item[key] !== void 0 && item[key] !== null && typeof item[key] !== "string") {
         throw new ApiError(
           400,
@@ -176547,20 +176695,21 @@ function parseDeletionReferences(body, jsonFlag, fileFlag, label) {
   }
   return references;
 }
-function singleObjectiveDescription(body) {
-  const given = hasFlag(body, "--objective-description") || hasFlag(body, "--objective-description-file");
+function singleObjectiveSummary(body) {
+  const given = hasFlag(body, "--objective-summary") || hasFlag(body, "--objective-summary-file");
   if (!given) return void 0;
-  return resolveInput(body, "--objective-description", "--objective-description-file") ?? "";
+  return resolveInput(body, "--objective-summary", "--objective-summary-file") ?? "";
 }
 function objectiveInputs(body) {
+  rejectRenamedObjectiveFlags(body, RETIRED_CREATE_FLAGS);
   const parsed = parseObjectiveArrayInput(body);
   const autoAdvance = optionalAutoAdvanceFlag(body);
-  const description = singleObjectiveDescription(body);
+  const summary = singleObjectiveSummary(body);
   if (parsed !== void 0) {
-    if (description !== void 0) {
+    if (summary !== void 0) {
       throw new ApiError(
         400,
-        '--objective-description applies to --objective; set "description" on each --objectives-json item instead',
+        '--objective-summary applies to --objective-instructions; set "summary" on each --objectives-json item instead',
         void 0,
         "invalid_input"
       );
@@ -176572,8 +176721,8 @@ function objectiveInputs(body) {
     withDefaultAutoAdvance(
       [
         {
-          objective: objectiveText(body),
-          ...description !== void 0 ? { description } : {},
+          instructions: objectiveInstructions(body),
+          ...summary !== void 0 ? { summary } : {},
           ...resourceKey ? { resourceKey } : {}
         }
       ],
@@ -176582,15 +176731,19 @@ function objectiveInputs(body) {
     body
   );
 }
-function withDescriptionWarnings(created, inputs) {
+function withSummaryWarnings(created, inputs) {
   return created.map((objective, index) => {
-    const text = inputs[index]?.description;
-    if (typeof text !== "string" || !text.trim()) return objective;
-    const warnings = objectiveDescriptionStyleWarnings(text.trim());
+    const input2 = inputs[index];
+    const text = input2?.summary;
+    if (!input2 || typeof text !== "string" || !text.trim()) return objective;
+    const warnings = [
+      ...objectiveSummaryPlacementWarnings({ instructions: input2.instructions, summary: text }),
+      ...objectiveSummaryStyleWarnings(text.trim())
+    ];
     return warnings.length > 0 ? { ...objective, warnings } : objective;
   });
 }
-var DESCRIPTION_REQUEST_MODES = ["summarize", "regenerate", "retry"];
+var SUMMARY_REQUEST_MODES = ["summarize", "regenerate", "retry"];
 var missionSubcommands = {
   // Mission creation and discovery -----------------------------------------
   create: {
@@ -176612,7 +176765,7 @@ var missionSubcommands = {
             "project_creation_scope_conflict"
           );
         }
-        const first = objectives[0]?.objective?.trim();
+        const first = objectives[0]?.instructions?.trim();
         if (!first) throw new ApiError(400, "Inbox creation requires an objective");
         return {
           unassigned: true,
@@ -176643,7 +176796,7 @@ var missionSubcommands = {
         title: strFlag(body, "--title") ?? null,
         ...assignedTo !== void 0 ? { assignedTo } : {}
       });
-      return { ...created, objectives: withDescriptionWarnings(created.objectives, objectives) };
+      return { ...created, objectives: withSummaryWarnings(created.objectives, objectives) };
     }
   },
   prompt: {
@@ -176659,15 +176812,23 @@ var missionSubcommands = {
         );
       }
       const assignedTo = strFlag(body, "--assigned-to");
-      return protocolPrompt({
+      const objectives = objectiveInputs(body);
+      const attached = await protocolPrompt({
         ctx: await withAgentOrigin({ ctx, body }),
         projectId,
-        objectives: objectiveInputs(body),
+        objectives,
         title: strFlag(body, "--title") ?? null,
         agentIdentifier: strFlag(body, "--agent") ?? "unknown",
         externalSessionId: externalSessionId(body),
         ...assignedTo !== void 0 ? { assignedTo } : {}
       });
+      const warnings = objectives.flatMap(
+        (input2) => typeof input2.summary === "string" && input2.summary.trim() ? objectiveSummaryPlacementWarnings({
+          instructions: input2.instructions,
+          summary: input2.summary
+        }) : []
+      );
+      return warnings.length > 0 ? { ...attached, warnings } : attached;
     }
   },
   "load-context": {
@@ -176786,13 +176947,14 @@ var missionSubcommands = {
         missionId: missionRefFlag(body),
         objectives
       });
-      return withDescriptionWarnings(created, objectives);
+      return withSummaryWarnings(created, objectives);
     }
   },
   "update-objective": {
     permission: PERMISSIONS.OBJECTIVE_UPDATE,
     handler: async (ctx, body) => {
       const objectiveId = requireFlag(body, "--objective-id");
+      rejectRenamedObjectiveFlags(body, RETIRED_UPDATE_OBJECTIVE_FLAGS);
       const update = {};
       const autoAdvance = optionalAutoAdvanceFlag(body);
       if (autoAdvance !== void 0) {
@@ -176805,37 +176967,39 @@ var missionSubcommands = {
         await assertDraftOnProtocolSurface(objectiveId, "instruction text");
         update.instructionText = resolveInput(body, "--instruction-text", "--instruction-text-file") ?? "";
       }
-      const hasDescription = hasFlag(body, "--description") || hasFlag(body, "--description-file");
-      const descriptionRequest = strFlag(body, "--description-request");
-      if (hasFlag(body, "--description-request")) {
-        if (!descriptionRequest || !DESCRIPTION_REQUEST_MODES.includes(descriptionRequest)) {
+      const hasSummary = hasFlag(body, "--summary") || hasFlag(body, "--summary-file");
+      const summaryRequest = strFlag(body, "--summary-request");
+      if (hasFlag(body, "--summary-request")) {
+        if (!summaryRequest || !SUMMARY_REQUEST_MODES.includes(summaryRequest)) {
           throw new ApiError(
             400,
-            "--description-request must be summarize, regenerate or retry",
+            "--summary-request must be summarize, regenerate or retry",
             void 0,
             "invalid_input"
           );
         }
-        if (hasDescription) {
+        if (hasSummary) {
           throw new ApiError(
             400,
-            "--description-request cannot be combined with --description/--description-file",
+            "--summary-request cannot be combined with --summary/--summary-file",
             void 0,
             "invalid_input"
           );
         }
       }
-      if (hasDescription || descriptionRequest) {
-        await assertDraftOnProtocolSurface(objectiveId, "description");
+      const current = hasSummary || summaryRequest ? await assertDraftOnProtocolSurface(objectiveId, "summary") : null;
+      if (hasSummary) {
+        update.summary = resolveInput(body, "--summary", "--summary-file") ?? "";
       }
-      if (hasDescription) {
-        update.description = resolveInput(body, "--description", "--description-file") ?? "";
-      }
+      const placement = typeof update.summary === "string" && update.summary.trim() ? {
+        instructions: update.instructionText ?? current?.instructionText ?? "",
+        summary: update.summary
+      } : null;
       Object.assign(update, objectiveAssignmentUpdate(body));
-      if (autoAdvance === void 0 && update.instructionText === void 0 && update.title === void 0 && update.description === void 0 && update.assignedAgent === void 0 && !descriptionRequest) {
+      if (autoAdvance === void 0 && update.instructionText === void 0 && update.title === void 0 && update.summary === void 0 && update.assignedAgent === void 0 && !summaryRequest) {
         throw new ApiError(
           400,
-          "Provide at least one of --title, --description/--description-file, --description-request, --auto-advance/--no-auto-advance, --instruction-text/--instruction-text-file, or --objective-agent"
+          "Provide at least one of --title, --summary/--summary-file, --summary-request, --auto-advance/--no-auto-advance, --instruction-text/--instruction-text-file, or --objective-agent"
         );
       }
       const { origin } = await withAgentOrigin({ ctx, body });
@@ -176843,15 +177007,14 @@ var missionSubcommands = {
       const result2 = await updateObjectiveWithWarnings(objectiveId, update, options);
       const warnings = [...result2.warnings];
       let objective = result2.objective;
-      if (typeof update.description === "string" && update.description.trim() && !warnings.some((warning2) => warning2.code === "description_suppressed")) {
-        warnings.push(...objectiveDescriptionStyleWarnings(update.description.trim()));
-      }
-      if (descriptionRequest) {
-        objective = await requestObjectiveDescription(
-          objective.id,
-          { mode: descriptionRequest },
-          options
+      if (placement && !warnings.some((warning2) => warning2.code === "summary_suppressed")) {
+        warnings.push(
+          ...objectiveSummaryPlacementWarnings(placement),
+          ...objectiveSummaryStyleWarnings(placement.summary.trim())
         );
+      }
+      if (summaryRequest) {
+        objective = await requestObjectiveSummary(objective.id, { mode: summaryRequest }, options);
       }
       return { ...objective, warnings };
     }
@@ -184664,16 +184827,16 @@ function overlordMcpToolDefinitions({ defaultAgent }) {
       inputSchema: objectSchema({
         projectId: stringProperty("Overlord project id, slug, or name. Required unless unassignedToProject is true."),
         unassignedToProject: booleanProperty("Set true only to intentionally create an account-owned inbox item instead of a project mission. Cannot be combined with projectId."),
-        objective: stringProperty("Initial objective text."),
-        description: stringProperty("Optional human-facing summary of the objective for the people who decide whether to launch it: one to three short prose paragraphs in Simplified Technical English style that open with the goal and close with the done-when sentence, about 120 words. The objective text stays the complete instruction for the executing agent; the summary is never sent to it. Omit it and Overlord writes one for long agent-written objectives. Style issues come back as warnings; the text is stored as written."),
+        objectiveInstructions: stringProperty("INSTRUCTIONS: the complete brief the executing agent receives (context, steps, done-when). Usually the LONGER of the two texts. The agent receives only this text. If the summary looks swapped with these instructions (3x longer, for example), the response carries an objective_fields_swapped warning."),
+        objectiveSummary: stringProperty("SUMMARY: a short overview for the people who decide whether to launch the objective, never sent to the executing agent. Usually the SHORTER text: one to three prose paragraphs (about 120 words) in Simplified Technical English style that open with the goal and close with the done-when sentence. No headings or numbered steps; those belong in the instructions. Omit it and Overlord writes one for long agent-written objectives. A possible swap and style issues come back as warnings; the text is stored as written."),
         title: stringProperty("Optional mission title."),
         resourceKey: stringProperty("Optional logical project resource key for the objective."),
         agent: stringProperty("Optional agent identifier to assign to the initial objective, such as codex or claude, or manual (alias human) when a person will do it: manual takes no model and is never launched. Omitted leaves the project launch-preference default; set it here instead of appending a second objective just to name an agent."),
         model: stringProperty("Optional model identifier for the assigned agent. Requires agent; rejected without it."),
         assignedTo: stringProperty("Optional workspace member to own the mission (workspace_users.id, profile UUID, orgid:username, bare username, or email). Rejected when the member is not in the workspace; meaningless for an unassigned inbox item."),
         autoAdvance: booleanProperty("When true, Overlord queues the next objective for execution after this one is delivered. Defaults to false.")
-      }, ["objective"]),
-      outputSchema: protocolOutputSchema("The newly created draft mission, or an intentional unassigned inbox item. For each created objective, inspect the returned ObjectiveDto assignedAgent, model, resourceKey, and queueEntry/autoAdvance fields to verify the persisted launch settings."),
+      }, ["objectiveInstructions"]),
+      outputSchema: protocolOutputSchema("The newly created draft mission, or an intentional unassigned inbox item. Created objectives may carry warnings (objective_fields_swapped, summary_style). For each created objective, inspect the returned ObjectiveDto assignedAgent, model, resourceKey, and queueEntry/autoAdvance fields to verify the persisted launch settings."),
       annotations: writeAction
     },
     {
@@ -184894,11 +185057,11 @@ function overlordMcpToolDefinitions({ defaultAgent }) {
         objectiveId: stringProperty("Objective UUID or display id such as coo:756.k7xm. Used only to supply missionId when it is omitted; the new objectives are appended to that objective mission."),
         objectives: {
           type: "array",
-          description: "Objective objects with objective text and optional title, description, agent/model launch selection, resourceKey, and autoAdvance.",
+          description: "Objective objects with instructions (the complete brief for the executing agent) and optional summary (a short overview for people), title, agent/model launch selection, resourceKey, and autoAdvance.",
           items: objectSchema({
-            objective: stringProperty("Objective text."),
+            instructions: stringProperty("INSTRUCTIONS: the complete brief the executing agent receives (context, steps, done-when). Usually the LONGER of the two texts. The agent receives only this text. If the summary looks swapped with these instructions (3x longer, for example), the response carries an objective_fields_swapped warning."),
             title: stringProperty("Optional objective title."),
-            description: stringProperty("Optional human-facing summary of the objective for the people who decide whether to launch it: one to three short prose paragraphs in Simplified Technical English style that open with the goal and close with the done-when sentence, about 120 words. The objective text stays the complete instruction for the executing agent; the summary is never sent to it. Omit it and Overlord writes one for long agent-written objectives. Style issues come back as warnings; the text is stored as written."),
+            summary: stringProperty("SUMMARY: a short overview for the people who decide whether to launch the objective, never sent to the executing agent. Usually the SHORTER text: one to three prose paragraphs (about 120 words) in Simplified Technical English style that open with the goal and close with the done-when sentence. No headings or numbered steps; those belong in the instructions. Omit it and Overlord writes one for long agent-written objectives. A possible swap and style issues come back as warnings; the text is stored as written."),
             agent: stringProperty("Optional agent identifier to assign to this objective, such as codex or claude, or manual (alias human) when a person will do it: manual takes no model and is never launched."),
             model: stringProperty("Optional model identifier for this objective. Requires agent."),
             resourceKey: stringProperty("Optional logical project resource key."),
@@ -184912,23 +185075,23 @@ function overlordMcpToolDefinitions({ defaultAgent }) {
     {
       name: "overlord_update_objective",
       title: "Update objective",
-      description: "Use this to rewrite an objective title in any state, turn auto-advance on or off, edit instruction text or the human-facing description (summary) on a draft objective, request a generated summary on a draft objective, and/or reassign the objective to another agent or to a person (agent manual, alias human).",
+      description: "Use this to rewrite an objective title in any state, turn auto-advance on or off, edit instruction text or the human-facing summary on a draft objective, request a generated summary on a draft objective, and/or reassign the objective to another agent or to a person (agent manual, alias human).",
       inputSchema: objectSchema({
         objectiveId: stringProperty("Objective UUID or display id."),
         title: stringProperty("Replacement objective title. An empty string clears the custom title and restores instruction-derived presentation."),
         autoAdvance: booleanProperty("When true, Overlord queues the next objective after this one is delivered. When false, delivery waits for approval."),
-        instructionText: stringProperty("Replacement instruction text. Allowed only when the objective is in draft state; blank clears the text."),
-        description: stringProperty("Replacement human-facing summary, allowed only when the objective is in draft state: one to three short prose paragraphs in Simplified Technical English style that open with the goal and close with the done-when sentence. It is never sent to the executing agent. An empty string removes the summary; Overlord then writes none until a person selects Summarize. When a person has removed the summary, your text is not stored and a description_suppressed warning is returned."),
-        descriptionRequest: {
+        instructionText: stringProperty("Replacement INSTRUCTIONS: the complete brief the executing agent receives. Allowed only when the objective is in draft state; blank clears the text."),
+        summary: stringProperty("Replacement SUMMARY: a short overview for people, never sent to the executing agent; allowed only when the objective is in draft state: one to three short prose paragraphs in Simplified Technical English style that open with the goal and close with the done-when sentence. An empty string removes the summary; Overlord then writes none until a person selects Summarize. When a person has removed the summary, your text is not stored and a summary_suppressed warning is returned. A summary that looks swapped with the instructions returns an objective_fields_swapped warning."),
+        summaryRequest: {
           type: "string",
           enum: ["summarize", "regenerate", "retry"],
-          description: "Ask Overlord to write the summary (summarize/regenerate) or to retry a failed generation (retry). Allowed only in draft state and only for instructions of at least 280 characters. Refused with description_suppressed when a person removed the summary: only a person can turn summaries back on. Cannot be combined with description."
+          description: "Ask Overlord to write the summary (summarize/regenerate) or to retry a failed generation (retry). Allowed only in draft state and only for instructions of at least 280 characters. Refused with summary_suppressed when a person removed the summary: only a person can turn summaries back on. Cannot be combined with summary."
         },
         agent: stringProperty("Agent to assign, such as codex or claude, or manual (alias human) so a person does the objective instead of an agent. Manual objectives are never launched and the Run Queue holds them until an agent is assigned. Changing agent clears any model or reasoning effort not passed alongside it."),
         model: stringProperty("Optional model identifier for the agent named in agent. Requires agent; rejected for manual."),
         reasoningEffort: stringProperty("Optional reasoning-effort setting for the agent named in agent. Requires agent; rejected for manual.")
       }, ["objectiveId"]),
-      outputSchema: protocolOutputSchema("The updated objective, including title, description and its summary state (descriptionSource, descriptionStatus, descriptionSuppressed), assignedAgent, model, reasoningEffort, resourceKey, autoAdvance, and instructionText, plus warnings: advisory description_style issues and description_suppressed."),
+      outputSchema: protocolOutputSchema("The updated objective, including title, summary and its state (summarySource, summaryStatus, summarySuppressed), assignedAgent, model, reasoningEffort, resourceKey, autoAdvance, and instructionText, plus warnings: advisory summary_style issues, summary_suppressed and objective_fields_swapped."),
       annotations: writeAction
     },
     {
@@ -185602,11 +185765,11 @@ function updateObjectiveProtocolBody(args) {
   const hasAutoAdvance = typeof args.autoAdvance === "boolean";
   const hasInstructionText = typeof args.instructionText === "string";
   const hasAgent = typeof args.agent === "string";
-  const hasDescription = typeof args.description === "string";
-  const hasDescriptionRequest = typeof args.descriptionRequest === "string";
-  if (!hasTitle && !hasAutoAdvance && !hasInstructionText && !hasAgent && !hasDescription && !hasDescriptionRequest) {
+  const hasSummary = typeof args.summary === "string";
+  const hasSummaryRequest = typeof args.summaryRequest === "string";
+  if (!hasTitle && !hasAutoAdvance && !hasInstructionText && !hasAgent && !hasSummary && !hasSummaryRequest) {
     throw new Error(
-      "Provide title, description, descriptionRequest, autoAdvance, instructionText, and/or agent"
+      "Provide title, summary, summaryRequest, autoAdvance, instructionText, and/or agent"
     );
   }
   return protocolBody({
@@ -185614,8 +185777,8 @@ function updateObjectiveProtocolBody(args) {
     ...hasTitle ? { "--title": args.title } : {},
     ...hasAutoAdvance ? autoAdvanceFlags(args) : {},
     ...hasInstructionText ? { "--instruction-text": requiredString2(args, "instructionText") } : {},
-    ...hasDescription ? { "--description": args.description } : {},
-    ...hasDescriptionRequest ? { "--description-request": args.descriptionRequest } : {},
+    ...hasSummary ? { "--summary": args.summary } : {},
+    ...hasSummaryRequest ? { "--summary-request": args.summaryRequest } : {},
     // The protocol handler validates the selection (model requires agent,
     // manual takes none), so pass whatever was supplied straight through.
     ...hasAgent ? { "--objective-agent": args.agent } : {},
@@ -185685,8 +185848,8 @@ var toolHandlers = {
     protocolBody({
       ...optionalString(args, "projectId") ? { "--project-id": requiredString2(args, "projectId") } : {},
       ...args.unassignedToProject === true ? { "--unassigned-to-project": true } : {},
-      "--objective": requiredString2(args, "objective"),
-      ...typeof args.description === "string" ? { "--objective-description": args.description } : {},
+      "--objective-instructions": requiredString2(args, "objectiveInstructions"),
+      ...typeof args.objectiveSummary === "string" ? { "--objective-summary": args.objectiveSummary } : {},
       ...optionalString(args, "title") ? { "--title": requiredString2(args, "title") } : {},
       ...optionalString(args, "resourceKey") ? { "--resource": requiredString2(args, "resourceKey") } : {},
       ...optionalString(args, "agent") ? { "--objective-agent": requiredString2(args, "agent") } : {},
@@ -185700,7 +185863,7 @@ var toolHandlers = {
     protocolBody({
       "--unassigned-to-project": true,
       "--title": requiredString2(args, "title"),
-      "--objective": requiredString2(args, "objective")
+      "--objective-instructions": requiredString2(args, "objective")
     })
   ),
   overlord_load_mission_context: (args) => runProtocolSubcommand(
@@ -188168,7 +188331,7 @@ var ChatProposals = class _ChatProposals extends ChatStore {
           createdFromChatThreadId: p3.thread_id,
           objectives: m3.objectives.map((o3) => ({
             title: o3.title,
-            objective: [
+            instructions: [
               o3.objective,
               ...o3.acceptanceCriteria.length ? ["", "Acceptance criteria:", ...o3.acceptanceCriteria.map((c5) => `- ${c5}`)] : [],
               ...o3.evidenceIds.length ? ["", "Evidence:", ...o3.evidenceIds.map((e5) => `- ${e5}`)] : [],
@@ -190653,7 +190816,7 @@ ${lines.join("\n\n")}
       config: {
         systemInstruction: SUMMARY_INSTRUCTION,
         responseMimeType: "application/json",
-        responseJsonSchema: SUMMARY_SCHEMA,
+        responseJsonSchema: SUMMARY_SCHEMA2,
         maxOutputTokens: SUMMARY_MAX_OUTPUT_TOKENS,
         thinkingConfig: { thinkingLevel: "low" },
         abortSignal: signal
@@ -190682,7 +190845,7 @@ ${lines.join("\n\n")}
     await record2("summary.error", { error: error64 });
   }
 }
-var SUMMARY_SCHEMA = {
+var SUMMARY_SCHEMA2 = {
   type: "object",
   properties: {
     text: { type: "string", maxLength: SUMMARY_LIMITS.text },
@@ -198028,8 +198191,8 @@ var QUESTION_LIMIT = 10;
 var QUESTION_MAX_AGE_MS = 3 * 24 * 60 * 60 * 1e3;
 var FEED_LIMIT = 40;
 var INSTRUCTION_PREVIEW_CHARS = 400;
-function descriptionPreview(description) {
-  const text = description?.trim();
+function summaryPreview(summary) {
+  const text = summary?.trim();
   return text ? truncate2(text, INSTRUCTION_PREVIEW_CHARS) : null;
 }
 var EVENT_SUMMARY_CHARS = 240;
@@ -198107,7 +198270,7 @@ async function loadRuns(workspaceIds) {
   return await requireDatabaseClient().all(
     `SELECT ${CONTEXT_COLUMNS}, ${MISSION_PROVENANCE_COLUMNS},
             o.id AS objective_id, o.display_key AS objective_display_key,
-            o.title AS objective_title, o.instruction_text, o.description, o.state, o.position,
+            o.title AS objective_title, o.instruction_text, o.summary, o.state, o.position,
             o.branch, o.resource_key, o.assigned_agent, o.model,
             o.updated_at AS objective_updated_at, o.launched_at, o.started_at,
             (SELECT s.agent_identifier FROM agent_sessions s
@@ -198243,7 +198406,7 @@ async function loadDelivered({
     `SELECT ${CONTEXT_COLUMNS}, ${MISSION_PROVENANCE_COLUMNS},
             d.id AS delivery_id, d.summary AS delivery_summary, d.delivered_at,
             o.id AS objective_id, o.display_key AS objective_display_key,
-            o.title AS objective_title, o.instruction_text, o.description,
+            o.title AS objective_title, o.instruction_text, o.summary,
             o.branch, o.resource_key, o.assigned_agent, o.model,
             s.agent_identifier AS session_agent_identifier,
             s.model_identifier AS session_model_identifier
@@ -198377,7 +198540,7 @@ function toMissionItem2({
     activeObjectiveIds: runs.map((run) => run.objective_id),
     objectiveTitle: primary.objective_title,
     instructionPreview: truncate2(primary.instruction_text, INSTRUCTION_PREVIEW_CHARS),
-    descriptionPreview: descriptionPreview(primary.description),
+    summaryPreview: summaryPreview(primary.summary),
     agentIdentifier: resolveAgentIdentifier(
       primary.session_agent_identifier,
       primary.assigned_agent
@@ -198421,7 +198584,7 @@ function toDeliveredMissionItem({
     activeObjectiveIds: [],
     objectiveTitle: row.objective_title,
     instructionPreview: truncate2(row.instruction_text, INSTRUCTION_PREVIEW_CHARS),
-    descriptionPreview: descriptionPreview(row.description),
+    summaryPreview: summaryPreview(row.summary),
     agentIdentifier: resolveAgentIdentifier(row.session_agent_identifier, row.assigned_agent),
     modelIdentifier: row.session_model_identifier ?? row.model,
     branch: row.branch,
@@ -203857,7 +204020,7 @@ function runnerContext(db, workspaceId2) {
 function wantedFields(row) {
   return {
     title: row.title_status === "pending" && row.title_source === "generated" ? { generation: row.title_generation } : null,
-    description: row.description_status === "pending" && !row.description_suppressed && isDescriptionEligibleInstruction(row.instruction_text) ? { generation: row.description_generation } : null
+    summary: row.summary_status === "pending" && !row.summary_suppressed && isSummaryEligibleInstruction(row.instruction_text) ? { generation: row.summary_generation } : null
   };
 }
 var ObjectiveBriefComposeWorker = class extends WorkerJobPoller {
@@ -203997,7 +204160,7 @@ var ObjectiveBriefComposeWorker = class extends WorkerJobPoller {
     const ctx = runnerContext(client, row.workspace_id);
     await clearUnsatisfiableObjectiveBriefIntent(ctx, objectiveId);
     const wanted = wantedFields(row);
-    if (!wanted.title && !wanted.description) return { kind: "done" };
+    if (!wanted.title && !wanted.summary) return { kind: "done" };
     const instructionText = (row.instruction_text ?? "").trim();
     const instructionHash = hashObjectiveInstruction(instructionText);
     const generate = this.generateOverride;
@@ -204011,11 +204174,11 @@ var ObjectiveBriefComposeWorker = class extends WorkerJobPoller {
           status: null
         });
       }
-      if (wanted.description) {
-        await failObjectiveDescriptionGeneration({
+      if (wanted.summary) {
+        await failObjectiveSummaryGeneration({
           ctx,
           objectiveId,
-          generation: wanted.description.generation,
+          generation: wanted.summary.generation,
           failureCode: "provider_unavailable"
         });
       }
@@ -204025,7 +204188,7 @@ var ObjectiveBriefComposeWorker = class extends WorkerJobPoller {
     const startedAt = Date.now();
     const outcome = await this.compose({
       instructionText,
-      fields: { title: wanted.title !== null, description: wanted.description !== null },
+      fields: { title: wanted.title !== null, summary: wanted.summary !== null },
       ...generate ? { generate } : {},
       timeoutMs: OBJECTIVE_BRIEF_PROVIDER_TIMEOUT_MS
     });
@@ -204042,11 +204205,11 @@ var ObjectiveBriefComposeWorker = class extends WorkerJobPoller {
           status: code === "provider_error" ? "failed" : null
         });
       }
-      if (wanted.description) {
-        await failObjectiveDescriptionGeneration({
+      if (wanted.summary) {
+        await failObjectiveSummaryGeneration({
           ctx,
           objectiveId,
-          generation: wanted.description.generation,
+          generation: wanted.summary.generation,
           failureCode: code
         });
       }
@@ -204062,13 +204225,13 @@ var ObjectiveBriefComposeWorker = class extends WorkerJobPoller {
     if (wanted.title && outcome.title.status === "ok") {
       result2.title = { generation: wanted.title.generation, text: outcome.title.text };
     }
-    if (wanted.description && outcome.description.status === "ok") {
-      result2.description = {
-        generation: wanted.description.generation,
-        text: outcome.description.text
+    if (wanted.summary && outcome.summary.status === "ok") {
+      result2.summary = {
+        generation: wanted.summary.generation,
+        text: outcome.summary.text
       };
     }
-    const published = result2.title || result2.description ? await publishObjectiveBrief({ ctx, objectiveId, result: result2 }) : { title: "not_requested", description: "not_requested" };
+    const published = result2.title || result2.summary ? await publishObjectiveBrief({ ctx, objectiveId, result: result2 }) : { title: "not_requested", summary: "not_requested" };
     if (wanted.title && outcome.title.status === "failed") {
       await settleObjectiveTitleGeneration({
         ctx,
@@ -204077,12 +204240,12 @@ var ObjectiveBriefComposeWorker = class extends WorkerJobPoller {
         status: "failed"
       });
     }
-    if (wanted.description && (outcome.description.status === "failed" || published.description === "invalid")) {
-      await failObjectiveDescriptionGeneration({
+    if (wanted.summary && (outcome.summary.status === "failed" || published.summary === "invalid")) {
+      await failObjectiveSummaryGeneration({
         ctx,
         objectiveId,
-        generation: wanted.description.generation,
-        failureCode: outcome.description.status === "failed" ? outcome.description.code : "invalid_output"
+        generation: wanted.summary.generation,
+        failureCode: outcome.summary.status === "failed" ? outcome.summary.code : "invalid_output"
       });
     }
     logBriefMetric("objective_brief_composed", {
@@ -204095,10 +204258,10 @@ var ObjectiveBriefComposeWorker = class extends WorkerJobPoller {
       inputChars: outcome.inputChars,
       model: outcome.model,
       title: wanted.title ? `${outcome.title.status}:${published.title}` : null,
-      description: wanted.description ? `${outcome.description.status}:${published.description}` : null,
-      descriptionWarnings: outcome.description.status === "ok" ? outcome.description.warnings.length : null
+      summary: wanted.summary ? `${outcome.summary.status}:${published.summary}` : null,
+      summaryWarnings: outcome.summary.status === "ok" ? outcome.summary.warnings.length : null
     });
-    return published.title === "stale" || published.description === "stale" ? { kind: "stale" } : { kind: "done" };
+    return published.title === "stale" || published.summary === "stale" ? { kind: "stale" } : { kind: "done" };
   }
 };
 var objectiveBriefComposeWorker = new ObjectiveBriefComposeWorker();
@@ -206814,8 +206977,8 @@ app.delete(
   handle3((req) => deleteObjective(req.params.id), { mutates: true })
 );
 app.post(
-  "/api/objectives/:id/description-requests",
-  handle3((req) => requestObjectiveDescription(req.params.id, req.body), { mutates: true })
+  "/api/objectives/:id/summary-requests",
+  handle3((req) => requestObjectiveSummary(req.params.id, req.body), { mutates: true })
 );
 app.post(
   "/api/objectives/:id/launch",
