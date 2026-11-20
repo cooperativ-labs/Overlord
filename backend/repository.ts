@@ -164,8 +164,8 @@ import {
 } from '../packages/core/service/missions.ts';
 import { emitNotification } from '../packages/core/service/notifications/notifications.ts';
 import {
-  isSummaryEligibleInstruction,
   isObjectiveSummaryStale,
+  isSummaryEligibleInstruction,
   loadObjectiveBriefRow,
   normalizeObjectiveSummaryInput,
   objectiveBriefActorFromOrigin,

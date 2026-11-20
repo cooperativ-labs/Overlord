@@ -12,12 +12,12 @@ export {
 } from './compose-delivery/index.js';
 export type {
   ObjectiveBriefComposeOutcome,
-  ObjectiveBriefSummaryParts,
   ObjectiveBriefFieldFailure,
   ObjectiveBriefFieldOutcome,
   ObjectiveBriefFields,
   ObjectiveBriefGenerate,
-  ObjectiveBriefStyleIssue
+  ObjectiveBriefStyleIssue,
+  ObjectiveBriefSummaryParts
 } from './objective-brief/index.js';
 export {
   assembleObjectiveSummary,

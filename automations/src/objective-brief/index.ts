@@ -1,9 +1,9 @@
 export type {
   AssembledSummary,
   BriefFidelityIssue,
-  ObjectiveBriefSummaryParts,
   ObjectiveBriefFields,
   ObjectiveBriefStyleIssue,
+  ObjectiveBriefSummaryParts,
   ParsedObjectiveBrief
 } from './brief.js';
 export {
@@ -18,11 +18,11 @@ export {
   lintObjectiveTitle,
   normalizeBriefFragment,
   normalizeBriefTitle,
-  OBJECTIVE_BRIEF_SUMMARY_MAX_CHARS,
   OBJECTIVE_BRIEF_MAX_INPUT_CHARS,
   OBJECTIVE_BRIEF_MAX_OUTPUT_TOKENS,
   OBJECTIVE_BRIEF_MISSING_DONE_WHEN,
   OBJECTIVE_BRIEF_SCHEMA_VERSION,
+  OBJECTIVE_BRIEF_SUMMARY_MAX_CHARS,
   OBJECTIVE_BRIEF_SYSTEM_INSTRUCTION,
   OBJECTIVE_BRIEF_TARGET_WORDS,
   OBJECTIVE_BRIEF_TITLE_MAX_CHARS,
