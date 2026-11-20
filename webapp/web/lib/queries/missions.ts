@@ -1,6 +1,7 @@
 import type {
   ActivityFeedDto,
   BranchActionBody,
+  CreateArtifactBody,
   CreateInboxItemBody,
   CreateMissionBody,
   HumanAgentRequestDto,
@@ -355,6 +356,32 @@ export function useUpdateMissionArtifact(missionId: string) {
       qc.setQueryData<import('@overlord/contract').ArtifactDto[]>(
         keys.missionArtifacts(missionId),
         current => current?.map(item => (item.id === artifact.id ? artifact : item))
+      );
+    }
+  });
+}
+
+export function useCreateMissionArtifact(missionId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: CreateArtifactBody) => api.createMissionArtifact(missionId, body),
+    onSuccess: artifact => {
+      qc.setQueryData<import('@overlord/contract').ArtifactDto[]>(
+        keys.missionArtifacts(missionId),
+        current => [artifact, ...(current ?? []).filter(item => item.id !== artifact.id)]
+      );
+    }
+  });
+}
+
+export function useDeleteMissionArtifact(missionId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (artifactId: string) => api.deleteMissionArtifact(missionId, artifactId),
+    onSuccess: (_result, artifactId) => {
+      qc.setQueryData<import('@overlord/contract').ArtifactDto[]>(
+        keys.missionArtifacts(missionId),
+        current => current?.filter(item => item.id !== artifactId)
       );
     }
   });

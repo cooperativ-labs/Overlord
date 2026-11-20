@@ -5,10 +5,10 @@
 import { z } from 'zod';
 
 /** The contract version (contract/VERSION) this API description belongs to. */
-export const contractVersion = "179.0.1";
+export const contractVersion = "179.1.0";
 
 /** The API description's own version (OpenAPI `info.version`). */
-export const apiVersion = "6.0.0";
+export const apiVersion = "6.1.0";
 
 /** A non-JSON request or response body: raw bytes (G3). */
 export type BinaryBody = Uint8Array | ArrayBuffer | Blob;
@@ -2422,7 +2422,7 @@ export const activityFeedQuestionItemDtoSchema: z.ZodType<ActivityFeedQuestionIt
 
 export interface ActivityFeedDto {
   /**
-   * Grouped: launching mission runs, executing mission runs, blocking questions (those three capped together), then delivered missions; newest first within each group. A page loaded with `before` holds only delivered missions.
+   * Grouped: blocking questions, launching mission runs, executing mission runs (those three capped together), then delivered missions; newest first within each group. A page loaded with `before` holds only delivered missions.
    */
   items: Array<ActivityFeedMissionItemDto | ActivityFeedQuestionItemDto>;
   generatedAt: DateTime;
@@ -8004,6 +8004,18 @@ export interface PutMissionsByIdContextPathParams {
 }
 export const putMissionsByIdContextPathParamsSchema: z.ZodType<PutMissionsByIdContextPathParams> = z.object({ "id": z.string() });
 
+export interface DeleteMissionsByIdArtifactsByArtifactIdPathParams {
+  /**
+   * Mission UUID or display id.
+   */
+  id: string;
+  /**
+   * Artifact UUID.
+   */
+  artifactId: string;
+}
+export const deleteMissionsByIdArtifactsByArtifactIdPathParamsSchema: z.ZodType<DeleteMissionsByIdArtifactsByArtifactIdPathParams> = z.object({ "id": z.string(), "artifactId": z.string() });
+
 export interface PatchMissionsByIdArtifactsByArtifactIdPathParams {
   /**
    * Mission UUID or display id.
@@ -12779,7 +12791,7 @@ export const apiOperations = {
     permission: "artifact:create",
     permissionCandidates: [],
     edition: "both",
-    consumers: ["unverified"],
+    consumers: ["mobile","webapp"],
     extension: null,
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: postMissionsByIdArtifactsPathParamsSchema, query: null, header: null },
@@ -12823,6 +12835,25 @@ export const apiOperations = {
     parameters: { path: putMissionsByIdContextPathParamsSchema, query: null, header: null },
     requestBody: { required: true, content: { "application/json": { kind: "json", schema: upsertSharedContextBodySchema } } },
     responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: sharedContextEntryDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * DELETE /api/missions/{id}/artifacts/{artifactId}: Delete a mission artifact
+   */
+  deleteMissionsByIdArtifactsByArtifactId: {
+    operationId: "deleteMissionsByIdArtifactsByArtifactId",
+    method: "DELETE",
+    path: "/api/missions/{id}/artifacts/{artifactId}",
+    tags: ["missions"],
+    deprecated: false,
+    permission: "mission:update",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["mobile","webapp"],
+    extension: null,
+    security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
+    parameters: { path: deleteMissionsByIdArtifactsByArtifactIdPathParamsSchema, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: okResponseSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "500": apiResponses.InternalError }
   },
   /**
    * PATCH /api/missions/{id}/artifacts/{artifactId}: Edit an artifact's human-facing fields

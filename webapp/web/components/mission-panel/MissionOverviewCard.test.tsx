@@ -196,7 +196,7 @@ function seenWrites(): string[] {
 }
 
 it('keeps old missions to Objectives and For you, and shows the before-first-delivery state', async () => {
-  // Its notification was dismissed: For you still lists it (plan §5).
+  // Its notification was dismissed: For you no longer lists it; the objective activity keeps it.
   resetDismissedAgentRequestsForTests();
   for (const request of fixture.agentRequests as Array<{ id: string }>) {
     dismissAgentRequest(
@@ -214,17 +214,16 @@ it('keeps old missions to Objectives and For you, and shows the before-first-del
     seenAt: null
   });
   // The card never hides: it carries the objective list and, on an old summary-ineligible
-  // mission, still lists the open question under For you (plan §6.1, decision 13).
+  // mission, a dismissed question is not highlighted under For you (plan §6.1, decision 13).
   assert.ok(screen.getByText('Objective rows'));
   const tabs = screen.getAllByRole('tab').map(tab => tab.textContent);
-  assert.deepEqual(tabs, ['Objectives1/6', 'For you1']);
+  assert.deepEqual(tabs, ['Objectives1/6']);
   assert.equal(
     screen.getByRole('tab', { name: /Objectives/ }).getAttribute('aria-selected'),
     'true'
   );
-  selectTab(/For you/);
-  assert.ok(screen.getByText(/Answer the agent's question on/));
   cleanup();
+  window.localStorage.clear();
   resetDismissedAgentRequestsForTests();
   const response = structuredClone(fixture.summaryResponse);
   response.summary = null;

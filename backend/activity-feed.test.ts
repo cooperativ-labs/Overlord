@@ -427,6 +427,29 @@ test('an unseen blocking question surfaces and a seen one drops out', async () =
   );
 });
 
+test('blocking questions lead the feed, above launching and executing missions', async () => {
+  const project = await createProject({ name: 'AF Question Order' });
+  const running = await createMission({ projectId: project.id, firstObjective: 'Running' });
+  await updateObjective(running.objectives[0]!.id, { state: 'executing' });
+  const asking = await createMission({ projectId: project.id, firstObjective: 'Asking' });
+  const eventId = seedAskEvent({
+    workspaceId: asking.workspaceId,
+    projectId: project.id,
+    missionId: asking.id,
+    objectiveId: asking.objectives[0]!.id,
+    summary: 'Which path?',
+    createdAt: nowIso()
+  });
+
+  const feed = await listActivityFeed();
+  const questionIndex = feed.items.findIndex(entry => entry.id === `ask:${eventId}`);
+  const runIndex = feed.items.findIndex(
+    entry => entry.kind === 'mission_run' && entry.missionId === running.id
+  );
+  assert.ok(questionIndex >= 0 && runIndex >= 0);
+  assert.ok(questionIndex < runIndex, 'questions precede running missions');
+});
+
 test('an answered blocking question leaves the feed and the mission card', async () => {
   const project = await createProject({ name: 'AF Ask Answered' });
   const mission = await createMission({ projectId: project.id, firstObjective: 'Answer me' });

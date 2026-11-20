@@ -3698,7 +3698,9 @@ Data rules of individual routes:
 - Artifact edits (`patchMissionsByIdArtifactsByArtifactId`) keep delivery, session and objective
   provenance and the structured `contentJson` immutable, and the artifact must retain at least
   one text, JSON or URL content field. Artifact creation without a delivery
-  (`postMissionsByIdArtifacts`) leaves `delivery_id` null.
+  (`postMissionsByIdArtifacts`) leaves `delivery_id` null. Artifact deletion
+  (`deleteMissionsByIdArtifactsByArtifactId`, `mission:update`) only sets `deleted_at` and records
+  an `artifact` delete change; every artifact read excludes tombstoned rows (ADR 0086).
 - Uploads (`postUploadsByBucketKey`) persist bytes to the `storage_buckets` backend and record the
   matching object table row (for example `user_images`); `organization-images` has no metadata
   table. Serving (`getStorageByBucketKeyByStorageKey`) first authorizes by the logical storage

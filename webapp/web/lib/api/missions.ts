@@ -3,6 +3,7 @@ import type {
   AgentRequestListResponse,
   ArtifactDto,
   BranchActionBody,
+  CreateArtifactBody,
   CreateInboxItemBody,
   CreateMissionBody,
   ForgetTerminalSessionBody,
@@ -194,8 +195,12 @@ export const missionsApi = {
     request<MissionSummarySeenResponse>('PUT', `/api/missions/${id}/summary/seen`, body),
   listMissionArtifacts: (id: string) =>
     request<ArtifactDto[]>('GET', `/api/missions/${id}/artifacts`),
+  createMissionArtifact: (missionId: string, body: CreateArtifactBody) =>
+    request<ArtifactDto>('POST', `/api/missions/${missionId}/artifacts`, body),
   updateMissionArtifact: (missionId: string, artifactId: string, body: UpdateArtifactBody) =>
     request<ArtifactDto>('PATCH', `/api/missions/${missionId}/artifacts/${artifactId}`, body),
+  deleteMissionArtifact: (missionId: string, artifactId: string) =>
+    request<OkResponse>('DELETE', `/api/missions/${missionId}/artifacts/${artifactId}`),
   listMissionSharedContext: (id: string) =>
     request<SharedContextEntryDto[]>('GET', `/api/missions/${id}/context`),
   upsertMissionSharedContext: (missionId: string, body: UpsertSharedContextBody) =>

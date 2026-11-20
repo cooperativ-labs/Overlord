@@ -126,7 +126,10 @@ Command names, flags and response shapes are in
   skill or plugin, and is worded for the caller's connection method: `attach` and
   `resume-follow-up` accept an optional `--connection-method cli|mcp` (default `cli`); MCP
   servers send `mcp`, and the rules then name Overlord MCP tools and payload fields and no
-  CLI command or flag. Runner-launched
+  CLI command or flag. Both forms remind agents working in a writable checkout to use
+  the launch-provided `OVERLORD_TMPDIR` when available under that checkout’s `.overlord/tmp/`,
+  or create and use `.overlord/tmp/` at the checkout root, and to pass that directory
+  explicitly to tools that default to a system temp folder. Runner-launched
   agents carry `OVERLORD_EXECUTION_REQUEST_ID` and `OVERLORD_OBJECTIVE_ID`, which the CLI
   forwards as `--execution-request-id` and `--objective-id` so the backend pins that
   objective and links `execution_requests.launched_session_id` to the created session.

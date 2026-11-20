@@ -3,10 +3,10 @@ info:
   title: Overlord API
   # info.version is the API description's own Semantic Version; it changes when
   # this document changes and is never compared with the contract version.
-  version: 6.0.0
+  version: 6.1.0
   # The contract version (contract/VERSION) this document belongs to. Written
   # only by `yarn version:contract`.
-  x-overlord-contract-version: 179.0.1
+  x-overlord-contract-version: 179.1.0
   description: >-
     Normative description of Overlord's REST surface (ADR 0006): one operation for every
     method and path the backend registers, at the path it is served (ADR 0007), excluding
@@ -8992,7 +8992,7 @@ paths:
       tags: [missions]
       x-overlord-permission: artifact:create
       x-overlord-edition: both
-      x-overlord-consumers: [unverified]
+      x-overlord-consumers: [mobile, webapp]
       summary: Create a mission artifact without a delivery
       description: >-
         Requires `artifact:create` on the mission's workspace (and, at the route, in at least one of the
@@ -9120,6 +9120,30 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
         '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
+    delete:
+      operationId: deleteMissionsByIdArtifactsByArtifactId
+      tags: [missions]
+      x-overlord-permission: mission:update
+      x-overlord-edition: both
+      x-overlord-consumers: [mobile, webapp]
+      summary: Delete a mission artifact
+      description: >-
+        Requires `mission:update`. Tombstones the artifact (`deleted_at`) and records an `artifact`
+        delete change; it no longer appears in the mission's artifact list or agent context. An unknown
+        or already deleted artifact answers 404.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      responses:
+        '200':
+          description: Deleted.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OkResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
         '500': { $ref: '#/components/responses/InternalError' }
   "/api/missions/{id}/file-changes":
     parameters:
@@ -15128,7 +15152,7 @@ components:
         items:
           type: array
           description: >-
-            Grouped: launching mission runs, executing mission runs, blocking questions (those three
+            Grouped: blocking questions, launching mission runs, executing mission runs (those three
             capped together), then delivered missions; newest first within each group. A page loaded
             with `before` holds only delivered missions.
           items:

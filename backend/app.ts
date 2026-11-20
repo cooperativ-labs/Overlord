@@ -202,6 +202,7 @@ import {
   createProjectStatus,
   createProjectTag,
   createUserToken,
+  deleteArtifact,
   deleteInboxItem,
   deleteMission,
   deleteObjective,
@@ -1846,6 +1847,13 @@ app.post(
 app.patch(
   '/api/missions/:id/artifacts/:artifactId',
   handle(req => updateArtifact(req.params.id, req.params.artifactId, req.body), {
+    mutates: true,
+    requires: PERMISSIONS.MISSION_UPDATE
+  })
+);
+app.delete(
+  '/api/missions/:id/artifacts/:artifactId',
+  handle(req => deleteArtifact(req.params.id, req.params.artifactId), {
     mutates: true,
     requires: PERMISSIONS.MISSION_UPDATE
   })

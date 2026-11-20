@@ -9,8 +9,14 @@ const { bootstrapIntegrationTestDb } = await import('./test-helpers.ts');
 await bootstrapIntegrationTestDb({ sqlitePath: path.join(tempDir, 'webapp.sqlite') });
 
 const { db, nowIso } = await import('./db.ts');
-const { createMission, createProject, createArtifact, updateArtifact } =
-  await import('./repository.ts');
+const {
+  createMission,
+  createProject,
+  createArtifact,
+  deleteArtifact,
+  listArtifacts,
+  updateArtifact
+} = await import('./repository.ts');
 const { ApiError } = await import('./errors.ts');
 
 async function createArtifactFixture(contentText: string | null = '# Initial artifact') {
@@ -225,4 +231,62 @@ test('protocol add-artifact creates an artifact without a delivery', async () =>
   assert.equal(created.externalUrl, 'https://example.test/adr');
   assert.equal(created.deliveryId, null);
   assert.equal(created.revision, 1);
+});
+
+test('deletes an artifact by tombstoning it and recording a delete change', async () => {
+  const { artifactId, mission } = await createArtifactFixture();
+
+  await deleteArtifact(mission.id, artifactId);
+
+  const listed = await listArtifacts(mission.id);
+  assert.equal(
+    listed.some(artifact => artifact.id === artifactId),
+    false
+  );
+  const row = db
+    .prepare(`SELECT deleted_at, revision FROM artifacts WHERE id = ?`)
+    .get(artifactId) as { deleted_at: string | null; revision: number };
+  assert.ok(row.deleted_at, 'row is kept with a tombstone');
+  assert.equal(row.revision, 2);
+
+  const change = db
+    .prepare(
+      `SELECT entity_type, operation, entity_revision, changed_fields_json
+         FROM entity_changes WHERE entity_id = ? ORDER BY seq DESC LIMIT 1`
+    )
+    .get(artifactId) as {
+    entity_type: string;
+    operation: string;
+    entity_revision: number;
+    changed_fields_json: string;
+  };
+  assert.equal(change.entity_type, 'artifact');
+  assert.equal(change.operation, 'delete');
+  assert.equal(change.entity_revision, 2);
+  assert.deepEqual(JSON.parse(change.changed_fields_json), ['deleted_at']);
+});
+
+test('a deleted artifact can be neither deleted again nor edited', async () => {
+  const { artifactId, mission } = await createArtifactFixture();
+  await deleteArtifact(mission.id, artifactId);
+
+  await assert.rejects(
+    deleteArtifact(mission.id, artifactId),
+    (error: unknown) => error instanceof ApiError && error.status === 404
+  );
+  await assert.rejects(
+    updateArtifact(mission.id, artifactId, { expectedRevision: 2, label: 'Too late' }),
+    (error: unknown) => error instanceof ApiError && error.status === 404
+  );
+});
+
+test('rejects deleting an artifact through another mission', async () => {
+  const { artifactId } = await createArtifactFixture();
+  const project = await createProject({ name: `Other mission ${Date.now()}` });
+  const other = await createMission({ projectId: project.id, firstObjective: 'Unrelated' });
+
+  await assert.rejects(
+    deleteArtifact(other.id, artifactId),
+    (error: unknown) => error instanceof ApiError && error.status === 404
+  );
 });

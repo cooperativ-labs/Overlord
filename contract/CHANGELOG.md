@@ -5,6 +5,24 @@ is the current version and must equal [VERSION](VERSION); `yarn version:contract
 writes its skeleton. Dates use ISO 8601 and describe the contract change, not
 merely the files edited.
 
+## [179.1.0] - 2026-11-20
+
+Contract impact: minor. People can delete mission artifacts (ADR 0086).
+
+- Add `DELETE /api/missions/{id}/artifacts/{artifactId}`
+  (`deleteMissionsByIdArtifactsByArtifactId`, `mission:update`): tombstones the artifact through
+  its existing `deleted_at` column and records an `artifact` delete change. OpenAPI `info.version`
+  6.1.0.
+- `postMissionsByIdArtifacts` lists the web app and mobile app as consumers; they now create
+  artifacts by hand.
+
+## [179.0.2] - 2026-11-20
+
+Contract impact: patch. Clarify repository-local scratch usage for agents (ADR 0085).
+
+- Attach and resume-follow-up instructions point agents to the existing launch scratch
+  directory and the checkout-local fallback for writable repositories.
+
 ## [179.0.1] - 2026-11-20
 
 Contract impact: patch. Clarify post-delivery follow-up for a continuing harness (ADR 0084).

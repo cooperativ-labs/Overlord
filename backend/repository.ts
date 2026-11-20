@@ -5209,6 +5209,48 @@ export async function updateArtifact(
   });
 }
 
+/**
+ * Tombstone a mission artifact (`deleted_at`). Every artifact read already
+ * excludes tombstoned rows, so the artifact leaves the mission's list, the
+ * attach/load context and later edits; its delivery keeps its own record.
+ */
+export async function deleteArtifact(missionRef: string, artifactId: string): Promise<void> {
+  await requireDatabaseClient().transaction(async tx => {
+    const mission = await getMissionRow(missionRef, tx, PERMISSIONS.MISSION_UPDATE);
+    const artifact = (await tx.get(
+      `SELECT id, objective_id, revision
+         FROM artifacts
+        WHERE id = ? AND mission_id = ? AND workspace_id = ? AND deleted_at IS NULL`,
+      [artifactId, mission.id, mission.workspace_id]
+    )) as { id: string; objective_id: string | null; revision: number } | undefined;
+    if (!artifact) throw new ApiError(404, 'Artifact not found');
+
+    const now = nowIso();
+    const revision = artifact.revision + 1;
+    await tx.run(
+      `UPDATE artifacts
+          SET deleted_at = ?, updated_at = ?, revision = ?
+        WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
+      [now, now, revision, artifact.id, mission.workspace_id]
+    );
+
+    await recordChange(
+      {
+        entityType: 'artifact',
+        entityId: artifact.id,
+        operation: 'delete',
+        entityRevision: revision,
+        workspaceId: mission.workspace_id,
+        projectId: mission.project_id,
+        missionId: mission.id,
+        objectiveId: artifact.objective_id,
+        changedFields: ['deleted_at']
+      },
+      tx
+    );
+  });
+}
+
 type CreateMissionResult = {
   missionId: string;
   objectiveIds: string[];

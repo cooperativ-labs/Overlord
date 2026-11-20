@@ -10,6 +10,7 @@ import { deriveObjectiveLifecycleView } from '@overlord/automations/objective-ma
 import type { MissionDetailDto, ObjectiveDto } from '@overlord/contract';
 import { useEffect, useMemo, useState } from 'react';
 
+import { useDismissedAgentRequests } from '../../lib/dismissed-agent-requests.ts';
 import { useMissionOpenAgentRequests, useReorderObjectives } from '../../lib/queries.ts';
 
 import {
@@ -71,6 +72,10 @@ export function MissionObjectivesSection({
   const reorder = useReorderObjectives();
   const openRequests = useMissionOpenAgentRequests(mission.id);
   const blockingByObjective = openRequests.blockingByObjective;
+  const { dismissedIds } = useDismissedAgentRequests({
+    workspaceId: mission.workspaceId,
+    missionId: mission.id
+  });
 
   const visibleObjectives = useMemo(
     () =>
@@ -166,7 +171,7 @@ export function MissionObjectivesSection({
   };
   const isBlocked = (objective: ObjectiveDto) =>
     isInFlightObjective(objective.state) &&
-    (blockingByObjective.get(objective.id)?.length ?? 0) > 0;
+    (blockingByObjective.get(objective.id) ?? []).some(request => !dismissedIds.has(request.id));
 
   const fixedRows = [...executedObjectives, ...launchingObjectives];
   if (fixedRows.length === 0 && orderedQueuedObjectives.length === 0) {

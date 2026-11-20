@@ -120,3 +120,5 @@ record and the index disagree.
 - [0082 — Observe Latch sessions from launches without a requester](0082-observe-automated-latch-sessions.md)
 - [0083 — Objective instructions and summary](0083-objective-instructions-and-summary.md)
 - [0084 — Follow-up in a continuing runner-launched harness](0084-runner-follow-up.md)
+- [0085 — Direct agent scratch files to the project checkout](0085-repository-local-agent-scratch.md)
+- [0086 — People delete mission artifacts](0086-delete-mission-artifacts.md)

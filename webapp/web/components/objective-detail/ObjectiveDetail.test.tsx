@@ -521,7 +521,7 @@ describe('ObjectiveDetail (plan §9)', () => {
     assert.equal(screen.queryByText(/Nothing has run yet/), null);
   });
 
-  it('dismissing the top notification keeps the request in Blocking questions', async () => {
+  it('dismissing the top notification removes every highlight of the request', async () => {
     openRequests = [request({ id: 'req-1' })];
     await renderDetail(
       [objective({ id: 'a', state: 'executing', startedAt: '2026-11-15T10:00:00.000Z' })],
@@ -534,9 +534,9 @@ describe('ObjectiveDetail (plan §9)', () => {
     await waitFor(() =>
       assert.equal(screen.queryByRole('button', { name: 'Dismiss this notification' }), null)
     );
-    const row = screen.getByRole('button', { name: /Which database should I use\?/ });
-    assert.equal(row.getAttribute('aria-expanded'), 'false');
-    assert.ok(screen.getByText('Waiting on you'));
+    assert.equal(screen.queryByRole('button', { name: /Which database should I use\?/ }), null);
+    assert.equal(screen.queryByText('Blocking questions'), null);
+    assert.equal(screen.queryByText('Waiting on you'), null);
   });
 });
 

@@ -62,6 +62,11 @@ test('compact attach preserves mission order, real state and full inspection rea
       assert.ok(attached.objectives[1]!.objective.endsWith('… [truncated]'));
       assert.match(attached.agentInstructions, /`directives`/);
       assert.match(attached.agentInstructions, /`objectives`/);
+      assert.match(attached.agentInstructions, /use `OVERLORD_TMPDIR` for task scratch files/);
+      assert.match(
+        attached.agentInstructions,
+        /create and use `\.overlord\/tmp\/` at the checkout root/
+      );
     }
     const full = await loadMissionContext({
       ctx,
@@ -137,6 +142,7 @@ test('fresh follow-up sessions receive the latest current-objective directions b
       );
       assert.equal('history' in resumed, false);
       assert.ok(resumed.missionSummary);
+      assert.match(resumed.agentInstructions, /use `OVERLORD_TMPDIR` for task scratch files/);
       const attached = await attachSession({
         ctx,
         missionId: mission.id,

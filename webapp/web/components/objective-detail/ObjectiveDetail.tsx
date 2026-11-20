@@ -310,9 +310,18 @@ type LayoutProps = BodyProps & {
   setDetailsOpen: (open: boolean) => void;
 };
 
+const NO_DISMISSED: ReadonlySet<string> = new Set();
+
 function useBlockedState(mission: MissionDetailDto, objective: ObjectiveDto) {
   const openRequests = useMissionOpenAgentRequests(mission.id);
-  const requests = openRequests.blockingByObjective.get(objective.id) ?? [];
+  const { dismissedIds } = useDismissedAgentRequests({
+    workspaceId: mission.workspaceId,
+    missionId: mission.id
+  });
+  // A dismissed question is no longer highlighted anywhere; it stays in the activity section.
+  const requests = (openRequests.blockingByObjective.get(objective.id) ?? []).filter(
+    request => !dismissedIds.has(request.id)
+  );
   return {
     openRequests,
     requests,
@@ -710,7 +719,7 @@ function DetailMainColumn(props: LayoutProps) {
 
       <ObjectiveBlockingQuestions
         requests={requests}
-        dismissedIds={dismissedIds}
+        dismissedIds={NO_DISMISSED}
         stale={openRequests.stale && blocked}
         onRetry={() => void openRequests.retry()}
       />

@@ -12,6 +12,7 @@ import {
   useState
 } from 'react';
 
+import { useDismissedAgentRequests } from '../../lib/dismissed-agent-requests.ts';
 import { formatTimestamp, relativeTime } from '../../lib/format-date.ts';
 import {
   useAcknowledgeMissionSummary,
@@ -381,9 +382,18 @@ export function MissionOverviewCard({
   const objectives: SummaryObjective[] = mission.objectives;
   // For you is derived from the complete open-request collection, independent of summary
   // eligibility (plan §6.2, decision 13), so older missions still list their open questions.
+  const { dismissedIds } = useDismissedAgentRequests({
+    workspaceId: mission.workspaceId,
+    missionId: mission.id
+  });
+  // A dismissed question is no longer surfaced here; it stays in the objective's activity.
   const openQuestions = useMemo(
-    () => openSummaryQuestions(openRequests.requests, mission.id),
-    [mission.id, openRequests.requests]
+    () =>
+      openSummaryQuestions(
+        openRequests.requests.filter(request => !dismissedIds.has(request.id)),
+        mission.id
+      ),
+    [dismissedIds, mission.id, openRequests.requests]
   );
   const runningSentences = useMemo(
     () => missionSummaryRunningSentences(objectives, openQuestions),

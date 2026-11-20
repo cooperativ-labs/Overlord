@@ -476,12 +476,7 @@ export function MissionPanel({
               <MissionNotes missionId={mission.id} notes={mission.notes} />
               <Separator />
               <div className="flex flex-col gap-6 mt-8">
-                <div className="space-y-3">
-                  <h2 className="text-xs font-semibold uppercase tracking-wide text-(--color-ink-dim)">
-                    Artifacts
-                  </h2>
-                  <MissionArtifactsSection missionId={mission.id} objectives={mission.objectives} />
-                </div>
+                <MissionArtifactsSection missionId={mission.id} objectives={mission.objectives} />
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
                     <h2 className="text-xs font-semibold uppercase tracking-wide text-(--color-ink-dim)">

@@ -707,6 +707,9 @@ function assembleAgentInstructions({
     `Objective: ${objectiveLabel}`,
     `Project: ${projectName}`,
     '',
+    '## Temporary Files',
+    'When working in a writable project checkout, use `OVERLORD_TMPDIR` for task scratch files if it points to an available directory under that checkout’s `.overlord/tmp/`. Otherwise, create and use `.overlord/tmp/` at the checkout root. Pass that directory explicitly to tools that default to a system temp folder.',
+    '',
     '## Context Location',
     '- The current task body is in the top-level `objective.objective` field.',
     compactContext

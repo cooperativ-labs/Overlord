@@ -690,11 +690,10 @@ function newestFirst(a: ActivityFeedItemDto, b: ActivityFeedItemDto): number {
  * One bounded read of live work, recent deliveries, and blocking questions
  * across every workspace the caller can read missions in.
  *
- * The first page is grouped rather than purely time-descending: launching
- * missions lead, then executing ones, then blocking questions, then delivered
- * missions whose most recent delivery is within the past two weeks. A launching
- * mission is the one thing on this page nobody is working on yet, so it is what
- * should be seen first. `before` pages drop live work and questions and return
+ * The first page is grouped rather than purely time-descending: blocking
+ * questions lead (an agent is stopped until a person answers), then launching
+ * missions, then executing ones, then delivered missions whose most recent
+ * delivery is within the past two weeks. `before` pages drop live work and questions and return
  * the next older two-week window of delivered missions.
  */
 export async function listActivityFeed({
@@ -792,7 +791,7 @@ export async function listActivityFeed({
 
   return {
     items: [
-      ...[...launching, ...executing, ...questionItems].slice(0, FEED_LIMIT),
+      ...[...questionItems, ...launching, ...executing].slice(0, FEED_LIMIT),
       ...deliveredItems
     ],
     generatedAt,
