@@ -19,8 +19,8 @@ import {
  */
 
 /**
- * Launch/lifecycle events. Every one of them collapses into the single Execution status section
- * anchored at the bottom of the feed, so runner churn never separates two narrative rows.
+ * Launch and lifecycle events share the Execution status section with routine execute updates.
+ * The section sits at the bottom of the feed so runner churn never separates narrative rows.
  *
  * Both types share the `MissionEventDto` fields `type`, `objectiveId`, `phase`, `summary`, and
  * `createdAt`. Runner/queue writers also stash `executionRequestId` in `payload_json`, which
@@ -168,8 +168,19 @@ export function groupMissionFeedItems(
       executionStatus.push(event);
       continue;
     }
-    const parts = splitAgentMessageBlocks(event.summary ?? '');
-    if (parts.length === 1 && typeof parts[0] === 'string' && parts[0] === (event.summary ?? '')) {
+    const summary = event.summary ?? '';
+    const parts = splitAgentMessageBlocks(summary);
+    if (
+      event.type === 'update' &&
+      event.phase === 'execute' &&
+      parts.every(part => typeof part === 'string') &&
+      !/<task-notification>/i.test(summary) &&
+      !resolveEventPresentation(event).isFollowUp
+    ) {
+      executionStatus.push(event);
+      continue;
+    }
+    if (parts.length === 1 && parts[0] === summary) {
       midFeed.push({ kind: 'event', id: event.id, createdAt: event.createdAt, event });
       continue;
     }

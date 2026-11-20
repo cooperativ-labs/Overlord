@@ -350,9 +350,8 @@ function AgentMessageEntry({
 }
 
 /**
- * Collapsed execution-status section: shows the most recent launch/status event
- * as the headline. Click expands to the full chronological history for that
- * contiguous run of `status_change` + `execution_requested` events.
+ * Collapsed execution status section. Expand it to read the chronological history
+ * of lifecycle events and routine execution updates.
  */
 function ExecutionStatusSection({
   events,
@@ -363,12 +362,13 @@ function ExecutionStatusSection({
 }) {
   const [expanded, setExpanded] = useState(false);
   const latest = events[0]!;
+  const latestIsProgress = latest.type === 'update';
   const { icon: Icon, label: latestLabel } = eventMeta(latest.type);
   // Feed is newest-first; chronological expand list is oldest → newest.
   const chronological = [...events].reverse();
-  const countLabel = `${events.length} status updates`;
+  const countLabel = events.length === 1 ? '1 status update' : `${events.length} status updates`;
 
-  if (events.length === 1) {
+  if (events.length === 1 && !latestIsProgress) {
     return <ActivityEntry event={latest} missionId={missionId} />;
   }
 
@@ -406,10 +406,12 @@ function ExecutionStatusSection({
               aria-hidden="true"
             />
           </div>
-          <p className="line-clamp-2 text-sm text-(--color-ink-dim)">
-            <span className="font-medium text-(--color-ink)/80">{latestLabel}: </span>
-            {formatAgentHarnessText(latest.summary ?? '') || 'No summary.'}
-          </p>
+          {latestIsProgress ? null : (
+            <p className="line-clamp-2 text-sm text-(--color-ink-dim)">
+              <span className="font-medium text-(--color-ink)/80">{latestLabel}: </span>
+              {formatAgentHarnessText(latest.summary ?? '') || 'No summary.'}
+            </p>
+          )}
         </div>
       </button>
       {expanded ? (

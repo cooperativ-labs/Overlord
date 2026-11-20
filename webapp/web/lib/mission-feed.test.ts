@@ -73,23 +73,62 @@ function request(overrides: Partial<HumanAgentRequestDto> = {}): HumanAgentReque
 }
 
 describe('groupMissionFeedItems', () => {
-  it('routes every status event to the execution-status list, contiguous or not', () => {
+  it('groups lifecycle events and routine execute updates without moving other activity', () => {
     const { midFeed, executionStatus } = groupMissionFeedItems(
       [
         event({ id: 'e1', type: 'status_change', createdAt: '2026-08-01T00:05:00.000Z' }),
         event({ id: 'e2', type: 'update', createdAt: '2026-08-01T00:04:00.000Z' }),
-        event({ id: 'e3', type: 'execution_requested', createdAt: '2026-08-01T00:03:00.000Z' })
+        event({ id: 'e3', type: 'execution_requested', createdAt: '2026-08-01T00:03:00.000Z' }),
+        event({ id: 'e4', phase: 'draft', createdAt: '2026-08-01T00:06:00.000Z' }),
+        event({ id: 'e5', type: 'decision', createdAt: '2026-08-01T00:02:00.000Z' }),
+        event({ id: 'e6', type: 'alert', createdAt: '2026-08-01T00:01:00.000Z' })
       ],
       []
     );
     assert.deepEqual(
       executionStatus.map(item => item.id),
-      ['e1', 'e3']
+      ['e1', 'e2', 'e3']
     );
     assert.deepEqual(
       midFeed.map(item => item.id),
-      ['e2']
+      ['e4', 'e5', 'e6']
     );
+  });
+
+  it('keeps user prompts, background tasks and subordinate messages visible during execution', () => {
+    const { midFeed, executionStatus } = groupMissionFeedItems(
+      [
+        event({ id: 'prompt', type: 'user_follow_up', summary: 'Check the result.' }),
+        event({ id: 'relay', summary: 'Follow-up: Check the result.' }),
+        event({
+          id: 'task',
+          summary:
+            '<task-notification><status>completed</status><summary>Build finished</summary></task-notification>'
+        }),
+        event({
+          id: 'mixed-task',
+          summary: 'Build complete.\n<task-notification><status>completed</status>…'
+        }),
+        event({
+          id: 'agent',
+          summary:
+            'Review complete.\n<agent-message from="Reviewer">All checks passed.</agent-message>'
+        })
+      ],
+      []
+    );
+    assert.deepEqual(
+      midFeed.map(({ id, kind }) => [id, kind]),
+      [
+        ['prompt', 'event'],
+        ['relay', 'event'],
+        ['task', 'event'],
+        ['mixed-task', 'event'],
+        ['agent:text:0', 'event'],
+        ['agent:agent-message:0', 'agent_message']
+      ]
+    );
+    assert.deepEqual(executionStatus, []);
   });
 
   it('omits delivery events, which render under Artifacts', () => {
@@ -112,8 +151,8 @@ describe('groupMissionFeedItems', () => {
     ];
     const { midFeed } = groupMissionFeedItems(
       [
-        event({ id: 'e1', createdAt: '2026-08-01T00:04:00.000Z' }),
-        event({ id: 'e2', createdAt: '2026-08-01T00:06:00.000Z' })
+        event({ id: 'e1', type: 'decision', createdAt: '2026-08-01T00:04:00.000Z' }),
+        event({ id: 'e2', type: 'user_follow_up', createdAt: '2026-08-01T00:06:00.000Z' })
       ],
       agentSessionItems
     );

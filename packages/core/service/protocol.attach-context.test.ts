@@ -100,8 +100,8 @@ test('fresh follow-up sessions receive the latest current-objective directions b
     const add = async (index: number, type: string, objectiveId: string | null) => {
       await db.run(
         `INSERT INTO mission_events
-        (id, workspace_id, project_id, mission_id, objective_id, type, summary, source, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, 'cli', ?)`,
+        (id, workspace_id, project_id, mission_id, objective_id, type, phase, summary, source, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, 'execute', ?, 'cli', ?)`,
         [
           newId(),
           ctx.workspace.id,
@@ -114,7 +114,7 @@ test('fresh follow-up sessions receive the latest current-objective directions b
         ]
       );
     };
-    // More than the legacy 100-event window, plus newer irrelevant rows.
+    // More than the legacy 100-event window of execute updates, plus newer irrelevant rows.
     for (let i = 0; i < 110; i++) await add(i, 'update', objectives[0]!.id);
     const types = ['user_follow_up', 'decision', 'discussion_summary'];
     for (let i = 110; i < 122; i++) await add(i, types[i % 3]!, objectives[0]!.id);
@@ -143,6 +143,7 @@ test('fresh follow-up sessions receive the latest current-objective directions b
         existingSessionKey: resumed.sessionKey,
         connectionMethod
       });
+      assert.equal('history' in attached, false);
       assert.deepEqual(attached.directives, resumed.directives);
       await deliverSession({
         ctx,
