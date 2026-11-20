@@ -46,7 +46,7 @@ describe('objective resource binding', () => {
     const { mission, objectives } = await createMissionWithObjectives({
       ctx,
       projectId: project.id,
-      objectives: [{ objective: 'Work in mobile repo', resourceKey: 'mobile' }]
+      objectives: [{ instructions: 'Work in mobile repo', resourceKey: 'mobile' }]
     });
 
     const resolved = await resolveObjectiveWorkingDirectory({
@@ -112,7 +112,7 @@ describe('objective resource binding', () => {
     const { mission, objectives } = await createMissionWithObjectives({
       ctx,
       projectId: project.id,
-      objectives: [{ objective: 'Needs mobile checkout', resourceKey: 'mobile' }]
+      objectives: [{ instructions: 'Needs mobile checkout', resourceKey: 'mobile' }]
     });
 
     await assert.rejects(
@@ -154,7 +154,7 @@ describe('objective resource binding', () => {
     const { mission } = await createMissionWithObjectives({
       ctx,
       projectId: project.id,
-      objectives: [{ objective: 'Primary objective' }]
+      objectives: [{ instructions: 'Primary objective' }]
     });
 
     await assert.rejects(

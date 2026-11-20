@@ -50,7 +50,7 @@ describe('attach custom agent instructions', () => {
     const { mission, objectives } = await createMissionWithObjectives({
       ctx,
       projectId: project.id,
-      objectives: [{ objective: 'Verify custom instructions' }]
+      objectives: [{ instructions: 'Verify custom instructions' }]
     });
     await ctx.db.run(`UPDATE objectives SET state = 'submitted' WHERE id = ?`, [objectives[0]?.id]);
 

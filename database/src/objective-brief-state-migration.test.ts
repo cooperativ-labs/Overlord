@@ -82,9 +82,9 @@ test('adds brief state with conservative defaults and backfills provable authors
   );
   const rows = db
     .prepare(
-      `SELECT id, title_source, title_generation, title_status, description, description_source,
-              description_revision, description_suppressed, description_generation, description_status,
-              description_request_kind, instruction_author_kind
+      `SELECT id, title_source, title_generation, title_status, summary, summary_source,
+              summary_revision, summary_suppressed, summary_generation, summary_status,
+              summary_request_kind, instruction_author_kind
          FROM objectives ORDER BY id`
     )
     .all() as Array<Record<string, unknown>>;
@@ -99,14 +99,14 @@ test('adds brief state with conservative defaults and backfills provable authors
   });
   for (const row of rows) {
     assert.equal(row.title_source, null, 'legacy title provenance stays unknown (protected)');
-    assert.equal(row.description, null);
-    assert.equal(row.description_source, null);
-    assert.equal(row.description_suppressed, 0);
-    assert.equal(row.description_status, null);
-    assert.equal(row.description_request_kind, null);
+    assert.equal(row.summary, null);
+    assert.equal(row.summary_source, null);
+    assert.equal(row.summary_suppressed, 0);
+    assert.equal(row.summary_status, null);
+    assert.equal(row.summary_request_kind, null);
     assert.equal(row.title_generation, 0);
-    assert.equal(row.description_generation, 0);
-    assert.equal(row.description_revision, 0);
+    assert.equal(row.summary_generation, 0);
+    assert.equal(row.summary_revision, 0);
   }
   assert.ok(db.prepare('SELECT version FROM schema_migrations WHERE version = ?').get(VERSION));
 });
@@ -117,13 +117,13 @@ test('enforces the closed brief vocabularies', () => {
   const bad: Array<[string, unknown]> = [
     ['title_source', 'model'],
     ['title_status', 'running'],
-    ['description_source', 'person'],
-    ['description_status', 'ready'],
-    ['description_request_kind', 'manual'],
+    ['summary_source', 'person'],
+    ['summary_status', 'ready'],
+    ['summary_request_kind', 'manual'],
     ['instruction_author_kind', 'assistant'],
-    ['description_suppressed', 2],
-    ['description_generation', -1],
-    ['description_updated_at', '2026-11-14']
+    ['summary_suppressed', 2],
+    ['summary_generation', -1],
+    ['summary_updated_at', '2026-11-14']
   ];
   for (const [column, value] of bad) {
     assert.throws(
@@ -134,9 +134,9 @@ test('enforces the closed brief vocabularies', () => {
     );
   }
   db.prepare(
-    `UPDATE objectives SET title_source = 'agent', description = 'S', description_source = 'user',
-       description_status = 'failed', description_request_kind = 'explicit',
-       description_suppressed = 1, description_updated_at = ? WHERE id = 'agent-unedited'`
+    `UPDATE objectives SET title_source = 'agent', summary = 'S', summary_source = 'user',
+       summary_status = 'failed', summary_request_kind = 'explicit',
+       summary_suppressed = 1, summary_updated_at = ? WHERE id = 'agent-unedited'`
   ).run(now);
   const fk = db.pragma('foreign_key_check');
   assert.deepEqual(fk, []);

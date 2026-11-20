@@ -94,9 +94,9 @@ describe('objective brief state migration [postgres]', { skip: !connectionString
 
       assert.deepEqual(await snapshot(), before);
       const rows = await client.all<Record<string, unknown>>(
-        `SELECT id, title_source, title_generation, description, description_source,
-                description_suppressed, description_generation, description_revision,
-                description_status, instruction_author_kind
+        `SELECT id, title_source, title_generation, summary, summary_source,
+                summary_suppressed, summary_generation, summary_revision,
+                summary_status, instruction_author_kind
            FROM objectives ORDER BY id`
       );
       assert.deepEqual(Object.fromEntries(rows.map(r => [r.id, r.instruction_author_kind])), {
@@ -109,21 +109,21 @@ describe('objective brief state migration [postgres]', { skip: !connectionString
       });
       for (const row of rows) {
         assert.equal(row.title_source, null);
-        assert.equal(row.description, null);
-        assert.ok(!row.description_suppressed, 'not suppressed');
-        assert.equal(row.description_status, null);
+        assert.equal(row.summary, null);
+        assert.ok(!row.summary_suppressed, 'not suppressed');
+        assert.equal(row.summary_status, null);
         assert.equal(Number(row.title_generation), 0);
-        assert.equal(Number(row.description_generation), 0);
-        assert.equal(Number(row.description_revision), 0);
+        assert.equal(Number(row.summary_generation), 0);
+        assert.equal(Number(row.summary_revision), 0);
       }
 
       for (const [column, value] of [
         ['title_source', 'model'],
-        ['description_source', 'person'],
-        ['description_status', 'ready'],
-        ['description_request_kind', 'manual'],
+        ['summary_source', 'person'],
+        ['summary_status', 'ready'],
+        ['summary_request_kind', 'manual'],
         ['instruction_author_kind', 'assistant'],
-        ['description_generation', -1]
+        ['summary_generation', -1]
       ] as const) {
         await assert.rejects(
           client.run(`UPDATE objectives SET ${column} = ? WHERE id = 'agent-unedited'`, [value]),

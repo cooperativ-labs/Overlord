@@ -53,7 +53,7 @@ async function missionWithObjectives(projectId: string, label: string, count = 2
     flags: {
       '--project-id': projectId,
       '--objectives-json': JSON.stringify(
-        Array.from({ length: count }, (_, index) => ({ objective: `${label} ${index + 1}` }))
+        Array.from({ length: count }, (_, index) => ({ instructions: `${label} ${index + 1}` }))
       )
     }
   })) as { objectives: Array<{ id: string }> };

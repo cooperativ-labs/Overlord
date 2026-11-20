@@ -33,7 +33,7 @@ describe('Latch provider-session persistence', () => {
       ctx,
       projectId: project.id,
       assignedTo: 'operator-workspace-user',
-      objectives: [{ objective: 'Attach without a conversation surface' }]
+      objectives: [{ instructions: 'Attach without a conversation surface' }]
     });
     const request = await createExecutionRequest({
       ctx,
@@ -78,7 +78,7 @@ describe('Latch provider-session persistence', () => {
       ctx,
       projectId: project.id,
       assignedTo: 'operator-workspace-user',
-      objectives: [{ objective: 'Prune the mapping' }]
+      objectives: [{ instructions: 'Prune the mapping' }]
     });
     const request = await createExecutionRequest({
       ctx,

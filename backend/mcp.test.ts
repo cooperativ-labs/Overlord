@@ -479,15 +479,19 @@ test('PM-management MCP tools preserve the protocol contracts', () => {
   assert.deepEqual(Object.keys(objectiveItems).sort(), [
     'agent',
     'autoAdvance',
-    'description',
+    'instructions',
     'model',
-    'objective',
     'resourceKey',
+    'summary',
     'title'
   ]);
   assert.match(objectiveItems.model.description, /Requires agent/);
-  // The description is presentation for people, never part of the agent context (ADR 0059).
-  assert.match(objectiveItems.description.description, /never sent to it/);
+  // The summary is presentation for people, never part of the agent context (ADR 0059, 0083).
+  assert.match(objectiveItems.summary.description, /never sent to the executing agent/);
+  assert.match(
+    objectiveItems.instructions.description,
+    /complete brief the executing agent receives/
+  );
 
   const deliveries = hostedMcpToolDefinitions.find(
     definition => definition.name === 'overlord_list_deliveries'

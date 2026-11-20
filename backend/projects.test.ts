@@ -159,7 +159,7 @@ test('project reads use the project workspace instead of the active workspace', 
   await createMission({
     projectId: project.id,
     title: 'Secondary Mission',
-    objectives: [{ objective: 'Keep secondary project readable.' }]
+    objectives: [{ instructions: 'Keep secondary project readable.' }]
   });
   const secondaryStatuses = await listProjectStatuses(project.id);
 

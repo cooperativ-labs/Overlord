@@ -22,7 +22,7 @@ Owns:
 - Context assembly format returned by `attach`, including additive `displayKey` / `displayId` on `ObjectiveSummary`
 - Objective context summaries returned by `attach` and `load-context` include `assignedAgent`, `model`, `reasoningEffort`, and `resourceKey` so agents can verify execution assignment
 - `update-objective` accepts optional `--title` to replace or clear a custom objective title independently of instruction text; title edits are allowed in any objective state. `update-objective` and hosted MCP `overlord_update_objective` use the existing `objective:update` authorization and the shared objective service
-- Objective descriptions (ADR 0059): `create`/`prompt` accept `--objective-description` / `--objective-description-file` for the single `--objective` form and a per-item `description` in `--objectives-json`; `add-objectives` accepts the per-item field; `update-objective` accepts `--description` / `--description-file` (empty text is Remove) and `--description-request summarize|regenerate|retry`. Agent description writes and summary requests are allowed only on `draft` objectives (400 `description_not_editable`); while a person's removal is in force agent text is not stored (warning `description_suppressed`) and agent Summarize/Regenerate is refused (409 `description_suppressed`); only a person's Summarize or Regenerate clears removal. Responses carry advisory `warnings` (`description_style`, `description_suppressed`) — on each matching created objective for `create`/`add-objectives`, top-level for `update-objective`. The description is presentation only: `ObjectiveSummary` (attach, load-context, create results) and launch prompts never include it
+- Objective instructions and summaries (ADR 0059, renamed by ADR 0083): an objective has two texts. The **instructions** are the complete brief the executing agent receives; the **summary** is a short overview for people that is never sent to the agent. `create`/`prompt` take `--objective-instructions` / `--objective-instructions-file` (or positional text) and `--objective-summary` / `--objective-summary-file` for the single-objective form, and per-item `instructions` (required) and `summary` in `--objectives-json`; `add-objectives` takes the same item fields; `update-objective` takes `--instruction-text` / `--instruction-text-file`, `--summary` / `--summary-file` (empty text is Remove) and `--summary-request summarize|regenerate|retry`. The retired `--objective`, `--objective-description[-file]`, `--description[-file]`, `--description-request` and item keys `objective` / `description` are refused with 400 `invalid_input` naming the replacement. Every create and agent summary write checks for a swap and warns, never refuses: a summary at least 3 times as long as its instructions and at least 400 characters (the texts look swapped), or more than 1.5 times and at least 240 characters, or headings, numbered steps or a `Done when:` label over instructions shorter than 400 characters (they may be swapped), is stored as written with an `objective_fields_swapped` warning. Agent summary writes and summary requests are allowed only on `draft` objectives (400 `summary_not_editable`); while a person's removal is in force agent text is not stored (warning `summary_suppressed`) and agent Summarize/Regenerate is refused (409 `summary_suppressed`); only a person's Summarize or Regenerate clears removal. Responses carry advisory `warnings` (`summary_style`, `summary_suppressed`, `objective_fields_swapped`): on each matching created objective for `create`/`add-objectives`, top-level for `update-objective` and `prompt`. The summary is presentation only: `ObjectiveSummary` (attach, load-context, create results) and launch prompts never include it
 - `create`, `prompt`, and `add-objectives` return the persisted mission/objective DTOs so callers can verify each objective's assigned agent, model, resource, and queue/auto-advance settings. CLI human-readable creation output echoes those settings; JSON and MCP responses retain their existing structured shapes.
 - CLI read selector precedence: `load-context`, `read-context`, `attachment-list`
   and `attachment-download-url` inherit a launch objective only when no mission
@@ -97,7 +97,10 @@ Command names, flags and response shapes are in
   without reopening execution. `resume-follow-up` explicitly reopens a completed objective
   for post-delivery implementation follow-up, reuses that objective rather than adding a
   new one, transitions it to `pending_delivery`, and returns a new session key. A bare
-  `attach` must not silently reopen a completed objective. After delivery, implementation
+  `attach` must not silently reopen a completed objective, even when it is pinned by
+  an objective id or a runner launch request. Resuming uses the new session key for
+  subsequent work and preserves the launch request's original session binding.
+  After delivery, implementation
   work must not continue until follow-up execution is explicitly started. There is no
   `ovld protocol permission-request` subcommand; permission requests are the agent-session
   Decide capability (`ovld agent-session request`).
@@ -173,6 +176,9 @@ Command names, flags and response shapes are in
   connection method (CLI: `resume-follow-up` with the delivered ids; MCP: ask the user to
   start follow-up work); when the delivery's mission summary was withheld or omitted it
   leads with the `publish-delivery-summary` step in the same wording.
+  A refused attach pinned to a completed objective and an `invalid_session` refusal for its
+  delivered key give the same recovery guidance. A protocol session refusal is
+  distinct from rejection of the CLI's login credentials.
   `mission_summary_withheld`, `mission_summary_item_skipped` and the publication errors
   state their own next step. `agentInstructions` keeps one pointer per rule.
 - **Delivery.** A summary is the only required delivery content; delivery-report

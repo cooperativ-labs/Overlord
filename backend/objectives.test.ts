@@ -382,7 +382,9 @@ async function missionWithDrafts(name: string, count: number) {
   const project = await createProject({ name });
   const mission = await createMission({
     projectId: project.id,
-    objectives: Array.from({ length: count }, (_, index) => ({ objective: `Objective ${index}` }))
+    objectives: Array.from({ length: count }, (_, index) => ({
+      instructions: `Objective ${index}`
+    }))
   });
   return { project, mission, ids: mission.objectives.map(objective => objective.id) };
 }

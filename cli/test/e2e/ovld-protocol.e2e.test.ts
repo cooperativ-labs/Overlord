@@ -36,7 +36,7 @@ protocolE2e('ovld protocol attach returns attach-response-v4 JSON', async () => 
       'create',
       '--project-id',
       projectJson.project.id,
-      '--objective',
+      '--objective-instructions',
       'E2E attach test'
     ],
     env
@@ -94,7 +94,7 @@ protocolE2e('ovld protocol attach stores external session id', async () => {
       'create',
       '--project-id',
       projectJson.project.id,
-      '--objective',
+      '--objective-instructions',
       'E2E external session test'
     ],
     env
@@ -162,7 +162,7 @@ protocolE2e('shell-special summary via --summary-file - round-trips', async () =
       'create',
       '--project-id',
       projectJson.project.id,
-      '--objective',
+      '--objective-instructions',
       'Test `backticks` and $vars'
     ],
     env
@@ -218,7 +218,7 @@ protocolE2e(
         'create',
         '--project-id',
         projectJson.project.id,
-        '--objective',
+        '--objective-instructions',
         'Initial follow-up target'
       ],
       env

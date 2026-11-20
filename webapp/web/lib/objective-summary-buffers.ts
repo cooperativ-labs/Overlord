@@ -10,14 +10,14 @@ import { useSyncExternalStore } from 'react';
  * remounts it). Component state cannot survive the last one, so the buffer lives here,
  * outside the tree, until the person saves or cancels.
  *
- * `baseRevision` is the `descriptionRevision` the edit started from; the save sends it as
- * `expectedDescriptionRevision` so a concurrent change answers 409 instead of being
+ * `baseRevision` is the `summaryRevision` the edit started from; the save sends it as
+ * `expectedSummaryRevision` so a concurrent change answers 409 instead of being
  * silently overwritten.
  */
 export type SummaryEditBuffer = {
   text: string;
   baseRevision: number;
-  /** The server text when a save hit `description_conflict`; the buffer is kept. */
+  /** The server text when a save hit `summary_conflict`; the buffer is kept. */
   conflictText?: string | null;
 };
 

@@ -3,10 +3,10 @@ info:
   title: Overlord API
   # info.version is the API description's own Semantic Version; it changes when
   # this document changes and is never compared with the contract version.
-  version: 5.1.0
+  version: 6.0.0
   # The contract version (contract/VERSION) this document belongs to. Written
   # only by `yarn version:contract`.
-  x-overlord-contract-version: 178.1.1
+  x-overlord-contract-version: 179.0.1
   description: >-
     Normative description of Overlord's REST surface (ADR 0006): one operation for every
     method and path the backend registers, at the path it is served (ADR 0007), excluding
@@ -8073,7 +8073,9 @@ paths:
       description: >-
         Requires `mission:create` on the project's workspace. Creates the mission and its objectives in
         one transaction, allocating the mission number atomically. Title generation for an untitled
-        mission and its first objective runs asynchronously afterwards. Answers 200, not 201.
+        mission and its first objective runs asynchronously afterwards. Answers 200, not 201. A `summary`
+        that looks swapped with its `instructions` is stored as written; this route returns no warning
+        (protocol and MCP creates return `objective_fields_swapped`, ADR 0083).
       security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
       requestBody:
         required: true
@@ -9364,7 +9366,7 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
         '500': { $ref: '#/components/responses/InternalError' }
-  "/api/objectives/{id}/description-requests":
+  "/api/objectives/{id}/summary-requests":
     parameters:
       - name: id
         in: path
@@ -9374,7 +9376,7 @@ paths:
           an ambiguous display id answers 409.
         schema: { type: string }
     post:
-      operationId: postObjectivesByIdDescriptionRequests
+      operationId: postObjectivesByIdSummaryRequests
       tags: [objectives]
       x-overlord-permission: objective:update
       x-overlord-edition: both
@@ -9382,18 +9384,18 @@ paths:
       summary: Request a generated objective summary (Summarize, Regenerate or Retry)
       description: >-
         Requires `objective:update`. Allowed in every objective state. Records durable summary intent
-        (`descriptionStatus: pending`) and enqueues the brief job in the same transaction; the summary is
+        (`summaryStatus: pending`) and enqueues the brief job in the same transaction; the summary is
         written later by the worker and arrives as an ordinary objective change. Never changes
         instructions, lifecycle, Run Queue membership or execution evidence, and never waits for a model.
         A REST caller is a person, so `summarize` and `regenerate` clear removal suppression. 409 codes:
-        `description_not_eligible` (instructions shorter than 280 characters), `description_not_failed`
+        `summary_not_eligible` (instructions shorter than 280 characters), `summary_not_failed`
         (`retry` without a failed generation), `objective_conflict` (concurrent write; reload and retry).
       security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
       requestBody:
         required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/ObjectiveDescriptionRequestBody' }
+            schema: { $ref: '#/components/schemas/ObjectiveSummaryRequestBody' }
       responses:
         '200':
           description: The objective with its updated summary state (no queue join, so `queueEntry` is null).
@@ -11468,29 +11470,30 @@ components:
     ObjectiveBriefSource:
       type: string
       enum: [ generated, agent, user ]
-      description: Who wrote an objective title or description (ADR 0057).
+      description: Who wrote an objective title or summary (ADR 0057).
     ObjectiveBriefStatus:
       type: string
       enum: [ pending, failed ]
-    ObjectiveDescriptionFailureCode:
+    ObjectiveSummaryFailureCode:
       type: string
       enum: [ provider_unavailable, provider_error, invalid_output, unfaithful_output ]
       description: >-
         `provider_unavailable`: no model provider is configured. `provider_error`: the provider failed
         after retries. `invalid_output` / `unfaithful_output`: no faithful summary could be produced,
         including instructions longer than the bounded model input (ADR 0058).
-    ObjectiveDescriptionInput:
+    ObjectiveSummaryInput:
       description: >-
-        Authored human-facing description (ADR 0057). Omitted leaves it unchanged (on create, the automatic
+        Authored human-facing summary (ADR 0057, renamed from description by ADR 0083): a short overview for
+        people, never sent to the executing agent. Omitted leaves it unchanged (on create, the automatic
         summary policy applies). `null` or blank text is Remove: the summary is cleared and no summary is
         generated until a person requests Summarize. Other text (trimmed, at most 4000 characters, 400
-        `description_too_long` otherwise) is stored as written by the caller, with editor attribution.
+        `summary_too_long` otherwise) is stored as written by the caller, with editor attribution.
         Allowed in every objective state on REST; it never changes instructions, lifecycle or execution
-        evidence, and a description-only update does not move `updatedAt`.
+        evidence, and a summary-only update does not move `updatedAt`.
       oneOf:
         - type: string
         - type: 'null'
-    ObjectiveDescriptionRequestBody:
+    ObjectiveSummaryRequestBody:
       type: object
       required: [ mode ]
       additionalProperties: false
@@ -11501,7 +11504,7 @@ components:
           description: >-
             `summarize` and `regenerate` ask for a new generated summary and are the only operations that
             clear removal suppression. `retry` re-requests a `failed` generation only (409
-            `description_not_failed` otherwise) and never clears suppression.
+            `summary_not_failed` otherwise) and never clears suppression.
     ProjectLifecycle:
       type: string
       enum: [ active, archived ]
@@ -11939,17 +11942,17 @@ components:
           launchConfigOverrides,
           titleSource,
           titleStatus,
-          description,
-          descriptionSource,
-          descriptionStale,
-          descriptionStatus,
-          descriptionFailureCode,
-          descriptionSuppressed,
-          descriptionEligible,
-          descriptionRevision,
-          descriptionUpdatedAt,
-          descriptionAuthorWorkspaceUserId,
-          descriptionAuthorAgent
+          summary,
+          summarySource,
+          summaryStale,
+          summaryStatus,
+          summaryFailureCode,
+          summarySuppressed,
+          summaryEligible,
+          summaryRevision,
+          summaryUpdatedAt,
+          summaryAuthorWorkspaceUserId,
+          summaryAuthorAgent
         ]
       properties:
         id: { type: string, format: uuid }
@@ -11974,7 +11977,7 @@ components:
           oneOf:
             - $ref: '#/components/schemas/ObjectiveBriefStatus'
             - type: 'null'
-        description:
+        summary:
           description: >-
             Human-facing summary of the instructions in Simplified Technical English style: one to three
             prose paragraphs that open with the goal and close with the done-when sentence. Presentation
@@ -11983,47 +11986,47 @@ components:
           oneOf:
             - type: string
             - type: 'null'
-        descriptionSource:
-          description: Who wrote `description`; null when there is none.
+        summarySource:
+          description: Who wrote `summary`; null when there is none.
           oneOf:
             - $ref: '#/components/schemas/ObjectiveBriefSource'
             - type: 'null'
-        descriptionStale:
+        summaryStale:
           type: boolean
-          description: True when `description` was written from different instruction text (show "May be out
+          description: True when `summary` was written from different instruction text (show "May be out
             of date").
-        descriptionStatus:
+        summaryStatus:
           description: >-
             `pending` while a summary is wanted and not yet written; `failed` when generation failed for
-            good (see `descriptionFailureCode`; Retry is available). Null when no generation is outstanding.
+            good (see `summaryFailureCode`; Retry is available). Null when no generation is outstanding.
           oneOf:
             - $ref: '#/components/schemas/ObjectiveBriefStatus'
             - type: 'null'
-        descriptionFailureCode:
+        summaryFailureCode:
           description: Stable failure code of the last failed generation. Raw provider messages are never exposed.
           oneOf:
-            - $ref: '#/components/schemas/ObjectiveDescriptionFailureCode'
+            - $ref: '#/components/schemas/ObjectiveSummaryFailureCode'
             - type: 'null'
-        descriptionSuppressed:
+        summarySuppressed:
           type: boolean
           description: >-
             True after Remove: no summary is shown or generated, across instruction edits and catch-up,
             until a person requests `summarize` (or `regenerate`).
-        descriptionEligible:
+        summaryEligible:
           type: boolean
           description: >-
             True when the current instructions are long enough to summarize (at least 280 trimmed
             characters). Shorter instructions are shown in full and Summarize is not offered.
-        descriptionRevision:
+        summaryRevision:
           type: integer
           minimum: 0
-          description: Moves on every description change; send it as `expectedDescriptionRevision` to detect a
+          description: Moves on every description change; send it as `expectedSummaryRevision` to detect a
             concurrent edit.
-        descriptionUpdatedAt:
+        summaryUpdatedAt:
           oneOf:
             - $ref: '#/components/schemas/DateTime'
             - type: 'null'
-        descriptionAuthorWorkspaceUserId:
+        summaryAuthorWorkspaceUserId:
           description: >-
             Workspace member who wrote or last edited the authored description (source `user`, or the
             member behind an agent write). Compare with the viewer to show "Edited by you". Null for a
@@ -12032,7 +12035,7 @@ components:
             - type: string
               format: uuid
             - type: 'null'
-        descriptionAuthorAgent:
+        summaryAuthorAgent:
           description: Connector/agent identifier for an agent-written description, when known.
           oneOf:
             - type: string
@@ -13334,17 +13337,19 @@ components:
           type: array
           items:
             type: object
-            required: [ objective ]
+            required: [ instructions ]
             properties:
-              objective:
+              instructions:
                 type: string
-                description: Instruction text; must not be blank.
+                description: >-
+                  The complete brief the executing agent receives (usually the longer text); must not be
+                  blank. Put the short human-facing overview in `summary`.
               title:
                 oneOf:
                   - type: string
                   - type: 'null'
-              description:
-                $ref: '#/components/schemas/ObjectiveDescriptionInput'
+              summary:
+                $ref: '#/components/schemas/ObjectiveSummaryInput'
               autoAdvance:
                 type: boolean
                 description: Deprecated queue hint; defaults to false.
@@ -14702,8 +14707,8 @@ components:
           oneOf:
             - type: string
             - type: 'null'
-        description:
-          $ref: '#/components/schemas/ObjectiveDescriptionInput'
+        summary:
+          $ref: '#/components/schemas/ObjectiveSummaryInput'
         state:
           $ref: '#/components/schemas/ObjectiveState'
           description: Defaults to `draft`. Creating a draft never changes another objective.
@@ -14759,15 +14764,15 @@ components:
           oneOf:
             - type: string
             - type: 'null'
-        description:
-          $ref: '#/components/schemas/ObjectiveDescriptionInput'
-        expectedDescriptionRevision:
+        summary:
+          $ref: '#/components/schemas/ObjectiveSummaryInput'
+        expectedSummaryRevision:
           type: integer
           minimum: 0
           description: >-
-            Optional optimistic-concurrency check for `description`: the `descriptionRevision` the editor
-            started from. A different current revision answers 409 `description_conflict` (with the
-            current `descriptionRevision` and `description` in `details`) and writes nothing.
+            Optional optimistic-concurrency check for `summary`: the `summaryRevision` the editor
+            started from. A different current revision answers 409 `summary_conflict` (with the
+            current `summaryRevision` and `summary` in `details`) and writes nothing.
         state:
           $ref: '#/components/schemas/ObjectiveState'
           description: >-
@@ -14944,7 +14949,7 @@ components:
           activeObjectiveIds,
           objectiveTitle,
           instructionPreview,
-          descriptionPreview,
+          summaryPreview,
           agentIdentifier,
           modelIdentifier,
           branch,
@@ -15003,7 +15008,7 @@ components:
         instructionPreview:
           type: string
           description: Server-truncated instruction preview of the primary objective.
-        descriptionPreview:
+        summaryPreview:
           description: >-
             Server-truncated human-facing summary of the primary objective, or null when it has none
             (show `instructionPreview` then). Presentation only.

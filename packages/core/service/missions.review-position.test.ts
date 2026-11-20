@@ -11,13 +11,13 @@ it('delivery places an assigned mission ahead of existing review work on its pro
   const { mission: first } = await createMissionWithObjectives({
     ctx,
     projectId: project.id,
-    objectives: [{ objective: 'First review' }]
+    objectives: [{ instructions: 'First review' }]
   });
   await moveMissionToReview({ ctx, missionId: first.id });
   const { mission: delivered } = await createMissionWithObjectives({
     ctx,
     projectId: project.id,
-    objectives: [{ objective: 'New delivery' }]
+    objectives: [{ instructions: 'New delivery' }]
   });
   await db.run('UPDATE missions SET assigned_workspace_user_id = ? WHERE id = ?', [
     workspaceUserId,

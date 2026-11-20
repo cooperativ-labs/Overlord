@@ -31,8 +31,8 @@ describe('opt-in cross-resource objective parallelism', () => {
       ctx,
       projectId: project.id,
       objectives: [
-        { objective: 'Work the primary checkout' },
-        { objective: 'Work the docs checkout', resourceKey: 'docs' }
+        { instructions: 'Work the primary checkout' },
+        { instructions: 'Work the docs checkout', resourceKey: 'docs' }
       ]
     });
     const first = objectives[0]!;
@@ -155,7 +155,7 @@ describe('opt-in cross-resource objective parallelism', () => {
     const { mission, objectives } = await createMissionWithObjectives({
       ctx,
       projectId: project.id,
-      objectives: [{ objective: 'First on primary' }, { objective: 'Second on primary' }]
+      objectives: [{ instructions: 'First on primary' }, { instructions: 'Second on primary' }]
     });
     const first = objectives[0]!;
     const second = objectives[1]!;

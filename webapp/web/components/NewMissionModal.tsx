@@ -301,7 +301,7 @@ export function NewMissionModal({
           : undefined;
       const detail = await createMission.mutateAsync({
         projectId: selectedProjectId,
-        objectives: [{ objective: text, ...(resourceKey ? { resourceKey } : {}) }],
+        objectives: [{ instructions: text, ...(resourceKey ? { resourceKey } : {}) }],
         statusId: applicableStatusId,
         tagIds: selectedTagIds.length > 0 ? selectedTagIds : undefined
       });

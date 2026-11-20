@@ -129,7 +129,7 @@ describe('REST mission creation', () => {
     const project = await createProject({ name: 'REST Create Objective States' });
     const mission = await createMission({
       projectId: project.id,
-      objectives: [{ objective: 'First' }, { objective: 'Second' }, { objective: 'Third' }]
+      objectives: [{ instructions: 'First' }, { instructions: 'Second' }, { instructions: 'Third' }]
     });
 
     assert.deepEqual(
@@ -242,7 +242,7 @@ describe('REST mission creation', () => {
     await assert.rejects(
       createMission({
         projectId: project.id,
-        objectives: [{ objective: 'First' }, { objective: '   ' }]
+        objectives: [{ instructions: 'First' }, { instructions: '   ' }]
       }),
       (err: unknown) => (err as { status?: number }).status === 400
     );

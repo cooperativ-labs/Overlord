@@ -81,7 +81,7 @@ describe('objective creation agent defaulting', () => {
     const { objectives } = await createMissionWithObjectives({
       ctx,
       projectId: project.id,
-      objectives: [{ objective: 'Draft step' }, { objective: 'Future step' }]
+      objectives: [{ instructions: 'Draft step' }, { instructions: 'Future step' }]
     });
 
     // Both the draft (index 0) and future (index 1) slots record the agent so the
@@ -111,8 +111,8 @@ describe('objective creation agent defaulting', () => {
       ctx,
       projectId: project.id,
       objectives: [
-        { objective: 'Draft step', agent: 'codex', model: 'gpt-5.6-terra' },
-        { objective: 'Future step' }
+        { instructions: 'Draft step', agent: 'codex', model: 'gpt-5.6-terra' },
+        { instructions: 'Future step' }
       ]
     });
 
@@ -137,7 +137,7 @@ describe('objective creation agent defaulting', () => {
       createMissionWithObjectives({
         ctx,
         projectId: project.id,
-        objectives: [{ objective: 'Draft step', model: 'gpt-5.6-terra' }]
+        objectives: [{ instructions: 'Draft step', model: 'gpt-5.6-terra' }]
       }),
       /model requires an assigned agent/
     );
@@ -152,7 +152,7 @@ describe('objective creation agent defaulting', () => {
     const { objectives } = await createMissionWithObjectives({
       ctx,
       projectId: project.id,
-      objectives: [{ objective: 'Draft step' }]
+      objectives: [{ instructions: 'Draft step' }]
     });
 
     const stored = await agentOf(ctx, objectives[0]?.id as string);

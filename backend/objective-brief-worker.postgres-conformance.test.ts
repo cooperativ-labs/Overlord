@@ -29,24 +29,22 @@ type Row = {
   title_source: string | null;
   title_status: string | null;
   title_generation: number;
-  description: string | null;
-  description_source: string | null;
-  description_status: string | null;
-  description_failure_code: string | null;
-  description_generation: number;
-  description_suppressed: boolean;
-  description_instruction_hash: string | null;
+  summary: string | null;
+  summary_source: string | null;
+  summary_status: string | null;
+  summary_failure_code: string | null;
+  summary_generation: number;
+  summary_suppressed: boolean;
+  summary_instruction_hash: string | null;
   instruction_text: string | null;
   state: string;
 };
 
 async function row(db: DatabaseClient, id: string): Promise<Row> {
-  const raw = await db.get<
-    Omit<Row, 'description_suppressed'> & { description_suppressed: unknown }
-  >(
-    `SELECT title, title_source, title_status, title_generation, description, description_source,
-            description_status, description_failure_code, description_generation,
-            description_suppressed, description_instruction_hash, instruction_text, state
+  const raw = await db.get<Omit<Row, 'summary_suppressed'> & { summary_suppressed: unknown }>(
+    `SELECT title, title_source, title_status, title_generation, summary, summary_source,
+            summary_status, summary_failure_code, summary_generation,
+            summary_suppressed, summary_instruction_hash, instruction_text, state
        FROM objectives WHERE id = ?`,
     [id]
   );
@@ -54,8 +52,8 @@ async function row(db: DatabaseClient, id: string): Promise<Row> {
   return {
     ...raw,
     title_generation: Number(raw.title_generation),
-    description_generation: Number(raw.description_generation),
-    description_suppressed: raw.description_suppressed === true || raw.description_suppressed === 1
+    summary_generation: Number(raw.summary_generation),
+    summary_suppressed: raw.summary_suppressed === true || raw.summary_suppressed === 1
   };
 }
 
@@ -93,7 +91,7 @@ async function jobsFor(db: DatabaseClient, objectiveId: string): Promise<Job[]> 
 function fakeProvider(
   options: {
     title?: (call: number) => string;
-    description?: (call: number) => string;
+    summary?: (call: number) => string;
     onCall?: (call: number) => Promise<void>;
     fail?: (call: number) => boolean;
   } = {}
@@ -107,9 +105,9 @@ function fakeProvider(
     if (options.fail?.(call)) throw Object.assign(new Error('provider down'), { status: 503 });
     const out: Record<string, unknown> = {};
     if (required.includes('title')) out.title = options.title?.(call) ?? 'Write the brief worker';
-    if (required.includes('description')) {
-      out.description = {
-        goal: options.description?.(call) ?? 'Add a worker that writes summaries for people.',
+    if (required.includes('summary')) {
+      out.summary = {
+        goal: options.summary?.(call) ?? 'Add a worker that writes summaries for people.',
         decisionsNeeded: [],
         body: ['The worker keeps every constraint and warning visible.'],
         doneWhen: '',
@@ -157,7 +155,7 @@ for (const adapter of conformanceAdapters()) {
           await missions.addObjectivesToMission({
             ctx: agentCtx,
             missionId: mission.id,
-            objectives: [{ objective, ...extra }]
+            objectives: [{ instructions: objective, ...extra }]
           })
         )[0]!;
       /** Claim the next brief job, ignoring the debounce. */
@@ -203,7 +201,7 @@ for (const adapter of conformanceAdapters()) {
         const objective = await t.addAgent(LONG);
         let current = await row(t.db, objective.id);
         assert.equal(current.title_status, 'pending');
-        assert.equal(current.description_status, 'pending');
+        assert.equal(current.summary_status, 'pending');
         const queued = await jobsFor(t.db, objective.id);
         assert.equal(queued.length, 1, 'the create transaction queued one job');
         assert.ok(String(queued[0]!.run_after) > '', 'debounced run_after');
@@ -211,14 +209,14 @@ for (const adapter of conformanceAdapters()) {
         await t.runNext();
         current = await row(t.db, objective.id);
         assert.equal(provider.calls.length, 1, 'title and summary share one provider call');
-        assert.deepEqual(provider.calls[0]!.required.sort(), ['description', 'title']);
+        assert.deepEqual(provider.calls[0]!.required.sort(), ['summary', 'title']);
         assert.equal(current.title, 'Write the brief worker');
         assert.equal(current.title_status, null);
-        assert.equal(current.description_source, 'generated');
-        assert.equal(current.description_status, null);
-        assert.match(current.description ?? '', /^Add a worker that writes summaries for people\./);
+        assert.equal(current.summary_source, 'generated');
+        assert.equal(current.summary_status, null);
+        assert.match(current.summary ?? '', /^Add a worker that writes summaries for people\./);
         assert.ok(
-          current.description!.endsWith(
+          current.summary!.endsWith(
             'The instructions do not say how to confirm that the work is complete.'
           )
         );
@@ -243,7 +241,7 @@ for (const adapter of conformanceAdapters()) {
         assert.deepEqual(provider.calls[0]!.required, ['title']);
         const current = await row(t.db, human.id);
         assert.equal(current.title, 'Write the brief worker');
-        assert.equal(current.description, null);
+        assert.equal(current.summary, null);
 
         // An authored title and short instructions ask for nothing.
         const titled = await t.addAgent('Fix the README typo.', { title: 'Mine' });
@@ -271,7 +269,7 @@ for (const adapter of conformanceAdapters()) {
       try {
         const objective = await t.addAgent(LONG);
         const provider = fakeProvider({
-          description: call => (call === 1 ? 'Old summary.' : 'New summary.'),
+          summary: call => (call === 1 ? 'Old summary.' : 'New summary.'),
           onCall: async call => {
             if (call === 1) {
               await t.repo.updateObjective(
@@ -286,10 +284,10 @@ for (const adapter of conformanceAdapters()) {
         await t.runNext();
         const current = await row(t.db, objective.id);
         assert.equal(provider.calls.length, 2, 'the stale result triggered a second pass');
-        assert.match(current.description ?? '', /^New summary\./);
+        assert.match(current.summary ?? '', /^New summary\./);
         assert.equal(current.instruction_text, LONG_2);
         const { hashObjectiveInstruction } = t.service;
-        assert.equal(current.description_instruction_hash, hashObjectiveInstruction(LONG_2));
+        assert.equal(current.summary_instruction_hash, hashObjectiveInstruction(LONG_2));
       } finally {
         await t.finish();
       }
@@ -319,11 +317,8 @@ for (const adapter of conformanceAdapters()) {
         assert.ok(successorJobId);
         await t.runNext();
         const current = await row(t.db, objective.id);
-        assert.equal(current.description_status, null);
-        assert.equal(
-          current.description_instruction_hash,
-          t.service.hashObjectiveInstruction(LONG_2)
-        );
+        assert.equal(current.summary_status, null);
+        assert.equal(current.summary_instruction_hash, t.service.hashObjectiveInstruction(LONG_2));
         // A further completion with nothing pending queues nothing.
         assert.equal((await t.claim()) ?? null, null);
       } finally {
@@ -338,7 +333,7 @@ for (const adapter of conformanceAdapters()) {
         const provider = fakeProvider({
           onCall: async call => {
             if (call === 1) {
-              await t.service.removeObjectiveDescription({
+              await t.service.removeObjectiveSummary({
                 ctx: t.humanCtx,
                 objectiveId: objective.id
               });
@@ -348,8 +343,8 @@ for (const adapter of conformanceAdapters()) {
         t.worker.setGenerateOverride(provider.generate);
         await t.runNext();
         let current = await row(t.db, objective.id);
-        assert.equal(current.description, null);
-        assert.equal(current.description_suppressed, true);
+        assert.equal(current.summary, null);
+        assert.equal(current.summary_suppressed, true);
         assert.equal(current.title, 'Write the brief worker', 'title generation is independent');
 
         // Agent edits, catch-up and restart recovery keep it removed.
@@ -365,19 +360,19 @@ for (const adapter of conformanceAdapters()) {
           await t.worker.processJobForTest(t.db, job);
         }
         current = await row(t.db, objective.id);
-        assert.equal(current.description, null);
-        assert.equal(current.description_status, null);
+        assert.equal(current.summary, null);
+        assert.equal(current.summary_status, null);
 
         // An agent request is refused; a person's Summarize turns it back on.
         await assert.rejects(
-          t.service.requestObjectiveDescriptionGeneration({
+          t.service.requestObjectiveSummaryGeneration({
             ctx: t.agentCtx,
             objectiveId: objective.id,
             mode: 'summarize'
           }),
-          (e: { code?: string }) => e.code === 'description_suppressed'
+          (e: { code?: string }) => e.code === 'summary_suppressed'
         );
-        await t.service.requestObjectiveDescriptionGeneration({
+        await t.service.requestObjectiveSummaryGeneration({
           ctx: t.humanCtx,
           objectiveId: objective.id,
           mode: 'summarize'
@@ -386,8 +381,8 @@ for (const adapter of conformanceAdapters()) {
         assert.ok(explicit, 'Summarize queues a job without the debounce');
         await t.runNext();
         current = await row(t.db, objective.id);
-        assert.equal(current.description_suppressed, false);
-        assert.equal(current.description_source, 'generated');
+        assert.equal(current.summary_suppressed, false);
+        assert.equal(current.summary_source, 'generated');
       } finally {
         await t.finish();
       }
@@ -400,7 +395,7 @@ for (const adapter of conformanceAdapters()) {
         t.worker.setGenerateOverride(fakeProvider({ fail: () => true }).generate);
         await t.runNext();
         let current = await row(t.db, objective.id);
-        assert.equal(current.description_status, 'pending', 'intent survives a transient error');
+        assert.equal(current.summary_status, 'pending', 'intent survives a transient error');
         let [job] = await jobsFor(t.db, objective.id);
         assert.equal(job!.status, 'queued');
         assert.equal(job!.attempt_count, 1);
@@ -409,25 +404,25 @@ for (const adapter of conformanceAdapters()) {
         await t.db.run('UPDATE worker_jobs SET max_attempts = 2 WHERE id = ?', [job!.id]);
         await t.runNext();
         current = await row(t.db, objective.id);
-        assert.equal(current.description_status, 'failed');
-        assert.equal(current.description_failure_code, 'provider_error');
+        assert.equal(current.summary_status, 'failed');
+        assert.equal(current.summary_failure_code, 'provider_error');
         assert.equal(current.title_status, 'failed');
-        assert.equal(current.description, null, 'the instructions stay the readable text');
+        assert.equal(current.summary, null, 'the instructions stay the readable text');
         [job] = await jobsFor(t.db, objective.id);
         assert.equal(job!.status, 'failed');
 
         // Catch-up leaves failed rows alone; Retry re-requests.
         assert.equal((await t.worker.catchUp(t.db)).marked, 0);
         t.worker.setGenerateOverride(fakeProvider().generate);
-        await t.service.requestObjectiveDescriptionGeneration({
+        await t.service.requestObjectiveSummaryGeneration({
           ctx: t.humanCtx,
           objectiveId: objective.id,
           mode: 'retry'
         });
         await t.runNext();
         current = await row(t.db, objective.id);
-        assert.equal(current.description_status, null);
-        assert.equal(current.description_source, 'generated');
+        assert.equal(current.summary_status, null);
+        assert.equal(current.summary_source, 'generated');
       } finally {
         await t.finish();
       }
@@ -438,15 +433,15 @@ for (const adapter of conformanceAdapters()) {
       try {
         const objective = await t.addAgent(LONG);
         const provider = fakeProvider({
-          description: () => 'Edit `backend/invented-file.ts` for people.'
+          summary: () => 'Edit `backend/invented-file.ts` for people.'
         });
         t.worker.setGenerateOverride(provider.generate);
         await t.runNext();
         const current = await row(t.db, objective.id);
         assert.equal(provider.calls.length, 2, 'one bounded rewrite');
-        assert.equal(current.description, null);
-        assert.equal(current.description_status, 'failed');
-        assert.equal(current.description_failure_code, 'unfaithful_output');
+        assert.equal(current.summary, null);
+        assert.equal(current.summary_status, 'failed');
+        assert.equal(current.summary_failure_code, 'unfaithful_output');
         assert.equal(current.title, 'Write the brief worker', 'the title still publishes');
       } finally {
         await t.finish();
@@ -461,7 +456,7 @@ for (const adapter of conformanceAdapters()) {
           kind: 'composed',
           schemaVersion: 1,
           title: { status: 'ok', text: 'Write the brief worker', warnings: [] },
-          description: { status: 'ok', text: ' \n\t ', warnings: [] },
+          summary: { status: 'ok', text: ' \n\t ', warnings: [] },
           attempts: 1,
           model: null,
           inputChars: LONG.length
@@ -474,9 +469,9 @@ for (const adapter of conformanceAdapters()) {
         await worker.processJobForTest(t.db, job);
 
         const current = await row(t.db, objective.id);
-        assert.equal(current.description_status, 'failed');
-        assert.equal(current.description_failure_code, 'invalid_output');
-        assert.equal(current.description, null);
+        assert.equal(current.summary_status, 'failed');
+        assert.equal(current.summary_failure_code, 'invalid_output');
+        assert.equal(current.summary, null);
         assert.equal(current.instruction_text, LONG);
         assert.equal(current.title, 'Write the brief worker', 'the valid title still publishes');
         assert.equal(current.title_status, null);
@@ -503,8 +498,8 @@ for (const adapter of conformanceAdapters()) {
         const current = await row(t.db, objective.id);
         assert.equal(current.title, localTitle, 'the local title stays');
         assert.equal(current.title_status, null);
-        assert.equal(current.description_status, 'failed');
-        assert.equal(current.description_failure_code, 'provider_unavailable');
+        assert.equal(current.summary_status, 'failed');
+        assert.equal(current.summary_failure_code, 'provider_unavailable');
         // Objectives stay fully usable: lifecycle writes are unaffected.
         await t.repo.updateObjective(objective.id, { state: 'submitted' });
         assert.equal((await row(t.db, objective.id)).state, 'submitted');
@@ -528,7 +523,7 @@ for (const adapter of conformanceAdapters()) {
         assert.equal(reclaimed?.id, crashed.id);
         assert.equal(reclaimed?.attempt_count, 2);
         await t.worker.processJobForTest(t.db, reclaimed!);
-        assert.equal((await row(t.db, objective.id)).description_status, null);
+        assert.equal((await row(t.db, objective.id)).summary_status, null);
 
         // Restart: pending intent with no job (for example written before the
         // worker existed) is re-enqueued by the bounded sweep, once.
@@ -541,7 +536,7 @@ for (const adapter of conformanceAdapters()) {
         assert.equal((await t.worker.catchUp(t.db)).recovered, 0, 'idempotent');
         assert.equal((await jobsFor(t.db, second.id)).length, 1);
         await t.runNext();
-        assert.equal((await row(t.db, second.id)).description_source, 'generated');
+        assert.equal((await row(t.db, second.id)).summary_source, 'generated');
       } finally {
         await t.finish();
       }
@@ -558,7 +553,7 @@ for (const adapter of conformanceAdapters()) {
         });
         // Simulate rows that predate automatic intent.
         await t.db.run(
-          'UPDATE objectives SET description_status = NULL, description_request_kind = NULL, title_status = NULL WHERE id IN (?, ?)',
+          'UPDATE objectives SET summary_status = NULL, summary_request_kind = NULL, title_status = NULL WHERE id IN (?, ?)',
           [eligible.id, person.id]
         );
         await t.db.run(
@@ -566,8 +561,8 @@ for (const adapter of conformanceAdapters()) {
         );
         const first = await t.worker.catchUp(t.db);
         assert.equal(first.marked, 1);
-        assert.equal((await row(t.db, eligible.id)).description_status, 'pending');
-        assert.equal((await row(t.db, person.id)).description_status, null);
+        assert.equal((await row(t.db, eligible.id)).summary_status, 'pending');
+        assert.equal((await row(t.db, person.id)).summary_status, null);
         const second = await t.worker.catchUp(t.db);
         assert.equal(second.marked, 0);
         assert.equal((await jobsFor(t.db, eligible.id)).length, 1, 'no duplicate job');

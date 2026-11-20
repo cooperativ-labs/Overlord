@@ -8,8 +8,8 @@ import type {
   UpdateObjectiveBody
 } from '@overlord/contract';
 
-/** `{ mode: summarize | regenerate | retry }` (POST /api/objectives/{id}/description-requests). */
-export type ObjectiveDescriptionRequestMode = 'summarize' | 'regenerate' | 'retry';
+/** `{ mode: summarize | regenerate | retry }` (POST /api/objectives/{id}/summary-requests). */
+export type ObjectiveSummaryRequestMode = 'summarize' | 'regenerate' | 'retry';
 
 import { request } from './request.ts';
 
@@ -21,8 +21,8 @@ export const objectivesApi = {
   updateObjective: (id: string, body: UpdateObjectiveBody) =>
     request<ObjectiveDto>('PATCH', `/api/objectives/${id}`, body),
   /** Summarize / Regenerate / Retry: records durable intent; never waits for the model. */
-  requestObjectiveDescription: (id: string, body: { mode: ObjectiveDescriptionRequestMode }) =>
-    request<ObjectiveDto>('POST', `/api/objectives/${id}/description-requests`, body),
+  requestObjectiveSummary: (id: string, body: { mode: ObjectiveSummaryRequestMode }) =>
+    request<ObjectiveDto>('POST', `/api/objectives/${id}/summary-requests`, body),
   deleteObjective: (id: string) => request<{ ok: true }>('DELETE', `/api/objectives/${id}`),
   getObjectivePrompt: (id: string) =>
     request<ObjectivePromptDto>('GET', `/api/objectives/${id}/prompt`),

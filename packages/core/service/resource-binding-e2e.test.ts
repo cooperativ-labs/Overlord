@@ -74,8 +74,8 @@ describe('resource binding end-to-end (simulated cross-repo mission)', () => {
       projectId: project.id,
       title: 'Cross-repo resource binding verification',
       objectives: [
-        { objective: 'Change OpenOverlord backend', resourceKey: 'overlord' },
-        { objective: 'Change OverlordMobile app', resourceKey: 'mobile' }
+        { instructions: 'Change OpenOverlord backend', resourceKey: 'overlord' },
+        { instructions: 'Change OverlordMobile app', resourceKey: 'mobile' }
       ]
     });
 

@@ -219,13 +219,9 @@ test('backend requests do not send workspace-selection headers', async () => {
 });
 
 function assertAlreadyLinkedAttachDiagnostic(message: string): void {
-  assert.match(message, /already linked to another mission session/i);
-  assert.match(message, /stale mission-session binding/i);
-  assert.match(message, /not a user authentication failure/i);
-  assert.match(message, /ovld auth login/);
-  assert.match(message, /ovld auth repair/);
-  assert.match(message, /without `--execution-request-id`/);
-  assert.doesNotMatch(message, /credentials were rejected/i);
+  assert.match(message, /already linked to another session/i);
+  assert.match(message, /execution_request_already_linked/);
+  assert.doesNotMatch(message, /auth login|credentials were rejected/i);
 }
 
 test('createBackendClient distinguishes an already-linked execution request from authentication failure', async () => {

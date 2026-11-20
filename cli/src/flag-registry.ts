@@ -78,7 +78,11 @@ export const COMMAND_FLAGS: Record<string, readonly string[]> = {
   'add-et': ['--name', '--workspace-id'],
   create: [
     '--objectives-json',
+    '--objective-instructions',
+    '--objective-summary',
+    // Retired names, accepted here only so the command can name the replacement.
     '--objective',
+    '--objective-description',
     '--prompt',
     '--project-id',
     '--title',
@@ -90,7 +94,11 @@ export const COMMAND_FLAGS: Record<string, readonly string[]> = {
   ],
   prompt: [
     '--objectives-json',
+    '--objective-instructions',
+    '--objective-summary',
+    // Retired names, accepted here only so the command can name the replacement.
     '--objective',
+    '--objective-description',
     '--prompt',
     '--project-id',
     '--title',

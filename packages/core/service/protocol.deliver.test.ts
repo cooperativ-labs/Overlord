@@ -30,7 +30,7 @@ async function submittedMission(ctx: ServiceContext, name: string) {
   const { mission, objectives } = await createMissionWithObjectives({
     ctx,
     projectId: project.id,
-    objectives: [{ objective: `Work for ${name}` }]
+    objectives: [{ instructions: `Work for ${name}` }]
   });
   await ctx.db.run(`UPDATE objectives SET state = 'submitted' WHERE id = ?`, [objectives[0]?.id]);
   return { project, mission, objectiveId: objectives[0]?.id as string };
@@ -387,10 +387,11 @@ describe('deliverSession mechanical change capture', () => {
       projectId: project.id,
       objectives: [
         {
-          objective: 'Add form validation to the settings page including email and password fields.'
+          instructions:
+            'Add form validation to the settings page including email and password fields.'
         },
         {
-          objective:
+          instructions:
             'Implement the CSV export API for the reports page so operators can download filtered rows.'
         }
       ]
@@ -651,7 +652,7 @@ describe('deliverSession mechanical change capture', () => {
     const { mission } = await createMissionWithObjectives({
       ctx,
       projectId: project.id,
-      objectives: [{ objective: 'Complete current objective' }]
+      objectives: [{ instructions: 'Complete current objective' }]
     });
     const attached = await attachSession({ ctx, missionId: mission.displayId });
 
@@ -678,8 +679,8 @@ describe('deliverSession mechanical change capture', () => {
       ctx,
       projectId: project.id,
       objectives: [
-        { objective: 'Complete current objective' },
-        { objective: 'Next authored objective' }
+        { instructions: 'Complete current objective' },
+        { instructions: 'Next authored objective' }
       ]
     });
     const attached = await attachSession({ ctx, missionId: mission.displayId });
@@ -707,10 +708,10 @@ describe('deliverSession mechanical change capture', () => {
       ctx,
       projectId: project.id,
       objectives: [
-        { objective: 'Being discussed' },
-        { objective: 'Blank soon' },
-        { objective: 'Lower runnable draft' },
-        { objective: 'Launched out of order' }
+        { instructions: 'Being discussed' },
+        { instructions: 'Blank soon' },
+        { instructions: 'Lower runnable draft' },
+        { instructions: 'Launched out of order' }
       ]
     });
     await ctx.db.run(`UPDATE objectives SET state = 'submitted' WHERE id = ?`, [objectives[0]?.id]);
@@ -758,7 +759,7 @@ describe('deliverSession mechanical change capture', () => {
     const { mission } = await createMissionWithObjectives({
       ctx,
       projectId: project.id,
-      objectives: [{ objective: 'Complete current objective' }]
+      objectives: [{ instructions: 'Complete current objective' }]
     });
     const attached = await attachSession({ ctx, missionId: mission.displayId });
     // Blank slots are no longer persisted; this stands in for a legacy row left
@@ -815,8 +816,8 @@ describe('deliverSession mechanical change capture', () => {
       ctx,
       projectId: project.id,
       objectives: [
-        { objective: 'First objective' },
-        { objective: 'Second objective', autoAdvance: true }
+        { instructions: 'First objective' },
+        { instructions: 'Second objective', autoAdvance: true }
       ]
     });
     const secondObjectiveId = objectives[1]?.id as string;
@@ -883,7 +884,7 @@ describe('deliverSession mechanical change capture', () => {
     const { mission, objectives } = await createMissionWithObjectives({
       ctx,
       projectId: project.id,
-      objectives: [{ objective: 'Only queued objective' }]
+      objectives: [{ instructions: 'Only queued objective' }]
     });
     const pristine = await createRunQueue(ctx.db, project.id, 'Pristine', null);
     await enqueueRunQueueEntry(ctx.db, project.id, objectives[0]?.id as string);

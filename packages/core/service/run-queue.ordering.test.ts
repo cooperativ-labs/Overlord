@@ -21,7 +21,7 @@ describe('Run Queue objective-position write-through', () => {
       const { mission, objectives } = await createMissionWithObjectives({
         ctx,
         projectId: project.id,
-        objectives: Array.from({ length: 5 }, (_, i) => ({ objective: `Work ${i}` }))
+        objectives: Array.from({ length: 5 }, (_, i) => ({ instructions: `Work ${i}` }))
       });
       const [a, active, b, done, launching] = objectives;
       await db.run('UPDATE objectives SET position = position * 10 + 10 WHERE mission_id = ?', [
@@ -78,8 +78,8 @@ describe('Run Queue objective-position write-through', () => {
       ctx,
       projectId: project.id,
       objectives: [
-        { objective: 'First objective' },
-        { objective: 'Second objective', autoAdvance: true }
+        { instructions: 'First objective' },
+        { instructions: 'Second objective', autoAdvance: true }
       ]
     });
 
@@ -112,9 +112,9 @@ describe('Run Queue objective-position write-through', () => {
       ctx,
       projectId: project.id,
       objectives: [
-        { objective: 'Unqueued anchor' },
-        { objective: 'Queued second', autoAdvance: true },
-        { objective: 'Queued third', autoAdvance: true }
+        { instructions: 'Unqueued anchor' },
+        { instructions: 'Queued second', autoAdvance: true },
+        { instructions: 'Queued third', autoAdvance: true }
       ]
     });
     const first = objectives[0]!;
@@ -153,10 +153,10 @@ describe('Run Queue objective-position write-through', () => {
       ctx,
       projectId: project.id,
       objectives: [
-        { objective: 'First' },
-        { objective: 'Second' },
-        { objective: 'Third' },
-        { objective: 'Fourth' }
+        { instructions: 'First' },
+        { instructions: 'Second' },
+        { instructions: 'Third' },
+        { instructions: 'Fourth' }
       ]
     });
     const [first, second, third, fourth] = objectives as [
@@ -189,7 +189,7 @@ describe('Run Queue objective-position write-through', () => {
     const { mission, objectives } = await createMissionWithObjectives({
       ctx,
       projectId: project.id,
-      objectives: [{ objective: 'First' }, { objective: 'Second' }, { objective: 'Third' }]
+      objectives: [{ instructions: 'First' }, { instructions: 'Second' }, { instructions: 'Third' }]
     });
     const [first, second, third] = objectives as [
       (typeof objectives)[number],
@@ -227,7 +227,7 @@ describe('Run Queue objective-position write-through', () => {
     const { mission, objectives } = await createMissionWithObjectives({
       ctx,
       projectId: project.id,
-      objectives: [{ objective: 'First' }, { objective: 'Second' }, { objective: 'Third' }]
+      objectives: [{ instructions: 'First' }, { instructions: 'Second' }, { instructions: 'Third' }]
     });
     const [first, second, third] = objectives as [
       (typeof objectives)[number],

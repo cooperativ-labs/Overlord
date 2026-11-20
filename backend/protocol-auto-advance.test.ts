@@ -42,7 +42,7 @@ type CreatedMission = {
 test('protocol mission creation requires explicit project intent', async () => {
   await assert.rejects(
     runProtocolSubcommand('create', {
-      flags: { '--objective': 'Do not submit this to an inferred inbox' }
+      flags: { '--objective-instructions': 'Do not submit this to an inferred inbox' }
     }),
     (error: unknown) =>
       error instanceof ApiError &&
@@ -55,7 +55,7 @@ test('protocol creates an inbox item only with explicit unassigned-project inten
   const result = (await runProtocolSubcommand('create', {
     flags: {
       '--unassigned-to-project': true,
-      '--objective': 'Capture this deliberately outside a project'
+      '--objective-instructions': 'Capture this deliberately outside a project'
     }
   })) as { unassigned: boolean; inboxItem: { objectives: string[] } };
 
@@ -66,7 +66,7 @@ test('protocol creates an inbox item only with explicit unassigned-project inten
 test('protocol rejects the retired --inbox alias', async () => {
   await assert.rejects(
     runProtocolSubcommand('create', {
-      flags: { '--inbox': true, '--objective': 'The alias is retired' }
+      flags: { '--inbox': true, '--objective-instructions': 'The alias is retired' }
     }),
     (error: unknown) =>
       error instanceof ApiError && error.status === 400 && error.code === 'invalid_input'
@@ -80,7 +80,7 @@ test('protocol rejects conflicting project and unassigned-project intent', async
       flags: {
         '--project-id': project.id,
         '--unassigned-to-project': true,
-        '--objective': 'This must not choose between a mission and inbox item'
+        '--objective-instructions': 'This must not choose between a mission and inbox item'
       }
     }),
     (error: unknown) => error instanceof ApiError && error.status === 400
@@ -90,7 +90,7 @@ test('protocol rejects conflicting project and unassigned-project intent', async
 test('protocol prompt requires an explicit project instead of discovering one', async () => {
   await assert.rejects(
     runProtocolSubcommand('prompt', {
-      flags: { '--objective': 'Do not attach a project inferred from this checkout' }
+      flags: { '--objective-instructions': 'Do not attach a project inferred from this checkout' }
     }),
     (error: unknown) =>
       error instanceof ApiError && error.status === 400 && error.message.includes('--project-id')
@@ -102,7 +102,7 @@ test('protocol create persists --auto-advance on a single objective', async () =
   const result = (await runProtocolSubcommand('create', {
     flags: {
       '--project-id': project.id,
-      '--objective': 'Run the next step automatically',
+      '--objective-instructions': 'Run the next step automatically',
       '--auto-advance': true
     }
   })) as CreatedMission;
@@ -116,7 +116,7 @@ test('protocol add-objectives persists per-item autoAdvance', async () => {
   const created = (await runProtocolSubcommand('create', {
     flags: {
       '--project-id': project.id,
-      '--objective': 'Existing draft'
+      '--objective-instructions': 'Existing draft'
     }
   })) as CreatedMission;
 
@@ -124,8 +124,8 @@ test('protocol add-objectives persists per-item autoAdvance', async () => {
     flags: {
       '--mission-id': created.mission.id,
       '--objectives-json': JSON.stringify([
-        { objective: 'Auto follow-up', autoAdvance: true },
-        { objective: 'Manual follow-up' }
+        { instructions: 'Auto follow-up', autoAdvance: true },
+        { instructions: 'Manual follow-up' }
       ])
     }
   })) as CreatedMission['objectives'];
@@ -139,7 +139,7 @@ test('protocol add-objectives persists per-item agent and model', async () => {
   const created = (await runProtocolSubcommand('create', {
     flags: {
       '--project-id': project.id,
-      '--objective': 'Existing draft'
+      '--objective-instructions': 'Existing draft'
     }
   })) as CreatedMission;
 
@@ -147,7 +147,7 @@ test('protocol add-objectives persists per-item agent and model', async () => {
     flags: {
       '--mission-id': created.mission.id,
       '--objectives-json': JSON.stringify([
-        { objective: 'Use Codex', agent: 'codex', model: 'gpt-5.6-terra' }
+        { instructions: 'Use Codex', agent: 'codex', model: 'gpt-5.6-terra' }
       ])
     }
   })) as CreatedMission['objectives'];
@@ -166,8 +166,8 @@ test('protocol create persists per-item agent and model on the initial objective
     flags: {
       '--project-id': project.id,
       '--objectives-json': JSON.stringify([
-        { objective: 'Draft with Codex', agent: 'codex', model: 'gpt-5.6-terra' },
-        { objective: 'Future with Claude', agent: 'claude' }
+        { instructions: 'Draft with Codex', agent: 'codex', model: 'gpt-5.6-terra' },
+        { instructions: 'Future with Claude', agent: 'claude' }
       ])
     }
   })) as CreatedMission;
@@ -192,7 +192,7 @@ test('protocol create assigns an agent to the single --objective form', async ()
   const result = (await runProtocolSubcommand('create', {
     flags: {
       '--project-id': project.id,
-      '--objective': 'One objective, already assigned',
+      '--objective-instructions': 'One objective, already assigned',
       '--objective-agent': 'codex',
       '--objective-model': 'gpt-5.6-terra'
     }
@@ -214,8 +214,8 @@ test('--objective-agent seeds only the items that name no agent of their own', a
       '--project-id': project.id,
       '--objective-agent': 'claude',
       '--objectives-json': JSON.stringify([
-        { objective: 'Inherits the flag' },
-        { objective: 'Keeps its own', agent: 'codex' }
+        { instructions: 'Inherits the flag' },
+        { instructions: 'Keeps its own', agent: 'codex' }
       ])
     }
   })) as CreatedMission;
@@ -238,7 +238,7 @@ test('protocol create rejects an objective model with no agent', async () => {
     runProtocolSubcommand('create', {
       flags: {
         '--project-id': project.id,
-        '--objective': 'Model without an agent',
+        '--objective-instructions': 'Model without an agent',
         '--objective-model': 'gpt-5.6-terra'
       }
     }),
@@ -252,8 +252,8 @@ test('agent queue commands keep legacy auto-advance work in mission-local queue 
     flags: {
       '--project-id': project.id,
       '--objectives-json': JSON.stringify([
-        { objective: 'First queued objective', autoAdvance: true },
-        { objective: 'Second queued objective', autoAdvance: true }
+        { instructions: 'First queued objective', autoAdvance: true },
+        { instructions: 'Second queued objective', autoAdvance: true }
       ])
     }
   })) as CreatedMission;
@@ -293,7 +293,7 @@ test('protocol update-objective toggles auto-advance', async () => {
   const created = (await runProtocolSubcommand('create', {
     flags: {
       '--project-id': project.id,
-      '--objective': 'Existing draft'
+      '--objective-instructions': 'Existing draft'
     }
   })) as CreatedMission;
   const objectiveId = created.objectives[0]?.id;
@@ -327,8 +327,8 @@ test('protocol update-objective edits instruction text on draft and future objec
     flags: {
       '--project-id': project.id,
       '--objectives-json': JSON.stringify([
-        { objective: 'Draft slot' },
-        { objective: 'Future slot' }
+        { instructions: 'Draft slot' },
+        { instructions: 'Future slot' }
       ])
     }
   })) as CreatedMission;

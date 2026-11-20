@@ -66,7 +66,7 @@ test('an explicit mission cannot be paired with an objective from another missio
       flags: {
         '--mission-id': first.missionDisplayId,
         '--objective-id': second.objective.displayId,
-        '--objectives-json': JSON.stringify([{ objective: 'Must not be appended' }])
+        '--objectives-json': JSON.stringify([{ instructions: 'Must not be appended' }])
       }
     }),
     (error: unknown) =>

@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import {
+  existsSync,
   lutimesSync,
   mkdirSync,
   mkdtempSync,
@@ -14,6 +15,7 @@ import path from 'node:path';
 import test from 'node:test';
 
 import {
+  ensureHarnessScratchDir,
   ensureProjectTmpDir,
   PROJECT_TMP_RETENTION_MS,
   PROJECT_TMP_SESSION_RETENTION_MS,
@@ -21,7 +23,7 @@ import {
   projectTmpDir,
   pruneProjectTmpContents,
   pruneStaleProjectTmp,
-  removeSessionScratch,
+  removeLaunchBriefing,
   sessionScratchName
 } from '../src/project-tmp.ts';
 
@@ -146,31 +148,31 @@ test('pruneStaleProjectTmp keeps live session scratch and expires orphaned scrat
   ]);
 });
 
-test('removeSessionScratch removes only a direct child of sessions/ plus the briefing', () => {
+test('delivery removes the briefing while aged scratch files expire without deleting the harness directory', () => {
   const workingDirectory = makeProjectDir();
   const tmpDir = ensureProjectTmpDir(workingDirectory);
   const scratch = path.join(tmpDir, PROJECT_TMP_SESSIONS_DIRNAME, 'objective-coo-1-abcd-req1');
-  mkdirSync(scratch, { recursive: true });
-  writeFileSync(path.join(scratch, 'a.txt'), 'a\n');
+  ensureHarnessScratchDir(workingDirectory, scratch);
+  const staleFile = path.join(scratch, 'stale.txt');
+  writeFileSync(staleFile, 'a\n');
+  const now = Date.now();
+  const stale = new Date(now - PROJECT_TMP_RETENTION_MS - 1_000);
+  utimesSync(staleFile, stale, stale);
+  utimesSync(scratch, stale, stale);
   const briefing = path.join(tmpDir, 'objective-coo-1-abcd.md');
   writeFileSync(briefing, 'brief\n');
   const launchScript = path.join(tmpDir, 'launch-coo-1-req1.sh');
   writeFileSync(launchScript, '#!/bin/sh\n');
 
-  // Refuses anything that is not a session scratch directory.
-  assert.deepEqual(removeSessionScratch({ workingDirectory, scratchDir: tmpDir }).removed, []);
-  assert.deepEqual(removeSessionScratch({ workingDirectory, scratchDir: os.tmpdir() }).removed, []);
+  removeLaunchBriefing(workingDirectory, launchScript);
+  removeLaunchBriefing(workingDirectory, briefing);
+  assert.equal(existsSync(briefing), false);
+  assert.equal(existsSync(launchScript), true);
 
-  const result = removeSessionScratch({
-    workingDirectory,
-    scratchDir: scratch,
-    contextFile: briefing
-  });
-  assert.deepEqual(result.removed.sort(), [briefing, scratch].sort());
-  assert.deepEqual(readdirSync(tmpDir).sort(), [
-    'launch-coo-1-req1.sh',
-    PROJECT_TMP_SESSIONS_DIRNAME
-  ]);
+  pruneStaleProjectTmp({ workingDirectory, now });
+  assert.equal(existsSync(staleFile), false);
+  assert.equal(statSync(scratch).isDirectory(), true);
+  writeFileSync(path.join(scratch, 'still-writable.txt'), 'new follow-up\n');
 });
 
 test('pruneProjectTmpContents keeps live session scratch unless forced', () => {

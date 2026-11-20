@@ -1,6 +1,6 @@
 /**
  * Objective brief (coo:1275): one model call writes the human-facing title
- * and/or the summary ("description") of an objective. This file holds the
+ * and/or the summary of an objective. This file holds the
  * deterministic parts — the versioned output schema, the prompt, paragraph
  * assembly, normalization for safe plain-text rendering, and the fidelity
  * checks. `compose.ts` orchestrates the provider call and the bounded retry.
@@ -26,8 +26,8 @@ export const OBJECTIVE_BRIEF_TITLE_MAX_CHARS = 60;
 export const OBJECTIVE_BRIEF_TARGET_WORDS = 120;
 /** Above this many words a summary is asked for once more, then accepted. */
 export const OBJECTIVE_BRIEF_SOFT_MAX_WORDS = 180;
-/** Hard storage bound, equal to the objective description column limit. */
-export const OBJECTIVE_BRIEF_DESCRIPTION_MAX_CHARS = 4000;
+/** Hard storage bound, equal to the objective summary column limit. */
+export const OBJECTIVE_BRIEF_SUMMARY_MAX_CHARS = 4000;
 /** The goal and the done-when sentences each have at most this many words. */
 export const OBJECTIVE_BRIEF_EDGE_SENTENCE_MAX_WORDS = 25;
 /** Bounded model input. Longer instructions get no generated summary. */
@@ -45,10 +45,10 @@ export const OBJECTIVE_BRIEF_MISSING_DONE_WHEN =
 export const DECISION_PREFIX = 'Decision needed:';
 export const CAUTION_PREFIX = 'CAUTION:';
 
-export type ObjectiveBriefFields = { title: boolean; description: boolean };
+export type ObjectiveBriefFields = { title: boolean; summary: boolean };
 
-/** Model output for the description, before assembly. */
-export type ObjectiveBriefDescriptionParts = {
+/** Model output for the summary, before assembly. */
+export type ObjectiveBriefSummaryParts = {
   goal: string;
   decisionsNeeded: string[];
   body: string[];
@@ -56,7 +56,7 @@ export type ObjectiveBriefDescriptionParts = {
   doneWhenStated: boolean;
 };
 
-const DESCRIPTION_SCHEMA: Schema = {
+const SUMMARY_SCHEMA: Schema = {
   type: 'object',
   properties: {
     goal: { type: 'string' },
@@ -72,7 +72,7 @@ const DESCRIPTION_SCHEMA: Schema = {
 export function objectiveBriefResponseSchema(fields: ObjectiveBriefFields): Schema {
   const properties: Record<string, Schema> = {};
   if (fields.title) properties.title = { type: 'string' };
-  if (fields.description) properties.description = DESCRIPTION_SCHEMA;
+  if (fields.summary) properties.summary = SUMMARY_SCHEMA;
   return { type: 'object', properties, required: Object.keys(properties) };
 }
 
@@ -104,7 +104,7 @@ Faithfulness rules:
 ${OBJECTIVE_WRITING_RULES}`;
 
 export function describeRequestedFields(fields: ObjectiveBriefFields): string {
-  return [fields.title ? 'title' : null, fields.description ? 'description' : null]
+  return [fields.title ? 'title' : null, fields.summary ? 'summary' : null]
     .filter(Boolean)
     .join(' and ');
 }
@@ -202,7 +202,7 @@ function capitalizeFirst(value: string): string {
 
 export type ParsedObjectiveBrief = {
   title?: string | null;
-  description?: ObjectiveBriefDescriptionParts | null;
+  summary?: ObjectiveBriefSummaryParts | null;
 };
 
 function asString(value: unknown): string | null {
@@ -232,12 +232,12 @@ export function parseObjectiveBriefOutput(
   const record = raw as Record<string, unknown>;
   const parsed: ParsedObjectiveBrief = {};
   if (fields.title) parsed.title = asString(record.title);
-  if (fields.description) {
-    const description = record.description;
-    if (!description || typeof description !== 'object' || Array.isArray(description)) {
-      parsed.description = null;
+  if (fields.summary) {
+    const summary = record.summary;
+    if (!summary || typeof summary !== 'object' || Array.isArray(summary)) {
+      parsed.summary = null;
     } else {
-      const d = description as Record<string, unknown>;
+      const d = summary as Record<string, unknown>;
       const goal = asString(d.goal);
       const decisions = d.decisionsNeeded === undefined ? [] : asStringArray(d.decisionsNeeded);
       const body =
@@ -245,7 +245,7 @@ export function parseObjectiveBriefOutput(
       const doneWhen = asString(d.doneWhen ?? '');
       const doneWhenStated =
         typeof d.doneWhenStated === 'boolean' ? d.doneWhenStated : Boolean(doneWhen?.trim());
-      parsed.description =
+      parsed.summary =
         goal === null || decisions === null || body === null || doneWhen === null
           ? null
           : { goal, decisionsNeeded: decisions, body, doneWhen, doneWhenStated };
@@ -254,16 +254,14 @@ export function parseObjectiveBriefOutput(
   return parsed;
 }
 
-export type AssembledDescription = { ok: true; text: string } | { ok: false; problem: string };
+export type AssembledSummary = { ok: true; text: string } | { ok: false; problem: string };
 
 /**
  * Join the parts into 1–3 plain-prose paragraphs: the goal opens the first
  * paragraph, any "Decision needed:" sentences follow it immediately, and the
  * done-when sentence (or the fixed missing-done-when sentence) closes the last.
  */
-export function assembleObjectiveDescription(
-  parts: ObjectiveBriefDescriptionParts
-): AssembledDescription {
+export function assembleObjectiveSummary(parts: ObjectiveBriefSummaryParts): AssembledSummary {
   const goal = endSentence(capitalizeFirst(normalizeBriefFragment(parts.goal)));
   if (!goal) return { ok: false, problem: 'The goal sentence is empty.' };
   const decisions = parts.decisionsNeeded
@@ -284,10 +282,10 @@ export function assembleObjectiveDescription(
   const paragraphs = [[goal, ...decisions].join(' '), ...body.map(endSentence)];
   paragraphs[paragraphs.length - 1] = `${paragraphs[paragraphs.length - 1]} ${doneWhen}`;
   const text = paragraphs.join('\n\n');
-  if (text.length > OBJECTIVE_BRIEF_DESCRIPTION_MAX_CHARS) {
+  if (text.length > OBJECTIVE_BRIEF_SUMMARY_MAX_CHARS) {
     return {
       ok: false,
-      problem: `The summary has ${text.length} characters. The limit is ${OBJECTIVE_BRIEF_DESCRIPTION_MAX_CHARS}.`
+      problem: `The summary has ${text.length} characters. The limit is ${OBJECTIVE_BRIEF_SUMMARY_MAX_CHARS}.`
     };
   }
   return { ok: true, text };
@@ -509,8 +507,8 @@ export function isRetryStyleIssue(issue: { code: string }): boolean {
   return issue.code !== 'passive_voice';
 }
 
-export function lintObjectiveDescription(
-  parts: ObjectiveBriefDescriptionParts,
+export function lintObjectiveSummary(
+  parts: ObjectiveBriefSummaryParts,
   text: string
 ): ObjectiveBriefStyleIssue[] {
   const issues: ObjectiveBriefStyleIssue[] = lintSte(text);
@@ -549,12 +547,12 @@ export function lintObjectiveDescription(
 }
 
 /**
- * Advisory checks for a description written by an agent or a person rather
+ * Advisory checks for a summary written by an agent or a person rather
  * than assembled from model parts: the STE lint plus the settled prose shape
  * (one to three paragraphs, no headings or lists) and the soft length ceiling.
  * Never used to reject or rewrite text; callers return these as warnings.
  */
-export function lintAuthoredObjectiveDescription(text: string): ObjectiveBriefStyleIssue[] {
+export function lintAuthoredObjectiveSummary(text: string): ObjectiveBriefStyleIssue[] {
   const issues: ObjectiveBriefStyleIssue[] = lintSte(text);
   const paragraphs = text
     .split(/\n\s*\n/)

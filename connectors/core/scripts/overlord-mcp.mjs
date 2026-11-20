@@ -331,14 +331,15 @@ const tools = [
           description:
             'Set true only to intentionally create an account-owned inbox item instead of a project mission. Cannot be combined with projectId.'
         },
-        objective: {
-          type: 'string',
-          description: 'Initial objective text.'
-        },
-        description: {
+        objectiveInstructions: {
           type: 'string',
           description:
-            'Optional human-facing summary of the objective for the people who decide whether to launch it: one to three short prose paragraphs in Simplified Technical English style that open with the goal and close with the done-when sentence, about 120 words. The objective text stays the complete instruction for the executing agent; the summary is never sent to it. Omit it and Overlord writes one for long agent-written objectives. Style issues come back as warnings; the text is stored as written.'
+            'INSTRUCTIONS: the complete brief the executing agent receives (context, steps, done-when). Usually the LONGER of the two texts. The agent receives only this text. If the summary looks swapped with these instructions (3x longer, for example), the response carries an objective_fields_swapped warning.'
+        },
+        objectiveSummary: {
+          type: 'string',
+          description:
+            'SUMMARY: a short overview for the people who decide whether to launch the objective, never sent to the executing agent. Usually the SHORTER text: one to three prose paragraphs (about 120 words) in Simplified Technical English style that open with the goal and close with the done-when sentence. No headings or numbered steps; those belong in the instructions. Omit it and Overlord writes one for long agent-written objectives. A possible swap and style issues come back as warnings; the text is stored as written.'
         },
         title: {
           type: 'string',
@@ -369,7 +370,7 @@ const tools = [
             'When true, Overlord queues the next objective for execution after this one is delivered. Defaults to false.'
         }
       },
-      required: ['objective'],
+      required: ['objectiveInstructions'],
       additionalProperties: false
     },
     annotations: {
@@ -918,22 +919,23 @@ const tools = [
         objectives: {
           type: 'array',
           description:
-            'Objective objects with objective text and optional title, description, agent/model launch selection, resourceKey, and autoAdvance.',
+            'Objective objects with instructions (the complete brief for the executing agent) and optional summary (a short overview for people), title, agent/model launch selection, resourceKey, and autoAdvance.',
           items: {
             type: 'object',
             properties: {
-              objective: {
+              instructions: {
                 type: 'string',
-                description: 'Objective text.'
+                description:
+                  'INSTRUCTIONS: the complete brief the executing agent receives (context, steps, done-when). Usually the LONGER of the two texts. The agent receives only this text. If the summary looks swapped with these instructions (3x longer, for example), the response carries an objective_fields_swapped warning.'
               },
               title: {
                 type: 'string',
                 description: 'Optional objective title.'
               },
-              description: {
+              summary: {
                 type: 'string',
                 description:
-                  'Optional human-facing summary of the objective for the people who decide whether to launch it: one to three short prose paragraphs in Simplified Technical English style that open with the goal and close with the done-when sentence, about 120 words. The objective text stays the complete instruction for the executing agent; the summary is never sent to it. Omit it and Overlord writes one for long agent-written objectives. Style issues come back as warnings; the text is stored as written.'
+                  'SUMMARY: a short overview for the people who decide whether to launch the objective, never sent to the executing agent. Usually the SHORTER text: one to three prose paragraphs (about 120 words) in Simplified Technical English style that open with the goal and close with the done-when sentence. No headings or numbered steps; those belong in the instructions. Omit it and Overlord writes one for long agent-written objectives. A possible swap and style issues come back as warnings; the text is stored as written.'
               },
               agent: {
                 type: 'string',
@@ -972,7 +974,7 @@ const tools = [
     name: 'overlord_update_objective',
     title: 'Update objective',
     description:
-      'Use this to rewrite an objective title in any state, turn auto-advance on or off, edit instruction text or the human-facing description (summary) on a draft objective, request a generated summary on a draft objective, and/or reassign the objective to another agent or to a person (agent manual, alias human).',
+      'Use this to rewrite an objective title in any state, turn auto-advance on or off, edit instruction text or the human-facing summary on a draft objective, request a generated summary on a draft objective, and/or reassign the objective to another agent or to a person (agent manual, alias human).',
     inputSchema: {
       type: 'object',
       properties: {
@@ -993,18 +995,18 @@ const tools = [
         instructionText: {
           type: 'string',
           description:
-            'Replacement instruction text. Allowed only when the objective is in draft state; blank clears the text.'
+            'Replacement INSTRUCTIONS: the complete brief the executing agent receives. Allowed only when the objective is in draft state; blank clears the text.'
         },
-        description: {
+        summary: {
           type: 'string',
           description:
-            'Replacement human-facing summary, allowed only when the objective is in draft state: one to three short prose paragraphs in Simplified Technical English style that open with the goal and close with the done-when sentence. It is never sent to the executing agent. An empty string removes the summary; Overlord then writes none until a person selects Summarize. When a person has removed the summary, your text is not stored and a description_suppressed warning is returned.'
+            'Replacement SUMMARY: a short overview for people, never sent to the executing agent; allowed only when the objective is in draft state: one to three short prose paragraphs in Simplified Technical English style that open with the goal and close with the done-when sentence. An empty string removes the summary; Overlord then writes none until a person selects Summarize. When a person has removed the summary, your text is not stored and a summary_suppressed warning is returned. A summary that looks swapped with the instructions returns an objective_fields_swapped warning.'
         },
-        descriptionRequest: {
+        summaryRequest: {
           type: 'string',
           enum: ['summarize', 'regenerate', 'retry'],
           description:
-            'Ask Overlord to write the summary (summarize/regenerate) or to retry a failed generation (retry). Allowed only in draft state and only for instructions of at least 280 characters. Refused with description_suppressed when a person removed the summary: only a person can turn summaries back on. Cannot be combined with description.'
+            'Ask Overlord to write the summary (summarize/regenerate) or to retry a failed generation (retry). Allowed only in draft state and only for instructions of at least 280 characters. Refused with summary_suppressed when a person removed the summary: only a person can turn summaries back on. Cannot be combined with summary.'
         },
         agent: {
           type: 'string',
@@ -2128,9 +2130,9 @@ async function callOverlordTool(name, args) {
         ? { 'project-id': requiredString(args, 'projectId') }
         : {}),
       ...(args.unassignedToProject === true ? { 'unassigned-to-project': true } : {}),
-      objective: requiredString(args, 'objective'),
-      ...(typeof args.description === 'string'
-        ? { 'objective-description': args.description }
+      'objective-instructions': requiredString(args, 'objectiveInstructions'),
+      ...(typeof args.objectiveSummary === 'string'
+        ? { 'objective-summary': args.objectiveSummary }
         : {}),
       ...(optionalString(args, 'title') ? { title: requiredString(args, 'title') } : {}),
       ...(optionalString(args, 'resourceKey')
@@ -2153,7 +2155,7 @@ async function callOverlordTool(name, args) {
     return runProtocol('create', {
       'unassigned-to-project': true,
       title: requiredString(args, 'title'),
-      objective: requiredString(args, 'objective')
+      'objective-instructions': requiredString(args, 'objective')
     });
   }
   if (name === 'overlord_load_mission_context') {
@@ -2238,18 +2240,18 @@ async function callOverlordTool(name, args) {
     const hasAutoAdvance = typeof args.autoAdvance === 'boolean';
     const hasInstructionText = typeof args.instructionText === 'string';
     const hasAgent = typeof args.agent === 'string';
-    const hasDescription = typeof args.description === 'string';
-    const hasDescriptionRequest = typeof args.descriptionRequest === 'string';
+    const hasSummary = typeof args.summary === 'string';
+    const hasSummaryRequest = typeof args.summaryRequest === 'string';
     if (
       !hasTitle &&
       !hasAutoAdvance &&
       !hasInstructionText &&
       !hasAgent &&
-      !hasDescription &&
-      !hasDescriptionRequest
+      !hasSummary &&
+      !hasSummaryRequest
     ) {
       throw new Error(
-        'Provide title, description, descriptionRequest, autoAdvance, instructionText, and/or agent'
+        'Provide title, summary, summaryRequest, autoAdvance, instructionText, and/or agent'
       );
     }
     return runProtocol('update-objective', {
@@ -2263,9 +2265,9 @@ async function callOverlordTool(name, args) {
       ...(hasInstructionText
         ? { 'instruction-text': requiredString(args, 'instructionText') }
         : {}),
-      // An empty description is Remove; pass it through verbatim.
-      ...(hasDescription ? { description: args.description } : {}),
-      ...(hasDescriptionRequest ? { 'description-request': args.descriptionRequest } : {}),
+      // An empty summary is Remove; pass it through verbatim.
+      ...(hasSummary ? { summary: args.summary } : {}),
+      ...(hasSummaryRequest ? { 'summary-request': args.summaryRequest } : {}),
       // Validated by the protocol handler (model requires agent; manual takes none).
       ...(hasAgent ? { 'objective-agent': args.agent } : {}),
       ...(typeof args.model === 'string' ? { 'objective-model': args.model } : {}),
@@ -2595,7 +2597,7 @@ process.stdin.on('data', async chunk => {
         result: {
           protocolVersion: PROTOCOL_VERSION,
           capabilities: { tools: { listChanged: false } },
-          serverInfo: { name: 'overlord-__OVERLORD_ADAPTER_KEY__', version: '0.3.74' }
+          serverInfo: { name: 'overlord-__OVERLORD_ADAPTER_KEY__', version: '0.3.75' }
         }
       });
       continue;

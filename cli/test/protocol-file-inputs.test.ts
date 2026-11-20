@@ -57,23 +57,30 @@ test('stdin without an explicit file selector is not forwarded', async () => {
   assert.deepEqual(fileInputs, {});
 });
 
-test('objective instruction and description files are read as file inputs (ADR 0059)', async () => {
-  const dir = mkdtempSync(path.join(tmpdir(), 'ovld-description-inputs-'));
+test('objective instruction and summary files are read as file inputs (ADR 0059, ADR 0083)', async () => {
+  const dir = mkdtempSync(path.join(tmpdir(), 'ovld-summary-inputs-'));
   const instructionPath = path.join(dir, 'instruction.md');
-  const descriptionPath = path.join(dir, 'description.md');
+  const newInstructionsPath = path.join(dir, 'instructions.md');
+  const summaryPath = path.join(dir, 'summary.md');
   writeFileSync(instructionPath, 'The full instruction for the agent.', 'utf8');
-  writeFileSync(descriptionPath, 'A short summary for people.', 'utf8');
+  writeFileSync(newInstructionsPath, 'The complete brief for a new objective.', 'utf8');
+  writeFileSync(summaryPath, 'A short summary for people.', 'utf8');
 
   const { fileInputs } = await resolveProtocolFileInputs({
     flags: new Map<string, string | true>([
       ['--instruction-text-file', instructionPath],
-      ['--description-file', descriptionPath],
-      ['--objective-description-file', '-']
+      ['--objective-instructions-file', newInstructionsPath],
+      ['--summary-file', summaryPath],
+      ['--objective-summary-file', '-']
     ]),
     stdin: 'The summary of a new objective.'
   });
 
   assert.equal(fileInputs['--instruction-text-file'], 'The full instruction for the agent.');
-  assert.equal(fileInputs['--description-file'], 'A short summary for people.');
-  assert.equal(fileInputs['--objective-description-file'], 'The summary of a new objective.');
+  assert.equal(
+    fileInputs['--objective-instructions-file'],
+    'The complete brief for a new objective.'
+  );
+  assert.equal(fileInputs['--summary-file'], 'A short summary for people.');
+  assert.equal(fileInputs['--objective-summary-file'], 'The summary of a new objective.');
 });

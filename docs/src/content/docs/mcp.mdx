@@ -39,8 +39,8 @@ The hosted server advertises these mission-lifecycle tools:
 | `overlord_changes` | Reads one objective's synchronized changed-file evidence (`ObjectiveFileChangesDto`, scope `server_objective`, capped at 200 with `total`/`truncated` and capture diagnostics). Excludes unsynchronized local evidence. |
 | `overlord_create_mission`            | Creates a draft mission in a project you specify, or an account-owned inbox item when no project is given (never chooses a project for you). |
 | `overlord_create_inbox_item`         | Creates a private, account-owned unassigned task capture.                                                                                    |
-| `overlord_add_objectives`            | Appends draft objectives to an existing mission; each item may carry a human-facing `description`.                                           |
-| `overlord_update_objective`          | Turns auto-advance on or off, edits instruction text or the `description` (or asks for one with `descriptionRequest`) on a draft objective, and/or reassigns it to another agent (optional `model`, `reasoningEffort`) or to a person (`agent: manual`, alias `human`). Requires `objectiveId` (UUID or display id). |
+| `overlord_add_objectives`            | Appends draft objectives to an existing mission; each item has `instructions` and may carry a human-facing `summary`.                                           |
+| `overlord_update_objective`          | Turns auto-advance on or off, edits instruction text or the `summary` (or asks for one with `summaryRequest`) on a draft objective, and/or reassigns it to another agent (optional `model`, `reasoningEffort`) or to a person (`agent: manual`, alias `human`). Requires `objectiveId` (UUID or display id). |
 | `overlord_launch_objective`          | Queues the normal execution request for one objective. Requires `objectiveId` (UUID or display id) and `agent`. Does not attach this agent.  |
 | `overlord_reorder_objectives`        | Replaces one mission's complete draft/submitted objective order.                                                                             |
 | `overlord_delete_missions`           | Soft-deletes 1–100 missions (also soft-deletes their live objectives) atomically. Requires `confirm: true` after the resolved list is shown to and approved by the user.    |
@@ -75,19 +75,24 @@ be named.
 `ObjectiveDto` records. Check each one's `assignedAgent`, `model`, `resourceKey`,
 and `queueEntry` / `autoAdvance` fields to confirm the launch settings were saved.
 
-Objectives have instructions (the complete text the executing agent receives)
-and an optional human-facing `description`: one to three short prose paragraphs
-in Simplified Technical English style that open with the goal and close with
-the done-when sentence, about 120 words. The description is never sent to the
-executing agent. Pass it on `overlord_create_mission`, on each
-`overlord_add_objectives` item, or later on `overlord_update_objective`, where
-an empty value removes it and `descriptionRequest` (`summarize`, `regenerate`,
-or `retry`) asks Overlord to write one. Omit it and Overlord writes one for
-long (280+ characters) agent-written objectives. Agents may change descriptions
-only on `draft` objectives (`description_not_editable`); after a person removed
-a summary, agent text is not stored and summary requests are refused
-(`description_suppressed`). Responses carry advisory `warnings`
-(`description_style`, `description_suppressed`); the text is stored as written.
+Objectives have two texts; do not swap them. The **instructions**
+(`objectiveInstructions` on `overlord_create_mission`, `instructions` on
+`overlord_add_objectives` items) are the complete brief the executing agent
+receives, usually the long text. The optional **summary** (`objectiveSummary`,
+item `summary`) is a short human-facing overview, never sent to the executing
+agent: one to three short prose paragraphs in Simplified Technical English
+style that open with the goal and close with the done-when sentence, about 120
+words. Set it later on `overlord_update_objective` (`summary`), where an empty
+value removes it and `summaryRequest` (`summarize`, `regenerate`, or `retry`)
+asks Overlord to write one. Omit it and Overlord writes one for long (280+
+characters) agent-written objectives. A summary that looks swapped with its
+instructions (for example at least 3 times as long) returns an
+`objective_fields_swapped` warning; both texts are still stored.
+Agents may change summaries only on `draft` objectives
+(`summary_not_editable`); after a person removed a summary, agent text is not
+stored and summary requests are refused (`summary_suppressed`). Responses carry
+advisory `warnings` (`objective_fields_swapped`, `summary_style`,
+`summary_suppressed`); the text is stored as written.
 
 Read tools may also render Overlord MCP Apps widgets (`ui://overlord/*`) for project
 selection, mission lists, objective viewers, and file-change summaries. Hosted MCP

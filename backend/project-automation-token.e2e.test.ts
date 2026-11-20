@@ -314,8 +314,8 @@ async function seedProjectFixture(name: string, workspaceId: string): Promise<Fi
       projectId,
       title: `${name} feedback triage`,
       objectives: [
-        { objective: `Investigate ${name} feedback` },
-        { objective: `Resolve ${name} feedback` }
+        { instructions: `Investigate ${name} feedback` },
+        { instructions: `Resolve ${name} feedback` }
       ]
     }),
     `create ${name} mission`
@@ -829,7 +829,10 @@ describe('mission creation', () => {
       auto('POST', '/api/missions', {
         projectId: P.projectId,
         title: 'REST feedback',
-        objectives: [{ objective: 'Triage REST feedback' }, { objective: 'Reply to REST feedback' }]
+        objectives: [
+          { instructions: 'Triage REST feedback' },
+          { instructions: 'Reply to REST feedback' }
+        ]
       }),
       'REST create'
     );
@@ -858,8 +861,8 @@ describe('mission creation', () => {
         '--project-id': P.projectId,
         '--title': 'Protocol feedback',
         '--objectives-json': JSON.stringify([
-          { objective: 'Triage protocol feedback' },
-          { objective: 'Reply to protocol feedback' }
+          { instructions: 'Triage protocol feedback' },
+          { instructions: 'Reply to protocol feedback' }
         ])
       }),
       'protocol create'
@@ -894,8 +897,8 @@ describe('mission creation', () => {
         'CLI feedback',
         '--objectives-json',
         JSON.stringify([
-          { objective: 'Triage CLI feedback' },
-          { objective: 'Reply to CLI feedback' }
+          { instructions: 'Triage CLI feedback' },
+          { instructions: 'Reply to CLI feedback' }
         ])
       ],
       cwd: cliCwd,
@@ -917,7 +920,7 @@ describe('mission creation', () => {
         'prompt',
         '--project-id',
         P.projectId,
-        '--objective',
+        '--objective-instructions',
         'Denied',
         '--agent',
         'claude-code'
@@ -936,7 +939,7 @@ describe('mission creation', () => {
     assert.equal(initialize.status, 200, initialize.text);
     const created = await mcpCall(automationSecret, 'overlord_create_mission', {
       projectId: P.projectId,
-      objective: 'Triage MCP feedback',
+      objectiveInstructions: 'Triage MCP feedback',
       title: 'MCP feedback'
     });
     assert.ok(!created.result?.isError, JSON.stringify(created));
@@ -950,14 +953,14 @@ describe('mission creation', () => {
 
     const denied = await mcpCall(automationSecret, 'overlord_create_mission', {
       projectId: Q.projectId,
-      objective: 'Should fail'
+      objectiveInstructions: 'Should fail'
     });
     assert.equal(denied.result?.isError, true, JSON.stringify(denied));
     for (const [name, args] of [
       ['overlord_create_inbox_item', { title: 'Inbox', objective: 'Denied' }],
       [
         'overlord_add_objectives',
-        { missionId: P.missionDisplayId, objectives: [{ objective: 'Denied' }] }
+        { missionId: P.missionDisplayId, objectives: [{ instructions: 'Denied' }] }
       ],
       ['overlord_record_work', { projectId: P.projectId, objective: 'Denied', summary: 'Denied' }],
       ['overlord_attach_session', { missionId: P.missionDisplayId }],
@@ -977,7 +980,7 @@ describe('denied surfaces', () => {
       [
         'POST',
         `/api/protocol/prompt`,
-        { flags: { '--project-id': P.projectId, '--objective': 'Denied' } }
+        { flags: { '--project-id': P.projectId, '--objective-instructions': 'Denied' } }
       ],
       [
         'POST',
@@ -990,7 +993,7 @@ describe('denied surfaces', () => {
         {
           flags: {
             '--mission-id': P.missionDisplayId,
-            '--objectives-json': '[{"objective":"Denied"}]'
+            '--objectives-json': '[{"instructions":"Denied"}]'
           }
         }
       ],
@@ -1048,17 +1051,17 @@ describe('denied surfaces', () => {
       [
         'POST',
         `/api/protocol/create`,
-        { flags: { '--unassigned-to-project': true, '--objective': 'Denied' } }
+        { flags: { '--unassigned-to-project': true, '--objective-instructions': 'Denied' } }
       ],
       [
         'POST',
         `/api/protocol/create`,
-        { flags: { '--project-id': Q.projectId, '--objective': 'Denied' } }
+        { flags: { '--project-id': Q.projectId, '--objective-instructions': 'Denied' } }
       ],
       [
         'POST',
         `/api/protocol/create`,
-        { flags: { '--project-id': R.projectId, '--objective': 'Denied' } }
+        { flags: { '--project-id': R.projectId, '--objective-instructions': 'Denied' } }
       ],
       ['POST', `/api/protocol/discover-project`, { flags: {} }],
       ['POST', `/api/objectives`, { missionId: P.missionId, objective: 'Denied' }],

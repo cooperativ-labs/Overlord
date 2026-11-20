@@ -139,7 +139,7 @@ for (const adapter of conformanceAdapters()) {
       const mission = await protocolCreate({
         ctx,
         projectId: project.id,
-        objectives: [{ objective: 'Paging test' }]
+        objectives: [{ instructions: 'Paging test' }]
       });
       missionId = mission.mission.id;
       missionDisplayId = mission.mission.displayId;
@@ -410,7 +410,7 @@ for (const adapter of conformanceAdapters()) {
         const other = await protocolCreate({
           ctx,
           projectId: project.id,
-          objectives: [{ objective: 'Other mission' }]
+          objectives: [{ instructions: 'Other mission' }]
         });
         const issued = (await get(`missionId=${encodeURIComponent(missionId)}&status=open&limit=1`))
           .body as PageBody;

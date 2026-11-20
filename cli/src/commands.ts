@@ -13,6 +13,7 @@ import {
   executeLocalTargetMutation,
   parseMutationFromMetadata
 } from '@overlord/core/service/local-target-mutation-runner';
+import { assessObjectiveSummaryPlacement } from '@overlord/core/service/objective-summary-placement';
 import { launchSessionSnapshotFromMetadata } from '@overlord/core/service/terminal-profile-types';
 import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
@@ -59,8 +60,6 @@ import {
 import {
   CliError,
   finalizationErrorOutput,
-  formatExecutionRequestAlreadyLinkedDiagnostic,
-  isExecutionRequestAlreadyLinkedError,
   isUnlinkableExecutionRequestError,
   missionSummaryConflictOutput,
   reportDraftErrorOutput
@@ -79,10 +78,11 @@ import {
 import { runOrgSetupCommand } from './org-setup.js';
 import { printJson, printKeyValue } from './output.js';
 import {
+  ensureHarnessScratchDir,
   isSessionScratchDir,
   projectTmpDir,
   pruneStaleProjectTmp,
-  removeSessionScratch,
+  removeLaunchBriefing,
   safeTmpNamePart
 } from './project-tmp.js';
 import { hasProtocolSubcommandHelp, printProtocolHelp } from './protocol-help.js';
@@ -645,10 +645,11 @@ function createdObjectiveLines(mission: unknown): string[] {
 
 /** One `objectives[]` entry in the REST `POST /api/missions` body. */
 type CreateObjectiveInput = {
-  objective: string;
+  /** The complete brief the executing agent receives. */
+  instructions: string;
   title?: string | null;
-  /** Human-facing summary; null or blank removes it (never sent to the agent). */
-  description?: string | null;
+  /** Short overview for people; null or blank removes it (never sent to the agent). */
+  summary?: string | null;
   autoAdvance?: boolean;
   agent?: string | null;
   model?: string | null;
@@ -677,8 +678,8 @@ const PROTOCOL_FILE_FLAGS = [
   '--mission-ids-file',
   '--objective-ids-file',
   '--instruction-text-file',
-  '--description-file',
-  '--objective-description-file'
+  '--objective-instructions-file',
+  '--objective-summary-file'
 ] as const;
 
 /** Protocol subcommands that require a session key the cache can auto-inject. */
@@ -1298,9 +1299,19 @@ export async function runProtocolCommand({
     };
   }
 
+  const scratchDir = process.env.OVERLORD_TMPDIR?.trim();
+  const inheritedScratchName =
+    scratchDir && isSessionScratchDir(workingDirectory, scratchDir)
+      ? path.basename(scratchDir)
+      : undefined;
+  // Repair the inherited path for a harness whose first delivery ran an older CLI.
+  if (scratchDir && inheritedScratchName && subcommand === 'resume-follow-up') {
+    ensureHarnessScratchDir(workingDirectory, scratchDir);
+  }
+  const isActiveSessionScratch = sessionLivenessCheck(readActiveSessions(workingDirectory));
   pruneStaleProjectTmp({
     workingDirectory,
-    isSessionLive: sessionLivenessCheck(readActiveSessions(workingDirectory))
+    isSessionLive: name => name === inheritedScratchName || isActiveSessionScratch(name)
   });
 
   // Retry identity is fixed and saved before anything is sent (ADR 0075), from
@@ -1415,8 +1426,6 @@ export async function runProtocolCommand({
         path: protocolPath,
         body: { ...protocolBody, flags }
       });
-    } else if (isExecutionRequestAlreadyLinkedError(error)) {
-      throw new CliError({ message: formatExecutionRequestAlreadyLinkedDiagnostic() });
     } else {
       // A stale summary base rejected the whole delivery. Print the fresh
       // baseline on stdout so the agent can rewrite and deliver again.
@@ -1586,18 +1595,15 @@ export async function runProtocolCommand({
         objectiveId: objectiveRef,
         sessionKey: deliveredSessionKey ?? null
       });
-      // The ledger is synced and the session is over: drop this launch's own
-      // scratch directory and briefing. Both paths are keyed to this session,
-      // so concurrent agents in the same checkout are untouched.
-      removeSessionScratch({
+      // The briefing is disposable. The harness still exports its scratch path.
+      removeLaunchBriefing(
         workingDirectory,
-        scratchDir: process.env.OVERLORD_TMPDIR ?? null,
-        contextFile: deliveredBriefingPath({
+        deliveredBriefingPath({
           workingDirectory,
           objectiveAliases: deliveredEntry?.objectiveAliases ?? [],
           missionId
         })
-      });
+      );
       if (readActiveSessions(workingDirectory).length === 0) {
         clearActiveMissionPointer(workingDirectory);
       }
@@ -1817,9 +1823,19 @@ export async function runManagementCommand({
     case 'create':
     case 'prompt': {
       const objectivesJson = flagValue(parsed.flags, '--objectives-json');
+      for (const [retired, replacement] of [
+        ['--objective', '--objective-instructions'],
+        ['--objective-description', '--objective-summary']
+      ] as const) {
+        if (flagValue(parsed.flags, retired) !== undefined) {
+          throw new CliError({
+            message: `${retired} is now ${replacement}. --objective-instructions is the complete brief for the executing agent; --objective-summary is a short overview for people.`
+          });
+        }
+      }
       const objective =
         parsed.positional.join(' ') ||
-        flagValue(parsed.flags, '--objective') ||
+        flagValue(parsed.flags, '--objective-instructions') ||
         flagValue(parsed.flags, '--prompt');
       const projectId = await discoverProjectId(runtime, flagValue(parsed.flags, '--project-id'));
       const autoAdvance = flagOptionalBoolean({
@@ -1856,10 +1872,10 @@ export async function runManagementCommand({
         : objective
           ? [
               withAgentSelection({
-                objective,
+                instructions: objective,
                 title: flagValue(parsed.flags, '--title') ?? null,
-                ...(flagValue(parsed.flags, '--objective-description') !== undefined
-                  ? { description: flagValue(parsed.flags, '--objective-description') }
+                ...(flagValue(parsed.flags, '--objective-summary') !== undefined
+                  ? { summary: flagValue(parsed.flags, '--objective-summary') }
                   : {}),
                 ...(autoAdvance !== undefined ? { autoAdvance } : {}),
                 ...(flagValue(parsed.flags, '--resource')
@@ -1877,7 +1893,22 @@ export async function runManagementCommand({
         });
       }
 
-      const title = flagValue(parsed.flags, '--title') ?? first.title ?? first.objective;
+      // REST returns no warnings, so flag a likely or possible
+      // instructions/summary swap here (objective_fields_swapped). It never
+      // blocks the create.
+      for (const [index, item] of objectives.entries()) {
+        if (typeof item.summary !== 'string' || typeof item.instructions !== 'string') continue;
+        const placement = assessObjectiveSummaryPlacement({
+          instructions: item.instructions,
+          summary: item.summary
+        });
+        if (placement.verdict === 'warn') {
+          const label = objectives.length > 1 ? `objectives[${index}]` : 'objective';
+          console.error(`Warning (objective_fields_swapped, ${label}): ${placement.message}`);
+        }
+      }
+
+      const title = flagValue(parsed.flags, '--title') ?? first.title ?? first.instructions;
       const mission = await runtime.backend.post<unknown>({
         path: '/api/missions',
         body: {

@@ -60,19 +60,19 @@ describe('searchMissions full-text ranking', () => {
       ctx,
       projectId,
       title: 'Zylophonics dashboard rewrite',
-      objectives: [{ objective: 'Plain unrelated work' }]
+      objectives: [{ instructions: 'Plain unrelated work' }]
     });
     const viaObjective = await createMissionWithObjectives({
       ctx,
       projectId,
       title: 'Generic mission two',
-      objectives: [{ objective: 'Investigate the quarkbarrel ingestion pipeline' }]
+      objectives: [{ instructions: 'Investigate the quarkbarrel ingestion pipeline' }]
     });
     const viaEvent = await createMissionWithObjectives({
       ctx,
       projectId,
       title: 'Generic mission three',
-      objectives: [{ objective: 'Some baseline task' }]
+      objectives: [{ instructions: 'Some baseline task' }]
     });
     await recordEvent(
       ctx,
@@ -103,7 +103,7 @@ describe('searchMissions full-text ranking', () => {
       ctx,
       projectId,
       title: 'Implement efficient mission search',
-      objectives: [{ objective: 'baseline' }]
+      objectives: [{ instructions: 'baseline' }]
     });
 
     assert.deepEqual(
@@ -119,13 +119,13 @@ describe('searchMissions full-text ranking', () => {
       ctx,
       projectId,
       title: 'Moonbeam telemetry overhaul',
-      objectives: [{ objective: 'baseline one' }]
+      objectives: [{ instructions: 'baseline one' }]
     });
     const inEvent = await createMissionWithObjectives({
       ctx,
       projectId,
       title: 'Logging cleanup',
-      objectives: [{ objective: 'baseline two' }]
+      objectives: [{ instructions: 'baseline two' }]
     });
     await recordEvent(
       ctx,
@@ -145,7 +145,7 @@ describe('searchMissions full-text ranking', () => {
       ctx,
       projectId,
       title: 'Delivery exclusion regression',
-      objectives: [{ objective: 'baseline' }]
+      objectives: [{ instructions: 'baseline' }]
     });
     await recordDelivery(ctx, {
       missionId: mission.mission.id,
@@ -164,7 +164,7 @@ describe('searchMissions full-text ranking', () => {
       ctx,
       projectId,
       title: 'Krypton storage migration',
-      objectives: [{ objective: 'baseline' }]
+      objectives: [{ instructions: 'baseline' }]
     });
 
     assert.equal((await searchMissions({ ctx, query: 'krypton' })).length, 1);
@@ -190,13 +190,13 @@ describe('searchMissions full-text ranking', () => {
       ctx,
       projectId,
       title: 'Older mission',
-      objectives: [{ objective: 'baseline' }]
+      objectives: [{ instructions: 'baseline' }]
     });
     const newer = await createMissionWithObjectives({
       ctx,
       projectId,
       title: 'Newer mission',
-      objectives: [{ objective: 'baseline' }]
+      objectives: [{ instructions: 'baseline' }]
     });
     // Touch the newer mission so it sorts first by updated_at.
     await ctx.db.run(`UPDATE missions SET updated_at = ? WHERE id = ?`, [
@@ -220,8 +220,8 @@ describe('searchMissionsV3 grouped retrieval', () => {
       projectId,
       title: 'Grouped retrieval parent',
       objectives: [
-        { objective: 'Investigate the groupneedle ingestion path' },
-        { objective: 'Document groupneedle fallback behaviour' }
+        { instructions: 'Investigate the groupneedle ingestion path' },
+        { instructions: 'Document groupneedle fallback behaviour' }
       ]
     });
     await recordDelivery(ctx, {
@@ -263,7 +263,7 @@ describe('searchMissionsV3 grouped retrieval', () => {
       ctx,
       projectId,
       title: 'Filter corpus parent',
-      objectives: [{ objective: 'baseline work' }]
+      objectives: [{ instructions: 'baseline work' }]
     });
     await recordEvent(ctx, mission.mission.id, projectId, 'Noted a deliveryfilterterm in logs');
     await recordDelivery(ctx, {
@@ -303,10 +303,10 @@ describe('searchMissionsV3 grouped retrieval', () => {
       projectId,
       title: 'State filter parent',
       objectives: [
-        { objective: 'stateneedle first' },
-        { objective: 'stateneedle second' },
-        { objective: 'stateneedle third' },
-        { objective: 'stateneedle fourth' }
+        { instructions: 'stateneedle first' },
+        { instructions: 'stateneedle second' },
+        { instructions: 'stateneedle third' },
+        { instructions: 'stateneedle fourth' }
       ]
     });
     await ctx.db.run(`UPDATE objectives SET state = 'executing' WHERE id = ?`, [
@@ -346,8 +346,8 @@ describe('searchMissionsV3 grouped retrieval', () => {
       projectId,
       title: 'Display id parent',
       objectives: [
-        { objective: 'first display objective' },
-        { objective: 'second display objective' }
+        { instructions: 'first display objective' },
+        { instructions: 'second display objective' }
       ]
     });
     const target = mission.objectives[1]!;
@@ -367,13 +367,13 @@ describe('searchMissionsV3 grouped retrieval', () => {
       ctx,
       projectId,
       title: 'Truncation alpha truncneedle',
-      objectives: [{ objective: 'truncneedle body one' }]
+      objectives: [{ instructions: 'truncneedle body one' }]
     });
     await createMissionWithObjectives({
       ctx,
       projectId,
       title: 'Truncation beta truncneedle',
-      objectives: [{ objective: 'truncneedle body two' }]
+      objectives: [{ instructions: 'truncneedle body two' }]
     });
     const v3 = await searchMissionsV3({
       ctx,

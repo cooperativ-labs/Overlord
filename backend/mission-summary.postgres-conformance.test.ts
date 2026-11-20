@@ -396,12 +396,12 @@ for (const adapter of conformanceAdapters()) {
         const created = await protocolCreate({
           ctx,
           projectId: project.id,
-          objectives: [{ objective: 'Protocol create' }]
+          objectives: [{ instructions: 'Protocol create' }]
         });
         const prompted = await protocolPrompt({
           ctx,
           projectId: project.id,
-          objectives: [{ objective: 'Protocol prompt' }],
+          objectives: [{ instructions: 'Protocol prompt' }],
           agentIdentifier: 'codex'
         });
         const recorded = await recordWork({

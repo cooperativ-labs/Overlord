@@ -24,8 +24,8 @@ import {
   useSummaryBuffer
 } from '../../lib/objective-summary-buffers.ts';
 import {
-  useRequestObjectiveDescription,
-  useUpdateObjectiveDescription,
+  useRequestObjectiveSummary,
+  useUpdateObjectiveSummary,
   useWorkspaceMembers
 } from '../../lib/queries.ts';
 import { cn } from '../../lib/utils.ts';
@@ -35,7 +35,7 @@ import { cn } from '../../lib/utils.ts';
  * and status line, Summarize / Regenerate / Retry / Remove, and the person's editor.
  *
  * Presentation only. Nothing here touches `instructionText`, lifecycle, the Run Queue or
- * launch: every write is a description PATCH or a description request, which the server
+ * launch: every write is a summary PATCH or a summary request, which the server
  * keeps out of `updatedAt`, notifications and the executing agent's context (ADR 0059).
  */
 
@@ -43,7 +43,7 @@ import { cn } from '../../lib/utils.ts';
 export function useObjectiveSummary(objective: ObjectiveDto) {
   const view = objectiveSummaryView(objective);
   // Members are only needed to name a person's edit; skip the read otherwise.
-  const needsMembers = objective.descriptionSource === 'user' && view.summary !== null;
+  const needsMembers = objective.summarySource === 'user' && view.summary !== null;
   const members = useWorkspaceMembers(needsMembers ? objective.workspaceId : null);
   const provenance = summaryProvenanceLabel(objective, members.data);
   const buffer = useSummaryBuffer(objective.id);
@@ -225,11 +225,11 @@ function Separator() {
 function actionErrorMessage(error: unknown): string {
   if (error instanceof ApiRequestError) {
     switch (error.code) {
-      case 'description_not_eligible':
+      case 'summary_not_eligible':
         return 'These instructions are too short to summarize.';
-      case 'description_not_failed':
+      case 'summary_not_failed':
         return 'There is no failed summary to retry.';
-      case 'description_too_long':
+      case 'summary_too_long':
         return `A summary can have at most ${SUMMARY_MAX_CHARACTERS.toLocaleString('en-US')} characters.`;
       default:
         return error.message;
@@ -240,8 +240,8 @@ function actionErrorMessage(error: unknown): string {
 
 /** Summarize / Regenerate / Retry / Remove for one objective, with a shared error. */
 function useSummaryActions(objective: ObjectiveDto, view: ObjectiveSummaryView) {
-  const request = useRequestObjectiveDescription();
-  const update = useUpdateObjectiveDescription();
+  const request = useRequestObjectiveSummary();
+  const update = useUpdateObjectiveSummary();
   const busy = request.isPending || update.isPending;
   const error = request.error ?? update.error;
   return {
@@ -252,7 +252,7 @@ function useSummaryActions(objective: ObjectiveDto, view: ObjectiveSummaryView) 
     retry: () => request.mutate({ id: objective.id, mode: 'retry' }),
     // Remove is durable: the server keeps the summary absent, across edits, catch-up and
     // late generation results, until a person selects Summarize.
-    remove: () => update.mutate({ id: objective.id, description: null }),
+    remove: () => update.mutate({ id: objective.id, summary: null }),
     edit: () =>
       setSummaryBuffer(objective.id, { text: view.summary ?? '', baseRevision: view.revision })
   };
@@ -400,7 +400,7 @@ export function ObjectiveSummaryFallback({
  */
 export function ObjectiveSummaryEditor({ objective }: { objective: ObjectiveDto }) {
   const buffer = useSummaryBuffer(objective.id);
-  const update = useUpdateObjectiveDescription();
+  const update = useUpdateObjectiveSummary();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Focus on open, but never steal focus from another control (a remount after launch
@@ -420,13 +420,13 @@ export function ObjectiveSummaryEditor({ objective }: { objective: ObjectiveDto 
     update.mutate(
       {
         id: objective.id,
-        description: text.length > 0 ? text : null,
-        expectedDescriptionRevision: baseRevision
+        summary: text.length > 0 ? text : null,
+        expectedSummaryRevision: baseRevision
       },
       {
         onSuccess: () => clearSummaryBuffer(objective.id),
         onError: error => {
-          if (error instanceof ApiRequestError && error.code === 'description_conflict') {
+          if (error instanceof ApiRequestError && error.code === 'summary_conflict') {
             updateSummaryBuffer(objective.id, { conflictText: null });
           }
         }
@@ -472,14 +472,14 @@ export function ObjectiveSummaryEditor({ objective }: { objective: ObjectiveDto 
         >
           <p>This summary changed while you were editing it. Your text is kept. Current version:</p>
           <p className="whitespace-pre-wrap text-muted-foreground">
-            {objective.description?.trim() || 'No summary.'}
+            {objective.summary?.trim() || 'No summary.'}
           </p>
           <div className="flex gap-2">
             <button
               type="button"
               className="rounded-sm font-medium underline-offset-2 hover:underline"
               disabled={update.isPending || tooLong}
-              onClick={() => save(objective.descriptionRevision ?? 0)}
+              onClick={() => save(objective.summaryRevision ?? 0)}
             >
               Replace with mine
             </button>

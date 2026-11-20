@@ -80,17 +80,17 @@ describe('objectiveSummaryView', () => {
 
   it('offers Summarize only for eligible text with nothing outstanding', () => {
     assert.equal(
-      objectiveSummaryView({ instructionText: LONG, descriptionEligible: true }).canSummarize,
+      objectiveSummaryView({ instructionText: LONG, summaryEligible: true }).canSummarize,
       true
     );
     assert.equal(
-      objectiveSummaryView({ instructionText: 'short', descriptionEligible: false }).canSummarize,
+      objectiveSummaryView({ instructionText: 'short', summaryEligible: false }).canSummarize,
       false
     );
     const pending = objectiveSummaryView({
       instructionText: LONG,
-      descriptionEligible: true,
-      descriptionStatus: 'pending'
+      summaryEligible: true,
+      summaryStatus: 'pending'
     });
     assert.equal(pending.canSummarize, false);
     assert.equal(pending.canRemove, true, 'a pending first summary can be stopped');
@@ -99,9 +99,9 @@ describe('objectiveSummaryView', () => {
   it('keeps a removed summary absent and offers Summarize to re-enable it', () => {
     const view = objectiveSummaryView({
       instructionText: LONG,
-      description: null,
-      descriptionEligible: true,
-      descriptionSuppressed: true
+      summary: null,
+      summaryEligible: true,
+      summarySuppressed: true
     });
     assert.equal(view.summary, null);
     assert.equal(view.suppressed, true);
@@ -112,20 +112,20 @@ describe('objectiveSummaryView', () => {
   it('keeps the prior summary while regeneration is pending or failed', () => {
     const pending = objectiveSummaryView({
       instructionText: LONG,
-      description: SUMMARY,
-      descriptionEligible: true,
-      descriptionStatus: 'pending',
-      descriptionStale: true
+      summary: SUMMARY,
+      summaryEligible: true,
+      summaryStatus: 'pending',
+      summaryStale: true
     });
     assert.equal(pending.summary, SUMMARY);
     assert.equal(pending.canRegenerate, false);
     assert.equal(pending.stale, true);
     const failed = objectiveSummaryView({
       instructionText: LONG,
-      description: SUMMARY,
-      descriptionEligible: true,
-      descriptionStatus: 'failed',
-      descriptionFailureCode: 'provider_unavailable'
+      summary: SUMMARY,
+      summaryEligible: true,
+      summaryStatus: 'failed',
+      summaryFailureCode: 'provider_unavailable'
     });
     assert.equal(failed.canRetry, true);
     assert.equal(failed.canRegenerate, true);
@@ -133,10 +133,7 @@ describe('objectiveSummaryView', () => {
   });
 
   it('never reports a stale flag without a summary', () => {
-    assert.equal(
-      objectiveSummaryView({ instructionText: LONG, descriptionStale: true }).stale,
-      false
-    );
+    assert.equal(objectiveSummaryView({ instructionText: LONG, summaryStale: true }).stale, false);
   });
 });
 
@@ -145,25 +142,19 @@ describe('summaryProvenanceLabel', () => {
     { workspaceUserId: 'wu-me', displayName: 'Me', handle: null, email: null, isOperator: true },
     { workspaceUserId: 'wu-ana', displayName: 'Ana', handle: 'ana', email: null, isOperator: false }
   ];
-  const base = { instructionText: LONG, description: SUMMARY };
+  const base = { instructionText: LONG, summary: SUMMARY };
 
   it('labels generated and agent text', () => {
-    assert.equal(
-      summaryProvenanceLabel({ ...base, descriptionSource: 'generated' }, []),
-      'AI summary'
-    );
+    assert.equal(summaryProvenanceLabel({ ...base, summarySource: 'generated' }, []), 'AI summary');
     assert.equal(
       summaryProvenanceLabel(
-        { ...base, descriptionSource: 'agent', descriptionAuthorAgent: 'claude-code' },
+        { ...base, summarySource: 'agent', summaryAuthorAgent: 'claude-code' },
         []
       ),
       'Written by Claude Code'
     );
     assert.equal(
-      summaryProvenanceLabel(
-        { ...base, descriptionSource: 'agent', descriptionAuthorAgent: null },
-        []
-      ),
+      summaryProvenanceLabel({ ...base, summarySource: 'agent', summaryAuthorAgent: null }, []),
       'Written by agent'
     );
   });
@@ -171,26 +162,26 @@ describe('summaryProvenanceLabel', () => {
   it('says "Edited by you" only to the editor', () => {
     const mine = {
       ...base,
-      descriptionSource: 'user' as const,
-      descriptionAuthorWorkspaceUserId: 'wu-me'
+      summarySource: 'user' as const,
+      summaryAuthorWorkspaceUserId: 'wu-me'
     };
     const anas = {
       ...base,
-      descriptionSource: 'user' as const,
-      descriptionAuthorWorkspaceUserId: 'wu-ana'
+      summarySource: 'user' as const,
+      summaryAuthorWorkspaceUserId: 'wu-ana'
     };
     assert.equal(summaryProvenanceLabel(mine, members), 'Edited by you');
     assert.equal(summaryProvenanceLabel(anas, members), 'Edited by Ana');
     assert.equal(summaryProvenanceLabel(anas, undefined), 'Edited by a person');
     assert.equal(
-      summaryProvenanceLabel({ ...mine, descriptionAuthorWorkspaceUserId: null }, members),
+      summaryProvenanceLabel({ ...mine, summaryAuthorWorkspaceUserId: null }, members),
       'Edited by a person'
     );
   });
 
   it('has no provenance without a summary', () => {
     assert.equal(
-      summaryProvenanceLabel({ instructionText: LONG, descriptionSource: 'generated' }, []),
+      summaryProvenanceLabel({ instructionText: LONG, summarySource: 'generated' }, []),
       null
     );
   });

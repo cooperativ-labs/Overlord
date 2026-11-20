@@ -167,7 +167,18 @@ async function dispatchCommand({
         await runProtocolCommand({
           runtime,
           subcommand: 'create',
-          args: ['--unassigned-to-project', ...rest],
+          // An inbox capture has one text and no summary; `--objective` stays
+          // its flag and maps onto the protocol's instructions flag (ADR 0083).
+          args: [
+            '--unassigned-to-project',
+            ...rest.map(arg =>
+              arg === '--objective'
+                ? '--objective-instructions'
+                : arg.startsWith('--objective=')
+                  ? `--objective-instructions=${arg.slice('--objective='.length)}`
+                  : arg
+            )
+          ],
           stdin,
           primaryCommand
         });

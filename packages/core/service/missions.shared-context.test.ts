@@ -16,7 +16,7 @@ describe('writeSharedContext', () => {
     const { mission } = await createMissionWithObjectives({
       ctx,
       projectId: project.id,
-      objectives: [{ objective: 'Track shared facts' }]
+      objectives: [{ instructions: 'Track shared facts' }]
     });
 
     const created = await writeSharedContext({

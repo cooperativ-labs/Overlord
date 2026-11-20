@@ -46,7 +46,7 @@ describe('createMissionWithObjectives — agent-surface defaults', () => {
     const { mission } = await createMissionWithObjectives({
       ctx,
       projectId: project.id,
-      objectives: [{ objective: 'Do the agent thing' }]
+      objectives: [{ instructions: 'Do the agent thing' }]
     });
 
     const row = await missionRow(db, mission.id);
@@ -67,7 +67,7 @@ describe('createMissionWithObjectives — agent-surface defaults', () => {
     const { objectives } = await createMissionWithObjectives({
       ctx,
       projectId: project.id,
-      objectives: [{ objective: 'One' }, { objective: 'Two' }, { objective: 'Three' }]
+      objectives: [{ instructions: 'One' }, { instructions: 'Two' }, { instructions: 'Three' }]
     });
 
     assert.deepEqual(
@@ -83,7 +83,7 @@ describe('createMissionWithObjectives — agent-surface defaults', () => {
     const { mission, objectives } = await createMissionWithObjectives({
       ctx,
       projectId: project.id,
-      objectives: [{ objective: 'Already done' }],
+      objectives: [{ instructions: 'Already done' }],
       statusType: 'review'
     });
 
@@ -101,7 +101,7 @@ describe('createMissionWithObjectives — agent-surface defaults', () => {
     const { mission } = await createMissionWithObjectives({
       ctx,
       projectId: project.id,
-      objectives: [{ objective: 'Audit the dispatcher' }]
+      objectives: [{ instructions: 'Audit the dispatcher' }]
     });
 
     assert.equal(mission.title, 'Audit the dispatcher');
@@ -125,7 +125,7 @@ describe('createMissionWithObjectives — agent-surface defaults', () => {
       createMissionWithObjectives({
         ctx,
         projectId: project.id,
-        objectives: [{ objective: '   ' }]
+        objectives: [{ instructions: '   ' }]
       }),
       (err: unknown) => err instanceof ServiceError && err.status === 400
     );
@@ -140,7 +140,7 @@ describe('createMissionWithObjectives — optional board fields', () => {
     const { mission } = await createMissionWithObjectives({
       ctx,
       projectId: project.id,
-      objectives: [{ objective: 'Board-created work' }],
+      objectives: [{ instructions: 'Board-created work' }],
       priority: 'high',
       dueDatetime: '2026-09-01T12:00:00.000Z',
       assignedWorkspaceUserId: ctx.actorWorkspaceUserId
@@ -164,7 +164,7 @@ describe('createMissionWithObjectives — optional board fields', () => {
     const { mission } = await createMissionWithObjectives({
       ctx,
       projectId: project.id,
-      objectives: [{ objective: 'Straight to execute' }],
+      objectives: [{ instructions: 'Straight to execute' }],
       statusId: status.id
     });
 
@@ -180,7 +180,7 @@ describe('createMissionWithObjectives — optional board fields', () => {
       createMissionWithObjectives({
         ctx,
         projectId: project.id,
-        objectives: [{ objective: 'Nowhere to go' }],
+        objectives: [{ instructions: 'Nowhere to go' }],
         statusId: 'not-a-status'
       }),
       (err: unknown) => err instanceof ServiceError && err.status === 409
@@ -209,7 +209,7 @@ describe('createMissionWithObjectives — optional board fields', () => {
     const { mission } = await createMissionWithObjectives({
       ctx,
       projectId: project.id,
-      objectives: [{ objective: 'Tagged' }],
+      objectives: [{ instructions: 'Tagged' }],
       tagIds: [tagId]
     });
     const rows = (await db.all(`SELECT tag_id FROM mission_tags WHERE mission_id = ?`, [
@@ -224,7 +224,7 @@ describe('createMissionWithObjectives — optional board fields', () => {
       createMissionWithObjectives({
         ctx,
         projectId: project.id,
-        objectives: [{ objective: 'Borrowed tag' }],
+        objectives: [{ instructions: 'Borrowed tag' }],
         tagIds: [foreignTagId]
       }),
       (err: unknown) => err instanceof ServiceError && err.status === 400
@@ -264,7 +264,7 @@ describe('createMissionWithObjectives — creation provenance', () => {
     const { mission } = await createMissionWithObjectives({
       ctx: { ...ctx, actorTokenId: 'protocol-token' },
       projectId: project.id,
-      objectives: [{ objective: 'Create from protocol' }]
+      objectives: [{ instructions: 'Create from protocol' }]
     });
     const row = await db.get<{ created_by_token_id: string; created_by_token_label: string }>(
       `SELECT created_by_token_id, created_by_token_label FROM missions WHERE id = ?`,
@@ -302,7 +302,7 @@ describe('createMissionWithObjectives — creation provenance', () => {
     const { mission, objectives } = await createMissionWithObjectives({
       ctx,
       projectId: project.id,
-      objectives: [{ objective: 'Filed by an agent surface' }]
+      objectives: [{ instructions: 'Filed by an agent surface' }]
     });
 
     const missionRow = await provenanceRow(db, mission.id);
@@ -323,7 +323,7 @@ describe('createMissionWithObjectives — creation provenance', () => {
     const { mission } = await createMissionWithObjectives({
       ctx,
       projectId: project.id,
-      objectives: [{ objective: 'Typed on the board' }]
+      objectives: [{ instructions: 'Typed on the board' }]
     });
 
     assert.equal((await provenanceRow(db, mission.id)).created_by_kind, 'human');
@@ -343,7 +343,7 @@ describe('createMissionWithObjectives — creation provenance', () => {
         }
       },
       projectId: project.id,
-      objectives: [{ objective: 'Explicit origin override' }]
+      objectives: [{ instructions: 'Explicit origin override' }]
     });
 
     const row = await provenanceRow(db, mission.id);
@@ -359,7 +359,7 @@ describe('createMissionWithObjectives — creation provenance', () => {
     const { mission } = await createMissionWithObjectives({
       ctx,
       projectId: project.id,
-      objectives: [{ objective: 'Human-authored mission' }]
+      objectives: [{ instructions: 'Human-authored mission' }]
     });
     assert.equal((await provenanceRow(db, mission.id)).created_by_kind, 'human');
 
@@ -394,7 +394,7 @@ describe('createMissionWithObjectives — creation provenance', () => {
     const { mission } = await createMissionWithObjectives({
       ctx,
       projectId: project.id,
-      objectives: [{ objective: 'Baseline' }]
+      objectives: [{ instructions: 'Baseline' }]
     });
 
     await assert.rejects(

@@ -23,7 +23,7 @@ describe('mission branch observations', () => {
     const { mission } = await createMissionWithObjectives({
       ctx,
       projectId: project.id,
-      objectives: [{ objective: 'Observe prepared branch' }]
+      objectives: [{ instructions: 'Observe prepared branch' }]
     });
     const observedAt = new Date().toISOString();
 

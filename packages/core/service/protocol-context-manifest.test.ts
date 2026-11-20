@@ -56,7 +56,7 @@ describe('protocol context manifest', () => {
     const { mission, objectives } = await createMissionWithObjectives({
       ctx,
       projectId: project.id,
-      objectives: [{ objective: 'Cross-repo work', resourceKey: 'backend' }]
+      objectives: [{ instructions: 'Cross-repo work', resourceKey: 'backend' }]
     });
     await db.run(`UPDATE objectives SET state = 'submitted' WHERE id = ?`, [objectives[0]?.id]);
 
@@ -83,7 +83,7 @@ describe('protocol context manifest', () => {
     const { mission, objectives } = await createMissionWithObjectives({
       ctx,
       projectId: project.id,
-      objectives: [{ objective: 'Single repo work' }]
+      objectives: [{ instructions: 'Single repo work' }]
     });
     await db.run(`UPDATE objectives SET state = 'submitted' WHERE id = ?`, [objectives[0]?.id]);
 
@@ -110,7 +110,7 @@ describe('protocol context manifest', () => {
     const { mission, objectives } = await createMissionWithObjectives({
       ctx,
       projectId: project.id,
-      objectives: [{ objective: 'Direct attach', resourceKey: 'backend' }]
+      objectives: [{ instructions: 'Direct attach', resourceKey: 'backend' }]
     });
     await db.run(`UPDATE objectives SET state = 'submitted' WHERE id = ?`, [objectives[0]?.id]);
 
@@ -147,7 +147,7 @@ describe('protocol context manifest', () => {
     const { mission, objectives } = await createMissionWithObjectives({
       ctx,
       projectId: project.id,
-      objectives: [{ objective: 'Sync metadata' }]
+      objectives: [{ instructions: 'Sync metadata' }]
     });
     await db.run(`UPDATE objectives SET state = 'submitted' WHERE id = ?`, [objectives[0]?.id]);
     const attached = await attachSession({
@@ -312,7 +312,7 @@ describe('protocol context manifest', () => {
     const { mission, objectives } = await createMissionWithObjectives({
       ctx,
       projectId: project.id,
-      objectives: [{ objective: 'Ignore overlord paths' }]
+      objectives: [{ instructions: 'Ignore overlord paths' }]
     });
     await db.run(`UPDATE objectives SET state = 'submitted' WHERE id = ?`, [objectives[0]?.id]);
     const attached = await attachSession({

@@ -12,11 +12,11 @@ describe('protocol objective creation', () => {
     const { db, ctx } = await createSeededServiceContext({ source: 'protocol' });
 
     await assert.rejects(
-      protocolCreate({ ctx, objectives: [{ objective: 'Require project routing' }] }),
+      protocolCreate({ ctx, objectives: [{ instructions: 'Require project routing' }] }),
       /explicit project ID/
     );
     await assert.rejects(
-      protocolPrompt({ ctx, objectives: [{ objective: 'Require prompt routing' }] }),
+      protocolPrompt({ ctx, objectives: [{ instructions: 'Require prompt routing' }] }),
       /explicit project ID/
     );
 
@@ -31,8 +31,8 @@ describe('protocol objective creation', () => {
       ctx,
       projectId: project.id,
       objectives: [
-        { objective: 'First protocol objective' },
-        { objective: 'Second protocol objective' }
+        { instructions: 'First protocol objective' },
+        { instructions: 'Second protocol objective' }
       ]
     });
 
@@ -51,7 +51,7 @@ describe('protocol objective creation', () => {
     const { mission } = await createMissionWithObjectives({
       ctx,
       projectId: project.id,
-      objectives: [{ objective: 'Existing draft objective' }]
+      objectives: [{ instructions: 'Existing draft objective' }]
     });
 
     await ctx.db.run(`UPDATE objectives SET state = 'complete' WHERE mission_id = ?`, [mission.id]);
@@ -86,7 +86,7 @@ describe('protocol objective creation', () => {
     const { mission } = await createMissionWithObjectives({
       ctx,
       projectId: project.id,
-      objectives: [{ objective: 'Existing draft objective' }]
+      objectives: [{ instructions: 'Existing draft objective' }]
     });
 
     await assert.rejects(
@@ -110,8 +110,8 @@ describe('protocol objective creation', () => {
       ctx,
       projectId: project.id,
       objectives: [
-        { objective: 'First prompt objective' },
-        { objective: 'Second prompt objective' }
+        { instructions: 'First prompt objective' },
+        { instructions: 'Second prompt objective' }
       ],
       agentIdentifier: 'codex'
     });
@@ -131,7 +131,7 @@ describe('protocol objective creation', () => {
     const { mission, objectives } = await createMissionWithObjectives({
       ctx,
       projectId: project.id,
-      objectives: [{ objective: 'Only objective' }]
+      objectives: [{ instructions: 'Only objective' }]
     });
 
     await ctx.db.run(`UPDATE objectives SET assigned_agent = 'claude' WHERE id = ?`, [
@@ -165,7 +165,7 @@ describe('protocol objective creation', () => {
     const { mission, objectives } = await createMissionWithObjectives({
       ctx,
       projectId: project.id,
-      objectives: [{ objective: 'Run current objective' }, { objective: 'Later draft' }]
+      objectives: [{ instructions: 'Run current objective' }, { instructions: 'Later draft' }]
     });
 
     const attached = await attachSession({
@@ -190,7 +190,7 @@ describe('protocol objective creation', () => {
     const { mission, objectives } = await createMissionWithObjectives({
       ctx,
       projectId: project.id,
-      objectives: [{ objective: 'Run current objective' }, { objective: 'Queued draft' }]
+      objectives: [{ instructions: 'Run current objective' }, { instructions: 'Queued draft' }]
     });
 
     await ctx.db.run(`UPDATE objectives SET state = 'launching' WHERE id = ?`, [objectives[0]?.id]);
@@ -230,7 +230,11 @@ describe('protocol objective creation', () => {
     const { mission, objectives } = await createMissionWithObjectives({
       ctx,
       projectId: project.id,
-      objectives: [{ objective: 'Blank soon' }, { objective: 'Second' }, { objective: 'Third' }]
+      objectives: [
+        { instructions: 'Blank soon' },
+        { instructions: 'Second' },
+        { instructions: 'Third' }
+      ]
     });
     await ctx.db.run(`UPDATE objectives SET instruction_text = '' WHERE id = ?`, [
       objectives[0]?.id
@@ -254,9 +258,9 @@ describe('protocol objective creation', () => {
       ctx,
       projectId: project.id,
       objectives: [
-        { objective: 'Already finished work' },
-        { objective: 'Work to do now' },
-        { objective: 'Real queued follow-up' }
+        { instructions: 'Already finished work' },
+        { instructions: 'Work to do now' },
+        { instructions: 'Real queued follow-up' }
       ]
     });
 
@@ -288,7 +292,7 @@ describe('protocol objective creation', () => {
     const { mission, objectives } = await createMissionWithObjectives({
       ctx,
       projectId: project.id,
-      objectives: [{ objective: 'Already finished work' }, { objective: 'Work to do now' }]
+      objectives: [{ instructions: 'Already finished work' }, { instructions: 'Work to do now' }]
     });
 
     // The first objective is complete; the second is the one being executed.
@@ -323,7 +327,7 @@ describe('protocol objective creation', () => {
     const { mission } = await createMissionWithObjectives({
       ctx,
       projectId: project.id,
-      objectives: [{ objective: 'Filter my history' }]
+      objectives: [{ instructions: 'Filter my history' }]
     });
 
     const insertEvent = async (type: string, summary: string): Promise<void> => {
@@ -362,8 +366,8 @@ describe('protocol objective creation', () => {
       ctx,
       projectId: project.id,
       objectives: [
-        { objective: 'First protocol objective', autoAdvance: true },
-        { objective: 'Second protocol objective', autoAdvance: false }
+        { instructions: 'First protocol objective', autoAdvance: true },
+        { instructions: 'Second protocol objective', autoAdvance: false }
       ]
     });
 

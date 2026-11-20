@@ -218,7 +218,7 @@ test('exportWorkspaceObjectivesCsv exports the requested workspace objectives as
   const mission = await createMission({
     projectId: project.id,
     title: 'Quarterly Review',
-    objectives: [{ objective: 'Prepare agenda' }]
+    objectives: [{ instructions: 'Prepare agenda' }]
   });
   await createObjective({
     missionId: mission.id,

@@ -33,7 +33,7 @@ test('protocol lifecycle: attach → update → deliver', async () => {
   const { mission, objectives } = await createMissionWithObjectives({
     ctx,
     projectId: project.id,
-    objectives: [{ objective: 'Implement feature X' }]
+    objectives: [{ instructions: 'Implement feature X' }]
   });
   assert.equal(mission.statusType, 'draft');
 
@@ -94,7 +94,7 @@ test('attach records and clears native external session id', async () => {
   const { mission, objectives } = await createMissionWithObjectives({
     ctx,
     projectId: project.id,
-    objectives: [{ objective: 'Track native session id' }]
+    objectives: [{ instructions: 'Track native session id' }]
   });
   await ctx.db.run(`UPDATE objectives SET state = 'submitted' WHERE id = ?`, [objectives[0]?.id]);
 
@@ -133,7 +133,7 @@ test('hook-event persists external session id on the active agent session', asyn
   const { mission, objectives } = await createMissionWithObjectives({
     ctx,
     projectId: project.id,
-    objectives: [{ objective: 'Capture hook session id' }]
+    objectives: [{ instructions: 'Capture hook session id' }]
   });
   await ctx.db.run(`UPDATE objectives SET state = 'submitted' WHERE id = ?`, [objectives[0]?.id]);
 
@@ -169,7 +169,7 @@ test('attach response includes attach-response-v4 fields', async () => {
   const { mission, objectives } = await createMissionWithObjectives({
     ctx,
     projectId: project.id,
-    objectives: [{ objective: 'Verify attach shape' }]
+    objectives: [{ instructions: 'Verify attach shape' }]
   });
   await ctx.db.run(`UPDATE objectives SET state = 'submitted' WHERE id = ?`, [objectives[0]?.id]);
 
@@ -242,7 +242,7 @@ test('protocol lifecycle: attach baseline → deliver with missionSummary → ne
   const { mission, objectives } = await createMissionWithObjectives({
     ctx,
     projectId: project.id,
-    objectives: [{ objective: 'Build the export' }, { objective: 'Document the export' }]
+    objectives: [{ instructions: 'Build the export' }, { instructions: 'Document the export' }]
   });
   for (const objective of objectives) {
     await ctx.db.run(`UPDATE objectives SET state = 'submitted' WHERE id = ?`, [objective.id]);
@@ -294,7 +294,7 @@ test('protocol lifecycle links a verified foreign close through the public core 
   const source = await createMissionWithObjectives({
     ctx,
     projectId: project.id,
-    objectives: [{ objective: 'Add retry guard' }]
+    objectives: [{ instructions: 'Add retry guard' }]
   });
   const attached = await attachSession({
     ctx,

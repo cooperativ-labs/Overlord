@@ -31,7 +31,7 @@ for (const adapter of ['sqlite', ...(process.env.TEST_DATABASE_URL ? ['postgres'
                 ctx: { ...access.context(scope!.grant), db: tx },
                 projectId,
                 title: 'Draft',
-                objectives: [{ objective: 'Implement', agent: 'codex' }]
+                objectives: [{ instructions: 'Implement', agent: 'codex' }]
               });
             }
             await tx.run(
@@ -44,7 +44,7 @@ for (const adapter of ['sqlite', ...(process.env.TEST_DATABASE_URL ? ['postgres'
                 db: tx
               },
               projectId: 'missing',
-              objectives: [{ objective: 'Fail' }]
+              objectives: [{ instructions: 'Fail' }]
             });
           })
         );
@@ -463,7 +463,7 @@ for (const adapter of ['sqlite', ...(process.env.TEST_DATABASE_URL ? ['postgres'
             ctx: access.context(scope.grant),
             projectId: projects[0]!,
             title: 'Ordinary',
-            objectives: [{ objective: 'Another feature', agent: 'codex', model: 'test-model' }]
+            objectives: [{ instructions: 'Another feature', agent: 'codex', model: 'test-model' }]
           })
         ]);
         assert.notEqual(chat.receipt.missions[0]!.missionDisplayId, ordinary.mission.displayId);

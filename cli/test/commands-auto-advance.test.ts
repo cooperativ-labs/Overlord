@@ -37,7 +37,13 @@ test('ovld create --auto-advance sends autoAdvance on the REST payload', async (
     await runManagementCommand({
       runtime,
       command: 'create',
-      rest: ['--project-id', 'project-1', '--objective', 'First objective', '--auto-advance']
+      rest: [
+        '--project-id',
+        'project-1',
+        '--objective-instructions',
+        'First objective',
+        '--auto-advance'
+      ]
     });
   } finally {
     console.log = originalLog;
@@ -48,6 +54,6 @@ test('ovld create --auto-advance sends autoAdvance on the REST payload', async (
   assert.deepEqual(posts[0]?.body, {
     projectId: 'project-1',
     title: 'First objective',
-    objectives: [{ objective: 'First objective', title: null, autoAdvance: true }]
+    objectives: [{ instructions: 'First objective', title: null, autoAdvance: true }]
   });
 });

@@ -3,9 +3,16 @@ import { test } from 'node:test';
 
 import { protocolAttachResponseSchema } from '../../contract/src/generated/api.js';
 
+import { ServiceError } from './errors.js';
 import { createMissionWithObjectives } from './missions.js';
 import { createProject } from './projects.js';
-import { attachSession, deliverSession, loadMissionContext, resumeFollowUp } from './protocol.js';
+import {
+  attachSession,
+  deliverSession,
+  loadMissionContext,
+  resumeFollowUp,
+  updateSession
+} from './protocol.js';
 import { createSeededServiceContext } from './test-helpers.js';
 import { newId } from './util.js';
 
@@ -19,11 +26,11 @@ test('compact attach preserves mission order, real state and full inspection rea
       ctx,
       projectId: project.id,
       objectives: [
-        { objective: future },
-        { objective: 'Execute current task' },
-        { objective: text },
-        { objective: 'Blank soon' },
-        { objective: future }
+        { instructions: future },
+        { instructions: 'Execute current task' },
+        { instructions: text },
+        { instructions: 'Blank soon' },
+        { instructions: future }
       ]
     });
     await db.run("UPDATE objectives SET state = 'complete' WHERE id = ?", [objectives[2]!.id]);
@@ -76,7 +83,7 @@ test('fresh follow-up sessions receive the latest current-objective directions b
     const { mission, objectives } = await createMissionWithObjectives({
       ctx,
       projectId: project.id,
-      objectives: [{ objective: 'Current' }, { objective: 'Sibling' }]
+      objectives: [{ instructions: 'Current' }, { instructions: 'Sibling' }]
     });
     await db.run("UPDATE objectives SET state = 'complete' WHERE id = ?", [objectives[1]!.id]);
     const first = await attachSession({
@@ -143,6 +150,21 @@ test('fresh follow-up sessions receive the latest current-objective directions b
         sessionKey: resumed.sessionKey,
         summary: 'Follow-up delivered.'
       });
+      if (connectionMethod === 'mcp') {
+        await assert.rejects(
+          updateSession({
+            ctx,
+            missionId: mission.id,
+            sessionKey: resumed.sessionKey,
+            summary: 'Attempt to update after delivery.'
+          }),
+          (error: unknown) =>
+            error instanceof ServiceError &&
+            error.code === 'invalid_session' &&
+            error.message.includes('ask them to start follow-up work from Overlord') &&
+            !error.message.includes('ovld protocol')
+        );
+      }
     }
   } finally {
     await db.close();
@@ -157,7 +179,7 @@ test('fixed five-objective attach fixture fits 12000 response / 6500 instruction
       ctx,
       projectId: project.id,
       objectives: Array.from({ length: 5 }, (_, i) => ({
-        objective: `Task ${i}. ` + 'Details. '.repeat(i === 2 ? 10 : 150)
+        instructions: `Task ${i}. ` + 'Details. '.repeat(i === 2 ? 10 : 150)
       }))
     });
     await db.run("UPDATE objectives SET state = 'complete' WHERE id IN (?, ?)", [

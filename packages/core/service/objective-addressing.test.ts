@@ -31,7 +31,7 @@ describe('objective-addressed protocol entry points', () => {
     const { mission, objectives } = await createMissionWithObjectives({
       ctx,
       projectId: project.id,
-      objectives: [{ objective: 'First' }, { objective: 'Second' }]
+      objectives: [{ instructions: 'First' }, { instructions: 'Second' }]
     });
     const second = objectives[1]!;
 
@@ -60,12 +60,12 @@ describe('objective-addressed protocol entry points', () => {
     const { mission } = await createMissionWithObjectives({
       ctx,
       projectId: project.id,
-      objectives: [{ objective: 'Mine' }]
+      objectives: [{ instructions: 'Mine' }]
     });
     const other = await createMissionWithObjectives({
       ctx,
       projectId: project.id,
-      objectives: [{ objective: 'Theirs' }]
+      objectives: [{ instructions: 'Theirs' }]
     });
 
     await assert.rejects(
@@ -86,7 +86,7 @@ describe('objective-addressed protocol entry points', () => {
     const { mission, objectives } = await createMissionWithObjectives({
       ctx,
       projectId: project.id,
-      objectives: [{ objective: 'First' }, { objective: 'Second' }]
+      objectives: [{ instructions: 'First' }, { instructions: 'Second' }]
     });
     for (const objective of objectives) {
       await ctx.db.run(`UPDATE objectives SET state = 'executing' WHERE id = ?`, [objective.id]);
@@ -115,7 +115,7 @@ describe('objective-addressed protocol entry points', () => {
     const { mission, objectives } = await createMissionWithObjectives({
       ctx,
       projectId: project.id,
-      objectives: [{ objective: 'First' }, { objective: 'Second' }]
+      objectives: [{ instructions: 'First' }, { instructions: 'Second' }]
     });
     const second = objectives[1]!;
 
@@ -143,7 +143,7 @@ describe('objective-addressed protocol entry points', () => {
     const { mission, objectives } = await createMissionWithObjectives({
       ctx,
       projectId: project.id,
-      objectives: [{ objective: 'First' }, { objective: 'Second' }]
+      objectives: [{ instructions: 'First' }, { instructions: 'Second' }]
     });
     const second = objectives[1]!;
 
@@ -176,7 +176,7 @@ describe('objective-addressed protocol entry points', () => {
     const { mission, objectives } = await createMissionWithObjectives({
       ctx,
       projectId: project.id,
-      objectives: [{ objective: 'First' }, { objective: 'Second' }]
+      objectives: [{ instructions: 'First' }, { instructions: 'Second' }]
     });
 
     const submitted = await discussObjective({ ctx, missionId: mission.displayId });
@@ -204,7 +204,7 @@ describe('objective-addressed protocol entry points', () => {
     const { mission, objectives } = await createMissionWithObjectives({
       ctx,
       projectId: project.id,
-      objectives: [{ objective: 'First' }, { objective: 'Second' }]
+      objectives: [{ instructions: 'First' }, { instructions: 'Second' }]
     });
     await ctx.db.run(`UPDATE objectives SET state = 'complete' WHERE id = ?`, [objectives[1]!.id]);
 
@@ -226,7 +226,7 @@ describe('objective-addressed protocol entry points', () => {
     const { mission, objectives } = await createMissionWithObjectives({
       ctx,
       projectId: project.id,
-      objectives: [{ objective: 'First' }, { objective: 'Second' }]
+      objectives: [{ instructions: 'First' }, { instructions: 'Second' }]
     });
 
     // A display-id filter used to be compared against the UUID column, so it

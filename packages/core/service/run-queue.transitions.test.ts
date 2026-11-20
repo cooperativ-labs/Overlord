@@ -37,7 +37,7 @@ async function queuedObjective() {
   const { mission, objectives } = await createMissionWithObjectives({
     ctx,
     projectId: project.id,
-    objectives: [{ objective: 'First' }, { objective: 'Second' }]
+    objectives: [{ instructions: 'First' }, { instructions: 'Second' }]
   });
   const entry = await enqueueRunQueueEntry(db, project.id, objectives[0]!.id);
   const row = async () =>

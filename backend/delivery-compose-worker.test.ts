@@ -58,7 +58,7 @@ test('compose worker updates presentation from a fake provider and emits deliver
   const { mission, objectives } = await createMissionWithObjectives({
     ctx,
     projectId: project.id,
-    objectives: [{ objective: 'Compose a delivery message asynchronously.' }]
+    objectives: [{ instructions: 'Compose a delivery message asynchronously.' }]
   });
   await ctx.db.run(`UPDATE objectives SET state = 'submitted' WHERE id = ?`, [objectives[0]?.id]);
 
@@ -188,7 +188,7 @@ test('compose worker marks fallback when the fake provider returns invalid JSON'
   const { mission, objectives } = await createMissionWithObjectives({
     ctx,
     projectId: project.id,
-    objectives: [{ objective: 'Fallback when composition fails.' }]
+    objectives: [{ instructions: 'Fallback when composition fails.' }]
   });
   await ctx.db.run(`UPDATE objectives SET state = 'submitted' WHERE id = ?`, [objectives[0]?.id]);
   const attached = await attachSession({
@@ -251,7 +251,7 @@ async function riskMissionFixture(name: string) {
   const { mission, objectives } = await createMissionWithObjectives({
     ctx,
     projectId: project.id,
-    objectives: [{ objective: `${name} first.` }, { objective: `${name} second.` }]
+    objectives: [{ instructions: `${name} first.` }, { instructions: `${name} second.` }]
   });
   await ctx.db.run(`UPDATE objectives SET state = 'submitted' WHERE id = ?`, [objectives[0]?.id]);
   const attached = await attachSession({

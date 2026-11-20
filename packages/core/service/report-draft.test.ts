@@ -28,7 +28,7 @@ async function attachedMission(ctx: ServiceContext, name: string) {
   const { mission, objectives } = await createMissionWithObjectives({
     ctx,
     projectId: project.id,
-    objectives: [{ objective: `Work for ${name}` }]
+    objectives: [{ instructions: `Work for ${name}` }]
   });
   const objectiveId = objectives[0]!.id;
   await ctx.db.run(`UPDATE objectives SET state = 'submitted' WHERE id = ?`, [objectiveId]);

@@ -16,7 +16,7 @@ describe('protocol attach pinning', () => {
     const { mission, objectives } = await createMissionWithObjectives({
       ctx,
       projectId: project.id,
-      objectives: [{ objective: 'First draft' }, { objective: 'Second draft' }]
+      objectives: [{ instructions: 'First draft' }, { instructions: 'Second draft' }]
     });
     const first = objectives[0]!;
     const second = objectives[1]!;
@@ -39,7 +39,7 @@ describe('protocol attach pinning', () => {
     const { mission, objectives } = await createMissionWithObjectives({
       ctx,
       projectId: project.id,
-      objectives: [{ objective: 'Keep me draft' }, { objective: 'Pin me' }]
+      objectives: [{ instructions: 'Keep me draft' }, { instructions: 'Pin me' }]
     });
     const first = objectives[0]!;
     const second = objectives[1]!;
@@ -66,7 +66,7 @@ describe('protocol attach pinning', () => {
     const { mission, objectives } = await createMissionWithObjectives({
       ctx,
       projectId: project.id,
-      objectives: [{ objective: 'Draft stays' }]
+      objectives: [{ instructions: 'Draft stays' }]
     });
     const first = objectives[0]!;
     const second = await insertObjective({
@@ -104,7 +104,7 @@ describe('protocol attach pinning', () => {
     const { mission, objectives } = await createMissionWithObjectives({
       ctx,
       projectId: project.id,
-      objectives: [{ objective: 'First' }]
+      objectives: [{ instructions: 'First' }]
     });
     const first = objectives[0]!;
     const second = await insertObjective({
@@ -147,7 +147,7 @@ describe('protocol attach pinning', () => {
     const { mission, objectives } = await createMissionWithObjectives({
       ctx,
       projectId: project.id,
-      objectives: [{ objective: 'Objective A' }, { objective: 'Objective B' }]
+      objectives: [{ instructions: 'Objective A' }, { instructions: 'Objective B' }]
     });
     const first = objectives[0]!;
     const second = objectives[1]!;
@@ -183,7 +183,7 @@ describe('protocol attach pinning', () => {
     const { mission, objectives } = await createMissionWithObjectives({
       ctx,
       projectId: project.id,
-      objectives: [{ objective: 'Stay on me' }, { objective: 'Later draft' }]
+      objectives: [{ instructions: 'Stay on me' }, { instructions: 'Later draft' }]
     });
     const first = objectives[0]!;
     const second = objectives[1]!;

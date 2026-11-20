@@ -140,7 +140,7 @@ describe('POST /api/objectives launch selection', () => {
     });
     const mission = await call('POST', '/api/missions', {
       projectId: project.id,
-      objectives: [{ objective: 'First step' }]
+      objectives: [{ instructions: 'First step' }]
     });
     assert.equal(mission.status, 200, JSON.stringify(mission.body));
     return mission.body.id as string;

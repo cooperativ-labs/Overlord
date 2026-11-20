@@ -72,7 +72,7 @@ for (const adapter of ['sqlite', 'postgres'] as const) {
           const [objective] = await addObjectivesToMission({
             ctx,
             missionId: recorded.mission.id,
-            objectives: [{ objective: 'Resolve remaining work' }]
+            objectives: [{ instructions: 'Resolve remaining work' }]
           });
           const session = await attachSession({
             ctx,

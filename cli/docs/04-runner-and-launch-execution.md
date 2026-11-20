@@ -214,7 +214,9 @@ keeps pointing at the shared branch a later sequential objective should continue
 - Fetch or assemble mission context before launching.
 - Write large context payloads to `.overlord/tmp/` when a project directory is known.
 - Opportunistically prune stale `.overlord/tmp/` entries before writing new launch scratch files.
-- Export `TMPDIR`, `TMP`, `TEMP`, and `OVERLORD_TMPDIR` to the project `.overlord/tmp/`.
+- Export `TMPDIR`, `TMP`, `TEMP`, and `OVERLORD_TMPDIR` to a per-launch directory under
+  `.overlord/tmp/sessions/`. Keep the directory across delivery and explicit follow-up
+  in the same harness. Automatic pruning expires stale contents.
 - Export `MISSION_ID`, `OVERLORD_MISSION_ID`, and the resolved `OVERLORD_BACKEND_URL`
   into launched agent terminals so connector hooks can publish prompt and permission
   activity to the same mission/backend.

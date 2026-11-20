@@ -5,19 +5,21 @@ import {
   mkdirSync,
   readdirSync,
   rmSync,
-  unlinkSync
+  unlinkSync,
+  writeFileSync
 } from 'node:fs';
 import path from 'node:path';
+
+import { canonicalDirectory } from './local-file-storage.js';
 
 export const PROJECT_TMP_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 /**
  * Retention for `sessions/<id>/` scratch directories that no live session owns.
- * A delivered session removes its own directory; this window only covers
- * sessions that crashed or never delivered, and is long enough that a launch
- * cannot still be mid-write when the sweep sees it.
+ * This window applies to old scratch directories without a harness marker.
  */
 export const PROJECT_TMP_SESSION_RETENTION_MS = 24 * 60 * 60 * 1000;
 export const PROJECT_TMP_SESSIONS_DIRNAME = 'sessions';
+const HARNESS_SCRATCH_MARKER = '.overlord-harness-scratch';
 
 export function projectTmpDir(workingDirectory: string): string {
   return path.join(workingDirectory, '.overlord', 'tmp');
@@ -33,9 +35,7 @@ export function safeTmpNamePart(value: string): string {
 
 /**
  * Directory name for one launch's private scratch space:
- * `<objective-or-mission slug>-<execution request id | pid>`. Every path a
- * delivering session removes is keyed to this name, so concurrent sessions
- * on the same checkout never touch each other's files.
+ * `<objective-or-mission slug>-<execution request id | pid>`.
  */
 export function sessionScratchName({
   missionDisplayId,
@@ -57,53 +57,36 @@ export function sessionScratchName({
 
 /** True when `candidate` is a direct child of `<cwd>/.overlord/tmp/sessions/`. */
 export function isSessionScratchDir(workingDirectory: string, candidate: string): boolean {
-  const sessionsDir = path.resolve(projectTmpSessionsDir(workingDirectory));
   const resolved = path.resolve(candidate);
-  return path.dirname(resolved) === sessionsDir && path.basename(resolved).length > 0;
+  const candidateCheckout = path.resolve(resolved, '../../../..');
+  return (
+    path.dirname(resolved) === projectTmpSessionsDir(candidateCheckout) &&
+    canonicalDirectory(candidateCheckout) === canonicalDirectory(workingDirectory)
+  );
 }
 
-/**
- * Remove the scratch a session owns once it has delivered: its `sessions/<id>/`
- * directory (only ever a direct child of the sessions dir — anything else is
- * refused) and its launch briefing. The launch script is deliberately kept:
- * `attach` recovers channel/request ids from it on reconnect, and the age
- * sweep collects it later.
- */
-export function removeSessionScratch({
-  workingDirectory,
-  scratchDir,
-  contextFile
-}: {
-  workingDirectory: string;
-  scratchDir?: string | null;
-  contextFile?: string | null;
-}): { removed: string[] } {
-  const removed: string[] = [];
-  if (scratchDir?.trim() && isSessionScratchDir(workingDirectory, scratchDir)) {
-    try {
-      if (existsSync(scratchDir)) {
-        rmSync(scratchDir, { recursive: true, force: true });
-        removed.push(scratchDir);
-      }
-    } catch {
-      // Best-effort cleanup only.
-    }
+/** Keep the exported scratch path valid across protocol sessions in one harness. */
+export function ensureHarnessScratchDir(workingDirectory: string, scratchDir: string): void {
+  if (!isSessionScratchDir(workingDirectory, scratchDir)) return;
+  mkdirSync(scratchDir, { recursive: true, mode: 0o700 });
+  if (!lstatSync(scratchDir).isDirectory()) return;
+  try {
+    writeFileSync(path.join(scratchDir, HARNESS_SCRATCH_MARKER), '', { flag: 'wx', mode: 0o600 });
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
   }
-  if (contextFile?.trim()) {
-    const tmpDir = path.resolve(projectTmpDir(workingDirectory));
-    const resolved = path.resolve(contextFile);
-    if (path.dirname(resolved) === tmpDir && resolved.endsWith('.md')) {
-      try {
-        if (existsSync(resolved)) {
-          unlinkSync(resolved);
-          removed.push(resolved);
-        }
-      } catch {
-        // Best-effort cleanup only.
-      }
-    }
+}
+
+export function removeLaunchBriefing(workingDirectory: string, contextFile: string | null): void {
+  if (!contextFile) return;
+  const resolved = path.resolve(contextFile);
+  if (path.dirname(resolved) !== path.resolve(projectTmpDir(workingDirectory))) return;
+  if (!resolved.endsWith('.md')) return;
+  try {
+    unlinkSync(resolved);
+  } catch {
+    // Best-effort cleanup only.
   }
-  return { removed };
 }
 
 export function ensureProjectTmpDir(workingDirectory: string): string {
@@ -137,6 +120,7 @@ export function pruneStaleProjectTmp({
   pruneChildren(tmpDir, cutoff, {
     sessionsDir: projectTmpSessionsDir(workingDirectory),
     sessionCutoff: now - sessionRetentionMs,
+    fileCutoff: cutoff,
     isSessionLive
   });
 }
@@ -196,6 +180,7 @@ function removeEntry(target: string, isSymbolicLink: boolean): void {
 type SessionPruneOptions = {
   sessionsDir: string;
   sessionCutoff: number;
+  fileCutoff: number;
   isSessionLive: SessionLivenessCheck;
 };
 
@@ -210,6 +195,12 @@ function pruneSessionDirs(sessionsDir: string, options: SessionPruneOptions): vo
     const target = path.join(sessionsDir, entry.name);
     if (entry.isDirectory() && options.isSessionLive(entry.name)) continue;
     try {
+      if (entry.isDirectory() && existsSync(path.join(target, HARNESS_SCRATCH_MARKER))) {
+        // A delivered protocol session can leave an open harness indefinitely.
+        // Age out files, while preserving the directory exported to its shell.
+        pruneChildren(target, options.fileCutoff, undefined, HARNESS_SCRATCH_MARKER);
+        continue;
+      }
       const stats = lstatSync(target);
       if (stats.mtimeMs > options.sessionCutoff) continue;
       removeEntry(target, stats.isSymbolicLink());
@@ -219,7 +210,12 @@ function pruneSessionDirs(sessionsDir: string, options: SessionPruneOptions): vo
   }
 }
 
-function pruneChildren(directory: string, cutoff: number, sessions?: SessionPruneOptions): void {
+function pruneChildren(
+  directory: string,
+  cutoff: number,
+  sessions?: SessionPruneOptions,
+  preservedEntry?: string
+): void {
   let entries: Dirent<string>[];
   try {
     entries = readdirSync(directory, { withFileTypes: true, encoding: 'utf8' });
@@ -228,6 +224,7 @@ function pruneChildren(directory: string, cutoff: number, sessions?: SessionPrun
   }
 
   for (const entry of entries) {
+    if (entry.name === preservedEntry) continue;
     const target = path.join(directory, entry.name);
     if (sessions && entry.isDirectory() && target === sessions.sessionsDir) {
       // Session scratch is owned per launch: live ones are kept regardless of

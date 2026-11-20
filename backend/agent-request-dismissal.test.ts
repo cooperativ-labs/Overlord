@@ -66,7 +66,7 @@ before(async () => {
   const mission = await protocolCreate({
     ctx,
     projectId: project.id,
-    objectives: [{ objective: 'Dismissal test' }]
+    objectives: [{ instructions: 'Dismissal test' }]
   });
   missionId = mission.mission.id;
   objectiveId = mission.objectives[0]!.id;

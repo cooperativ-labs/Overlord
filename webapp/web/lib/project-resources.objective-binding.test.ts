@@ -152,7 +152,7 @@ describe('resolveResourceForKey', () => {
 describe('firstObjectiveCreatePayload', () => {
   it('binds the resource key when one is chosen', () => {
     assert.deepEqual(firstObjectiveCreatePayload('Do the thing', 'mobile'), {
-      objectives: [{ objective: 'Do the thing', resourceKey: 'mobile' }]
+      objectives: [{ instructions: 'Do the thing', resourceKey: 'mobile' }]
     });
   });
 

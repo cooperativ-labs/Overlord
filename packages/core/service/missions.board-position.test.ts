@@ -25,12 +25,12 @@ describe('moveMissionToReview board placement', () => {
     const { mission: firstMission } = await createMissionWithObjectives({
       ctx,
       projectId: project.id,
-      objectives: [{ objective: 'First into review' }]
+      objectives: [{ instructions: 'First into review' }]
     });
     const { mission: secondMission } = await createMissionWithObjectives({
       ctx,
       projectId: project.id,
-      objectives: [{ objective: 'Second into review' }]
+      objectives: [{ instructions: 'Second into review' }]
     });
 
     await moveMissionToReview({ ctx, missionId: firstMission.id });

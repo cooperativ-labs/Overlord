@@ -26,15 +26,15 @@ type Brief = {
   title_source: string | null;
   title_generation: number;
   title_status: string | null;
-  description: string | null;
-  description_source: string | null;
-  description_status: string | null;
-  description_request_kind: string | null;
-  description_generation: number;
-  description_revision: number;
-  description_suppressed: unknown;
-  description_author_workspace_user_id: string | null;
-  description_author_agent: string | null;
+  summary: string | null;
+  summary_source: string | null;
+  summary_status: string | null;
+  summary_request_kind: string | null;
+  summary_generation: number;
+  summary_revision: number;
+  summary_suppressed: unknown;
+  summary_author_workspace_user_id: string | null;
+  summary_author_agent: string | null;
   instruction_author_kind: string | null;
   instruction_text: string | null;
   state: string;
@@ -46,10 +46,10 @@ type Brief = {
 
 async function brief(db: DatabaseClient, id: string): Promise<Brief> {
   const row = await db.get<Brief>(
-    `SELECT title, title_source, title_generation, title_status, description, description_source,
-            description_status, description_request_kind, description_generation,
-            description_revision, description_suppressed, description_author_workspace_user_id,
-            description_author_agent, instruction_author_kind, instruction_text, state,
+    `SELECT title, title_source, title_generation, title_status, summary, summary_source,
+            summary_status, summary_request_kind, summary_generation,
+            summary_revision, summary_suppressed, summary_author_workspace_user_id,
+            summary_author_agent, instruction_author_kind, instruction_text, state,
             updated_at, revision, launched_at, completed_at
        FROM objectives WHERE id = ?`,
     [id]
@@ -58,10 +58,10 @@ async function brief(db: DatabaseClient, id: string): Promise<Brief> {
   return {
     ...row,
     title_generation: Number(row.title_generation),
-    description_generation: Number(row.description_generation),
-    description_revision: Number(row.description_revision),
+    summary_generation: Number(row.summary_generation),
+    summary_revision: Number(row.summary_revision),
     revision: Number(row.revision),
-    description_suppressed: row.description_suppressed === true || row.description_suppressed === 1
+    summary_suppressed: row.summary_suppressed === true || row.summary_suppressed === 1
   };
 }
 
@@ -95,13 +95,13 @@ for (const adapter of conformanceAdapters()) {
       });
       const addAgent = async (
         objective: string,
-        extra: { title?: string; description?: string | null } = {}
+        extra: { title?: string; summary?: string | null } = {}
       ) =>
         (
           await missions.addObjectivesToMission({
             ctx: agentCtx,
             missionId: mission.id,
-            objectives: [{ objective, ...extra }]
+            objectives: [{ instructions: objective, ...extra }]
           })
         )[0]!;
       return { db, cleanup, repo, service, humanCtx, agentCtx, mission, addAgent, workspaceUserId };
@@ -118,21 +118,21 @@ for (const adapter of conformanceAdapters()) {
         let row = await brief(t.db, human.id);
         assert.equal(row.instruction_author_kind, 'human');
         assert.equal(row.title_source, 'generated');
-        assert.equal(row.description_status, null);
+        assert.equal(row.summary_status, null);
 
         // Agent/assistant-written without an attached session: automatic summary intent.
         const agent = await t.addAgent(LONG, { title: 'Agent title' });
         row = await brief(t.db, agent.id);
         assert.equal(row.instruction_author_kind, 'agent');
         assert.equal(row.title_source, 'agent');
-        assert.equal(row.description_status, 'pending');
-        assert.equal(row.description_request_kind, 'automatic');
+        assert.equal(row.summary_status, 'pending');
+        assert.equal(row.summary_request_kind, 'automatic');
 
         // A person rewrites the agent's instructions: authorship flips, automatic intent is withdrawn.
         await t.repo.updateObjective(agent.id, { instructionText: LONG_2 });
         row = await brief(t.db, agent.id);
         assert.equal(row.instruction_author_kind, 'human');
-        assert.equal(row.description_status, null);
+        assert.equal(row.summary_status, null);
         assert.equal(row.title_source, 'agent', 'an authored title survives an instruction edit');
         assert.equal(row.title, 'Agent title');
 
@@ -144,13 +144,13 @@ for (const adapter of conformanceAdapters()) {
         );
         row = await brief(t.db, human.id);
         assert.equal(row.instruction_author_kind, 'agent');
-        assert.equal(row.description_status, 'pending');
+        assert.equal(row.summary_status, 'pending');
 
         // Lifecycle and configuration edits do not touch the brief.
-        const generation = row.description_generation;
+        const generation = row.summary_generation;
         await t.repo.updateObjective(human.id, { state: 'submitted' });
         row = await brief(t.db, human.id);
-        assert.equal(row.description_generation, generation);
+        assert.equal(row.summary_generation, generation);
         assert.equal(row.instruction_author_kind, 'agent');
 
         // A REST title edit is user-owned; clearing hands it back to automation.
@@ -212,7 +212,7 @@ for (const adapter of conformanceAdapters()) {
       }
     });
 
-    it('lets people edit descriptions after completion without touching instructions or evidence', async () => {
+    it('lets people edit summaries after completion without touching instructions or evidence', async () => {
       const t = await setup('ovld_brief_edit');
       try {
         const objective = await t.addAgent(LONG);
@@ -224,15 +224,15 @@ for (const adapter of conformanceAdapters()) {
           [objective.id]
         );
 
-        const result = await t.service.setObjectiveDescription({
+        const result = await t.service.setObjectiveSummary({
           ctx: t.humanCtx,
           objectiveId: objective.id,
-          description: 'Add brief state. The work is done when both adapters pass.',
-          expectedDescriptionRevision: before.description_revision
+          summary: 'Add brief state. The work is done when both adapters pass.',
+          expectedSummaryRevision: before.summary_revision
         });
-        assert.equal(result.brief.descriptionSource, 'user');
-        assert.equal(result.brief.descriptionAuthorWorkspaceUserId, t.workspaceUserId);
-        assert.equal(result.brief.descriptionStale, false);
+        assert.equal(result.brief.summarySource, 'user');
+        assert.equal(result.brief.summaryAuthorWorkspaceUserId, t.workspaceUserId);
+        assert.equal(result.brief.summaryStale, false);
 
         const after = await brief(t.db, objective.id);
         assert.equal(after.state, 'complete');
@@ -241,7 +241,7 @@ for (const adapter of conformanceAdapters()) {
         assert.deepEqual(after.launched_at, before.launched_at);
         assert.deepEqual(after.updated_at, before.updated_at, 'activity ordering is not moved');
         assert.equal(after.revision, before.revision + 1);
-        assert.equal(after.description_revision, before.description_revision + 1);
+        assert.equal(after.summary_revision, before.summary_revision + 1);
         const changesAfter = await t.db.get<{ n: number; fields: string }>(
           "SELECT COUNT(*) AS n FROM entity_changes WHERE entity_id = ? AND entity_type = 'objective'",
           [objective.id]
@@ -256,25 +256,25 @@ for (const adapter of conformanceAdapters()) {
 
         // Stale write: a second editor working from the old revision conflicts.
         await assert.rejects(
-          t.service.setObjectiveDescription({
+          t.service.setObjectiveSummary({
             ctx: t.agentCtx,
             objectiveId: objective.id,
-            description: 'Other text.',
-            expectedDescriptionRevision: before.description_revision
+            summary: 'Other text.',
+            expectedSummaryRevision: before.summary_revision
           }),
           (e: { code?: string; status?: number }) =>
-            e.code === 'description_conflict' && e.status === 409
+            e.code === 'summary_conflict' && e.status === 409
         );
-        assert.match((await brief(t.db, objective.id)).description ?? '', /both adapters/);
+        assert.match((await brief(t.db, objective.id)).summary ?? '', /both adapters/);
 
         // An agent edit records the agent attribution.
-        const agentEdit = await t.service.setObjectiveDescription({
+        const agentEdit = await t.service.setObjectiveSummary({
           ctx: t.agentCtx,
           objectiveId: objective.id,
-          description: 'Agent text.'
+          summary: 'Agent text.'
         });
-        assert.equal(agentEdit.brief.descriptionSource, 'agent');
-        assert.equal(agentEdit.brief.descriptionAuthorAgent, 'claude-code');
+        assert.equal(agentEdit.brief.summarySource, 'agent');
+        assert.equal(agentEdit.brief.summaryAuthorAgent, 'claude-code');
       } finally {
         await t.cleanup();
       }
@@ -285,19 +285,19 @@ for (const adapter of conformanceAdapters()) {
       try {
         const objective = await t.addAgent(LONG);
         const pending = await brief(t.db, objective.id);
-        assert.equal(pending.description_status, 'pending');
+        assert.equal(pending.summary_status, 'pending');
         const inFlight = {
-          generation: pending.description_generation,
+          generation: pending.summary_generation,
           hash: (
             await import('../packages/core/service/objective-brief.ts')
           ).hashObjectiveInstruction(LONG)!
         };
 
-        await t.service.removeObjectiveDescription({ ctx: t.humanCtx, objectiveId: objective.id });
+        await t.service.removeObjectiveSummary({ ctx: t.humanCtx, objectiveId: objective.id });
         let row = await brief(t.db, objective.id);
-        assert.equal(row.description_suppressed, true);
-        assert.equal(row.description_status, null);
-        assert.equal(row.description, null);
+        assert.equal(row.summary_suppressed, true);
+        assert.equal(row.summary_status, null);
+        assert.equal(row.summary, null);
 
         // The in-flight result cannot restore it.
         const late = await t.service.publishObjectiveBrief({
@@ -305,10 +305,10 @@ for (const adapter of conformanceAdapters()) {
           objectiveId: objective.id,
           result: {
             instructionHash: inFlight.hash,
-            description: { generation: inFlight.generation, text: 'Late summary.' }
+            summary: { generation: inFlight.generation, text: 'Late summary.' }
           }
         });
-        assert.equal(late.description, 'suppressed');
+        assert.equal(late.summary, 'suppressed');
 
         // Agent instruction edits, reorder/reopen-free lifecycle moves and catch-up do not re-enable it.
         await t.repo.updateObjective(
@@ -330,37 +330,37 @@ for (const adapter of conformanceAdapters()) {
           false
         );
         row = await brief(t.db, objective.id);
-        assert.equal(row.description_suppressed, true);
-        assert.equal(row.description_status, null);
+        assert.equal(row.summary_suppressed, true);
+        assert.equal(row.summary_status, null);
 
         // Agents cannot store text or request a summary while suppressed.
-        const refused = await t.service.setObjectiveDescription({
+        const refused = await t.service.setObjectiveSummary({
           ctx: t.agentCtx,
           objectiveId: objective.id,
-          description: 'Agent text.'
+          summary: 'Agent text.'
         });
         assert.deepEqual(
           refused.warnings.map(w => w.code),
-          ['description_suppressed']
+          ['summary_suppressed']
         );
-        assert.equal(refused.brief.description, null);
+        assert.equal(refused.brief.summary, null);
         await assert.rejects(
-          t.service.requestObjectiveDescriptionGeneration({
+          t.service.requestObjectiveSummaryGeneration({
             ctx: t.agentCtx,
             objectiveId: objective.id,
             mode: 'summarize'
           }),
-          (e: { code?: string }) => e.code === 'description_suppressed'
+          (e: { code?: string }) => e.code === 'summary_suppressed'
         );
 
         // A person selects Summarize: suppression clears and a fresh generation is pending.
-        const summarize = await t.service.requestObjectiveDescriptionGeneration({
+        const summarize = await t.service.requestObjectiveSummaryGeneration({
           ctx: t.humanCtx,
           objectiveId: objective.id,
           mode: 'summarize'
         });
-        assert.equal(summarize.brief.descriptionSuppressed, false);
-        assert.equal(summarize.brief.descriptionStatus, 'pending');
+        assert.equal(summarize.brief.summarySuppressed, false);
+        assert.equal(summarize.brief.summaryStatus, 'pending');
         row = await brief(t.db, objective.id);
         const published = await t.service.publishObjectiveBrief({
           ctx: t.humanCtx,
@@ -369,16 +369,16 @@ for (const adapter of conformanceAdapters()) {
             instructionHash: (
               await import('../packages/core/service/objective-brief.ts')
             ).hashObjectiveInstruction(LONG_2)!,
-            description: {
-              generation: row.description_generation,
+            summary: {
+              generation: row.summary_generation,
               text: 'Rewrite the brief state.'
             }
           }
         });
-        assert.equal(published.description, 'published');
+        assert.equal(published.summary, 'published');
         row = await brief(t.db, objective.id);
-        assert.equal(row.description_source, 'generated');
-        assert.equal(row.description_status, null);
+        assert.equal(row.summary_source, 'generated');
+        assert.equal(row.summary_status, null);
       } finally {
         await t.cleanup();
       }
@@ -411,20 +411,20 @@ for (const adapter of conformanceAdapters()) {
           objectiveId: kept.id,
           result: {
             instructionHash: hashObjectiveInstruction(LONG)!,
-            description: { generation: pending.description_generation, text: 'Build the state.' }
+            summary: { generation: pending.summary_generation, text: 'Build the state.' }
           }
         });
-        assert.equal(published.description, 'published');
+        assert.equal(published.summary, 'published');
         await runToCompletion(kept.id);
         const beforeReopen = await brief(t.db, kept.id);
         const jobsBeforeReopen = await briefJobs(kept.id);
         await t.repo.updateObjective(kept.id, { state: 'draft' });
         const reopened = await brief(t.db, kept.id);
         assert.equal(reopened.state, 'draft');
-        assert.equal(reopened.description, 'Build the state.');
-        assert.equal(reopened.description_source, 'generated');
-        assert.equal(reopened.description_status, null);
-        assert.equal(reopened.description_generation, beforeReopen.description_generation);
+        assert.equal(reopened.summary, 'Build the state.');
+        assert.equal(reopened.summary_source, 'generated');
+        assert.equal(reopened.summary_status, null);
+        assert.equal(reopened.summary_generation, beforeReopen.summary_generation);
         assert.equal(reopened.title_status, beforeReopen.title_status);
         assert.equal(reopened.title_generation, beforeReopen.title_generation);
         assert.equal(await briefJobs(kept.id), jobsBeforeReopen, 'reopen queues no brief job');
@@ -437,7 +437,7 @@ for (const adapter of conformanceAdapters()) {
 
         // A removed summary stays absent through a run, reopen and catch-up.
         const removed = await t.addAgent(LONG_2);
-        await t.service.removeObjectiveDescription({ ctx: t.humanCtx, objectiveId: removed.id });
+        await t.service.removeObjectiveSummary({ ctx: t.humanCtx, objectiveId: removed.id });
         await runToCompletion(removed.id);
         await t.repo.updateObjective(removed.id, { state: 'draft' });
         assert.equal(
@@ -452,9 +452,9 @@ for (const adapter of conformanceAdapters()) {
         );
         const removedRow = await brief(t.db, removed.id);
         assert.equal(removedRow.state, 'draft');
-        assert.equal(removedRow.description, null);
-        assert.equal(removedRow.description_suppressed, true);
-        assert.equal(removedRow.description_status, null);
+        assert.equal(removedRow.summary, null);
+        assert.equal(removedRow.summary_suppressed, true);
+        assert.equal(removedRow.summary_status, null);
       } finally {
         await t.cleanup();
       }
@@ -482,10 +482,10 @@ for (const adapter of conformanceAdapters()) {
 
         // A person writes a summary, then an agent rewrites the instructions.
         // Both wait on the row; each must plan from the row it then writes.
-        const personEdit = t.service.setObjectiveDescription({
+        const personEdit = t.service.setObjectiveSummary({
           ctx: t.humanCtx,
           objectiveId: objective.id,
-          description: 'A summary a person wrote.'
+          summary: 'A summary a person wrote.'
         });
         await sleep(150);
         const agentEdit = t.repo.updateObjective(
@@ -501,10 +501,10 @@ for (const adapter of conformanceAdapters()) {
 
         const row = await brief(t.db, objective.id);
         assert.equal(row.instruction_text, LONG_2);
-        assert.equal(row.description, 'A summary a person wrote.');
-        assert.equal(row.description_source, 'user');
+        assert.equal(row.summary, 'A summary a person wrote.');
+        assert.equal(row.summary_source, 'user');
         assert.notEqual(
-          row.description_status,
+          row.summary_status,
           'pending',
           'an agent edit planned from a stale snapshot must not queue a replacement for a person summary'
         );
@@ -535,42 +535,42 @@ for (const adapter of conformanceAdapters()) {
           objectiveId: objective.id,
           result: {
             instructionHash: hashObjectiveInstruction(LONG)!,
-            description: { generation: first.description_generation, text: 'Old summary.' }
+            summary: { generation: first.summary_generation, text: 'Old summary.' }
           }
         });
-        assert.equal(stale.description, 'stale');
+        assert.equal(stale.summary, 'stale');
         let row = await brief(t.db, objective.id);
-        assert.equal(row.description, null);
-        assert.equal(row.description_status, 'pending');
+        assert.equal(row.summary, null);
+        assert.equal(row.summary_status, 'pending');
 
         // A failure for a superseded generation is ignored; the current one is recorded.
         assert.equal(
-          await t.service.failObjectiveDescriptionGeneration({
+          await t.service.failObjectiveSummaryGeneration({
             ctx: t.humanCtx,
             objectiveId: objective.id,
-            generation: first.description_generation,
+            generation: first.summary_generation,
             failureCode: 'provider_error'
           }),
           false
         );
         assert.equal(
-          await t.service.failObjectiveDescriptionGeneration({
+          await t.service.failObjectiveSummaryGeneration({
             ctx: t.humanCtx,
             objectiveId: objective.id,
-            generation: row.description_generation,
+            generation: row.summary_generation,
             failureCode: 'provider_unavailable'
           }),
           true
         );
         row = await brief(t.db, objective.id);
-        assert.equal(row.description_status, 'failed');
-        const retry = await t.service.requestObjectiveDescriptionGeneration({
+        assert.equal(row.summary_status, 'failed');
+        const retry = await t.service.requestObjectiveSummaryGeneration({
           ctx: t.agentCtx,
           objectiveId: objective.id,
           mode: 'retry'
         });
-        assert.equal(retry.brief.descriptionStatus, 'pending');
-        assert.equal(retry.brief.descriptionFailureCode, null);
+        assert.equal(retry.brief.summaryStatus, 'pending');
+        assert.equal(retry.brief.summaryFailureCode, null);
 
         // Reorder and launch do not invalidate a still-current result.
         row = await brief(t.db, objective.id);
@@ -588,38 +588,38 @@ for (const adapter of conformanceAdapters()) {
           objectiveId: objective.id,
           result: {
             instructionHash: hashObjectiveInstruction(LONG_2)!,
-            description: {
-              generation: row.description_generation,
+            summary: {
+              generation: row.summary_generation,
               text: 'Rewrite the brief state.'
             }
           }
         });
-        assert.equal(current.description, 'published');
+        assert.equal(current.summary, 'published');
         assert.equal((await brief(t.db, objective.id)).state, 'launching');
 
         // A manual edit without an instruction change still invalidates an in-flight result.
-        const regenerate = await t.service.requestObjectiveDescriptionGeneration({
+        const regenerate = await t.service.requestObjectiveSummaryGeneration({
           ctx: t.humanCtx,
           objectiveId: objective.id,
           mode: 'regenerate'
         });
-        const regenGeneration = (await brief(t.db, objective.id)).description_generation;
-        assert.equal(regenerate.brief.descriptionStatus, 'pending');
-        await t.service.setObjectiveDescription({
+        const regenGeneration = (await brief(t.db, objective.id)).summary_generation;
+        assert.equal(regenerate.brief.summaryStatus, 'pending');
+        await t.service.setObjectiveSummary({
           ctx: t.humanCtx,
           objectiveId: objective.id,
-          description: 'My own summary.'
+          summary: 'My own summary.'
         });
         const overwritten = await t.service.publishObjectiveBrief({
           ctx: t.humanCtx,
           objectiveId: objective.id,
           result: {
             instructionHash: hashObjectiveInstruction(LONG_2)!,
-            description: { generation: regenGeneration, text: 'Model summary.' }
+            summary: { generation: regenGeneration, text: 'Model summary.' }
           }
         });
-        assert.equal(overwritten.description, 'stale');
-        assert.equal((await brief(t.db, objective.id)).description, 'My own summary.');
+        assert.equal(overwritten.summary, 'stale');
+        assert.equal((await brief(t.db, objective.id)).summary, 'My own summary.');
 
         // Deleted objectives accept no results.
         const otherRow = await brief(t.db, other.id);
@@ -629,10 +629,10 @@ for (const adapter of conformanceAdapters()) {
           objectiveId: other.id,
           result: {
             instructionHash: hashObjectiveInstruction(LONG_2)!,
-            description: { generation: otherRow.description_generation, text: 'Ghost.' }
+            summary: { generation: otherRow.summary_generation, text: 'Ghost.' }
           }
         });
-        assert.equal(deleted.description, 'stale');
+        assert.equal(deleted.summary, 'stale');
       } finally {
         await t.cleanup();
       }
@@ -651,7 +651,7 @@ for (const adapter of conformanceAdapters()) {
         const unknown = await t.addAgent(LONG);
         // Simulate rows whose automatic intent was lost or never recorded.
         await t.db.run(
-          'UPDATE objectives SET description_status = NULL, description_request_kind = NULL WHERE mission_id = ?',
+          'UPDATE objectives SET summary_status = NULL, summary_request_kind = NULL WHERE mission_id = ?',
           [t.mission.id]
         );
         await t.db.run("UPDATE objectives SET state = 'complete' WHERE id = ?", [done.id]);
@@ -673,7 +673,7 @@ for (const adapter of conformanceAdapters()) {
           false,
           'repeat scans are deduplicated'
         );
-        assert.equal((await brief(t.db, eligible.id)).description_request_kind, 'automatic');
+        assert.equal((await brief(t.db, eligible.id)).summary_request_kind, 'automatic');
       } finally {
         await t.cleanup();
       }

@@ -36,7 +36,7 @@ async function seedQueuedRequest(ctx: ServiceContext, name: string): Promise<str
   const { mission, objectives } = await createMissionWithObjectives({
     ctx,
     projectId: project.id,
-    objectives: [{ objective: 'Run somewhere' }]
+    objectives: [{ instructions: 'Run somewhere' }]
   });
   const requestId = newId();
   const now = nowIso();

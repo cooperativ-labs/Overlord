@@ -328,9 +328,15 @@ export function overlordMcpToolDefinitions({
           unassignedToProject: booleanProperty(
             'Set true only to intentionally create an account-owned inbox item instead of a project mission. Cannot be combined with projectId.'
           ),
-          objective: stringProperty('Initial objective text.'),
-          description: stringProperty(
-            'Optional human-facing summary of the objective for the people who decide whether to launch it: one to three short prose paragraphs in Simplified Technical English style that open with the goal and close with the done-when sentence, about 120 words. The objective text stays the complete instruction for the executing agent; the summary is never sent to it. Omit it and Overlord writes one for long agent-written objectives. Style issues come back as warnings; the text is stored as written.'
+          objectiveInstructions: stringProperty(
+            'INSTRUCTIONS: the complete brief the executing agent receives (context, steps, done-when). Usually the LONGER of the two texts. ' +
+              'The agent receives only this text. If the summary looks swapped with these instructions (3x longer, for example), the response carries an objective_fields_swapped warning.'
+          ),
+          objectiveSummary: stringProperty(
+            'SUMMARY: a short overview for the people who decide whether to launch the objective, never sent to the executing agent. Usually the SHORTER text: ' +
+              'one to three prose paragraphs (about 120 words) in Simplified Technical English style that open with the goal and close with the done-when sentence. ' +
+              'No headings or numbered steps; those belong in the instructions. Omit it and Overlord writes one for long agent-written objectives. ' +
+              'A possible swap and style issues come back as warnings; the text is stored as written.'
           ),
           title: stringProperty('Optional mission title.'),
           resourceKey: stringProperty('Optional logical project resource key for the objective.'),
@@ -347,10 +353,10 @@ export function overlordMcpToolDefinitions({
             'When true, Overlord queues the next objective for execution after this one is delivered. Defaults to false.'
           )
         },
-        ['objective']
+        ['objectiveInstructions']
       ),
       outputSchema: protocolOutputSchema(
-        'The newly created draft mission, or an intentional unassigned inbox item. For each created objective, inspect the returned ObjectiveDto assignedAgent, model, resourceKey, and queueEntry/autoAdvance fields to verify the persisted launch settings.'
+        'The newly created draft mission, or an intentional unassigned inbox item. Created objectives may carry warnings (objective_fields_swapped, summary_style). For each created objective, inspect the returned ObjectiveDto assignedAgent, model, resourceKey, and queueEntry/autoAdvance fields to verify the persisted launch settings.'
       ),
       annotations: writeAction
     },
@@ -684,12 +690,18 @@ export function overlordMcpToolDefinitions({
           objectives: {
             type: 'array',
             description:
-              'Objective objects with objective text and optional title, description, agent/model launch selection, resourceKey, and autoAdvance.',
+              'Objective objects with instructions (the complete brief for the executing agent) and optional summary (a short overview for people), title, agent/model launch selection, resourceKey, and autoAdvance.',
             items: objectSchema({
-              objective: stringProperty('Objective text.'),
+              instructions: stringProperty(
+                'INSTRUCTIONS: the complete brief the executing agent receives (context, steps, done-when). Usually the LONGER of the two texts. ' +
+                  'The agent receives only this text. If the summary looks swapped with these instructions (3x longer, for example), the response carries an objective_fields_swapped warning.'
+              ),
               title: stringProperty('Optional objective title.'),
-              description: stringProperty(
-                'Optional human-facing summary of the objective for the people who decide whether to launch it: one to three short prose paragraphs in Simplified Technical English style that open with the goal and close with the done-when sentence, about 120 words. The objective text stays the complete instruction for the executing agent; the summary is never sent to it. Omit it and Overlord writes one for long agent-written objectives. Style issues come back as warnings; the text is stored as written.'
+              summary: stringProperty(
+                'SUMMARY: a short overview for the people who decide whether to launch the objective, never sent to the executing agent. Usually the SHORTER text: ' +
+                  'one to three prose paragraphs (about 120 words) in Simplified Technical English style that open with the goal and close with the done-when sentence. ' +
+                  'No headings or numbered steps; those belong in the instructions. Omit it and Overlord writes one for long agent-written objectives. ' +
+                  'A possible swap and style issues come back as warnings; the text is stored as written.'
               ),
               agent: stringProperty(
                 'Optional agent identifier to assign to this objective, such as codex or claude, or manual (alias human) when a person will do it: manual takes no model and is never launched.'
@@ -715,7 +727,7 @@ export function overlordMcpToolDefinitions({
       name: 'overlord_update_objective',
       title: 'Update objective',
       description:
-        'Use this to rewrite an objective title in any state, turn auto-advance on or off, edit instruction text or the human-facing description (summary) on a draft objective, request a generated summary on a draft objective, and/or reassign the objective to another agent or to a person (agent manual, alias human).',
+        'Use this to rewrite an objective title in any state, turn auto-advance on or off, edit instruction text or the human-facing summary on a draft objective, request a generated summary on a draft objective, and/or reassign the objective to another agent or to a person (agent manual, alias human).',
       inputSchema: objectSchema(
         {
           objectiveId: stringProperty('Objective UUID or display id.'),
@@ -726,16 +738,16 @@ export function overlordMcpToolDefinitions({
             'When true, Overlord queues the next objective after this one is delivered. When false, delivery waits for approval.'
           ),
           instructionText: stringProperty(
-            'Replacement instruction text. Allowed only when the objective is in draft state; blank clears the text.'
+            'Replacement INSTRUCTIONS: the complete brief the executing agent receives. Allowed only when the objective is in draft state; blank clears the text.'
           ),
-          description: stringProperty(
-            'Replacement human-facing summary, allowed only when the objective is in draft state: one to three short prose paragraphs in Simplified Technical English style that open with the goal and close with the done-when sentence. It is never sent to the executing agent. An empty string removes the summary; Overlord then writes none until a person selects Summarize. When a person has removed the summary, your text is not stored and a description_suppressed warning is returned.'
+          summary: stringProperty(
+            'Replacement SUMMARY: a short overview for people, never sent to the executing agent; allowed only when the objective is in draft state: one to three short prose paragraphs in Simplified Technical English style that open with the goal and close with the done-when sentence. An empty string removes the summary; Overlord then writes none until a person selects Summarize. When a person has removed the summary, your text is not stored and a summary_suppressed warning is returned. A summary that looks swapped with the instructions returns an objective_fields_swapped warning.'
           ),
-          descriptionRequest: {
+          summaryRequest: {
             type: 'string',
             enum: ['summarize', 'regenerate', 'retry'],
             description:
-              'Ask Overlord to write the summary (summarize/regenerate) or to retry a failed generation (retry). Allowed only in draft state and only for instructions of at least 280 characters. Refused with description_suppressed when a person removed the summary: only a person can turn summaries back on. Cannot be combined with description.'
+              'Ask Overlord to write the summary (summarize/regenerate) or to retry a failed generation (retry). Allowed only in draft state and only for instructions of at least 280 characters. Refused with summary_suppressed when a person removed the summary: only a person can turn summaries back on. Cannot be combined with summary.'
           },
           agent: stringProperty(
             'Agent to assign, such as codex or claude, or manual (alias human) so a person does the objective instead of an agent. Manual objectives are never launched and the Run Queue holds them until an agent is assigned. Changing agent clears any model or reasoning effort not passed alongside it.'
@@ -750,7 +762,7 @@ export function overlordMcpToolDefinitions({
         ['objectiveId']
       ),
       outputSchema: protocolOutputSchema(
-        'The updated objective, including title, description and its summary state (descriptionSource, descriptionStatus, descriptionSuppressed), assignedAgent, model, reasoningEffort, resourceKey, autoAdvance, and instructionText, plus warnings: advisory description_style issues and description_suppressed.'
+        'The updated objective, including title, summary and its state (summarySource, summaryStatus, summarySuppressed), assignedAgent, model, reasoningEffort, resourceKey, autoAdvance, and instructionText, plus warnings: advisory summary_style issues, summary_suppressed and objective_fields_swapped.'
       ),
       annotations: writeAction
     },

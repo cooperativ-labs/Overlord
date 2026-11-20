@@ -160,7 +160,7 @@ for (const adapter of adapters) {
           ctx,
           projectId,
           title: 'Stop the webhooks from firing too fast',
-          objectives: [{ objective: 'Tune the webhook delivery backoff' }]
+          objectives: [{ instructions: 'Tune the webhook delivery backoff' }]
         });
         const decoys: Array<{ mission: { id: string } }> = [];
         for (const title of [
@@ -175,7 +175,7 @@ for (const adapter of adapters) {
               ctx,
               projectId,
               title,
-              objectives: [{ objective: `Unrelated work for ${title}` }]
+              objectives: [{ instructions: `Unrelated work for ${title}` }]
             })
           );
         }
@@ -211,20 +211,20 @@ for (const adapter of adapters) {
           projectId,
           title: 'Ship the investor portal login',
           dueDatetime: '2026-08-20T09:00:00.000Z',
-          objectives: [{ objective: 'Wire up the SSO handshake' }]
+          objectives: [{ instructions: 'Wire up the SSO handshake' }]
         });
         await createMissionWithObjectives({
           ctx,
           projectId,
           title: 'Quarterly compliance filing',
           dueDatetime: '2026-08-28T09:00:00.000Z',
-          objectives: [{ objective: 'Collate the filings' }]
+          objectives: [{ instructions: 'Collate the filings' }]
         });
         await createMissionWithObjectives({
           ctx,
           projectId,
           title: 'Unscheduled backlog item',
-          objectives: [{ objective: 'Someday' }]
+          objectives: [{ instructions: 'Someday' }]
         });
 
         const tomorrow = await searchMissionsV2({
@@ -261,13 +261,13 @@ for (const adapter of adapters) {
           ctx,
           projectId,
           title: 'Moonbeam telemetry overhaul',
-          objectives: [{ objective: 'baseline one' }]
+          objectives: [{ instructions: 'baseline one' }]
         });
         const chatty = await createMissionWithObjectives({
           ctx,
           projectId,
           title: 'Unrelated logging cleanup',
-          objectives: [{ objective: 'baseline two' }]
+          objectives: [{ instructions: 'baseline two' }]
         });
         for (let index = 0; index < 25; index += 1) {
           await recordEvent(
@@ -294,19 +294,19 @@ for (const adapter of adapters) {
           ctx,
           projectId,
           title: 'First mission',
-          objectives: [{ objective: 'baseline' }]
+          objectives: [{ instructions: 'baseline' }]
         });
         await createMissionWithObjectives({
           ctx,
           projectId,
           title: 'Second mission',
-          objectives: [{ objective: 'baseline' }]
+          objectives: [{ instructions: 'baseline' }]
         });
         await createMissionWithObjectives({
           ctx,
           projectId,
           title: 'Third mission',
-          objectives: [{ objective: 'baseline' }]
+          objectives: [{ instructions: 'baseline' }]
         });
 
         const v2 = await searchMissionsV2({ ctx, query: first.mission.displayId });
@@ -330,13 +330,13 @@ for (const adapter of adapters) {
           ctx,
           projectId,
           title: 'Redis decision log',
-          objectives: [{ objective: 'Decide whether to use Redis' }]
+          objectives: [{ instructions: 'Decide whether to use Redis' }]
         });
         const recent = await createMissionWithObjectives({
           ctx,
           projectId,
           title: 'Cache layer notes',
-          objectives: [{ objective: 'Mention redis only in passing' }]
+          objectives: [{ instructions: 'Mention redis only in passing' }]
         });
         await ctx.db.run(`UPDATE missions SET updated_at = ? WHERE id = ?`, [
           '2020-01-01T00:00:00.000Z',
@@ -363,7 +363,7 @@ for (const adapter of adapters) {
           ctx,
           projectId,
           title: 'Krypton storage migration',
-          objectives: [{ objective: 'baseline' }]
+          objectives: [{ instructions: 'baseline' }]
         });
         await ctx.db.run(`UPDATE missions SET status_type = 'complete' WHERE id = ?`, [
           complete.mission.id
@@ -383,7 +383,7 @@ for (const adapter of adapters) {
           ctx,
           projectId,
           title: 'Fallback mission',
-          objectives: [{ objective: 'baseline' }]
+          objectives: [{ instructions: 'baseline' }]
         });
         const v2 = await searchMissionsV2({ ctx, query: '???' });
         assert.equal(v2.appliedFilters.mode, 'fallback');
@@ -403,13 +403,13 @@ for (const adapter of adapters) {
           ctx,
           projectId,
           title: 'Old date-filter mission',
-          objectives: [{ objective: 'baseline' }]
+          objectives: [{ instructions: 'baseline' }]
         });
         const fresh = await createMissionWithObjectives({
           ctx,
           projectId,
           title: 'Fresh date-filter mission',
-          objectives: [{ objective: 'baseline' }]
+          objectives: [{ instructions: 'baseline' }]
         });
         await ctx.db.run(`UPDATE missions SET updated_at = ? WHERE id = ?`, [
           '2020-01-01T00:00:00.000Z',
@@ -445,13 +445,13 @@ for (const adapter of adapters) {
           ctx,
           projectId,
           title: 'Resource-filter matching mission',
-          objectives: [{ objective: 'baseline' }]
+          objectives: [{ instructions: 'baseline' }]
         });
         const other = await createMissionWithObjectives({
           ctx,
           projectId,
           title: 'Resource-filter other mission',
-          objectives: [{ objective: 'baseline' }]
+          objectives: [{ instructions: 'baseline' }]
         });
         await ctx.db.run(`UPDATE objectives SET resource_key = 'mobile' WHERE mission_id = ?`, [
           matching.mission.id
@@ -480,13 +480,13 @@ for (const adapter of adapters) {
           ctx,
           projectId,
           title: 'Moonbeam telemetry overhaul',
-          objectives: [{ objective: 'baseline one' }]
+          objectives: [{ instructions: 'baseline one' }]
         });
         const inEvent = await createMissionWithObjectives({
           ctx,
           projectId,
           title: 'Logging cleanup',
-          objectives: [{ objective: 'baseline two' }]
+          objectives: [{ instructions: 'baseline two' }]
         });
         await recordEvent(
           ctx,

@@ -41,7 +41,7 @@ async function setupProject(ctx: ServiceContext, name: string) {
   const { mission } = await createMissionWithObjectives({
     ctx,
     projectId: project.id,
-    objectives: [{ objective: 'Anchor for queued capability calls' }]
+    objectives: [{ instructions: 'Anchor for queued capability calls' }]
   });
   const target = await resolveRunnerTarget({ ctx, input: {} });
   return { projectId: project.id, missionId: mission.id, target };

@@ -164,17 +164,17 @@ import {
 } from '../packages/core/service/missions.ts';
 import { emitNotification } from '../packages/core/service/notifications/notifications.ts';
 import {
-  isDescriptionEligibleInstruction,
-  isObjectiveDescriptionStale,
+  isSummaryEligibleInstruction,
+  isObjectiveSummaryStale,
   loadObjectiveBriefRow,
-  normalizeObjectiveDescriptionInput,
+  normalizeObjectiveSummaryInput,
   objectiveBriefActorFromOrigin,
   objectiveBriefChangedFields,
   objectiveBriefPatchAssignments,
   type ObjectiveBriefWarning,
-  type ObjectiveDescriptionGenerationMode,
+  type ObjectiveSummaryGenerationMode,
   planObjectiveBriefForUpdate,
-  requestObjectiveDescriptionGeneration
+  requestObjectiveSummaryGeneration
 } from '../packages/core/service/objective-brief.ts';
 import {
   lockMissionObjectiveQueue,
@@ -760,16 +760,16 @@ interface ObjectiveRow {
   // Brief state (ADR 0057). Every ObjectiveDto read selects `o.*`.
   title_source?: string | null;
   title_status?: string | null;
-  description?: string | null;
-  description_source?: string | null;
-  description_instruction_hash?: string | null;
-  description_status?: string | null;
-  description_failure_code?: string | null;
-  description_suppressed?: unknown;
-  description_revision?: number | string | null;
-  description_updated_at?: string | Date | null;
-  description_author_workspace_user_id?: string | null;
-  description_author_agent?: string | null;
+  summary?: string | null;
+  summary_source?: string | null;
+  summary_instruction_hash?: string | null;
+  summary_status?: string | null;
+  summary_failure_code?: string | null;
+  summary_suppressed?: unknown;
+  summary_revision?: number | string | null;
+  summary_updated_at?: string | Date | null;
+  summary_author_workspace_user_id?: string | null;
+  summary_author_agent?: string | null;
 }
 
 // ---- serializers ---------------------------------------------------------
@@ -1948,7 +1948,7 @@ function toObjectiveDto(r: ObjectiveRow): ObjectiveDto {
 
 const BRIEF_SOURCES = new Set(['generated', 'agent', 'user']);
 const BRIEF_STATUSES = new Set(['pending', 'failed']);
-const DESCRIPTION_FAILURE_CODES = new Set([
+const SUMMARY_FAILURE_CODES = new Set([
   'provider_unavailable',
   'provider_error',
   'invalid_output',
@@ -1974,41 +1974,41 @@ function toObjectiveBriefDtoFields(
   ObjectiveDto,
   | 'titleSource'
   | 'titleStatus'
-  | 'description'
-  | 'descriptionSource'
-  | 'descriptionStale'
-  | 'descriptionStatus'
-  | 'descriptionFailureCode'
-  | 'descriptionSuppressed'
-  | 'descriptionEligible'
-  | 'descriptionRevision'
-  | 'descriptionUpdatedAt'
-  | 'descriptionAuthorWorkspaceUserId'
-  | 'descriptionAuthorAgent'
+  | 'summary'
+  | 'summarySource'
+  | 'summaryStale'
+  | 'summaryStatus'
+  | 'summaryFailureCode'
+  | 'summarySuppressed'
+  | 'summaryEligible'
+  | 'summaryRevision'
+  | 'summaryUpdatedAt'
+  | 'summaryAuthorWorkspaceUserId'
+  | 'summaryAuthorAgent'
 > {
-  const description = r.description ?? null;
-  const updatedAt = r.description_updated_at;
+  const summary = r.summary ?? null;
+  const updatedAt = r.summary_updated_at;
   return {
     titleSource: briefEnum(r.title_source, BRIEF_SOURCES),
     titleStatus: briefEnum(r.title_status, BRIEF_STATUSES),
-    description,
-    descriptionSource: description === null ? null : briefEnum(r.description_source, BRIEF_SOURCES),
-    descriptionStale: isObjectiveDescriptionStale(
-      { description, description_instruction_hash: r.description_instruction_hash ?? null },
+    summary,
+    summarySource: summary === null ? null : briefEnum(r.summary_source, BRIEF_SOURCES),
+    summaryStale: isObjectiveSummaryStale(
+      { summary, summary_instruction_hash: r.summary_instruction_hash ?? null },
       r.instruction_text
     ),
-    descriptionStatus: briefEnum(r.description_status, BRIEF_STATUSES),
-    descriptionFailureCode:
-      r.description_status === 'failed'
-        ? briefEnum(r.description_failure_code, DESCRIPTION_FAILURE_CODES)
+    summaryStatus: briefEnum(r.summary_status, BRIEF_STATUSES),
+    summaryFailureCode:
+      r.summary_status === 'failed'
+        ? briefEnum(r.summary_failure_code, SUMMARY_FAILURE_CODES)
         : null,
-    descriptionSuppressed: isTruthyFlag(r.description_suppressed),
-    descriptionEligible: isDescriptionEligibleInstruction(r.instruction_text),
-    descriptionRevision: Number(r.description_revision ?? 0),
-    descriptionUpdatedAt: updatedAt instanceof Date ? updatedAt.toISOString() : (updatedAt ?? null),
-    descriptionAuthorWorkspaceUserId:
-      description === null ? null : (r.description_author_workspace_user_id ?? null),
-    descriptionAuthorAgent: description === null ? null : (r.description_author_agent ?? null)
+    summarySuppressed: isTruthyFlag(r.summary_suppressed),
+    summaryEligible: isSummaryEligibleInstruction(r.instruction_text),
+    summaryRevision: Number(r.summary_revision ?? 0),
+    summaryUpdatedAt: updatedAt instanceof Date ? updatedAt.toISOString() : (updatedAt ?? null),
+    summaryAuthorWorkspaceUserId:
+      summary === null ? null : (r.summary_author_workspace_user_id ?? null),
+    summaryAuthorAgent: summary === null ? null : (r.summary_author_agent ?? null)
   };
 }
 
@@ -5226,9 +5226,9 @@ async function createMissionTx(
       body.objectives && body.objectives.length > 0
         ? body.objectives
         : body.firstObjective
-          ? [{ objective: body.firstObjective }]
+          ? [{ instructions: body.firstObjective }]
           : [];
-    const instruction = (objectiveInputs[0]?.objective ?? body.title ?? '').trim();
+    const instruction = (objectiveInputs[0]?.instructions ?? body.title ?? '').trim();
     if (!instruction) {
       throw new ApiError(400, 'Describe the work to be done (title or first objective)');
     }
@@ -5263,7 +5263,7 @@ async function createMissionTx(
     // only REST-side rule is the shape; the service layer owns the semantic
     // "a model needs an agent" rejection.
     for (const [index, item] of objectiveInputs.entries()) {
-      for (const key of ['agent', 'model', 'description'] as const) {
+      for (const key of ['agent', 'model', 'summary'] as const) {
         const value = item[key];
         if (value !== undefined && value !== null && typeof value !== 'string') {
           throw new ApiError(400, `objectives[${index}].${key} must be a string or null`);
@@ -5289,9 +5289,9 @@ async function createMissionTx(
       ctx,
       projectId: body.projectId,
       objectives: objectiveInputs.map(item => ({
-        objective: item.objective,
+        instructions: item.instructions,
         ...(item.title !== undefined ? { title: item.title } : {}),
-        ...(item.description !== undefined ? { description: item.description } : {}),
+        ...(item.summary !== undefined ? { summary: item.summary } : {}),
         autoAdvance: item.autoAdvance ?? false,
         ...(item.agent !== undefined ? { agent: item.agent } : {}),
         ...(item.model !== undefined ? { model: item.model } : {}),
@@ -5611,7 +5611,7 @@ export async function promoteInboxItem(id: string, projectId: string): Promise<M
         {
           projectId,
           title: item.title,
-          objectives: objectives.map(objective => ({ objective })),
+          objectives: objectives.map(instructions => ({ instructions })),
           dueDatetime: item.due_datetime,
           ...(item.priority ? { priority: item.priority } : {})
         },
@@ -7066,7 +7066,7 @@ async function insertObjective(
     missionId: body.missionId,
     instructionText: body.instructionText ?? '',
     ...(body.title !== undefined ? { title: body.title } : {}),
-    ...(body.description !== undefined ? { description: body.description } : {}),
+    ...(body.summary !== undefined ? { summary: body.summary } : {}),
     ...(body.state !== undefined ? { state: body.state } : {}),
     autoAdvance: body.autoAdvance ?? false,
     ...(body.assignedAgent !== undefined ? { assignedAgent: body.assignedAgent } : {}),
@@ -7117,12 +7117,12 @@ export type ObjectiveUpdateResult = {
   warnings: ObjectiveBriefWarning[];
 };
 
-function readExpectedDescriptionRevision(value: unknown): number | undefined {
+function readExpectedSummaryRevision(value: unknown): number | undefined {
   if (value === undefined || value === null) return undefined;
   if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) {
     throw new ApiError(
       400,
-      'expectedDescriptionRevision must be a non-negative integer',
+      'expectedSummaryRevision must be a non-negative integer',
       undefined,
       'validation_error'
     );
@@ -7135,12 +7135,10 @@ async function updateObjectiveTx(
   body: UpdateObjectiveBody,
   options: UpdateObjectiveOptions = {}
 ): Promise<ObjectiveUpdateResult> {
-  // Validate the authored description before any write (ADR 0057 mutation
+  // Validate the authored summary before any write (ADR 0057 mutation
   // table: omitted = unchanged, null/blank = Remove, text = authored).
-  const descriptionInput = normalizeObjectiveDescriptionInput(body.description);
-  const expectedDescriptionRevision = readExpectedDescriptionRevision(
-    body.expectedDescriptionRevision
-  );
+  const summaryInput = normalizeObjectiveSummaryInput(body.summary);
+  const expectedSummaryRevision = readExpectedSummaryRevision(body.expectedSummaryRevision);
   return requireDatabaseClient().transaction(async tx => {
     const {
       workspaceId,
@@ -7279,7 +7277,7 @@ async function updateObjectiveTx(
       setParams.push(nextLaunchConfigJson);
       changed.push('launch_config_json');
     }
-    if (fields.length === 0 && descriptionInput.kind === 'omit') {
+    if (fields.length === 0 && summaryInput.kind === 'omit') {
       return { objective: toObjectiveDto(existing), warnings: [] };
     }
 
@@ -7288,15 +7286,15 @@ async function updateObjectiveTx(
     // position and configuration edits leave every brief column untouched.
     const briefRow = (await loadObjectiveBriefRow(tx, id))!;
     if (
-      descriptionInput.kind !== 'omit' &&
-      expectedDescriptionRevision !== undefined &&
-      briefRow.description_revision !== expectedDescriptionRevision
+      summaryInput.kind !== 'omit' &&
+      expectedSummaryRevision !== undefined &&
+      briefRow.summary_revision !== expectedSummaryRevision
     ) {
       throw new ServiceError(
         'The summary changed after you started editing it. Reload it and try again.',
-        'description_conflict',
+        'summary_conflict',
         409,
-        { descriptionRevision: briefRow.description_revision, description: briefRow.description }
+        { summaryRevision: briefRow.summary_revision, summary: briefRow.summary }
       );
     }
     const briefPlan = planObjectiveBriefForUpdate({
@@ -7304,7 +7302,7 @@ async function updateObjectiveTx(
       currentInstruction: existing.instruction_text,
       instructionText: body.instructionText,
       title: body.title,
-      description: descriptionInput,
+      summary: summaryInput,
       actor: objectiveBriefActorFromOrigin(
         options.origin ?? { kind: 'human' },
         workspaceUserId ?? null
@@ -7312,7 +7310,7 @@ async function updateObjectiveTx(
       now: nowIso()
     });
 
-    // A description-only edit is presentation metadata: it never touches
+    // A summary-only edit is presentation metadata: it never touches
     // instructions, lifecycle, Run Queue membership, evidence or `updated_at`
     // (which orders the activity feed), in any objective state (ADR 0057).
     if (fields.length === 0) {
@@ -7388,7 +7386,7 @@ async function updateObjectiveTx(
       [...setParams, now, revision, id, workspaceId]
     );
     // Brief intent and its job commit together (ADR 0058).
-    if (briefPlan.titleRequested || briefPlan.descriptionRequested) {
+    if (briefPlan.titleRequested || briefPlan.summaryRequested) {
       await enqueueObjectiveBriefComposeJob({ db: tx, workspaceId, objectiveId: id });
     }
 
@@ -7555,7 +7553,7 @@ export async function updateObjective(
 
 /**
  * `updateObjective` plus the brief warnings of the write (for example an agent
- * description refused because a person removed the summary). Protocol and
+ * summary refused because a person removed the summary). Protocol and
  * hosted MCP surface these; REST callers are people and never receive one.
  */
 export async function updateObjectiveWithWarnings(
@@ -7571,9 +7569,9 @@ export async function updateObjectiveWithWarnings(
  * job in one transaction; the worker writes the summary later. Allowed in every
  * objective state. A person's Summarize or Regenerate is the only operation
  * that clears removal suppression; an agent request while suppressed is
- * refused (409 `description_suppressed`).
+ * refused (409 `summary_suppressed`).
  */
-export async function requestObjectiveDescription(
+export async function requestObjectiveSummary(
   idRef: string,
   body: { mode?: unknown },
   options: UpdateObjectiveOptions = {}
@@ -7594,10 +7592,10 @@ export async function requestObjectiveDescription(
       db: tx
     });
     const ctx = await buildWebappServiceContextForWorkspace(workspaceId, tx, workspaceUserId);
-    await requestObjectiveDescriptionGeneration({
+    await requestObjectiveSummaryGeneration({
       ctx: { ...ctx, origin: options.origin ?? { kind: 'human' } },
       objectiveId,
-      mode: mode as ObjectiveDescriptionGenerationMode
+      mode: mode as ObjectiveSummaryGenerationMode
     });
     const row = (await tx.get(
       `SELECT o.*, m.display_id AS mission_display_id

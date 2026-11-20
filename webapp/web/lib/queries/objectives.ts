@@ -6,7 +6,7 @@ import type {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { api } from '../api.ts';
-import type { ObjectiveDescriptionRequestMode } from '../api/objectives.ts';
+import type { ObjectiveSummaryRequestMode } from '../api/objectives.ts';
 import { invalidateNonEverhourQueries as invalidateAll } from '../query-invalidation.ts';
 import { keys } from '../query-keys.ts';
 
@@ -30,25 +30,25 @@ export function useUpdateObjective() {
 }
 
 /**
- * A person's summary edit or Remove (`description: null`). Sends the revision the editor
- * started from, so a concurrent change answers 409 `description_conflict` instead of being
+ * A person's summary edit or Remove (`summary: null`). Sends the revision the editor
+ * started from, so a concurrent change answers 409 `summary_conflict` instead of being
  * overwritten. Refetches on error too: after a conflict the card must show the current text.
  */
-export function useUpdateObjectiveDescription() {
+export function useUpdateObjectiveSummary() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({
       id,
-      description,
-      expectedDescriptionRevision
+      summary,
+      expectedSummaryRevision
     }: {
       id: string;
-      description: string | null;
-      expectedDescriptionRevision?: number;
+      summary: string | null;
+      expectedSummaryRevision?: number;
     }) =>
       api.updateObjective(id, {
-        description,
-        ...(expectedDescriptionRevision === undefined ? {} : { expectedDescriptionRevision })
+        summary,
+        ...(expectedSummaryRevision === undefined ? {} : { expectedSummaryRevision })
       }),
     onSettled: () => invalidateAll(qc)
   });
@@ -59,11 +59,11 @@ export function useUpdateObjectiveDescription() {
  * Summarize or Regenerate clears a removal; the request returns at once and the worker's
  * result arrives through the realtime refetch.
  */
-export function useRequestObjectiveDescription() {
+export function useRequestObjectiveSummary() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, mode }: { id: string; mode: ObjectiveDescriptionRequestMode }) =>
-      api.requestObjectiveDescription(id, { mode }),
+    mutationFn: ({ id, mode }: { id: string; mode: ObjectiveSummaryRequestMode }) =>
+      api.requestObjectiveSummary(id, { mode }),
     onSuccess: () => invalidateAll(qc)
   });
 }

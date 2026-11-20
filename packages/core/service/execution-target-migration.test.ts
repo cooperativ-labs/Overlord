@@ -35,7 +35,7 @@ describe('execution target migration diagnostics', () => {
     const mission = await createMissionWithObjectives({
       ctx,
       projectId: project.id,
-      objectives: [{ objective: 'Test migration diagnostics' }]
+      objectives: [{ instructions: 'Test migration diagnostics' }]
     });
     const now = nowIso();
 

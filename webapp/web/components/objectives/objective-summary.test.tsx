@@ -14,7 +14,7 @@ import { ObjectiveDetailTabs } from '../objective-detail/ObjectiveDetailTabs.tsx
  * transport, so every assertion about what the detail *sends* is about real requests.
  */
 
-const LONG_INSTRUCTION = `Implement the description UI in webapp/web/components/objectives. ${'Keep every queue rule. '.repeat(20)}`;
+const LONG_INSTRUCTION = `Implement the summary UI in webapp/web/components/objectives. ${'Keep every queue rule. '.repeat(20)}`;
 const SUMMARY =
   'Show a short summary on each objective card. Decision needed: include the inbox now or later.\n\nCAUTION: Do not change the launch payload. The work is done when people can read both texts.';
 
@@ -99,17 +99,17 @@ function objective(overrides: Partial<ObjectiveDto> & { id: string }): Objective
     title: `Title ${overrides.id}`,
     titleSource: 'generated',
     titleStatus: null,
-    description: null,
-    descriptionSource: null,
-    descriptionStale: false,
-    descriptionStatus: null,
-    descriptionFailureCode: null,
-    descriptionSuppressed: false,
-    descriptionEligible: true,
-    descriptionRevision: 0,
-    descriptionUpdatedAt: null,
-    descriptionAuthorWorkspaceUserId: null,
-    descriptionAuthorAgent: null,
+    summary: null,
+    summarySource: null,
+    summaryStale: false,
+    summaryStatus: null,
+    summaryFailureCode: null,
+    summarySuppressed: false,
+    summaryEligible: true,
+    summaryRevision: 0,
+    summaryUpdatedAt: null,
+    summaryAuthorWorkspaceUserId: null,
+    summaryAuthorAgent: null,
     instructionText: LONG_INSTRUCTION,
     state: 'draft',
     autoAdvance: false,
@@ -140,9 +140,9 @@ function objective(overrides: Partial<ObjectiveDto> & { id: string }): Objective
 function withSummary(id: string, overrides: Partial<ObjectiveDto> = {}): ObjectiveDto {
   return objective({
     id,
-    description: SUMMARY,
-    descriptionSource: 'generated',
-    descriptionRevision: 3,
+    summary: SUMMARY,
+    summarySource: 'generated',
+    summaryRevision: 3,
     ...overrides
   });
 }
@@ -171,7 +171,7 @@ function setup(initial: ObjectiveDto) {
   return { ...utils, rerenderTabs: (next: ObjectiveDto) => utils.rerender(view(next)) };
 }
 
-const descriptionRequests = () => requests.filter(r => r.path.endsWith('/description-requests'));
+const summaryRequests = () => requests.filter(r => r.path.endsWith('/summary-requests'));
 const summaryEditor = () =>
   screen.getByRole('textbox', { name: 'Objective summary' }) as HTMLTextAreaElement;
 
@@ -193,14 +193,14 @@ describe('Summary and Instructions tabs', () => {
     assert.equal(panel.hidden, true);
     fireEvent.click(instructionsTab);
     assert.equal(panel.hidden, false);
-    assert.match(panel.textContent ?? '', /Implement the description UI/);
+    assert.match(panel.textContent ?? '', /Implement the summary UI/);
     // Rendering never asks for a summary.
-    assert.equal(descriptionRequests().length, 0);
+    assert.equal(summaryRequests().length, 0);
   });
 
   it('shows person-written and short instructions as today, with no tab row or summary controls', () => {
     const { unmount } = setup(
-      objective({ id: 'a', instructionText: 'Fix the typo.', descriptionEligible: false })
+      objective({ id: 'a', instructionText: 'Fix the typo.', summaryEligible: false })
     );
     assert.ok(screen.getByText('Fix the typo.'));
     assert.equal(screen.queryByRole('tablist'), null, 'no tabs without a summary');
@@ -221,39 +221,39 @@ describe('Summary and Instructions tabs', () => {
 describe('summary states and actions', () => {
   it('Summarize asks the server, never waits for a model, and leaves the instructions readable', async () => {
     setup(objective({ id: 'a' }));
-    assert.ok(screen.getByText(/Implement the description UI/));
+    assert.ok(screen.getByText(/Implement the summary UI/));
     fireEvent.click(screen.getByRole('button', { name: 'Summarize instructions' }));
-    await waitFor(() => assert.equal(descriptionRequests().length, 1));
-    assert.deepEqual(descriptionRequests()[0]!.body, { mode: 'summarize' });
-    assert.equal(descriptionRequests()[0]!.path, '/api/objectives/a/description-requests');
+    await waitFor(() => assert.equal(summaryRequests().length, 1));
+    assert.deepEqual(summaryRequests()[0]!.body, { mode: 'summarize' });
+    assert.equal(summaryRequests()[0]!.path, '/api/objectives/a/summary-requests');
   });
 
   it('pending keeps the instructions with "Writing summary…", and Cancel removes durably', async () => {
-    setup(objective({ id: 'a', descriptionStatus: 'pending' }));
+    setup(objective({ id: 'a', summaryStatus: 'pending' }));
     assert.ok(screen.getByText('Writing summary…'));
-    assert.ok(screen.getByText(/Implement the description UI/));
+    assert.ok(screen.getByText(/Implement the summary UI/));
     fireEvent.click(screen.getByRole('button', { name: 'Stop summary' }));
     await waitFor(() => assert.ok(requests.some(r => r.method === 'PATCH')));
     const patch = requests.find(r => r.method === 'PATCH')!;
     assert.equal(patch.path, '/api/objectives/a');
-    assert.deepEqual(patch.body, { description: null });
+    assert.deepEqual(patch.body, { summary: null });
   });
 
   it('failure shows a stable message and Retry', async () => {
     setup(
       objective({
         id: 'a',
-        descriptionStatus: 'failed',
-        descriptionFailureCode: 'provider_unavailable'
+        summaryStatus: 'failed',
+        summaryFailureCode: 'provider_unavailable'
       })
     );
     assert.ok(screen.getByText('Summary unavailable: no model provider is configured.'));
     fireEvent.click(screen.getByRole('button', { name: 'Retry summary' }));
-    await waitFor(() => assert.deepEqual(descriptionRequests()[0]?.body, { mode: 'retry' }));
+    await waitFor(() => assert.deepEqual(summaryRequests()[0]?.body, { mode: 'retry' }));
   });
 
   it('regeneration keeps the prior summary with stale and pending lines', () => {
-    setup(withSummary('a', { descriptionStale: true, descriptionStatus: 'pending' }));
+    setup(withSummary('a', { summaryStale: true, summaryStatus: 'pending' }));
     assert.ok(screen.getByText(/Show a short summary/));
     assert.ok(screen.getByText('Writing a new summary…'));
     assert.equal(screen.queryByRole('button', { name: 'Regenerate summary' }), null);
@@ -263,48 +263,48 @@ describe('summary states and actions', () => {
     const { rerenderTabs } = setup(withSummary('a'));
     fireEvent.click(screen.getByRole('button', { name: 'Remove summary' }));
     await waitFor(() => assert.ok(requests.some(r => r.method === 'PATCH')));
-    assert.deepEqual(requests.find(r => r.method === 'PATCH')!.body, { description: null });
+    assert.deepEqual(requests.find(r => r.method === 'PATCH')!.body, { summary: null });
 
     // Server state after Remove, then after an instruction edit and a catch-up scan:
     // still suppressed, still no summary. The detail shows instructions and Summarize.
-    rerenderTabs(objective({ id: 'a', descriptionSuppressed: true, descriptionRevision: 4 }));
+    rerenderTabs(objective({ id: 'a', summarySuppressed: true, summaryRevision: 4 }));
     assert.ok(screen.getByText('Summary removed'));
-    assert.ok(screen.getByText(/Implement the description UI/));
+    assert.ok(screen.getByText(/Implement the summary UI/));
     assert.equal(screen.queryByTestId('objective-summary-prose'), null);
     rerenderTabs(
       objective({
         id: 'a',
         instructionText: `${LONG_INSTRUCTION} Edited.`,
-        descriptionSuppressed: true,
-        descriptionRevision: 4
+        summarySuppressed: true,
+        summaryRevision: 4
       })
     );
     assert.equal(screen.queryByTestId('objective-summary-prose'), null);
-    assert.equal(descriptionRequests().length, 0, 'nothing re-enables it automatically');
+    assert.equal(summaryRequests().length, 0, 'nothing re-enables it automatically');
 
     fireEvent.click(screen.getByRole('button', { name: 'Summarize instructions' }));
-    await waitFor(() => assert.deepEqual(descriptionRequests()[0]?.body, { mode: 'summarize' }));
+    await waitFor(() => assert.deepEqual(summaryRequests()[0]?.body, { mode: 'summarize' }));
   });
 
   it('attributes edits accurately: "Edited by you" only to the editor', async () => {
     const mine = setup(
-      withSummary('a', { descriptionSource: 'user', descriptionAuthorWorkspaceUserId: 'wu-me' })
+      withSummary('a', { summarySource: 'user', summaryAuthorWorkspaceUserId: 'wu-me' })
     );
     await waitFor(() => assert.ok(screen.getByText('Edited by you')));
     mine.unmount();
     const ana = setup(
-      withSummary('b', { descriptionSource: 'user', descriptionAuthorWorkspaceUserId: 'wu-ana' })
+      withSummary('b', { summarySource: 'user', summaryAuthorWorkspaceUserId: 'wu-ana' })
     );
     await waitFor(() => assert.ok(screen.getByText('Edited by Ana')));
     ana.unmount();
-    setup(withSummary('c', { descriptionSource: 'agent', descriptionAuthorAgent: null }));
+    setup(withSummary('c', { summarySource: 'agent', summaryAuthorAgent: null }));
     assert.ok(screen.getByText('Written by agent'));
   });
 });
 
 describe('editing through realtime results and launch', () => {
   it('a summary that arrives mid-edit keeps the instruction editor and selects Instructions', () => {
-    const a = objective({ id: 'a', descriptionStatus: 'pending' });
+    const a = objective({ id: 'a', summaryStatus: 'pending' });
     const { rerenderTabs } = setup(a);
     fireEvent.click(screen.getByRole('button', { name: 'Edit instructions' }));
     const editor = screen.getByRole('textbox', {
@@ -313,7 +313,7 @@ describe('editing through realtime results and launch', () => {
     fireEvent.focus(editor);
     fireEvent.change(editor, { target: { value: 'Still typing' } });
 
-    rerenderTabs(withSummary('a', { descriptionRevision: 1 }));
+    rerenderTabs(withSummary('a', { summaryRevision: 1 }));
 
     const after = screen.getByRole('textbox', { name: 'Objective instruction' });
     assert.equal((after as HTMLTextAreaElement).value, 'Still typing');
@@ -344,18 +344,18 @@ describe('editing through realtime results and launch', () => {
             status: 409,
             body: {
               error: 'The summary changed after you started editing it.',
-              code: 'description_conflict'
+              code: 'summary_conflict'
             }
           }
         : null;
-    setup(withSummary('a', { descriptionRevision: 3 }));
+    setup(withSummary('a', { summaryRevision: 3 }));
     fireEvent.click(screen.getByRole('button', { name: 'Edit summary' }));
     fireEvent.change(summaryEditor(), { target: { value: 'Mine.' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save summary' }));
     await waitFor(() => assert.ok(screen.getByText(/changed while you were editing/)));
     assert.deepEqual(requests.find(r => r.method === 'PATCH')!.body, {
-      description: 'Mine.',
-      expectedDescriptionRevision: 3
+      summary: 'Mine.',
+      expectedSummaryRevision: 3
     });
     assert.equal(summaryEditor().value, 'Mine.');
   });
@@ -393,7 +393,7 @@ describe('executed objectives', () => {
         completedAt: '2026-11-14T11:00:00.000Z'
       })
     );
-    assert.ok(screen.getByText(/Implement the description UI/));
+    assert.ok(screen.getByText(/Implement the summary UI/));
     assert.equal(screen.queryByRole('tab', { name: 'Summary' }), null);
     assert.ok(screen.getByRole('button', { name: 'Summarize instructions' }));
   });

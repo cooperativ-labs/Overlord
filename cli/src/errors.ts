@@ -172,18 +172,17 @@ export function isExecutionRequestAlreadyLinkedError(error: unknown): boolean {
 export function formatExecutionRequestAlreadyLinkedDiagnostic(): string {
   return [
     'Attach was rejected because this execution request is already linked to another mission session (`execution_request_already_linked`).',
-    'This is a stale mission-session binding, not a user authentication failure. Do not run `ovld auth login` or `ovld auth repair`.',
-    'Recovery: retry `ovld protocol attach` without `--execution-request-id` (unset OVERLORD_EXECUTION_REQUEST_ID). The existing session remains bound to the request; a new attach can continue the objective without relinking it.'
+    'Use the existing key if that protocol session is still active. For a completed objective, wait for an explicit follow-up request, then run `ovld protocol resume-follow-up --mission-id <mission-id> --objective-id <objective-id>`.'
   ].join('\n');
 }
 
 export function formatCliError(error: unknown): string {
-  if (isExecutionRequestAlreadyLinkedError(error)) {
-    return redactSecrets(formatExecutionRequestAlreadyLinkedDiagnostic());
-  }
-
   if (error instanceof CliError) {
     return redactSecrets(error.message);
+  }
+
+  if (isExecutionRequestAlreadyLinkedError(error)) {
+    return redactSecrets(formatExecutionRequestAlreadyLinkedDiagnostic());
   }
 
   if (error instanceof Error) {

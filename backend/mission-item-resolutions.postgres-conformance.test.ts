@@ -54,7 +54,7 @@ for (const adapter of conformanceAdapters()) {
         const prompted = await protocolPrompt({
           ctx,
           projectId: project.id,
-          objectives: [{ objective: 'Backfill items' }],
+          objectives: [{ instructions: 'Backfill items' }],
           agentIdentifier: 'codex'
         });
         const { deliveryId } = await deliverSession({

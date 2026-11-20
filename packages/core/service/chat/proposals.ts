@@ -529,7 +529,7 @@ export class ChatProposals extends ChatStore {
           createdFromChatThreadId: p.thread_id,
           objectives: m.objectives.map(o => ({
             title: o.title,
-            objective: [
+            instructions: [
               o.objective,
               ...(o.acceptanceCriteria.length
                 ? ['', 'Acceptance criteria:', ...o.acceptanceCriteria.map(c => `- ${c}`)]

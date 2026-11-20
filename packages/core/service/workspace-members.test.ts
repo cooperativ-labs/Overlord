@@ -110,7 +110,7 @@ describe('resolveAgentMissionAssignee / protocolCreate assignment', () => {
     const created = await protocolCreate({
       ctx: { ...ctx, allowedProjectIds: [project.id] },
       projectId: project.id,
-      objectives: [{ objective: 'Import feedback' }]
+      objectives: [{ instructions: 'Import feedback' }]
     });
     const row = await db.get<{ assigned_workspace_user_id: string | null }>(
       `SELECT assigned_workspace_user_id FROM missions WHERE id = ?`,
@@ -127,7 +127,7 @@ describe('resolveAgentMissionAssignee / protocolCreate assignment', () => {
     const { mission } = await protocolCreate({
       ctx,
       projectId: project.id,
-      objectives: [{ objective: 'Land on my plate' }]
+      objectives: [{ instructions: 'Land on my plate' }]
     });
 
     const row = (await db.get(`SELECT assigned_workspace_user_id FROM missions WHERE id = ?`, [
@@ -155,7 +155,7 @@ describe('resolveAgentMissionAssignee / protocolCreate assignment', () => {
     const { mission } = await protocolCreate({
       ctx,
       projectId: project.id,
-      objectives: [{ objective: 'For alex' }],
+      objectives: [{ instructions: 'For alex' }],
       assignedTo: 'alex'
     });
 
@@ -176,7 +176,7 @@ describe('resolveAgentMissionAssignee / protocolCreate assignment', () => {
         protocolCreate({
           ctx,
           projectId: project.id,
-          objectives: [{ objective: 'Orphaned work' }],
+          objectives: [{ instructions: 'Orphaned work' }],
           assignedTo: 'missing-person'
         }),
       (err: unknown) =>
@@ -203,7 +203,7 @@ describe('resolveAgentMissionAssignee / protocolCreate assignment', () => {
     const parent = await createMissionWithObjectives({
       ctx,
       projectId: project.id,
-      objectives: [{ objective: 'Parent work' }],
+      objectives: [{ instructions: 'Parent work' }],
       assignedWorkspaceUserId: parentAssigneeId
     });
     const attached = await attachSession({
@@ -223,7 +223,7 @@ describe('resolveAgentMissionAssignee / protocolCreate assignment', () => {
     const { mission } = await protocolCreate({
       ctx: childCtx,
       projectId: project.id,
-      objectives: [{ objective: 'Follow-up for the same person' }]
+      objectives: [{ instructions: 'Follow-up for the same person' }]
     });
 
     const row = (await db.get(`SELECT assigned_workspace_user_id FROM missions WHERE id = ?`, [
@@ -250,7 +250,7 @@ describe('resolveAgentMissionAssignee / protocolCreate assignment', () => {
     const parent = await createMissionWithObjectives({
       ctx: { ...ctx, actorWorkspaceUserId: creatorId },
       projectId: project.id,
-      objectives: [{ objective: 'Unassigned parent' }],
+      objectives: [{ instructions: 'Unassigned parent' }],
       assignedWorkspaceUserId: null
     });
     const attached = await attachSession({

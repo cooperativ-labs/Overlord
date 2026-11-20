@@ -109,9 +109,13 @@ export const OBJECTIVE_RESOURCE_REPAIR_HINT =
 export function firstObjectiveCreatePayload(
   objective: string,
   resourceKey?: string | null
-): { objectives: Array<{ objective: string; resourceKey: string }> } | { firstObjective: string } {
+):
+  | { objectives: Array<{ instructions: string; resourceKey: string }> }
+  | { firstObjective: string } {
   const key = resourceKey?.trim();
-  return key ? { objectives: [{ objective, resourceKey: key }] } : { firstObjective: objective };
+  return key
+    ? { objectives: [{ instructions: objective, resourceKey: key }] }
+    : { firstObjective: objective };
 }
 
 /**

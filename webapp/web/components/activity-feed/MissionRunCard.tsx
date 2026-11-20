@@ -148,7 +148,7 @@ export function MissionRunCard({
               way the mission feed does rather than as tag soup. */}
           {/* Falls back to the objective's human-facing summary, then its instructions (coo:1275). */}
           {(item.latestEventSummary && formatAgentHarnessText(item.latestEventSummary)) ||
-            item.descriptionPreview ||
+            item.summaryPreview ||
             item.instructionPreview}
         </p>
 

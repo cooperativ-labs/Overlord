@@ -43,8 +43,8 @@ async function createMission(objectivesJson: unknown[]): Promise<CreatedMission>
 
 test('create assigns the Manual executor and folds the human alias onto manual', async () => {
   const created = await createMission([
-    { objective: 'Call the vendor', agent: 'manual' },
-    { objective: 'Sign the contract', agent: 'Human' }
+    { instructions: 'Call the vendor', agent: 'manual' },
+    { instructions: 'Sign the contract', agent: 'Human' }
   ]);
   assert.deepEqual(
     created.objectives.map(objective => objective.assignedAgent),
@@ -54,14 +54,14 @@ test('create assigns the Manual executor and folds the human alias onto manual',
 
 test('create rejects a model on a Manual objective', async () => {
   await assert.rejects(
-    createMission([{ objective: 'Review in person', agent: 'human', model: 'opus' }]),
+    createMission([{ instructions: 'Review in person', agent: 'human', model: 'opus' }]),
     (error: unknown) => error instanceof Error && /takes no model/.test(error.message)
   );
 });
 
 test('update-objective reassigns between an agent and Manual', async () => {
   const created = await createMission([
-    { objective: 'Start with an agent', agent: 'codex', model: 'gpt-5.6' }
+    { instructions: 'Start with an agent', agent: 'codex', model: 'gpt-5.6' }
   ]);
   const objective = created.objectives[0];
   assert.ok(objective);
@@ -86,7 +86,7 @@ test('update-objective reassigns between an agent and Manual', async () => {
 });
 
 test('update-objective validates the assignment flags', async () => {
-  const created = await createMission([{ objective: 'Validate flags' }]);
+  const created = await createMission([{ instructions: 'Validate flags' }]);
   const objectiveId = created.objectives[0]?.id;
   assert.ok(objectiveId);
 
@@ -107,7 +107,7 @@ test('update-objective validates the assignment flags', async () => {
 });
 
 test('launch-objective refuses the Manual executor', async () => {
-  const created = await createMission([{ objective: 'Done by hand', agent: 'manual' }]);
+  const created = await createMission([{ instructions: 'Done by hand', agent: 'manual' }]);
   const objective = created.objectives[0];
   assert.ok(objective);
 

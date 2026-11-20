@@ -1015,18 +1015,18 @@ One ordered agent pass inside a mission.
 | `title_source`                 | text         | no       | Owner of `title` (ADR 0057): `generated` (system-owned; automation may replace it), `agent`, or `user` (authored; never replaced automatically). Null means provenance is not known (every row created before the column) and is treated as owned. Clearing a title sets `generated`. |
 | `title_generation`             | integer      | yes      | Default 0. Ownership token for generated titles: increments on every title edit and every instruction change, so a title generated for an earlier token never publishes. |
 | `title_status`                 | text         | no       | `pending` while a model-written title is wanted for `title_generation` (system-owned title, instructions longer than 100 characters; ADR 0058); `failed` when generation failed and the local title stays; null otherwise, including when no provider is configured. |
-| `description`                  | text         | no       | Human-facing summary of the instructions (presentation only, at most 4000 characters; one to three prose paragraphs when generated). Never part of the launch payload or of any execution context. Null shows the instructions instead. |
-| `description_source`           | text         | no       | `generated`, `agent` or `user`; null exactly when `description` is null. |
-| `description_instruction_hash` | text         | no       | SHA-256 hex of the trimmed instruction text the description was written from. A description whose hash differs from the current instructions is stale. |
-| `description_author_workspace_user_id` | Id   | no       | Workspace member who wrote an authored description (for an agent, the person behind the token). Soft reference with no foreign key, like `created_by_session_id`; null for generated text. |
-| `description_author_agent`     | text         | no       | Connector/agent identifier for an agent-authored description (open vocabulary). |
-| `description_updated_at`       | TimestampUTC | no       | Last change to the description text, source or removal state. Presentation writes do not move `updated_at`, which orders activity. |
-| `description_revision`         | integer      | yes      | Default 0. Optimistic-concurrency token for description edits; increments whenever the text, source or removal state changes. |
-| `description_suppressed`       | Bool         | yes      | Default `false`. Set by Remove. While true no description is generated or accepted from an agent; instruction edits, catch-up, reorder, reopen and retries leave it set. Only a person's explicit Summarize or Regenerate clears it. |
-| `description_generation`       | integer      | yes      | Default 0. Ownership token for generated descriptions: increments on every instruction change, authored edit, removal and new request. A result publishes only for the current token and instruction hash. |
-| `description_status`           | text         | no       | `pending` (durable intent: a description is wanted for `description_generation`) or `failed`; null when nothing is outstanding. |
-| `description_request_kind`     | text         | no       | `automatic` (authorship/staleness policy) or `explicit` (Summarize, Regenerate, Retry); set while `description_status` is not null. |
-| `description_failure_code`     | text         | no       | Stable failure code when `description_status = 'failed'`: `provider_unavailable` (no provider configured), `provider_error` (the last retry failed), `invalid_output` (no schema-valid result), `unfaithful_output` (the result failed the fidelity checks, or the instructions exceed the bounded model input). Raw provider messages are never stored. |
+| `summary`                      | text         | no       | Human-facing summary of the instructions (presentation only, at most 4000 characters; one to three prose paragraphs when generated). Never part of the launch payload or of any execution context. Null shows the instructions instead. |
+| `summary_source`           | text         | no       | `generated`, `agent` or `user`; null exactly when `summary` is null. |
+| `summary_instruction_hash` | text         | no       | SHA-256 hex of the trimmed instruction text the summary was written from. A summary whose hash differs from the current instructions is stale. |
+| `summary_author_workspace_user_id` | Id   | no       | Workspace member who wrote an authored summary (for an agent, the person behind the token). Soft reference with no foreign key, like `created_by_session_id`; null for generated text. |
+| `summary_author_agent`     | text         | no       | Connector/agent identifier for an agent-authored summary (open vocabulary). |
+| `summary_updated_at`       | TimestampUTC | no       | Last change to the summary text, source or removal state. Presentation writes do not move `updated_at`, which orders activity. |
+| `summary_revision`         | integer      | yes      | Default 0. Optimistic-concurrency token for summary edits; increments whenever the text, source or removal state changes. |
+| `summary_suppressed`       | Bool         | yes      | Default `false`. Set by Remove. While true no summary is generated or accepted from an agent; instruction edits, catch-up, reorder, reopen and retries leave it set. Only a person's explicit Summarize or Regenerate clears it. |
+| `summary_generation`       | integer      | yes      | Default 0. Ownership token for generated summaries: increments on every instruction change, authored edit, removal and new request. A result publishes only for the current token and instruction hash. |
+| `summary_status`           | text         | no       | `pending` (durable intent: a summary is wanted for `summary_generation`) or `failed`; null when nothing is outstanding. |
+| `summary_request_kind`     | text         | no       | `automatic` (authorship/staleness policy) or `explicit` (Summarize, Regenerate, Retry); set while `summary_status` is not null. |
+| `summary_failure_code`     | text         | no       | Stable failure code when `summary_status = 'failed'`: `provider_unavailable` (no provider configured), `provider_error` (the last retry failed), `invalid_output` (no schema-valid result), `unfaithful_output` (the result failed the fidelity checks, or the instructions exceed the bounded model input). Raw provider messages are never stored. |
 | `instruction_author_kind`      | text         | no       | Class of actor that wrote the *current* instruction text: `human`, `agent` or `automation` (same closed vocabulary as `created_by_kind`). Updated by every instruction write; null for blank instructions and when not known. Unlike `created_by_kind`, it follows edits. |
 | `created_at`                   | TimestampUTC | yes      |                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | `updated_at`                   | TimestampUTC | yes      |                                                                                                                                                                                                                                                                                                                                                                                                                                             |
@@ -1050,7 +1050,7 @@ bindings must remain portable across execution targets.
 
 #### Objective brief state (ADR 0057)
 
-Title and description are presentation for people; `instruction_text` remains
+Title and summary are presentation for people; `instruction_text` remains
 the only text an executing agent receives. The rules below are implemented once
 in the core service (`packages/core/service/objective-brief.ts`) and apply to
 every surface (REST, protocol, hosted MCP, in-app chat, automation).
@@ -1061,56 +1061,56 @@ every surface (REST, protocol, hosted MCP, in-app chat, automation).
   Overlord-owned writes are `automation`. Creation provenance (`created_by_*`)
   is never rewritten.
 - **Automatic summaries.** A write that leaves agent-written instructions of at
-  least 280 trimmed characters with no description and no suppression records
-  `description_status = 'pending'` with `description_request_kind = 'automatic'`.
+  least 280 trimmed characters with no summary and no suppression records
+  `summary_status = 'pending'` with `summary_request_kind = 'automatic'`.
   Human and automation writes never request one; blank or shorter instructions
   never do.
-- **Instruction change without an authored description** (`description_generation`
+- **Instruction change without an authored summary** (`summary_generation`
   always increments): suppressed → no request; `generated`/`agent` text →
   regenerate while eligible, otherwise clear it; `user` text → keep it (now
   stale); no text → request only under the automatic rule or while an explicit
   request is outstanding.
-- **Authored description values** on create/update writes: omitted leaves the
-  description alone; `null` or blank text is Remove; other text is stored with
+- **Authored summary values** on create/update writes: omitted leaves the
+  summary alone; `null` or blank text is Remove; other text is stored with
   source `user` (person) or `agent`. While suppressed, agent text is not stored
-  and the write returns a `description_suppressed` warning; a person's text is
+  and the write returns a `summary_suppressed` warning; a person's text is
   stored and suppression stays set.
-- **Remove** clears the text, sets `description_suppressed` and cancels any
+- **Remove** clears the text, sets `summary_suppressed` and cancels any
   outstanding request. **Summarize/Regenerate** by a person clears suppression
   and records an explicit pending request; an agent request while suppressed is
-  refused with `description_suppressed`. **Retry** re-requests only a `failed`
+  refused with `summary_suppressed`. **Retry** re-requests only a `failed`
   generation. A request that is already pending is deduplicated.
-- **Publication.** A generated description publishes only when the row is live,
-  not suppressed, `description_status = 'pending'`, and both
-  `description_generation` and the instruction hash equal the values the
+- **Publication.** A generated summary publishes only when the row is live,
+  not suppressed, `summary_status = 'pending'`, and both
+  `summary_generation` and the instruction hash equal the values the
   generator read. A generated title publishes only while
   `title_source = 'generated'` and `title_generation` matches. Reorder, launch
   and reopen never invalidate a result; deleted objectives accept none.
-- **Lifecycle independence.** Description edits are allowed in every objective
+- **Lifecycle independence.** Summary edits are allowed in every objective
   state, including after launch and completion. They never change
   `instruction_text`, `state`, lifecycle timestamps, Run Queue membership,
   execution evidence or `updated_at`; they increment `revision` and append one
-  `entity_changes` row whose changed fields include `description`.
+  `entity_changes` row whose changed fields include `summary`.
   Instruction-edit restrictions are unchanged.
 - **Catch-up** selects only live `draft`/`submitted` rows with
-  `instruction_author_kind = 'agent'`, eligible length, no description, no
+  `instruction_author_kind = 'agent'`, eligible length, no summary, no
   outstanding or failed request and no suppression; unknown authorship never
   qualifies.
 - **Worker (ADR 0058).** Every write that leaves `title_status` or
-  `description_status` pending enqueues `overlord.objective.brief.compose.v1`
+  `summary_status` pending enqueues `overlord.objective.brief.compose.v1`
   in the same transaction. Titles: a system-owned title whose instructions are
   longer than 100 characters is requested as `title_status = 'pending'`;
   shorter instructions get the local title in the same statement (create,
   instruction edit, clearing an authored title). The worker makes one provider
   call for the fields still wanted, publishes each under its own guard above,
   re-reads the row and tries again while its result is stale, and records
-  `title_status = 'failed'` or a `description_failure_code` when no valid
+  `title_status = 'failed'` or a `summary_failure_code` when no valid
   result exists. Without a provider the local title stays (`title_status`
-  null) and the description records `provider_unavailable`. A bounded sweep
+  null) and the summary records `provider_unavailable`. A bounded sweep
   marks catch-up rows and re-enqueues pending rows that have no queued or
   running job. Generated text moves `revision` and appends one
   `entity_changes` row; it never moves `updated_at`.
-- **Generated description shape.** One to three plain-prose paragraphs: the
+- **Generated summary shape.** One to three plain-prose paragraphs: the
   goal sentence opens the first paragraph, each `Decision needed:` sentence
   follows it, and the done-when sentence closes the last paragraph; when the
   instructions state no completion test, the closing sentence is "The
@@ -1120,17 +1120,30 @@ every surface (REST, protocol, hosted MCP, in-app chat, automation).
   instructions. 120 words is a target, not a limit.
 
 - **Surfaces (ADR 0059).** `ObjectiveDto` projects these columns for people
-  (`titleSource`, `titleStatus`, `description`, `descriptionSource`,
-  `descriptionStale`, `descriptionStatus`, `descriptionFailureCode`,
-  `descriptionSuppressed`, `descriptionEligible`, `descriptionRevision`,
-  `descriptionUpdatedAt`, `descriptionAuthorWorkspaceUserId`,
-  `descriptionAuthorAgent`); `ObjectiveSummary` and launch prompts never do.
+  (`titleSource`, `titleStatus`, `summary`, `summarySource`,
+  `summaryStale`, `summaryStatus`, `summaryFailureCode`,
+  `summarySuppressed`, `summaryEligible`, `summaryRevision`,
+  `summaryUpdatedAt`, `summaryAuthorWorkspaceUserId`,
+  `summaryAuthorAgent`); `ObjectiveSummary` and launch prompts never do.
   REST writers are people and may edit, remove and request summaries in every
-  state. Protocol and hosted-MCP writers are agents: description writes and
+  state. Protocol and hosted-MCP writers are agents: summary writes and
   summary requests only on `draft` objectives, never clearing suppression.
 
+- **Instructions/summary swap guard (ADR 0083).** Every create (REST,
+  protocol, hosted MCP) and every agent summary write compares the summary
+  with the instructions the row will have. The guard is advisory: both texts
+  are always stored as written. A summary at least 3 times as long as the
+  instructions and at least 400 characters ("look swapped"), or more than 1.5
+  times as long (and at least 240 characters) or with Markdown headings, two or
+  more numbered steps or a `Done when:` label while the instructions are
+  shorter than 400 characters ("may be swapped"), makes the protocol or MCP
+  response carry an `objective_fields_swapped` warning. REST returns no
+  warning; a person's REST `PATCH` is not checked.
+
 The migration `20261114180000_objective_brief_state` adds these columns to both
-dialects. Existing rows keep `title_source` null and no description;
+dialects, named `description*` at the time; `20261120090000_objective_summary_rename`
+renames them to `summary*` (ADR 0083) with no data, default or constraint
+change. Existing rows keep `title_source` null and no summary;
 `instruction_author_kind` is backfilled from `created_by_kind` only for live
 rows with non-blank instructions whose change feed records no instruction edit.
 
@@ -2087,7 +2100,7 @@ cutover migration cancelled remaining jobs while keeping their rows, and the age
 (see `mission_summaries`) drops any new one. Core type
 `overlord.objective.brief.compose.v1` (ADR 0058) carries `{ "objectiveId": "<id>" }` only; it is
 enqueued in the transaction of each write that leaves `objectives.title_status` or
-`objectives.description_status` pending, reused while queued (automatic requests push `run_after`
+`objectives.summary_status` pending, reused while queued (automatic requests push `run_after`
 back by 5 s, never beyond 60 s after queueing; explicit requests pull it to now), and completed
 under the objective row lock, which queues a successor while brief work is still pending, so the
 intent on the row is never lost. The core
@@ -3278,7 +3291,7 @@ Closed values:
 - Default status mapping: `draft -> draft`, `next-up -> next`, `execute -> execute`, `review -> review`, `complete -> complete`, `blocked -> blocked`, `cancelled -> cancelled`.
 - `objectives.state`: `draft`, `submitted`, `launching`, `executing`, `pending_delivery`, `complete`.
 - `user_tokens.scope`: `full`, `mission_lifecycle`, `project_automation`. A token-created mission keeps `created_by_kind` as the creating actor's class; the token itself is recorded on `missions.created_by_token_id` / `created_by_token_label`.
-- `objectives.title_source`, `objectives.description_source`: `generated`, `agent`, `user` (null: provenance not known / no description). `objectives.title_status`, `objectives.description_status`: `pending`, `failed`. `objectives.description_request_kind`: `automatic`, `explicit`. `objectives.instruction_author_kind`: `human`, `agent`, `automation`. `objectives.description_failure_code`: `provider_unavailable`, `provider_error`, `invalid_output`, `unfaithful_output` (ADR 0057).
+- `objectives.title_source`, `objectives.summary_source`: `generated`, `agent`, `user` (null: provenance not known / no description). `objectives.title_status`, `objectives.summary_status`: `pending`, `failed`. `objectives.summary_request_kind`: `automatic`, `explicit`. `objectives.instruction_author_kind`: `human`, `agent`, `automation`. `objectives.summary_failure_code`: `provider_unavailable`, `provider_error`, `invalid_output`, `unfaithful_output` (ADR 0057).
 - `mission_items.kind`: `risk`, `human_action`, `suggestion`. `mission_items.status`: `open`, `done`, `dismissed`, `superseded`. `mission_items.resolved_by_kind`: `person`, `agent`. `mission_items.outcome`: `mission_created`, `objective_added` (ADR 0060).
 - `mission_summaries.status`: `pending`, `composed`, `fallback`. `mission_summaries.generated_by`: `deterministic`, `gemini`, `agent` (`agent` added in v173, ADR 0060).
 - `missions.created_by_kind`, `objectives.created_by_kind`: `human`, `agent`, `automation`. `human` is the default and covers every pre-provenance row; `agent` is the protocol surface (CLI-forwarded agent commands, connector harness, MCP); `automation` is Overlord itself creating a row with no actor in the loop, such as scheduled-mission regeneration. The companion `created_by_agent` identifier stays **open** (see connector identifiers below).

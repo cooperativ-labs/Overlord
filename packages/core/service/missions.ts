@@ -28,7 +28,7 @@ import {
   toSearchResponseV3
 } from './mission-search.js';
 import {
-  normalizeObjectiveDescriptionInput,
+  normalizeObjectiveSummaryInput,
   objectiveBriefActorFromContext,
   objectiveBriefPatchAssignments,
   planObjectiveBriefForCreate
@@ -395,17 +395,17 @@ export async function insertObjective({
   reasoningEffort,
   resourceKey = null,
   launchConfigJson = null,
-  description
+  summary
 }: {
   ctx: ServiceContext;
   missionId: string;
   instructionText: string;
   title?: string | null;
   /**
-   * Authored human-facing description. Omitted leaves it to the automatic
+   * Authored human-facing summary. Omitted leaves it to the automatic
    * summary policy; `null` or blank removes it and suppresses generation.
    */
-  description?: string | null;
+  summary?: string | null;
   state?: string;
   autoAdvance?: boolean;
   assignedAgent?: string | null;
@@ -420,6 +420,10 @@ export async function insertObjective({
   launchConfigJson?: string | null;
 }): Promise<ObjectiveSummary> {
   const instruction = instructionText.trim();
+  // Validate the summary before anything is locked or written. A possible
+  // instructions/summary swap is a warning the protocol layer returns
+  // (coo:1321, ADR 0083); it never refuses the write.
+  const summaryInput = normalizeObjectiveSummaryInput(summary);
 
   const mission = await resolveMissionId(ctx, missionId);
   const normalizedResourceKey = resourceKey?.trim() || null;
@@ -481,11 +485,11 @@ export async function insertObjective({
     : launchSelection.reasoningEffort;
   const origin = resolveOrigin(ctx);
   const displayKey = await allocateObjectiveDisplayKey({ db: ctx.db, missionId: mission.id });
-  // Title/description ownership and current-instruction authorship (ADR 0057).
+  // Title/summary ownership and current-instruction authorship (ADR 0057).
   const brief = planObjectiveBriefForCreate({
     instructionText: instruction,
     titleProvided: Boolean(title?.trim()),
-    description: normalizeObjectiveDescriptionInput(description),
+    summary: summaryInput,
     actor: objectiveBriefActorFromContext(ctx),
     now
   });
@@ -538,7 +542,7 @@ export async function insertObjective({
 
   // Brief intent and its job commit together (ADR 0058): every create surface
   // (REST, protocol, hosted MCP, in-app chat, inbox conversion) passes here.
-  if (brief.titleRequested || brief.descriptionRequested) {
+  if (brief.titleRequested || brief.summaryRequested) {
     await enqueueObjectiveBriefComposeJob({
       db: ctx.db,
       workspaceId: ctx.workspace.id,
@@ -599,10 +603,10 @@ export async function createMissionWithObjectives({
   ctx: ServiceContext;
   projectId: string;
   objectives: Array<{
-    objective: string;
+    instructions: string;
     title?: string | null;
-    /** Authored description; see `insertObjective`. */
-    description?: string | null;
+    /** Authored summary; see `insertObjective`. */
+    summary?: string | null;
     autoAdvance?: boolean;
     /** Explicit launch selection for this objective; omitted keeps project defaulting. */
     agent?: string | null;
@@ -630,7 +634,7 @@ export async function createMissionWithObjectives({
   }
 
   const resolvedProjectId = await resolveProjectId(ctx, projectId);
-  const firstInstruction = objectives[0]?.objective.trim() ?? '';
+  const firstInstruction = objectives[0]?.instructions.trim() ?? '';
   if (objectives.length > 0 && !firstInstruction) {
     throw new ServiceError('First objective instruction is required', 'validation_error');
   }
@@ -705,7 +709,7 @@ export async function createMissionWithObjectives({
 
     for (let index = 0; index < objectives.length; index++) {
       const item = objectives[index]!;
-      const instruction = item.objective.trim();
+      const instruction = item.instructions.trim();
       if (!instruction) {
         throw new ServiceError(
           `Objective ${index + 1} instruction is required`,
@@ -719,7 +723,7 @@ export async function createMissionWithObjectives({
           missionId,
           instructionText: instruction,
           ...(item.title !== undefined ? { title: item.title } : {}),
-          ...(item.description !== undefined ? { description: item.description } : {}),
+          ...(item.summary !== undefined ? { summary: item.summary } : {}),
           state: objectiveState,
           autoAdvance: item.autoAdvance ?? false,
           ...(item.agent !== undefined ? { assignedAgent: item.agent } : {}),
@@ -1036,10 +1040,10 @@ export async function addObjectivesToMission({
   ctx: ServiceContext;
   missionId: string;
   objectives: Array<{
-    objective: string;
+    instructions: string;
     title?: string | null;
-    /** Authored description; see `insertObjective`. */
-    description?: string | null;
+    /** Authored summary; see `insertObjective`. */
+    summary?: string | null;
     autoAdvance?: boolean;
     agent?: string | null;
     model?: string | null;
@@ -1060,9 +1064,9 @@ export async function addObjectivesToMission({
         await insertObjective({
           ctx: txCtx,
           missionId: resolved.id,
-          instructionText: item.objective,
+          instructionText: item.instructions,
           ...(item.title !== undefined ? { title: item.title } : {}),
-          ...(item.description !== undefined ? { description: item.description } : {}),
+          ...(item.summary !== undefined ? { summary: item.summary } : {}),
           autoAdvance: item.autoAdvance ?? false,
           ...(item.agent !== undefined ? { assignedAgent: item.agent } : {}),
           ...(item.model !== undefined ? { model: item.model } : {}),

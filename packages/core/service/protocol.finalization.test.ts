@@ -26,7 +26,7 @@ async function attachedMission(ctx: ServiceContext, name: string, objectiveCount
     ctx,
     projectId: project.id,
     objectives: Array.from({ length: objectiveCount }, (_, index) => ({
-      objective: `Work ${index + 1} for ${name}`
+      instructions: `Work ${index + 1} for ${name}`
     }))
   });
   const objectiveId = objectives[0]!.id;

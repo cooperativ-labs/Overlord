@@ -30,7 +30,7 @@ test('execution request queue rejects when no primary resource is linked', async
   const { mission, objectives } = await createMissionWithObjectives({
     ctx,
     projectId: project.id,
-    objectives: [{ objective: 'Should not queue without a primary resource' }]
+    objectives: [{ instructions: 'Should not queue without a primary resource' }]
   });
 
   await assert.rejects(
@@ -68,7 +68,7 @@ test('execution request queue rejects when the primary resource path is missing'
   const { mission, objectives } = await createMissionWithObjectives({
     ctx,
     projectId: project.id,
-    objectives: [{ objective: 'Should not queue with a missing primary path' }]
+    objectives: [{ instructions: 'Should not queue with a missing primary path' }]
   });
 
   await assert.rejects(
@@ -105,7 +105,7 @@ test('claiming a queued request fails when the primary resource is missing', asy
   const { mission, objectives } = await createMissionWithObjectives({
     ctx,
     projectId: project.id,
-    objectives: [{ objective: 'Queued before the primary path disappeared' }]
+    objectives: [{ instructions: 'Queued before the primary path disappeared' }]
   });
 
   const requestId = newId();
@@ -144,7 +144,7 @@ test('execution request queue can create, claim, launch, and clear active reques
   const { mission, objectives } = await createMissionWithObjectives({
     ctx,
     projectId: project.id,
-    objectives: [{ objective: 'Run the next objective' }]
+    objectives: [{ instructions: 'Run the next objective' }]
   });
 
   const request = await createExecutionRequest({
@@ -226,7 +226,7 @@ test('execution request state machine rejects illegal launch transitions', async
   const { mission, objectives } = await createMissionWithObjectives({
     ctx,
     projectId: project.id,
-    objectives: [{ objective: 'Reject illegal transition' }]
+    objectives: [{ instructions: 'Reject illegal transition' }]
   });
 
   const request = await createExecutionRequest({
@@ -261,7 +261,7 @@ test('stale claims expire with event and change records', async () => {
   const { mission, objectives } = await createMissionWithObjectives({
     ctx,
     projectId: project.id,
-    objectives: [{ objective: 'Expire stale claim' }]
+    objectives: [{ instructions: 'Expire stale claim' }]
   });
   const request = await createExecutionRequest({
     ctx,
@@ -302,7 +302,7 @@ test('launched requests expire when no agent attaches before the deadline', asyn
   const { mission, objectives } = await createMissionWithObjectives({
     ctx,
     projectId: project.id,
-    objectives: [{ objective: 'Expire launched-but-unattached' }]
+    objectives: [{ instructions: 'Expire launched-but-unattached' }]
   });
   const request = await createExecutionRequest({
     ctx,
@@ -347,7 +347,7 @@ test('a launching request whose runner never reported launched expires', async (
   const { mission, objectives } = await createMissionWithObjectives({
     ctx,
     projectId: project.id,
-    objectives: [{ objective: 'Expire a stalled launching request' }]
+    objectives: [{ instructions: 'Expire a stalled launching request' }]
   });
   const request = await createExecutionRequest({
     ctx,
@@ -399,7 +399,7 @@ test('marking launched tolerates a request expired underneath a very slow launch
   const { mission, objectives } = await createMissionWithObjectives({
     ctx,
     projectId: project.id,
-    objectives: [{ objective: 'Tolerate launched-after-expiry' }]
+    objectives: [{ instructions: 'Tolerate launched-after-expiry' }]
   });
   const request = await createExecutionRequest({
     ctx,
@@ -458,7 +458,7 @@ test('a launched request linked to a session is not expired', async () => {
   const { mission, objectives } = await createMissionWithObjectives({
     ctx,
     projectId: project.id,
-    objectives: [{ objective: 'Linked launched request survives expiry' }]
+    objectives: [{ instructions: 'Linked launched request survives expiry' }]
   });
   const request = await createExecutionRequest({
     ctx,
@@ -506,7 +506,7 @@ test('attach links a launched execution request to the created session', async (
   const { mission, objectives } = await createMissionWithObjectives({
     ctx,
     projectId: project.id,
-    objectives: [{ objective: 'Attach should link request' }]
+    objectives: [{ instructions: 'Attach should link request' }]
   });
   const request = await createExecutionRequest({
     ctx,
@@ -548,7 +548,7 @@ test('attach still succeeds when the recovered execution request was already cle
   const { mission, objectives } = await createMissionWithObjectives({
     ctx,
     projectId: project.id,
-    objectives: [{ objective: 'Attach should survive a cleared request' }]
+    objectives: [{ instructions: 'Attach should survive a cleared request' }]
   });
   const request = await createExecutionRequest({
     ctx,
@@ -590,7 +590,7 @@ test('runner does not claim a queued request for a soft-deleted objective', asyn
   const { mission, objectives } = await createMissionWithObjectives({
     ctx,
     projectId: project.id,
-    objectives: [{ objective: 'Objective to be removed' }]
+    objectives: [{ instructions: 'Objective to be removed' }]
   });
 
   const request = await createExecutionRequest({
@@ -628,8 +628,8 @@ test('delivery schedules durable Run Queue dispatch instead of auto-advance inli
     ctx,
     projectId: project.id,
     objectives: [
-      { objective: 'First objective' },
-      { objective: 'Second objective', autoAdvance: true }
+      { instructions: 'First objective' },
+      { instructions: 'Second objective', autoAdvance: true }
     ]
   });
   // The first objective ran with an explicit agent/model (as a launch would
@@ -690,8 +690,8 @@ test('durable dispatch preserves the next objective explicit agent until worker 
     ctx,
     projectId: project.id,
     objectives: [
-      { objective: 'First objective' },
-      { objective: 'Second objective', autoAdvance: true }
+      { instructions: 'First objective' },
+      { instructions: 'Second objective', autoAdvance: true }
     ]
   });
   await ctx.db.run(
@@ -729,7 +729,7 @@ test('objective change review reports compact synchronized evidence without anno
   const { mission, objectives } = await createMissionWithObjectives({
     ctx,
     projectId: project.id,
-    objectives: [{ objective: 'Track changes' }]
+    objectives: [{ instructions: 'Track changes' }]
   });
   await ctx.db.run(`UPDATE objectives SET state = 'submitted' WHERE id = ?`, [objectives[0]?.id]);
   const attached = await attachSession({ ctx, missionId: mission.displayId });

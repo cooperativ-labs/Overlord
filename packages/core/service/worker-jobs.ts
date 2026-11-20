@@ -351,7 +351,7 @@ function addMs(iso: string, ms: number): string {
 /**
  * Enqueue the brief job for one objective. Call it inside the transaction of
  * the write that left brief work pending (`title_status` or
- * `description_status = 'pending'`), after that write: on Postgres the write
+ * `summary_status = 'pending'`), after that write: on Postgres the write
  * holds the objective row lock, which {@link completeObjectiveBriefComposeJob}
  * also takes, so a request made while a job runs either is seen by that job's
  * completion (which queues a successor) or finds no active job and queues one.
@@ -465,14 +465,14 @@ export async function completeObjectiveBriefComposeJob({
     const row = await tx.get<{
       workspace_id: string;
       title_status: string | null;
-      description_status: string | null;
+      summary_status: string | null;
     }>(
-      `SELECT workspace_id, title_status, description_status FROM objectives
+      `SELECT workspace_id, title_status, summary_status FROM objectives
         WHERE id = ? AND deleted_at IS NULL ${lockClause}`,
       [objectiveId]
     );
     await finishWorkerJob(tx, jobId, status, lastError, now);
-    if (!row || (row.title_status !== 'pending' && row.description_status !== 'pending')) {
+    if (!row || (row.title_status !== 'pending' && row.summary_status !== 'pending')) {
       return { successorJobId: null };
     }
     const successor = await enqueueObjectiveBriefComposeJob({

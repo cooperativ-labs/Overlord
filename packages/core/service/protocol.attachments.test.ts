@@ -20,7 +20,7 @@ async function missionWithAttachment(ctx: ServiceContext, name: string, filename
   const { mission, objectives } = await createMissionWithObjectives({
     ctx,
     projectId: project.id,
-    objectives: [{ objective: `Work for ${name}` }]
+    objectives: [{ instructions: `Work for ${name}` }]
   });
   const objective = objectives[0]!;
   await ctx.db.run(`UPDATE objectives SET state = 'submitted' WHERE id = ?`, [objective.id]);

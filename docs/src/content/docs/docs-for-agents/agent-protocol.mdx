@@ -645,7 +645,7 @@ existing mission for sequential steps toward the same goal:
 
 ```bash
 ovld protocol add-objectives --mission-id coo:312 \
-  --objectives-json '[{"objective":"Implement the API"},{"objective":"Add CLI docs"}]'
+  --objectives-json '[{"instructions":"Implement the API"},{"instructions":"Add CLI docs"}]'
 ```
 
 ### Assigning an agent to an objective
@@ -658,46 +658,58 @@ a mission and then append a second objective just to name one:
 
 ```bash
 ovld protocol create \
-  --objectives-json '[{"objective":"Implement the API","agent":"codex","model":"gpt-6.1-terra"}]'
+  --objectives-json '[{"instructions":"Implement the API","agent":"codex","model":"gpt-6.1-terra"}]'
 ```
 
 This is distinct from `--agent`, which records who created the mission (and, on
 `prompt`, which agent attaches to it).
 
-### Objective descriptions
+### Objective instructions and summary
 
-The objective text is the instruction for the executing agent: make it
-complete. The optional `description` is a summary for the person who decides
-whether to launch it, and it is never sent to the executing agent. Write one to
-three short prose paragraphs in Simplified Technical English style that open
-with the goal and close with the done-when sentence, about 120 words. You may
-omit it: Overlord writes one for long (280+ characters) agent-written
-objectives.
+An objective has two texts. Do not swap them. The **instructions**
+(`--objective-instructions`, item `"instructions"`) are the complete brief the
+executing agent receives: usually the long text. The optional **summary**
+(`--objective-summary`, item `"summary"`) is for the person who decides whether
+to launch it, and it is never sent to the executing agent: usually the short
+text. Write one to three short prose paragraphs in Simplified Technical English
+style that open with the goal and close with the done-when sentence, about 120
+words, with no headings or numbered steps. You may omit it: Overlord writes one
+for long (280+ characters) agent-written objectives.
+
+Overlord never refuses a create over this, but it warns when the texts look
+swapped: the response carries an `objective_fields_swapped` warning that names
+both fields when the summary is at least 3 times as long as its instructions
+(and 400+ characters), or more weakly when it is 1.5 times longer or has
+headings, numbered steps or a `Done when:` label over short instructions. Both
+texts are stored as written; fix a swap with `update-objective`. The old names `--objective`, `--objective-description` and item keys
+`objective` / `description` are refused with their replacement.
 
 ```bash
 ovld protocol add-objectives --mission-id coo:312 \
-  --objectives-json '[{"objective":"<complete instructions>","description":"Add retry to the sync worker. ... The work is done when the retry test passes."}]'
-ovld protocol update-objective --objective-id coo:312.k7xm --description-file - <<'EOF'
+  --objectives-json '[{"instructions":"<complete instructions>","summary":"Add retry to the sync worker. ... The work is done when the retry test passes."}]'
+ovld protocol update-objective --objective-id coo:312.k7xm --summary-file - <<'EOF'
 <summary>
 EOF
 ```
 
-- `create` / `prompt` take `--objective-description <text>` or
-  `--objective-description-file <path|->` with a single `--objective`; with
-  `--objectives-json`, set `"description"` per item.
-- `update-objective` takes `--description` / `--description-file` (empty
-  removes the summary) or `--description-request summarize|regenerate|retry`
-  (not combined with `--description`).
-- Agents may change descriptions or request summaries only on `draft`
-  objectives (400 `description_not_editable`). `retry` re-requests only a
-  failed generation (409 `description_not_failed`); instructions under 280
-  characters are not summarized (409 `description_not_eligible`).
+- `create` / `prompt` take `--objective-instructions <text>` (or
+  `--objective-instructions-file`) and `--objective-summary <text>` (or
+  `--objective-summary-file <path|->`); with `--objectives-json`, set
+  `"instructions"` and `"summary"` per item.
+- `update-objective` takes `--summary` / `--summary-file` (empty
+  removes the summary) or `--summary-request summarize|regenerate|retry`
+  (not combined with `--summary`).
+- Agents may change summaries or request them only on `draft`
+  objectives (400 `summary_not_editable`). `retry` re-requests only a
+  failed generation (409 `summary_not_failed`); instructions under 280
+  characters are not summarized (409 `summary_not_eligible`).
 - If a person removed the summary, your text is not stored (warning
-  `description_suppressed`) and summarize/regenerate are refused (409
-  `description_suppressed`). Do not work around it; only that person's
+  `summary_suppressed`) and summarize/regenerate are refused (409
+  `summary_suppressed`). Do not work around it; only that person's
   Summarize in the app turns summaries back on.
 - Responses carry advisory `warnings` (`{ code, message, rule?, excerpt?,
-  suggestion? }`, code `description_style` or `description_suppressed`): on
+  suggestion? }`, code `summary_style`, `summary_suppressed` or
+  `objective_fields_swapped`): on
   the matching created objective for `create` / `add-objectives`, top-level for
   `update-objective`. The text is stored as written.
 
@@ -726,7 +738,7 @@ EOF
 | `discuss-objective`              | Submit a draft objective for discussion (no session). `--objective-id` names which draft.         |
 | `create` / `prompt`              | Create a draft / create-and-attach a mission. The response returns the persisted mission and objectives so you can verify agent, model, resource, and queue/auto-advance settings. |
 | `add-objectives`                 | Append ordered objectives to a mission; returns each persisted objective's launch settings.        |
-| `update-objective`               | Turn auto-advance on or off, edit instruction text or the description (`--description`, `--description-request`), or reassign with `--objective-agent` (`manual`/`human` for a person). Requires `--objective-id`.|
+| `update-objective`               | Turn auto-advance on or off, edit instruction text or the summary (`--summary`, `--summary-request`), or reassign with `--objective-agent` (`manual`/`human` for a person). Requires `--objective-id`.|
 | `update`                         | Post progress and decisions; optionally record draft report evidence or declare uncaptured paths. |
 | `heartbeat`                      | Liveness ping, no feed event.                                                                     |
 | `ask`                            | Post a blocking question and stop.                                                                |

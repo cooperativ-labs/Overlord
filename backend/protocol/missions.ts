@@ -7,7 +7,8 @@ import { isManualAgentKey, normalizeAgentKey } from '../../packages/core/service
 import { parseMissionSearchOptions } from '../../packages/core/service/mission-search.ts';
 import {
   type ObjectiveBriefWarning,
-  objectiveDescriptionStyleWarnings
+  objectiveSummaryPlacementWarnings,
+  objectiveSummaryStyleWarnings
 } from '../../packages/core/service/objective-brief.ts';
 import {
   addObjectivesToMission,
@@ -31,7 +32,7 @@ import {
   deleteObjectives,
   listMissionDeliveries,
   reorderObjectives,
-  requestObjectiveDescription,
+  requestObjectiveSummary,
   searchMissionReferences,
   searchMissionsAcrossWorkspacesV2,
   searchMissionsAcrossWorkspacesV3,
@@ -161,33 +162,34 @@ async function withAgentOrigin({
 
 /**
  * Agent protocol surfaces may edit instruction text only on draft objectives.
- * Agent description edits and summary requests stay inside the same planning
- * scope (ADR 0059); people edit descriptions in any state over REST.
+ * Agent summary edits and summary requests stay inside the same planning
+ * scope (ADR 0059); people edit summaries in any state over REST.
  */
 async function assertDraftOnProtocolSurface(
   objectiveRef: string,
-  what: 'instruction text' | 'description'
-): Promise<void> {
+  what: 'instruction text' | 'summary'
+): Promise<{ instructionText: string }> {
   const db = requireDatabaseClient();
   const resolved = await resolveObjectiveIdForRest({ ref: objectiveRef, db });
   const row = (await db.get(
-    `SELECT state FROM objectives
+    `SELECT state, instruction_text FROM objectives
       WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
     [resolved.id, resolved.workspaceId]
-  )) as { state: string } | undefined;
+  )) as { state: string; instruction_text: string | null } | undefined;
   if (!row) {
     throw new ApiError(404, 'Objective not found');
   }
   if (row.state !== 'draft') {
     throw new ApiError(
       400,
-      what === 'description'
-        ? 'An agent can change an objective description or request a summary only in draft state'
+      what === 'summary'
+        ? 'An agent can change an objective summary or request a summary only in draft state'
         : 'Objective instruction text can only be edited in draft state',
       undefined,
-      what === 'description' ? 'description_not_editable' : undefined
+      what === 'summary' ? 'summary_not_editable' : undefined
     );
   }
+  return { instructionText: row.instruction_text ?? '' };
 }
 
 /**
@@ -298,20 +300,76 @@ async function searchExactReference(body: ProtocolRequestBody, reference: string
   });
 }
 
-/** Objective text for create/prompt/record-work: `--objective`, else positional. */
-function objectiveText(body: ProtocolRequestBody): string {
-  const flag = strFlag(body, '--objective');
+/**
+ * Flags renamed so each one says which text it carries (coo:1321). An old name
+ * is refused with its replacement instead of being ignored.
+ */
+const RENAMED_OBJECTIVE_FLAGS: Record<string, string> = {
+  '--objective': '--objective-instructions',
+  '--objective-description': '--objective-summary',
+  '--objective-description-file': '--objective-summary-file',
+  '--description': '--summary',
+  '--description-file': '--summary-file',
+  '--description-request': '--summary-request'
+};
+
+const RETIRED_CREATE_FLAGS = [
+  '--objective',
+  '--objective-description',
+  '--objective-description-file'
+] as const;
+const RETIRED_UPDATE_OBJECTIVE_FLAGS = [
+  '--description',
+  '--description-file',
+  '--description-request'
+] as const;
+
+/** JSON item keys renamed alongside the flags (coo:1321). */
+const RENAMED_OBJECTIVE_ITEM_KEYS: Record<string, string> = {
+  objective: 'instructions',
+  description: 'summary'
+};
+
+function rejectRenamedObjectiveFlags(body: ProtocolRequestBody, flags: readonly string[]): void {
+  const present = flags.filter(flag => hasFlag(body, flag));
+  if (present.length === 0) return;
+  throw new ApiError(
+    400,
+    `Renamed protocol flag(s): ${present
+      .map(flag => `${flag} is now ${RENAMED_OBJECTIVE_FLAGS[flag]}`)
+      .join(
+        '; '
+      )}. --objective-instructions is the complete brief for the executing agent; --objective-summary is a short overview for people.`,
+    undefined,
+    'invalid_input'
+  );
+}
+
+/**
+ * Instructions for create/prompt: `--objective-instructions` /
+ * `--objective-instructions-file`, else the positional text.
+ */
+function objectiveInstructions(body: ProtocolRequestBody): string {
+  const given =
+    hasFlag(body, '--objective-instructions') || hasFlag(body, '--objective-instructions-file');
+  const flag = given
+    ? resolveInput(body, '--objective-instructions', '--objective-instructions-file')
+    : undefined;
   if (flag !== undefined && flag.trim() !== '') return flag;
   const positional = (body.positional ?? []).join(' ').trim();
   if (positional) return positional;
-  throw new ApiError(400, 'Missing objective text (use --objective or a positional argument)');
+  throw new ApiError(
+    400,
+    'Missing objective instructions (use --objective-instructions, --objective-instructions-file or a positional argument)'
+  );
 }
 
 type ObjectiveInput = {
-  objective: string;
+  /** The complete brief the executing agent receives. */
+  instructions: string;
   title?: string | null;
-  /** Authored human-facing description; null or blank removes it (ADR 0057). */
-  description?: string | null;
+  /** Authored human-facing summary; null or blank removes it (ADR 0057). */
+  summary?: string | null;
   autoAdvance?: boolean;
   agent?: string | null;
   model?: string | null;
@@ -321,9 +379,9 @@ type ObjectiveInput = {
 const MAX_PROTOCOL_OBJECTIVES = 100;
 const MAX_PROTOCOL_DELETIONS = 100;
 const OBJECTIVE_INPUT_KEYS = new Set([
-  'objective',
+  'instructions',
   'title',
-  'description',
+  'summary',
   'autoAdvance',
   'agent',
   'model',
@@ -351,6 +409,19 @@ function parseObjectiveArrayInput(body: ProtocolRequestBody): ObjectiveInput[] |
       throw new ApiError(400, `objectives[${index}] must be an object`, undefined, 'invalid_input');
     }
     const item = value as Record<string, unknown>;
+    const renamed = Object.keys(item).filter(key => key in RENAMED_OBJECTIVE_ITEM_KEYS);
+    if (renamed.length > 0) {
+      throw new ApiError(
+        400,
+        `objectives[${index}] uses renamed field(s): ${renamed
+          .map(key => `"${key}" is now "${RENAMED_OBJECTIVE_ITEM_KEYS[key]}"`)
+          .join(
+            '; '
+          )}. "instructions" is the complete brief for the executing agent; "summary" is a short overview for people.`,
+        undefined,
+        'invalid_input'
+      );
+    }
     if (Object.keys(item).some(key => !OBJECTIVE_INPUT_KEYS.has(key))) {
       throw new ApiError(
         400,
@@ -359,15 +430,15 @@ function parseObjectiveArrayInput(body: ProtocolRequestBody): ObjectiveInput[] |
         'invalid_input'
       );
     }
-    if (typeof item.objective !== 'string' || !item.objective.trim()) {
+    if (typeof item.instructions !== 'string' || !item.instructions.trim()) {
       throw new ApiError(
         400,
-        `objectives[${index}].objective must be a non-empty string`,
+        `objectives[${index}].instructions must be a non-empty string`,
         undefined,
         'invalid_input'
       );
     }
-    for (const key of ['title', 'description', 'agent', 'model', 'resourceKey'] as const) {
+    for (const key of ['title', 'summary', 'agent', 'model', 'resourceKey'] as const) {
       if (item[key] !== undefined && item[key] !== null && typeof item[key] !== 'string') {
         throw new ApiError(
           400,
@@ -425,27 +496,30 @@ function parseDeletionReferences(
 }
 
 /**
- * `--objective-description` / `--objective-description-file`: the authored
- * description of the single `--objective` form. With `--objectives-json` each
- * item carries its own `description` instead.
+ * `--objective-summary` / `--objective-summary-file`: the authored
+ * summary of the single `--objective-instructions` form. With
+ * `--objectives-json` each item carries its own `summary` instead.
  */
-function singleObjectiveDescription(body: ProtocolRequestBody): string | undefined {
-  const given =
-    hasFlag(body, '--objective-description') || hasFlag(body, '--objective-description-file');
+function singleObjectiveSummary(body: ProtocolRequestBody): string | undefined {
+  const given = hasFlag(body, '--objective-summary') || hasFlag(body, '--objective-summary-file');
   if (!given) return undefined;
-  return resolveInput(body, '--objective-description', '--objective-description-file') ?? '';
+  return resolveInput(body, '--objective-summary', '--objective-summary-file') ?? '';
 }
 
-/** Objective array for create/prompt: `--objectives-json`, else a one-item `--objective`. */
+/**
+ * Objective array for create/prompt: `--objectives-json`, else a one-item
+ * `--objective-instructions`.
+ */
 function objectiveInputs(body: ProtocolRequestBody): ObjectiveInput[] {
+  rejectRenamedObjectiveFlags(body, RETIRED_CREATE_FLAGS);
   const parsed = parseObjectiveArrayInput(body);
   const autoAdvance = optionalAutoAdvanceFlag(body);
-  const description = singleObjectiveDescription(body);
+  const summary = singleObjectiveSummary(body);
   if (parsed !== undefined) {
-    if (description !== undefined) {
+    if (summary !== undefined) {
       throw new ApiError(
         400,
-        '--objective-description applies to --objective; set "description" on each --objectives-json item instead',
+        '--objective-summary applies to --objective-instructions; set "summary" on each --objectives-json item instead',
         undefined,
         'invalid_input'
       );
@@ -457,8 +531,8 @@ function objectiveInputs(body: ProtocolRequestBody): ObjectiveInput[] {
     withDefaultAutoAdvance(
       [
         {
-          objective: objectiveText(body),
-          ...(description !== undefined ? { description } : {}),
+          instructions: objectiveInstructions(body),
+          ...(summary !== undefined ? { summary } : {}),
           ...(resourceKey ? { resourceKey } : {})
         }
       ],
@@ -469,23 +543,28 @@ function objectiveInputs(body: ProtocolRequestBody): ObjectiveInput[] {
 }
 
 /**
- * Advisory style warnings for each created objective whose item carried an
- * authored description. Warnings never reject a write; they are attached to
- * the matching created objective so a batch shows which item they belong to.
+ * Advisory warnings for each created objective whose item carried an authored
+ * summary: a possible instructions/summary swap first (coo:1321), then style
+ * issues. Warnings never reject a write; they are attached to the matching
+ * created objective so a batch shows which item they belong to.
  */
-function withDescriptionWarnings<T extends { id: string }>(
+function withSummaryWarnings<T extends { id: string }>(
   created: T[],
   inputs: ObjectiveInput[]
 ): Array<T & { warnings?: ObjectiveBriefWarning[] }> {
   return created.map((objective, index) => {
-    const text = inputs[index]?.description;
-    if (typeof text !== 'string' || !text.trim()) return objective;
-    const warnings = objectiveDescriptionStyleWarnings(text.trim());
+    const input = inputs[index];
+    const text = input?.summary;
+    if (!input || typeof text !== 'string' || !text.trim()) return objective;
+    const warnings = [
+      ...objectiveSummaryPlacementWarnings({ instructions: input.instructions, summary: text }),
+      ...objectiveSummaryStyleWarnings(text.trim())
+    ];
     return warnings.length > 0 ? { ...objective, warnings } : objective;
   });
 }
 
-const DESCRIPTION_REQUEST_MODES = ['summarize', 'regenerate', 'retry'] as const;
+const SUMMARY_REQUEST_MODES = ['summarize', 'regenerate', 'retry'] as const;
 
 export const missionSubcommands: SubcommandTable = {
   // Mission creation and discovery -----------------------------------------
@@ -509,7 +588,7 @@ export const missionSubcommands: SubcommandTable = {
             'project_creation_scope_conflict'
           );
         }
-        const first = objectives[0]?.objective?.trim();
+        const first = objectives[0]?.instructions?.trim();
         if (!first) throw new ApiError(400, 'Inbox creation requires an objective');
         return {
           unassigned: true,
@@ -540,7 +619,7 @@ export const missionSubcommands: SubcommandTable = {
         title: strFlag(body, '--title') ?? null,
         ...(assignedTo !== undefined ? { assignedTo } : {})
       });
-      return { ...created, objectives: withDescriptionWarnings(created.objectives, objectives) };
+      return { ...created, objectives: withSummaryWarnings(created.objectives, objectives) };
     }
   },
 
@@ -557,15 +636,27 @@ export const missionSubcommands: SubcommandTable = {
         );
       }
       const assignedTo = strFlag(body, '--assigned-to');
-      return protocolPrompt({
+      const objectives = objectiveInputs(body);
+      const attached = await protocolPrompt({
         ctx: await withAgentOrigin({ ctx, body }),
         projectId,
-        objectives: objectiveInputs(body),
+        objectives,
         title: strFlag(body, '--title') ?? null,
         agentIdentifier: strFlag(body, '--agent') ?? 'unknown',
         externalSessionId: externalSessionId(body),
         ...(assignedTo !== undefined ? { assignedTo } : {})
       });
+      // The attach response has no per-objective list, so a possible swap is
+      // reported once at the top level (coo:1321).
+      const warnings = objectives.flatMap(input =>
+        typeof input.summary === 'string' && input.summary.trim()
+          ? objectiveSummaryPlacementWarnings({
+              instructions: input.instructions,
+              summary: input.summary
+            })
+          : []
+      );
+      return warnings.length > 0 ? { ...attached, warnings } : attached;
     }
   },
 
@@ -710,7 +801,7 @@ export const missionSubcommands: SubcommandTable = {
         missionId: missionRefFlag(body),
         objectives
       });
-      return withDescriptionWarnings(created, objectives);
+      return withSummaryWarnings(created, objectives);
     }
   },
 
@@ -718,6 +809,7 @@ export const missionSubcommands: SubcommandTable = {
     permission: PERMISSIONS.OBJECTIVE_UPDATE,
     handler: async (ctx, body) => {
       const objectiveId = requireFlag(body, '--objective-id');
+      rejectRenamedObjectiveFlags(body, RETIRED_UPDATE_OBJECTIVE_FLAGS);
       const update: UpdateObjectiveBody = {};
       const autoAdvance = optionalAutoAdvanceFlag(body);
       if (autoAdvance !== undefined) {
@@ -731,49 +823,59 @@ export const missionSubcommands: SubcommandTable = {
         update.instructionText =
           resolveInput(body, '--instruction-text', '--instruction-text-file') ?? '';
       }
-      const hasDescription = hasFlag(body, '--description') || hasFlag(body, '--description-file');
-      const descriptionRequest = strFlag(body, '--description-request');
-      if (hasFlag(body, '--description-request')) {
+      const hasSummary = hasFlag(body, '--summary') || hasFlag(body, '--summary-file');
+      const summaryRequest = strFlag(body, '--summary-request');
+      if (hasFlag(body, '--summary-request')) {
         if (
-          !descriptionRequest ||
-          !(DESCRIPTION_REQUEST_MODES as readonly string[]).includes(descriptionRequest)
+          !summaryRequest ||
+          !(SUMMARY_REQUEST_MODES as readonly string[]).includes(summaryRequest)
         ) {
           throw new ApiError(
             400,
-            '--description-request must be summarize, regenerate or retry',
+            '--summary-request must be summarize, regenerate or retry',
             undefined,
             'invalid_input'
           );
         }
-        if (hasDescription) {
+        if (hasSummary) {
           throw new ApiError(
             400,
-            '--description-request cannot be combined with --description/--description-file',
+            '--summary-request cannot be combined with --summary/--summary-file',
             undefined,
             'invalid_input'
           );
         }
       }
-      if (hasDescription || descriptionRequest) {
-        await assertDraftOnProtocolSurface(objectiveId, 'description');
-      }
-      if (hasDescription) {
+      const current =
+        hasSummary || summaryRequest
+          ? await assertDraftOnProtocolSurface(objectiveId, 'summary')
+          : null;
+      if (hasSummary) {
         // An empty value is Remove: the summary stays absent until a person
         // selects Summarize (ADR 0057).
-        update.description = resolveInput(body, '--description', '--description-file') ?? '';
+        update.summary = resolveInput(body, '--summary', '--summary-file') ?? '';
       }
+      // Compare the summary with the instructions the objective will have
+      // after this write; a possible swap is returned as a warning.
+      const placement =
+        typeof update.summary === 'string' && update.summary.trim()
+          ? {
+              instructions: update.instructionText ?? current?.instructionText ?? '',
+              summary: update.summary
+            }
+          : null;
       Object.assign(update, objectiveAssignmentUpdate(body));
       if (
         autoAdvance === undefined &&
         update.instructionText === undefined &&
         update.title === undefined &&
-        update.description === undefined &&
+        update.summary === undefined &&
         update.assignedAgent === undefined &&
-        !descriptionRequest
+        !summaryRequest
       ) {
         throw new ApiError(
           400,
-          'Provide at least one of --title, --description/--description-file, --description-request, --auto-advance/--no-auto-advance, --instruction-text/--instruction-text-file, or --objective-agent'
+          'Provide at least one of --title, --summary/--summary-file, --summary-request, --auto-advance/--no-auto-advance, --instruction-text/--instruction-text-file, or --objective-agent'
         );
       }
       // Protocol writes (CLI, hosted MCP) are agent-authored, attached or not.
@@ -783,19 +885,14 @@ export const missionSubcommands: SubcommandTable = {
       const warnings: ObjectiveBriefWarning[] = [...result.warnings];
       let objective = result.objective;
       // Advisory style warnings only for text that was actually stored.
-      if (
-        typeof update.description === 'string' &&
-        update.description.trim() &&
-        !warnings.some(warning => warning.code === 'description_suppressed')
-      ) {
-        warnings.push(...objectiveDescriptionStyleWarnings(update.description.trim()));
-      }
-      if (descriptionRequest) {
-        objective = await requestObjectiveDescription(
-          objective.id,
-          { mode: descriptionRequest },
-          options
+      if (placement && !warnings.some(warning => warning.code === 'summary_suppressed')) {
+        warnings.push(
+          ...objectiveSummaryPlacementWarnings(placement),
+          ...objectiveSummaryStyleWarnings(placement.summary.trim())
         );
+      }
+      if (summaryRequest) {
+        objective = await requestObjectiveSummary(objective.id, { mode: summaryRequest }, options);
       }
       return { ...objective, warnings };
     }

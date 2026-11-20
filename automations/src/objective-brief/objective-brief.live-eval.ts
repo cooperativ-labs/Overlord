@@ -29,24 +29,24 @@ let failures = 0;
 for (const fixture of fixtures) {
   const outcome = await composeObjectiveBrief({
     instructionText: fixture.instruction,
-    fields: { title: true, description: fixture.instruction.trim().length >= 280 }
+    fields: { title: true, summary: fixture.instruction.trim().length >= 280 }
   });
   if (outcome.kind !== 'composed') {
     console.log(`${fixture.name}: ${outcome.kind}`);
     failures += 1;
     continue;
   }
-  const description = outcome.description.status === 'ok' ? outcome.description.text : null;
+  const summary = outcome.summary.status === 'ok' ? outcome.summary.text : null;
   // The goal is the text before the first "Decision needed:" sentence, or the
   // first sentence when there is no decision.
-  const firstParagraph = description?.split('\n\n')[0] ?? '';
+  const firstParagraph = summary?.split('\n\n')[0] ?? '';
   const decisionAt = firstParagraph.indexOf(DECISION_PREFIX);
-  const goal = description
+  const goal = summary
     ? decisionAt >= 0
       ? firstParagraph.slice(0, decisionAt).trim()
       : (firstParagraph.match(/^.*?[.!?](?=\s|$)/)?.[0] ?? firstParagraph)
     : null;
-  const decisions = description
+  const decisions = summary
     ? firstParagraph
         .split(DECISION_PREFIX)
         .slice(1)
@@ -55,15 +55,14 @@ for (const fixture of fixtures) {
   const report = {
     attempts: outcome.attempts,
     title: outcome.title.status === 'ok' ? outcome.title.text : outcome.title.status,
-    description:
-      description ?? (outcome.description.status === 'failed' ? outcome.description.code : null),
-    paragraphs: description ? description.split('\n\n').length : null,
-    words: description ? description.split(/\s+/).length : null,
+    summary: summary ?? (outcome.summary.status === 'failed' ? outcome.summary.code : null),
+    paragraphs: summary ? summary.split('\n\n').length : null,
+    words: summary ? summary.split(/\s+/).length : null,
     goal,
-    decisions: description ? description.split(DECISION_PREFIX).length - 1 : null,
+    decisions: summary ? summary.split(DECISION_PREFIX).length - 1 : null,
     goalPicksDecisionOption: goal ? findGoalDecisionOptions(goal, decisions) : null,
-    missingDoneWhen: description ? description.endsWith(OBJECTIVE_BRIEF_MISSING_DONE_WHEN) : null,
-    lint: description ? lintSte(description).map(issue => issue.code) : null
+    missingDoneWhen: summary ? summary.endsWith(OBJECTIVE_BRIEF_MISSING_DONE_WHEN) : null,
+    lint: summary ? lintSte(summary).map(issue => issue.code) : null
   };
   console.log(`\n## ${fixture.name}\n${JSON.stringify(report, null, 2)}`);
 }

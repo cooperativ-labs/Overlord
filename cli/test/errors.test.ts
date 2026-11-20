@@ -13,13 +13,8 @@ import {
 function assertAlreadyLinkedDiagnostic(message: string): void {
   assert.match(message, /already linked to another mission session/i);
   assert.match(message, /execution_request_already_linked/);
-  assert.match(message, /stale mission-session binding/i);
-  assert.match(message, /not a user authentication failure/i);
-  assert.match(message, /Do not run `ovld auth login` or `ovld auth repair`/);
-  assert.match(message, /without `--execution-request-id`/);
-  assert.match(message, /OVERLORD_EXECUTION_REQUEST_ID/);
-  assert.doesNotMatch(message, /saved credentials were rejected/i);
-  assert.doesNotMatch(message, /sign in again/i);
+  assert.match(message, /resume-follow-up/);
+  assert.doesNotMatch(message, /auth login|credentials were rejected/i);
 }
 
 test('already-linked execution-request diagnostic is distinct from authentication failure', () => {

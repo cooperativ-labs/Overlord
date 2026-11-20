@@ -19,7 +19,7 @@ describe('objective display ids', () => {
     const { mission, objectives } = await createMissionWithObjectives({
       ctx,
       projectId: project.id,
-      objectives: [{ objective: 'First' }, { objective: 'Second' }]
+      objectives: [{ instructions: 'First' }, { instructions: 'Second' }]
     });
 
     assert.equal(objectives.length, 2);
@@ -45,7 +45,7 @@ describe('objective display ids', () => {
     const { mission, objectives } = await createMissionWithObjectives({
       ctx,
       projectId: project.id,
-      objectives: [{ objective: 'Existing' }]
+      objectives: [{ instructions: 'Existing' }]
     });
     const existingKey = objectives[0]!.displayKey;
     let fourCharAttempts = 0;
@@ -74,7 +74,7 @@ describe('objective display ids', () => {
     const { mission, objectives } = await createMissionWithObjectives({
       ctx,
       projectId: project.id,
-      objectives: [{ objective: 'Resolve me' }]
+      objectives: [{ instructions: 'Resolve me' }]
     });
     const objective = objectives[0]!;
 
@@ -134,7 +134,7 @@ describe('objective display ids', () => {
     const { mission, objectives } = await createMissionWithObjectives({
       ctx,
       projectId: project.id,
-      objectives: [{ objective: 'Attach with display id' }]
+      objectives: [{ instructions: 'Attach with display id' }]
     });
     const attached = await attachSession({
       ctx,
@@ -156,7 +156,7 @@ describe('objective display ids', () => {
     const { mission, objectives } = await createMissionWithObjectives({
       ctx,
       projectId: project.id,
-      objectives: [{ objective: 'First' }]
+      objectives: [{ instructions: 'First' }]
     });
     const followUp = await insertObjective({
       ctx,

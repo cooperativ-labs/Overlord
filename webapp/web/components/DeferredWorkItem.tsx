@@ -196,7 +196,7 @@ export function useDeferredWorkActions(
         title: promotion.title,
         objectives: [
           {
-            objective: promotion.instructionText,
+            instructions: promotion.instructionText,
             title: promotion.title,
             ...(resourceKey ? { resourceKey } : {})
           }

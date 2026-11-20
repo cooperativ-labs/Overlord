@@ -17,9 +17,9 @@ test('mission creation creates every objective as a draft', async () => {
     ctx,
     projectId: project.id,
     objectives: [
-      { objective: 'First objective' },
-      { objective: 'Second objective' },
-      { objective: 'Third objective' }
+      { instructions: 'First objective' },
+      { instructions: 'Second objective' },
+      { instructions: 'Third objective' }
     ]
   });
 
@@ -37,13 +37,13 @@ test('adding objectives to a mission with a draft appends more drafts', async ()
   const { mission } = await createMissionWithObjectives({
     ctx,
     projectId: project.id,
-    objectives: [{ objective: 'Existing draft' }]
+    objectives: [{ instructions: 'Existing draft' }]
   });
 
   const added = await addObjectivesToMission({
     ctx,
     missionId: mission.id,
-    objectives: [{ objective: 'Additional objective' }, { objective: 'Another objective' }]
+    objectives: [{ instructions: 'Additional objective' }, { instructions: 'Another objective' }]
   });
 
   assert.deepEqual(
@@ -60,14 +60,14 @@ test('adding objectives to a mission without a draft creates drafts and leaves t
   const { mission, objectives } = await createMissionWithObjectives({
     ctx,
     projectId: project.id,
-    objectives: [{ objective: 'Existing objective' }]
+    objectives: [{ instructions: 'Existing objective' }]
   });
   await ctx.db.run(`UPDATE objectives SET state = 'submitted' WHERE id = ?`, [objectives[0]?.id]);
 
   const added = await addObjectivesToMission({
     ctx,
     missionId: mission.id,
-    objectives: [{ objective: 'New next-up' }, { objective: 'Future follow-up' }]
+    objectives: [{ instructions: 'New next-up' }, { instructions: 'Future follow-up' }]
   });
 
   assert.deepEqual(
@@ -89,15 +89,15 @@ test('adding objectives persists autoAdvance when requested', async () => {
   const { mission } = await createMissionWithObjectives({
     ctx,
     projectId: project.id,
-    objectives: [{ objective: 'Existing draft' }]
+    objectives: [{ instructions: 'Existing draft' }]
   });
 
   const added = await addObjectivesToMission({
     ctx,
     missionId: mission.id,
     objectives: [
-      { objective: 'Auto-advance follow-up', autoAdvance: true },
-      { objective: 'Manual follow-up' }
+      { instructions: 'Auto-advance follow-up', autoAdvance: true },
+      { instructions: 'Manual follow-up' }
     ]
   });
 
@@ -113,13 +113,13 @@ test('adding objectives persists an explicit agent and model', async () => {
   const { mission } = await createMissionWithObjectives({
     ctx,
     projectId: project.id,
-    objectives: [{ objective: 'Existing draft' }]
+    objectives: [{ instructions: 'Existing draft' }]
   });
 
   const [added] = await addObjectivesToMission({
     ctx,
     missionId: mission.id,
-    objectives: [{ objective: 'Run with Codex', agent: 'codex', model: 'gpt-5.6-terra' }]
+    objectives: [{ instructions: 'Run with Codex', agent: 'codex', model: 'gpt-5.6-terra' }]
   });
 
   const stored = await db.get<{ assigned_agent: string | null; model: string | null }>(
@@ -138,14 +138,14 @@ test('adding an objective rejects a model without an agent', async () => {
   const { mission } = await createMissionWithObjectives({
     ctx,
     projectId: project.id,
-    objectives: [{ objective: 'Existing draft' }]
+    objectives: [{ instructions: 'Existing draft' }]
   });
 
   await assert.rejects(
     addObjectivesToMission({
       ctx,
       missionId: mission.id,
-      objectives: [{ objective: 'Invalid model selection', model: 'gpt-5.6-terra' }]
+      objectives: [{ instructions: 'Invalid model selection', model: 'gpt-5.6-terra' }]
     }),
     /model requires an assigned agent/
   );
@@ -159,7 +159,7 @@ test('updateObjective toggles autoAdvance on an existing objective', async () =>
   const { objectives } = await createMissionWithObjectives({
     ctx,
     projectId: project.id,
-    objectives: [{ objective: 'Existing draft' }]
+    objectives: [{ instructions: 'Existing draft' }]
   });
 
   const updated = await updateObjective({

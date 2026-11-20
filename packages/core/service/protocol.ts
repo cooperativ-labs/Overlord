@@ -280,10 +280,22 @@ export function postDeliveryInstruction({
   missionDisplayId: string;
   objectiveDisplayId: string;
 }): string {
+  return `Delivered; this session has ended. Do not continue implementation. ${followUpRecoveryInstruction({ style, missionDisplayId, objectiveDisplayId })}`;
+}
+
+function followUpRecoveryInstruction({
+  style,
+  missionDisplayId,
+  objectiveDisplayId
+}: {
+  style: InstructionStyle;
+  missionDisplayId: string;
+  objectiveDisplayId: string;
+}): string {
   if (style === 'mcp') {
-    return 'Delivered; this session has ended. Do not continue implementation. These tools cannot begin follow-up work: if the user asks for more work on this objective, ask them to start follow-up work from Overlord.';
+    return 'If the user asks for more work on this objective, ask them to start follow-up work from Overlord.';
   }
-  return `Delivered; this session has ended. Do not continue implementation. If the user asks for more work on this objective, first run \`ovld protocol resume-follow-up --mission-id ${missionDisplayId} --objective-id ${objectiveDisplayId} --summary "<what you will do>"\`, use the session key it returns, and deliver again when done.`;
+  return `If the user asks for more work on this objective, first run \`ovld protocol resume-follow-up --mission-id ${missionDisplayId} --objective-id ${objectiveDisplayId} --summary "<what you will do>"\`, use the session key it returns, and deliver again when done.`;
 }
 
 function protocolWorkflow(style: InstructionStyle): string {
@@ -426,10 +438,30 @@ async function getSessionByKeyMaybeEnded(
   )) as SessionRow | undefined;
 }
 
-async function getSessionByKey(ctx: ServiceContext, sessionKey: string): Promise<SessionRow> {
-  const row = await getSessionByKeyMaybeEnded(ctx, sessionKey);
+async function getSessionByKey(
+  ctx: ServiceContext,
+  sessionKey: string,
+  mission: { id: string; displayId: string }
+): Promise<SessionRow> {
+  const row = await getSessionByKeyMaybeEnded(ctx, sessionKey, { includeEnded: true });
 
-  if (!row) {
+  if (!row || row.ended_at) {
+    if (row?.mission_id === mission.id && row.delivery_state === 'delivered') {
+      const objective = (await listObjectives({ ctx, missionId: mission.id })).find(
+        candidate => candidate.id === row.objective_id
+      );
+      if (objective?.state === 'complete') {
+        throw new ServiceError(
+          `This protocol session ended at delivery. ${followUpRecoveryInstruction({
+            style: instructionStyleFor(row.connection_method),
+            missionDisplayId: mission.displayId,
+            objectiveDisplayId: objective.displayId
+          })}`,
+          'invalid_session',
+          401
+        );
+      }
+    }
     throw new ServiceError('Invalid or expired session key', 'invalid_session', 401);
   }
   return row;
@@ -1051,7 +1083,10 @@ export async function attachSession({
   // via mission state — with two executing siblings that 409s as ambiguous.
   let resolvedObjectiveId = objectiveId;
   if (existingSessionKey?.trim() && !explicitPin) {
-    const existing = await getSessionByKey(ctx, existingSessionKey);
+    const existing = await getSessionByKey(ctx, existingSessionKey, mission);
+    if (existing.mission_id !== mission.id) {
+      throw new ServiceError('Session key belongs to a different mission', 'invalid_session', 401);
+    }
     resolvedObjectiveId = existing.objective_id;
   }
   const pinned = Boolean(resolvedObjectiveId?.trim() || executionRequestId?.trim());
@@ -1073,7 +1108,7 @@ export async function attachSession({
   const context = { mission, objective };
 
   if (existingSessionKey) {
-    const existing = await getSessionByKey(ctx, existingSessionKey);
+    const existing = await getSessionByKey(ctx, existingSessionKey, mission);
     if (existing.mission_id !== context.mission.id) {
       throw new ServiceError('Session key belongs to a different mission', 'invalid_session', 401);
     }
@@ -1182,7 +1217,7 @@ export async function attachSession({
 
   await ctx.db.transaction(async tx => {
     const txCtx = { ...ctx, db: tx };
-    await txCtx.db.run(
+    const updated = await txCtx.db.run(
       `UPDATE objectives
          SET state = 'executing',
              assigned_agent = COALESCE(assigned_agent, ?),
@@ -1190,9 +1225,31 @@ export async function attachSession({
              ${OBJECTIVE_STARTED_AT_ASSIGNMENT},
              updated_at = ?,
              revision = revision + 1
-         WHERE id = ? AND mission_id = ?`,
+         WHERE id = ? AND mission_id = ? AND state <> 'complete' AND deleted_at IS NULL`,
       [inheritedDraftAgent || null, now, now, now, objective.id, context.mission.id]
     );
+    if (updated.changes === 0) {
+      const linked = executionRequestId
+        ? await tx.get(
+            `SELECT launched_session_id FROM execution_requests
+              WHERE id = ? AND workspace_id = ? AND mission_id = ? AND objective_id = ?
+                AND deleted_at IS NULL AND launched_session_id IS NOT NULL`,
+            [executionRequestId, ctx.workspace.id, mission.id, objective.id]
+          )
+        : undefined;
+      const reason = linked
+        ? 'Execution request is already linked to another session and this objective is complete.'
+        : 'No active objective at this reference. This objective has already been completed.';
+      throw new ServiceError(
+        `${reason} ${followUpRecoveryInstruction({
+          style: instructionStyleFor(connectionMethod),
+          missionDisplayId: mission.displayId,
+          objectiveDisplayId: objective.displayId
+        })}`,
+        linked ? 'execution_request_already_linked' : 'no_active_objective',
+        409
+      );
+    }
     await recordChange({
       ctx: txCtx,
       entityType: 'objective',
@@ -1566,50 +1623,50 @@ export async function resumeFollowUp({
 }): Promise<AttachResponse & { sessionKey: string }> {
   const trimmedSummary = summary?.trim() || 'Beginning follow-up work.';
   const mission = await getMissionSummary({ ctx, missionId });
-  const objectives = await listObjectives({ ctx, missionId: mission.id });
-  const resolvedObjectiveId = objectiveId
-    ? (await resolveObjectiveRef({ ctx, ref: objectiveId, missionId: mission.id })).id
-    : null;
-  const selectedObjective = resolvedObjectiveId
-    ? objectives.find(objective => objective.id === resolvedObjectiveId)
-    : latestCompletedObjective(objectives);
-
-  if (!selectedObjective) {
-    throw new ServiceError(
-      'No completed objective found for follow-up',
-      'no_active_objective',
-      409
-    );
-  }
-
-  const activeObjective = objectives.find(objective =>
-    ['executing', 'pending_delivery'].includes(objective.state)
-  );
-  if (activeObjective) {
-    throw new ServiceError(
-      'Mission already has active follow-up or execution work',
-      'active_objective_exists',
-      409
-    );
-  }
-
-  if (selectedObjective.state !== 'complete') {
-    throw new ServiceError(
-      'Follow-up resume requires a completed objective',
-      'validation_error',
-      409
-    );
-  }
-
   const { rawKey, prefix, hash } = generateSessionKey();
   const now = nowIso();
   const sessionId = newId();
   const eventId = newId();
 
-  await ctx.db.transaction(async tx => {
+  const selectedObjective = await ctx.db.transaction(async tx => {
     const txCtx = { ...ctx, db: tx };
     // Mission lock first, as delivery and publication take it (ADR 0076).
     await lockMissionObjectiveQueue(tx, mission.id);
+    const objectives = await listObjectives({ ctx: txCtx, missionId: mission.id });
+    const resolvedObjectiveId = objectiveId
+      ? (await resolveObjectiveRef({ ctx: txCtx, ref: objectiveId, missionId: mission.id })).id
+      : null;
+    const selectedObjective = resolvedObjectiveId
+      ? objectives.find(objective => objective.id === resolvedObjectiveId)
+      : latestCompletedObjective(objectives);
+
+    if (!selectedObjective) {
+      throw new ServiceError(
+        'No completed objective found for follow-up',
+        'no_active_objective',
+        409
+      );
+    }
+
+    const activeObjective = objectives.find(objective =>
+      ['executing', 'pending_delivery'].includes(objective.state)
+    );
+    if (activeObjective) {
+      throw new ServiceError(
+        'Mission already has active follow-up or execution work',
+        'active_objective_exists',
+        409
+      );
+    }
+
+    if (selectedObjective.state !== 'complete') {
+      throw new ServiceError(
+        'Follow-up resume requires a completed objective',
+        'validation_error',
+        409
+      );
+    }
+
     await txCtx.db.run(
       `UPDATE objectives
          SET state = 'pending_delivery', completed_at = NULL, updated_at = ?, revision = revision + 1
@@ -1696,6 +1753,7 @@ export async function resumeFollowUp({
       missionId: mission.id,
       objectiveId: selectedObjective.id
     });
+    return selectedObjective;
   });
 
   const refreshedMission = await getMissionSummary({ ctx, missionId: mission.id });
@@ -1755,7 +1813,7 @@ export async function heartbeatSession({
   note?: string | null;
 }): Promise<{ ok: true }> {
   const mission = await resolveMissionId(ctx, missionId);
-  const session = await getSessionByKey(ctx, sessionKey);
+  const session = await getSessionByKey(ctx, sessionKey, mission);
   if (session.mission_id !== mission.id) {
     throw new ServiceError('Session key does not match mission', 'invalid_session', 401);
   }
@@ -2563,7 +2621,7 @@ export async function updateSession({
       write: draftWrite
     });
   }
-  const session = await getSessionByKey(ctx, sessionKey);
+  const session = await getSessionByKey(ctx, sessionKey, mission);
   if (session.mission_id !== mission.id) {
     throw new ServiceError('Session key does not match mission', 'invalid_session', 401);
   }
@@ -2958,7 +3016,7 @@ export async function askQuestion({
   }
 
   const mission = await resolveMissionId(ctx, missionId);
-  const session = await getSessionByKey(ctx, sessionKey);
+  const session = await getSessionByKey(ctx, sessionKey, mission);
   if (session.mission_id !== mission.id) {
     throw new ServiceError('Session key does not match mission', 'invalid_session', 401);
   }
@@ -3910,10 +3968,10 @@ export async function protocolCreate({
   ctx: ServiceContext;
   projectId?: string | null;
   objectives: Array<{
-    objective: string;
+    instructions: string;
     title?: string | null;
-    /** Authored human-facing description (ADR 0057); never part of the agent context. */
-    description?: string | null;
+    /** Authored human-facing summary (ADR 0057); never part of the agent context. */
+    summary?: string | null;
     autoAdvance?: boolean;
     /** Explicit launch selection for this objective; omitted keeps project defaulting. */
     agent?: string | null;
@@ -3955,10 +4013,10 @@ export async function protocolPrompt({
   ctx: ServiceContext;
   projectId?: string | null;
   objectives: Array<{
-    objective: string;
+    instructions: string;
     title?: string | null;
-    /** Authored human-facing description (ADR 0057); never part of the agent context. */
-    description?: string | null;
+    /** Authored human-facing summary (ADR 0057); never part of the agent context. */
+    summary?: string | null;
     autoAdvance?: boolean;
     /** Explicit launch selection for this objective; omitted keeps project defaulting. */
     agent?: string | null;
@@ -4153,7 +4211,7 @@ export async function recordWork({
         const created = await createMissionWithObjectives({
           ctx: txCtx,
           projectId: resolvedProjectId,
-          objectives: [{ objective }],
+          objectives: [{ instructions: objective }],
           statusType: 'review',
           assignedWorkspaceUserId,
           ...(title !== undefined ? { title } : {})
@@ -4387,7 +4445,7 @@ export async function readAgentMissionItems({
   offset?: number;
 }) {
   const mission = await resolveMissionId(ctx, missionId);
-  const session = await getSessionByKey(ctx, sessionKey);
+  const session = await getSessionByKey(ctx, sessionKey, mission);
   if (session.mission_id !== mission.id) {
     throw new ServiceError('Session key does not match mission', 'invalid_session', 401);
   }
@@ -4443,7 +4501,7 @@ export async function closeAgentMissionItems({
     async tx => {
       const txCtx = { ...ctx, db: tx };
       const mission = await resolveMissionId(txCtx, missionId);
-      const session = await getSessionByKey(txCtx, sessionKey);
+      const session = await getSessionByKey(txCtx, sessionKey, mission);
       if (session.mission_id !== mission.id) {
         throw new ServiceError('Session key does not match mission', 'invalid_session', 401);
       }
@@ -4493,7 +4551,7 @@ export async function readAgentProjectItems({
   return ctx.db.transaction(async db => {
     const txCtx = { ...ctx, db };
     const mission = await resolveMissionId(txCtx, missionId);
-    const session = await getSessionByKey(txCtx, sessionKey);
+    const session = await getSessionByKey(txCtx, sessionKey, mission);
     if (session.mission_id !== mission.id || session.delivery_state === 'delivered') {
       throw new ServiceError(
         'Discovery requires a live matching attached session',

@@ -7,7 +7,7 @@ import {
 } from '@overlord/core/service/latch-launch';
 import type { LaunchSessionSnapshot } from '@overlord/core/service/terminal-profile-types';
 import { spawnSync, type SpawnSyncOptions, type SpawnSyncReturns } from 'node:child_process';
-import { chmodSync, mkdirSync, writeFileSync } from 'node:fs';
+import { chmodSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
 import { writeChannelCredential } from './agent-session/channel.js';
@@ -25,6 +25,7 @@ import {
   substitutePreLaunchVariables
 } from './pre-launch.js';
 import {
+  ensureHarnessScratchDir,
   ensureProjectTmpDir,
   projectTmpSessionsDir,
   pruneStaleProjectTmp,
@@ -498,9 +499,8 @@ export async function buildLaunchPlan({
     ? `objective-${context.objectiveDisplayId.replace(/[^a-zA-Z0-9_-]/g, '-')}`
     : `mission-${context.displayId.replace(/[^a-zA-Z0-9_-]/g, '-')}`;
   const contextFile = path.join(tmpDir, `${contextFileStem}.md`);
-  // Each launch gets a private scratch directory that TMPDIR & co point at. The
-  // delivering session removes exactly this directory, so cleanup never has to
-  // guess which files in the shared `.overlord/tmp` belong to whom.
+  // Each launch keeps its own TMPDIR for the lifetime of the harness,
+  // including across delivery and explicit resumption.
   const sessionScratchDir = path.join(
     projectTmpSessionsDir(options.workingDirectory),
     sessionScratchName({
@@ -509,7 +509,7 @@ export async function buildLaunchPlan({
       executionRequestId: options.executionRequestId
     })
   );
-  mkdirSync(sessionScratchDir, { recursive: true });
+  ensureHarnessScratchDir(options.workingDirectory, sessionScratchDir);
   // The execution request id is deliberately NOT written into the agent-facing
   // context. It is launch plumbing: it reaches the agent as the
   // `OVERLORD_EXECUTION_REQUEST_ID` env var, and `ovld protocol attach` picks it

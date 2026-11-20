@@ -5,17 +5,17 @@ import { ServiceError } from './errors.js';
 import {
   EMPTY_OBJECTIVE_BRIEF_STATE,
   hashObjectiveInstruction,
-  isObjectiveDescriptionStale,
-  normalizeObjectiveDescriptionInput,
-  OBJECTIVE_DESCRIPTION_MAX_CHARS,
-  OBJECTIVE_DESCRIPTION_MIN_INSTRUCTION_CHARS,
+  isObjectiveSummaryStale,
+  normalizeObjectiveSummaryInput,
+  OBJECTIVE_SUMMARY_MAX_CHARS,
+  OBJECTIVE_SUMMARY_MIN_INSTRUCTION_CHARS,
   type ObjectiveBriefActor,
   type ObjectiveBriefRow,
   type ObjectiveBriefState,
   planObjectiveBriefForCreate,
   planObjectiveBriefForUpdate,
   planObjectiveBriefPublication,
-  planObjectiveDescriptionGenerationRequest
+  planObjectiveSummaryGenerationRequest
 } from './objective-brief.js';
 
 const NOW = '2026-11-14T12:00:00.000Z';
@@ -57,12 +57,12 @@ function row(overrides: Partial<ObjectiveBriefRow> = {}): ObjectiveBriefRow {
   };
 }
 
-describe('description input normalization', () => {
+describe('summary input normalization', () => {
   it('distinguishes omitted, removal and authored values', () => {
-    assert.deepEqual(normalizeObjectiveDescriptionInput(undefined), { kind: 'omit' });
-    assert.deepEqual(normalizeObjectiveDescriptionInput(null), { kind: 'remove' });
-    assert.deepEqual(normalizeObjectiveDescriptionInput('   \n '), { kind: 'remove' });
-    assert.deepEqual(normalizeObjectiveDescriptionInput(' Goal.\r\n\r\nDone when. '), {
+    assert.deepEqual(normalizeObjectiveSummaryInput(undefined), { kind: 'omit' });
+    assert.deepEqual(normalizeObjectiveSummaryInput(null), { kind: 'remove' });
+    assert.deepEqual(normalizeObjectiveSummaryInput('   \n '), { kind: 'remove' });
+    assert.deepEqual(normalizeObjectiveSummaryInput(' Goal.\r\n\r\nDone when. '), {
       kind: 'set',
       text: 'Goal.\n\nDone when.'
     });
@@ -70,16 +70,16 @@ describe('description input normalization', () => {
 
   it('rejects non-strings and over-long text with stable codes', () => {
     assert.throws(
-      () => normalizeObjectiveDescriptionInput(42),
+      () => normalizeObjectiveSummaryInput(42),
       (e: unknown) => e instanceof ServiceError && e.code === 'validation_error'
     );
     assert.throws(
-      () => normalizeObjectiveDescriptionInput('x'.repeat(OBJECTIVE_DESCRIPTION_MAX_CHARS + 1)),
-      (e: unknown) => e instanceof ServiceError && e.code === 'description_too_long'
+      () => normalizeObjectiveSummaryInput('x'.repeat(OBJECTIVE_SUMMARY_MAX_CHARS + 1)),
+      (e: unknown) => e instanceof ServiceError && e.code === 'summary_too_long'
     );
     // 120 words is a target, not a cap: a long but bounded text is accepted.
     const words = Array.from({ length: 300 }, () => 'word').join(' ');
-    assert.equal(normalizeObjectiveDescriptionInput(words).kind, 'set');
+    assert.equal(normalizeObjectiveSummaryInput(words).kind, 'set');
   });
 });
 
@@ -88,13 +88,13 @@ describe('create', () => {
     const agentLong = planObjectiveBriefForCreate({
       instructionText: LONG,
       titleProvided: false,
-      description: { kind: 'omit' },
+      summary: { kind: 'omit' },
       actor: agent,
       now: NOW
     });
-    assert.equal(agentLong.descriptionRequested, true);
-    assert.equal(agentLong.patch.description_status, 'pending');
-    assert.equal(agentLong.patch.description_request_kind, 'automatic');
+    assert.equal(agentLong.summaryRequested, true);
+    assert.equal(agentLong.patch.summary_status, 'pending');
+    assert.equal(agentLong.patch.summary_request_kind, 'automatic');
     assert.equal(agentLong.patch.instruction_author_kind, 'agent');
     assert.equal(agentLong.patch.title_source, 'generated');
     assert.equal(agentLong.titleRequested, true);
@@ -103,62 +103,62 @@ describe('create', () => {
       const plan = planObjectiveBriefForCreate({
         instructionText: LONG,
         titleProvided: false,
-        description: { kind: 'omit' },
+        summary: { kind: 'omit' },
         actor,
         now: NOW
       });
-      assert.equal(plan.descriptionRequested, false, actor.kind);
-      assert.equal(plan.patch.description_status, null);
+      assert.equal(plan.summaryRequested, false, actor.kind);
+      assert.equal(plan.patch.summary_status, null);
       assert.equal(plan.patch.instruction_author_kind, actor.kind);
     }
 
     const agentShort = planObjectiveBriefForCreate({
       instructionText: SHORT,
       titleProvided: false,
-      description: { kind: 'omit' },
+      summary: { kind: 'omit' },
       actor: agent,
       now: NOW
     });
-    assert.equal(agentShort.descriptionRequested, false);
+    assert.equal(agentShort.summaryRequested, false);
 
     const blank = planObjectiveBriefForCreate({
       instructionText: '   ',
       titleProvided: false,
-      description: { kind: 'omit' },
+      summary: { kind: 'omit' },
       actor: agent,
       now: NOW
     });
-    assert.equal(blank.descriptionRequested, false);
+    assert.equal(blank.summaryRequested, false);
     assert.equal(blank.titleRequested, false);
     assert.equal(blank.patch.instruction_author_kind, null);
   });
 
-  it('records authored titles and descriptions with their owner', () => {
+  it('records authored titles and summaries with their owner', () => {
     const plan = planObjectiveBriefForCreate({
       instructionText: LONG,
       titleProvided: true,
-      description: { kind: 'set', text: 'Agent summary.' },
+      summary: { kind: 'set', text: 'Agent summary.' },
       actor: agent,
       now: NOW
     });
     assert.equal(plan.patch.title_source, 'agent');
     assert.equal(plan.titleRequested, false);
-    assert.equal(plan.patch.description, 'Agent summary.');
-    assert.equal(plan.patch.description_source, 'agent');
-    assert.equal(plan.patch.description_author_agent, 'claude-code');
-    assert.equal(plan.patch.description_instruction_hash, hashObjectiveInstruction(LONG));
-    assert.equal(plan.descriptionRequested, false);
+    assert.equal(plan.patch.summary, 'Agent summary.');
+    assert.equal(plan.patch.summary_source, 'agent');
+    assert.equal(plan.patch.summary_author_agent, 'claude-code');
+    assert.equal(plan.patch.summary_instruction_hash, hashObjectiveInstruction(LONG));
+    assert.equal(plan.summaryRequested, false);
 
     const humanTitle = planObjectiveBriefForCreate({
       instructionText: LONG,
       titleProvided: true,
-      description: { kind: 'remove' },
+      summary: { kind: 'remove' },
       actor: human,
       now: NOW
     });
     assert.equal(humanTitle.patch.title_source, 'user');
-    assert.equal(humanTitle.patch.description_suppressed, true);
-    assert.equal(humanTitle.patch.description, null);
+    assert.equal(humanTitle.patch.summary_suppressed, true);
+    assert.equal(humanTitle.patch.summary, null);
   });
 });
 
@@ -169,7 +169,7 @@ describe('instruction edits', () => {
     instructionText: string | undefined,
     extra: {
       title?: string | null;
-      description?: ReturnType<typeof normalizeObjectiveDescriptionInput>;
+      summary?: ReturnType<typeof normalizeObjectiveSummaryInput>;
     } = {}
   ) =>
     planObjectiveBriefForUpdate({
@@ -177,7 +177,7 @@ describe('instruction edits', () => {
       currentInstruction: LONG,
       instructionText,
       title: extra.title,
-      description: extra.description ?? { kind: 'omit' },
+      summary: extra.summary ?? { kind: 'omit' },
       actor,
       now: NOW
     });
@@ -185,81 +185,81 @@ describe('instruction edits', () => {
   it('tracks current authorship in both directions', () => {
     const agentWritten = state({
       instruction_author_kind: 'agent',
-      description_status: 'pending',
-      description_request_kind: 'automatic'
+      summary_status: 'pending',
+      summary_request_kind: 'automatic'
     });
     const byHuman = update(agentWritten, human, LONG_2);
     assert.equal(byHuman.patch.instruction_author_kind, 'human');
-    assert.equal(byHuman.descriptionRequested, false);
-    assert.equal(byHuman.patch.description_status, null, 'automatic request is withdrawn');
+    assert.equal(byHuman.summaryRequested, false);
+    assert.equal(byHuman.patch.summary_status, null, 'automatic request is withdrawn');
 
     const humanWritten = state({ instruction_author_kind: 'human' });
     const byAgent = update(humanWritten, agent, LONG_2);
     assert.equal(byAgent.patch.instruction_author_kind, 'agent');
-    assert.equal(byAgent.descriptionRequested, true);
-    assert.equal(byAgent.patch.description_request_kind, 'automatic');
+    assert.equal(byAgent.summaryRequested, true);
+    assert.equal(byAgent.patch.summary_request_kind, 'automatic');
   });
 
   it('regenerates generated and agent summaries whoever edits, and clears them when ineligible', () => {
     for (const source of ['generated', 'agent'] as const) {
       const s = state({
-        description: 'Old.',
-        description_source: source,
-        description_generation: 4,
-        description_revision: 2
+        summary: 'Old.',
+        summary_source: source,
+        summary_generation: 4,
+        summary_revision: 2
       });
       const longEdit = update(s, human, LONG_2);
-      assert.equal(longEdit.descriptionRequested, true, source);
-      assert.equal(longEdit.patch.description_generation, 5);
-      assert.equal(longEdit.patch.description, undefined, 'old text stays visible until replaced');
+      assert.equal(longEdit.summaryRequested, true, source);
+      assert.equal(longEdit.patch.summary_generation, 5);
+      assert.equal(longEdit.patch.summary, undefined, 'old text stays visible until replaced');
 
       const shortEdit = update(s, agent, SHORT);
-      assert.equal(shortEdit.descriptionRequested, false);
-      assert.equal(shortEdit.patch.description, null);
-      assert.equal(shortEdit.patch.description_revision, 3);
+      assert.equal(shortEdit.summaryRequested, false);
+      assert.equal(shortEdit.patch.summary, null);
+      assert.equal(shortEdit.patch.summary_revision, 3);
 
       const blankEdit = update(s, agent, '');
-      assert.equal(blankEdit.patch.description, null);
+      assert.equal(blankEdit.patch.summary, null);
       assert.equal(blankEdit.patch.instruction_author_kind, null);
     }
   });
 
   it('keeps a person-written summary and marks it stale', () => {
     const s = state({
-      description: 'Mine.',
-      description_source: 'user',
-      description_instruction_hash: hashObjectiveInstruction(LONG)
+      summary: 'Mine.',
+      summary_source: 'user',
+      summary_instruction_hash: hashObjectiveInstruction(LONG)
     });
     const plan = update(s, agent, LONG_2);
-    assert.equal(plan.descriptionRequested, false);
-    assert.equal(plan.patch.description, undefined);
-    assert.equal(isObjectiveDescriptionStale(s, LONG), false);
-    assert.equal(isObjectiveDescriptionStale(s, LONG_2), true);
+    assert.equal(plan.summaryRequested, false);
+    assert.equal(plan.patch.summary, undefined);
+    assert.equal(isObjectiveSummaryStale(s, LONG), false);
+    assert.equal(isObjectiveSummaryStale(s, LONG_2), true);
   });
 
   it('keeps an outstanding explicit request through a human edit', () => {
     const s = state({
-      description_status: 'pending',
-      description_request_kind: 'explicit',
-      description_generation: 7
+      summary_status: 'pending',
+      summary_request_kind: 'explicit',
+      summary_generation: 7
     });
     const plan = update(s, human, LONG_2);
-    assert.equal(plan.descriptionRequested, true);
-    assert.equal(plan.patch.description_generation, 8);
-    assert.equal(plan.patch.description_request_kind, 'explicit');
+    assert.equal(plan.summaryRequested, true);
+    assert.equal(plan.patch.summary_generation, 8);
+    assert.equal(plan.patch.summary_request_kind, 'explicit');
   });
 
   it('never generates while removal suppression is on, including across agent edits', () => {
     const s = state({
-      description_suppressed: true,
+      summary_suppressed: true,
       instruction_author_kind: 'agent',
-      description_generation: 2
+      summary_generation: 2
     });
     const plan = update(s, agent, LONG_2);
-    assert.equal(plan.descriptionRequested, false);
-    assert.equal(plan.patch.description_status, null);
-    assert.equal(plan.patch.description_suppressed, undefined, 'edits never clear suppression');
-    assert.equal(plan.patch.description_generation, 3, 'in-flight results are invalidated');
+    assert.equal(plan.summaryRequested, false);
+    assert.equal(plan.patch.summary_status, null);
+    assert.equal(plan.patch.summary_suppressed, undefined, 'edits never clear suppression');
+    assert.equal(plan.patch.summary_generation, 3, 'in-flight results are invalidated');
   });
 
   it('leaves the brief alone when instructions are unchanged', () => {
@@ -322,7 +322,7 @@ describe('instruction edits', () => {
     const created = planObjectiveBriefForCreate({
       instructionText: SHORT,
       titleProvided: false,
-      description: { kind: 'omit' },
+      summary: { kind: 'omit' },
       actor: agent,
       now: NOW
     });
@@ -330,39 +330,30 @@ describe('instruction edits', () => {
     assert.equal(created.patch.title_status, undefined);
   });
 
-  it('applies an authored description written together with new instructions', () => {
-    const plan = update(
-      state({ description_source: 'generated', description: 'Old.' }),
-      agent,
-      LONG_2,
-      {
-        description: { kind: 'set', text: 'New agent summary.' }
-      }
-    );
-    assert.equal(plan.patch.description, 'New agent summary.');
-    assert.equal(plan.patch.description_source, 'agent');
-    assert.equal(plan.patch.description_instruction_hash, hashObjectiveInstruction(LONG_2));
-    assert.equal(plan.descriptionRequested, false);
+  it('applies an authored summary written together with new instructions', () => {
+    const plan = update(state({ summary_source: 'generated', summary: 'Old.' }), agent, LONG_2, {
+      summary: { kind: 'set', text: 'New agent summary.' }
+    });
+    assert.equal(plan.patch.summary, 'New agent summary.');
+    assert.equal(plan.patch.summary_source, 'agent');
+    assert.equal(plan.patch.summary_instruction_hash, hashObjectiveInstruction(LONG_2));
+    assert.equal(plan.summaryRequested, false);
   });
 
   it('refuses agent-authored text while suppressed with a warning, not an error', () => {
-    const s = state({ description_suppressed: true });
-    const plan = update(s, agent, undefined, { description: { kind: 'set', text: 'Sneaky.' } });
-    assert.equal(plan.patch.description, undefined);
+    const s = state({ summary_suppressed: true });
+    const plan = update(s, agent, undefined, { summary: { kind: 'set', text: 'Sneaky.' } });
+    assert.equal(plan.patch.summary, undefined);
     assert.deepEqual(
       plan.warnings.map(w => w.code),
-      ['description_suppressed']
+      ['summary_suppressed']
     );
 
-    const person = update(s, human, undefined, { description: { kind: 'set', text: 'Mine.' } });
-    assert.equal(person.patch.description, 'Mine.');
-    assert.equal(person.patch.description_source, 'user');
-    assert.equal(person.patch.description_author_workspace_user_id, 'wu-human');
-    assert.equal(
-      person.patch.description_suppressed,
-      undefined,
-      'only Summarize clears suppression'
-    );
+    const person = update(s, human, undefined, { summary: { kind: 'set', text: 'Mine.' } });
+    assert.equal(person.patch.summary, 'Mine.');
+    assert.equal(person.patch.summary_source, 'user');
+    assert.equal(person.patch.summary_author_workspace_user_id, 'wu-human');
+    assert.equal(person.patch.summary_suppressed, undefined, 'only Summarize clears suppression');
   });
 });
 
@@ -372,54 +363,54 @@ describe('explicit requests', () => {
     mode: 'summarize' | 'regenerate' | 'retry',
     actor = human,
     text: string | null = LONG
-  ) => planObjectiveDescriptionGenerationRequest({ state: s, instructionText: text, mode, actor });
+  ) => planObjectiveSummaryGenerationRequest({ state: s, instructionText: text, mode, actor });
 
   it('only a person clears suppression via Summarize or Regenerate', () => {
-    const suppressed = state({ description_suppressed: true, description_generation: 3 });
+    const suppressed = state({ summary_suppressed: true, summary_generation: 3 });
     const plan = request(suppressed, 'summarize');
-    assert.equal(plan.patch.description_suppressed, false);
-    assert.equal(plan.patch.description_status, 'pending');
-    assert.equal(plan.patch.description_request_kind, 'explicit');
-    assert.equal(plan.patch.description_generation, 4);
+    assert.equal(plan.patch.summary_suppressed, false);
+    assert.equal(plan.patch.summary_status, 'pending');
+    assert.equal(plan.patch.summary_request_kind, 'explicit');
+    assert.equal(plan.patch.summary_generation, 4);
 
     assert.throws(
       () => request(suppressed, 'summarize', agent),
       (e: unknown) =>
-        e instanceof ServiceError && e.code === 'description_suppressed' && e.status === 409
+        e instanceof ServiceError && e.code === 'summary_suppressed' && e.status === 409
     );
     assert.throws(
       () => request(suppressed, 'regenerate', agent),
-      (e: unknown) => e instanceof ServiceError && e.code === 'description_suppressed'
+      (e: unknown) => e instanceof ServiceError && e.code === 'summary_suppressed'
     );
   });
 
   it('deduplicates repeated requests without moving the generation', () => {
     const pending = state({
-      description_status: 'pending',
-      description_request_kind: 'automatic',
-      description_generation: 5
+      summary_status: 'pending',
+      summary_request_kind: 'automatic',
+      summary_generation: 5
     });
     const again = request(pending, 'regenerate');
-    assert.equal(again.descriptionRequested, true);
-    assert.deepEqual(again.patch, { description_request_kind: 'explicit' });
+    assert.equal(again.summaryRequested, true);
+    assert.deepEqual(again.patch, { summary_request_kind: 'explicit' });
     const thrice = request(applied(pending, again.patch), 'regenerate');
     assert.deepEqual(thrice.patch, {});
   });
 
   it('retries only failed generations and never clears suppression', () => {
     const failed = state({
-      description_status: 'failed',
-      description_failure_code: 'provider_error',
-      description_generation: 2
+      summary_status: 'failed',
+      summary_failure_code: 'provider_error',
+      summary_generation: 2
     });
     const plan = request(failed, 'retry', agent);
-    assert.equal(plan.patch.description_status, 'pending');
-    assert.equal(plan.patch.description_generation, 3);
-    assert.equal(plan.patch.description_failure_code, null);
-    assert.equal(plan.patch.description_suppressed, undefined);
+    assert.equal(plan.patch.summary_status, 'pending');
+    assert.equal(plan.patch.summary_generation, 3);
+    assert.equal(plan.patch.summary_failure_code, null);
+    assert.equal(plan.patch.summary_suppressed, undefined);
     assert.throws(
       () => request(state(), 'retry'),
-      (e: unknown) => e instanceof ServiceError && e.code === 'description_not_failed'
+      (e: unknown) => e instanceof ServiceError && e.code === 'summary_not_failed'
     );
   });
 
@@ -427,10 +418,10 @@ describe('explicit requests', () => {
     for (const text of [SHORT, '', null]) {
       assert.throws(
         () => request(state(), 'summarize', human, text),
-        (e: unknown) => e instanceof ServiceError && e.code === 'description_not_eligible'
+        (e: unknown) => e instanceof ServiceError && e.code === 'summary_not_eligible'
       );
     }
-    assert.ok(LONG.length >= OBJECTIVE_DESCRIPTION_MIN_INSTRUCTION_CHARS);
+    assert.ok(LONG.length >= OBJECTIVE_SUMMARY_MIN_INSTRUCTION_CHARS);
   });
 });
 
@@ -439,8 +430,8 @@ describe('publication', () => {
 
   it('publishes only against the exact generation and instruction', () => {
     const r = row({
-      description_status: 'pending',
-      description_generation: 4,
+      summary_status: 'pending',
+      summary_generation: 4,
       title_source: 'generated',
       title_generation: 2
     });
@@ -449,47 +440,47 @@ describe('publication', () => {
       result: {
         instructionHash: hash,
         title: { generation: 2, text: 'Add brief state' },
-        description: { generation: 4, text: 'Goal. Done when.' }
+        summary: { generation: 4, text: 'Goal. Done when.' }
       },
       now: NOW
     });
     assert.equal(ok.title, 'published');
-    assert.equal(ok.description, 'published');
-    assert.equal(ok.patch.description_source, 'generated');
-    assert.equal(ok.patch.description_status, null);
-    assert.equal(ok.patch.description_revision, r.description_revision + 1);
+    assert.equal(ok.summary, 'published');
+    assert.equal(ok.patch.summary_source, 'generated');
+    assert.equal(ok.patch.summary_status, null);
+    assert.equal(ok.patch.summary_revision, r.summary_revision + 1);
 
     const staleGeneration = planObjectiveBriefPublication({
       row: r,
-      result: { instructionHash: hash, description: { generation: 3, text: 'Old.' } },
+      result: { instructionHash: hash, summary: { generation: 3, text: 'Old.' } },
       now: NOW
     });
-    assert.equal(staleGeneration.description, 'stale');
+    assert.equal(staleGeneration.summary, 'stale');
     assert.deepEqual(staleGeneration.patch, {});
 
     const staleInstruction = planObjectiveBriefPublication({
       row: r,
       result: {
         instructionHash: hashObjectiveInstruction(LONG_2)!,
-        description: { generation: 4, text: 'Old.' }
+        summary: { generation: 4, text: 'Old.' }
       },
       now: NOW
     });
-    assert.equal(staleInstruction.description, 'stale');
+    assert.equal(staleInstruction.summary, 'stale');
   });
 
   it('never restores a removed summary or overwrites authored titles', () => {
     const removed = row({
-      description_suppressed: true,
-      description_status: null,
-      description_generation: 9
+      summary_suppressed: true,
+      summary_status: null,
+      summary_generation: 9
     });
     const late = planObjectiveBriefPublication({
       row: removed,
-      result: { instructionHash: hash, description: { generation: 9, text: 'Late.' } },
+      result: { instructionHash: hash, summary: { generation: 9, text: 'Late.' } },
       now: NOW
     });
-    assert.equal(late.description, 'suppressed');
+    assert.equal(late.summary, 'suppressed');
     assert.deepEqual(late.patch, {});
 
     for (const source of ['agent', 'user', null] as const) {
@@ -502,21 +493,21 @@ describe('publication', () => {
     }
 
     const deleted = planObjectiveBriefPublication({
-      row: row({ deleted_at: NOW, description_status: 'pending' }),
-      result: { instructionHash: hash, description: { generation: 0, text: 'Text.' } },
+      row: row({ deleted_at: NOW, summary_status: 'pending' }),
+      result: { instructionHash: hash, summary: { generation: 0, text: 'Text.' } },
       now: NOW
     });
-    assert.equal(deleted.description, 'stale');
+    assert.equal(deleted.summary, 'stale');
   });
 
-  it('rejects an empty generated description as invalid output', () => {
-    const r = row({ description_status: 'pending', description_generation: 1 });
+  it('rejects an empty generated summary as invalid output', () => {
+    const r = row({ summary_status: 'pending', summary_generation: 1 });
     const out = planObjectiveBriefPublication({
       row: r,
-      result: { instructionHash: hash, description: { generation: 1, text: '   ' } },
+      result: { instructionHash: hash, summary: { generation: 1, text: '   ' } },
       now: NOW
     });
-    assert.equal(out.description, 'invalid');
+    assert.equal(out.summary, 'invalid');
     assert.deepEqual(out.patch, {});
   });
 });

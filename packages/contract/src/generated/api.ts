@@ -5,10 +5,10 @@
 import { z } from 'zod';
 
 /** The contract version (contract/VERSION) this API description belongs to. */
-export const contractVersion = "178.1.1";
+export const contractVersion = "179.0.1";
 
 /** The API description's own version (OpenAPI `info.version`). */
-export const apiVersion = "5.1.0";
+export const apiVersion = "6.0.0";
 
 /** A non-JSON request or response body: raw bytes (G3). */
 export type BinaryBody = Uint8Array | ArrayBuffer | Blob;
@@ -130,7 +130,7 @@ export type CreatedByKind = "human" | "agent" | "automation";
 export const createdByKindSchema: z.ZodType<CreatedByKind> = z.enum(["human", "agent", "automation"]);
 
 /**
- * Who wrote an objective title or description (ADR 0057).
+ * Who wrote an objective title or summary (ADR 0057).
  */
 export type ObjectiveBriefSource = "generated" | "agent" | "user";
 export const objectiveBriefSourceSchema: z.ZodType<ObjectiveBriefSource> = z.enum(["generated", "agent", "user"]);
@@ -141,22 +141,22 @@ export const objectiveBriefStatusSchema: z.ZodType<ObjectiveBriefStatus> = z.enu
 /**
  * `provider_unavailable`: no model provider is configured. `provider_error`: the provider failed after retries. `invalid_output` / `unfaithful_output`: no faithful summary could be produced, including instructions longer than the bounded model input (ADR 0058).
  */
-export type ObjectiveDescriptionFailureCode = "provider_unavailable" | "provider_error" | "invalid_output" | "unfaithful_output";
-export const objectiveDescriptionFailureCodeSchema: z.ZodType<ObjectiveDescriptionFailureCode> = z.enum(["provider_unavailable", "provider_error", "invalid_output", "unfaithful_output"]);
+export type ObjectiveSummaryFailureCode = "provider_unavailable" | "provider_error" | "invalid_output" | "unfaithful_output";
+export const objectiveSummaryFailureCodeSchema: z.ZodType<ObjectiveSummaryFailureCode> = z.enum(["provider_unavailable", "provider_error", "invalid_output", "unfaithful_output"]);
 
 /**
- * Authored human-facing description (ADR 0057). Omitted leaves it unchanged (on create, the automatic summary policy applies). `null` or blank text is Remove: the summary is cleared and no summary is generated until a person requests Summarize. Other text (trimmed, at most 4000 characters, 400 `description_too_long` otherwise) is stored as written by the caller, with editor attribution. Allowed in every objective state on REST; it never changes instructions, lifecycle or execution evidence, and a description-only update does not move `updatedAt`.
+ * Authored human-facing summary (ADR 0057, renamed from description by ADR 0083): a short overview for people, never sent to the executing agent. Omitted leaves it unchanged (on create, the automatic summary policy applies). `null` or blank text is Remove: the summary is cleared and no summary is generated until a person requests Summarize. Other text (trimmed, at most 4000 characters, 400 `summary_too_long` otherwise) is stored as written by the caller, with editor attribution. Allowed in every objective state on REST; it never changes instructions, lifecycle or execution evidence, and a summary-only update does not move `updatedAt`.
  */
-export type ObjectiveDescriptionInput = string | null;
-export const objectiveDescriptionInputSchema: z.ZodType<ObjectiveDescriptionInput> = z.string().nullable();
+export type ObjectiveSummaryInput = string | null;
+export const objectiveSummaryInputSchema: z.ZodType<ObjectiveSummaryInput> = z.string().nullable();
 
-export interface ObjectiveDescriptionRequestBody {
+export interface ObjectiveSummaryRequestBody {
   /**
-   * `summarize` and `regenerate` ask for a new generated summary and are the only operations that clear removal suppression. `retry` re-requests a `failed` generation only (409 `description_not_failed` otherwise) and never clears suppression.
+   * `summarize` and `regenerate` ask for a new generated summary and are the only operations that clear removal suppression. `retry` re-requests a `failed` generation only (409 `summary_not_failed` otherwise) and never clears suppression.
    */
   mode: "summarize" | "regenerate" | "retry";
 }
-export const objectiveDescriptionRequestBodySchema: z.ZodType<ObjectiveDescriptionRequestBody> = z.strictObject({ "mode": z.enum(["summarize", "regenerate", "retry"]) });
+export const objectiveSummaryRequestBodySchema: z.ZodType<ObjectiveSummaryRequestBody> = z.strictObject({ "mode": z.enum(["summarize", "regenerate", "retry"]) });
 
 export type ProjectLifecycle = "active" | "archived";
 export const projectLifecycleSchema: z.ZodType<ProjectLifecycle> = z.enum(["active", "archived"]);
@@ -357,44 +357,44 @@ export interface ObjectiveDto {
   /**
    * Human-facing summary of the instructions in Simplified Technical English style: one to three prose paragraphs that open with the goal and close with the done-when sentence. Presentation only: it is never sent to the executing agent. Null when there is no summary; clients then show `instructionText`.
    */
-  description: string | null;
+  summary: string | null;
   /**
-   * Who wrote `description`; null when there is none.
+   * Who wrote `summary`; null when there is none.
    */
-  descriptionSource: ObjectiveBriefSource | null;
+  summarySource: ObjectiveBriefSource | null;
   /**
-   * True when `description` was written from different instruction text (show "May be out of date").
+   * True when `summary` was written from different instruction text (show "May be out of date").
    */
-  descriptionStale: boolean;
+  summaryStale: boolean;
   /**
-   * `pending` while a summary is wanted and not yet written; `failed` when generation failed for good (see `descriptionFailureCode`; Retry is available). Null when no generation is outstanding.
+   * `pending` while a summary is wanted and not yet written; `failed` when generation failed for good (see `summaryFailureCode`; Retry is available). Null when no generation is outstanding.
    */
-  descriptionStatus: ObjectiveBriefStatus | null;
+  summaryStatus: ObjectiveBriefStatus | null;
   /**
    * Stable failure code of the last failed generation. Raw provider messages are never exposed.
    */
-  descriptionFailureCode: ObjectiveDescriptionFailureCode | null;
+  summaryFailureCode: ObjectiveSummaryFailureCode | null;
   /**
    * True after Remove: no summary is shown or generated, across instruction edits and catch-up, until a person requests `summarize` (or `regenerate`).
    */
-  descriptionSuppressed: boolean;
+  summarySuppressed: boolean;
   /**
    * True when the current instructions are long enough to summarize (at least 280 trimmed characters). Shorter instructions are shown in full and Summarize is not offered.
    */
-  descriptionEligible: boolean;
+  summaryEligible: boolean;
   /**
-   * Moves on every description change; send it as `expectedDescriptionRevision` to detect a concurrent edit.
+   * Moves on every description change; send it as `expectedSummaryRevision` to detect a concurrent edit.
    */
-  descriptionRevision: number;
-  descriptionUpdatedAt: DateTime | null;
+  summaryRevision: number;
+  summaryUpdatedAt: DateTime | null;
   /**
    * Workspace member who wrote or last edited the authored description (source `user`, or the member behind an agent write). Compare with the viewer to show "Edited by you". Null for a generated summary.
    */
-  descriptionAuthorWorkspaceUserId: string | null;
+  summaryAuthorWorkspaceUserId: string | null;
   /**
    * Connector/agent identifier for an agent-written description, when known.
    */
-  descriptionAuthorAgent: string | null;
+  summaryAuthorAgent: string | null;
   instructionText: string;
   state: ObjectiveState;
   /**
@@ -434,7 +434,7 @@ export interface ObjectiveDto {
    */
   launchConfigOverrides: { [key: string]: { [key: string]: AgentLaunchConfigDto } };
 }
-export const objectiveDtoSchema: z.ZodType<ObjectiveDto> = z.object({ "id": z.string(), "workspaceId": z.string(), "projectId": z.string(), "missionId": z.string(), "position": z.int().min(0), "title": z.string().nullable(), "titleSource": objectiveBriefSourceSchema.nullable(), "titleStatus": objectiveBriefStatusSchema.nullable(), "description": z.string().nullable(), "descriptionSource": objectiveBriefSourceSchema.nullable(), "descriptionStale": z.boolean(), "descriptionStatus": objectiveBriefStatusSchema.nullable(), "descriptionFailureCode": objectiveDescriptionFailureCodeSchema.nullable(), "descriptionSuppressed": z.boolean(), "descriptionEligible": z.boolean(), "descriptionRevision": z.int().min(0), "descriptionUpdatedAt": dateTimeSchema.nullable(), "descriptionAuthorWorkspaceUserId": z.string().nullable(), "descriptionAuthorAgent": z.string().nullable(), "instructionText": z.string(), "state": objectiveStateSchema, "autoAdvance": z.boolean(), "queueEntry": objectiveRunQueueEntryDtoSchema.nullable(), "assignedAgent": z.string().nullable(), "model": z.string().nullable(), "reasoningEffort": z.string().nullable(), "createdAt": dateTimeSchema, "updatedAt": dateTimeSchema, "launchedAt": dateTimeSchema.nullable(), "startedAt": dateTimeSchema.nullable(), "completedAt": dateTimeSchema.nullable(), "reopenedAt": dateTimeSchema.nullable(), "revision": z.int().min(1), "externalSessionId": z.string().nullable(), "branch": z.string().nullable(), "resourceKey": z.string().nullable(), "displayKey": z.string(), "displayId": z.string(), "createdByKind": createdByKindSchema, "createdByAgent": z.string().nullable(), "createdByWorkspaceUserId": z.string().nullable(), "launchConfigOverrides": z.record(z.string(), z.record(z.string(), agentLaunchConfigDtoSchema)) });
+export const objectiveDtoSchema: z.ZodType<ObjectiveDto> = z.object({ "id": z.string(), "workspaceId": z.string(), "projectId": z.string(), "missionId": z.string(), "position": z.int().min(0), "title": z.string().nullable(), "titleSource": objectiveBriefSourceSchema.nullable(), "titleStatus": objectiveBriefStatusSchema.nullable(), "summary": z.string().nullable(), "summarySource": objectiveBriefSourceSchema.nullable(), "summaryStale": z.boolean(), "summaryStatus": objectiveBriefStatusSchema.nullable(), "summaryFailureCode": objectiveSummaryFailureCodeSchema.nullable(), "summarySuppressed": z.boolean(), "summaryEligible": z.boolean(), "summaryRevision": z.int().min(0), "summaryUpdatedAt": dateTimeSchema.nullable(), "summaryAuthorWorkspaceUserId": z.string().nullable(), "summaryAuthorAgent": z.string().nullable(), "instructionText": z.string(), "state": objectiveStateSchema, "autoAdvance": z.boolean(), "queueEntry": objectiveRunQueueEntryDtoSchema.nullable(), "assignedAgent": z.string().nullable(), "model": z.string().nullable(), "reasoningEffort": z.string().nullable(), "createdAt": dateTimeSchema, "updatedAt": dateTimeSchema, "launchedAt": dateTimeSchema.nullable(), "startedAt": dateTimeSchema.nullable(), "completedAt": dateTimeSchema.nullable(), "reopenedAt": dateTimeSchema.nullable(), "revision": z.int().min(1), "externalSessionId": z.string().nullable(), "branch": z.string().nullable(), "resourceKey": z.string().nullable(), "displayKey": z.string(), "displayId": z.string(), "createdByKind": createdByKindSchema, "createdByAgent": z.string().nullable(), "createdByWorkspaceUserId": z.string().nullable(), "launchConfigOverrides": z.record(z.string(), z.record(z.string(), agentLaunchConfigDtoSchema)) });
 
 export interface MissionDto {
   id: string;
@@ -1252,11 +1252,11 @@ export interface CreateMissionBody {
   firstObjective?: string;
   objectives?: Array<{
     /**
-     * Instruction text; must not be blank.
+     * The complete brief the executing agent receives (usually the longer text); must not be blank. Put the short human-facing overview in `summary`.
      */
-    objective: string;
+    instructions: string;
     title?: string | null;
-    description?: ObjectiveDescriptionInput;
+    summary?: ObjectiveSummaryInput;
     /**
      * Deprecated queue hint; defaults to false.
      */
@@ -1276,7 +1276,7 @@ export interface CreateMissionBody {
    */
   tagIds?: string[];
 }
-export const createMissionBodySchema: z.ZodType<CreateMissionBody> = z.object({ "projectId": z.string(), "title": z.exactOptional(z.string()), "priority": z.exactOptional(missionPrioritySchema), "dueDatetime": z.exactOptional(z.string().nullable()), "statusId": z.exactOptional(z.string()), "assignedWorkspaceUserId": z.exactOptional(z.string().nullable()), "firstObjective": z.exactOptional(z.string()), "objectives": z.exactOptional(z.array(z.object({ "objective": z.string(), "title": z.exactOptional(z.string().nullable()), "description": z.exactOptional(objectiveDescriptionInputSchema), "autoAdvance": z.exactOptional(z.boolean()), "agent": z.exactOptional(z.string().nullable()), "model": z.exactOptional(z.string().nullable()), "resourceKey": z.exactOptional(z.string().nullable()) }))), "tagIds": z.exactOptional(z.array(z.string())) });
+export const createMissionBodySchema: z.ZodType<CreateMissionBody> = z.object({ "projectId": z.string(), "title": z.exactOptional(z.string()), "priority": z.exactOptional(missionPrioritySchema), "dueDatetime": z.exactOptional(z.string().nullable()), "statusId": z.exactOptional(z.string()), "assignedWorkspaceUserId": z.exactOptional(z.string().nullable()), "firstObjective": z.exactOptional(z.string()), "objectives": z.exactOptional(z.array(z.object({ "instructions": z.string(), "title": z.exactOptional(z.string().nullable()), "summary": z.exactOptional(objectiveSummaryInputSchema), "autoAdvance": z.exactOptional(z.boolean()), "agent": z.exactOptional(z.string().nullable()), "model": z.exactOptional(z.string().nullable()), "resourceKey": z.exactOptional(z.string().nullable()) }))), "tagIds": z.exactOptional(z.array(z.string())) });
 
 /**
  * Partial update; omitted members are unchanged.
@@ -2167,7 +2167,7 @@ export interface CreateObjectiveBody {
    * Blank or omitted derives a title from the instruction and generates a better one asynchronously.
    */
   title?: string | null;
-  description?: ObjectiveDescriptionInput;
+  summary?: ObjectiveSummaryInput;
   /**
    * Defaults to `draft`. Creating a draft never changes another objective.
    */
@@ -2201,7 +2201,7 @@ export interface CreateObjectiveBody {
    */
   launchConfigAgent?: string;
 }
-export const createObjectiveBodySchema: z.ZodType<CreateObjectiveBody> = z.object({ "missionId": z.string(), "instructionText": z.string(), "title": z.exactOptional(z.string().nullable()), "description": z.exactOptional(objectiveDescriptionInputSchema), "state": z.exactOptional(objectiveStateSchema), "autoAdvance": z.exactOptional(z.boolean()), "resourceKey": z.exactOptional(z.string().nullable()), "assignedAgent": z.exactOptional(z.string().nullable()), "model": z.exactOptional(z.string().nullable()), "reasoningEffort": z.exactOptional(z.string().nullable()), "launchConfigOverride": z.exactOptional(agentLaunchConfigInputSchema.nullable()), "launchConfigAgent": z.exactOptional(z.string()) });
+export const createObjectiveBodySchema: z.ZodType<CreateObjectiveBody> = z.object({ "missionId": z.string(), "instructionText": z.string(), "title": z.exactOptional(z.string().nullable()), "summary": z.exactOptional(objectiveSummaryInputSchema), "state": z.exactOptional(objectiveStateSchema), "autoAdvance": z.exactOptional(z.boolean()), "resourceKey": z.exactOptional(z.string().nullable()), "assignedAgent": z.exactOptional(z.string().nullable()), "model": z.exactOptional(z.string().nullable()), "reasoningEffort": z.exactOptional(z.string().nullable()), "launchConfigOverride": z.exactOptional(agentLaunchConfigInputSchema.nullable()), "launchConfigAgent": z.exactOptional(z.string()) });
 
 /**
  * Partial update; a body with no recognized member returns the objective unchanged.
@@ -2215,11 +2215,11 @@ export interface UpdateObjectiveBody {
    * Blank or null clears it.
    */
   title?: string | null;
-  description?: ObjectiveDescriptionInput;
+  summary?: ObjectiveSummaryInput;
   /**
-   * Optional optimistic-concurrency check for `description`: the `descriptionRevision` the editor started from. A different current revision answers 409 `description_conflict` (with the current `descriptionRevision` and `description` in `details`) and writes nothing.
+   * Optional optimistic-concurrency check for `summary`: the `summaryRevision` the editor started from. A different current revision answers 409 `summary_conflict` (with the current `summaryRevision` and `summary` in `details`) and writes nothing.
    */
-  expectedDescriptionRevision?: number;
+  expectedSummaryRevision?: number;
   /**
    * Moving an executed objective back to `draft` reopens it (a new run) and moves it to the head of the mission's draft queue, redistributing only the queued objectives' existing position slots; leaving an active state dequeues it and clears its active execution requests. Setting `draft` never changes another objective's state.
    */
@@ -2242,7 +2242,7 @@ export interface UpdateObjectiveBody {
    */
   launchConfigAgent?: string;
 }
-export const updateObjectiveBodySchema: z.ZodType<UpdateObjectiveBody> = z.object({ "instructionText": z.exactOptional(z.string()), "title": z.exactOptional(z.string().nullable()), "description": z.exactOptional(objectiveDescriptionInputSchema), "expectedDescriptionRevision": z.exactOptional(z.int().min(0)), "state": z.exactOptional(objectiveStateSchema), "autoAdvance": z.exactOptional(z.boolean()), "position": z.exactOptional(z.int().min(0)), "assignedAgent": z.exactOptional(z.string().nullable()), "model": z.exactOptional(z.string().nullable()), "reasoningEffort": z.exactOptional(z.string().nullable()), "resourceKey": z.exactOptional(z.string().nullable()), "launchConfigOverride": z.exactOptional(agentLaunchConfigInputSchema.nullable()), "launchConfigAgent": z.exactOptional(z.string()) });
+export const updateObjectiveBodySchema: z.ZodType<UpdateObjectiveBody> = z.object({ "instructionText": z.exactOptional(z.string()), "title": z.exactOptional(z.string().nullable()), "summary": z.exactOptional(objectiveSummaryInputSchema), "expectedSummaryRevision": z.exactOptional(z.int().min(0)), "state": z.exactOptional(objectiveStateSchema), "autoAdvance": z.exactOptional(z.boolean()), "position": z.exactOptional(z.int().min(0)), "assignedAgent": z.exactOptional(z.string().nullable()), "model": z.exactOptional(z.string().nullable()), "reasoningEffort": z.exactOptional(z.string().nullable()), "resourceKey": z.exactOptional(z.string().nullable()), "launchConfigOverride": z.exactOptional(agentLaunchConfigInputSchema.nullable()), "launchConfigAgent": z.exactOptional(z.string()) });
 
 export interface LaunchObjectiveBody {
   /**
@@ -2370,7 +2370,7 @@ export interface ActivityFeedMissionItemDto {
   /**
    * Server-truncated human-facing summary of the primary objective, or null when it has none (show `instructionPreview` then). Presentation only.
    */
-  descriptionPreview: string | null;
+  summaryPreview: string | null;
   agentIdentifier: string | null;
   modelIdentifier: string | null;
   branch: string | null;
@@ -2382,7 +2382,7 @@ export interface ActivityFeedMissionItemDto {
   latestEventSummary: string | null;
   latestEventAt: DateTime | null;
 }
-export const activityFeedMissionItemDtoSchema: z.ZodType<ActivityFeedMissionItemDto> = z.object({ "id": z.string(), "kind": z.enum(["mission_run", "mission_delivered"]), "occurredAt": dateTimeSchema, "workspaceId": z.string(), "workspaceName": z.string(), "projectId": z.string(), "projectName": z.string(), "projectColor": z.string().nullable(), "missionId": z.string(), "missionDisplayId": z.string(), "missionTitle": z.string(), "objectiveId": z.string().nullable(), "objectiveDisplayId": z.string().nullable(), "createdByKind": createdByKindSchema, "createdByAgent": z.string().nullable(), "runState": z.enum(["launching", "executing", "delivered"]), "objectives": z.array(activityFeedMissionObjectiveDtoSchema), "activeObjectiveIds": z.array(z.string()), "objectiveTitle": z.string().nullable(), "instructionPreview": z.string(), "descriptionPreview": z.string().nullable(), "agentIdentifier": z.string().nullable(), "modelIdentifier": z.string().nullable(), "branch": z.string().nullable(), "resourceKey": z.string().nullable(), "startedAt": dateTimeSchema.nullable(), "latestEventSummary": z.string().nullable(), "latestEventAt": dateTimeSchema.nullable() });
+export const activityFeedMissionItemDtoSchema: z.ZodType<ActivityFeedMissionItemDto> = z.object({ "id": z.string(), "kind": z.enum(["mission_run", "mission_delivered"]), "occurredAt": dateTimeSchema, "workspaceId": z.string(), "workspaceName": z.string(), "projectId": z.string(), "projectName": z.string(), "projectColor": z.string().nullable(), "missionId": z.string(), "missionDisplayId": z.string(), "missionTitle": z.string(), "objectiveId": z.string().nullable(), "objectiveDisplayId": z.string().nullable(), "createdByKind": createdByKindSchema, "createdByAgent": z.string().nullable(), "runState": z.enum(["launching", "executing", "delivered"]), "objectives": z.array(activityFeedMissionObjectiveDtoSchema), "activeObjectiveIds": z.array(z.string()), "objectiveTitle": z.string().nullable(), "instructionPreview": z.string(), "summaryPreview": z.string().nullable(), "agentIdentifier": z.string().nullable(), "modelIdentifier": z.string().nullable(), "branch": z.string().nullable(), "resourceKey": z.string().nullable(), "startedAt": dateTimeSchema.nullable(), "latestEventSummary": z.string().nullable(), "latestEventAt": dateTimeSchema.nullable() });
 
 /**
  * An unseen `ask` mission event from the past three days; the agent is blocked on it.
@@ -8075,13 +8075,13 @@ export interface PatchObjectivesByIdPathParams {
 }
 export const patchObjectivesByIdPathParamsSchema: z.ZodType<PatchObjectivesByIdPathParams> = z.object({ "id": z.string() });
 
-export interface PostObjectivesByIdDescriptionRequestsPathParams {
+export interface PostObjectivesByIdSummaryRequestsPathParams {
   /**
    * Objective UUID, or full display id (`coo:756.k7xm`) resolved within the caller's organization; an ambiguous display id answers 409.
    */
   id: string;
 }
-export const postObjectivesByIdDescriptionRequestsPathParamsSchema: z.ZodType<PostObjectivesByIdDescriptionRequestsPathParams> = z.object({ "id": z.string() });
+export const postObjectivesByIdSummaryRequestsPathParamsSchema: z.ZodType<PostObjectivesByIdSummaryRequestsPathParams> = z.object({ "id": z.string() });
 
 export interface PostObjectivesByIdLaunchPathParams {
   /**
@@ -12996,12 +12996,12 @@ export const apiOperations = {
     responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: objectiveDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
   },
   /**
-   * POST /api/objectives/{id}/description-requests: Request a generated objective summary (Summarize, Regenerate or Retry)
+   * POST /api/objectives/{id}/summary-requests: Request a generated objective summary (Summarize, Regenerate or Retry)
    */
-  postObjectivesByIdDescriptionRequests: {
-    operationId: "postObjectivesByIdDescriptionRequests",
+  postObjectivesByIdSummaryRequests: {
+    operationId: "postObjectivesByIdSummaryRequests",
     method: "POST",
-    path: "/api/objectives/{id}/description-requests",
+    path: "/api/objectives/{id}/summary-requests",
     tags: ["objectives"],
     deprecated: false,
     permission: "objective:update",
@@ -13010,8 +13010,8 @@ export const apiOperations = {
     consumers: ["mobile","webapp"],
     extension: null,
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
-    parameters: { path: postObjectivesByIdDescriptionRequestsPathParamsSchema, query: null, header: null },
-    requestBody: { required: true, content: { "application/json": { kind: "json", schema: objectiveDescriptionRequestBodySchema } } },
+    parameters: { path: postObjectivesByIdSummaryRequestsPathParamsSchema, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: objectiveSummaryRequestBodySchema } } },
     responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: objectiveDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
   },
   /**

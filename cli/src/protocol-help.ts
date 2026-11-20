@@ -124,7 +124,7 @@ Subcommands:
   statuses                List one project's ordered board columns
   discuss-objective      Mark a draft objective as submitted (does not start execution)
   add-objectives         Append ordered objectives to an existing mission
-  update-objective       Set title, description, auto-advance, instruction text, and/or agent on an objective
+  update-objective       Set title, summary, auto-advance, instruction text, and/or agent on an objective
   delete-missions        Confirmed bulk soft-delete of missions
   delete-objectives      Confirmed bulk soft-delete of objectives
   create                 Create a draft mission without attaching
@@ -729,29 +729,41 @@ add-objectives:
     --objective-agent <id> / --objective-model <id>
         Default launch selection for items that name no "agent" of their own.
         --objective-model requires --objective-agent.
+  Item fields:
+    "instructions"  (required) The complete brief the executing agent receives:
+                    context, steps and done-when. Usually the LONG text.
+    "summary"       (optional) Short overview for people, 1-3 paragraphs, about
+                    120 words. Never sent to the agent. Usually the SHORT text.
+    "title", "agent", "model", "autoAdvance", "resourceKey"
   Notes:
-    Each item is { "objective": "...", "title": "...", "description": "...",
+    Each item is { "instructions": "...", "summary": "...", "title": "...",
     "agent": "codex", "model": "gpt-6.1-terra", "autoAdvance": true|false,
     "resourceKey": "..." }.
     model requires agent. Per-item autoAdvance and agent win over the flags.
-    "description" is the optional human-facing summary (see create); style
-    issues come back as "warnings" on the matching created objective.
+    A summary that looks swapped with its instructions (3x longer and 400+
+    characters, or 1.5x longer, or headings or numbered steps over short
+    instructions) returns an objective_fields_swapped warning; it is never
+    refused. Style issues come back as "warnings" on the matching created
+    objective.
     Use agent "manual" (alias "human") to assign an objective to a person; it
     takes no model and is never launched.
 
 update-objective:
   Purpose:
-    Rewrite an objective title or description, queue or dequeue compatibility
+    Rewrite an objective title or summary, queue or dequeue compatibility
     auto-advance, edit instruction text, request a generated summary, and/or
     reassign the agent on an existing objective.
   Required:
     --objective-id <id>
     At least one of:
       --title <text>
-      --description <text> or --description-file <path|->
-      --description-request summarize | regenerate | retry
+      --summary <text> or --summary-file <path|->
+                        Short overview for people (1-3 paragraphs); never sent
+                        to the agent. Empty removes it.
+      --summary-request summarize | regenerate | retry
       --auto-advance or --no-auto-advance
       --instruction-text <text> or --instruction-text-file <path|->
+                        The complete brief the executing agent receives.
       --objective-agent <id>
   Optional:
     --objective-model <id> / --objective-reasoning-effort <value>
@@ -766,21 +778,23 @@ update-objective:
     custom title and restores instruction-derived presentation.
     Instruction text may be edited only when the objective is in draft state.
     Blank instruction text is allowed in that state.
-    The description (and --description-request) may be changed by an agent
-    only in draft state; people edit descriptions in any state in the app.
-    An empty --description removes the summary: Overlord then writes none,
+    The summary (and --summary-request) may be changed by an agent
+    only in draft state; people edit summaries in any state in the app.
+    A --summary that looks swapped with the instructions returns an
+    objective_fields_swapped warning; it is stored as written.
+    An empty --summary removes the summary: Overlord then writes none,
     even after instruction edits, until a person selects Summarize. While a
     person's removal is in force, agent text is not stored (warning
-    description_suppressed) and summary requests are refused (409).
-    --description-request summarize|regenerate asks Overlord to write the
+    summary_suppressed) and summary requests are refused (409).
+    --summary-request summarize|regenerate asks Overlord to write the
     summary; retry re-requests a failed one. Instructions shorter than 280
     characters are shown in full and are not summarized (409
-    description_not_eligible).
+    summary_not_eligible).
   Returns:
     The updated objective JSON, including assignedAgent, model, reasoningEffort,
-    resourceKey, description and its summary state (descriptionSource,
-    descriptionStatus, descriptionSuppressed), plus "warnings": advisory
-    description_style issues and description_suppressed. autoAdvance is
+    resourceKey, summary and its state (summarySource, summaryStatus,
+    summarySuppressed), plus "warnings": advisory summary_style issues,
+    summary_suppressed and objective_fields_swapped. autoAdvance is
     deprecated and derived from live queueEntry membership.
 
 delete-missions:
@@ -816,12 +830,20 @@ create:
     Create a draft mission without attaching. A project must be named
     explicitly; use --unassigned-to-project only for deliberate account-owned
     inbox capture.
-  Required:
-    --objective "<text>" or --objectives-json / --objectives-file <path|->
+  Required (one of):
+    --objective-instructions "<text>" or --objective-instructions-file <path|->
+        INSTRUCTIONS: the complete brief the executing agent receives (context,
+        steps, done-when). Usually the LONG text. Positional text also works.
+    --objectives-json / --objectives-file <path|->
+        Items { "instructions": "...", "summary": "...", "title": "...", ... }.
   Optional:
+    --objective-summary "<text>" or --objective-summary-file <path|->
+        SUMMARY: a short overview for people, 1-3 paragraphs (about 120 words).
+        Never sent to the agent. Usually the SHORT text. With --objectives-json,
+        set "summary" on each item instead.
     --title <text>
-    --resource <key>           Resource key for the single --objective form;
-                               use resourceKey on each --objectives-json item
+    --resource <key>           Resource key for the single --objective-instructions
+                               form; use resourceKey on each --objectives-json item
     --project-id <id>           Required for a project mission; never inferred
     --unassigned-to-project     Intentionally create an account-owned inbox item
     --assigned-to <id>          Workspace member to own the mission (meaningless on the inbox fallback)
@@ -834,28 +856,35 @@ create:
         objective just to name an agent. This is not --agent, which records
         creation provenance. Seeds only items with no "agent" of their own;
         --objective-model requires --objective-agent.
-    --objective-description <text> or --objective-description-file <path|->
-        Human-facing summary of the single --objective (see Notes). With
-        --objectives-json, set "description" on each item instead.
   Notes:
-    The objective text is the complete instruction for the executing agent.
-    A description is a short summary for the people who decide whether to
-    launch it: one to three prose paragraphs in Simplified Technical English
-    style that open with the goal and close with the done-when sentence (about
-    120 words). It is never sent to the executing agent. Omit it and Overlord
-    writes one for long agent-written objectives. Style issues come back as
-    "warnings" on the created objective; the text is stored as written.
+    Do not swap the two texts. The agent receives ONLY the instructions; the
+    summary is for the people who decide whether to launch it: one to three
+    prose paragraphs in Simplified Technical English style that open with the
+    goal and close with the done-when sentence. Omit it and Overlord writes one
+    for long agent-written objectives.
+    If the texts look swapped (a summary 3x longer than its instructions and
+    400+ characters), or may be swapped (1.5x longer, or Markdown headings,
+    numbered steps or a "Done when:" label over short instructions), the
+    created objective carries an objective_fields_swapped warning naming both
+    flags. Nothing is refused. Style issues come back as "warnings" on the
+    created objective; the text is stored as written.
 
 prompt:
   Purpose:
     Create a mission and attach to it in one call.
   Required:
-    --objective "<text>" or --objectives-json / --objectives-file <path|->
+    --objective-instructions "<text>" or --objective-instructions-file <path|->
+        INSTRUCTIONS: the complete brief the executing agent receives. Usually
+        the LONG text. Or --objectives-json / --objectives-file <path|->.
     --project-id <id>
   Optional:
+    --objective-summary "<text>" or --objective-summary-file <path|->
+        SUMMARY: a short overview for people, 1-3 paragraphs. Never sent to the
+        agent. Usually the SHORT text. With --objectives-json, set "summary" on
+        each item instead. Same swap guard as create.
     --title <text>
-    --resource <key>           Resource key for the single --objective form;
-                               use resourceKey on each --objectives-json item
+    --resource <key>           Resource key for the single --objective-instructions
+                               form; use resourceKey on each --objectives-json item
     --agent <identifier>
     --external-session-id <id>
     --assigned-to <id>          Workspace member to own the mission
@@ -865,9 +894,6 @@ prompt:
     --objective-agent <id> / --objective-model <id>
         Assign a launch agent (and its model) to the objectives created here.
         Distinct from --agent, which names the attaching agent for the session.
-    --objective-description <text> or --objective-description-file <path|->
-        Human-facing summary of the single --objective (see Notes). With
-        --objectives-json, set "description" on each item instead.
   Returns:
     New mission/session JSON plus SESSION_KEY on stderr when available.
 

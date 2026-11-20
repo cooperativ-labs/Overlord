@@ -58,7 +58,7 @@ async function missionWith(ctx: ServiceContext, name: string, objectiveCount = 1
     ctx,
     projectId: project.id,
     objectives: Array.from({ length: objectiveCount }, (_, index) => ({
-      objective: `Work ${index + 1} for ${name}`
+      instructions: `Work ${index + 1} for ${name}`
     }))
   });
   for (const objective of objectives) {

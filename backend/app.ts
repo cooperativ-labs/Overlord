@@ -251,7 +251,7 @@ import {
   reorderObjectives,
   reorderProjects,
   reorderProjectStatuses,
-  requestObjectiveDescription,
+  requestObjectiveSummary,
   revokeUserToken,
   searchMissions,
   searchMissionsAcrossWorkspacesV2,
@@ -1899,8 +1899,8 @@ app.delete(
 // Summarize / Regenerate / Retry an objective summary (ADR 0059). Authorized
 // against the objective's own workspace inside the handler, like PATCH.
 app.post(
-  '/api/objectives/:id/description-requests',
-  handle(req => requestObjectiveDescription(req.params.id, req.body), { mutates: true })
+  '/api/objectives/:id/summary-requests',
+  handle(req => requestObjectiveSummary(req.params.id, req.body), { mutates: true })
 );
 app.post(
   '/api/objectives/:id/launch',

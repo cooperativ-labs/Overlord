@@ -13,7 +13,7 @@ async function missionWith(names: string[]) {
   const { mission, objectives } = await createMissionWithObjectives({
     ctx,
     projectId: project.id,
-    objectives: names.map(objective => ({ objective }))
+    objectives: names.map(instructions => ({ instructions }))
   });
   const missionQueue = async () =>
     (await listProjectRunQueues(db, project.id)).queues.find(
@@ -30,7 +30,7 @@ describe('Run Queue queueing behind a running objective', () => {
     const { objectives: followers } = await createMissionWithObjectives({
       ctx,
       projectId: project.id,
-      objectives: [{ objective: 'Other mission' }]
+      objectives: [{ instructions: 'Other mission' }]
     });
     const entry = await enqueueRunQueueEntry(db, project.id, first.id);
     const queue = await missionQueue();

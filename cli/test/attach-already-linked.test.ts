@@ -22,7 +22,7 @@ test('attach rejected for an already-linked execution request is not treated as 
       post: async () => {
         throw new CliError({
           message:
-            'Execution request is already linked to another session — (execution_request_already_linked)'
+            'Execution request is already linked to another session (execution_request_already_linked). Run ovld protocol resume-follow-up --mission-id coo:830 --objective-id coo:830.abcd.'
         });
       },
       patch: async () => {
@@ -57,11 +57,11 @@ test('attach rejected for an already-linked execution request is not treated as 
         }),
       (error: unknown) => {
         assert.ok(error instanceof CliError);
-        assert.match(error.message, /stale mission-session binding/i);
-        assert.match(error.message, /not a user authentication failure/i);
-        assert.match(error.message, /without `--execution-request-id`/);
-        assert.match(error.message, /OVERLORD_EXECUTION_REQUEST_ID/);
-        assert.doesNotMatch(error.message, /credentials were rejected/i);
+        assert.match(
+          error.message,
+          /resume-follow-up --mission-id coo:830 --objective-id coo:830.abcd/
+        );
+        assert.doesNotMatch(error.message, /auth login|credentials were rejected/i);
         return true;
       }
     );

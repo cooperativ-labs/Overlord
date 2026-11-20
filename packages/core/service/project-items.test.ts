@@ -33,7 +33,7 @@ async function source(ctx: any, projectId: string) {
   const created = await createMissionWithObjectives({
     ctx,
     projectId,
-    objectives: [{ objective: 'Resolve project items' }]
+    objectives: [{ instructions: 'Resolve project items' }]
   });
   const attached = await attachSession({ ctx, missionId: created.mission.id });
   return {
@@ -312,7 +312,7 @@ test('scan bound, live ledger, own mission inclusion, deleted sources and MCP at
     const sibling = await createMissionWithObjectives({
       ctx,
       projectId: project.id,
-      objectives: [{ objective: 'Earlier own work' }, { objective: 'Current own work' }]
+      objectives: [{ instructions: 'Earlier own work' }, { instructions: 'Current own work' }]
     });
     const a = await attachSession({
       ctx,

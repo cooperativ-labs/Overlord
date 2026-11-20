@@ -41,10 +41,12 @@ Requirements:
   selection for items naming no `agent` of their own — so a mission is created
   with its first objective already assigned instead of needing a second
   objective appended just to name an agent. These are distinct from `--agent`,
-  which records creation provenance only. `--objective-description <text>` /
-  `--objective-description-file <path|->` set the human-facing summary of a
-  single `--objective` (rejected with `--objectives-json`; set a per-item
-  `"description"` instead). See "Objective Descriptions" below.
+  which records creation provenance only. `--objective-instructions <text>` /
+  `--objective-instructions-file <path|->` carry the instructions and
+  `--objective-summary <text>` / `--objective-summary-file <path|->` the
+  human-facing summary of a single objective (with `--objectives-json`, set
+  per-item `"instructions"` and `"summary"` instead). See "Objective
+  Instructions and Summary" below.
 - `prompt`: create a mission and attach or queue execution immediately. It takes
   the same per-item `agent` / `model` and `--objective-agent` /
   `--objective-model` selection as create; its `--agent` names the attaching
@@ -118,16 +120,16 @@ Requirements:
   retain project launch-preference defaults, and `--objective-agent` /
   `--objective-model` supply the default for items omitting `agent`. It uses the
   same `autoAdvance` JSON field and `--auto-advance` / `--no-auto-advance` Run
-  Queue mapping as create, and the same per-item `"description"`.
+  Queue mapping as create, and the same per-item `"summary"`.
 - `update-objective`: accepts `--title` to replace or clear the custom title
   without changing the instruction text, maps `--auto-advance` /
   `--no-auto-advance` to queue membership, and can edit instruction text on
-  draft objectives. `--description <text>` / `--description-file <path|->` set
-  the description (empty removes it) and `--description-request
+  draft objectives. `--summary <text>` / `--summary-file <path|->` set
+  the summary (empty removes it) and `--summary-request
   summarize|regenerate|retry` asks Overlord to write one (not combined with
-  `--description`); both are draft-only for agents. Context and update
+  `--summary`); both are draft-only for agents. Context and update
   responses include the assigned agent, model, reasoning effort, and resource
-  key; the update response also carries the description state and a top-level
+  key; the update response also carries the summary state and a top-level
   `warnings` array. The returned `autoAdvance` field is deprecated and derived
   from `queueEntry`.
 - `delete-missions` and `delete-objectives`: atomically soft-delete one to 100
@@ -140,26 +142,37 @@ Requirements:
   objectives; objective deletion removes live Run Queue membership.
 - `record-work`: record already-completed chat work as a review mission with completed objective and delivery record.
 
-### Objective Descriptions
+### Objective Instructions and Summary
 
-An objective has instructions (the complete text the executing agent receives)
-and an optional human-facing description: one to three short prose paragraphs
-in Simplified Technical English style that open with the goal and close with the
-done-when sentence, about 120 words (a target, not a cap). Attach, load-context
-and launch prompts are instruction-only; the description is never sent to the
-executing agent. When it is omitted, Overlord writes one for long (280+
-characters) agent-written objectives, with or without an attached session.
+An objective has two texts. Do not swap them. The **instructions**
+(`--objective-instructions`, item `"instructions"`) are the complete brief the
+executing agent receives, usually the long text. The optional **summary**
+(`--objective-summary`, item `"summary"`) is a short human-facing overview,
+usually the short text: one to three prose paragraphs in Simplified Technical
+English style that open with the goal and close with the done-when sentence,
+about 120 words (a target, not a cap). Attach, load-context and launch prompts
+are instruction-only; the summary is never sent to the executing agent. When it
+is omitted, Overlord writes one for long (280+ characters) agent-written
+objectives, with or without an attached session.
 
-- Agents may write descriptions or request summaries only on `draft` objectives
-  (400 `description_not_editable`). People edit them in any state in the app.
+- Swap guard (warning only): a summary at least 3 times as long as its
+  instructions (and 400+ characters) returns an `objective_fields_swapped`
+  warning saying the texts look swapped, naming both fields; a weaker signal
+  (1.5 times longer, or headings, numbered steps or a `Done when:` label over
+  short instructions) returns the same code saying they may be swapped. Both
+  texts are always stored as written. The retired names `--objective`,
+  `--objective-description`, `--description` and item keys `objective` /
+  `description` are refused with their replacement.
+- Agents may write summaries or request them only on `draft` objectives
+  (400 `summary_not_editable`). People edit them in any state in the app.
 - While a person's removal is in force, agent text is not stored (warning
-  `description_suppressed`) and agent summarize/regenerate is refused (409
-  `description_suppressed`). Only a person's Summarize turns summaries back on.
-- `retry` re-requests only a failed generation (409 `description_not_failed`).
+  `summary_suppressed`) and agent summarize/regenerate is refused (409
+  `summary_suppressed`). Only a person's Summarize turns summaries back on.
+- `retry` re-requests only a failed generation (409 `summary_not_failed`).
   Instructions under 280 characters are not summarized (409
-  `description_not_eligible`).
+  `summary_not_eligible`).
 - Responses carry advisory `warnings` (`{ code, message, rule?, excerpt?,
-  suggestion? }`, code `description_style` or `description_suppressed`). On
+  suggestion? }`, code `summary_style` or `summary_suppressed`). On
   `create` / `add-objectives` they sit on the matching created objective; on
   `update-objective` they are top-level. The text is stored as written.
 
@@ -372,8 +385,9 @@ Post-delivery discussion vs execution:
   follow-up messages. This appends `user_follow_up` activity and does not change
   objective state.
 - When the user explicitly asks for more implementation after delivery, agents
-  should call `resume-follow-up` to create a new live session and transition the
-  completed objective to `pending_delivery`.
+  should run `ovld protocol resume-follow-up --mission-id <mission-id> --objective-id <objective-id>`
+  to transition the completed objective to `pending_delivery` and get the fresh
+  key for progress and delivery. Use the delivered IDs from the recovery message.
 - A bare `attach` must not silently reopen a completed objective.
 - `resume-follow-up` reuses the existing completed objective rather than adding
   a new objective when the user is asking for a correction or update to the

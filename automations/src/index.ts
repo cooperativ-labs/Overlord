@@ -12,7 +12,7 @@ export {
 } from './compose-delivery/index.js';
 export type {
   ObjectiveBriefComposeOutcome,
-  ObjectiveBriefDescriptionParts,
+  ObjectiveBriefSummaryParts,
   ObjectiveBriefFieldFailure,
   ObjectiveBriefFieldOutcome,
   ObjectiveBriefFields,
@@ -20,10 +20,10 @@ export type {
   ObjectiveBriefStyleIssue
 } from './objective-brief/index.js';
 export {
-  assembleObjectiveDescription,
+  assembleObjectiveSummary,
   checkObjectiveBriefFidelity,
   composeObjectiveBrief,
-  lintAuthoredObjectiveDescription,
+  lintAuthoredObjectiveSummary,
   OBJECTIVE_BRIEF_MAX_INPUT_CHARS,
   OBJECTIVE_BRIEF_MISSING_DONE_WHEN,
   OBJECTIVE_BRIEF_PROVIDER_TIMEOUT_MS,

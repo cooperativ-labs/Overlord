@@ -20,7 +20,7 @@ const item = {
   startedAt: '2026-11-15T10:00:00.000Z',
   occurredAt: '2026-11-15T10:00:00.000Z',
   latestEventSummary: 'Working',
-  descriptionPreview: null,
+  summaryPreview: null,
   instructionPreview: 'Do it',
   agentIdentifier: 'claude',
   modelIdentifier: null,

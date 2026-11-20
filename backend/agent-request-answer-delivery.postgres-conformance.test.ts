@@ -82,7 +82,7 @@ for (const adapter of conformanceAdapters()) {
       const created = await protocolCreate({
         ctx,
         projectId,
-        objectives: [{ objective: question }]
+        objectives: [{ instructions: question }]
       });
       const attached = await attachSession({ ctx, missionId: created.mission.id });
       const asked = await askQuestion({

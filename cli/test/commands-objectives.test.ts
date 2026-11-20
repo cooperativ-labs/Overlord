@@ -47,7 +47,7 @@ test('ovld create sends objectives-json as one REST array payload', async () => 
         '--project-id',
         'project-1',
         '--objectives-json',
-        '[{"objective":"First objective"},{"objective":"Second objective","title":"Follow-up"}]'
+        '[{"instructions":"First objective"},{"instructions":"Second objective","title":"Follow-up"}]'
       ]
     });
   } finally {
@@ -60,8 +60,8 @@ test('ovld create sends objectives-json as one REST array payload', async () => 
     projectId: 'project-1',
     title: 'First objective',
     objectives: [
-      { objective: 'First objective' },
-      { objective: 'Second objective', title: 'Follow-up' }
+      { instructions: 'First objective' },
+      { instructions: 'Second objective', title: 'Follow-up' }
     ]
   });
 });

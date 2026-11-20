@@ -30,8 +30,8 @@ async function twoObjectiveMission(projectId: string, label: string) {
     flags: {
       '--project-id': projectId,
       '--objectives-json': JSON.stringify([
-        { objective: `${label} first` },
-        { objective: `${label} second` }
+        { instructions: `${label} first` },
+        { instructions: `${label} second` }
       ])
     }
   })) as { objectives: Array<{ id: string }> };
@@ -372,8 +372,8 @@ test('real out-of-order delivery dispatches the queued successor and leaves earl
     flags: {
       '--project-id': project.id,
       '--objectives-json': JSON.stringify(
-        ['Earlier unqueued', 'Deliver out of order', 'Queued successor'].map(objective => ({
-          objective,
+        ['Earlier unqueued', 'Deliver out of order', 'Queued successor'].map(instructions => ({
+          instructions,
           agent: 'codex'
         }))
       )

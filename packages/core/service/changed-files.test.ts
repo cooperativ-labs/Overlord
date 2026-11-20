@@ -21,7 +21,7 @@ async function setup() {
       ctx: seeded.ctx,
       projectId: project.id,
       objectives: Array.from({ length: objectives }, (_, index) => ({
-        objective: `Objective ${index}`
+        instructions: `Objective ${index}`
       }))
     });
     return created;

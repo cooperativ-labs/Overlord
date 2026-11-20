@@ -9,9 +9,9 @@ import type { DatabaseClient } from '@overlord/database';
 import type { ServiceContext } from '../packages/core/service/context.ts';
 import {
   clearUnsatisfiableObjectiveBriefIntent,
-  failObjectiveDescriptionGeneration,
+  failObjectiveSummaryGeneration,
   hashObjectiveInstruction,
-  isDescriptionEligibleInstruction,
+  isSummaryEligibleInstruction,
   listObjectiveBriefCatchUpCandidates,
   listObjectiveBriefOrphans,
   loadObjectiveBriefRow,
@@ -61,7 +61,7 @@ function runnerContext(db: DatabaseClient, workspaceId: string): ServiceContext 
 
 type Wanted = {
   title: { generation: number } | null;
-  description: { generation: number } | null;
+  summary: { generation: number } | null;
 };
 
 function wantedFields(row: ObjectiveBriefRow): Wanted {
@@ -70,11 +70,11 @@ function wantedFields(row: ObjectiveBriefRow): Wanted {
       row.title_status === 'pending' && row.title_source === 'generated'
         ? { generation: row.title_generation }
         : null,
-    description:
-      row.description_status === 'pending' &&
-      !row.description_suppressed &&
-      isDescriptionEligibleInstruction(row.instruction_text)
-        ? { generation: row.description_generation }
+    summary:
+      row.summary_status === 'pending' &&
+      !row.summary_suppressed &&
+      isSummaryEligibleInstruction(row.instruction_text)
+        ? { generation: row.summary_generation }
         : null
   };
 }
@@ -258,7 +258,7 @@ export class ObjectiveBriefComposeWorker extends WorkerJobPoller {
     const ctx = runnerContext(client, row.workspace_id);
     await clearUnsatisfiableObjectiveBriefIntent(ctx, objectiveId);
     const wanted = wantedFields(row);
-    if (!wanted.title && !wanted.description) return { kind: 'done' };
+    if (!wanted.title && !wanted.summary) return { kind: 'done' };
 
     const instructionText = (row.instruction_text ?? '').trim();
     const instructionHash = hashObjectiveInstruction(instructionText)!;
@@ -273,11 +273,11 @@ export class ObjectiveBriefComposeWorker extends WorkerJobPoller {
           status: null
         });
       }
-      if (wanted.description) {
-        await failObjectiveDescriptionGeneration({
+      if (wanted.summary) {
+        await failObjectiveSummaryGeneration({
           ctx,
           objectiveId,
-          generation: wanted.description.generation,
+          generation: wanted.summary.generation,
           failureCode: 'provider_unavailable'
         });
       }
@@ -288,7 +288,7 @@ export class ObjectiveBriefComposeWorker extends WorkerJobPoller {
     const startedAt = Date.now();
     const outcome = await this.compose({
       instructionText,
-      fields: { title: wanted.title !== null, description: wanted.description !== null },
+      fields: { title: wanted.title !== null, summary: wanted.summary !== null },
       ...(generate ? { generate } : {}),
       timeoutMs: OBJECTIVE_BRIEF_PROVIDER_TIMEOUT_MS
     });
@@ -306,11 +306,11 @@ export class ObjectiveBriefComposeWorker extends WorkerJobPoller {
           status: code === 'provider_error' ? 'failed' : null
         });
       }
-      if (wanted.description) {
-        await failObjectiveDescriptionGeneration({
+      if (wanted.summary) {
+        await failObjectiveSummaryGeneration({
           ctx,
           objectiveId,
-          generation: wanted.description.generation,
+          generation: wanted.summary.generation,
           failureCode: code
         });
       }
@@ -327,16 +327,16 @@ export class ObjectiveBriefComposeWorker extends WorkerJobPoller {
     if (wanted.title && outcome.title.status === 'ok') {
       result.title = { generation: wanted.title.generation, text: outcome.title.text };
     }
-    if (wanted.description && outcome.description.status === 'ok') {
-      result.description = {
-        generation: wanted.description.generation,
-        text: outcome.description.text
+    if (wanted.summary && outcome.summary.status === 'ok') {
+      result.summary = {
+        generation: wanted.summary.generation,
+        text: outcome.summary.text
       };
     }
     const published =
-      result.title || result.description
+      result.title || result.summary
         ? await publishObjectiveBrief({ ctx, objectiveId, result })
-        : { title: 'not_requested' as const, description: 'not_requested' as const };
+        : { title: 'not_requested' as const, summary: 'not_requested' as const };
 
     // Fields the composer or publication validation rejected: keep the instructions readable.
     if (wanted.title && outcome.title.status === 'failed') {
@@ -348,15 +348,14 @@ export class ObjectiveBriefComposeWorker extends WorkerJobPoller {
       });
     }
     if (
-      wanted.description &&
-      (outcome.description.status === 'failed' || published.description === 'invalid')
+      wanted.summary &&
+      (outcome.summary.status === 'failed' || published.summary === 'invalid')
     ) {
-      await failObjectiveDescriptionGeneration({
+      await failObjectiveSummaryGeneration({
         ctx,
         objectiveId,
-        generation: wanted.description.generation,
-        failureCode:
-          outcome.description.status === 'failed' ? outcome.description.code : 'invalid_output'
+        generation: wanted.summary.generation,
+        failureCode: outcome.summary.status === 'failed' ? outcome.summary.code : 'invalid_output'
       });
     }
 
@@ -370,13 +369,10 @@ export class ObjectiveBriefComposeWorker extends WorkerJobPoller {
       inputChars: outcome.inputChars,
       model: outcome.model,
       title: wanted.title ? `${outcome.title.status}:${published.title}` : null,
-      description: wanted.description
-        ? `${outcome.description.status}:${published.description}`
-        : null,
-      descriptionWarnings:
-        outcome.description.status === 'ok' ? outcome.description.warnings.length : null
+      summary: wanted.summary ? `${outcome.summary.status}:${published.summary}` : null,
+      summaryWarnings: outcome.summary.status === 'ok' ? outcome.summary.warnings.length : null
     });
-    return published.title === 'stale' || published.description === 'stale'
+    return published.title === 'stale' || published.summary === 'stale'
       ? { kind: 'stale' }
       : { kind: 'done' };
   }

@@ -47,7 +47,7 @@ async function seedMission(): Promise<{
   const created = await protocolCreate({
     ctx,
     projectId: project.id,
-    objectives: [{ objective: 'Do the thing' }]
+    objectives: [{ instructions: 'Do the thing' }]
   });
   return { ctx, db, missionId: created.mission.id, projectId: project.id };
 }

@@ -15,7 +15,7 @@ describe('delivery webhook envelopes', () => {
       const { mission, objectives } = await createMissionWithObjectives({
         ctx,
         projectId: project.id,
-        objectives: [{ objective: 'Deliver a report through a webhook.' }]
+        objectives: [{ instructions: 'Deliver a report through a webhook.' }]
       });
       await ctx.db.run(`UPDATE objectives SET state = 'submitted' WHERE id = ?`, [
         objectives[0]?.id

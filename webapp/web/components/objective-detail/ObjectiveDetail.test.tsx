@@ -101,17 +101,17 @@ function objective(overrides: Partial<ObjectiveDto> & { id: string }): Objective
     title: `Title ${overrides.id}`,
     titleSource: 'generated',
     titleStatus: null,
-    description: null,
-    descriptionSource: null,
-    descriptionStale: false,
-    descriptionStatus: null,
-    descriptionFailureCode: null,
-    descriptionSuppressed: false,
-    descriptionEligible: true,
-    descriptionRevision: 0,
-    descriptionUpdatedAt: null,
-    descriptionAuthorWorkspaceUserId: null,
-    descriptionAuthorAgent: null,
+    summary: null,
+    summarySource: null,
+    summaryStale: false,
+    summaryStatus: null,
+    summaryFailureCode: null,
+    summarySuppressed: false,
+    summaryEligible: true,
+    summaryRevision: 0,
+    summaryUpdatedAt: null,
+    summaryAuthorWorkspaceUserId: null,
+    summaryAuthorAgent: null,
     instructionText: `Instructions for ${overrides.id}`,
     state: 'draft',
     autoAdvance: false,
@@ -359,9 +359,9 @@ describe('ObjectiveDetail (plan §9)', () => {
   it('shows Summary first when there is a summary, and no tab row without one', async () => {
     const withSummary = objective({
       id: 'a',
-      description: 'The goal is a faster build.',
-      descriptionSource: 'generated',
-      descriptionRevision: 1
+      summary: 'The goal is a faster build.',
+      summarySource: 'generated',
+      summaryRevision: 1
     });
     const { unmount } = await renderDetail([withSummary], '/missions/mission-1?objective=coo:1.a');
     await dialog();

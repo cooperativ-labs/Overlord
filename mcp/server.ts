@@ -465,7 +465,7 @@ export function deliverSessionProtocolBody(args: Record<string, unknown>): Proto
 }
 
 /**
- * Protocol body for `overlord_update_objective`. An empty `description` is
+ * Protocol body for `overlord_update_objective`. An empty `summary` is
  * Remove and passes through verbatim; the protocol handler applies the agent
  * draft-only and removal-suppression rules (ADR 0059).
  */
@@ -474,18 +474,18 @@ export function updateObjectiveProtocolBody(args: Record<string, unknown>): Prot
   const hasAutoAdvance = typeof args.autoAdvance === 'boolean';
   const hasInstructionText = typeof args.instructionText === 'string';
   const hasAgent = typeof args.agent === 'string';
-  const hasDescription = typeof args.description === 'string';
-  const hasDescriptionRequest = typeof args.descriptionRequest === 'string';
+  const hasSummary = typeof args.summary === 'string';
+  const hasSummaryRequest = typeof args.summaryRequest === 'string';
   if (
     !hasTitle &&
     !hasAutoAdvance &&
     !hasInstructionText &&
     !hasAgent &&
-    !hasDescription &&
-    !hasDescriptionRequest
+    !hasSummary &&
+    !hasSummaryRequest
   ) {
     throw new Error(
-      'Provide title, description, descriptionRequest, autoAdvance, instructionText, and/or agent'
+      'Provide title, summary, summaryRequest, autoAdvance, instructionText, and/or agent'
     );
   }
   return protocolBody({
@@ -495,10 +495,8 @@ export function updateObjectiveProtocolBody(args: Record<string, unknown>): Prot
     ...(hasInstructionText
       ? { '--instruction-text': requiredString(args, 'instructionText') }
       : {}),
-    ...(hasDescription ? { '--description': args.description as string } : {}),
-    ...(hasDescriptionRequest
-      ? { '--description-request': args.descriptionRequest as string }
-      : {}),
+    ...(hasSummary ? { '--summary': args.summary as string } : {}),
+    ...(hasSummaryRequest ? { '--summary-request': args.summaryRequest as string } : {}),
     // The protocol handler validates the selection (model requires agent,
     // manual takes none), so pass whatever was supplied straight through.
     ...(hasAgent ? { '--objective-agent': args.agent as string } : {}),
@@ -604,9 +602,9 @@ const toolHandlers: Record<string, ToolHandler> = {
           ? { '--project-id': requiredString(args, 'projectId') }
           : {}),
         ...(args.unassignedToProject === true ? { '--unassigned-to-project': true } : {}),
-        '--objective': requiredString(args, 'objective'),
-        ...(typeof args.description === 'string'
-          ? { '--objective-description': args.description }
+        '--objective-instructions': requiredString(args, 'objectiveInstructions'),
+        ...(typeof args.objectiveSummary === 'string'
+          ? { '--objective-summary': args.objectiveSummary }
           : {}),
         ...(optionalString(args, 'title') ? { '--title': requiredString(args, 'title') } : {}),
         ...(optionalString(args, 'resourceKey')
@@ -630,7 +628,7 @@ const toolHandlers: Record<string, ToolHandler> = {
       protocolBody({
         '--unassigned-to-project': true,
         '--title': requiredString(args, 'title'),
-        '--objective': requiredString(args, 'objective')
+        '--objective-instructions': requiredString(args, 'objective')
       })
     ),
   overlord_load_mission_context: args =>

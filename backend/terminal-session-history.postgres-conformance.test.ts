@@ -34,7 +34,7 @@ for (const adapter of conformanceAdapters()) {
       const mission = await protocolCreate({
         ctx,
         projectId: project.id,
-        objectives: [{ objective: 'Retain sessions' }]
+        objectives: [{ instructions: 'Retain sessions' }]
       });
       const missionId = mission.mission.id;
       const ids: string[] = [];

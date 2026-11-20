@@ -5,6 +5,42 @@ is the current version and must equal [VERSION](VERSION); `yarn version:contract
 writes its skeleton. Dates use ISO 8601 and describe the contract change, not
 merely the files edited.
 
+## [179.0.1] - 2026-11-20
+
+Contract impact: patch. Clarify post-delivery follow-up for a continuing harness (ADR 0084).
+
+- Guard completed objectives on pinned attach. Give CLI and MCP callers state-aware
+  recovery guidance while preserving the runner's original launch binding.
+- Keep the harness's exported temporary directory usable across delivery and resumption.
+
+## [179.0.0] - 2026-11-20
+
+Contract impact: major. Objective instructions and summary (ADR 0083, coo:1321).
+
+- Rename the objective "description" (ADR 0057/0059) to "summary" end to end: database columns
+  `objectives.description*` → `objectives.summary*` (migration
+  `20261120090000_objective_summary_rename`, both dialects, no data change), `ObjectiveDto`
+  `summary*` fields, activity-feed `summaryPreview`, REST `PATCH` `summary` /
+  `expectedSummaryRevision`, `POST /api/objectives/{id}/summary-requests`, codes `summary_style`,
+  `summary_suppressed`, `summary_conflict`, `summary_not_editable`, `summary_not_eligible`,
+  `summary_not_failed`, `summary_too_long`. OpenAPI 6.0.0.
+- Name the agent-facing text "instructions" on create: protocol `create`/`prompt`
+  `--objective-instructions[-file]` and `--objective-summary[-file]`; `--objectives-json` /
+  `add-objectives` / REST `POST /api/missions` items `instructions` and `summary`;
+  `update-objective` `--summary[-file]`, `--summary-request`; MCP `overlord_create_mission`
+  `objectiveInstructions` / `objectiveSummary`, `overlord_add_objectives` items `instructions` /
+  `summary`, `overlord_update_objective` `summary` / `summaryRequest`. Retired names are refused
+  with 400 `invalid_input` naming the replacement. `record-work` and `ovld inbox create` keep
+  `--objective`.
+- Add the advisory swap check: on every protocol/MCP create and agent summary write, a summary at
+  least 3× its instructions and at least 400 characters ("look swapped"), or a weaker length or
+  structure signal ("may be swapped"), returns an `objective_fields_swapped` warning naming both
+  fields (top-level on `prompt`). Nothing is refused; REST returns no warning.
+- Help, MCP property descriptions, docs and the connector skill state the instructions/summary
+  distinction next to the fields. Conformance manifests restamped.
+- Breaking for every client that reads `ObjectiveDto.description*` (web app updated here; the iOS
+  app must move to `summary*`) and for agents using the old flags or MCP arguments.
+
 ## [178.1.1] - 2026-11-19
 
 Contract impact: patch. Correct background Latch observation for launches without

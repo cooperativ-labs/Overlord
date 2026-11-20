@@ -3,11 +3,7 @@ import { normalizeBaseUrl } from '@overlord/contract';
 import { readStoredAuthCredentials } from './auth-credentials.js';
 import { loadConfig, resolveBackendUrl } from './config.js';
 import { clientDeviceIdentity } from './device-identity.js';
-import {
-  CliError,
-  formatExecutionRequestAlreadyLinkedDiagnostic,
-  isExecutionRequestAlreadyLinkedPayload
-} from './errors.js';
+import { CliError, isExecutionRequestAlreadyLinkedPayload } from './errors.js';
 
 export type BackendClient = {
   baseUrl: string;
@@ -155,10 +151,18 @@ export function createBackendClient(): BackendClient {
         ? Buffer.from(await response.arrayBuffer())
         : await readResponseJson(response);
     if (!response.ok) {
-      if (isExecutionRequestAlreadyLinkedPayload(payload)) {
-        throw new CliError({ message: formatExecutionRequestAlreadyLinkedDiagnostic() });
-      }
-      if (response.status === 401 && auth.headers.Authorization) {
+      const invalidProtocolSession =
+        path.startsWith('/api/protocol/') &&
+        payload !== null &&
+        typeof payload === 'object' &&
+        'code' in payload &&
+        payload.code === 'invalid_session';
+      if (
+        response.status === 401 &&
+        auth.headers.Authorization &&
+        !invalidProtocolSession &&
+        !isExecutionRequestAlreadyLinkedPayload(payload)
+      ) {
         // Do NOT delete stored credentials here. A 401 can be transient (backend
         // restart, momentary session-lookup failure, an edge revocation) and
         // wiping auth.json on the first one forced a full re-login even when the

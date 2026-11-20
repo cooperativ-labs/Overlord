@@ -2,12 +2,12 @@ import type { ObjectiveDto } from '@overlord/contract';
 
 import { agentDisplayName } from './helpers/agent-icons.ts';
 
-export type ObjectiveDescriptionFailureCode = NonNullable<ObjectiveDto['descriptionFailureCode']>;
+export type ObjectiveSummaryFailureCode = NonNullable<ObjectiveDto['summaryFailureCode']>;
 
 /**
  * Presentation rules for an objective's human-facing summary (coo:1275, ADR 0057–0059).
  *
- * The summary (`ObjectiveDto.description`) is presentation only: the executing agent always
+ * The summary (`ObjectiveDto.summary`) is presentation only: the executing agent always
  * receives `instructionText`. Every surface that shows an objective reads the same answers
  * from here — whether a summary replaces the instruction body, which provenance line to
  * show, which of Summarize / Regenerate / Retry / Remove apply, and whether the prose
@@ -21,16 +21,16 @@ export type ObjectiveDescriptionFailureCode = NonNullable<ObjectiveDto['descript
 export type ObjectiveBriefFields = Partial<
   Pick<
     ObjectiveDto,
-    | 'description'
-    | 'descriptionSource'
-    | 'descriptionStale'
-    | 'descriptionStatus'
-    | 'descriptionFailureCode'
-    | 'descriptionSuppressed'
-    | 'descriptionEligible'
-    | 'descriptionRevision'
-    | 'descriptionAuthorWorkspaceUserId'
-    | 'descriptionAuthorAgent'
+    | 'summary'
+    | 'summarySource'
+    | 'summaryStale'
+    | 'summaryStatus'
+    | 'summaryFailureCode'
+    | 'summarySuppressed'
+    | 'summaryEligible'
+    | 'summaryRevision'
+    | 'summaryAuthorWorkspaceUserId'
+    | 'summaryAuthorAgent'
   >
 > & { instructionText: string };
 
@@ -55,7 +55,7 @@ export type ObjectiveSummaryView = {
   pending: boolean;
   /** The last generation failed for good; Retry is available. */
   failed: boolean;
-  failureCode: ObjectiveDescriptionFailureCode | null;
+  failureCode: ObjectiveSummaryFailureCode | null;
   /** The summary was written from different instruction text. */
   stale: boolean;
   /** A person removed the summary; nothing is generated until someone selects Summarize. */
@@ -142,21 +142,21 @@ export function summaryCodeSegments(text: string): Array<{ text: string; code: b
 }
 
 export function objectiveSummaryView(objective: ObjectiveBriefFields): ObjectiveSummaryView {
-  const summary = objective.description?.trim() ? objective.description.trim() : null;
-  const pending = objective.descriptionStatus === 'pending';
-  const failed = objective.descriptionStatus === 'failed';
-  const eligible = objective.descriptionEligible ?? false;
-  const suppressed = objective.descriptionSuppressed ?? false;
+  const summary = objective.summary?.trim() ? objective.summary.trim() : null;
+  const pending = objective.summaryStatus === 'pending';
+  const failed = objective.summaryStatus === 'failed';
+  const eligible = objective.summaryEligible ?? false;
+  const suppressed = objective.summarySuppressed ?? false;
   return {
     summary,
     paragraphs: summaryParagraphs(summary),
     pending,
     failed,
-    failureCode: failed ? (objective.descriptionFailureCode ?? null) : null,
-    stale: summary !== null && (objective.descriptionStale ?? false),
+    failureCode: failed ? (objective.summaryFailureCode ?? null) : null,
+    stale: summary !== null && (objective.summaryStale ?? false),
     suppressed,
     eligible,
-    revision: objective.descriptionRevision ?? 0,
+    revision: objective.summaryRevision ?? 0,
     canSummarize: summary === null && eligible && !pending && !failed,
     canRegenerate: summary !== null && eligible && !pending,
     canRetry: failed,
@@ -179,17 +179,17 @@ export function summaryProvenanceLabel(
   objective: ObjectiveBriefFields,
   members: readonly BriefMember[] | undefined
 ): string | null {
-  if (!objective.description?.trim()) return null;
-  switch (objective.descriptionSource) {
+  if (!objective.summary?.trim()) return null;
+  switch (objective.summarySource) {
     case 'generated':
       return 'AI summary';
     case 'agent': {
-      const agent = agentDisplayName(objective.descriptionAuthorAgent ?? null);
+      const agent = agentDisplayName(objective.summaryAuthorAgent ?? null);
       return agent ? `Written by ${agent}` : 'Written by agent';
     }
     case 'user': {
-      const author = objective.descriptionAuthorWorkspaceUserId
-        ? members?.find(m => m.workspaceUserId === objective.descriptionAuthorWorkspaceUserId)
+      const author = objective.summaryAuthorWorkspaceUserId
+        ? members?.find(m => m.workspaceUserId === objective.summaryAuthorWorkspaceUserId)
         : undefined;
       if (!author) return 'Edited by a person';
       return author.isOperator ? 'Edited by you' : `Edited by ${memberName(author)}`;
@@ -200,7 +200,7 @@ export function summaryProvenanceLabel(
 }
 
 /** A failure line that never exposes provider text (the DTO carries stable codes only). */
-export function summaryFailureMessage(code: ObjectiveDescriptionFailureCode | null): string {
+export function summaryFailureMessage(code: ObjectiveSummaryFailureCode | null): string {
   switch (code) {
     case 'provider_unavailable':
       return 'Summary unavailable: no model provider is configured.';
@@ -227,7 +227,7 @@ export function summaryWordCount(text: string): number {
 }
 
 export const SUMMARY_TARGET_WORDS = 120;
-/** Server cap on an authored description (400 `description_too_long`). */
+/** Server cap on an authored summary (400 `summary_too_long`). */
 export const SUMMARY_MAX_CHARACTERS = 4000;
 
 /** Accessible/visible label for a mention badge: "1 decision", "2 cautions". */

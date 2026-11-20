@@ -3,14 +3,14 @@ import { readGeminiConfigFromEnv } from '../title-summarizer/config.js';
 import { getGeminiClient } from '../title-summarizer/gemini-client.js';
 
 import {
-  assembleObjectiveDescription,
+  assembleObjectiveSummary,
   buildObjectiveBriefPrompt,
   checkObjectiveBriefFidelity,
   clampBriefTitle,
   describeFidelityIssue,
   describeStyleIssue,
   isRetryStyleIssue,
-  lintObjectiveDescription,
+  lintObjectiveSummary,
   lintObjectiveTitle,
   normalizeBriefTitle,
   OBJECTIVE_BRIEF_MAX_INPUT_CHARS,
@@ -52,7 +52,7 @@ export type ObjectiveBriefComposeOutcome =
       kind: 'composed';
       schemaVersion: number;
       title: ObjectiveBriefFieldOutcome;
-      description: ObjectiveBriefFieldOutcome;
+      summary: ObjectiveBriefFieldOutcome;
       attempts: number;
       model: string | null;
       inputChars: number;
@@ -65,7 +65,7 @@ type Candidate =
 type AttemptResult = {
   raw: string;
   title?: Candidate;
-  description?: Candidate;
+  summary?: Candidate;
 };
 
 function evaluateAttempt(
@@ -99,21 +99,21 @@ function evaluateAttempt(
     }
   }
 
-  if (fields.description) {
-    const parts = parsed?.description ?? null;
+  if (fields.summary) {
+    const parts = parsed?.summary ?? null;
     if (!parts) {
-      result.description = malformed('description');
+      result.summary = malformed('summary');
     } else {
-      const assembled = assembleObjectiveDescription(parts);
+      const assembled = assembleObjectiveSummary(parts);
       if (!assembled.ok) {
-        result.description = {
+        result.summary = {
           status: 'failed',
           code: 'invalid_output',
           problems: [assembled.problem]
         };
       } else {
         const fidelity = checkObjectiveBriefFidelity({ instructionText, text: assembled.text });
-        result.description = fidelity.length
+        result.summary = fidelity.length
           ? {
               status: 'failed',
               code: 'unfaithful_output',
@@ -122,7 +122,7 @@ function evaluateAttempt(
           : {
               status: 'ok',
               text: assembled.text,
-              style: lintObjectiveDescription(parts, assembled.text)
+              style: lintObjectiveSummary(parts, assembled.text)
             };
       }
     }
@@ -134,7 +134,7 @@ function retryProblems(attempt: AttemptResult): string[] {
   const problems: string[] = [];
   for (const [label, candidate] of [
     ['title', attempt.title],
-    ['summary', attempt.description]
+    ['summary', attempt.summary]
   ] as const) {
     if (!candidate) continue;
     if (candidate.status === 'failed') {
@@ -232,7 +232,7 @@ export async function composeObjectiveBrief({
   const tooLong = instruction.length > OBJECTIVE_BRIEF_MAX_INPUT_CHARS;
   const wanted: ObjectiveBriefFields = {
     title: fields.title && instruction.length > 0,
-    description: fields.description && instruction.length > 0 && !tooLong
+    summary: fields.summary && instruction.length > 0 && !tooLong
   };
   const tooLongOutcome: ObjectiveBriefFieldOutcome = {
     status: 'failed',
@@ -246,12 +246,12 @@ export async function composeObjectiveBrief({
 
   const generator = generate ?? defaultGenerate(env);
   if (!generator) return { kind: 'provider_unavailable' };
-  if (!wanted.title && !wanted.description) {
+  if (!wanted.title && !wanted.summary) {
     return {
       kind: 'composed',
       schemaVersion: OBJECTIVE_BRIEF_SCHEMA_VERSION,
       title: { status: 'not_requested' },
-      description: describe(fields.description && tooLong, tooLongOutcome),
+      summary: describe(fields.summary && tooLong, tooLongOutcome),
       attempts: 0,
       model: null,
       inputChars: 0
@@ -301,7 +301,7 @@ export async function composeObjectiveBrief({
     }
   }
 
-  const pick = (field: 'title' | 'description') =>
+  const pick = (field: 'title' | 'summary') =>
     selectField(
       attempts.map(attempt => attempt[field]).filter((c): c is Candidate => c !== undefined),
       field === 'title'
@@ -311,9 +311,7 @@ export async function composeObjectiveBrief({
     kind: 'composed',
     schemaVersion: OBJECTIVE_BRIEF_SCHEMA_VERSION,
     title: wanted.title ? pick('title') : { status: 'not_requested' },
-    description: wanted.description
-      ? pick('description')
-      : describe(fields.description && tooLong, tooLongOutcome),
+    summary: wanted.summary ? pick('summary') : describe(fields.summary && tooLong, tooLongOutcome),
     attempts: attempts.length,
     model: generate ? null : (readGeminiConfigFromEnv(env)?.model ?? null),
     inputChars: input.length

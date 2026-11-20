@@ -49,9 +49,9 @@ async function createQueuedObjectives() {
     flags: {
       '--project-id': project.id,
       '--objectives-json': JSON.stringify([
-        { objective: 'First queued objective', autoAdvance: true },
-        { objective: 'Second queued objective', autoAdvance: true },
-        { objective: 'Third queued objective', autoAdvance: true }
+        { instructions: 'First queued objective', autoAdvance: true },
+        { instructions: 'Second queued objective', autoAdvance: true },
+        { instructions: 'Third queued objective', autoAdvance: true }
       ])
     }
   })) as CreatedMission;

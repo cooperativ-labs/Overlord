@@ -418,7 +418,7 @@ describe('resolveClaimLaunchConfig', () => {
     const mission = await createMissionWithObjectives({
       ctx,
       projectId: project.id,
-      objectives: [{ objective: 'x' }]
+      objectives: [{ instructions: 'x' }]
     });
     const snapshot = { preCommand: 'from-snapshot', flags: [{ name: '--snap' }] };
 
@@ -447,7 +447,7 @@ describe('resolveClaimLaunchConfig', () => {
     const mission = await createMissionWithObjectives({
       ctx,
       projectId: project.id,
-      objectives: [{ objective: 'x' }]
+      objectives: [{ instructions: 'x' }]
     });
 
     const resolved = await resolveClaimLaunchConfig({
@@ -475,7 +475,7 @@ describe('resolveClaimLaunchConfig', () => {
     const mission = await createMissionWithObjectives({
       ctx,
       projectId: project.id,
-      objectives: [{ objective: 'x' }]
+      objectives: [{ instructions: 'x' }]
     });
     const objectiveId = mission.objectives[0]!.id;
     await ctx.db.run(`UPDATE objectives SET launch_config_json = ? WHERE id = ?`, [
@@ -507,7 +507,7 @@ describe('resolveClaimLaunchConfig', () => {
     const mission = await createMissionWithObjectives({
       ctx,
       projectId: project.id,
-      objectives: [{ objective: 'x' }]
+      objectives: [{ instructions: 'x' }]
     });
     const objectiveId = mission.objectives[0]!.id;
     const empty = { preCommand: '', flags: [] };
@@ -556,7 +556,7 @@ describe('recordResolvedLaunchConfigEvent', () => {
     const mission = await createMissionWithObjectives({
       ctx,
       projectId: project.id,
-      objectives: [{ objective: 'x' }]
+      objectives: [{ instructions: 'x' }]
     });
     const launchConfig = {
       preCommand: 'nvm use 20',
@@ -598,7 +598,7 @@ describe('recordResolvedLaunchConfigEvent', () => {
     const mission = await createMissionWithObjectives({
       ctx,
       projectId: project.id,
-      objectives: [{ objective: 'x' }]
+      objectives: [{ instructions: 'x' }]
     });
 
     await recordResolvedLaunchConfigEvent({
@@ -853,7 +853,7 @@ describe('execution target lifecycle', () => {
     const mission = await createMissionWithObjectives({
       ctx,
       projectId: project.id,
-      objectives: [{ objective: 'Queued work' }]
+      objectives: [{ instructions: 'Queued work' }]
     });
     const now = nowIso();
     await db.run(

@@ -30,9 +30,9 @@ test('PM protocol commands preserve delivery, launch, and draft-queue order serv
     flags: {
       '--project-id': project.id,
       '--objectives-json': JSON.stringify([
-        { objective: 'Launch through the normal execution queue' },
-        { objective: 'Second queued objective' },
-        { objective: 'Third queued objective' }
+        { instructions: 'Launch through the normal execution queue' },
+        { instructions: 'Second queued objective' },
+        { instructions: 'Third queued objective' }
       ])
     }
   })) as CreatedMission;
@@ -57,7 +57,10 @@ test('PM protocol commands preserve delivery, launch, and draft-queue order serv
   );
 
   const deliveryMission = (await runProtocolSubcommand('create', {
-    flags: { '--project-id': project.id, '--objective': 'Deliver evidence for PM retrieval' }
+    flags: {
+      '--project-id': project.id,
+      '--objective-instructions': 'Deliver evidence for PM retrieval'
+    }
   })) as CreatedMission;
   const deliveredObjective = deliveryMission.objectives[0];
   assert.ok(deliveredObjective);
@@ -93,14 +96,14 @@ test('PM protocol commands preserve delivery, launch, and draft-queue order serv
 test('confirmed bulk protocol deletion is atomic for mission and objective lists', async () => {
   const project = await createProject({ name: `Bulk deletion ${Date.now()}` });
   const firstMission = (await runProtocolSubcommand('create', {
-    flags: { '--project-id': project.id, '--objective': 'Delete first mission' }
+    flags: { '--project-id': project.id, '--objective-instructions': 'Delete first mission' }
   })) as CreatedMission;
   const secondMission = (await runProtocolSubcommand('create', {
     flags: {
       '--project-id': project.id,
       '--objectives-json': JSON.stringify([
-        { objective: 'Delete first objective' },
-        { objective: 'Delete second objective' }
+        { instructions: 'Delete first objective' },
+        { instructions: 'Delete second objective' }
       ])
     }
   })) as CreatedMission;
