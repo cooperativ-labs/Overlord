@@ -1,15 +1,20 @@
 {
   "fixtureVersion": 1,
   "kind": "mutation-window",
-  "description": "Antigravity has a first-party PreToolUse example but no recorded completion payload or runtime evidence.",
-  "classification": "unsupported",
-  "reason": "No recorded PostToolUse payload or empirical agy hook execution proves completion-side or paired evidence.",
-  "preFixture": "fixtures/official-pre-tool-use.json",
+  "description": "Antigravity registers only a PostToolUse capture hook. Its recorded write_to_file completion carries the conversation, workspace, tool and an exact TargetFile that the codec normalizes to a single file.edited path, so evidence is post-only and direct. No PreToolUse hook is registered, so no paired window is claimed.",
+  "classification": "post-only",
+  "postFixture": "fixtures/normalize-post-tool-use-write.json",
   "proof": {
-    "pre": {
+    "post": {
       "session": "conversationId",
-      "workspace": "workspacePaths.0",
-      "tool": "toolCall.name"
+      "call": "toolCall.id",
+      "workspace": "cwd",
+      "tool": "toolCall.name",
+      "directPath": "toolCall.args.TargetFile",
+      "completion": {
+        "path": "hookEventName",
+        "equals": "PostToolUse"
+      }
     }
   }
 }

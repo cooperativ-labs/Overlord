@@ -304,10 +304,10 @@ test('local MCP shim publishes the shared contract catalog verbatim, minus outpu
   assert.deepEqual(local, expected);
 });
 
-test('hosted MCP tools are the shared contract catalog plus widget metadata', () => {
+test('hosted MCP tools are the shared contract catalog plus widget and task metadata', () => {
   const shared = overlordMcpToolDefinitions({ defaultAgent: 'hosted-mcp' });
   assert.deepEqual(
-    hostedMcpToolDefinitions.map(({ _meta: _widget, ...tool }) => tool),
+    hostedMcpToolDefinitions.map(({ _meta: _widget, execution: _execution, ...tool }) => tool),
     shared
   );
   const attach = hostedMcpToolDefinitions.find(tool => tool.name === 'overlord_attach_session');

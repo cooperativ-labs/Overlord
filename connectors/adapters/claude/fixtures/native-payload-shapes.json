@@ -1,0 +1,206 @@
+{
+  "fixtureVersion": 1,
+  "kind": "native-payload",
+  "description": "Recorded Claude Code 2.1.329 hook inputs (claude -p, --setting-sources \"\" with an isolated --settings file of command hooks that dump stdin, 2026-11-20). Every field the Claude codec, the decision codec and the mcp_tool hook input templates (hooks/hooks.json, cli/src/claude-decision-hook.ts) read is present for each event Overlord registers. hookTimeoutSeconds is not a native field: the decision hook supplies it as a literal input. Basis for harness.verifiedVersion. Paths are rewritten to /repo; tool output, the last assistant message and the prompt text are replaced.",
+  "payload": {
+    "claudeCodeVersion": "2.1.329",
+    "samples": {
+      "SessionStart": {
+        "session_id": "fc7f856d-7f91-43fc-acd1-ebc23289feb0",
+        "transcript_path": "/home/user/.claude/projects/-repo/session.jsonl",
+        "cwd": "/repo",
+        "hook_event_name": "SessionStart",
+        "source": "startup"
+      },
+      "UserPromptSubmit": {
+        "session_id": "fc7f856d-7f91-43fc-acd1-ebc23289feb0",
+        "transcript_path": "/home/user/.claude/projects/-repo/session.jsonl",
+        "cwd": "/repo",
+        "prompt_id": "c0604527-2be9-4461-b9df-7cc36265bf98",
+        "permission_mode": "acceptEdits",
+        "hook_event_name": "UserPromptSubmit",
+        "prompt": "<recorded prompt>"
+      },
+      "PostToolUse_Write": {
+        "session_id": "fc7f856d-7f91-43fc-acd1-ebc23289feb0",
+        "transcript_path": "/home/user/.claude/projects/-repo/session.jsonl",
+        "cwd": "/repo",
+        "prompt_id": "c0604527-2be9-4461-b9df-7cc36265bf98",
+        "permission_mode": "acceptEdits",
+        "effort": {
+          "level": "medium"
+        },
+        "hook_event_name": "PostToolUse",
+        "tool_name": "Write",
+        "tool_input": {
+          "file_path": "/repo/a.txt",
+          "content": "hello"
+        },
+        "tool_response": "<recorded; never templated>",
+        "tool_use_id": "toolu_01KFmvFSr7vRdpZNtWP6tPRS",
+        "duration_ms": 4
+      },
+      "PostToolUse_Edit": {
+        "session_id": "fc7f856d-7f91-43fc-acd1-ebc23289feb0",
+        "transcript_path": "/home/user/.claude/projects/-repo/session.jsonl",
+        "cwd": "/repo",
+        "prompt_id": "c0604527-2be9-4461-b9df-7cc36265bf98",
+        "permission_mode": "acceptEdits",
+        "effort": {
+          "level": "medium"
+        },
+        "hook_event_name": "PostToolUse",
+        "tool_name": "Edit",
+        "tool_input": {
+          "file_path": "/repo/a.txt",
+          "old_string": "hello",
+          "new_string": "world",
+          "replace_all": false
+        },
+        "tool_response": "<recorded; never templated>",
+        "tool_use_id": "toolu_012QpJWBa7m1Mz4TnpUR2LXq",
+        "duration_ms": 4
+      },
+      "PostToolUse_NotebookEdit": {
+        "session_id": "fc7f856d-7f91-43fc-acd1-ebc23289feb0",
+        "transcript_path": "/home/user/.claude/projects/-repo/session.jsonl",
+        "cwd": "/repo",
+        "prompt_id": "c0604527-2be9-4461-b9df-7cc36265bf98",
+        "permission_mode": "acceptEdits",
+        "effort": {
+          "level": "medium"
+        },
+        "hook_event_name": "PostToolUse",
+        "tool_name": "NotebookEdit",
+        "tool_input": {
+          "notebook_path": "/repo/nb.ipynb",
+          "cell_id": "c1",
+          "new_source": "x = 2"
+        },
+        "tool_response": "<recorded; never templated>",
+        "tool_use_id": "toolu_01DhAP2CE252rfQXrJQRuiSh",
+        "duration_ms": 3
+      },
+      "PostToolUse_Bash": {
+        "session_id": "fc7f856d-7f91-43fc-acd1-ebc23289feb0",
+        "transcript_path": "/home/user/.claude/projects/-repo/session.jsonl",
+        "cwd": "/repo",
+        "prompt_id": "c0604527-2be9-4461-b9df-7cc36265bf98",
+        "permission_mode": "acceptEdits",
+        "effort": {
+          "level": "medium"
+        },
+        "hook_event_name": "PostToolUse",
+        "tool_name": "Bash",
+        "tool_input": {
+          "command": "echo probe",
+          "description": "Print probe"
+        },
+        "tool_response": "<recorded; never templated>",
+        "tool_use_id": "toolu_01BCfVX4A3reTtwB7Thnj7VZ",
+        "duration_ms": 758
+      },
+      "PermissionRequest_Bash": {
+        "session_id": "af42d1dd-5e6a-4699-8a95-de7a95ac8ba3",
+        "transcript_path": "/home/user/.claude/projects/-repo/session.jsonl",
+        "cwd": "/repo",
+        "prompt_id": "ec547135-9bc0-470f-9cfc-91daa1545050",
+        "permission_mode": "default",
+        "effort": {
+          "level": "medium"
+        },
+        "hook_event_name": "PermissionRequest",
+        "tool_name": "Bash",
+        "tool_input": {
+          "command": "touch perm-probe.txt",
+          "description": "Create empty probe file"
+        },
+        "permission_suggestions": [
+          {
+            "type": "addDirectories",
+            "directories": ["/repo"],
+            "destination": "session"
+          },
+          {
+            "type": "setMode",
+            "mode": "acceptEdits",
+            "destination": "session"
+          }
+        ]
+      },
+      "Stop": {
+        "session_id": "fc7f856d-7f91-43fc-acd1-ebc23289feb0",
+        "transcript_path": "/home/user/.claude/projects/-repo/session.jsonl",
+        "cwd": "/repo",
+        "prompt_id": "c0604527-2be9-4461-b9df-7cc36265bf98",
+        "permission_mode": "acceptEdits",
+        "effort": {
+          "level": "medium"
+        },
+        "hook_event_name": "Stop",
+        "stop_hook_active": false,
+        "last_assistant_message": "<recorded; never templated>",
+        "background_tasks": [],
+        "session_crons": []
+      }
+    }
+  },
+  "assert": {
+    "requiredPaths": [
+      "samples.SessionStart.hook_event_name",
+      "samples.SessionStart.session_id",
+      "samples.SessionStart.cwd",
+      "samples.SessionStart.source",
+      "samples.UserPromptSubmit.hook_event_name",
+      "samples.UserPromptSubmit.session_id",
+      "samples.UserPromptSubmit.cwd",
+      "samples.UserPromptSubmit.prompt",
+      "samples.PostToolUse_Write.hook_event_name",
+      "samples.PostToolUse_Write.session_id",
+      "samples.PostToolUse_Write.cwd",
+      "samples.PostToolUse_Write.tool_name",
+      "samples.PostToolUse_Write.tool_use_id",
+      "samples.PostToolUse_Write.tool_input",
+      "samples.PostToolUse_Write.tool_input.file_path",
+      "samples.PostToolUse_Edit.hook_event_name",
+      "samples.PostToolUse_Edit.session_id",
+      "samples.PostToolUse_Edit.cwd",
+      "samples.PostToolUse_Edit.tool_name",
+      "samples.PostToolUse_Edit.tool_use_id",
+      "samples.PostToolUse_Edit.tool_input",
+      "samples.PostToolUse_Edit.tool_input.file_path",
+      "samples.PostToolUse_NotebookEdit.hook_event_name",
+      "samples.PostToolUse_NotebookEdit.session_id",
+      "samples.PostToolUse_NotebookEdit.cwd",
+      "samples.PostToolUse_NotebookEdit.tool_name",
+      "samples.PostToolUse_NotebookEdit.tool_use_id",
+      "samples.PostToolUse_NotebookEdit.tool_input",
+      "samples.PostToolUse_NotebookEdit.tool_input.notebook_path",
+      "samples.PostToolUse_Bash.hook_event_name",
+      "samples.PostToolUse_Bash.session_id",
+      "samples.PostToolUse_Bash.cwd",
+      "samples.PostToolUse_Bash.tool_name",
+      "samples.PostToolUse_Bash.tool_use_id",
+      "samples.PostToolUse_Bash.tool_input",
+      "samples.PostToolUse_Bash.tool_input.command",
+      "samples.PermissionRequest_Bash.hook_event_name",
+      "samples.PermissionRequest_Bash.session_id",
+      "samples.PermissionRequest_Bash.cwd",
+      "samples.PermissionRequest_Bash.permission_mode",
+      "samples.PermissionRequest_Bash.tool_name",
+      "samples.PermissionRequest_Bash.tool_input",
+      "samples.Stop.hook_event_name",
+      "samples.Stop.session_id",
+      "samples.Stop.cwd",
+      "samples.Stop.stop_hook_active",
+      "samples.Stop.background_tasks"
+    ],
+    "equals": {
+      "claudeCodeVersion": "2.1.329",
+      "samples.SessionStart.source": "startup",
+      "samples.PostToolUse_NotebookEdit.tool_input.notebook_path": "/repo/nb.ipynb",
+      "samples.PermissionRequest_Bash.hook_event_name": "PermissionRequest",
+      "samples.Stop.stop_hook_active": false
+    }
+  }
+}

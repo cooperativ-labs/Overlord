@@ -62,6 +62,16 @@ export type CodecEventRule = {
    */
   outcomeExitCodePrefix?: string;
   /**
+   * Dotted path to an error-message string that the harness documents as empty or omitted when
+   * the call succeeded (Antigravity `PostToolUse.error`). A non-empty string decodes to `error`;
+   * an empty string or an absent field decodes to `ok`; any other value stays unknown. The
+   * message itself is never retained. Exclusive with `outcomePath` and `successOnly`, and, like
+   * `successOnly`, it must cite harness documentation or source evidence in the codec and be
+   * pinned by a normalized-event fixture: absence only means success because the matched rule
+   * already proved which native event this is.
+   */
+  outcomeErrorPath?: string;
+  /**
    * The harness emits this native event only after a successful call (failures go to a
    * different event that is not registered here). Must be backed by fixture/source evidence
    * for the harness version. With no decoded outcome the event is sealed as `ok`; an
@@ -168,12 +178,20 @@ function readOutcome(
     const lowered = value.toLowerCase();
     if (lowered === 'ok' || lowered === 'success' || lowered === 'completed') return 'ok';
     if (lowered === 'error' || lowered === 'failed' || lowered === 'failure') return 'error';
-    if (lowered === 'blocked' || lowered === 'denied') return 'blocked';
+    // `declined`: a Codex app-server item a person or policy refused to approve.
+    if (lowered === 'blocked' || lowered === 'denied' || lowered === 'declined') return 'blocked';
     if (lowered === 'cancelled' || lowered === 'canceled' || lowered === 'interrupted') {
       return 'cancelled';
     }
   }
   return undefined;
+}
+
+/** Decode an error-message field: empty or absent is success, any message is failure. */
+function readErrorMessageOutcome(value: unknown): NormalizedEventPayload['outcome'] | undefined {
+  if (value === undefined || value === null) return 'ok';
+  if (typeof value !== 'string') return undefined;
+  return value.trim() === '' ? 'ok' : 'error';
 }
 
 const PATCH_HEADER = /^\*\*\* (?:(?:Add|Update|Delete) File|Move to): (.+)$/gm;
@@ -315,6 +333,10 @@ export function normalizeNativeEvent({
 
   if (rule.outcomePath) {
     const outcome = readOutcome(readPath(payload, rule.outcomePath), rule.outcomeExitCodePrefix);
+    if (outcome) sealedInput.outcome = outcome;
+  }
+  if (rule.outcomeErrorPath) {
+    const outcome = readErrorMessageOutcome(readPath(payload, rule.outcomeErrorPath));
     if (outcome) sealedInput.outcome = outcome;
   }
   if (rule.successOnly && !sealedInput.outcome) sealedInput.outcome = 'ok';

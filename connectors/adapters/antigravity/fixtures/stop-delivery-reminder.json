@@ -1,0 +1,37 @@
+{
+  "fixtureVersion": 1,
+  "kind": "script-io",
+  "description": "A launched Antigravity session's Stop hook asks `ovld protocol hook-event --hook-output` for the delivery reminder and passes its exact Antigravity answer through: `decision: continue` with the reason keeps the agent working so it can deliver. Without a session channel the inbox is not consulted.",
+  "script": "connectors/adapters/antigravity/hooks/overlord-stop.sh",
+  "stdin": {
+    "hookEventName": "Stop",
+    "conversationId": "ec33ebf9-0cba-4100-8142-c61503f6c587",
+    "workspacePaths": ["/workspace/project"],
+    "cwd": "/workspace/project",
+    "executionNum": 3,
+    "terminationReason": "model_stop",
+    "fullyIdle": true,
+    "continuation_active": false,
+    "lastUserInput": "Ship it",
+    "modelName": "gemini-3.6-flash-medium"
+  },
+  "env": {
+    "MISSION_ID": "coo:825",
+    "OVERLORD_MISSION_ID": "coo:825",
+    "OVERLORD_OBJECTIVE_ID": "coo:825.abcd",
+    "OVERLORD_SESSION_CHANNEL_ID": null
+  },
+  "spy": {
+    "stdout": "{\"decision\":\"continue\",\"reason\":\"[Overlord] Objective coo:825.abcd is still executing and has not been delivered.\"}\n"
+  },
+  "expect": {
+    "exitCode": 0,
+    "stdout": "{\"decision\":\"continue\",\"reason\":\"[Overlord] Objective coo:825.abcd is still executing and has not been delivered.\"}\n",
+    "stderr": "",
+    "cliInvocations": [
+      "protocol hook-event --agent antigravity --hook-type Stop --hook-output --payload-file -"
+    ],
+    "stdinForwarded": true,
+    "sandboxWrites": []
+  }
+}

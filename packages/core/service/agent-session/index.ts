@@ -12,4 +12,5 @@ export * from './channels.js';
 export * from './credential.js';
 export * from './events.js';
 export * from './inputs.js';
+export * from './launch-channels.js';
 export * from './requests.js';

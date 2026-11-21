@@ -29,6 +29,44 @@ export function projectTmpSessionsDir(workingDirectory: string): string {
   return path.join(projectTmpDir(workingDirectory), PROJECT_TMP_SESSIONS_DIRNAME);
 }
 
+/**
+ * Shared temp root for harnesses that ignore `TMPDIR` and read their own variable
+ * (Claude Code reads only `CLAUDE_CODE_TMPDIR`). Kept at a short, stable path rather
+ * than a per-launch `sessions/<id>/` directory because the harness binds Unix sockets
+ * beneath it.
+ */
+export const PROJECT_TMP_HARNESS_DIRNAME = 'harness';
+
+/**
+ * Claude Code binds `<CLAUDE_CODE_TMPDIR>/cc-socks/<pid>.sock`. Unix socket paths are
+ * capped at 104 bytes on macOS (108 on Linux); past that Claude starts without its
+ * messaging socket. Reserve room for a 7-digit pid and the terminating NUL.
+ */
+const UNIX_SOCKET_PATH_MAX_BYTES = 104;
+const CLAUDE_SOCKET_SUFFIX_BYTES = Buffer.byteLength('/cc-socks/1234567.sock') + 1;
+
+export function projectHarnessTmpDir(workingDirectory: string): string {
+  return path.join(projectTmpDir(workingDirectory), PROJECT_TMP_HARNESS_DIRNAME);
+}
+
+/**
+ * The `CLAUDE_CODE_TMPDIR` value for a checkout, or null when the checkout path is
+ * so deep that Claude's messaging socket would not fit (Claude then keeps its default).
+ */
+export function claudeCodeTmpDir(workingDirectory: string): string | null {
+  const dir = projectHarnessTmpDir(workingDirectory);
+  return Buffer.byteLength(dir) + CLAUDE_SOCKET_SUFFIX_BYTES <= UNIX_SOCKET_PATH_MAX_BYTES
+    ? dir
+    : null;
+}
+
+/** Create the private (0700) harness temp root Claude Code requires. */
+export function ensureHarnessTmpDir(workingDirectory: string): void {
+  const dir = claudeCodeTmpDir(workingDirectory);
+  if (!dir) return;
+  mkdirSync(dir, { recursive: true, mode: 0o700 });
+}
+
 export function safeTmpNamePart(value: string): string {
   return value.replace(/[^a-zA-Z0-9_-]/g, '-').replace(/^-+|-+$/g, '');
 }
@@ -152,6 +190,12 @@ export function pruneProjectTmpContents(
   const entries = readdirSync(tmpDir, { withFileTypes: true, encoding: 'utf8' });
   for (const entry of entries) {
     const target = path.join(tmpDir, entry.name);
+    if (entry.name === PROJECT_TMP_HARNESS_DIRNAME && entry.isDirectory() && !force) {
+      // Shared by every running Claude Code session in this checkout (scratchpads,
+      // task output, messaging sockets), so only files past retention are removed.
+      pruneChildren(target, Date.now() - PROJECT_TMP_RETENTION_MS);
+      continue;
+    }
     if (entry.name === PROJECT_TMP_SESSIONS_DIRNAME && entry.isDirectory() && !force) {
       for (const session of readdirSync(target, { withFileTypes: true, encoding: 'utf8' })) {
         if (session.isDirectory() && isSessionLive(session.name)) {
@@ -268,6 +312,9 @@ function pruneLeaf(target: string, cutoff: number): void {
     // forever.
     const stats = lstatSync(target);
     if (stats.mtimeMs > cutoff) return;
+    // A socket's mtime is its bind time, so age says nothing about whether a
+    // long-running harness still listens on it.
+    if (stats.isSocket()) return;
     if (stats.isSymbolicLink()) {
       // `rmSync({ recursive, force })` resolves the link first; on a dangling
       // link that is ENOENT, which `force` swallows, leaving the link in place.

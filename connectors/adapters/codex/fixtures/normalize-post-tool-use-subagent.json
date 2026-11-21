@@ -1,0 +1,53 @@
+{
+  "fixtureVersion": 1,
+  "kind": "normalized-event",
+  "description": "Codex PostToolUse fired inside a spawned subagent, in the 0.170 hook shape: `session_id` is the root session (subagents share the session tree's agent-control identity) and `agent_id` is the child thread. The edit therefore correlates with the session that spawned the subagent and records the child as subagentId; the patch body, tool output, transcript path and model are not kept.",
+  "codec": "codec/codex.codec.yaml",
+  "occurredAt": "2026-08-01T00:00:00.000Z",
+  "payload": {
+    "session_id": "01a1faeb-d29d-77a2-91b0-89021afec101",
+    "turn_id": "01a1faeb-e98e-7f92-9764-6130255aed13",
+    "agent_id": "01a1faeb-e92a-7711-8210-2250b334ce2f",
+    "agent_type": "default",
+    "transcript_path": "/home/user/.codex/sessions/rollout-child.jsonl",
+    "cwd": "/repo",
+    "hook_event_name": "PostToolUse",
+    "model": "gpt-6.2-sol",
+    "permission_mode": "default",
+    "tool_name": "apply_patch",
+    "tool_input": {
+      "command": "*** Begin Patch\n*** Add File: /repo/child.txt\n+from child\n*** End Patch"
+    },
+    "tool_response": "Exit code: 0\nWall time: 0.1 seconds\nOutput:\nSuccess. Updated the following files:\nA child.txt\n",
+    "tool_use_id": "call_child_apply_patch"
+  },
+  "expect": {
+    "eventId": "ev_1d5655c50624512307b79382d7279edf",
+    "producerSequence": null,
+    "occurredAt": "2026-08-01T00:00:00.000Z",
+    "kind": "file.edited",
+    "severity": "info",
+    "nativeEvent": "PostToolUse",
+    "nativeTurnId": "01a1faeb-e98e-7f92-9764-6130255aed13",
+    "nativeCallId": "call_child_apply_patch",
+    "subagentId": "01a1faeb-e92a-7711-8210-2250b334ce2f",
+    "correlationId": "01a1faeb-d29d-77a2-91b0-89021afec101",
+    "origin": "agent",
+    "summary": "Write a file",
+    "payload": {
+      "tool": "edit",
+      "action": "Write a file",
+      "paths": [
+        "child.txt"
+      ],
+      "outcome": "ok",
+      "formatterVersion": 1
+    }
+  },
+  "mustNotContain": [
+    "from child",
+    "Wall time",
+    "rollout-child",
+    "gpt-6.2-sol"
+  ]
+}

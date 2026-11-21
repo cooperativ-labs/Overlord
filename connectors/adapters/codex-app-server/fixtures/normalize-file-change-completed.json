@@ -1,0 +1,70 @@
+{
+  "fixtureVersion": 1,
+  "kind": "normalized-event",
+  "description": "The same fileChange item completed (live 0.170.0, answered by a second client). One file.edited event per change, with the repo-relative path and the decoded status; never the diff.",
+  "codec": "codec/codex-app-server.codec.yaml",
+  "nativeEventName": "item/completed:fileChange",
+  "occurredAt": "2026-01-01T00:00:00.000Z",
+  "payload": {
+    "item": {
+      "type": "fileChange",
+      "id": "exec-cbfb07b2-1a28-4740-9992-676d9e62c3d7",
+      "changes": [
+        {
+          "path": "/repo/notes.md",
+          "kind": {
+            "type": "add"
+          },
+          "diff": "hello\n"
+        }
+      ],
+      "status": "completed",
+      "startedAtMs": 1795207193624,
+      "completedAtMs": 1795207194005
+    },
+    "threadId": "01a1faaf-cd91-7372-a780-f5a9c5b457a7",
+    "turnId": "01a1faaf-d058-7193-bb3b-9f01dcfd8812",
+    "contentTokenCount": null,
+    "completedAtMs": 1795207194005,
+    "event": "item/completed:fileChange",
+    "context": {
+      "cwd": "/repo"
+    },
+    "change": {
+      "path": "/repo/notes.md",
+      "kind": {
+        "type": "add"
+      },
+      "diff": "hello\n"
+    },
+    "changeIndex": 0
+  },
+  "expect": {
+    "eventId": "ev_a58aa9c466cbd3adf2a1a3fb74766f74",
+    "producerSequence": null,
+    "occurredAt": "2026-01-01T00:00:00.000Z",
+    "kind": "file.edited",
+    "severity": "info",
+    "nativeEvent": "item/completed:fileChange",
+    "nativeTurnId": "01a1faaf-d058-7193-bb3b-9f01dcfd8812",
+    "nativeCallId": "exec-cbfb07b2-1a28-4740-9992-676d9e62c3d7",
+    "subagentId": null,
+    "correlationId": "01a1faaf-cd91-7372-a780-f5a9c5b457a7",
+    "origin": "agent",
+    "summary": "Write a file: notes.md",
+    "payload": {
+      "tool": "edit",
+      "action": "Write a file",
+      "subject": "notes.md",
+      "paths": [
+        "notes.md"
+      ],
+      "outcome": "ok",
+      "formatterVersion": 1
+    }
+  },
+  "mustNotContain": [
+    "hello",
+    "diff"
+  ]
+}

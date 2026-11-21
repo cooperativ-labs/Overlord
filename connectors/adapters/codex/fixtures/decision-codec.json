@@ -1,17 +1,21 @@
 {
   "fixtureVersion": 1,
   "kind": "decision-codec",
-  "description": "Codex request reduction and exact allow/deny/defer output.",
+  "description": "Codex request reduction and exact allow/deny/defer output. Payload shape recorded live from codex-cli 0.170.0 and checked against the 0.171.0 schemas: PermissionRequest carries no request id, tool_use_id or timeout, and tool_input.description echoes the command, so the secret appears in both.",
   "codec": "codec/codex.decision-codec.yaml",
   "payload": {
-    "hook_event_name": "PermissionRequest",
     "session_id": "session-1",
+    "turn_id": "turn-1",
+    "transcript_path": null,
     "cwd": "/repo",
+    "hook_event_name": "PermissionRequest",
+    "model": "gpt-6.2-astra",
+    "permission_mode": "default",
     "tool_name": "Bash",
-    "tool_input": { "command": "echo AKIAIOSFODNN7EXAMPLE" },
-    "request_id": "req-1",
-    "tool_use_id": "call-1",
-    "timeout": 45
+    "tool_input": {
+      "command": "echo AKIAIOSFODNN7EXAMPLE",
+      "description": "Allow echo AKIAIOSFODNN7EXAMPLE to run outside the sandbox?"
+    }
   },
   "expect": {
     "request": {
@@ -25,9 +29,9 @@
         "riskMarkers": ["secret-adjacent"],
         "formatterVersion": 1
       },
-      "nativeRequestId": "req-1",
-      "nativeCallId": "call-1",
-      "harnessTimeoutSeconds": 45
+      "nativeRequestId": null,
+      "nativeCallId": null,
+      "harnessTimeoutSeconds": null
     },
     "responses": {
       "allow": "{\"hookSpecificOutput\":{\"hookEventName\":\"PermissionRequest\",\"decision\":{\"behavior\":\"allow\"}}}\n",

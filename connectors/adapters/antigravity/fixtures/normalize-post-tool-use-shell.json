@@ -1,0 +1,50 @@
+{
+  "fixtureVersion": 1,
+  "kind": "normalized-event",
+  "description": "Antigravity PostToolUse for run_command, using the first-party PostToolUse example arguments and error. It is a tool.completed shell card with a decoded error outcome; the command output is not in the payload and the error text is not retained.",
+  "codec": "codec/antigravity.codec.yaml",
+  "occurredAt": "2026-11-20T00:00:00.000Z",
+  "payload": {
+    "hookEventName": "PostToolUse",
+    "toolCall": {
+      "id": "toolu_cmd_3",
+      "name": "run_command",
+      "args": {
+        "CommandLine": "npm test",
+        "Cwd": "/workspace/project",
+        "WaitMsBeforeAsync": 5000
+      }
+    },
+    "stepIdx": 19,
+    "error": "exit status 1",
+    "conversationId": "ec33ebf9-0cba-4100-8142-c61503f6c587",
+    "workspacePaths": ["/workspace/project"],
+    "transcriptPath": "/Users/dev/.gemini/antigravity-cli/brain/ec33ebf9-0cba-4100-8142-c61503f6c587/.system_generated/logs/transcript.jsonl",
+    "artifactDirectoryPath": "/Users/dev/.gemini/antigravity-cli/brain/ec33ebf9-0cba-4100-8142-c61503f6c587",
+    "modelName": "gemini-3.6-flash-medium",
+    "cwd": "/workspace/project"
+  },
+  "expect": {
+    "eventId": "ev_af50fe65f64c984d4b22f1ca95ea3ce1",
+    "producerSequence": null,
+    "occurredAt": "2026-11-20T00:00:00.000Z",
+    "kind": "tool.completed",
+    "severity": "info",
+    "nativeEvent": "PostToolUse",
+    "nativeTurnId": null,
+    "nativeCallId": "toolu_cmd_3",
+    "subagentId": null,
+    "correlationId": "ec33ebf9-0cba-4100-8142-c61503f6c587",
+    "origin": "agent",
+    "summary": "Run a shell command: npm test",
+    "payload": {
+      "tool": "shell",
+      "action": "Run a shell command",
+      "subject": "npm",
+      "detail": "npm test",
+      "outcome": "error",
+      "formatterVersion": 1
+    }
+  },
+  "mustNotContain": ["exit status 1", "transcript.jsonl", "/Users/dev"]
+}

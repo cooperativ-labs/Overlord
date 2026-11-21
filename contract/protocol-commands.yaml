@@ -315,6 +315,38 @@ sessionLifecycle:
       - appends-mission-event-type-ask
       - creates-answerable-agent-request-when-session-has-bound-channel
 
+  hook-event:
+    description: 'Record a connector lifecycle hook: a UserPromptSubmit follow-up, or the Stop delivery status (ADR 0087)'
+    requiredFlags: [--hook-type]
+    requiresSessionKey: false
+    optionalFlags:
+      - --mission-id
+      - --objective-id
+      - --session-key
+      - --external-session-id
+      - --turn-index
+      - --agent
+      - --payload-file
+      - --hook-output
+    promptInput:
+      flag: --prompt
+      fileAlternative: --prompt-file
+    hookTypes: [UserPromptSubmit, Stop]
+    rules:
+      - 'UserPromptSubmit records one user_follow_up mission event, idempotent on hook type, mission, native session or session, turn index and prompt hash; it never reopens execution'
+      - 'Stop is read-only and returns deliveryStatus { needed, reason }: needed only for an open session located by --session-key whose objective is executing, undelivered, and whose latest activity is not an ask. It records no event'
+      - "Native mode (CLI only): with --agent <key> --payload-file -, the CLI reads the harness's native hook payload, decodes it with that connector's codec, resolves the binding (launch environment, else the native-session index written by attach/connect/resume-follow-up), and prints the backend result plus hookOutput, the exact JSON object the harness hook answers with ({} unless there is something to say). Every native-mode failure is a result with hookOutput {}, never an error"
+      - 'Native mode never sends --prompt as argv: prompt text travels as the --prompt-file input. The Stop reminder is answered at most once per protocol session and objective and never when the payload sets stop_hook_active'
+      - 'Native mode skips a harness-written prompt (Claude <task-notification>; skipped harness_notification) and defers the Stop reminder while the payload lists a running background task (Claude background_tasks; skipped background_tasks_running) (ADR 0088)'
+      - 'The Claude mcp_tool hook tools spawn this same command; they hold no logic of their own (ADR 0087)'
+      - 'Native mode with --hook-output prints only the hookOutput object on one line, for shell hooks that pass it through (ADR 0090)'
+      - "Native mode maps the payload event to a canonical hook type through the connector codec: a rule of kind prompt.submitted is UserPromptSubmit (Antigravity PreInvocation lastUserInput). A prompt from such a per-invocation event is recorded only when it differs from the last one recorded for the native session (only a hash is kept). --hook-type may name the native event or its canonical type (ADR 0090)"
+      - "Native mode locates the session-key cache in the payload's codec-declared project root when it names an existing directory, else the process working directory; this never selects the binding (ADR 0090)"
+      - 'The Stop reminder hookOutput is {decision: continue, reason} for Antigravity and {decision: block, reason} for Claude and Codex; it is also skipped when the payload sets continuation_active or fullyIdle false (ADR 0090)'
+    sideEffects:
+      - appends-mission-event-type-user_follow_up-for-UserPromptSubmit
+      - persists-external-session-id-on-the-resolved-session
+
   deliver:
     description: 'Final delivery — mark objective complete and move mission to review'
     requiredFlags: []

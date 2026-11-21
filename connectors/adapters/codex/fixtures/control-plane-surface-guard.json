@@ -1,0 +1,26 @@
+{
+  "fixtureVersion": 1,
+  "kind": "script-io",
+  "description": "Inside a private `codex app-server` that the Overlord codex-app-server supervisor drives, the server environment carries OVERLORD_CONTROL_PLANE_SURFACE. The installed Codex plugin's PostToolUse callback still fires there (spike: hook/started inside app-server turns), so it must exit before reading stdin or spawning the CLI even when an objective is in scope: the supervisor already captures the change, and a second capture would double-attribute it.",
+  "script": "connectors/core/scripts/capture-change-hook.sh",
+  "adapterKey": "codex",
+  "stdin": {
+    "session_id": "01a1faaf-cd91-7372-a780-f5a9c5b457a7",
+    "hook_event_name": "PostToolUse",
+    "cwd": "/repo",
+    "tool_name": "apply_patch",
+    "tool_input": { "command": "*** Begin Patch\n*** Add File: notes.md\n+hello\n*** End Patch" }
+  },
+  "env": {
+    "OVERLORD_CONTROL_PLANE_SURFACE": "codex-app-server",
+    "OVERLORD_OBJECTIVE_ID": "coo:1.abcd",
+    "MISSION_ID": "coo:1"
+  },
+  "expect": {
+    "exitCode": 0,
+    "stdout": "",
+    "stderr": "",
+    "cliInvocations": [],
+    "sandboxWrites": []
+  }
+}

@@ -411,8 +411,21 @@ test('tmpEnvFor pins the TMPDIR family to the project .overlord/tmp', () => {
     TMPDIR: expected,
     TMP: expected,
     TEMP: expected,
-    OVERLORD_TMPDIR: expected
+    OVERLORD_TMPDIR: expected,
+    CLAUDE_CODE_TMPDIR: `${expected}/harness`
   });
+});
+
+test('tmpEnvFor pins Claude Code to the shared harness root even with session scratch', () => {
+  const scratch = '/Users/jake/project/.overlord/tmp/sessions/objective-coo-1-abcd-req1';
+  const env = tmpEnvFor('/Users/jake/project', scratch);
+  assert.equal(env.TMPDIR, scratch);
+  assert.equal(env.CLAUDE_CODE_TMPDIR, '/Users/jake/project/.overlord/tmp/harness');
+});
+
+test('tmpEnvFor leaves CLAUDE_CODE_TMPDIR unset when the socket path would overflow', () => {
+  const deep = `/Users/jake/${'nested/'.repeat(10)}project`;
+  assert.equal(tmpEnvFor(deep).CLAUDE_CODE_TMPDIR, undefined);
 });
 
 test('composeAgentTerminalCommand matches the terminal inner command string S', () => {

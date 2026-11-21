@@ -1,0 +1,32 @@
+{
+  "fixtureVersion": 1,
+  "kind": "native-payload",
+  "description": "Antigravity Stop input in the documented shape (hooks doc Stop input; continuation_active from agy 1.5.6). It carries the conversationId binding alias, fullyIdle and the continuation guard the delivery reminder reads.",
+  "payload": {
+    "hookEventName": "Stop",
+    "conversationId": "ec33ebf9-0cba-4100-8142-c61503f6c587",
+    "workspacePaths": ["/workspace/project"],
+    "cwd": "/workspace/project",
+    "executionNum": 3,
+    "terminationReason": "model_stop",
+    "fullyIdle": true,
+    "continuation_active": false,
+    "lastUserInput": "Ship it",
+    "modelName": "gemini-3.6-flash-medium"
+  },
+  "assert": {
+    "requiredPaths": [
+      "hookEventName",
+      "conversationId",
+      "executionNum",
+      "terminationReason",
+      "fullyIdle",
+      "continuation_active"
+    ],
+    "bindingField": "conversationId",
+    "equals": {
+      "hookEventName": "Stop",
+      "fullyIdle": true
+    }
+  }
+}

@@ -6,7 +6,7 @@
 
 **Harness version verified** `2026.08.04-aaa8809` · **range** `>=2026.07.01` · **scheme** `calendar`
 
-**Descriptor digest** `d468594240b637953358713e6412156d35b2b095d14fd1b2fc403496bcd6caf9`
+**Descriptor digest** `55c24b2e53d557d9c07e593effc230fc2ec72f985168765b5f23f494b2fc7c0b`
 
 > The tier is derived from passing fixtures, never authored. `unsupported` means the harness
 > cannot do it — do not attempt it. `not-implemented` means it is buildable and unbuilt: that is
@@ -91,11 +91,11 @@ callbacks, record unavailable evidence health.
 
 | Hazard | Severity | Verification | Mitigation | Tracked as |
 | --- | --- | --- | --- | --- |
-| `reads-claude-hook-config` | high | unverified | required | `taxonomy-7.1` |
+| `reads-claude-hook-config` | high | verified | implemented | fixture `fixtures/claude-plugin-import-guard.json` |
 | `allowlist-precedence` | medium | unverified | required | `taxonomy-7.8` |
 | `fail-closed-inverts-fallback` | high | verified | implemented | fixture `fixtures/fail-closed-unset.json` |
 
-**`reads-claude-hook-config`** — Cursor resolves hooks from Claude's own project-local, project, and user configuration in addition to its own. If plugin-provided hooks are expanded, Overlord's Claude hooks may fire inside Cursor sessions and emit Claude-shaped decisions into a Cursor-shaped contract — cross-connector misattribution with no code change on our side.
+**`reads-claude-hook-config`** — Cursor loads hooks from Claude's project-local, project and user settings and imports installed, enabled Claude Code plugins' hooks/hooks.json (on by default in the IDE; it cannot be turned off in cursor-agent), so Overlord's Claude hooks could fire inside Cursor sessions with Cursor-shaped payloads. Verified from Cursor's third-party hooks docs and forum (t/166558). Mitigated in coo:1323: the Claude plugin now ships only fail-open `mcp_tool` hooks, and Cursor's importer copies only `command` hooks, so no Overlord script runs in Cursor. The fail-closed decision hook is registered per Claude launch and never lives in the plugin, and the plugin registers no PreToolUse. How Cursor treats an `mcp_tool` entry is undocumented and was not observed in a live Cursor run.
 
 **`allowlist-precedence`** — Reported upstream that beforeShellExecution allow/ask is ignored when a command allowlist entry matches. A remote approval may be a no-op, so "we returned allow" is not proof the decision was decisive.
 

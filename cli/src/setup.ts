@@ -1,4 +1,5 @@
 import { hostname } from 'node:os';
+import path from 'node:path';
 
 import { flagBoolean, flagValue, parseArgs } from './args.js';
 import {
@@ -9,6 +10,19 @@ import {
   runInteractiveAuthLogin
 } from './auth-login.js';
 import { resolveAuthStatus } from './auth-status.js';
+import { compareSemver } from './claude-hook-health.js';
+import {
+  type ClaudeStatusLineSetup,
+  configureClaudeStatusLine,
+  inspectClaudeStatusLine
+} from './claude-status-line.js';
+import { detectCodexVersion } from './codex-hook-trust.js';
+import {
+  CODEX_STATUS_LINE_MIN_VERSION,
+  type CodexStatusLineSetup,
+  configureCodexStatusLine,
+  inspectCodexStatusLine
+} from './codex-status-line.js';
 import {
   DEFAULT_LOCAL_BACKEND_URL,
   loadConfig,
@@ -17,6 +31,7 @@ import {
 } from './config.js';
 import {
   listAvailableConnectors,
+  resolveHome,
   setupAllConnectors,
   setupConnector,
   type SetupResult
@@ -59,7 +74,8 @@ function printHumanResult(result: SetupResult): void {
           : file.action === 'removed' || file.action === 'would-remove'
             ? '-'
             : '=';
-    printLine(`  ${marker} ${file.path}${file.executable ? ' (executable)' : ''}`);
+    const shownPath = file.root ? path.join(file.root, file.path) : file.path;
+    printLine(`  ${marker} ${shownPath}${file.executable ? ' (executable)' : ''}`);
   }
   for (const warning of result.warnings) {
     printLine(`  warn: ${warning}`);
@@ -602,9 +618,15 @@ export async function runAgentSetupCommand({
   const dryRun = flagBoolean(parsed.flags, '--dry-run');
   const home = flagValue(parsed.flags, '--home');
   const exportPath = flagValue(parsed.flags, '--export');
+  const statusLineRequested = flagBoolean(parsed.flags, '--status-line');
 
   if (exportPath && target !== 'codex') {
     throw new CliError({ message: '`--export` requires `agent-setup codex`.' });
+  }
+  if (statusLineRequested && target !== 'claude' && target !== 'codex' && target !== 'all') {
+    throw new CliError({
+      message: '`--status-line` requires `agent-setup claude`, `agent-setup codex` (or `all`).'
+    });
   }
 
   const shouldConfigureCodexPermissions = async (agentKey: string): Promise<boolean> => {
@@ -647,8 +669,62 @@ export async function runAgentSetupCommand({
           })
         ];
 
+  // The status line is opt-in: `--status-line`, or a yes at the interactive prompt, which is
+  // only offered when Claude has no status line yet. An existing one is never replaced.
+  let statusLine: ClaudeStatusLineSetup | null = null;
+  const claudeInstalled = results.some(result => result.agentKey === 'claude');
+  if (claudeInstalled && !exportPath) {
+    const configDir = path.join(resolveHome(home), '.claude');
+    const wantsStatusLine =
+      statusLineRequested ||
+      (!json &&
+        !dryRun &&
+        Boolean(process.stdin.isTTY) &&
+        inspectClaudeStatusLine(configDir).state === 'none' &&
+        (await promptYesNo(
+          "Show the bound Overlord mission and objective in Claude Code's status line?",
+          false
+        )));
+    if (wantsStatusLine) statusLine = configureClaudeStatusLine({ configDir, dryRun });
+  }
+
+  // Codex: the same opt-in, written to ~/.codex/config.toml (custom status line feature and
+  // provider selection). The prompt is only offered on a Codex that can show it.
+  let codexStatusLine: CodexStatusLineSetup | null = null;
+  const codexInstalled = results.some(result => result.agentKey === 'codex');
+  if (codexInstalled && !exportPath) {
+    const codexHome = path.join(resolveHome(home), '.codex');
+    const codexVersion = detectCodexVersion();
+    const inspection = statusLineRequested
+      ? null
+      : inspectCodexStatusLine(path.join(codexHome, 'config.toml'));
+    const wantsStatusLine =
+      statusLineRequested ||
+      (!json &&
+        !dryRun &&
+        Boolean(process.stdin.isTTY) &&
+        codexVersion !== null &&
+        compareSemver(codexVersion, CODEX_STATUS_LINE_MIN_VERSION) >= 0 &&
+        inspection?.state === 'none' &&
+        inspection.feature !== false &&
+        (await promptYesNo(
+          "Show the bound Overlord mission and objective in Codex's status line?",
+          false
+        )));
+    if (wantsStatusLine) {
+      codexStatusLine = configureCodexStatusLine({ codexHome, codexVersion, dryRun });
+    }
+  }
+
   if (json) {
-    printJson({ ok: true, dryRun, exported: Boolean(exportPath), results });
+    printJson({
+      ok: true,
+      dryRun,
+      exported: Boolean(exportPath),
+      results,
+      ...(statusLine ? { statusLine } : {}),
+      ...(codexStatusLine ? { codexStatusLine } : {})
+    });
   } else {
     for (const result of results) {
       if (exportPath) {
@@ -658,6 +734,8 @@ export async function runAgentSetupCommand({
         printHumanResult(result);
       }
     }
+    if (statusLine) printLine(statusLine.message);
+    if (codexStatusLine) printLine(codexStatusLine.message);
   }
 }
 

@@ -218,29 +218,37 @@ test('native stdin reader stops after the byte ceiling', () => {
  * registrations, delivery-time change attribution and follow-up capture both break, and neither
  * failure is visible until a delivery comes back empty.
  */
-test('Claude Channel 1 protocol registrations survive without agent-session observation', () => {
+test('Claude Channel 1 protocol registrations survive as fail-open mcp_tool hooks', () => {
+  type Hook = {
+    type: string;
+    server?: string;
+    tool?: string;
+    command?: string;
+    onFailure?: string;
+    timeout?: number;
+  };
   const hooks = JSON.parse(
     readFileSync(path.join(repoRoot, 'connectors/adapters/claude/hooks/hooks.json'), 'utf8')
-  ) as { hooks: Record<string, { hooks: { command: string }[] }[]> };
+  ) as { hooks: Record<string, { matcher?: string; hooks: Hook[] }[]> };
 
-  const commandsFor = (event: string) =>
-    (hooks.hooks[event] ?? []).flatMap(entry => entry.hooks.map(hook => hook.command));
+  const hooksFor = (event: string): Hook[] =>
+    (hooks.hooks[event] ?? []).flatMap(entry => entry.hooks);
+  const toolsFor = (event: string) => hooksFor(event).map(hook => hook.tool);
 
-  assert.deepEqual(commandsFor('PostToolUse'), [
-    '"${CLAUDE_PLUGIN_ROOT}/scripts/post-tool-use-hook.sh"'
-  ]);
-  assert.deepEqual(commandsFor('UserPromptSubmit'), [
-    '"${CLAUDE_PLUGIN_ROOT}/scripts/user-prompt-submit-hook.sh"'
-  ]);
-  assert.equal(
-    commandsFor('PostToolUse').some(c => c.endsWith('/scripts/agent-session-event.sh')),
-    false
-  );
-  assert.equal(
-    commandsFor('UserPromptSubmit').some(c => c.endsWith('/scripts/agent-session-event.sh')),
-    false
-  );
-  assert.equal(commandsFor('SessionStart').length, 0);
+  assert.deepEqual(toolsFor('PostToolUse'), ['overlord_hook_post_tool_use']);
+  assert.deepEqual(toolsFor('UserPromptSubmit'), ['overlord_hook_user_prompt_submit']);
+  assert.deepEqual(toolsFor('Stop'), ['overlord_hook_stop']);
+  for (const hook of Object.keys(hooks.hooks).flatMap(hooksFor)) {
+    assert.equal(hook.type, 'mcp_tool');
+    assert.equal(hook.server, 'plugin:overlord:overlord-hooks');
+    assert.equal(hook.command, undefined);
+    // Capture, follow-up and Stop fail open; only the per-launch decision hook blocks.
+    assert.equal(hook.onFailure, undefined);
+    assert.ok(typeof hook.timeout === 'number' && hook.timeout > 0, 'explicit timeout');
+  }
+  assert.equal(hooksFor('PermissionRequest').length, 0);
+  assert.equal(hooksFor('PreToolUse').length, 0);
+  assert.equal(hooksFor('SessionStart').length, 0);
 });
 
 test('agent-session event: the rendered hook gates before it spawns', () => {
@@ -283,13 +291,13 @@ test('agent-session request: a remote CAS winner returns only the exact native d
         payloadRaw: JSON.stringify({
           hook_event_name: 'PermissionRequest',
           tool_name: 'Bash',
-          timeout: 5,
-          request_id: 'native-1'
+          tool_input: { command: 'ls' },
+          hookTimeoutSeconds: 5
         }),
         env: BOUND_ENV
       });
       assert.deepEqual(JSON.parse(result ?? '{}'), {
-        hookSpecificOutput: { hookEventName: 'PermissionRequest', decision: 'allow' }
+        hookSpecificOutput: { hookEventName: 'PermissionRequest', decision: { behavior: 'allow' } }
       });
       assert.equal(captured.length, 2);
       assert.equal(calls, 2);

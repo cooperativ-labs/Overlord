@@ -1,0 +1,29 @@
+{
+  "fixtureVersion": 1,
+  "kind": "script-io",
+  "description": "The Antigravity PreInvocation hook is silent in an unbound session: no stdin read, no spawn, no write, no output.",
+  "script": "connectors/adapters/antigravity/hooks/overlord-pre-invocation.sh",
+  "stdin": {
+    "hookEventName": "PreInvocation",
+    "conversationId": "ec33ebf9-0cba-4100-8142-c61503f6c587",
+    "workspacePaths": ["/workspace/project"],
+    "cwd": "/workspace/project",
+    "invocationNum": 2,
+    "initialNumSteps": 11,
+    "lastUserInput": "Also update the changelog",
+    "modelName": "gemini-3.6-flash-medium"
+  },
+  "env": {
+    "MISSION_ID": null,
+    "OVERLORD_MISSION_ID": null,
+    "OVERLORD_OBJECTIVE_ID": null,
+    "OVERLORD_SESSION_CHANNEL_ID": null
+  },
+  "expect": {
+    "exitCode": 0,
+    "stdout": "",
+    "stderr": "",
+    "cliInvocations": [],
+    "sandboxWrites": []
+  }
+}

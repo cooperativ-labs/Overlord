@@ -18,7 +18,8 @@ import { launchSessionSnapshotFromMetadata } from '@overlord/core/service/termin
 import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
-import { readBoundedStdin } from './agent-session/event.js';
+import { resolveCodexHarnessMode } from './agent-session/codex-app-server/launch.js';
+import { readBoundedPayloadFile, readBoundedStdin } from './agent-session/event.js';
 import { clearActiveMissionPointer, writeActiveMissionPointer } from './active-mission.js';
 import {
   diagnoseObjectiveBinding,
@@ -64,9 +65,15 @@ import {
   missionSummaryConflictOutput,
   reportDraftErrorOutput
 } from './errors.js';
-import { launchAgent } from './launch.js';
+import {
+  harnessNativeSession,
+  removeNativeSessionIndex,
+  writeNativeSessionIndex
+} from './hook-binding.js';
+import { runNativeHookEvent } from './hook-event.js';
+import { launchAgent, type LaunchAgentResult } from './launch.js';
 import { recoverLaunchBootstrapFromProjectTmp } from './launch-bootstrap.js';
-import { fetchLaunchSettings } from './launch-settings.js';
+import { fetchAgentHarnessMode, fetchLaunchSettings } from './launch-settings.js';
 import { buildLocalObjectiveChanges } from './local-objective-changes.js';
 import { resolveNativeSessionId } from './native-session.js';
 import {
@@ -393,6 +400,14 @@ type LaunchSettingsShape = {
 function repeatedLaunchFlags(args: string[], name: string): AgentLaunchFlagDto[] {
   const flags: AgentLaunchFlagDto[] = [];
   for (let index = 0; index < args.length; index += 1) {
+    // `--flag=--sandbox=read-only` carries a value that itself starts with `--`, which the
+    // two-token form cannot (the argument parser would read it as an unknown `ovld` flag).
+    const inline = args[index]?.startsWith(`${name}=`) ? args[index]!.slice(name.length + 1) : null;
+    if (inline !== null) {
+      const parsed = parseAgentLaunchFlagText(inline);
+      if (parsed) flags.push(parsed);
+      continue;
+    }
     if (args[index] !== name) continue;
     const value = args[index + 1];
     if (value !== undefined) {
@@ -1119,6 +1134,35 @@ export async function runProtocolCommand({
   if (missionId && typeof flags['--mission-id'] !== 'string') {
     flags['--mission-id'] = missionId;
   }
+
+  // Native hook mode: the harness's own payload on stdin, decoded by the connector codec. The
+  // Claude `mcp_tool` hooks spawn exactly this command, so the CLI fallback and the MCP path share
+  // one implementation. Prints only JSON whose `hookOutput` is the harness answer, or with
+  // `--hook-output` exactly that answer on one line, so a shell hook can pass it through without
+  // a JSON parser (Antigravity command hooks).
+  const hookAgent = flagValue(parsed.flags, '--agent');
+  const hookPayloadFile = flagValue(parsed.flags, '--payload-file');
+  if (subcommand === 'hook-event' && hookAgent && hookPayloadFile) {
+    const result = await runNativeHookEvent({
+      backend: runtime.backend,
+      agent: hookAgent,
+      hookTypeFlag: flagValue(parsed.flags, '--hook-type') ?? null,
+      payloadRaw:
+        stdin !== undefined && hookPayloadFile === '-'
+          ? stdin
+          : readBoundedPayloadFile(hookPayloadFile),
+      workingDirectory,
+      missionId: missionId ?? null,
+      objectiveId: objectiveRef ?? null
+    });
+    if (flagBoolean(parsed.flags, '--hook-output')) {
+      process.stdout.write(`${JSON.stringify(result.hookOutput)}\n`);
+    } else {
+      printJson(result);
+    }
+    return;
+  }
+
   const { fileInputs } = await resolveProtocolFileInputs({
     flags: parsed.flags,
     stdin
@@ -1511,6 +1555,29 @@ export async function runProtocolCommand({
           objectiveId: objectiveAlias
         });
       }
+      // Index this harness conversation so its hooks can find the binding without a launch
+      // environment. A lookup alias only: the session key stays in the cache written above.
+      const explicitNativeId =
+        typeof flags['--external-session-id'] === 'string'
+          ? flags['--external-session-id'].trim()
+          : '';
+      const explicitAgent = flagValue(parsed.flags, '--agent');
+      const nativeSession =
+        explicitNativeId && explicitAgent
+          ? { agent: explicitAgent, nativeSessionId: explicitNativeId }
+          : harnessNativeSession();
+      if (
+        nativeSession &&
+        attachedObjectiveId &&
+        (subcommand === 'attach' || subcommand === 'connect' || subcommand === 'resume-follow-up')
+      ) {
+        writeNativeSessionIndex({
+          ...nativeSession,
+          workingDirectory,
+          missionId,
+          objectiveId: attachedObjectiveId
+        });
+      }
       // Store the exact objective binding used by capture-change. The hook must
       // still supply this objective; cwd never chooses an entry.
       if ((subcommand === 'attach' || subcommand === 'resume-follow-up') && attachedObjectiveId) {
@@ -1595,6 +1662,17 @@ export async function runProtocolCommand({
         objectiveId: objectiveRef,
         sessionKey: deliveredSessionKey ?? null
       });
+      const nativeSession = harnessNativeSession();
+      if (nativeSession) {
+        removeNativeSessionIndex({
+          ...nativeSession,
+          objectiveIds: [
+            ...(deliveredEntry?.objectiveAliases ?? []),
+            ...(deliveredActive?.objectiveId ? [deliveredActive.objectiveId] : []),
+            ...(objectiveRef ? [objectiveRef] : [])
+          ]
+        });
+      }
       // The briefing is disposable. The harness still exports its scratch path.
       removeLaunchBriefing(
         workingDirectory,
@@ -2069,10 +2147,17 @@ export async function runManagementCommand({
         branchAutomation: prepared.branchAutomation
       });
 
+      const harnessMode = await resolveLaunchHarnessMode({
+        runtime: scopedRuntime,
+        agent,
+        workspaceId: missionWorkspaceId,
+        launchEnvVars
+      });
       const result = await launchAgent({
         runtime: scopedRuntime,
         options: {
           agent,
+          harnessMode,
           missionId,
           workingDirectory: prepared.workingDirectory,
           model: flagValue(parsed.flags, '--model'),
@@ -2090,6 +2175,7 @@ export async function runManagementCommand({
       if (json || dryRun) {
         printJson({ plan: result.plan, status: result.status, signal: result.signal });
       }
+      reportHarnessNotes(result);
       if (result.status && result.status !== 0) {
         throw new CliError({
           message: launchFailureMessage({
@@ -2439,19 +2525,63 @@ function isNoExecutionTargetRegisteredError(error: unknown): boolean {
   return message.includes('(no_execution_target_registered)');
 }
 
-/** The runner service cannot host an interactive agent inline without a TTY. */
+/**
+ * The runner service cannot host an interactive agent inline without a TTY. A Codex objective in
+ * app-server mode needs none: the supervisor runs the session, and a person attaches later.
+ */
 export function shouldRefuseInlineRunnerLaunch({
   dryRun,
   terminalLauncher,
   executionProvider,
-  stdoutIsTTY
+  stdoutIsTTY,
+  harnessMode
 }: {
   dryRun: boolean;
   terminalLauncher?: string | null;
   executionProvider?: string | null;
   stdoutIsTTY?: boolean;
+  harnessMode?: string | null;
 }): boolean {
+  if (harnessMode === 'appServer') return false;
   return !dryRun && !terminalLauncher && executionProvider !== 'latch' && !stdoutIsTTY;
+}
+
+/**
+ * Resolve how this launch drives the agent (ADR 0092): the acting user's per-machine setting,
+ * the runner's own `OVERLORD_CODEX_APP_SERVER=1`, or the project's launch env var of that name.
+ * Only Codex has a second mode; every other agent is a terminal launch.
+ */
+async function resolveLaunchHarnessMode({
+  runtime,
+  agent,
+  workspaceId,
+  launchEnvVars
+}: {
+  runtime: CliRuntime;
+  agent: string;
+  workspaceId?: string | null;
+  launchEnvVars?: Record<string, string> | null;
+}): Promise<'hooks' | 'appServer'> {
+  if (agent !== 'codex') return 'hooks';
+  const configuredMode = await fetchAgentHarnessMode({
+    backend: runtime.backend,
+    workspaceId,
+    agent
+  });
+  return resolveCodexHarnessMode({ agent, configuredMode, launchEnvVars });
+}
+
+/** Print the non-fatal notes a launch produced about its harness mode. */
+function reportHarnessNotes(result: LaunchAgentResult): void {
+  for (const warning of result.plan.harnessWarnings ?? []) {
+    console.error(`[overlord] ${warning}`);
+  }
+  if (result.plan.controlPlane && result.supervisorPid) {
+    console.error(
+      `[overlord] Codex app-server session started (supervisor pid ${result.supervisorPid}). ` +
+        `Attach a terminal with: ovld agent-session attach --channel-id ${result.plan.controlPlane.channelId}`
+    );
+  }
 }
 
 export async function runRunnerOnce({
@@ -2599,6 +2729,13 @@ export async function runRunnerOnce({
       branchAutomation: prepared.branchAutomation
     });
     const launchSession = launchSessionSnapshotFromMetadata(asRecord(requestRecord.metadata));
+    const claimedLaunchEnvVars = parseLaunchEnvVarsValue(requestRecord.launchEnvVars);
+    const harnessMode = await resolveLaunchHarnessMode({
+      runtime,
+      agent: requestedAgent,
+      workspaceId: requestWorkspaceId,
+      launchEnvVars: claimedLaunchEnvVars
+    });
     // A runner must hand the agent a terminal of its own (a launcher window/tab,
     // or a Latch session). With neither, `launchAgent` spawns the agent inline on
     // the runner's own stdio: under the persistent runner service there is no TTY
@@ -2610,7 +2747,8 @@ export async function runRunnerOnce({
         dryRun,
         terminalLauncher: terminal.terminalLauncher,
         executionProvider: launchSession?.executionProvider.kind,
-        stdoutIsTTY: process.stdout.isTTY
+        stdoutIsTTY: process.stdout.isTTY,
+        harnessMode
       })
     ) {
       throw new CliError({
@@ -2625,6 +2763,7 @@ export async function runRunnerOnce({
       runtime,
       options: {
         agent: requestedAgent,
+        harnessMode,
         missionId,
         workingDirectory: prepared.workingDirectory,
         model:
@@ -2643,7 +2782,7 @@ export async function runRunnerOnce({
               (value): value is string => typeof value === 'string'
             )
           : undefined,
-        launchEnvVars: parseLaunchEnvVarsValue(requestRecord.launchEnvVars),
+        launchEnvVars: claimedLaunchEnvVars,
         executionRequestId: requestId,
         executionTargetId: executionTargetId || undefined,
         objectiveId:
@@ -2656,6 +2795,10 @@ export async function runRunnerOnce({
     if (result.providerFallbackWarning) {
       console.error(`[overlord] ${result.providerFallbackWarning}`);
     }
+    if (result.plan.decisionHookWarning) {
+      console.error(`[overlord] ${result.plan.decisionHookWarning}`);
+    }
+    reportHarnessNotes(result);
     if (result.viewerOpen && result.viewerOpen.ok === false) {
       console.error(`[overlord] ${result.viewerOpen.warning}`);
     }
@@ -2749,7 +2892,19 @@ async function runRunnerCommand({
     });
   }
 
-  const runOnce = () => runRunnerOnce({ runtime, parsed, json });
+  // A long-running runner reports this machine's live Codex models (at start, then every few
+  // hours) so the workspace model picker offers what its launches can run. Never awaited and
+  // never fatal: a missing Codex or a missing permission only skips the report.
+  const { createRunnerCodexModelsReporter } = await import('./codex-models.js');
+  const { resolveLaunchSettingsWorkspaceId } = await import('./launch-settings.js');
+  const codexModelsReporter = createRunnerCodexModelsReporter({
+    backend: runtime.backend,
+    resolveWorkspaceId: () => resolveLaunchSettingsWorkspaceId({ backend: runtime.backend })
+  });
+  const runOnce = () => {
+    if (sub !== 'once') void codexModelsReporter.tick();
+    return runRunnerOnce({ runtime, parsed, json });
+  };
 
   if (sub === 'once') {
     const result = await runOnce();

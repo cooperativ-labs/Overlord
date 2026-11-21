@@ -10,6 +10,8 @@
     "transcript_path": "/Users/jake/.codex/sessions/secret.jsonl",
     "cwd": "/repo",
     "hook_event_name": "UserPromptSubmit",
+    "model": "gpt-6.2-astra",
+    "permission_mode": "default",
     "prompt": "Use out_abcdefgh12345678 to deploy this safely"
   },
   "expect": {

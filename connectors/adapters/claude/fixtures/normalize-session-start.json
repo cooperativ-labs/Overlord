@@ -28,8 +28,5 @@
       "detail": "startup"
     }
   },
-  "mustNotContain": [
-    ".jsonl",
-    "/Users/jake"
-  ]
+  "mustNotContain": [".jsonl", "/Users/jake"]
 }

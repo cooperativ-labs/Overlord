@@ -2,6 +2,7 @@ import {
   type AgentLaunchConfigDto,
   agentLaunchFlagKey,
   type TerminalProfileDto,
+  type UpdateAgentLaunchConfigBody,
   type UpdateTerminalProfileBody
 } from '@overlord/contract';
 import { useEffect, useRef, useState } from 'react';
@@ -331,7 +332,10 @@ export function IdePage({ open }: IdePageProps) {
     }
   }
 
-  async function commitAgentConfig(agentKey: string, config: AgentLaunchConfigDto) {
+  async function commitAgentConfig(
+    agentKey: string,
+    config: AgentLaunchConfigDto | UpdateAgentLaunchConfigBody
+  ) {
     setAgentError(null);
     try {
       await updateAgentLaunchConfig.mutateAsync({ agentKey, body: config });
@@ -725,6 +729,30 @@ export function IdePage({ open }: IdePageProps) {
                 onCommit={next => void commitAgentConfig(agent.key, next)}
                 sourceHint="Saved to your per-target launch preferences."
               />
+              {agent.key === 'codex' ? (
+                <div className="flex items-start justify-between gap-4">
+                  <div className="space-y-0.5">
+                    <Label htmlFor="codex-harness-mode">
+                      Run through the Codex app server (experimental)
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                      Overlord drives the objective through a private Codex app server on this
+                      machine and the terminal attaches to it, so you can watch, answer approvals
+                      and type there. Needs Codex 0.170 or later; otherwise the launch falls back to
+                      the terminal. Your own Codex sessions are not affected.
+                    </p>
+                  </div>
+                  <Switch
+                    id="codex-harness-mode"
+                    checked={config.harnessMode === 'appServer'}
+                    onCheckedChange={next =>
+                      void commitAgentConfig(agent.key, {
+                        harnessMode: next ? 'appServer' : null
+                      })
+                    }
+                  />
+                </div>
+              ) : null}
             </div>
           );
         })}

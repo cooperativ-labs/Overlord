@@ -1,0 +1,150 @@
+# Codex app server — agent-session event codec.
+#
+# A control-plane codec: the adapter is a JSON-RPC client of `codex app-server`, not a hook.
+# Codex names a notification by its JSON-RPC `method`, and most of the interesting ones are
+# `item/started` / `item/completed`, whose meaning depends on `params.item.type`. So the
+# transport (cli/src/agent-session/codex-app-server/events.ts) projects each notification into
+# a frame of this shape before normalizing it:
+#
+#   { event: "<method>" | "<method>:<item.type>",   # synthesized by the transport
+#     context: { cwd: "<thread working directory>", # known to the supervisor, not the frame
+#                rootThreadId, subagentThreadId?,   # the frame's place in the session's
+#                parentThreadId?, lineage? },       #   thread tree (threads.ts)
+#     ...params }                                     # the native params, verbatim
+#
+# A `subAgentActivity` item is named by its kind as well, `<method>:subAgentActivity:<kind>`.
+#
+# Child threads. A subagent the agent spawns (and a fork made from an attached TUI) is work for
+# the same Overlord session. Every frame is correlated with the root thread
+# (`context.rootThreadId`, so `correlationId` is the channel's native session alias), and a frame
+# from any other thread of the tree records that thread as the event's `subagentId`. Frames from
+# threads outside the tree never reach this codec.
+#
+# A `fileChange` item is fanned out to one frame per entry of `item.changes`, carrying that entry
+# as `change`, so every changed path (and a rename's destination) becomes its own `file.edited`
+# event. `change.diff`, `item.aggregatedOutput` and message text are never read here.
+#
+# `eventNamePath: event` lets the same projected frame feed both the sidecar and the local
+# `ovld protocol capture-change` path.
+codecVersion: 1
+adapter: codex-app-server
+
+eventNamePath: event
+nativeSessionPaths:
+  - context.rootThreadId
+  - threadId
+  - thread.id
+projectRootPaths:
+  - context.cwd
+  - item.cwd
+
+events:
+  # A user message item. Steering input (`turn/steer`) also lands here, which is how an injected
+  # instruction becomes observable as received.
+  - native: item/completed:userMessage
+    kind: prompt.submitted
+    origin: user
+    subagentIdPath: context.subagentThreadId
+    promptPath: item.content.0.text
+    turnIdPath: turnId
+
+  - native: item/started:commandExecution
+    kind: tool.called
+    origin: agent
+    subagentIdPath: context.subagentThreadId
+    toolPath: item.type
+    inputPath: item
+    callIdPath: item.id
+    turnIdPath: turnId
+
+  # `item.status` is `completed`, `failed` or `declined`; the aggregated output is never read.
+  - native: item/completed:commandExecution
+    kind: tool.completed
+    origin: agent
+    subagentIdPath: context.subagentThreadId
+    toolPath: item.type
+    inputPath: item
+    callIdPath: item.id
+    turnIdPath: turnId
+    outcomePath: item.status
+
+  # Pre-mutation evidence: Codex emits the fileChange item, with its diff, before it asks for
+  # the patch approval and before it applies anything.
+  - native: item/started:fileChange
+    kind: tool.called
+    origin: agent
+    subagentIdPath: context.subagentThreadId
+    toolPath: item.type
+    inputPath: change
+    callIdPath: item.id
+    turnIdPath: turnId
+
+  - native: item/completed:fileChange
+    kind: tool.completed
+    origin: agent
+    subagentIdPath: context.subagentThreadId
+    toolPath: item.type
+    inputPath: change
+    callIdPath: item.id
+    turnIdPath: turnId
+    outcomePath: item.status
+    fileEditKind: file.edited
+    filePathPaths:
+      - path
+      - kind.move_path
+
+  # The root thread, or a fork of a tree thread (Codex sends no thread/started for a spawned
+  # subagent; see the subAgentActivity rules). `context.lineage` says how a fork joined.
+  - native: thread/started
+    kind: session.started
+    origin: system
+    subagentIdPath: context.subagentThreadId
+    detailPath: context.lineage
+
+  - native: thread/closed
+    kind: session.ended
+    origin: system
+    subagentIdPath: context.subagentThreadId
+
+  - native: turn/started
+    kind: notice
+    origin: system
+    subagentIdPath: context.subagentThreadId
+    turnIdPath: turn.id
+    detailPath: turn.status
+
+  # `turn.status` is `completed`, `interrupted` or `failed`.
+  - native: turn/completed
+    kind: notice
+    origin: system
+    subagentIdPath: context.subagentThreadId
+    turnIdPath: turn.id
+    detailPath: turn.status
+
+  # A subagent's lifecycle, announced by its parent's turn (LIVE 0.170: the `started` item arrives
+  # before any frame of the child thread). The event's `subagentId` is the child thread and its
+  # turn is the parent's; `agentPath` (`/root/<name>`, nested for deeper agents) is the lineage.
+  # The child's own frames then carry the same `subagentId`.
+  - native: item/completed:subAgentActivity:started
+    kind: session.started
+    origin: agent
+    subagentIdPath: item.agentThreadId
+    callIdPath: item.id
+    turnIdPath: turnId
+    detailPath: item.agentPath
+
+  - native: item/completed:subAgentActivity:completed
+    kind: session.ended
+    origin: agent
+    subagentIdPath: item.agentThreadId
+    callIdPath: item.id
+    turnIdPath: turnId
+    detailPath: item.agentPath
+
+  - native: item/completed:subAgentActivity:interrupted
+    kind: notice
+    origin: agent
+    subagentIdPath: item.agentThreadId
+    callIdPath: item.id
+    turnIdPath: turnId
+    detailPath: item.agentPath

@@ -36,10 +36,14 @@ export type NormalizedTool = (typeof NORMALIZED_TOOLS)[number];
  */
 const EXACT: Record<string, NormalizedTool> = {
   bash: 'shell',
+  // Codex app-server `commandExecution` thread item.
+  commandexecution: 'shell',
   shell: 'shell',
   shell_command: 'shell',
   run_terminal_cmd: 'shell',
   runcommand: 'shell',
+  // Antigravity built-in tools (https://antigravity.google/docs/hooks, tool reference).
+  run_command: 'shell',
   execute: 'shell',
   exec: 'shell',
   bashoutput: 'shell',
@@ -49,6 +53,7 @@ const EXACT: Record<string, NormalizedTool> = {
   readfile: 'read',
   read_file: 'read',
   notebookread: 'read',
+  view_file: 'read',
   cat: 'read',
 
   write: 'write',
@@ -56,6 +61,7 @@ const EXACT: Record<string, NormalizedTool> = {
   write_file: 'write',
   create_file: 'write',
   createfile: 'write',
+  write_to_file: 'write',
 
   edit: 'edit',
   multiedit: 'edit',
@@ -70,6 +76,10 @@ const EXACT: Record<string, NormalizedTool> = {
   patch: 'edit',
   notebookedit: 'edit',
   update_file: 'edit',
+  // Codex app-server thread item types (`item.type`); see connectors/adapters/codex-app-server.
+  filechange: 'edit',
+  replace_file_content: 'edit',
+  multi_replace_file_content: 'edit',
 
   webfetch: 'fetch',
   web_fetch: 'fetch',
@@ -77,6 +87,8 @@ const EXACT: Record<string, NormalizedTool> = {
   http_request: 'fetch',
   websearch: 'fetch',
   web_search: 'fetch',
+  read_url_content: 'fetch',
+  search_web: 'fetch',
 
   grep: 'search',
   glob: 'search',
@@ -85,6 +97,8 @@ const EXACT: Record<string, NormalizedTool> = {
   file_search: 'search',
   ls: 'search',
   list_dir: 'search',
+  grep_search: 'search',
+  find_by_name: 'search',
 
   task: 'task',
   agent: 'task',

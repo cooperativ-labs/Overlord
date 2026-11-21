@@ -1,0 +1,84 @@
+{
+  "fixtureVersion": 1,
+  "kind": "script-io",
+  "description": "The version gate: a server whose initialize userAgent reports 0.169.0 (below the verified range) gets initialize and initialized, and nothing else: no thread, no channel traffic.",
+  "script": "scripts/codex-app-server-replay.mjs",
+  "stdinMessages": [
+    {
+      "setup": {
+        "codec": "connectors/adapters/codex-app-server/codec/codex-app-server.codec.yaml",
+        "cwd": "/repo",
+        "report": [
+          "/heartbeat",
+          "/events"
+        ]
+      }
+    },
+    {
+      "await": {
+        "method": "initialize"
+      }
+    },
+    {
+      "server": {
+        "id": 1,
+        "result": {
+          "userAgent": "overlord/0.169.0 (Mac OS 27.2.1; arm64) xterm-256color (overlord; replay)",
+          "codexHome": "/home/user/.codex",
+          "platformFamily": "unix",
+          "platformOs": "macos"
+        }
+      }
+    }
+  ],
+  "timeoutMs": 60000,
+  "expect": {
+    "exitCode": 0,
+    "stderr": "",
+    "responses": [
+      {
+        "id": "out-1",
+        "rpc": {
+          "id": 1,
+          "method": "initialize",
+          "params": {
+            "clientInfo": {
+              "name": "overlord",
+              "title": "Overlord",
+              "version": "replay"
+            },
+            "capabilities": {
+              "experimentalApi": true,
+              "requestAttestation": false,
+              "optOutNotificationMethods": [
+                "item/agentMessage/delta",
+                "item/reasoning/summaryTextDelta",
+                "item/reasoning/summaryPartAdded",
+                "item/reasoning/textDelta",
+                "item/commandExecution/outputDelta",
+                "item/fileChange/outputDelta",
+                "thread/tokenUsage/updated",
+                "account/rateLimits/updated",
+                "turn/moderationMetadata"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": "out-2",
+        "rpc": {
+          "method": "initialized"
+        }
+      },
+      {
+        "id": "result",
+        "reason": "version-unsupported",
+        "serverVersion": "0.169.0",
+        "threadId": null,
+        "injected": 0,
+        "interrupted": false
+      }
+    ]
+  }
+}

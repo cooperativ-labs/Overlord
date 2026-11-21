@@ -399,7 +399,9 @@ export async function bindChannelToSession({
         objectiveId,
         projectId,
         nativeSessionId,
-        agentIdentifier,
+        // `unknown` is attach's placeholder when the agent did not say; it must not overwrite the
+        // identifier a launch recorded on the channel (a control-plane launch knows it is Codex).
+        agentIdentifier === 'unknown' ? null : agentIdentifier,
         adapterKey,
         adapterVersion,
         now,

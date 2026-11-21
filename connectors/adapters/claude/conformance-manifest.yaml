@@ -1,4 +1,4 @@
-contractVersion: "179.1.0"
+contractVersion: "179.11.0"
 componentType: connector
 componentKey: claude
 label: "Claude Code Connector"
@@ -14,7 +14,7 @@ connector:
   harnessCapabilities:
     path: connectors/adapters/claude/harness-capabilities.yaml
     schemaVersion: 1
-    digest: "0f708197c1306226e137a332532fabbc68c41023ba0bd46614468d9fef38a14e"
+    digest: "ea275756dcff0c1ed16b366f8bcfad9a185545d2c7fd55ab7afc6933bbad2552"
   # ── END GENERATED ────────────────────────────────────────────────────────────
   installPath: "~/.ovld/claude/marketplace/plugins/overlord"
   managedFiles:
@@ -30,11 +30,9 @@ connector:
     - "commands/load.md"
     - "commands/prompt.md"
     - "commands/record-work.md"
+    - ".mcp.json"
     - "hooks/hooks.json"
-    - "scripts/permission-hook.sh"
-    - "scripts/post-tool-use-hook.sh"
-    - "scripts/stop-hook.sh"
-    - "scripts/user-prompt-submit-hook.sh"
+    - "scripts/overlord-mcp.mjs"
     - "skills/overlord-mission/SKILL.md"
     - "skills/overlord-mission/reference/cli.md"
     - "skills/overlord-mission/reference/record-work.md"

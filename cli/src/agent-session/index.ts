@@ -263,16 +263,90 @@ async function runSidecarCommand({
 }): Promise<void> {
   const parsed = parseArgs(args);
   const agent = parsed.flags.get('--agent');
+  if (agent === 'codex-app-server') {
+    // A JSON-RPC client of a private `codex app-server` on an owner-only Unix socket. Same
+    // subcommand, different transport: the adapter key selects it, so no subcommand is added.
+    const flag = (name: string): string | null => {
+      const value = parsed.flags.get(name);
+      return typeof value === 'string' && value.trim() ? value.trim() : null;
+    };
+    const { runCodexAppServerSidecar } = await import('./codex-app-server/index.js');
+    const approval = flag('--approval-policy');
+    const sandbox = flag('--sandbox');
+    const result = await runCodexAppServerSidecar({
+      socketPath: flag('--socket'),
+      threadId: flag('--thread-id'),
+      promptFile: flag('--prompt-file'),
+      cwd: flag('--working-directory') ?? process.cwd(),
+      codexBin: flag('--codex-bin') ?? 'codex',
+      model: flag('--model'),
+      effort: flag('--effort'),
+      approvalPolicy:
+        approval === 'untrusted' || approval === 'on-request' || approval === 'never'
+          ? approval
+          : null,
+      sandbox:
+        sandbox === 'read-only' || sandbox === 'workspace-write' || sandbox === 'danger-full-access'
+          ? sandbox
+          : null
+    });
+    printJson(result);
+    return;
+  }
   const portFlag = parsed.flags.get('--port');
   const port = typeof portFlag === 'string' ? Number.parseInt(portFlag, 10) : Number.NaN;
   if (typeof agent !== 'string' || !Number.isInteger(port) || port <= 0) {
     throw new CliError({
-      message: `Usage: ${primaryCommand} agent-session sidecar --agent <key> --port <port>`
+      message:
+        `Usage: ${primaryCommand} agent-session sidecar --agent <key> --port <port>\n` +
+        `       ${primaryCommand} agent-session sidecar --agent codex-app-server [--socket <path>] ` +
+        `[--thread-id <id>] [--prompt-file <path>] [--working-directory <dir>] [--model <m>] ` +
+        `[--effort <e>] [--approval-policy <p>] [--sandbox <s>] [--codex-bin <path>]`
     });
   }
   const { runSidecar } = await import('./sidecar.js');
   const result = await runSidecar({ agent, port });
   printJson(result);
+}
+
+/**
+ * `ovld agent-session attach` — open the Codex TUI on a running Overlord-driven app-server
+ * session on this machine (`codex --remote unix://… resume <thread>`). The launch terminal runs
+ * it, and a person can run it again at any time after closing the TUI.
+ */
+async function runAttachCommand({
+  args,
+  primaryCommand
+}: {
+  args: string[];
+  primaryCommand: string;
+}): Promise<void> {
+  const parsed = parseArgs(args);
+  const flag = (name: string): string | null => {
+    const value = parsed.flags.get(name);
+    return typeof value === 'string' && value.trim() ? value.trim() : null;
+  };
+  const waitFlag = flag('--wait-ms');
+  const waitMs = waitFlag ? Number.parseInt(waitFlag, 10) : 120_000;
+  const { runCodexRemoteTui, waitForAttachTarget } = await import('./codex-app-server/attach.js');
+  const found = await waitForAttachTarget({
+    channelId: flag('--channel-id'),
+    objectiveId: flag('--objective-id') ?? parsed.positional[0] ?? null,
+    waitMs: Number.isFinite(waitMs) ? waitMs : 120_000
+  });
+  if (!found.ok) {
+    throw new CliError({
+      message:
+        `${found.detail}\n` +
+        `Usage: ${primaryCommand} agent-session attach [--objective-id <ref>] [--channel-id <id>] ` +
+        '[--wait-ms <ms>]'
+    });
+  }
+  const status = runCodexRemoteTui({
+    target: found.target,
+    codexBin: flag('--codex-bin') ?? 'codex'
+  });
+  if (status !== 0) process.exitCode = status;
 }
 
 async function runRequestCommand({
@@ -331,9 +405,14 @@ async function runInboxCommand({
       printJson({ report: confirmed.report, inputId: confirmId });
     return;
   }
+  // Without --wait-ms the core decides (resolveInboxWaitMs): only a final Claude Stop in a
+  // headless session waits. The `mcp_tool` Stop hook spawns this same command, so both paths
+  // apply the same rule.
   const waitFlag = parsed.flags.get('--wait-ms');
   const waitMs =
-    typeof waitFlag === 'string' && Number.isFinite(Number(waitFlag)) ? Number(waitFlag) : 0;
+    typeof waitFlag === 'string' && Number.isFinite(Number(waitFlag))
+      ? Number(waitFlag)
+      : undefined;
   // Hooks pass --payload-file - and stream the native event on stdin. Extension callers
   // (Pi) invoke without a payload file and must not block on an empty stdin pipe.
   const readsStdin = parsed.flags.has('--payload-file');
@@ -376,16 +455,34 @@ export async function runAgentSessionCommand({
     console.log(
       '                                   Wait for a remote decision or defer to the harness.'
     );
-    console.log('  inbox --agent <key> --payload-file -');
+    console.log('  inbox --agent <key> --payload-file - [--wait-ms <ms>]');
     console.log(
       '                                   Claim one pending instruction and emit it natively.'
     );
+    console.log(
+      '                                   A final Claude Stop in a headless session polls up to'
+    );
+    console.log('                                   60 s; --wait-ms sets the wait (max 120000).');
     console.log('  sidecar --agent <key> --port <port>');
     console.log(
       '                                   Drive a control-plane harness event stream (Shape C).'
     );
+    console.log(
+      '  sidecar --agent codex-app-server [--socket <path>] [--thread-id <id>] [--prompt-file <path>]'
+    );
+    console.log(
+      '                                   Drive a private Codex app server (launch starts'
+    );
+    console.log('                                   it in app-server mode; by hand it requires');
+    console.log('                                   OVERLORD_CODEX_APP_SERVER=1).');
+    console.log('  attach [--objective-id <ref>] [--channel-id <id>] [--wait-ms <ms>]');
+    console.log(
+      '                                   Open the Codex TUI on a running app-server session.'
+    );
     console.log('');
-    console.log('  All adapter runtime commands require a scoped session channel credential.');
+    console.log(
+      '  Adapter runtime commands (all but attach) require a scoped session channel credential.'
+    );
     return;
   }
 
@@ -404,6 +501,11 @@ export async function runAgentSessionCommand({
     return;
   }
 
+  if (subcommand === 'attach') {
+    await runAttachCommand({ args, primaryCommand });
+    return;
+  }
+
   if (subcommand === 'request') {
     await runRequestCommand({ args, primaryCommand });
     return;
@@ -418,7 +520,7 @@ export async function runAgentSessionCommand({
     throw new CliError({
       message:
         `Unknown agent-session subcommand: ${subcommand}\n` +
-        `Usage: ${primaryCommand} agent-session <capabilities|bind|event|request|inbox|sidecar>`
+        `Usage: ${primaryCommand} agent-session <capabilities|bind|event|request|inbox|sidecar|attach>`
     });
   }
 

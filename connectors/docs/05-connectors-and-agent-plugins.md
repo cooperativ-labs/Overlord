@@ -64,13 +64,17 @@ Requirements:
 
 ## Canonical Post-Tool Capture Callback
 
-`connectors/core/scripts/capture-change-hook.sh` is the only implementation of the local
+`connectors/core/scripts/capture-change-hook.sh` is the only shell implementation of the local
 post-tool mutation callback. Setup substitutes the adapter key and installs it at the unchanged
 harness-native paths:
 
-- Claude: `scripts/post-tool-use-hook.sh`
 - Codex: `scripts/post-tool-use-hook.sh`
 - Cursor: `hooks/overlord-post-tool-use.sh`
+- Antigravity: `hooks/overlord-post-tool-use.sh`
+
+Claude ships no hook script. Its `PostToolUse` hook is an `mcp_tool` call to the plugin's
+`overlord-hooks` server (the shim above in `--hooks` mode), which runs the same
+`ovld protocol capture-change`.
 
 The adapter hook registrations and managed paths remain native; adapter directories do not carry
 copies of the script. Fixtures render the same core source before exercising bound and unbound
@@ -155,13 +159,17 @@ Requirements:
 
 ## Antigravity Connector
 
-Shipped, currently fixture-proven only at tier 0 — see
-`connectors/adapters/antigravity/CAPABILITIES.md`. Requirements:
+Shipped at tier 1 (Observational) — see `connectors/adapters/antigravity/CAPABILITIES.md` and
+ADR 0090. Requirements:
 
 - Install Antigravity plugin.
 - Provide protocol skill and commands.
 - Use Antigravity model selection internally rather than passing model flags if that remains the harness behavior.
 - Keep local MCP shim parity with CLI protocol commands where useful.
+- Ship fail-open lifecycle hooks in the plugin's `hooks.json` (agy 1.5.4+): `PreInvocation`
+  records `lastUserInput` as a follow-up, `PostToolUse` runs the core capture callback, and `Stop`
+  answers the delivery reminder as `decision: "continue"`. No `PreToolUse` decision hook until a
+  launch creates a session channel.
 
 ## OpenCode And Custom Agents
 

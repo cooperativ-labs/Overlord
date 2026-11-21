@@ -24,8 +24,11 @@ permissions:
   contents: read
 
 env:
-  # Tooling pin, not a HARNESS-MATRIX compatibility certification.
-  CLAUDE_CODE_VERSION: '2.1.303'
+  # Tooling pin. It must satisfy the plugin's engines["claude-code"] floor (>=2.1.328), or the
+  # strict validation step is skipped; OVERLORD_REQUIRE_CLAUDE_VALIDATE makes that a failure here.
+  # The fixture-backed verified version lives in connectors/adapters/claude/harness-capabilities.yaml.
+  CLAUDE_CODE_VERSION: '2.1.329'
+  OVERLORD_REQUIRE_CLAUDE_VALIDATE: '1'
   CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1'
   DISABLE_AUTOUPDATER: '1'
 

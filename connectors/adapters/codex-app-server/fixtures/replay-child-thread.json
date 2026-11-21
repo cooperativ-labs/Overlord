@@ -1,0 +1,692 @@
+{
+  "fixtureVersion": 1,
+  "kind": "script-io",
+  "description": "A subagent attributed to its parent session, from frames recorded on a live 0.170.0 server. The root turn announces the child (subAgentActivity started) before any child frame; the child's own turn, file change and patch approval then arrive on the Overlord connection with the child threadId. Every event is posted to the same channel, correlated with the root thread, with the child as subagentId; the approval card names the subagent (details.subagent) and is answered with {\"decision\":\"accept\"}. A thread outside the session tree (started from scratch by another client) is looked up once with thread/read and then ignored: no event, no card, and its approval is left to the client that owns it.",
+  "script": "scripts/codex-app-server-replay.mjs",
+  "timeoutMs": 60000,
+  "stdinMessages": [
+    {
+      "setup": {
+        "codec": "connectors/adapters/codex-app-server/codec/codex-app-server.codec.yaml",
+        "cwd": "/repo",
+        "firstPrompt": "Spawn exactly one subagent to create child.txt.",
+        "threadSettings": {
+          "approvalPolicy": "untrusted",
+          "sandbox": "workspace-write"
+        },
+        "report": [
+          "/events",
+          "/requests",
+          "/requests/"
+        ],
+        "channel": {
+          "POST /requests/req-1/lease": [
+            {
+              "leaseId": "lease-1",
+              "status": "resolved",
+              "resolution": {
+                "decision": "allow"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "await": {
+        "method": "initialize"
+      }
+    },
+    {
+      "server": {
+        "id": 1,
+        "result": {
+          "userAgent": "overlord/0.170.0 (Mac OS 27.2.1; arm64) xterm-256color (overlord; probe)",
+          "codexHome": "/home/user/.codex",
+          "platformFamily": "unix",
+          "platformOs": "macos"
+        }
+      }
+    },
+    {
+      "await": {
+        "method": "thread/start"
+      }
+    },
+    {
+      "server": {
+        "id": 2,
+        "result": {
+          "thread": {
+            "id": "01a1faeb-d29d-77a2-91b0-89021afec101",
+            "environments": [
+              {
+                "environmentId": "local",
+                "cwd": "/repo",
+                "runtimeWorkspaceRoots": [
+                  "/repo"
+                ]
+              }
+            ],
+            "extra": null,
+            "sessionId": "01a1faeb-d29d-77a2-91b0-89021afec101",
+            "forkedFromId": null,
+            "attachedToThreadId": null,
+            "parentThreadId": null,
+            "preview": "",
+            "ephemeral": false,
+            "section": null,
+            "sectionEnteredAt": null,
+            "projectId": null,
+            "historyMode": "paginated",
+            "modelProvider": "openai",
+            "model": "gpt-6.2-sol",
+            "reasoningEffort": "medium",
+            "createdAt": 1795211121,
+            "updatedAt": 1795211121,
+            "recencyAt": 1795211121,
+            "status": {
+              "type": "idle"
+            },
+            "path": "/home/user/.codex/sessions/2026/11/20/rollout-2026-11-20T22-45-21-01a1faeb-d29d-77a2-91b0-89021afec101.jsonl",
+            "cwd": "/repo",
+            "cliVersion": "0.170.0",
+            "originator": "overlord",
+            "source": "vscode",
+            "canAcceptDirectInput": true,
+            "threadSource": null,
+            "agentNickname": null,
+            "agentRole": null,
+            "gitInfo": null,
+            "name": null,
+            "daybreakEnabled": null,
+            "turns": []
+          },
+          "model": "gpt-6.2-sol",
+          "modelProvider": "openai",
+          "serviceTier": "default",
+          "disabledPluginIds": [],
+          "cwd": "/repo",
+          "runtimeWorkspaceRoots": [
+            "/repo"
+          ],
+          "instructionSources": [],
+          "approvalPolicy": "untrusted",
+          "approvalsReviewer": "user",
+          "sandbox": {
+            "type": "workspaceWrite",
+            "writableRoots": [],
+            "networkAccess": false,
+            "excludeTmpdirEnvVar": false,
+            "excludeSlashTmp": false
+          },
+          "activePermissionProfile": null,
+          "reasoningEffort": "medium",
+          "multiAgentMode": "explicitRequestOnly"
+        }
+      }
+    },
+    {
+      "await": {
+        "method": "turn/start"
+      }
+    },
+    {
+      "server": {
+        "id": 3,
+        "result": {
+          "turn": {
+            "id": "01a1faeb-d30f-7761-a52a-b80145730805",
+            "rootTurnId": "01a1faeb-d30f-7761-a52a-b80145730805",
+            "items": [],
+            "itemsView": "notLoaded",
+            "status": "inProgress",
+            "error": null,
+            "startedAt": null,
+            "completedAt": null,
+            "durationMs": null
+          }
+        }
+      }
+    },
+    {
+      "server": {
+        "method": "item/started",
+        "params": {
+          "item": {
+            "type": "subAgentActivity",
+            "model": "gpt-6.2-sol",
+            "reasoningEffort": "medium",
+            "id": "call_2a2dae9d5eb745319b730abb1a5b95d5",
+            "kind": "started",
+            "agentThreadId": "01a1faeb-e92a-7711-8210-2250b334ce2f",
+            "agentPath": "/root/child",
+            "startedAtMs": 1795211127183,
+            "completedAtMs": null
+          },
+          "threadId": "01a1faeb-d29d-77a2-91b0-89021afec101",
+          "turnId": "01a1faeb-d30f-7761-a52a-b80145730805",
+          "startedAtMs": 1795211127183
+        },
+        "emittedAtMs": 1795211127183
+      }
+    },
+    {
+      "server": {
+        "method": "item/completed",
+        "params": {
+          "item": {
+            "type": "subAgentActivity",
+            "model": "gpt-6.2-sol",
+            "reasoningEffort": "medium",
+            "id": "call_2a2dae9d5eb745319b730abb1a5b95d5",
+            "kind": "started",
+            "agentThreadId": "01a1faeb-e92a-7711-8210-2250b334ce2f",
+            "agentPath": "/root/child",
+            "startedAtMs": 1795211127183,
+            "completedAtMs": 1795211127183
+          },
+          "threadId": "01a1faeb-d29d-77a2-91b0-89021afec101",
+          "turnId": "01a1faeb-d30f-7761-a52a-b80145730805",
+          "contentTokenCount": null,
+          "completedAtMs": 1795211127183
+        },
+        "emittedAtMs": 1795211127185
+      }
+    },
+    {
+      "server": {
+        "method": "turn/started",
+        "params": {
+          "threadId": "01a1faeb-e92a-7711-8210-2250b334ce2f",
+          "turn": {
+            "id": "01a1faeb-e98e-7f92-9764-6130255aed13",
+            "rootTurnId": "01a1faeb-d30f-7761-a52a-b80145730805",
+            "items": [],
+            "itemsView": "notLoaded",
+            "status": "inProgress",
+            "error": null,
+            "startedAt": 1795211127,
+            "completedAt": null,
+            "durationMs": null
+          }
+        },
+        "emittedAtMs": 1795211127195
+      }
+    },
+    {
+      "server": {
+        "method": "item/started",
+        "params": {
+          "item": {
+            "type": "fileChange",
+            "id": "exec-f6cb83ed-662d-4e02-9a5f-dfb15ad4e227",
+            "changes": [
+              {
+                "path": "/repo/child.txt",
+                "kind": {
+                  "type": "add"
+                },
+                "diff": "from child\n"
+              }
+            ],
+            "status": "inProgress",
+            "startedAtMs": 1795211131003,
+            "completedAtMs": null
+          },
+          "threadId": "01a1faeb-e92a-7711-8210-2250b334ce2f",
+          "turnId": "01a1faeb-e98e-7f92-9764-6130255aed13",
+          "startedAtMs": 1795211131003
+        },
+        "emittedAtMs": 1795211131003
+      }
+    },
+    {
+      "server": {
+        "method": "item/fileChange/requestApproval",
+        "id": 0,
+        "params": {
+          "threadId": "01a1faeb-e92a-7711-8210-2250b334ce2f",
+          "turnId": "01a1faeb-e98e-7f92-9764-6130255aed13",
+          "itemId": "exec-f6cb83ed-662d-4e02-9a5f-dfb15ad4e227",
+          "startedAtMs": 1795211131004,
+          "reason": null,
+          "grantRoot": null
+        }
+      }
+    },
+    {
+      "await": {
+        "id": 0
+      }
+    },
+    {
+      "server": {
+        "method": "item/completed",
+        "params": {
+          "item": {
+            "type": "fileChange",
+            "id": "exec-f6cb83ed-662d-4e02-9a5f-dfb15ad4e227",
+            "changes": [
+              {
+                "path": "/repo/child.txt",
+                "kind": {
+                  "type": "add"
+                },
+                "diff": "from child\n"
+              }
+            ],
+            "status": "completed",
+            "startedAtMs": 1795211131003,
+            "completedAtMs": 1795211131054
+          },
+          "threadId": "01a1faeb-e92a-7711-8210-2250b334ce2f",
+          "turnId": "01a1faeb-e98e-7f92-9764-6130255aed13",
+          "contentTokenCount": null,
+          "completedAtMs": 1795211131054
+        },
+        "emittedAtMs": 1795211131055
+      }
+    },
+    {
+      "server": {
+        "method": "item/completed",
+        "params": {
+          "item": {
+            "type": "fileChange",
+            "id": "exec-foreign",
+            "changes": [
+              {
+                "path": "/repo/foreign.txt",
+                "kind": {
+                  "type": "add"
+                },
+                "diff": "foreign\n"
+              }
+            ],
+            "status": "completed",
+            "startedAtMs": 1795211131003,
+            "completedAtMs": 1795211131054
+          },
+          "threadId": "01a1fb10-0000-7000-8000-00000000f00d",
+          "turnId": "01a1fb10-0000-7000-8000-00000000beef",
+          "completedAtMs": 1795211131054
+        }
+      }
+    },
+    {
+      "await": {
+        "method": "thread/read"
+      }
+    },
+    {
+      "server": {
+        "id": 4,
+        "result": {
+          "thread": {
+            "id": "01a1fb10-0000-7000-8000-00000000f00d",
+            "environments": [
+              {
+                "environmentId": "local",
+                "cwd": "/repo",
+                "runtimeWorkspaceRoots": [
+                  "/repo"
+                ]
+              }
+            ],
+            "extra": null,
+            "sessionId": "01a1fb10-0000-7000-8000-00000000f00d",
+            "forkedFromId": null,
+            "attachedToThreadId": null,
+            "parentThreadId": null,
+            "preview": "unrelated work",
+            "ephemeral": false,
+            "section": null,
+            "sectionEnteredAt": null,
+            "projectId": null,
+            "historyMode": "paginated",
+            "modelProvider": "openai",
+            "model": "gpt-6.2-sol",
+            "reasoningEffort": "medium",
+            "createdAt": 1795211142,
+            "updatedAt": 1795211143,
+            "recencyAt": 1795211142,
+            "status": {
+              "type": "idle"
+            },
+            "path": "/home/user/.codex/sessions/2026/11/20/rollout-2026-11-20T22-45-42-01a1faec-2574-7e33-b31f-1a6f3abb3cd7.jsonl",
+            "cwd": "/repo",
+            "cliVersion": "0.170.0",
+            "originator": "overlord",
+            "source": "cli",
+            "canAcceptDirectInput": true,
+            "threadSource": null,
+            "agentNickname": null,
+            "agentRole": null,
+            "gitInfo": {
+              "sha": "eaf3eadeb8141d9208cee6dc9fb4fe21a3f98b80",
+              "branch": "main",
+              "originUrl": null
+            },
+            "name": null,
+            "daybreakEnabled": null,
+            "turns": []
+          },
+          "readState": null
+        }
+      }
+    },
+    {
+      "server": {
+        "id": 1,
+        "method": "item/commandExecution/requestApproval",
+        "params": {
+          "kind": "command",
+          "threadId": "01a1fb10-0000-7000-8000-00000000f00d",
+          "turnId": "01a1fb10-0000-7000-8000-00000000beef",
+          "itemId": "exec-foreign-cmd",
+          "command": "/bin/zsh -lc ls",
+          "cwd": "/repo",
+          "availableDecisions": [
+            "accept",
+            "cancel"
+          ]
+        }
+      }
+    }
+  ],
+  "expect": {
+    "exitCode": 0,
+    "stderr": "",
+    "responses": [
+      {
+        "id": "out-1",
+        "rpc": {
+          "id": 1,
+          "method": "initialize",
+          "params": {
+            "clientInfo": {
+              "name": "overlord",
+              "title": "Overlord",
+              "version": "replay"
+            },
+            "capabilities": {
+              "experimentalApi": true,
+              "requestAttestation": false,
+              "optOutNotificationMethods": [
+                "item/agentMessage/delta",
+                "item/reasoning/summaryTextDelta",
+                "item/reasoning/summaryPartAdded",
+                "item/reasoning/textDelta",
+                "item/commandExecution/outputDelta",
+                "item/fileChange/outputDelta",
+                "thread/tokenUsage/updated",
+                "account/rateLimits/updated",
+                "turn/moderationMetadata"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": "out-2",
+        "rpc": {
+          "method": "initialized"
+        }
+      },
+      {
+        "id": "out-3",
+        "rpc": {
+          "id": 2,
+          "method": "thread/start",
+          "params": {
+            "cwd": "/repo",
+            "approvalsReviewer": "user",
+            "approvalPolicy": "untrusted",
+            "sandbox": "workspace-write",
+            "ephemeral": false
+          }
+        }
+      },
+      {
+        "id": "out-4",
+        "rpc": {
+          "id": 3,
+          "method": "turn/start",
+          "params": {
+            "threadId": "01a1faeb-d29d-77a2-91b0-89021afec101",
+            "input": [
+              {
+                "type": "text",
+                "text": "Spawn exactly one subagent to create child.txt.",
+                "text_elements": []
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": "out-5",
+        "channel": {
+          "method": "POST",
+          "path": "/events",
+          "body": {
+            "nativeSessionId": "01a1faeb-d29d-77a2-91b0-89021afec101",
+            "events": [
+              {
+                "eventId": "ev_226d8efb3d1f9eba963b872be51afeb1",
+                "producerSequence": null,
+                "occurredAt": "2026-01-01T00:00:00.000Z",
+                "kind": "session.started",
+                "severity": "info",
+                "nativeEvent": "item/completed:subAgentActivity:started",
+                "nativeTurnId": "01a1faeb-d30f-7761-a52a-b80145730805",
+                "nativeCallId": "call_2a2dae9d5eb745319b730abb1a5b95d5",
+                "subagentId": "01a1faeb-e92a-7711-8210-2250b334ce2f",
+                "correlationId": "01a1faeb-d29d-77a2-91b0-89021afec101",
+                "origin": "agent",
+                "summary": "Session started",
+                "payload": {
+                  "detail": "/root/child"
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": "out-6",
+        "channel": {
+          "method": "POST",
+          "path": "/events",
+          "body": {
+            "nativeSessionId": "01a1faeb-d29d-77a2-91b0-89021afec101",
+            "events": [
+              {
+                "eventId": "ev_69fcde853d23e86b0f31838ffe28d9ff",
+                "producerSequence": null,
+                "occurredAt": "2026-01-01T00:00:00.000Z",
+                "kind": "notice",
+                "severity": "info",
+                "nativeEvent": "turn/started",
+                "nativeTurnId": "01a1faeb-e98e-7f92-9764-6130255aed13",
+                "nativeCallId": null,
+                "subagentId": "01a1faeb-e92a-7711-8210-2250b334ce2f",
+                "correlationId": "01a1faeb-d29d-77a2-91b0-89021afec101",
+                "origin": "system",
+                "summary": null,
+                "payload": {
+                  "detail": "inProgress"
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": "out-7",
+        "channel": {
+          "method": "POST",
+          "path": "/events",
+          "body": {
+            "nativeSessionId": "01a1faeb-d29d-77a2-91b0-89021afec101",
+            "events": [
+              {
+                "eventId": "ev_7442893227e36fcd2cd49aa064ddb500",
+                "producerSequence": null,
+                "occurredAt": "2026-01-01T00:00:00.000Z",
+                "kind": "tool.called",
+                "severity": "info",
+                "nativeEvent": "item/started:fileChange",
+                "nativeTurnId": "01a1faeb-e98e-7f92-9764-6130255aed13",
+                "nativeCallId": "exec-f6cb83ed-662d-4e02-9a5f-dfb15ad4e227",
+                "subagentId": "01a1faeb-e92a-7711-8210-2250b334ce2f",
+                "correlationId": "01a1faeb-d29d-77a2-91b0-89021afec101",
+                "origin": "agent",
+                "summary": "Write a file: child.txt",
+                "payload": {
+                  "tool": "edit",
+                  "action": "Write a file",
+                  "subject": "child.txt",
+                  "formatterVersion": 1
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": "out-8",
+        "channel": {
+          "method": "POST",
+          "path": "/requests",
+          "body": {
+            "kind": "permission",
+            "summary": "Write a file: child.txt",
+            "details": {
+              "tool": "edit",
+              "action": "Write a file",
+              "subject": "child.txt",
+              "detail": "1 file, +1 −0 lines",
+              "riskMarkers": [],
+              "paths": [
+                "child.txt"
+              ],
+              "changeKinds": [
+                "add"
+              ],
+              "formatterVersion": 1,
+              "codexKind": "fileChange",
+              "requiresPerson": true,
+              "requestsWriteRoot": false,
+              "subagent": {
+                "threadId": "01a1faeb-e92a-7711-8210-2250b334ce2f",
+                "relation": "subagent",
+                "parentThreadId": "01a1faeb-d29d-77a2-91b0-89021afec101",
+                "depth": 1,
+                "agentPath": "/root/child"
+              }
+            },
+            "options": [
+              {
+                "optionId": "allow",
+                "label": "Allow once",
+                "kind": "allow"
+              },
+              {
+                "optionId": "deny",
+                "label": "Deny",
+                "kind": "deny"
+              }
+            ],
+            "nativeRequestId": "exec-f6cb83ed-662d-4e02-9a5f-dfb15ad4e227",
+            "nativeCallId": "exec-f6cb83ed-662d-4e02-9a5f-dfb15ad4e227"
+          }
+        }
+      },
+      {
+        "id": "out-9",
+        "channel": {
+          "method": "POST",
+          "path": "/requests/req-1/lease",
+          "body": {}
+        }
+      },
+      {
+        "id": "out-10",
+        "channel": {
+          "method": "POST",
+          "path": "/requests/req-1/application",
+          "body": {
+            "applicationState": "emitted"
+          }
+        }
+      },
+      {
+        "id": "out-11",
+        "rpc": {
+          "id": 0,
+          "result": {
+            "decision": "accept"
+          }
+        }
+      },
+      {
+        "id": "out-12",
+        "channel": {
+          "method": "POST",
+          "path": "/events",
+          "body": {
+            "nativeSessionId": "01a1faeb-d29d-77a2-91b0-89021afec101",
+            "events": [
+              {
+                "eventId": "ev_b28233da24a2e47e766dbdc5ebea35ea",
+                "producerSequence": null,
+                "occurredAt": "2026-01-01T00:00:00.000Z",
+                "kind": "file.edited",
+                "severity": "info",
+                "nativeEvent": "item/completed:fileChange",
+                "nativeTurnId": "01a1faeb-e98e-7f92-9764-6130255aed13",
+                "nativeCallId": "exec-f6cb83ed-662d-4e02-9a5f-dfb15ad4e227",
+                "subagentId": "01a1faeb-e92a-7711-8210-2250b334ce2f",
+                "correlationId": "01a1faeb-d29d-77a2-91b0-89021afec101",
+                "origin": "agent",
+                "summary": "Write a file: child.txt",
+                "payload": {
+                  "tool": "edit",
+                  "action": "Write a file",
+                  "subject": "child.txt",
+                  "paths": [
+                    "child.txt"
+                  ],
+                  "outcome": "ok",
+                  "formatterVersion": 1
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": "out-13",
+        "rpc": {
+          "id": 4,
+          "method": "thread/read",
+          "params": {
+            "threadId": "01a1fb10-0000-7000-8000-00000000f00d",
+            "includeTurns": false
+          }
+        }
+      },
+      {
+        "id": "result",
+        "reason": "reconnect-exhausted",
+        "serverVersion": "0.170.0",
+        "threadId": "01a1faeb-d29d-77a2-91b0-89021afec101",
+        "injected": 0,
+        "interrupted": false,
+        "childThreads": 1
+      }
+    ]
+  }
+}

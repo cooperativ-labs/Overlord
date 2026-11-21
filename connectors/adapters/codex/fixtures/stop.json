@@ -1,0 +1,28 @@
+{
+  "fixtureVersion": 1,
+  "kind": "native-payload",
+  "description": "Codex Stop recorded live from codex-cli 0.170.0 and checked against the published 0.171.0 stop input schema. Only cwd is redacted. Shape evidence for a future turn-boundary injection path; the connector registers no Stop hook today.",
+  "payload": {
+    "session_id": "01a1f9e9-6c82-70f1-952e-a38b5da8afe2",
+    "turn_id": "01a1f9e9-6fa9-7b52-837a-65b9fcd0bd40",
+    "transcript_path": null,
+    "cwd": "/repo",
+    "hook_event_name": "Stop",
+    "model": "gpt-6.2-astra",
+    "permission_mode": "default",
+    "stop_hook_active": false,
+    "last_assistant_message": "DONE"
+  },
+  "assert": {
+    "requiredPaths": [
+      "session_id",
+      "turn_id",
+      "cwd",
+      "hook_event_name",
+      "stop_hook_active",
+      "last_assistant_message"
+    ],
+    "equals": { "hook_event_name": "Stop", "stop_hook_active": false },
+    "bindingField": "session_id"
+  }
+}

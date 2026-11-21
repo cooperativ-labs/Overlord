@@ -1,0 +1,148 @@
+{
+  "fixtureVersion": 1,
+  "kind": "script-io",
+  "description": "A nested Claude session (claude -p started from a Bash tool of the launched session) inherits the launch environment, including the mission, objective and session channel, but is not the session Overlord launched. The hooks server recognizes it by an inherited CLAUDE_PID that is not its own parent (fixtures/subagent-identity.json, nested). Its follow-up, Stop (inbox and delivery reminder) and decision hooks then use no launch binding: they spawn nothing and answer {}, so a nested run can neither record its prompt as the user's follow-up, nor claim the parent's pending instruction, nor be told to deliver the parent's objective. File capture still runs, because the nested process edits the same checkout for the same objective.",
+  "script": "connectors/core/scripts/overlord-mcp.mjs",
+  "adapterKey": "claude",
+  "args": [
+    "--hooks"
+  ],
+  "stdinMessages": [
+    {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "tools/call",
+      "params": {
+        "name": "overlord_hook_user_prompt_submit",
+        "arguments": {
+          "hook_event_name": "UserPromptSubmit",
+          "session_id": "nested-session-1",
+          "cwd": "/repo",
+          "prompt": "Summarize the diff"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "id": 2,
+      "method": "tools/call",
+      "params": {
+        "name": "overlord_hook_stop",
+        "arguments": {
+          "hook_event_name": "Stop",
+          "session_id": "nested-session-1",
+          "cwd": "/repo",
+          "stop_hook_active": "false",
+          "background_tasks": "[]"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "id": 3,
+      "method": "tools/call",
+      "params": {
+        "name": "overlord_hook_permission_request",
+        "arguments": {
+          "hook_event_name": "PermissionRequest",
+          "session_id": "nested-session-1",
+          "cwd": "/repo",
+          "permission_mode": "default",
+          "tool_name": "Bash",
+          "tool_input": "{\"command\": \"ls\"}",
+          "hookTimeoutSeconds": 300
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "id": 4,
+      "method": "tools/call",
+      "params": {
+        "name": "overlord_hook_post_tool_use",
+        "arguments": {
+          "hook_event_name": "PostToolUse",
+          "session_id": "nested-session-1",
+          "cwd": "/repo",
+          "tool_name": "Write",
+          "tool_use_id": "toolu_1",
+          "tool_input": "{\"file_path\": \"/repo/src/a.ts\"}"
+        }
+      }
+    }
+  ],
+  "env": {
+    "MISSION_ID": "coo:825",
+    "OVERLORD_MISSION_ID": "coo:825",
+    "OVERLORD_OBJECTIVE_ID": "coo:825.abcd",
+    "OVERLORD_SESSION_CHANNEL_ID": "channel-1",
+    "OVERLORD_SESSION_CHANNEL_TOKEN": null,
+    "SESSION_KEY": null,
+    "OVLD_HOME": null,
+    "CLAUDE_CODE_SESSION_ID": "nested-session-1",
+    "CLAUDE_CODE_ENTRYPOINT": "sdk-cli",
+    "CLAUDE_PID": "1"
+  },
+  "spy": {
+    "exitCode": 0,
+    "stdout": "{\"hookOutput\":{\"decision\":\"block\",\"reason\":\"must not surface\"}}"
+  },
+  "expect": {
+    "exitCode": 0,
+    "stderr": "",
+    "responses": [
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "{}"
+            }
+          ]
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 2,
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "{}"
+            }
+          ]
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 3,
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "{}"
+            }
+          ]
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 4,
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "{}"
+            }
+          ]
+        }
+      }
+    ],
+    "cliInvocations": [
+      "protocol capture-change --agent claude"
+    ],
+    "sandboxWrites": []
+  }
+}

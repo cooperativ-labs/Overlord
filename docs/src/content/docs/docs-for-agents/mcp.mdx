@@ -109,6 +109,19 @@ different request fails with `delivery_operation_conflict`. The tools never gene
 an id themselves. `overlord_delivery_receipt` reads the caller's accepted receipt by
 `operationId` or `deliveryId`.
 
+An MCP client that supports tasks (MCP 2025-11-25) may run `overlord_deliver_session`
+and `overlord_record_work` as tasks: both list `execution.taskSupport: optional`, and
+`initialize` declares task-augmented `tools/call` with `tasks/list` and without
+`tasks/cancel`, because a started delivery cannot be withdrawn. The call returns a task
+at once; poll `tasks/get` and read the tool result with `tasks/result`. A tool error
+fails the task, and `tasks/result` returns the same `isError` result a direct call
+would. Tasks are visible only to the caller that created them and live in the server's
+memory: a default ttl of 15 minutes (60 at most), and at most 10 unfinished per caller.
+If a task is lost, for example to a server restart, read the outcome with
+`overlord_delivery_receipt` using the `operationId` you sent. Every other tool, and
+every call without a task, answers directly as before. The local connector shim does
+not offer tasks.
+
 Draft report evidence is opt-in: `overlord_update_session` accepts `reportDraft
 { operationId, expectedRevision, operations }` (with it, `summary` is optional) to
 record provisional risks, human actions, tradeoffs, deferred work and assumptions by

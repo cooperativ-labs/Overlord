@@ -11,6 +11,8 @@
     "transcript_path": "/Users/jake/.codex/sessions/secret.jsonl",
     "cwd": "/repo",
     "hook_event_name": "PostToolUse",
+    "model": "gpt-6.2-astra",
+    "permission_mode": "default",
     "tool_name": "apply_patch",
     "tool_input": {
       "command": "*** Begin Patch\n*** Update File: /repo/src/old-name.ts\n*** Move to: /repo/src/new-name.ts\n@@\n-export const key = 'AKIAIOSFODNN7EXAMPLE';\n+export const key = process.env.KEY;\n*** Delete File: /repo/src/removed.ts\n*** End Patch"

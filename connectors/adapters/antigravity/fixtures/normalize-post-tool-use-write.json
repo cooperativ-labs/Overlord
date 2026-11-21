@@ -1,0 +1,58 @@
+{
+  "fixtureVersion": 1,
+  "kind": "normalized-event",
+  "description": "Antigravity PostToolUse for a successful write_to_file in the documented camelCase shape (hooks doc PostToolUse input; hookEventName, cwd and toolCall.id from agy 1.5.4). `error` is omitted, which the doc defines as success, so the edit is file.edited with outcome ok and the exact workspace-relative TargetFile; the written content, transcript path and home directory never appear.",
+  "codec": "codec/antigravity.codec.yaml",
+  "occurredAt": "2026-11-20T00:00:00.000Z",
+  "payload": {
+    "hookEventName": "PostToolUse",
+    "toolCall": {
+      "id": "toolu_write_1",
+      "name": "write_to_file",
+      "args": {
+        "TargetFile": "/workspace/project/src/config.ts",
+        "Overwrite": false,
+        "CodeContent": "export const token = 'AKIAIOSFODNN7EXAMPLE';\n",
+        "Description": "Create the config module",
+        "IsArtifact": false
+      }
+    },
+    "stepIdx": 7,
+    "lastUserInput": "Add a config module",
+    "conversationId": "ec33ebf9-0cba-4100-8142-c61503f6c587",
+    "workspacePaths": ["/workspace/project"],
+    "transcriptPath": "/Users/dev/.gemini/antigravity-cli/brain/ec33ebf9-0cba-4100-8142-c61503f6c587/.system_generated/logs/transcript.jsonl",
+    "artifactDirectoryPath": "/Users/dev/.gemini/antigravity-cli/brain/ec33ebf9-0cba-4100-8142-c61503f6c587",
+    "modelName": "gemini-3.6-flash-medium",
+    "cwd": "/workspace/project"
+  },
+  "expect": {
+    "eventId": "ev_0781b172f93cc11b8111d341e105ad77",
+    "producerSequence": null,
+    "occurredAt": "2026-11-20T00:00:00.000Z",
+    "kind": "file.edited",
+    "severity": "info",
+    "nativeEvent": "PostToolUse",
+    "nativeTurnId": null,
+    "nativeCallId": "toolu_write_1",
+    "subagentId": null,
+    "correlationId": "ec33ebf9-0cba-4100-8142-c61503f6c587",
+    "origin": "agent",
+    "summary": "Write a file: src/config.ts: 45 bytes",
+    "payload": {
+      "tool": "write",
+      "action": "Write a file",
+      "subject": "src/config.ts",
+      "detail": "45 bytes",
+      "paths": ["src/config.ts"],
+      "outcome": "ok",
+      "formatterVersion": 1
+    }
+  },
+  "mustNotContain": [
+    "AKIAIOSFODNN7EXAMPLE",
+    "transcript.jsonl",
+    "/Users/dev",
+    "Create the config module"
+  ]
+}

@@ -11,7 +11,10 @@ const READ_ONLY_REASON_TEXT: Record<
     'The Latch session has ended, so this question can no longer be answered here.',
   target_offline:
     'The computer running this session is offline. Bring its runner back online to answer here.',
-  request_closed: 'This question has already been closed.'
+  request_closed: 'This question has already been closed.',
+  channel_ended: 'This session has ended, so it can no longer be answered here.',
+  not_session_owner:
+    'Only the person who launched this session can approve its commands and file changes.'
 };
 
 const DELIVERY_STATE_TEXT: Record<
@@ -36,8 +39,15 @@ export function deliveryStateText(state: HumanAgentRequestDto['delivery']['state
   return state ? DELIVERY_STATE_TEXT[state] : null;
 }
 
+/**
+ * `latch`: the answer is typed into the agent's Latch session. `control_plane`: the session's
+ * supervisor (Codex app-server mode) applies it (ADR 0094). Anything else is read-only.
+ */
 export function isQuestionDeliveryAnswerable(request: HumanAgentRequestDto): boolean {
-  return request.delivery.mode === 'latch' && request.status === 'open';
+  return (
+    (request.delivery.mode === 'latch' || request.delivery.mode === 'control_plane') &&
+    request.status === 'open'
+  );
 }
 
 export function questionAllowsFreeText(request: HumanAgentRequestDto): boolean {
@@ -72,15 +82,18 @@ const PENDING_STAGE_TEXT: Record<string, string> = {
 };
 
 /**
- * The outcome of a resolved question or choice, or null when the request holds no answer
- * (open, expired, cancelled) or is not a question/choice.
+ * The outcome of a resolved question, choice or approval, or null when the request holds no
+ * answer (open, expired, cancelled) or is another kind. An approval only ever has an outcome on
+ * a control-plane session, the only place one can be answered here.
  *
  * Prefers `delivery.stage`; falls back to the legacy closed `state` vocabulary for an older
  * server. An unrecognised stage is shown as pending, never as delivered.
  */
 export function answerOutcome(request: HumanAgentRequestDto): AnswerOutcome | null {
   if (request.status !== 'resolved') return null;
-  if (request.kind !== 'question' && request.kind !== 'choice') return null;
+  if (request.kind !== 'question' && request.kind !== 'choice' && request.kind !== 'permission') {
+    return null;
+  }
   const delivery = request.delivery;
   const stage = delivery.stage ?? legacyStage(delivery.state);
   if (!stage) return null;

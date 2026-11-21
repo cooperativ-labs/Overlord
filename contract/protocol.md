@@ -287,7 +287,9 @@ Command names, flags and response shapes are in
 ### Connector → Protocol (Hook Surface)
 
 - **Hooks**: harness-native lifecycle callbacks declared by the connector descriptor
-- **Transport**: Shell scripts invoking `ovld protocol hook-event` for follow-up activity or the local-only `ovld protocol capture-change` command for file evidence
+- **Transport**: Shell scripts invoking `ovld protocol hook-event` for follow-up activity or the local-only `ovld protocol capture-change` command for file evidence, or harness `mcp_tool` hooks calling a connector-bundled **local** stdio MCP server whose hook tools forward the rebuilt native payload on stdin to the same `ovld` commands (ADR 0087). A hook tool holds no logic of its own: it gates, rebuilds the payload, spawns a fixed command, and answers with that command's `hookOutput` or decision as exactly one JSON object (`{}` at minimum). Each connector declares its per-hook failure policy
+- **Native hook mode**: `ovld protocol hook-event --agent <key> --payload-file -` decodes the native payload with the connector codec and prints `hookOutput`, the exact harness answer. `--hook-type Stop` is read-only and returns `deliveryStatus { needed, reason }`; the reminder is answered at most once per protocol session and objective and never when `stop_hook_active` is set. It is also not answered while the payload reports a running background task (Claude `background_tasks`): the harness wakes the agent when that work ends, and the reminder belongs to the Stop that follows (ADR 0088). A prompt the harness writes itself (Claude `<task-notification>`) is not a user follow-up and records nothing. The connector codec maps the native event to the canonical hook type, so Antigravity `PreInvocation` (`lastUserInput`) is a `UserPromptSubmit`; because it repeats before every model call, a prompt from such a per-invocation event is recorded only when it differs from the last one recorded for the conversation. The Stop answer is `{decision: "continue", reason}` for Antigravity and `{decision: "block", reason}` for Claude and Codex, and Antigravity `continuation_active` and `fullyIdle: false` skip it like `stop_hook_active` and running background tasks. `--hook-output` prints only the `hookOutput` object, for a shell hook that passes it through (ADR 0090)
+- **Hook binding**: the launch environment names the mission and objective. Otherwise the **native-session index** (`<global data dir>/native-session-index/<sha256(agent \0 native session id)>`, owner-only, holding working directory, mission and objective, no secret), written by `attach`, `connect` and `resume-follow-up` when the harness exports its session id (`CLAUDE_CODE_SESSION_ID`; for Codex, when no Claude id is exported, `CODEX_SESSION_ID` or else `CODEX_THREAD_ID`, ADR 0093) or `--agent` and `--external-session-id` are given, and by the `codex-app-server` sidecar for its thread while it runs, and removed at delivery, may locate a binding for follow-up and Stop hooks. The protocol session key still comes only from the owner-only session-key cache. The index never feeds file capture, and the working directory never selects a binding. The launch environment binds only the session Overlord launched: a hooks server that detects a nested harness session (a session started from a tool of another session, which inherits its environment; Claude: an inherited `CLAUDE_PID` that is not the server's parent) uses no launch binding for follow-up, Stop or decision hooks, and may still bind through the index under the nested session's own native id. File capture keeps the launch objective, because the nested session edits the same checkout for it (ADR 0088). Subagent and fork hooks carry the parent's native session id and bind to the parent's session
 - **Rule**: Hook scripts must not write to the database directly; use protocol commands only
 - **Scope**: file capture requires an explicit objective identity and its attached protocol session. The working directory is only the normalization root and never selects an objective. An unbound callback performs no attribution.
 - **Direct edit capture**: a post-tool callback must pass its connector key, and may append `declared_edit` evidence (source only; quality is retired in version 165) only when that connector's compiled codec normalizes the event as `file.edited` with an exact path. The CLI bounds the normalized workspace-relative path and applies `.overlordignore` before writing the owner-only objective/session ledger. Generic path-key parsing is forbidden; known read-only callbacks are silent, while mutation-capable, shell, unmapped, and no-path callbacks record bounded unavailable health and claim no path.
@@ -330,11 +332,36 @@ answering a decision it is blocked on, and injecting an instruction into it.
 - **Scope gate ordering**: scope resolution runs before logging, interpreter spawn, filesystem
   write, or network access. The only permitted pre-gate operation is a bounded stdin read plus a
   native-id/channel lookup in already-known local state. An unbound session produces no request,
-  no event, no database row, and no observable delay
+  no event, no database row, and no observable delay. A harness-started, connector-bundled local
+  hooks server process may run in an unbound session only if it does no I/O, logging, spawn or
+  network call before its per-call gate (ADR 0087)
+- **One surface per session**: a harness process that a control-plane supervisor drives (the
+  `codex-app-server` sidecar's private `codex app-server`) is started with an allowlisted
+  environment that carries no user token, channel credential, mission or objective scope, plus
+  `OVERLORD_CONTROL_PLANE_SURFACE=<adapter key>`. Every Overlord callback hook exits 0 before
+  reading stdin, writing or spawning when that marker is set, so a harness the supervisor
+  observes and answers for is never also captured or decided through hooks (ADR 0091)
+- **Control-plane answers**: a control-plane supervisor answers a harness approval only with a
+  decision the harness offered for that request, never a standing grant, and closes its request
+  as resolved elsewhere when the harness reports that another client answered first. When the
+  channel stops honoring its credential, or the supervisor is signalled, it interrupts the
+  harness's running turn before it lets go of the session (ADR 0091). It also stops when the
+  channel heartbeat reports its objective `complete` or `deleted`, or its session `delivered` and
+  its thread idle for 15 minutes (ADR 0092)
+- **Control-plane launch**: a Codex objective launched in app-server mode (`harnessMode =
+  appServer`, `OVERLORD_CODEX_APP_SERVER=1`, or that project launch env var) mints a
+  `launch_kind = 'control_plane'` channel before the agent starts, stages its credential in the
+  owner-only cache, starts the supervisor detached, and attaches any terminal with
+  `ovld agent-session attach`; protocol attach inside the thread binds the channel by objective.
+  Every other launch mints no channel. A launch that cannot use the mode falls back to the
+  terminal launch with a warning (ADR 0092)
 - **Failure rule**: the harness's own behavior is the floor. Timeout, backend error, missing
   binding, auth failure, or malformed response all return _no decision_, which yields the
   harness's native prompt. No failure path may manufacture an approval, and a decision call must
-  never retry with a broader credential
+  never retry with a broader credential. The core still returns no decision on every internal
+  failure. A connector **may** register a decision hook with harness-level fail-closed behavior
+  (Claude `onFailure: "block"`) only for sessions it launched and bound; then a failure to reach
+  the local hook tool denies and never approves (ADR 0087)
 - **Payload reduction happens on the machine, before transmission.** Raw native payloads are
   never persisted: no transcripts or transcript paths, no raw tool input or output, no file
   contents, no environment variables. What is persisted is the native session id, a normalized
@@ -355,7 +382,8 @@ answering a decision it is blocked on, and injecting an instruction into it.
   choice mode. `AgentRequestDto.delivery` is the sole answerability projection: `latch` when
   a live Latch provider session on a reachable target can receive the answer, otherwise
   `read_only` with one of `no_latch_session`, `latch_session_exited`, `target_offline`, or
-  `request_closed`; it also projects the application state and observation time. Human
+  `request_closed` (a control-plane request projects as described in the next rule); it also
+  projects the application state and observation time. Outside control-plane channels, human
   `POST /api/agent-requests/:id/resolve` is available only for `question` and `choice`,
   retains revision CAS and native permission/retry retirement, validates text/options
   against the request, and fails `409 request_not_deliverable` unless delivery mode is
@@ -385,6 +413,21 @@ answering a decision it is blocked on, and injecting an instruction into it.
   (`session:read`, ADR 0063). Dismissal is per workspace member, bound to the request
   revision, and exposed as additive `dismissed`/`dismissedAt` on human reads; it never
   changes the request, its delivery, the blocking-question seen marker, or answerability.
+- **Answering control-plane requests (ADR 0094)**: a request on a `launch_kind = 'control_plane'` channel
+  projects `delivery.mode = 'control_plane'` while it is open and the channel is live
+  (`preparing`, `online`, `degraded`), otherwise `read_only` with `request_closed` or
+  `channel_ended`. Its `question`, `choice` and `permission` requests are answered through
+  `POST /api/agent-requests/:id/resolve` with no Latch delivery: the supervisor that holds the
+  card's waiter lease reads the resolution through its channel credential and answers the
+  harness, and `delivery.stage` stays `recorded` until it records the request's application
+  (then `confirmed` for `emitted` or `applied`, `failed` for `not_applied`, `unconfirmed` for
+  `unknown`). A `permission` request is answerable only by the member who created the channel
+  (`agent_session_channels.created_by_workspace_user_id`, the launching member): anyone else sees
+  `read_only` with `not_session_owner` and resolve answers `403 not_session_owner`. It is
+  answered only with exactly `{ optionId }` or `{ decision }` naming one of its own options (stored
+  as `{ optionId }`), never with text or extra fields (`400 invalid_resolution`). An ended channel answers `409 request_not_deliverable`, and
+  `/redeliver` refuses every control-plane request (`409`). Session inputs remain closed for
+  every channel (`POST /api/agent-session-inputs` answers `410`)
 
 ### Replay-safe finalization (ADR 0075)
 

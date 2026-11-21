@@ -11,7 +11,34 @@ import { chmodSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
 import { writeChannelCredential } from './agent-session/channel.js';
+import {
+  attachArgs,
+  type CodexAppServerPreflight,
+  type CodexThreadLaunchSettings,
+  codexThreadSettingsFromFlags,
+  mintCodexLaunchChannel,
+  ovldSelfInvocation,
+  preflightCodexAppServer,
+  resolveCodexBinary,
+  startCodexSupervisorDetached,
+  supervisorArgs,
+  supervisorEnv
+} from './agent-session/codex-app-server/launch.js';
 import { resolveAgentBinary } from './agent-binaries.js';
+import { partitionSecretEnv } from './argv-secrets.js';
+import {
+  claudeConfigDir,
+  claudeDecisionHookAvailability,
+  claudeDecisionHookSettings,
+  claudeDecisionHookSkippedWarning
+} from './claude-decision-hook.js';
+import {
+  checkCodexLaunchSelection,
+  type CodexLiveModels,
+  loadCodexLiveModels
+} from './codex-models.js';
+import { resolveHome } from './connectors.js';
+import { CliError } from './errors.js';
 import { discoverLatchOnThisDevice } from './latch-discovery.js';
 import {
   createLatchSession,
@@ -26,6 +53,7 @@ import {
 } from './pre-launch.js';
 import {
   ensureHarnessScratchDir,
+  ensureHarnessTmpDir,
   ensureProjectTmpDir,
   projectTmpSessionsDir,
   pruneStaleProjectTmp,
@@ -43,6 +71,7 @@ import {
   terminalOpenSpawnTimeoutMs,
   tmpEnvFor
 } from './terminal-launcher.js';
+import { getCliVersion } from './version.js';
 
 export type LaunchOptions = {
   agent: string;
@@ -99,6 +128,64 @@ export type LaunchOptions = {
   missionTitle?: string | null;
   /** Mission display id used as the Latch session name hint. */
   missionDisplayId?: string | null;
+  /**
+   * How to drive the agent (ADR 0092). `appServer` runs a Codex objective through a private
+   * Codex app server and the control-plane supervisor; anything else, or any other agent, is the
+   * terminal launch observed through hooks.
+   */
+  harnessMode?: 'hooks' | 'appServer' | null;
+  /** Test seam for the Codex install check. */
+  codexPreflight?: () => CodexAppServerPreflight;
+  /**
+   * The live Codex model list a Codex launch's model and effort are checked against (test
+   * seam). `null` means Codex could not be asked, and the launch is not checked.
+   */
+  codexLiveModels?: (args: { cwd: string }) => Promise<CodexLiveModels | null>;
+};
+
+/** Ask this machine's Codex (cached for a few minutes) for the models it supports. */
+async function defaultCodexLiveModels({ cwd }: { cwd: string }): Promise<CodexLiveModels | null> {
+  const codex = resolveCodexBinary();
+  if (!codex) return null;
+  return loadCodexLiveModels({ codexBin: codex.path, cwd, clientVersion: getCliVersion() });
+}
+
+/**
+ * Refuse a Codex launch whose model or effort the installation does not support, before a
+ * channel is minted or a terminal opens, so the person sees which models are available instead
+ * of a Codex error in a terminal. Without a reachable Codex the launch goes ahead unchecked: the
+ * bundled catalog is a guess, and refusing on a guess would block launches that would work.
+ */
+export async function assertCodexLaunchSelection(options: LaunchOptions): Promise<void> {
+  if (options.agent !== 'codex' || options.dryRun) return;
+  if (!options.model?.trim() && !options.thinking?.trim()) return;
+  let live: CodexLiveModels | null = null;
+  try {
+    live = await (options.codexLiveModels ?? defaultCodexLiveModels)({
+      cwd: options.workingDirectory
+    });
+  } catch {
+    live = null;
+  }
+  if (!live) return;
+  const check = checkCodexLaunchSelection({
+    live,
+    model: options.model,
+    effort: options.thinking
+  });
+  if (!check.ok) throw new CliError({ message: check.message });
+}
+
+/** A launch that runs through the Codex app-server control plane. */
+export type CodexControlPlanePlan = {
+  adapter: 'codex-app-server';
+  /** Null only in a dry run, which mints nothing. */
+  channelId: string | null;
+  supervisor: { program: string; args: string[] };
+  logFile: string;
+  /** Run before the supervisor starts, in place of the terminal's pre-launch lines. */
+  preLaunchCommands: string[];
+  threadSettings: CodexThreadLaunchSettings;
 };
 
 /**
@@ -190,6 +277,15 @@ type LaunchPlan = {
   missionDisplayId?: string | null;
   objectiveDisplayId?: string | null;
   objectiveTitle?: string | null;
+  /**
+   * Set when a channel-bound Claude launch could not register the fail-closed decision hook,
+   * so the session falls back to Claude's native permission prompts.
+   */
+  decisionHookWarning?: string | null;
+  /** Set when the launch runs through the Codex app-server control plane (ADR 0092). */
+  controlPlane?: CodexControlPlanePlan | null;
+  /** Non-fatal notes about the harness mode: a fallback to hooks, or ignored settings. */
+  harnessWarnings?: string[];
 };
 
 export type LaunchAgentResult = {
@@ -200,6 +296,8 @@ export type LaunchAgentResult = {
   viewerOpen?: LatchOpenResult | null;
   /** Non-fatal note when Latch was requested but unavailable — fell back to direct. */
   providerFallbackWarning?: string | null;
+  /** Pid of the detached control-plane supervisor, when the launch started one. */
+  supervisorPid?: number | null;
 };
 
 type MissionContext = {
@@ -421,7 +519,8 @@ function buildAgentCommand({
   flags = [],
   prompt,
   contextFile,
-  launchMessage
+  launchMessage,
+  claudeSettings
 }: {
   agent: string;
   model?: string | null;
@@ -430,6 +529,8 @@ function buildAgentCommand({
   prompt: string;
   contextFile: string;
   launchMessage: string;
+  /** Extra `claude --settings` JSON (the per-launch decision hook); never holds a secret. */
+  claudeSettings?: string | null;
 }): { command: string; args: string[] } {
   const flagArgs = agentLaunchFlagsToArgv(flags);
   if (agent === 'codex') {
@@ -442,6 +543,7 @@ function buildAgentCommand({
 
   if (agent === 'claude') {
     const args = ['--append-system-prompt-file', contextFile];
+    if (claudeSettings) args.push('--settings', claudeSettings);
     if (model) args.push('--model', model);
     if (thinking) args.push('--effort', thinking);
     args.push(...flagArgs, launchMessage);
@@ -493,8 +595,10 @@ export async function buildLaunchPlan({
     missionId: options.missionId,
     objectiveId: options.objectiveId
   });
+  await assertCodexLaunchSelection(options);
   pruneStaleProjectTmp({ workingDirectory: options.workingDirectory, create: true });
   const tmpDir = ensureProjectTmpDir(options.workingDirectory);
+  ensureHarnessTmpDir(options.workingDirectory);
   const contextFileStem = context.objectiveDisplayId
     ? `objective-${context.objectiveDisplayId.replace(/[^a-zA-Z0-9_-]/g, '-')}`
     : `mission-${context.displayId.replace(/[^a-zA-Z0-9_-]/g, '-')}`;
@@ -523,14 +627,58 @@ export async function buildLaunchPlan({
     missionId: options.missionId,
     executionTargetId: options.executionTargetId
   });
+  // App-server mode (ADR 0092): a Codex objective runs through a private app server driven by
+  // the control-plane supervisor, which needs a channel credential from the first turn. Any
+  // failure here (Codex missing or too old, no objective, a backend without the route) falls
+  // back to the terminal launch with a warning rather than failing the objective.
+  const harnessWarnings: string[] = [];
+  let sessionChannelId = options.sessionChannelId ?? null;
+  let sessionChannelToken = options.sessionChannelToken ?? null;
+  let sessionChannelLaunchKind = options.sessionChannelLaunchKind ?? null;
+  let codexBin: string | null = null;
+  let controlPlaneChannelId: string | null | undefined;
+  if (options.agent === 'codex' && options.harnessMode === 'appServer') {
+    const preflight = (options.codexPreflight ?? preflightCodexAppServer)();
+    if (!preflight.ok) {
+      harnessWarnings.push(preflight.warning);
+    } else if (!context.objectiveDisplayId) {
+      harnessWarnings.push(
+        'Codex app-server mode needs an objective to bind the session to; launching in the ' +
+          'terminal (hooks) instead.'
+      );
+    } else if (options.dryRun) {
+      codexBin = preflight.codex.path;
+      controlPlaneChannelId = null;
+    } else {
+      try {
+        const minted = await mintCodexLaunchChannel({
+          backend: runtime.backend,
+          objectiveRef: context.objectiveDisplayId,
+          adapterVersion: getCliVersion(),
+          executionRequestId: options.executionRequestId,
+          executionTargetId: options.executionTargetId
+        });
+        codexBin = preflight.codex.path;
+        controlPlaneChannelId = minted.channelId;
+        sessionChannelId = minted.channelId;
+        sessionChannelToken = minted.token;
+        sessionChannelLaunchKind = 'control_plane';
+      } catch (error) {
+        harnessWarnings.push(
+          `Could not mint the session channel for Codex app-server mode (${
+            error instanceof Error ? error.message : String(error)
+          }); launching in the terminal (hooks) instead.`
+        );
+      }
+    }
+  }
+  const useControlPlane = controlPlaneChannelId !== undefined;
+
   // Stage the scoped credential before the agent starts, so it is on disk (owner-only, outside
   // every checkout) by the time the launched process first looks for it. A dry run stages
   // nothing: it must remain a pure description of what *would* happen.
-  if (options.sessionChannelId && options.sessionChannelToken && !options.dryRun) {
-    writeChannelCredential({
-      channelId: options.sessionChannelId,
-      token: options.sessionChannelToken
-    });
+  if (sessionChannelId && sessionChannelToken && !options.dryRun) {
+    writeChannelCredential({ channelId: sessionChannelId, token: sessionChannelToken });
   }
 
   const launchEnv = overlordLaunchEnv({
@@ -538,8 +686,8 @@ export async function buildLaunchPlan({
     missionId: context.displayId,
     objectiveId: context.objectiveDisplayId,
     executionRequestId: options.executionRequestId,
-    sessionChannelId: options.sessionChannelId,
-    sessionChannelLaunchKind: options.sessionChannelLaunchKind,
+    sessionChannelId,
+    sessionChannelLaunchKind,
     projectResources
   });
 
@@ -582,23 +730,95 @@ export async function buildLaunchPlan({
       ? `Read the Overlord context file at ${contextFile}, attach to mission ${context.displayId}${context.objectiveDisplayId ? ` --objective-id ${context.objectiveDisplayId}` : ''}, then immediately execute its current objective. Do not wait for more instructions.`
       : launchContext;
 
-  const command = buildAgentCommand({
-    agent: options.agent,
-    model: options.model,
-    thinking: options.thinking,
-    flags: options.flags,
-    prompt,
-    contextFile,
-    launchMessage: `Attach to ovld mission ${context.displayId}${context.objectiveDisplayId ? ` objective ${context.objectiveDisplayId}` : ''}, then immediately execute ${context.objectiveTitle ?? context.title}. Do not wait for more instructions.`
-  });
+  // The fail-closed decision hook is registered only for sessions launched with a session
+  // channel (the only sessions with a remote decision path), and only when the hooks server it
+  // calls is installed. Otherwise the session keeps Claude's native prompts.
+  let claudeSettings: string | null = null;
+  let decisionHookWarning: string | null = null;
+  if (options.agent === 'claude' && options.sessionChannelId) {
+    const availability = claudeDecisionHookAvailability({
+      configDir: claudeConfigDir({ env: { ...process.env, ...exportedEnv } }),
+      ovldHome: resolveHome()
+    });
+    if (availability.available) {
+      claudeSettings = JSON.stringify(claudeDecisionHookSettings());
+    } else {
+      decisionHookWarning = claudeDecisionHookSkippedWarning(availability.reason);
+    }
+  }
 
+  let controlPlane: CodexControlPlanePlan | null = null;
+  let terminalPreCommand = options.preCommand;
+  let terminalPreLaunchCommands = preLaunchCommands;
+  let command: { command: string; args: string[] };
+  if (useControlPlane) {
+    // The supervisor sends the objective prompt as the thread's first turn; the visible terminal
+    // only attaches the Codex TUI to that thread. Launch flags become thread settings.
+    const threadSettings = codexThreadSettingsFromFlags(options.flags ?? []);
+    if (threadSettings.ignored.length > 0) {
+      harnessWarnings.push(
+        `Codex app-server mode ignores these launch flags: ${threadSettings.ignored.join(', ')}.`
+      );
+    }
+    if (options.preCommand?.trim()) {
+      harnessWarnings.push(
+        `Codex app-server mode ignores the pre-command \`${options.preCommand.trim()}\`: the app ` +
+          'server is started by Overlord, not by the terminal.'
+      );
+    }
+    const self = ovldSelfInvocation();
+    controlPlane = {
+      adapter: 'codex-app-server',
+      channelId: controlPlaneChannelId ?? null,
+      supervisor: {
+        program: self.program,
+        args: [
+          ...self.args,
+          ...supervisorArgs({
+            contextFile,
+            workingDirectory: options.workingDirectory,
+            model: options.model,
+            effort: options.thinking,
+            settings: threadSettings,
+            codexBin
+          })
+        ]
+      },
+      logFile: path.join(sessionScratchDir, 'codex-app-server.log'),
+      preLaunchCommands,
+      threadSettings
+    };
+    const attach = [...self.args, ...attachArgs(controlPlaneChannelId ?? '<minted-at-launch>')];
+    // Under the desktop app, `ovld` runs as Electron-as-Node; a fresh terminal must say so too.
+    command = process.env.ELECTRON_RUN_AS_NODE
+      ? { command: 'env', args: ['ELECTRON_RUN_AS_NODE=1', self.program, ...attach] }
+      : { command: self.program, args: attach };
+    terminalPreCommand = null;
+    terminalPreLaunchCommands = [];
+  } else {
+    command = buildAgentCommand({
+      agent: options.agent,
+      model: options.model,
+      thinking: options.thinking,
+      flags: options.flags,
+      prompt,
+      contextFile,
+      claudeSettings,
+      launchMessage: `Attach to ovld mission ${context.displayId}${context.objectiveDisplayId ? ` objective ${context.objectiveDisplayId}` : ''}, then immediately execute ${context.objectiveTitle ?? context.title}. Do not wait for more instructions.`
+    });
+  }
+
+  // The Latch command string becomes argv (`$SHELL -ilc S`, inline or inside Latch), which any
+  // local user can read. Secret-looking values (a project `launchEnvVars` token, say) are left
+  // out of its exports and reach the agent only through the process environment: the inline
+  // spawn passes `plan.env`, and the Latch manifest carries it as `launch.env`.
   const latchCommandString = composeAgentTerminalCommand({
     command: command.command,
     args: command.args,
     workingDirectory: options.workingDirectory,
-    preCommand: options.preCommand,
-    extraEnv: exportedEnv,
-    preLaunchCommands
+    preCommand: terminalPreCommand,
+    extraEnv: partitionSecretEnv(exportedEnv).argvSafe,
+    preLaunchCommands: terminalPreLaunchCommands
   });
 
   const terminalScriptPath = options.terminalLauncher?.trim()
@@ -609,16 +829,20 @@ export async function buildLaunchPlan({
       })
     : null;
   if (terminalScriptPath) {
+    // A new terminal window inherits no environment, so this script must export the full
+    // launch env. Create it owner-only rather than chmod'ing a world-readable file afterwards;
+    // the chmod still covers a script left behind by an earlier launch.
     writeFileSync(
       terminalScriptPath,
       terminalLaunchScriptContent({
         command: command.command,
         args: command.args,
         workingDirectory: options.workingDirectory,
-        preCommand: options.preCommand,
+        preCommand: terminalPreCommand,
         extraEnv: exportedEnv,
-        preLaunchCommands
-      })
+        preLaunchCommands: terminalPreLaunchCommands
+      }),
+      { mode: 0o700 }
     );
     chmodSync(terminalScriptPath, 0o700);
   }
@@ -627,14 +851,14 @@ export async function buildLaunchPlan({
     command: command.command,
     args: command.args,
     workingDirectory: options.workingDirectory,
-    preCommand: options.preCommand,
+    preCommand: terminalPreCommand,
     terminalLauncher: options.terminalLauncher,
     terminalLaunchPlacement: options.terminalLaunchPlacement,
     terminalLaunchChord: options.terminalLaunchChord,
     terminalLaunchBackground: options.terminalLaunchBackground,
     terminalScriptPath,
     extraEnv: exportedEnv,
-    preLaunchCommands
+    preLaunchCommands: terminalPreLaunchCommands
   });
 
   return {
@@ -645,12 +869,15 @@ export async function buildLaunchPlan({
     execution,
     env: exportedEnv,
     latchCommandString,
-    latchPreLaunchCommands: preLaunchCommands,
+    latchPreLaunchCommands: terminalPreLaunchCommands,
     launchSession: options.launchSession ?? null,
     missionTitle: options.missionTitle ?? context.title,
     missionDisplayId: options.missionDisplayId ?? context.displayId,
     objectiveDisplayId: context.objectiveDisplayId,
-    objectiveTitle: context.objectiveTitle
+    objectiveTitle: context.objectiveTitle,
+    decisionHookWarning,
+    controlPlane,
+    harnessWarnings
   };
 }
 
@@ -671,6 +898,20 @@ export async function launchAgent({
     ...tmpEnvFor(options.workingDirectory),
     ...plan.env
   };
+
+  // App-server mode: the supervisor owns the session, so it starts first and detached; whatever
+  // terminal opens below only attaches the Codex TUI to the thread it drives.
+  let supervisorPid: number | null = null;
+  if (plan.controlPlane) {
+    supervisorPid = startCodexSupervisorDetached({
+      program: plan.controlPlane.supervisor.program,
+      args: plan.controlPlane.supervisor.args,
+      cwd: options.workingDirectory,
+      env: supervisorEnv(env),
+      logFile: plan.controlPlane.logFile,
+      preLaunchCommands: plan.controlPlane.preLaunchCommands
+    }).pid;
+  }
 
   const snapshot = options.launchSession ?? plan.launchSession ?? null;
 
@@ -718,7 +959,8 @@ export async function launchAgent({
       signal: result.signal,
       providerSession: existingProviderSession,
       viewerOpen: null,
-      providerFallbackWarning
+      providerFallbackWarning,
+      supervisorPid
     };
   }
 
@@ -812,11 +1054,26 @@ export async function launchAgent({
       signal: null,
       providerSession: created.providerSession,
       viewerOpen,
-      providerFallbackWarning
+      providerFallbackWarning,
+      supervisorPid
     };
   }
 
   const { execution } = plan;
+  // A runner with no terminal and no Latch has nowhere to show the TUI. In app-server mode that
+  // is fine: the session runs in the supervisor, and a person can attach later with
+  // `ovld agent-session attach`.
+  if (plan.controlPlane && !execution.terminal && !process.stdout.isTTY) {
+    return {
+      plan,
+      status: 0,
+      signal: null,
+      providerSession: null,
+      viewerOpen: null,
+      providerFallbackWarning,
+      supervisorPid
+    };
+  }
   const timeoutMs = terminalOpenSpawnTimeoutMs(execution);
   const spawnOptions = spawnSyncOptionsForLaunch({
     cwd: options.workingDirectory,
@@ -837,6 +1094,7 @@ export async function launchAgent({
     signal: result.signal,
     providerSession: null,
     viewerOpen: null,
-    providerFallbackWarning
+    providerFallbackWarning,
+    supervisorPid
   };
 }

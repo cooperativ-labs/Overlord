@@ -1,8 +1,15 @@
 {
   "$schema": "https://antigravity.google/schemas/v1/plugin.json",
   "name": "overlord",
-  "version": "0.3.75",
-  "description": "Chat-driven access to Overlord mission protocol workflows through skills and MCP.",
+  "displayName": "Overlord",
+  "version": "0.3.84",
+  "description": "Run Overlord missions from Antigravity: attach to an objective, post progress, ask blocking questions, and deliver through skills and MCP.",
+  "logo": "assets/logo.png",
+  "suggestedPrompts": [
+    "Attach to my Overlord mission and start the current objective",
+    "Create an Overlord mission from this conversation",
+    "Record the work I just finished in Overlord"
+  ],
   "author": {
     "name": "Cooperativ",
     "url": "https://github.com/cooperativ-labs"

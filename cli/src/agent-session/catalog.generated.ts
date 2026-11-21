@@ -112,13 +112,14 @@ export const HARNESS_DESCRIPTORS: HarnessDescriptor[] = [
     "adapter": "antigravity",
     "codec": "antigravity",
     "integrationShape": "callback",
-    "capabilityTier": 0,
-    "descriptorDigest": "c5686f1ab4c02e6bb90adeef83c6acd61703f3238be12618fed1e2b833636b2a",
+    "capabilityTier": 1,
+    "descriptorDigest": "c99353d29093e78117e61a930e091a5bdba53952a29c578cad8c113b397a1474",
     "descriptorSchemaVersion": 1,
     "harness": {
       "name": "Antigravity CLI",
-      "verifiedVersion": "docs: Antigravity CLI v1.1.11 / Antigravity 2.0 v2.6.0",
-      "versionScheme": "opaque"
+      "verifiedVersion": "docs + agy changelog 1.5.13",
+      "versionRange": ">=1.5.4",
+      "versionScheme": "semver"
     },
     "binding": {
       "source": "payload",
@@ -128,28 +129,28 @@ export const HARNESS_DESCRIPTORS: HarnessDescriptor[] = [
     },
     "decisionHold": {
       "status": "unverified",
-      "timeoutField": null,
-      "timeoutUnit": null,
-      "defaultTimeoutSeconds": null,
+      "timeoutField": "timeout",
+      "timeoutUnit": "seconds",
+      "defaultTimeoutSeconds": 30,
       "maxTimeoutSeconds": null
     },
     "mutationHooks": {
-      "classification": "unsupported",
-      "pathEvidenceSource": "unavailable",
-      "pathEvidenceQuality": "unavailable",
+      "classification": "post-only",
+      "pathEvidenceSource": "declared_edit",
+      "pathEvidenceQuality": "direct",
       "shellEvidence": "unavailable",
       "pathlessEvidence": "unavailable",
       "fixture": "fixtures/mutation-window-evidence.json",
-      "reason": "No recorded PostToolUse payload or empirical agy hook execution proves a pair.",
+      "reason": null,
       "evidenceRef": null,
-      "notes": null
+      "notes": "Only PostToolUse is registered, so evidence is post-only. A `write_to_file`, `replace_file_content` or `multi_replace_file_content` completion names its destination in `TargetFile`; the codec normalizes it to `file.edited` and decodes the outcome from `error` (empty or absent is success per the hook contract). Only an `ok` edit records objective-bound, non-exclusive `declared_edit`/`direct` evidence; a failed edit records `outcome_partial`, and `run_command` records `shell_activity_unverified`."
     },
     "capabilities": {
       "observe.prompt": {
-        "status": "unsupported",
+        "status": "supported",
         "native": "PreInvocation",
-        "reason": "PreInvocation exposes invocation counters and common metadata but no submitted prompt. Reading transcriptPath to reconstruct one would violate the raw-transcript privacy boundary.",
-        "evidenceRef": "https://antigravity.google/docs/hooks#preinvocation",
+        "reason": null,
+        "evidenceRef": null,
         "trackedAs": null
       },
       "observe.toolCall": {
@@ -157,35 +158,35 @@ export const HARNESS_DESCRIPTORS: HarnessDescriptor[] = [
         "native": "PreToolUse",
         "reason": null,
         "evidenceRef": null,
-        "trackedAs": "agent-session-verify-antigravity"
+        "trackedAs": "latch-engine"
       },
       "observe.toolResult": {
-        "status": "not-implemented",
+        "status": "supported",
         "native": "PostToolUse",
         "reason": null,
         "evidenceRef": null,
-        "trackedAs": "agent-session-verify-antigravity"
+        "trackedAs": null
       },
       "observe.fileEdit": {
-        "status": "not-implemented",
+        "status": "supported",
         "native": "PostToolUse",
         "reason": null,
         "evidenceRef": null,
-        "trackedAs": "agent-session-verify-antigravity"
+        "trackedAs": null
       },
       "observe.sessionLifecycle": {
         "status": "not-implemented",
-        "native": "Stop",
+        "native": "SessionStart",
         "reason": null,
         "evidenceRef": null,
-        "trackedAs": "agent-session-verify-antigravity"
+        "trackedAs": "latch-engine"
       },
       "decide.shell": {
         "status": "not-implemented",
         "native": "PreToolUse",
         "reason": null,
         "evidenceRef": null,
-        "trackedAs": "agent-session-verify-antigravity"
+        "trackedAs": "latch-engine"
       },
       "decide.mcp": {
         "status": "unverified",
@@ -199,14 +200,14 @@ export const HARNESS_DESCRIPTORS: HarnessDescriptor[] = [
         "native": "PreToolUse",
         "reason": null,
         "evidenceRef": null,
-        "trackedAs": "agent-session-verify-antigravity"
+        "trackedAs": "latch-engine"
       },
       "decide.anyTool": {
         "status": "not-implemented",
         "native": "PreToolUse",
         "reason": null,
         "evidenceRef": null,
-        "trackedAs": "agent-session-verify-antigravity"
+        "trackedAs": "latch-engine"
       },
       "decide.universal": {
         "status": "unverified",
@@ -227,7 +228,7 @@ export const HARNESS_DESCRIPTORS: HarnessDescriptor[] = [
         "native": "PreToolUse.permissionOverrides",
         "reason": null,
         "evidenceRef": null,
-        "trackedAs": "agent-session-verify-antigravity"
+        "trackedAs": "latch-engine"
       },
       "inject.midTurn": {
         "status": "unsupported",
@@ -237,18 +238,18 @@ export const HARNESS_DESCRIPTORS: HarnessDescriptor[] = [
         "trackedAs": null
       },
       "inject.turnBoundary": {
-        "status": "not-implemented",
+        "status": "supported",
         "native": "Stop",
         "reason": null,
         "evidenceRef": null,
-        "trackedAs": "agent-session-verify-antigravity"
+        "trackedAs": null
       },
       "inject.nextTurn": {
         "status": "not-implemented",
         "native": "PreInvocation.injectSteps.userMessage",
         "reason": null,
         "evidenceRef": null,
-        "trackedAs": "agent-session-verify-antigravity"
+        "trackedAs": "latch-engine"
       },
       "terminal.concurrentAnswer": {
         "status": "unverified",
@@ -269,10 +270,18 @@ export const HARNESS_DESCRIPTORS: HarnessDescriptor[] = [
       {
         "id": "outside-verification-survey",
         "severity": "medium",
-        "summary": "Antigravity was not part of the original harness verification survey. The current first-party docs now establish hook names, payload fields, and response shapes, but the `agy` binary was unavailable for empirical timeout, failure, resume, and headless tests. The connector must stay at its fixture-proven tier until those paths are exercised.",
-        "verification": "unverified",
-        "mitigation": "required",
-        "trackedAs": "agent-session-verify-antigravity"
+        "summary": "Antigravity was not part of the original harness verification survey. Its hook names, payload fields, response shapes and failure behavior are now established by the first-party hook contract, the build guide (\"any non-zero exit code is logged ... and ignored (failing open)\") and the agy release notes, and every graded capability is fixture-proven against that contract. The connector registers only fail-open observational, reminder and inject hooks; it registers no decision hook, so no hook failure can block or approve a tool call. No live agy session at the 1.5.4 floor has been recorded (the local agy was 1.0.4).",
+        "verification": "verified",
+        "mitigation": "implemented",
+        "trackedAs": null
+      },
+      {
+        "id": "per-invocation-hook-spawn",
+        "severity": "low",
+        "summary": "PreInvocation runs before every model call, so a launched session spawns `ovld` once per invocation to record a prompt that usually has not changed. Repeats are dropped locally before any backend call; unlaunched sessions spawn nothing.",
+        "verification": "verified",
+        "mitigation": "accepted",
+        "trackedAs": null
       }
     ],
     "decisionShape": {
@@ -281,7 +290,8 @@ export const HARNESS_DESCRIPTORS: HarnessDescriptor[] = [
         "allow_tool",
         "hookSpecificOutput",
         "permissionDecision",
-        "permission"
+        "permission",
+        "overwrite"
       ]
     }
   },
@@ -290,12 +300,12 @@ export const HARNESS_DESCRIPTORS: HarnessDescriptor[] = [
     "codec": "claude",
     "integrationShape": "callback",
     "capabilityTier": 1,
-    "descriptorDigest": "0f708197c1306226e137a332532fabbc68c41023ba0bd46614468d9fef38a14e",
+    "descriptorDigest": "ea275756dcff0c1ed16b366f8bcfad9a185545d2c7fd55ab7afc6933bbad2552",
     "descriptorSchemaVersion": 1,
     "harness": {
       "name": "Claude Code",
-      "verifiedVersion": "2.1.227",
-      "versionRange": ">=2.1.0",
+      "verifiedVersion": "2.1.329",
+      "versionRange": ">=2.1.328",
       "versionScheme": "semver"
     },
     "binding": {
@@ -436,18 +446,18 @@ export const HARNESS_DESCRIPTORS: HarnessDescriptor[] = [
         "trackedAs": null
       },
       "terminal.statusSurface": {
-        "status": "not-implemented",
-        "native": "statusMessage",
+        "status": "supported",
+        "native": "statusLine",
         "reason": null,
         "evidenceRef": null,
-        "trackedAs": "agent-session-phase-2"
+        "trackedAs": null
       }
     },
     "hazards": [
       {
         "id": "shipped-permission-hook-inert",
         "severity": "high",
-        "summary": "The installed PermissionRequest hook calls a `ovld protocol permission-request` subcommand that does not exist, backgrounds the call with `) & disown`, and is gated on a MISSION_ID environment variable launched sessions do not always set. It records nothing and, being backgrounded with stdout discarded, is structurally incapable of returning a decision.",
+        "summary": "Retired with the shell scripts (coo:1323). The old plugin shipped an unregistered `scripts/permission-hook.sh` that called a nonexistent `ovld protocol permission-request` and backgrounded the call, so it could never return a decision. The script is deleted. The decision path is now a PermissionRequest `mcp_tool` hook that `ovld launch` registers only for channel-bound sessions, with `onFailure: \"block\"`.",
         "verification": "verified",
         "mitigation": "implemented",
         "trackedAs": null
@@ -455,26 +465,58 @@ export const HARNESS_DESCRIPTORS: HarnessDescriptor[] = [
       {
         "id": "shipped-stop-hook-inert",
         "severity": "medium",
-        "summary": "The installed Stop hook calls `ovld protocol hook-event --hook-type Stop`, which the CLI rejects, and then parses a `deliveryStatus` field nothing produces. Confirmed again at 2.1.221 from a live agent-pod session: every entry in ~/.ovld/logs/stop-hook.log takes the `no launch mission id` branch and returns before the delivery check, because the hook gates on a `MISSION_ID` environment variable the pod does not set. The PostToolUse path is independently scoped by explicit mission and objective launch environment; the Stop hook should use an equally explicit binding.",
+        "summary": "Fixed in coo:1323. The old Stop script called `ovld protocol hook-event --hook-type Stop`, which the CLI rejected, and gated on a `MISSION_ID` the pod did not set. The Stop hook is now an `mcp_tool` call: it binds through the launch environment or the native-session index that `attach` writes, `hook-event` accepts Stop and returns delivery status, and the reminder blocks at most once per session and objective. Failures fail open.",
+        "verification": "verified",
+        "mitigation": "implemented",
+        "trackedAs": null
+      },
+      {
+        "id": "hook-tool-unlisted-call",
+        "severity": "medium",
+        "summary": "The hooks server omits its hook tools from `tools/list` so the model never sees them, and Claude Code still calls them from `mcp_tool` hooks (verified on 2.1.329). That behavior is undocumented. A release that validated hook tools against `tools/list` would break every Overlord hook, and in channel-bound launches would deny every permission request. Doctor warns when Claude Code is newer than `verifiedVersion`; the probe must be re-run on each `verifiedVersion` bump.",
         "verification": "verified",
         "mitigation": "required",
-        "trackedAs": "agent-session-phase-3"
+        "trackedAs": "coo:1323.2ewy"
+      },
+      {
+        "id": "hook-server-no-fallback",
+        "severity": "medium",
+        "summary": "Claude Code has no fallback from a failed `mcp_tool` hook to another hook, so when the hooks server is not connected (no `node` on PATH, server disabled in `/mcp`, plugin not installed) follow-up capture, file capture and the Stop reminder silently stop while the session keeps working. Mitigated: these hooks fail open (fixtures/probe-fail-open.json), `ovld agent-setup claude` and `ovld doctor` report a missing or disconnected server with the fix, and the overlord-mission skill tells the agent to use the `ovld protocol` CLI.",
+        "verification": "verified",
+        "mitigation": "implemented",
+        "trackedAs": null
       },
       {
         "id": "fork-and-subagent-identity-unknown",
         "severity": "medium",
-        "summary": "Whether an in-process fork mints a new native session id, and whether subagent tool calls carry the parent's id, are both unverified. Guessing either routes a session's requests to the wrong mission. Partially narrowed at 2.1.221: the binary carries distinct `SubagentStart` and `SubagentStop` hook events, converts an agent-frontmatter `Stop` registration into `SubagentStop` (\"subagents trigger SubagentStop\"), and records `parent_session_id` and `agent_type` as separate fields from `session_id`. That the harness distinguishes the two identities is now established; which value lands in a subagent hook payload's `session_id` is still not, and that is the part binding depends on. Read it from a real subagent payload before changing any binding code.",
-        "verification": "unverified",
-        "mitigation": "required",
-        "trackedAs": "taxonomy-7.6"
+        "summary": "Resolved (coo:1323.n938). Recorded on 2.1.329: every hook fired inside a subagent, including a `fork` subagent, carries the parent's `session_id` and adds `agent_id` and `agent_type`; `${agent_id}`/`${agent_type}` template the same values into an `mcp_tool` input and `\"\"` in the main agent. PreCompact, PostCompact and the post-compaction SessionStart keep the `session_id` (main-thread compaction carries no `agent_id`). Binding by `session_id` therefore routes subagent and fork work to the parent's binding, which is correct because they work on the parent's objective, and a binding survives compaction. No Overlord hook needs `agent_id` today; it stays available if a decision card ever has to name the subagent.",
+        "verification": "verified",
+        "mitigation": "implemented",
+        "trackedAs": null
       },
       {
         "id": "subagent-stop-unregistered",
         "severity": "medium",
-        "summary": "The adapter registers `Stop` and no subagent-lifecycle event. Claude Code 2.1.221 fires `SubagentStop` — not `Stop` — when a subagent finishes, and subagents now run in the background past the parent's turn boundary. Version 2.1.224 also removed the 200-subagent-per-session spawn cap, increasing the frequency of this gap, so the shipped Stop registration is guaranteed not to run for work a subagent completes after the parent stopped. Nothing is lost today because that registration is already inert (see `shipped-stop-hook-inert`), which is exactly why the fix is to repair the Stop path first and only then decide whether the repaired body should also ride `SubagentStop`. Registering the current inert script on a second event would add a spawn per subagent completion and buy nothing.",
+        "summary": "Resolved (coo:1323.n938); `SubagentStop` stays unregistered on purpose. Recorded on 2.1.329: the main `Stop` fires while background subagents still run and lists them in `background_tasks`; each subagent's end fires `SubagentStop` (parent `session_id` plus `agent_id`); Claude then wakes the main agent with a harness-written `<task-notification>` prompt through UserPromptSubmit, and that turn ends in another main `Stop` with `background_tasks` empty. So the main Stop does run after subagent work completes. A subagent's stop is not the end of the objective, so a reminder or an inbox claim there would be wrong. The Stop hook templates `background_tasks`; while one is running, the delivery reminder and the headless inbox wait are deferred to the later Stop, and `hook-event` never records a `<task-notification>` prompt as a user follow-up.",
         "verification": "verified",
-        "mitigation": "required",
-        "trackedAs": "coo:585"
+        "mitigation": "implemented",
+        "trackedAs": null
+      },
+      {
+        "id": "nested-session-inherits-launch-env",
+        "severity": "medium",
+        "summary": "A `claude -p` started from a Bash tool of a launched session gets its own session id (2.1.317+, and on 2.1.329 even with `CLAUDE_CODE_DISABLE_NESTED_SESSION_ID=1`), so it never matches the native-session index. But it inherits the launch environment (mission, objective, session channel), which bound it to the parent's mission: its prompt would be recorded as the user's follow-up, its Stop could claim the parent's pending instruction or be told to deliver the parent's objective. Mitigated: Claude Code exports `CLAUDE_PID` to tool processes but not to MCP servers, so a hooks server that sees a `CLAUDE_PID` other than its own parent belongs to a nested session. Its follow-up, Stop and decision hooks then ignore the launch binding (it may still bind through the index under its own id if its agent attaches); file capture keeps the launch objective because the nested process edits the same checkout for the same objective. Limit: a session launched by an `ovld` process that itself runs inside a Claude Code tool inherits that outer `CLAUDE_PID` and is treated as nested.",
+        "verification": "verified",
+        "mitigation": "implemented",
+        "trackedAs": null
+      },
+      {
+        "id": "headless-stop-hold",
+        "severity": "low",
+        "summary": "A headless final Stop holds the inbox open for up to 60 s. Before 2.1.323 a host could take a hook that long for a hung turn. Since 2.1.323 `claude -p` and SDK sessions emit a progress heartbeat every 30 s while a hook runs (recorded on 2.1.329: `tool_progress` with `heartbeat: true` at 30 s during a 45 s Stop hook). Interactive sessions never wait, the wait is skipped while background subagents run, and the Stop hook timeout (100 s) exceeds the wait plus the inbox (16 s) and reminder (10 s) budgets.",
+        "verification": "verified",
+        "mitigation": "implemented",
+        "trackedAs": null
       }
     ],
     "decisionShape": {
@@ -492,11 +534,11 @@ export const HARNESS_DESCRIPTORS: HarnessDescriptor[] = [
     "codec": "codex",
     "integrationShape": "callback",
     "capabilityTier": 1,
-    "descriptorDigest": "b3120edbb3f8a017801de0b9b085c42f05f1d7c335246e224cd283e874ddc542",
+    "descriptorDigest": "689c59aa63597d90cf3ef64ac11fd339f543c9f381646f98e6c417c5c31bbc38",
     "descriptorSchemaVersion": 1,
     "harness": {
       "name": "Codex CLI",
-      "verifiedVersion": "0.147.0",
+      "verifiedVersion": "0.171.0",
       "versionRange": ">=0.124.0",
       "versionScheme": "semver"
     },
@@ -638,18 +680,42 @@ export const HARNESS_DESCRIPTORS: HarnessDescriptor[] = [
         "trackedAs": null
       },
       "terminal.statusSurface": {
-        "status": "unverified",
-        "native": null,
+        "status": "supported",
+        "native": "statusline MCP provider (tui_extensions_statusline)",
         "reason": null,
         "evidenceRef": null,
-        "trackedAs": "taxonomy-7.9"
+        "trackedAs": null
       }
     },
     "hazards": [
       {
         "id": "two-integration-surfaces-could-disagree",
         "severity": "high",
-        "summary": "Hooks and `codex app-server` can both answer a permission. A session driven by both would race in a way no revision CAS can settle, so exactly one surface must be chosen and documented before either is built.",
+        "summary": "Hooks and `codex app-server` can both answer a permission. A session driven by both would race in a way no revision CAS can settle, so exactly one surface must be chosen and documented before either is built. Chosen per session: user-started Codex sessions use this hooks adapter, which claims no `decide.*`; Overlord-driven sessions use the separate `codex-app-server` adapter, whose server environment silences these hooks (`plugin-hooks-fire-inside-app-server-threads`).",
+        "verification": "verified",
+        "mitigation": "implemented",
+        "trackedAs": null
+      },
+      {
+        "id": "plugin-hooks-fire-inside-app-server-threads",
+        "severity": "high",
+        "summary": "The installed Overlord Codex plugin's hooks run inside `codex app-server` threads too (spike coo:1325.gqfy: hook/started for userPromptSubmit and postToolUse inside app-server turns). When the `codex-app-server` adapter drives a session, a hook that still reported would capture every edit twice and could attribute a thread to whatever objective started the server. The supervisor starts the server with an allowlisted environment (no objective, mission or channel scope) plus OVERLORD_CONTROL_PLANE_SURFACE, and every Overlord callback exits before any work when that marker is set. In app-server mode only the adapter observes and answers, which also keeps `two-integration-surfaces-could-disagree` closed by construction.",
+        "verification": "verified",
+        "mitigation": "implemented",
+        "trackedAs": null
+      },
+      {
+        "id": "prompt-hook-inside-app-server-threads",
+        "severity": "medium",
+        "summary": "The plugin's UserPromptSubmit callback writes the native-session alias and spawns `ovld protocol hook-event`; inside an Overlord-driven app server it must do neither, for the same reason as the PostToolUse callback.",
+        "verification": "verified",
+        "mitigation": "implemented",
+        "trackedAs": null
+      },
+      {
+        "id": "subagent-hooks-share-the-root-session",
+        "severity": "medium",
+        "summary": "Codex runs the plugin's hooks inside spawned subagents too. In 0.170 every thread of a session tree shares the root's agent-control identity, so a subagent's hook payload carries the root session's `session_id` plus `agent_id` (the child thread) and `agent_type` (its role) — codex-rs `core/src/hook_runtime.rs` and `core/src/agent/control.rs`; the 0.168 `InheritedSessionId` extension does the same for host-started child threads. The codec records `agent_id` as `subagentId`, so a user-started session's subagent work correlates with the parent session instead of appearing as a separate one. Not covered: a 0.170 fork (`/fork`) gets a new session id and correlates as its own session; release notes say 0.171 makes forks inherit the root session id, which has not been run here. SubagentStart and SubagentStop hooks exist but are not registered; the parent's tool calls already show the spawn.",
         "verification": "verified",
         "mitigation": "implemented",
         "trackedAs": null
@@ -657,7 +723,7 @@ export const HARNESS_DESCRIPTORS: HarnessDescriptor[] = [
       {
         "id": "prompt-and-agent-hook-handlers-inert",
         "severity": "low",
-        "summary": "Codex 0.146.0 accepts three hook handler types — `command`, `prompt`, and `agent` — but only `command` runs. Hook discovery parses `prompt` and `agent` and then skips them with a \"not supported yet\" warning, so a manifest that used either would install cleanly, list in `hooks`, and never execute. The connector must keep emitting `command` handlers only, and must not read the presence of these variants in the schema as availability. `command` is a shell command line run through `$SHELL -lc` (`/bin/sh` when SHELL is unset) — it is not restricted to Bash and not restricted to shell scripting, since the command may invoke any interpreter.",
+        "summary": "Codex parses `prompt` and `agent` hook handlers and then skips them with a \"not supported yet\" warning (re-checked live on 0.170.0 and in the 0.171.0 hook discovery source), so a manifest that used either would install cleanly, list in `hooks`, and never execute. `command` runs, and since 0.148 an `mcp_tool` handler can call an MCP tool; the connector uses neither `mcp_tool` nor the inert types. The connector must keep emitting `command` handlers only, and must not read the presence of these variants in the schema as availability. `command` is a shell command line run through `$SHELL -lc` (`/bin/sh` when SHELL is unset) — it is not restricted to Bash and not restricted to shell scripting, since the command may invoke any interpreter.",
         "verification": "verified",
         "mitigation": "accepted",
         "trackedAs": null
@@ -665,10 +731,18 @@ export const HARNESS_DESCRIPTORS: HarnessDescriptor[] = [
       {
         "id": "hooks-version-and-platform-gate",
         "severity": "medium",
-        "summary": "Hooks were experimental behind `features.codex_hooks` before v0.124. The connector requires Codex >=0.124; installations outside that range must be treated as unavailable.",
+        "summary": "Hooks were experimental behind `features.codex_hooks` before v0.124. The connector requires Codex >=0.124; installations outside that range must be treated as unavailable. Re-checked at 0.171.0: `hooks` is a stable feature and the hook schemas the connector reads are unchanged, but nothing yet enforces the lower bound at install or launch.",
         "verification": "verified",
         "mitigation": "required",
         "trackedAs": "agent-session-phase-4"
+      },
+      {
+        "id": "plugin-hook-trust-pinned-to-bundle",
+        "severity": "high",
+        "summary": "Codex runs a plugin hook only after the user approves it in `/hooks`, and from 0.164 the approval (`trusted_content_hash` in config.toml) pins a fingerprint of the whole installed plugin bundle. A fresh `ovld agent-setup codex`, and every connector update after it (each one bumps plugin.json), leaves the Overlord hooks unapproved. The interactive TUI asks for review; `codex exec` skips them silently, so prompt capture and change capture stop without an error. `ovld agent-setup codex` and `ovld doctor` reproduce the fingerprint and name the hooks that will not run. Overlord never writes hook trust: approving a hook stays the user's decision, and `--dangerously-bypass-hook-trust` is not used.",
+        "verification": "verified",
+        "mitigation": "accepted",
+        "trackedAs": null
       }
     ],
     "decisionShape": {
@@ -683,11 +757,301 @@ export const HARNESS_DESCRIPTORS: HarnessDescriptor[] = [
     }
   },
   {
+    "adapter": "codex-app-server",
+    "codec": "codex-app-server",
+    "integrationShape": "controlPlane",
+    "capabilityTier": 3,
+    "descriptorDigest": "62fe3dc93ee7f64f6fb52d48e88e10679c9a32a92abc6b16ace29571284fcbf2",
+    "descriptorSchemaVersion": 1,
+    "harness": {
+      "name": "Codex app server",
+      "versionScheme": "semver",
+      "verifiedVersion": "0.171.0",
+      "versionRange": ">=0.170.0"
+    },
+    "binding": {
+      "source": "env",
+      "field": "OVERLORD_SESSION_CHANNEL_ID",
+      "fallbackField": null,
+      "status": "supported"
+    },
+    "decisionHold": {
+      "status": "supported",
+      "timeoutField": null,
+      "timeoutUnit": null,
+      "defaultTimeoutSeconds": null,
+      "maxTimeoutSeconds": null
+    },
+    "mutationHooks": {
+      "classification": "paired",
+      "pathEvidenceSource": "declared_edit",
+      "pathEvidenceQuality": "direct",
+      "shellEvidence": "unavailable",
+      "pathlessEvidence": "unavailable",
+      "fixture": "fixtures/mutation-window-evidence.json",
+      "reason": null,
+      "evidenceRef": null,
+      "notes": "`item/started` carries the fileChange item (paths and diff) before the patch approval and before anything is written; `item/completed` carries the same item id and path with the final status. The diff is used only for the approval card's line counts and never leaves the machine."
+    },
+    "capabilities": {
+      "observe.prompt": {
+        "status": "supported",
+        "native": "item/completed:userMessage",
+        "reason": null,
+        "evidenceRef": null,
+        "trackedAs": null
+      },
+      "observe.toolCall": {
+        "status": "supported",
+        "native": "item/started:commandExecution",
+        "reason": null,
+        "evidenceRef": null,
+        "trackedAs": null
+      },
+      "observe.toolResult": {
+        "status": "supported",
+        "native": "item/completed:commandExecution",
+        "reason": null,
+        "evidenceRef": null,
+        "trackedAs": null
+      },
+      "observe.fileEdit": {
+        "status": "supported",
+        "native": "item/completed:fileChange",
+        "reason": null,
+        "evidenceRef": null,
+        "trackedAs": null
+      },
+      "observe.sessionLifecycle": {
+        "status": "supported",
+        "native": "thread/started",
+        "reason": null,
+        "evidenceRef": null,
+        "trackedAs": null
+      },
+      "decide.shell": {
+        "status": "supported",
+        "native": "item/commandExecution/requestApproval",
+        "reason": null,
+        "evidenceRef": null,
+        "trackedAs": null
+      },
+      "decide.mcp": {
+        "status": "unverified",
+        "native": "mcpServer/elicitation/request",
+        "reason": null,
+        "evidenceRef": null,
+        "trackedAs": "coo-1325-codex-mcp-elicitation-frames"
+      },
+      "decide.fileWrite": {
+        "status": "supported",
+        "native": "item/fileChange/requestApproval",
+        "reason": null,
+        "evidenceRef": null,
+        "trackedAs": null
+      },
+      "decide.anyTool": {
+        "status": "unsupported",
+        "native": "approvalPolicy",
+        "reason": "Codex gates by sandbox and approval policy, not per tool: web search, dynamic tools and in-sandbox reads are never routed to a client for approval, so there is no request to answer for an arbitrary tool.",
+        "evidenceRef": "planning/feature-plans/codex-app-server-control-plane.md#33-approvals-and-questions",
+        "trackedAs": null
+      },
+      "decide.universal": {
+        "status": "unsupported",
+        "native": "approvalPolicy",
+        "reason": "The app server has no pre-tool callback that every tool passes through; that exists only on the hooks surface, which does not run in this mode.",
+        "evidenceRef": "planning/feature-plans/codex-app-server-control-plane.md#54-capability-targets-per-matrix-row",
+        "trackedAs": null
+      },
+      "answer.structuredQuestion": {
+        "status": "unverified",
+        "native": "item/tool/requestUserInput",
+        "reason": null,
+        "evidenceRef": null,
+        "trackedAs": "coo-1325-codex-request-user-input-frames"
+      },
+      "answer.persistentAllow": {
+        "status": "not-implemented",
+        "native": "acceptForSession",
+        "reason": null,
+        "evidenceRef": null,
+        "trackedAs": "agent-session-phase-2"
+      },
+      "inject.midTurn": {
+        "status": "supported",
+        "native": "turn/steer",
+        "reason": null,
+        "evidenceRef": null,
+        "trackedAs": null
+      },
+      "inject.turnBoundary": {
+        "status": "supported",
+        "native": "turn/start",
+        "reason": null,
+        "evidenceRef": null,
+        "trackedAs": null
+      },
+      "inject.nextTurn": {
+        "status": "supported",
+        "native": "turn/start",
+        "reason": null,
+        "evidenceRef": null,
+        "trackedAs": null
+      },
+      "terminal.concurrentAnswer": {
+        "status": "supported",
+        "native": "serverRequest/resolved",
+        "reason": null,
+        "evidenceRef": null,
+        "trackedAs": null
+      },
+      "terminal.statusSurface": {
+        "status": "supported",
+        "native": "statusline MCP provider (tui_extensions_statusline)",
+        "reason": null,
+        "evidenceRef": null,
+        "trackedAs": null
+      }
+    },
+    "hazards": [
+      {
+        "id": "experimental-surface-drift",
+        "severity": "high",
+        "summary": "`codex app-server` and its WebSocket transport are labelled experimental, and 0.168–0.171 each changed app-server behavior. The adapter speaks only a pinned method list, refuses a server whose initialize userAgent reports a version below the verified range, ignores unknown notifications and refuses unknown server requests.",
+        "verification": "verified",
+        "mitigation": "implemented",
+        "trackedAs": null
+      },
+      {
+        "id": "auto-review-would-bypass-overlord",
+        "severity": "high",
+        "summary": "A user config with `approvals_reviewer = \"auto_review\"` makes a Codex subagent decide approvals the client never sees, and a thread started without an explicit reviewer inherits it (spike, LIVE). Every thread is started or resumed with `approvalsReviewer: \"user\"`.",
+        "verification": "verified",
+        "mitigation": "implemented",
+        "trackedAs": null
+      },
+      {
+        "id": "control-socket-owns-the-session",
+        "severity": "high",
+        "summary": "Anything that can connect to the app server can drive the agent. The server listens only on `unix://` in an owner-only `~/.ovld/cx/` (Codex keeps the real 0600 socket in its own 0700 directory, and the supervisor connects only after checking that socket and directory belong to this user and are not group- or world-writable), never on TCP and never on the user's shared daemon socket; the supervisor starts no thread until the server reports remote control `disabled` right after `initialize`, and stops if it later reports anything else. A same-user local process can still connect, exactly as the TUI does (see `same-user-agent-reaches-credentials`).",
+        "verification": "verified",
+        "mitigation": "implemented",
+        "trackedAs": null
+      },
+      {
+        "id": "server-env-carries-scope",
+        "severity": "high",
+        "summary": "Commands the agent runs inherit the app server's environment. The server is started with an allowlisted environment, so the user token, channel credentials and objective scope never reach it, and with OVERLORD_CONTROL_PLANE_SURFACE so the Codex plugin's own hooks stay silent inside it (see the codex adapter's `plugin-hooks-fire-inside-app-server-threads`).",
+        "verification": "verified",
+        "mitigation": "implemented",
+        "trackedAs": null
+      },
+      {
+        "id": "stop-leaves-turn-running",
+        "severity": "medium",
+        "summary": "Ending an Overlord session must not leave Codex working. When the channel stops honoring the credential, or the supervisor is signalled, it interrupts the running turn before closing the connection.",
+        "verification": "verified",
+        "mitigation": "implemented",
+        "trackedAs": null
+      },
+      {
+        "id": "launch-mints-no-channel",
+        "severity": "high",
+        "summary": "The adapter needs a credentialed session channel, and launch minted none since contract 76 (ADR 0065). A Codex launch in app-server mode now mints one through POST /api/objectives/{id}/session-channels, stages it in the owner-only cache and starts the supervisor; every other launch still mints none (ADR 0092).",
+        "verification": "verified",
+        "mitigation": "implemented",
+        "trackedAs": null
+      },
+      {
+        "id": "human-session-controls-closed",
+        "severity": "low",
+        "summary": "This adapter's approval, question and choice cards are answered from Overlord (delivery mode `control_plane`, ADR 0094); an approval only by the member who launched the session. Session inputs are still refused for every adapter (`POST /api/agent-session-inputs` answers 410), so a follow-up, steer or interrupt is typed in the attached TUI (`ovld agent-session attach`), not sent from web or mobile.",
+        "verification": "verified",
+        "mitigation": "required",
+        "trackedAs": "coo-1325-control-plane-human-controls"
+      },
+      {
+        "id": "question-answer-double-delivery",
+        "severity": "medium",
+        "summary": "A human answer to a question or choice request is delivered through Latch into the session's terminal (ADR 0065). For a codex-app-server session that would type the answer into an attached TUI as well as answering the JSON-RPC request. The resolve route now records an answer to a control-plane request without any Latch delivery, and the supervisor answers the JSON-RPC request from its waiter lease (ADR 0094).",
+        "verification": "verified",
+        "mitigation": "implemented",
+        "trackedAs": null
+      },
+      {
+        "id": "supervisor-killed-leaves-server",
+        "severity": "medium",
+        "summary": "The private server runs in its own process group so the supervisor can stop it, and it ignores SIGTERM while a turn runs (LIVE), so stop escalates to SIGKILL. A supervisor that is itself killed with SIGKILL would leave the server running its turn unsupervised, so a detached `sh` watchdog started with the server ends the server's group within about a second of the supervisor's pid disappearing. The next supervisor start and `ovld doctor` still reap any server left behind, after checking the pid belongs to a Codex app server.",
+        "verification": "verified",
+        "mitigation": "implemented",
+        "trackedAs": null
+      },
+      {
+        "id": "reasked-approval-inherits-answer",
+        "severity": "medium",
+        "summary": "Codex can ask twice about one item (a command that failed in the sandbox is asked again to run outside it, with the same item id), and the channel dedupes cards by native request id, returning the earlier card with its answer. The supervisor gives a later request for an already-settled item its own occurrence id (`<item>#2`), so an earlier allow is never applied to a new, possibly broader, approval; a replay of a still-open card keeps its id.",
+        "verification": "verified",
+        "mitigation": "implemented",
+        "trackedAs": null
+      },
+      {
+        "id": "same-user-agent-reaches-credentials",
+        "severity": "medium",
+        "summary": "Commands the agent runs execute as the person's own OS user, and Codex's workspace-write sandbox allows reading the whole filesystem. With network access (granted per command, or a sandbox that allows it) such a command could read the person's `ovld` login and the channel credential cache, or connect to this session's own socket, and answer the session's cards. The server's environment carries no credential and the channel credential cannot resolve a request, but the same-user boundary is the person's own account. Accepted and documented; a sandbox that denies reading `~/.ovld` is the stronger control where Codex supports it.",
+        "verification": "verified",
+        "mitigation": "accepted",
+        "trackedAs": null
+      },
+      {
+        "id": "child-threads-share-the-connection",
+        "severity": "high",
+        "summary": "The app server attaches every connection to every thread it creates (LIVE 0.170, and `try_attach_thread_listener` in the 0.170 source), so a subagent's notifications and its approval requests reach the Overlord connection with the child's thread id, and so do those of a thread another client started from scratch. The supervisor keeps the session's thread tree: a child announced by a tree thread's `subAgentActivity` or `spawnAgent` item, a thread whose `thread/read` lineage (`parentThreadId`, `forkedFromId`, or the root's inherited `sessionId`) points into the tree, or a fork reported by thread/started, is the session's work and is attributed to it; any other thread is looked up once and then ignored — no event, no capture, no card, and its approvals are left to its own client.",
+        "verification": "verified",
+        "mitigation": "implemented",
+        "trackedAs": null
+      },
+      {
+        "id": "notifications-missed-while-disconnected",
+        "severity": "medium",
+        "summary": "Notifications are not replayed, so whatever a thread or its subagents did while the supervisor's socket was down (server crash and respawn, dropped connection, a supervisor started on an existing thread) would be missing from the session feed and the change ledger. After every resume the supervisor pages `thread/turns/list` for each thread in the tree (children found by `thread/list {parentThreadId}`) and replays completed items through the live path. Event ids are content-derived and equal the live ones, and the change ledger appends a path once, so nothing already captured is duplicated.",
+        "verification": "verified",
+        "mitigation": "implemented",
+        "trackedAs": null
+      },
+      {
+        "id": "fork-history-repeats-source-turns",
+        "severity": "low",
+        "summary": "A fork's `thread/turns/list` begins with its source's turns, with the same turn and item ids (LIVE 0.170; 0.169 made paging work across fork segments). Importing them under the fork would credit the source's work to the fork. The import walks the tree root first and skips a turn it has already imported in the same pass. A fork is only known from its thread/started, so one made while Overlord was disconnected is not found by the import (`thread/list` has no fork filter); spawned subagents are.",
+        "verification": "verified",
+        "mitigation": "implemented",
+        "trackedAs": null
+      },
+      {
+        "id": "implicit-folder-trust",
+        "severity": "low",
+        "summary": "`thread/start` in an untrusted git checkout with a writable sandbox writes `trust_level = \"trusted\"` for that path into the user's ~/.codex/config.toml (LIVE). The supervisor records the entry its thread added and removes exactly that table when the session ends, only while it holds nothing but that line (ADR 0092; LIVE on 0.170 and 0.171). A symlinked config is edited at its target, so the link survives.",
+        "verification": "verified",
+        "mitigation": "implemented",
+        "trackedAs": null
+      }
+    ],
+    "decisionShape": {
+      "codec": "codex-app-server",
+      "neverSend": [
+        "hookSpecificOutput",
+        "permissionDecision",
+        "acceptForSession",
+        "acceptWithExecpolicyAmendment"
+      ]
+    }
+  },
+  {
     "adapter": "cursor",
     "codec": "cursor",
     "integrationShape": "callback",
     "capabilityTier": 1,
-    "descriptorDigest": "d468594240b637953358713e6412156d35b2b095d14fd1b2fc403496bcd6caf9",
+    "descriptorDigest": "55c24b2e53d557d9c07e593effc230fc2ec72f985168765b5f23f494b2fc7c0b",
     "descriptorSchemaVersion": 1,
     "harness": {
       "name": "Cursor Agent CLI",
@@ -844,10 +1208,10 @@ export const HARNESS_DESCRIPTORS: HarnessDescriptor[] = [
       {
         "id": "reads-claude-hook-config",
         "severity": "high",
-        "summary": "Cursor resolves hooks from Claude's own project-local, project, and user configuration in addition to its own. If plugin-provided hooks are expanded, Overlord's Claude hooks may fire inside Cursor sessions and emit Claude-shaped decisions into a Cursor-shaped contract — cross-connector misattribution with no code change on our side.",
-        "verification": "unverified",
-        "mitigation": "required",
-        "trackedAs": "taxonomy-7.1"
+        "summary": "Cursor loads hooks from Claude's project-local, project and user settings and imports installed, enabled Claude Code plugins' hooks/hooks.json (on by default in the IDE; it cannot be turned off in cursor-agent), so Overlord's Claude hooks could fire inside Cursor sessions with Cursor-shaped payloads. Verified from Cursor's third-party hooks docs and forum (t/166558). Mitigated in coo:1323: the Claude plugin now ships only fail-open `mcp_tool` hooks, and Cursor's importer copies only `command` hooks, so no Overlord script runs in Cursor. The fail-closed decision hook is registered per Claude launch and never lives in the plugin, and the plugin registers no PreToolUse. How Cursor treats an `mcp_tool` entry is undocumented and was not observed in a live Cursor run.",
+        "verification": "verified",
+        "mitigation": "implemented",
+        "trackedAs": null
       },
       {
         "id": "allowlist-precedence",
@@ -1271,7 +1635,7 @@ export const HARNESS_DESCRIPTORS: HarnessDescriptor[] = [
   }
 ];
 
-export const HARNESS_CATALOG_DIGEST = '4a4d783280e116b9f7ca59bf2bbd1e19f5cd60725d08ae6eb4e064087ba3d84d';
+export const HARNESS_CATALOG_DIGEST = 'd0d425ba03bbe499091d6963d6e53620d1d08d9f6c5c7f77b2324d18f18eceb2';
 
 export function findHarnessDescriptor(adapter: string): HarnessDescriptor | undefined {
   return HARNESS_DESCRIPTORS.find(entry => entry.adapter === adapter);

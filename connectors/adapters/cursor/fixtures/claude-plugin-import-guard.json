@@ -1,0 +1,17 @@
+{
+  "fixtureVersion": 1,
+  "kind": "source-guard",
+  "description": "Cursor imports installed Claude Code plugin hooks and copies only `command` hooks (Cursor docs, third-party hooks). The Overlord Claude plugin's hooks.json holds only fail-open mcp_tool hooks: no command hook, no shell script, no onFailure, and no PermissionRequest or PreToolUse. So nothing Cursor can import runs an Overlord script or carries a decision into a Cursor session.",
+  "path": "connectors/adapters/claude/hooks/hooks.json",
+  "assert": {
+    "mustContain": ["\"type\": \"mcp_tool\""],
+    "mustNotContain": [
+      "\"type\": \"command\"",
+      "\"command\":",
+      ".sh",
+      "\"onFailure\"",
+      "\"PermissionRequest\"",
+      "\"PreToolUse\""
+    ]
+  }
+}

@@ -1,5 +1,6 @@
 import {
   type AgentLaunchFlagDto,
+  normalizeAgentHarnessMode,
   normalizeAgentLaunchFlags,
   type WorkspaceExecutionTargetDto
 } from '@overlord/contract';
@@ -39,6 +40,8 @@ export const PROJECT_EXECUTION_TARGET_PREFERENCE_KEY = 'selectedExecutionTargetI
 export type AgentLaunchConfig = {
   preCommand: string;
   flags: AgentLaunchFlagDto[];
+  /** Per-user, per-target harness mode (ADR 0092). Absent means `hooks`. */
+  harnessMode?: 'hooks' | 'appServer';
 };
 
 export type LaunchExecutionTargetResolution = {
@@ -527,10 +530,12 @@ export function parseAgentConfigs(json: string): Record<string, AgentLaunchConfi
   const configs: Record<string, AgentLaunchConfig> = {};
   for (const [key, value] of Object.entries(parsed)) {
     if (!value || typeof value !== 'object') continue;
-    const config = value as { preCommand?: unknown; flags?: unknown };
+    const config = value as { preCommand?: unknown; flags?: unknown; harnessMode?: unknown };
+    const harnessMode = normalizeAgentHarnessMode(config.harnessMode);
     configs[key] = {
       preCommand: typeof config.preCommand === 'string' ? config.preCommand : '',
-      flags: normalizeAgentLaunchFlags(config.flags)
+      flags: normalizeAgentLaunchFlags(config.flags),
+      ...(harnessMode ? { harnessMode } : {})
     };
   }
   return configs;

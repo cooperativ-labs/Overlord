@@ -41,7 +41,19 @@ const AGENT_SESSION_FLAGS = [
   '--port',
   '--confirm',
   '--lease-id',
-  '--wait-ms'
+  '--wait-ms',
+  // `sidecar --agent codex-app-server`
+  '--socket',
+  '--thread-id',
+  '--prompt-file',
+  '--working-directory',
+  '--model',
+  '--effort',
+  '--approval-policy',
+  '--sandbox',
+  '--codex-bin',
+  // `attach`
+  '--channel-id'
 ] as const;
 
 /**
@@ -58,12 +70,22 @@ export const COMMAND_FLAGS: Record<string, readonly string[]> = {
   init: [],
   doctor: [],
   setup: [],
-  'agent-setup': ['--dry-run', '--home', '--export'],
+  'agent-setup': ['--dry-run', '--home', '--export', '--status-line'],
   config: ['--path', '--url'],
   auth: ['--token', '--organization-id'],
   'user-token': ['--label', '--expires-in', '--no-expiry', '--scope', '--project', '--id'],
   prune: [],
   'agent-session': AGENT_SESSION_FLAGS,
+  models: ['--sync', '--provider', '--workspace-id'],
+  'status-line': [
+    '--agent',
+    '--payload-file',
+    '--native-session-id',
+    '--ui-tree',
+    '--refresh',
+    '--mission-id',
+    '--objective-id'
+  ],
   'create-project': ['--name', '--directory', '--no-directory'],
   'org-setup': [
     '--org-name',

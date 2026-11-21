@@ -131,3 +131,14 @@ export function formatOvldLaunchCommand({
   }
   return parts.join(' ');
 }
+
+/** The harness modes an agent launch config may select (ADR 0092). */
+export const AGENT_HARNESS_MODES = ['hooks', 'appServer'] as const;
+
+/**
+ * Coerce a stored harness mode. Anything unknown is `undefined`, which means `hooks`: an
+ * experimental mode is never selected by a malformed or future value.
+ */
+export function normalizeAgentHarnessMode(input: unknown): 'hooks' | 'appServer' | undefined {
+  return input === 'appServer' || input === 'hooks' ? input : undefined;
+}

@@ -94,3 +94,28 @@ export async function fetchLaunchSettings<T>({
   const resolved = await resolveLaunchSettingsWorkspaceId({ backend, workspaceId });
   return backend.get<T>(launchSettingsPath(resolved));
 }
+
+/**
+ * The harness mode the acting user chose for `agent` on this machine (Settings → Terminal & IDE,
+ * ADR 0092), or `null`. Never throws: a settings read that fails leaves the default (`hooks`),
+ * because an experimental mode must never be entered by accident.
+ */
+export async function fetchAgentHarnessMode({
+  backend,
+  workspaceId,
+  agent
+}: {
+  backend: BackendClient;
+  workspaceId?: string | null;
+  agent: string;
+}): Promise<string | null> {
+  try {
+    const settings = await fetchLaunchSettings<{
+      agentConfigs?: Record<string, { harnessMode?: unknown } | undefined>;
+    }>({ backend, workspaceId });
+    const mode = settings?.agentConfigs?.[agent]?.harnessMode;
+    return typeof mode === 'string' ? mode : null;
+  } catch {
+    return null;
+  }
+}

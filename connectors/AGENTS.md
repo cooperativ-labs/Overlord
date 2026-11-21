@@ -108,9 +108,11 @@ read, search, and fetch callbacks append no evidence but still record callback o
 Patch-text extraction reduces `*** Add|Update|Delete File:` and `*** Move to:` headers, so a
 rename keeps both endpoints. Every hook
 registration must be backed by a `script-io` fixture, and every mutation window claim must be
-backed by a `mutation-window` fixture. Claude, Codex, and Cursor render this callback from
+backed by a `mutation-window` fixture. Codex, Cursor and Antigravity render this callback from
 `connectors/core/scripts/capture-change-hook.sh`; their adapter directories own only the native
-managed path and registration, not copies of the implementation.
+managed path and registration, not copies of the implementation. Claude registers an `mcp_tool`
+hook instead, served by the shim's `--hooks` mode, which spawns the same `capture-change`; its
+fixtures run that shim (`script-io` with `args` and `stdinMessages`).
 
 ### The event codec
 

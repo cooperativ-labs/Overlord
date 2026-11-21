@@ -6,6 +6,13 @@
 # Every capability Claude Code *can* do but Overlord has not built yet is `not-implemented`
 # with a tracker, never `supported`. Phase 1 flipped the `observe.*` group to `supported` by
 # adding executable fixtures that run the shipped codec, not by editing this file.
+#
+# Hook transport (coo:1323): every Overlord Claude hook is an `mcp_tool` hook that calls the
+# plugin-bundled local server `plugin:overlord:overlord-hooks` (the rendered connector shim in
+# `--hooks` mode). Each hook tool spawns the same `ovld` command the CLI fallback uses. The
+# plugin's `hooks/hooks.json` holds UserPromptSubmit, PostToolUse and Stop, all fail-open; the
+# fail-closed PermissionRequest hook is registered per launch by `ovld launch`
+# (cli/src/claude-decision-hook.ts). No shell hook script ships.
 schemaVersion: 1
 adapter: claude
 codec: claude
@@ -14,8 +21,11 @@ decisionCodecSpec: codec/claude.decision-codec.yaml
 
 harness:
   name: Claude Code
-  verifiedVersion: '2.1.227'
-  versionRange: '>=2.1.0'
+  # Re-verified on 2.1.329 (coo:1323.2ewy): every fixture passes and the recorded hook inputs
+  # (fixtures/native-payload-shapes.json) carry every field the codecs and hook templates read.
+  verifiedVersion: '2.1.329'
+  # 2.1.328 added `onFailure: "block"` for `mcp_tool` hooks, which the decision path needs.
+  versionRange: '>=2.1.328'
   versionScheme: semver
 
 integrationShape: callback
@@ -32,6 +42,10 @@ binding:
     credential, never from cwd and never from an unverified native id. `CLAUDE_CODE_SESSION_ID`
     remains available in tool subprocesses and is used by `attach`, but the payload field is the
     one the push path depends on because it is present on the path that actually needs it.
+    The `mcp_tool` hooks template it into the tool input as `${session_id}`. Recorded on
+    2.1.329 (fixtures/subagent-identity.json): hooks inside a subagent or fork carry the
+    parent's `session_id` plus `agent_id`/`agent_type`, so their work binds to the parent's
+    mission; compaction keeps the `session_id`; a nested `claude -p` gets its own id.
 
 decisionHold:
   status: supported
@@ -40,9 +54,10 @@ decisionHold:
   maxTimeoutSeconds: null
   fixture: fixtures/permission-request.json
   notes: >-
-    Per-command `timeout` in seconds with no documented ceiling. Omitting `decision` from a
-    PermissionRequest response falls through to the native prompt, which is the required
-    fail-toward-the-harness behavior.
+    The hook's `timeout` (seconds, default 600 for mcp_tool) has no documented ceiling. Claude
+    sends no timeout in the payload, so the launch-registered decision hook passes
+    `hookTimeoutSeconds: 300` as a literal input and the tool answers `{}` 5 s before it.
+    Omitting `decision` from a PermissionRequest answer falls through to the native prompt.
 
 mutationHooks:
   classification: post-only
@@ -58,9 +73,13 @@ capabilities:
   observe.prompt:
     status: supported
     native: UserPromptSubmit
-    fixtures: [fixtures/normalize-user-prompt-submit.json]
+    fixtures:
+      - fixtures/normalize-user-prompt-submit.json
+      - fixtures/native-payload-shapes.json
     notes: >-
-      The protocol follow-up hook posts `user_follow_up` mission events. There is no separate
+      The UserPromptSubmit `mcp_tool` hook calls `overlord_hook_user_prompt_submit`, which runs
+      `ovld protocol hook-event --hook-type UserPromptSubmit` and posts `user_follow_up` mission
+      events. It fails open (fixtures/hooks-fail-open-registration.json). There is no separate
       mechanical agent-session event stream.
   observe.toolCall:
     status: not-implemented
@@ -86,9 +105,12 @@ capabilities:
       - fixtures/normalize-post-tool-use-notebook.json
       - fixtures/post-tool-use-parity.json
       - fixtures/post-tool-use-capture.json
+      - fixtures/hook-capture-fail-open.json
+      - fixtures/native-payload-shapes.json
     notes: >-
-      The shipped PostToolUse callback forwards its native payload to local `capture-change` only
-      when `OVERLORD_OBJECTIVE_ID` resolves an exact active-session binding. A directly named
+      The PostToolUse `mcp_tool` hook calls `overlord_hook_post_tool_use`, which forwards the
+      rebuilt native payload to local `capture-change` only when `OVERLORD_OBJECTIVE_ID`
+      resolves an exact active-session binding, and always answers `{}` (fails open). A directly named
       Write/Edit path normalized by the Claude codec as `file.edited` records non-exclusive
       `declared_edit`/`direct` evidence. Codec-normalized read, search, and fetch callbacks are
       silent no-ops; mutation-capable callbacks without a normalized edit path, plus shell,
@@ -120,7 +142,12 @@ capabilities:
     native: PermissionRequest
     trackedAs: latch-engine
     notes: >-
-      The native Claude prompt owns approvals; Overlord exposes no remote decision control.
+      The native Claude prompt owns approvals; Overlord exposes no remote decision control yet.
+      The transport exists: `ovld launch` registers a PermissionRequest `mcp_tool` hook with
+      `onFailure: "block"` for channel-bound launches only (fixtures/decision-hook-registration.json).
+      A failure to reach the hooks server denies (fixtures/probe-decision-fail-closed.json); a
+      CLI or backend failure answers no decision and keeps the native prompt
+      (fixtures/hook-decision-no-approval-on-failure.json).
   answer.structuredQuestion:
     status: unverified
     native: Elicitation
@@ -147,8 +174,13 @@ capabilities:
     native: Stop
     trackedAs: latch-engine
     notes: >-
-      Turn-boundary injection moved off Overlord connectors. The protocol Stop hook still
-      reminds the agent to deliver when needed.
+      Turn-boundary injection moved off Overlord connectors. The Stop `mcp_tool` hook still
+      checks the channel inbox and reminds the agent to deliver when needed, at most once per
+      session and objective. It fails open (fixtures/hook-stop-fail-open.json). At a final
+      Stop (no running `background_tasks`) in a headless session (`CLAUDE_CODE_ENTRYPOINT`
+      `sdk-*`) the inbox step polls for up to 60 s so an instruction sent just after the run
+      finishes still reaches it; interactive sessions claim once and never wait. The plugin's
+      Stop hook timeout is 100 s (hazard `headless-stop-hold`).
   inject.nextTurn:
     status: not-implemented
     native: Stop
@@ -163,71 +195,133 @@ capabilities:
       way to answer remotely and the reason the terminal cannot participate.
     evidenceRef: connector-harness-taxonomy.md#12-the-axis-that-actually-matters
   terminal.statusSurface:
-    status: not-implemented
-    native: statusMessage
-    trackedAs: agent-session-phase-2
+    status: supported
+    native: statusLine
+    fixtures:
+      - fixtures/status-line-payload.json
+      - fixtures/status-line-opt-in.json
+      - fixtures/status-line-side-effect-free.json
     notes: >-
-      `statusMessage` is static install-time configuration with no per-request interpolation
-      and no session-binding predicate, so it renders in unbound sessions too. It must be
-      worded as an option, never as an instruction.
+      Claude Code's `statusLine` command runs `ovld status-line --agent claude --payload-file -`,
+      which shows the bound mission and objective (display ids and titles) and whether the
+      session is awaiting an answer or approval, blocked on a question, or delivered. The
+      binding comes from the native-session index under the payload `session_id`, else the
+      launch environment; an unbound session prints nothing and makes no network call. The
+      command answers from an owner-only local snapshot and refreshes a stale one in a detached,
+      lock-guarded process. A plugin cannot ship a status line, so `ovld agent-setup claude
+      --status-line` (or a yes at its prompt) adds it to the user's settings and never replaces an
+      existing one. Verified live on 2.1.329. The hook `statusMessage` field is unrelated: it is
+      static spinner text with no session-binding predicate, and Overlord does not use it.
 
 hazards:
   - id: shipped-permission-hook-inert
     severity: high
     summary: >-
-      The installed PermissionRequest hook calls a `ovld protocol permission-request`
-      subcommand that does not exist, backgrounds the call with `) & disown`, and is gated on
-      a MISSION_ID environment variable launched sessions do not always set. It records
-      nothing and, being backgrounded with stdout discarded, is structurally incapable of
-      returning a decision.
+      Retired with the shell scripts (coo:1323). The old plugin shipped an unregistered
+      `scripts/permission-hook.sh` that called a nonexistent `ovld protocol permission-request`
+      and backgrounded the call, so it could never return a decision. The script is deleted.
+      The decision path is now a PermissionRequest `mcp_tool` hook that `ovld launch` registers
+      only for channel-bound sessions, with `onFailure: "block"`.
     verification: verified
     mitigation: implemented
-    fixture: fixtures/permission-request.json
+    fixture: fixtures/decision-hook-registration.json
   - id: shipped-stop-hook-inert
     severity: medium
     summary: >-
-      The installed Stop hook calls `ovld protocol hook-event --hook-type Stop`, which the CLI
-      rejects, and then parses a `deliveryStatus` field nothing produces. Confirmed again at
-      2.1.221 from a live agent-pod session: every entry
-      in ~/.ovld/logs/stop-hook.log takes the `no launch mission id` branch and returns before
-      the delivery check, because the hook gates on a `MISSION_ID` environment variable the pod
-      does not set. The PostToolUse path is independently scoped by explicit mission and
-      objective launch environment; the Stop hook should use an equally explicit binding.
+      Fixed in coo:1323. The old Stop script called `ovld protocol hook-event --hook-type Stop`,
+      which the CLI rejected, and gated on a `MISSION_ID` the pod did not set. The Stop hook is
+      now an `mcp_tool` call: it binds through the launch environment or the native-session
+      index that `attach` writes, `hook-event` accepts Stop and returns delivery status, and the
+      reminder blocks at most once per session and objective. Failures fail open.
+    verification: verified
+    mitigation: implemented
+    fixture: fixtures/hook-stop-fail-open.json
+  - id: hook-tool-unlisted-call
+    severity: medium
+    summary: >-
+      The hooks server omits its hook tools from `tools/list` so the model never sees them, and
+      Claude Code still calls them from `mcp_tool` hooks (verified on 2.1.329). That behavior is
+      undocumented. A release that validated hook tools against `tools/list` would break every
+      Overlord hook, and in channel-bound launches would deny every permission request. Doctor
+      warns when Claude Code is newer than `verifiedVersion`; the probe must be re-run on each
+      `verifiedVersion` bump.
     verification: verified
     mitigation: required
-    trackedAs: agent-session-phase-3
+    trackedAs: coo:1323.2ewy
+  - id: hook-server-no-fallback
+    severity: medium
+    summary: >-
+      Claude Code has no fallback from a failed `mcp_tool` hook to another hook, so when the
+      hooks server is not connected (no `node` on PATH, server disabled in `/mcp`, plugin not
+      installed) follow-up capture, file capture and the Stop reminder silently stop while the
+      session keeps working. Mitigated: these hooks fail open (fixtures/probe-fail-open.json),
+      `ovld agent-setup claude` and `ovld doctor` report a missing or disconnected server with
+      the fix, and the overlord-mission skill tells the agent to use the `ovld protocol` CLI.
+    verification: verified
+    mitigation: implemented
+    fixture: fixtures/probe-fail-open.json
   - id: fork-and-subagent-identity-unknown
     severity: medium
     summary: >-
-      Whether an in-process fork mints a new native session id, and whether subagent tool
-      calls carry the parent's id, are both unverified. Guessing either routes a session's
-      requests to the wrong mission. Partially narrowed at 2.1.221: the binary carries
-      distinct `SubagentStart` and `SubagentStop` hook events, converts an agent-frontmatter
-      `Stop` registration into `SubagentStop` ("subagents trigger SubagentStop"), and records
-      `parent_session_id` and `agent_type` as separate fields from `session_id`. That the
-      harness distinguishes the two identities is now established; which value lands in a
-      subagent hook payload's `session_id` is still not, and that is the part binding depends
-      on. Read it from a real subagent payload before changing any binding code.
-    verification: unverified
-    mitigation: required
-    trackedAs: taxonomy-7.6
+      Resolved (coo:1323.n938). Recorded on 2.1.329: every hook fired inside a subagent,
+      including a `fork` subagent, carries the parent's `session_id` and adds `agent_id` and
+      `agent_type`; `${agent_id}`/`${agent_type}` template the same values into an `mcp_tool`
+      input and `""` in the main agent. PreCompact, PostCompact and the post-compaction
+      SessionStart keep the `session_id` (main-thread compaction carries no `agent_id`). Binding
+      by `session_id` therefore routes subagent and fork work to the parent's binding, which is
+      correct because they work on the parent's objective, and a binding survives compaction.
+      No Overlord hook needs `agent_id` today; it stays available if a decision card ever has to
+      name the subagent.
+    verification: verified
+    mitigation: implemented
+    fixture: fixtures/subagent-identity.json
   - id: subagent-stop-unregistered
     severity: medium
     summary: >-
-      The adapter registers `Stop` and no subagent-lifecycle event. Claude Code 2.1.221 fires
-      `SubagentStop` — not `Stop` — when a subagent finishes, and subagents now run in the
-      background past the parent's turn boundary. Version 2.1.224 also removed the
-      200-subagent-per-session spawn cap, increasing the frequency of this gap,
-      so the shipped Stop registration is guaranteed not to run for work a
-      subagent completes after the parent stopped. Nothing is
-      lost today because that registration is already inert (see `shipped-stop-hook-inert`),
-      which is exactly why the fix is to repair the Stop path first and only then decide
-      whether the repaired body should also ride `SubagentStop`. Registering the current
-      inert script on a second event would add a spawn per subagent completion and buy
-      nothing.
+      Resolved (coo:1323.n938); `SubagentStop` stays unregistered on purpose. Recorded on
+      2.1.329: the main `Stop` fires while background subagents still run and lists them in
+      `background_tasks`; each subagent's end fires `SubagentStop` (parent `session_id` plus
+      `agent_id`); Claude then wakes the main agent with a harness-written `<task-notification>`
+      prompt through UserPromptSubmit, and that turn ends in another main `Stop` with
+      `background_tasks` empty. So the main Stop does run after subagent work completes. A
+      subagent's stop is not the end of the objective, so a reminder or an inbox claim there
+      would be wrong. The Stop hook templates `background_tasks`; while one is running, the
+      delivery reminder and the headless inbox wait are deferred to the later Stop, and
+      `hook-event` never records a `<task-notification>` prompt as a user follow-up.
     verification: verified
-    mitigation: required
-    trackedAs: coo:585
+    mitigation: implemented
+    fixture: fixtures/subagent-stop-background.json
+  - id: nested-session-inherits-launch-env
+    severity: medium
+    summary: >-
+      A `claude -p` started from a Bash tool of a launched session gets its own session id
+      (2.1.317+, and on 2.1.329 even with `CLAUDE_CODE_DISABLE_NESTED_SESSION_ID=1`), so it never
+      matches the native-session index. But it inherits the launch environment (mission,
+      objective, session channel), which bound it to the parent's mission: its prompt would be
+      recorded as the user's follow-up, its Stop could claim the parent's pending instruction or
+      be told to deliver the parent's objective. Mitigated: Claude Code exports `CLAUDE_PID` to
+      tool processes but not to MCP servers, so a hooks server that sees a `CLAUDE_PID` other
+      than its own parent belongs to a nested session. Its follow-up, Stop and decision hooks
+      then ignore the launch binding (it may still bind through the index under its own id if
+      its agent attaches); file capture keeps the launch objective because the nested process
+      edits the same checkout for the same objective. Limit: a session launched by an `ovld`
+      process that itself runs inside a Claude Code tool inherits that outer `CLAUDE_PID` and is
+      treated as nested.
+    verification: verified
+    mitigation: implemented
+    fixture: fixtures/hook-nested-session-gate.json
+  - id: headless-stop-hold
+    severity: low
+    summary: >-
+      A headless final Stop holds the inbox open for up to 60 s. Before 2.1.323 a host could
+      take a hook that long for a hung turn. Since 2.1.323 `claude -p` and SDK sessions emit a
+      progress heartbeat every 30 s while a hook runs (recorded on 2.1.329: `tool_progress`
+      with `heartbeat: true` at 30 s during a 45 s Stop hook). Interactive sessions never wait,
+      the wait is skipped while background subagents run, and the Stop hook timeout (100 s)
+      exceeds the wait plus the inbox (16 s) and reminder (10 s) budgets.
+    verification: verified
+    mitigation: implemented
+    fixture: fixtures/probe-stop-heartbeat.json
 decisionShape:
   codec: claude
   allowFixture: fixtures/decision-codec.json

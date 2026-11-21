@@ -497,6 +497,14 @@ export async function runLocalCommand({
               ? `installed at ${report.installPath}`
               : report.problems.join('; ')
           });
+          if (report.warnings.length > 0) {
+            checks.push({
+              name: `connector-warnings:${agentKey}`,
+              ok: false,
+              required: false,
+              detail: report.warnings.join('; ')
+            });
+          }
         }
         checks.push({
           name: `agent-binary:${report.binaryName}`,
@@ -534,6 +542,26 @@ export async function runLocalCommand({
           ok: true,
           required: false,
           detail: binding.detail
+        });
+      }
+
+      // Which Codex sessions on this machine run through the app-server control plane, and which
+      // through hooks (ADR 0092). Local only; orphaned app servers are reaped on the way.
+      {
+        const { describeCodexHarnessSessions } =
+          await import('./agent-session/codex-app-server/state.js');
+        const { removeImplicitTrustEntry } =
+          await import('./agent-session/codex-app-server/trust.js');
+        const sessions = describeCodexHarnessSessions({
+          cleanup: state => {
+            if (state.trustEntryAdded) removeImplicitTrustEntry(state.trustEntryAdded);
+          }
+        });
+        checks.push({
+          name: 'codex-harness-mode',
+          ok: true,
+          required: false,
+          detail: sessions.detail
         });
       }
 

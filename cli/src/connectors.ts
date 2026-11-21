@@ -1,4 +1,3 @@
-import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import {
   chmodSync,
@@ -7,6 +6,7 @@ import {
   readdirSync,
   readFileSync,
   realpathSync,
+  rmdirSync,
   rmSync,
   statSync,
   writeFileSync
@@ -16,6 +16,16 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { resolveAgentBinary } from './agent-binaries.js';
+import { antigravityHookVersionWarnings, detectAgyVersion } from './antigravity-hooks.js';
+import { spawnSyncWithoutSecrets } from './argv-secrets.js';
+import {
+  CLAUDE_MARKETPLACE_NAME,
+  CLAUDE_PLUGIN_KEY,
+  type ClaudeCommandRunner,
+  defaultClaudeRunner,
+  inspectClaudeHookHealth
+} from './claude-hook-health.js';
+import { detectCodexVersion, inspectCodexHookTrust } from './codex-hook-trust.js';
 import { resolveRepoPath } from './config.js';
 import { managedFileSourceExists, resolveManagedFileContents } from './connector-core-render.js';
 import { CliError } from './errors.js';
@@ -48,6 +58,11 @@ export type ManagedFileResult = {
   path: string;
   action: 'written' | 'unchanged' | 'would-write' | 'removed' | 'would-remove';
   executable: boolean;
+  /**
+   * Absolute root `path` is relative to when it is not the current install path —
+   * set only for files removed from a previous install location during migration.
+   */
+  root?: string;
 };
 
 export type SetupResult = {
@@ -80,6 +95,8 @@ export type ConnectorReport = {
   binaryFound: boolean;
   staleContractVersion: boolean;
   problems: string[];
+  /** Non-fatal findings, such as a harness newer than the connector was verified against. */
+  warnings: string[];
 };
 
 const CURSOR_HOOK_COMMANDS = {
@@ -88,18 +105,17 @@ const CURSOR_HOOK_COMMANDS = {
   stop: 'plugins/local/overlord/hooks/overlord-stop.sh'
 } as const;
 const CURSOR_PROTOCOL_PERMISSION = 'Shell(ovld protocol:*)';
-const CODEX_PLUGIN_KEY = 'overlord@overlord-local';
+const CODEX_MARKETPLACE_NAME = 'overlord-local';
+const CODEX_PLUGIN_KEY = `overlord@${CODEX_MARKETPLACE_NAME}`;
 const CODEX_RULES_START = '# overlord:permissions:start';
 const CODEX_RULES_END = '# overlord:permissions:end';
-const CLAUDE_MARKETPLACE_NAME = 'overlord-local';
-const CLAUDE_PLUGIN_KEY = `overlord@${CLAUDE_MARKETPLACE_NAME}`;
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 /** Add or replace one scalar in a TOML section without touching unrelated user configuration. */
-function setTomlScalar({
+export function setTomlScalar({
   content,
   section,
   key,
@@ -136,8 +152,10 @@ function setTomlScalar({
   if (keyPattern.test(body)) {
     return `${content.slice(0, bodyStart)}${body.replace(keyPattern, assignment)}${content.slice(sectionEnd)}`;
   }
-  const normalizedBody = body.endsWith('\n') ? body : `${body}\n`;
-  return `${content.slice(0, bodyStart)}${normalizedBody}${assignment}\n${content.slice(sectionEnd)}`;
+  // Append after the section's last line, keeping the blank lines that separate it from the next.
+  const lastLine = body.replace(/\s+$/, '');
+  const trailing = body.slice(lastLine.length) || '\n';
+  return `${content.slice(0, bodyStart)}${lastLine}\n${assignment}${trailing}${content.slice(sectionEnd)}`;
 }
 
 /**
@@ -360,6 +378,124 @@ function findOnPath(command: string): boolean {
     }
   }
   return false;
+}
+
+/**
+ * Adapters whose host agent loads every file under the plugin root (skills, hooks, MCP
+ * config) rather than only the ones a manifest names. A stray file in such a root is not
+ * inert, so setup and doctor name unmanaged files there instead of staying silent.
+ */
+const WHOLE_TREE_LOADING_ADAPTERS: ReadonlySet<string> = new Set(['antigravity']);
+
+/** Relative paths of every regular file under `root`, using `/` separators. */
+function listFilesRecursive(root: string): string[] {
+  if (!existsSync(root)) return [];
+  const results: string[] = [];
+  const walk = (dir: string): void => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const absolute = path.join(dir, entry.name);
+      if (entry.isDirectory()) walk(absolute);
+      else if (entry.isFile()) {
+        results.push(path.relative(root, absolute).split(path.sep).join('/'));
+      }
+    }
+  };
+  walk(root);
+  return results.sort();
+}
+
+/** Files under an install root that the connector manifest does not manage. */
+function listUnmanagedFiles(installPath: string, managedFiles: readonly string[]): string[] {
+  const managed = new Set(managedFiles);
+  return listFilesRecursive(installPath).filter(relativePath => !managed.has(relativePath));
+}
+
+function describeUnmanagedFiles(installPath: string, unmanaged: readonly string[]): string {
+  const shown = unmanaged.slice(0, 8).join(', ');
+  const more = unmanaged.length > 8 ? `, and ${unmanaged.length - 8} more` : '';
+  return (
+    `${unmanaged.length} file(s) in ${installPath} are not managed by Overlord, and the agent may ` +
+    `load them as part of the plugin: ${shown}${more}`
+  );
+}
+
+/**
+ * Remove now-empty directories from `start` up to and including `stopAt`. Never climbs
+ * above `stopAt`, and stops at the first directory that still has entries.
+ */
+function pruneEmptyDirectories(start: string, stopAt: string): void {
+  const boundary = path.resolve(stopAt);
+  let dir = path.resolve(start);
+  while (dir === boundary || dir.startsWith(`${boundary}${path.sep}`)) {
+    if (!existsSync(dir) || readdirSync(dir).length > 0) return;
+    rmdirSync(dir);
+    if (dir === boundary) return;
+    dir = path.dirname(dir);
+  }
+}
+
+/**
+ * Move an install off a previous location when the connector's install path changed.
+ * Files the previous install recorded are removed only when their contents still match the
+ * recorded hash; edited files, files the install never recorded, and anything that resolves
+ * outside the previous root are left alone and reported.
+ */
+function migratePreviousInstallLocation({
+  previousState,
+  dryRun
+}: {
+  previousState: InstallState;
+  dryRun: boolean;
+}): { files: ManagedFileResult[]; warnings: string[] } {
+  const files: ManagedFileResult[] = [];
+  const warnings: string[] = [];
+  const previousRoot = previousState.installPath;
+  if (!existsSync(previousRoot)) return { files, warnings };
+
+  const resolvedPreviousRoot = realpathSync(previousRoot);
+  const preserved: string[] = [];
+  for (const recorded of previousState.files) {
+    const target = path.resolve(previousRoot, recorded.path);
+    const resolvedTarget = existsSync(target) ? realpathSync(target) : target;
+    if (!resolvedTarget.startsWith(`${resolvedPreviousRoot}${path.sep}`)) {
+      warnings.push(
+        `Refusing to remove previous-install path outside its root: ${previousRoot}/${recorded.path}`
+      );
+      continue;
+    }
+    if (!existsSync(target) || !statSync(target).isFile()) continue;
+    if (sha256(readFileSync(target)) !== recorded.sha256) {
+      preserved.push(recorded.path);
+      continue;
+    }
+    if (!dryRun) {
+      rmSync(target);
+      pruneEmptyDirectories(path.dirname(target), previousRoot);
+    }
+    files.push({
+      path: recorded.path,
+      action: dryRun ? 'would-remove' : 'removed',
+      executable: false,
+      root: previousRoot
+    });
+  }
+
+  if (preserved.length > 0) {
+    warnings.push(
+      `Preserved ${preserved.length} modified file(s) at the previous install location ` +
+        `${previousRoot}: ${preserved.join(', ')}. Move any edits you want to keep, then delete it.`
+    );
+  }
+  const leftovers = dryRun ? [] : listFilesRecursive(previousRoot);
+  const unrecordedLeftovers = leftovers.filter(file => !preserved.includes(file));
+  if (unrecordedLeftovers.length > 0) {
+    warnings.push(
+      `The previous install location ${previousRoot} still holds ${unrecordedLeftovers.length} ` +
+        `file(s) Overlord did not record (left in place): ${unrecordedLeftovers.slice(0, 8).join(', ')}` +
+        `${unrecordedLeftovers.length > 8 ? ', …' : ''}`
+    );
+  }
+  return { files, warnings };
 }
 
 function isExecutableManaged(relativePath: string): boolean {
@@ -606,9 +742,12 @@ function configureCodexHarness({
     rmSync(legacyAgentsPath, { force: true });
   }
 
-  const codexAdd = spawnSync('codex', ['plugin', 'add', CODEX_PLUGIN_KEY], {
+  // Codex resolves the personal marketplace and its plugin cache from HOME, so it must see the
+  // same home this setup wrote the marketplace into.
+  const codexAdd = spawnSyncWithoutSecrets('codex', ['plugin', 'add', CODEX_PLUGIN_KEY], {
     encoding: 'utf8',
-    timeout: 30_000
+    timeout: 30_000,
+    env: { ...process.env, HOME: home }
   });
   if (codexAdd.error && (codexAdd.error as NodeJS.ErrnoException).code === 'ENOENT') {
     warnings.push(
@@ -617,15 +756,49 @@ function configureCodexHarness({
     );
   } else if (codexAdd.status !== 0) {
     const output = `${codexAdd.stdout ?? ''}${codexAdd.stderr ?? ''}`;
-    if (/already/i.test(output)) {
+    if (!/already/i.test(output)) {
+      warnings.push(
+        `Could not install the Codex plugin via the Codex CLI. Re-run \`ovld agent-setup codex\` to retry.`
+      );
       return warnings;
     }
+  }
+
+  if (!codexAdd.error) {
+    // Codex pins hook approval to the installed plugin bundle, so a fresh install or an
+    // update leaves Overlord's hooks unapproved until the user reviews them in `/hooks`.
     warnings.push(
-      `Could not install the Codex plugin via the Codex CLI. Re-run \`ovld agent-setup codex\` to retry.`
+      ...inspectCodexHookTrust({
+        codexHome: path.join(home, '.codex'),
+        installPath,
+        pluginId: CODEX_PLUGIN_KEY,
+        marketplaceName: CODEX_MARKETPLACE_NAME,
+        codexVersion: detectCodexVersion()
+      }).problems
     );
   }
 
   return warnings;
+}
+
+/**
+ * The local marketplace manifest (`.claude-plugin/marketplace.json`) that lists the Overlord
+ * plugin. `relativeSource` is the plugin directory relative to the marketplace root, starting
+ * with `./`. `yarn connectors:claude:check` strict-validates this same shape.
+ */
+export function buildClaudeMarketplaceManifest(relativeSource: string) {
+  return {
+    name: CLAUDE_MARKETPLACE_NAME,
+    owner: { name: 'Cooperativ' },
+    metadata: { description: 'Overlord local plugin marketplace.' },
+    plugins: [
+      {
+        name: 'overlord',
+        source: relativeSource,
+        description: 'Overlord mission protocol workflow for Claude Code.'
+      }
+    ]
+  };
 }
 
 /**
@@ -646,11 +819,13 @@ function configureCodexHarness({
 function configureClaudeHarness({
   home,
   installPath,
-  dryRun = false
+  dryRun = false,
+  claudeRunner
 }: {
   home: string;
   installPath: string;
   dryRun?: boolean;
+  claudeRunner?: ClaudeCommandRunner;
 }): string[] {
   const warnings: string[] = [];
   const marketplaceRoot = path.dirname(path.dirname(installPath));
@@ -658,18 +833,7 @@ function configureClaudeHarness({
   const relativeSource = `./${path.relative(marketplaceRoot, installPath).split(path.sep).join('/')}`;
   const configDir = path.join(home, '.claude');
 
-  const marketplace = {
-    name: CLAUDE_MARKETPLACE_NAME,
-    owner: { name: 'Cooperativ' },
-    metadata: { description: 'Overlord local plugin marketplace.' },
-    plugins: [
-      {
-        name: 'overlord',
-        source: relativeSource,
-        description: 'Overlord mission protocol workflow for Claude Code.'
-      }
-    ]
-  };
+  const marketplace = buildClaudeMarketplaceManifest(relativeSource);
 
   if (dryRun) {
     warnings.push(`Would write Claude marketplace manifest at ${marketplacePath}.`);
@@ -683,14 +847,9 @@ function configureClaudeHarness({
   mkdirSync(path.dirname(marketplacePath), { recursive: true });
   writeFileSync(marketplacePath, `${JSON.stringify(marketplace, null, 2)}\n`);
 
-  const runClaude = (args: string[]): ReturnType<typeof spawnSync> =>
-    spawnSync('claude', args, {
-      encoding: 'utf8',
-      timeout: 60_000,
-      // Pin the CLI to the same home we installed into so the marketplace and
-      // plugin land in this home's config dir rather than the caller's real one.
-      env: { ...process.env, CLAUDE_CONFIG_DIR: configDir }
-    });
+  // Pin the CLI to the same home we installed into so the marketplace and
+  // plugin land in this home's config dir rather than the caller's real one.
+  const runClaude = claudeRunner ?? defaultClaudeRunner({ configDir });
 
   const add = runClaude(['plugin', 'marketplace', 'add', marketplaceRoot]);
   if (add.error && (add.error as NodeJS.ErrnoException).code === 'ENOENT') {
@@ -728,6 +887,12 @@ function configureClaudeHarness({
     }
   }
 
+  // The plugin's hooks are `mcp_tool` calls to its bundled `overlord-hooks` server. Verify the
+  // version floor, the plugin, and that the server actually connects, so a broken install is
+  // reported here rather than discovered as silently missing activity.
+  const health = inspectClaudeHookHealth({ configDir, run: runClaude });
+  warnings.push(...health.problems, ...health.warnings);
+
   return warnings;
 }
 
@@ -736,7 +901,8 @@ export function setupConnector({
   home,
   configureCodexPermissions = true,
   dryRun = false,
-  exportPath
+  exportPath,
+  claudeRunner
 }: {
   agentKey: string;
   home?: string;
@@ -744,6 +910,8 @@ export function setupConnector({
   dryRun?: boolean;
   /** Materialize the connector package here without installing or configuring the host agent. */
   exportPath?: string;
+  /** Claude CLI runner (tests inject one; default spawns `claude`). */
+  claudeRunner?: ClaudeCommandRunner;
 }): SetupResult {
   if (exportPath && agentKey !== 'codex') {
     throw new CliError({
@@ -769,6 +937,17 @@ export function setupConnector({
   const stateFiles: Array<{ path: string; sha256: string }> = [];
   const previousState = readInstallState(agentKey, resolvedHome);
   const declaredFiles = new Set(manifest.connector.managedFiles);
+
+  if (
+    !exportPath &&
+    previousState &&
+    previousState.installPath &&
+    path.resolve(previousState.installPath) !== path.resolve(installPath)
+  ) {
+    const migration = migratePreviousInstallLocation({ previousState, dryRun });
+    files.push(...migration.files);
+    warnings.push(...migration.warnings);
+  }
 
   if (previousState?.installPath === installPath && existsSync(installPath)) {
     const resolvedInstallPath = realpathSync(installPath);
@@ -839,6 +1018,13 @@ export function setupConnector({
     }
   }
 
+  if (!exportPath && WHOLE_TREE_LOADING_ADAPTERS.has(agentKey)) {
+    const unmanaged = listUnmanagedFiles(installPath, manifest.connector.managedFiles);
+    if (unmanaged.length > 0) {
+      warnings.push(`${describeUnmanagedFiles(installPath, unmanaged)}. Setup left them in place.`);
+    }
+  }
+
   const binaryName = resolveAgentBinary(agentKey);
   const binaryFound = findOnPath(binaryName);
   if (!binaryFound) {
@@ -850,6 +1036,10 @@ export function setupConnector({
 
   if (!exportPath && agentKey === 'cursor') {
     warnings.push(...configureCursorHarness({ home: resolvedHome, dryRun }));
+  }
+
+  if (!exportPath && agentKey === 'antigravity' && binaryFound) {
+    warnings.push(...antigravityHookVersionWarnings(detectAgyVersion(binaryName)));
   }
 
   if (!exportPath && agentKey === 'codex') {
@@ -864,7 +1054,9 @@ export function setupConnector({
   }
 
   if (!exportPath && agentKey === 'claude') {
-    warnings.push(...configureClaudeHarness({ home: resolvedHome, installPath, dryRun }));
+    warnings.push(
+      ...configureClaudeHarness({ home: resolvedHome, installPath, dryRun, claudeRunner })
+    );
   }
 
   if (!dryRun && !exportPath) {
@@ -963,10 +1155,13 @@ export function isStaleContractVersion({
 /** Inspect one connector's local install for `ovld doctor`. */
 export function inspectConnector({
   agentKey,
-  home
+  home,
+  claudeRunner
 }: {
   agentKey: string;
   home?: string;
+  /** Claude CLI runner (tests inject one; default spawns `claude`). */
+  claudeRunner?: ClaudeCommandRunner;
 }): ConnectorReport {
   const resolvedHome = resolveHome(home);
   const manifest = readConnectorManifest(agentKey);
@@ -983,11 +1178,13 @@ export function inspectConnector({
       binaryName,
       binaryFound,
       staleContractVersion: false,
-      problems: []
+      problems: [],
+      warnings: []
     };
   }
 
   const problems: string[] = [];
+  const warnings: string[] = [];
   const staleContractVersion = isStaleContractVersion({
     installed: state.contractVersion,
     declared: manifest.contractVersion
@@ -997,6 +1194,22 @@ export function inspectConnector({
       `Installed against contract ${state.contractVersion}; connector now declares ` +
         `${manifest.contractVersion}. Re-run \`ovld agent-setup ${agentKey}\`.`
     );
+  }
+
+  const declaredInstallPath = expandInstallPath(manifest.connector.installPath, resolvedHome);
+  if (path.resolve(state.installPath) !== path.resolve(declaredInstallPath)) {
+    problems.push(
+      `Installed at ${state.installPath}, but the connector now installs to ` +
+        `${declaredInstallPath}, which is where the agent loads it from. ` +
+        `Re-run \`ovld agent-setup ${agentKey}\` to move it.`
+    );
+  } else if (WHOLE_TREE_LOADING_ADAPTERS.has(agentKey)) {
+    const unmanaged = listUnmanagedFiles(state.installPath, manifest.connector.managedFiles);
+    if (unmanaged.length > 0) {
+      problems.push(
+        `${describeUnmanagedFiles(state.installPath, unmanaged)}. Remove them unless you added them on purpose.`
+      );
+    }
   }
 
   const declared = new Set(manifest.connector.managedFiles);
@@ -1019,6 +1232,33 @@ export function inspectConnector({
     }
   }
 
+  if (agentKey === 'codex' && binaryFound) {
+    problems.push(
+      ...inspectCodexHookTrust({
+        codexHome: path.join(resolvedHome, '.codex'),
+        installPath: state.installPath,
+        pluginId: CODEX_PLUGIN_KEY,
+        marketplaceName: CODEX_MARKETPLACE_NAME,
+        codexVersion: detectCodexVersion(binaryName)
+      }).problems
+    );
+  }
+
+  if (agentKey === 'antigravity' && binaryFound) {
+    warnings.push(...antigravityHookVersionWarnings(detectAgyVersion(binaryName)));
+  }
+
+  if (agentKey === 'claude' && (binaryFound || claudeRunner)) {
+    const health = inspectClaudeHookHealth({
+      configDir: path.join(resolvedHome, '.claude'),
+      run:
+        claudeRunner ??
+        defaultClaudeRunner({ binary: binaryName, configDir: path.join(resolvedHome, '.claude') })
+    });
+    problems.push(...health.problems);
+    warnings.push(...health.warnings);
+  }
+
   return {
     agentKey,
     installed: true,
@@ -1027,6 +1267,7 @@ export function inspectConnector({
     binaryName,
     binaryFound,
     staleContractVersion,
-    problems
+    problems,
+    warnings
   };
 }

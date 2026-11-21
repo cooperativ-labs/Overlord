@@ -22,6 +22,8 @@ export function describeRead({ input, projectRoot }: DescribeInput): Description
     (typeof record.filePath === 'string' && record.filePath) ||
     (typeof record.path === 'string' && record.path) ||
     (typeof record.notebook_path === 'string' && record.notebook_path) ||
+    // Antigravity `view_file`.
+    (typeof record.AbsolutePath === 'string' && record.AbsolutePath) ||
     null;
   const path = reducePath(raw, projectRoot);
 

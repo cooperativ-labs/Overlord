@@ -1,0 +1,403 @@
+{
+  "fixtureVersion": 1,
+  "kind": "script-io",
+  "description": "inject.turnBoundary and inject.nextTurn from recorded 0.170.0 shapes. With the thread idle, a claimed instruction starts a new turn (turn/start). When an instruction is routed to a running turn that has just ended, Codex refuses the steer precondition (-32600 \"no active turn to steer\", recorded in the spike) and the same input starts a new turn instead: delivered once, never retried. After turn/completed, the next instruction starts the next turn.",
+  "script": "scripts/codex-app-server-replay.mjs",
+  "stdinMessages": [
+    {
+      "setup": {
+        "codec": "connectors/adapters/codex-app-server/codec/codex-app-server.codec.yaml",
+        "cwd": "/repo",
+        "threadId": "01a1faaf-cd91-7372-a780-f5a9c5b457a7",
+        "report": [
+          "/inputs/input-"
+        ],
+        "channel": {
+          "POST /inputs/claim": [
+            {
+              "input": {
+                "id": "input-1",
+                "kind": "instruction",
+                "body": "Append a second line, bye, to notes.md.",
+                "leaseId": "lease-1",
+                "leaseExpiresAt": null
+              }
+            },
+            {
+              "input": null
+            },
+            {
+              "input": {
+                "id": "input-2",
+                "kind": "instruction",
+                "body": "Then run the tests.",
+                "leaseId": "lease-2",
+                "leaseExpiresAt": null
+              }
+            },
+            {
+              "input": null
+            },
+            {
+              "input": {
+                "id": "input-3",
+                "kind": "instruction",
+                "body": "Finally summarize.",
+                "leaseId": "lease-3",
+                "leaseExpiresAt": null
+              }
+            },
+            {
+              "input": null
+            }
+          ]
+        }
+      }
+    },
+    {
+      "await": {
+        "method": "initialize"
+      }
+    },
+    {
+      "server": {
+        "id": 1,
+        "result": {
+          "userAgent": "overlord/0.170.0 (Mac OS 27.2.1; arm64) xterm-256color (overlord; replay)",
+          "codexHome": "/home/user/.codex",
+          "platformFamily": "unix",
+          "platformOs": "macos"
+        }
+      }
+    },
+    {
+      "server": {
+        "method": "remoteControl/status/changed",
+        "params": {
+          "status": "disabled",
+          "serverName": "host",
+          "installationId": "00000000-0000-0000-0000-000000000000",
+          "environmentId": null
+        },
+        "emittedAtMs": 1795207125837
+      }
+    },
+    {
+      "await": {
+        "method": "thread/resume"
+      }
+    },
+    {
+      "server": {
+        "id": 2,
+        "result": {
+          "thread": {
+            "id": "01a1faaf-cd91-7372-a780-f5a9c5b457a7",
+            "sessionId": "01a1faaf-cd91-7372-a780-f5a9c5b457a7",
+            "status": {
+              "type": "idle"
+            },
+            "cwd": "/repo",
+            "turns": []
+          },
+          "cwd": "/repo",
+          "approvalPolicy": "untrusted",
+          "approvalsReviewer": "user"
+        }
+      }
+    },
+    {
+      "await": {
+        "method": "turn/start"
+      }
+    },
+    {
+      "server": {
+        "id": 3,
+        "result": {
+          "turn": {
+            "id": "01a1faaf-efd4-7651-adc0-9e8f3965ce1e",
+            "status": "inProgress",
+            "items": []
+          }
+        }
+      }
+    },
+    {
+      "await": {
+        "channel": "POST /inputs/input-1/acknowledged"
+      }
+    },
+    {
+      "server": {
+        "method": "turn/started",
+        "params": {
+          "threadId": "01a1faaf-cd91-7372-a780-f5a9c5b457a7",
+          "turn": {
+            "id": "01a1faaf-efd4-7651-adc0-9e8f3965ce1e",
+            "status": "inProgress",
+            "items": []
+          }
+        }
+      }
+    },
+    {
+      "await": {
+        "method": "turn/steer"
+      }
+    },
+    {
+      "server": {
+        "error": {
+          "code": -32600,
+          "message": "no active turn to steer"
+        },
+        "id": 4
+      }
+    },
+    {
+      "await": {
+        "id": 5
+      }
+    },
+    {
+      "server": {
+        "id": 5,
+        "result": {
+          "turn": {
+            "id": "01a1fab0-0370-7970-9ca7-648404ea5416",
+            "status": "inProgress",
+            "items": []
+          }
+        }
+      }
+    },
+    {
+      "await": {
+        "channel": "POST /inputs/input-2/acknowledged"
+      }
+    },
+    {
+      "server": {
+        "method": "turn/completed",
+        "params": {
+          "threadId": "01a1faaf-cd91-7372-a780-f5a9c5b457a7",
+          "turn": {
+            "id": "01a1fab0-0370-7970-9ca7-648404ea5416",
+            "status": "completed",
+            "items": []
+          }
+        }
+      }
+    },
+    {
+      "await": {
+        "id": 6
+      }
+    },
+    {
+      "server": {
+        "id": 6,
+        "result": {
+          "turn": {
+            "id": "01a1fab0-1111-7970-9ca7-648404ea5416",
+            "status": "inProgress",
+            "items": []
+          }
+        }
+      }
+    },
+    {
+      "await": {
+        "channel": "POST /inputs/input-3/acknowledged"
+      }
+    }
+  ],
+  "timeoutMs": 60000,
+  "expect": {
+    "exitCode": 0,
+    "stderr": "",
+    "responses": [
+      {
+        "id": "out-1",
+        "rpc": {
+          "id": 1,
+          "method": "initialize",
+          "params": {
+            "clientInfo": {
+              "name": "overlord",
+              "title": "Overlord",
+              "version": "replay"
+            },
+            "capabilities": {
+              "experimentalApi": true,
+              "requestAttestation": false,
+              "optOutNotificationMethods": [
+                "item/agentMessage/delta",
+                "item/reasoning/summaryTextDelta",
+                "item/reasoning/summaryPartAdded",
+                "item/reasoning/textDelta",
+                "item/commandExecution/outputDelta",
+                "item/fileChange/outputDelta",
+                "thread/tokenUsage/updated",
+                "account/rateLimits/updated",
+                "turn/moderationMetadata"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": "out-2",
+        "rpc": {
+          "method": "initialized"
+        }
+      },
+      {
+        "id": "out-3",
+        "rpc": {
+          "id": 2,
+          "method": "thread/resume",
+          "params": {
+            "threadId": "01a1faaf-cd91-7372-a780-f5a9c5b457a7",
+            "approvalsReviewer": "user"
+          }
+        }
+      },
+      {
+        "id": "out-4",
+        "rpc": {
+          "id": 3,
+          "method": "turn/start",
+          "params": {
+            "threadId": "01a1faaf-cd91-7372-a780-f5a9c5b457a7",
+            "input": [
+              {
+                "type": "text",
+                "text": "Append a second line, bye, to notes.md.",
+                "text_elements": []
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": "out-5",
+        "channel": {
+          "method": "POST",
+          "path": "/inputs/input-1/emitted",
+          "body": {
+            "leaseId": "lease-1",
+            "deliveryOutcome": "delivered"
+          }
+        }
+      },
+      {
+        "id": "out-6",
+        "channel": {
+          "method": "POST",
+          "path": "/inputs/input-1/acknowledged",
+          "body": {}
+        }
+      },
+      {
+        "id": "out-7",
+        "rpc": {
+          "id": 4,
+          "method": "turn/steer",
+          "params": {
+            "threadId": "01a1faaf-cd91-7372-a780-f5a9c5b457a7",
+            "input": [
+              {
+                "type": "text",
+                "text": "Then run the tests.",
+                "text_elements": []
+              }
+            ],
+            "expectedTurnId": "01a1faaf-efd4-7651-adc0-9e8f3965ce1e"
+          }
+        }
+      },
+      {
+        "id": "out-8",
+        "rpc": {
+          "id": 5,
+          "method": "turn/start",
+          "params": {
+            "threadId": "01a1faaf-cd91-7372-a780-f5a9c5b457a7",
+            "input": [
+              {
+                "type": "text",
+                "text": "Then run the tests.",
+                "text_elements": []
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": "out-9",
+        "channel": {
+          "method": "POST",
+          "path": "/inputs/input-2/emitted",
+          "body": {
+            "leaseId": "lease-2",
+            "deliveryOutcome": "delivered"
+          }
+        }
+      },
+      {
+        "id": "out-10",
+        "channel": {
+          "method": "POST",
+          "path": "/inputs/input-2/acknowledged",
+          "body": {}
+        }
+      },
+      {
+        "id": "out-11",
+        "rpc": {
+          "id": 6,
+          "method": "turn/start",
+          "params": {
+            "threadId": "01a1faaf-cd91-7372-a780-f5a9c5b457a7",
+            "input": [
+              {
+                "type": "text",
+                "text": "Finally summarize.",
+                "text_elements": []
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": "out-12",
+        "channel": {
+          "method": "POST",
+          "path": "/inputs/input-3/emitted",
+          "body": {
+            "leaseId": "lease-3",
+            "deliveryOutcome": "delivered"
+          }
+        }
+      },
+      {
+        "id": "out-13",
+        "channel": {
+          "method": "POST",
+          "path": "/inputs/input-3/acknowledged",
+          "body": {}
+        }
+      },
+      {
+        "id": "result",
+        "reason": "reconnect-exhausted",
+        "serverVersion": "0.170.0",
+        "threadId": "01a1faaf-cd91-7372-a780-f5a9c5b457a7",
+        "injected": 3,
+        "interrupted": false
+      }
+    ]
+  }
+}

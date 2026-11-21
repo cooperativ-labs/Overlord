@@ -1,0 +1,22 @@
+{
+  "fixtureVersion": 1,
+  "kind": "source-guard",
+  "description": "`ovld agent-setup codex --status-line` writes the user-level Codex config only when asked: it turns on `tui_extensions_statusline` only when unset (never over an explicit false), selects the Overlord provider only when no provider is selected (another provider or an explicit \"default\" is kept), refuses an unreadable or uneditable config, and re-parses the merged text before writing. Codex ignores a status line provider selected in project config.",
+  "path": "cli/src/codex-status-line.ts",
+  "assert": {
+    "mustContain": [
+      "export const CODEX_STATUS_LINE_FEATURE = 'tui_extensions_statusline'",
+      "export const CODEX_STATUS_LINE_SERVER = 'overlord'",
+      "export const CODEX_STATUS_LINE_TOOL = 'overlord_status_line'",
+      "if (inspection.feature === null) {",
+      "if (inspection.state === 'none') {",
+      "status: 'kept-existing'",
+      "status: 'feature-disabled'",
+      "if (!selectsOverlord(merged)) {"
+    ],
+    "mustNotContain": [
+      "writeOwnerOnlyFileAtomically",
+      "--dangerously"
+    ]
+  }
+}

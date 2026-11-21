@@ -1,4 +1,4 @@
-contractVersion: "179.1.0"
+contractVersion: "179.11.0"
 componentType: connector
 componentKey: cursor
 label: "Cursor Connector"
@@ -14,7 +14,7 @@ connector:
   harnessCapabilities:
     path: connectors/adapters/cursor/harness-capabilities.yaml
     schemaVersion: 1
-    digest: "d468594240b637953358713e6412156d35b2b095d14fd1b2fc403496bcd6caf9"
+    digest: "55c24b2e53d557d9c07e593effc230fc2ec72f985168765b5f23f494b2fc7c0b"
   # ── END GENERATED ────────────────────────────────────────────────────────────
   installPath: "~/.cursor/plugins/local/overlord"
   managedFiles:

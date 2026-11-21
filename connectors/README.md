@@ -25,7 +25,7 @@ OpenCode, Antigravity, and others). A connector is what lets an agent speak the
 Install or refresh a connector with:
 
 ```bash
-ovld agent-setup <agent>    # claude | codex | cursor | pi | antigravity | opencode | all
+ovld agent-setup <agent>    # claude | codex | codex-app-server | cursor | pi | antigravity | opencode | all
 ovld doctor                 # verify managed files and permissions
 ```
 
@@ -41,6 +41,7 @@ connector contract version changes.
 - [PI](adapters/pi/README.md): PI Agent skill and extension with follow-up capture and native-session resume.
 - [Antigravity](adapters/antigravity/README.md): Antigravity plugin exposing the local mission workflow to Antigravity CLI/IDE sessions.
 - [OpenCode](adapters/opencode/README.md): control-plane connector (Shape C) driven by `ovld agent-session sidecar` — no hook scripts.
+- [Codex app server](adapters/codex-app-server/README.md): experimental control-plane connector for Codex driven by `ovld agent-session sidecar --agent codex-app-server` against a private `codex app-server` — no hook scripts; behind `OVERLORD_CODEX_APP_SERVER=1`.
 
 ### Plugin marketplace
 
@@ -103,9 +104,10 @@ contributor adding an adapter can tell signal from neglect. Source of truth for 
 | `claude`      | `commands/`   | `hooks/hooks.json` (3 types)                          | —              | —                 | —        | —             |
 | `codex`       | —             | `.codex-plugin/hooks.json` + `scripts/*.sh` (2 types) | rendered       | `.mcp.json`       | —        | yes           |
 | `cursor`      | `commands/`   | `hooks/*.sh` (4 types)                                | rendered       | `mcp.json`        | `rules/` | —             |
-| `antigravity` | `skills/*.md` | `hooks.json` (0 types — none shipped yet)             | rendered       | `mcp_config.json` | —        | —             |
+| `antigravity` | `skills/*.md` | `hooks.json` + `hooks/*.sh` (3 types)                 | rendered       | `mcp_config.json` | —        | —             |
 | `pi`          | —             | `extensions/overlord.ts` (input/tool/session events)  | —              | —                 | —        | yes           |
 | `opencode`    | —             | none — control plane, see below                       | —              | —                 | —        | —             |
+| `codex-app-server` | —         | none — control plane, see below                       | —              | —                 | —        | —             |
 
 Intentional omissions:
 
@@ -115,13 +117,20 @@ Intentional omissions:
   alongside the harness. The sidecar implements event reconciliation, concurrent permission
   observation, and `prompt_async` instruction delivery, but the bundled agent catalog does not
   yet start it automatically. A supervised execution target must supply that launch integration.
-- **`claude` ships no local MCP shim.** The Claude plugin reaches Overlord's hosted
-  MCP server, so a local stdio bridge would duplicate it.
-- **`claude` ships a 4th hook script, `scripts/permission-hook.sh`, that is not registered in
-  `hooks/hooks.json`.** It is a declared hazard (`shipped-permission-hook-inert` in
-  `connectors/adapters/claude/CAPABILITIES.md`), not live behavior: it calls a
-  `ovld protocol permission-request` subcommand that does not exist and is structurally
-  incapable of returning a decision even once wired in.
+- **`codex-app-server` ships no hooks either.** It drives Codex through `codex app-server`
+  instead of the plugin hooks, and the private server's environment silences the `codex`
+  plugin's hooks inside it (`OVERLORD_CONTROL_PLANE_SURFACE`), so one Codex session is never
+  reported through both. It is experimental and launch does not start it yet.
+- **Only the `codex` shim is a status line provider.** The Codex rendering of the local MCP
+  shim also lists `overlord_status_line` and serves `ui://overlord/status-line`, the Codex 0.171
+  statusline provider (`terminal.statusSurface`, ADR 0093). It is a terminal UI surface, not a
+  protocol operation, so the hosted MCP server and the other shims have no equivalent; Claude's
+  status line is the `ovld status-line` command itself.
+- **`claude` ships no hook scripts.** Its hooks are `mcp_tool` hooks (Claude Code 2.1.328+)
+  that call the plugin-bundled `overlord-hooks` server, the core shim rendered in `--hooks`
+  mode, which lists no tools and forwards each hook to the same `ovld` command the CLI uses.
+  The model's tools still come from Overlord's hosted MCP server. The fail-closed
+  `PermissionRequest` hook is registered per launch by `ovld launch`, not in the plugin.
 - **`pi` ships no shim, hooks directory, or commands.** PI integrates through one TypeScript
   extension. It has no native permission dialog; its optional `tool_call` decision interceptor
   is fail-open and requires explicit workspace and project opt-in.
@@ -135,8 +144,8 @@ work as its own mission rather than folding it into a docs change:
 
 - `codex` ships no `commands/` while `claude` and `cursor` do, and `antigravity`
   achieves the same surface through `skills/*.md`. No harness constraint is recorded.
-- `antigravity` registers no post-tool mutation or Stop hook; whether its harness exposes
-  equivalent events is not documented here.
+- `antigravity` registers no `PreToolUse` decision hook: its decision codec is pinned, but the
+  remote decision path needs a session channel that no launch creates yet (ADR 0090).
 
 ### Generated files
 
@@ -144,10 +153,10 @@ The local MCP shim and post-tool capture callback are **generated**, not committ
 adapter. `ovld agent-setup` renders their core sources with the adapter key substituted:
 
 - [`core/scripts/overlord-mcp.mjs`](core/scripts/overlord-mcp.mjs) becomes the local MCP
-  shim for Codex, Cursor, and Antigravity.
+  shim for Codex, Cursor, and Antigravity, and Claude's `overlord-hooks` server (`--hooks`).
 - [`core/scripts/capture-change-hook.sh`](core/scripts/capture-change-hook.sh) becomes
-  Claude's and Codex's `scripts/post-tool-use-hook.sh` and Cursor's
-  `hooks/overlord-post-tool-use.sh`.
+  Codex's `scripts/post-tool-use-hook.sh` and Cursor's `hooks/overlord-post-tool-use.sh`.
+  Claude reaches the same `ovld protocol capture-change` through its hooks server.
 
 Edit the core source; there are no adapter copies. Installed paths and native hook
 registrations remain harness-specific.

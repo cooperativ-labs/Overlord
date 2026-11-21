@@ -5,8 +5,16 @@
         "matcher": ".*",
         "hooks": [
           {
-            "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/scripts/user-prompt-submit-hook.sh\""
+            "type": "mcp_tool",
+            "server": "plugin:overlord:overlord-hooks",
+            "tool": "overlord_hook_user_prompt_submit",
+            "input": {
+              "hook_event_name": "${hook_event_name}",
+              "session_id": "${session_id}",
+              "cwd": "${cwd}",
+              "prompt": "${prompt}"
+            },
+            "timeout": 10
           }
         ]
       }
@@ -16,8 +24,18 @@
         "matcher": "Edit|Write|MultiEdit|NotebookEdit|Bash",
         "hooks": [
           {
-            "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/scripts/post-tool-use-hook.sh\""
+            "type": "mcp_tool",
+            "server": "plugin:overlord:overlord-hooks",
+            "tool": "overlord_hook_post_tool_use",
+            "input": {
+              "hook_event_name": "${hook_event_name}",
+              "session_id": "${session_id}",
+              "cwd": "${cwd}",
+              "tool_name": "${tool_name}",
+              "tool_use_id": "${tool_use_id}",
+              "tool_input": "${tool_input}"
+            },
+            "timeout": 15
           }
         ]
       }
@@ -27,8 +45,17 @@
         "matcher": ".*",
         "hooks": [
           {
-            "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/scripts/stop-hook.sh\""
+            "type": "mcp_tool",
+            "server": "plugin:overlord:overlord-hooks",
+            "tool": "overlord_hook_stop",
+            "input": {
+              "hook_event_name": "${hook_event_name}",
+              "session_id": "${session_id}",
+              "cwd": "${cwd}",
+              "stop_hook_active": "${stop_hook_active}",
+              "background_tasks": "${background_tasks}"
+            },
+            "timeout": 100
           }
         ]
       }

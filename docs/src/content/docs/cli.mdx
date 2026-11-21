@@ -51,6 +51,9 @@ return JSON by default.
 | `ovld agent-setup [--json]`                                                                                                                | List installable connectors.                                                        |
 | `ovld agent-setup <agent> [--dry-run] [--home <path>] [--json]`                                                                            | Install or repair one agent connector.                                              |
 | `ovld agent-setup all [--dry-run] [--home <path>] [--json]`                                                                                | Install or repair all supported connectors.                                         |
+| `ovld agent-setup claude --status-line`                                                                                                    | Also add the Overlord status line to Claude Code, only if no status line is set.    |
+| `ovld agent-setup codex --status-line`                                                                                                     | Also select the Overlord status line provider in Codex 0.171+ (feature `tui_extensions_statusline`); never replaces your selection. |
+| `ovld status-line --agent <key> [--payload-file -] [--native-session-id <id>] [--json\|--ui-tree]`                                         | Print the session's bound mission, objective and state for a harness status line; prints nothing when unbound. `--ui-tree` prints it as a Codex status line UI tree (`null` when unbound). |
 | `ovld org-setup --org-name <name> [--workspace-name <name>] [--workspace-slug <slug>] [--logo <path>] [--no-input] [--if-needed] [--json]` | Create an organization and its first workspace when the signed-in profile has none. |
 
 Supported built-in connector names currently include `claude`, `codex`, `cursor`,
@@ -117,15 +120,17 @@ request reports delivery separately (`delivery.stage`: `queued`, `dispatched`, `
 | Command                                                                                                    | What it does                                                                                                                    |
 | ---------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
 | `ovld requests [--mission-id <id>] [--objective-id <id>] [--json]`                                         | List open and recent agent decisions, optionally restricted to one mission or objective.                                        |
-| `ovld requests resolve <id> --revision <n> --decision allow\|deny\|ask [--text <text>]`                    | Answer a held decision; `--text` carries a question's answer. Redelivery after a failed delivery is in the web app only.        |
+| `ovld requests resolve <id> --revision <n> --decision allow\|deny\|ask [--text <text>]`                    | Answer a held decision; `--text` carries a question's answer. `--decision allow\|deny` answers a Codex app-server approval (launching member only). Redelivery after a failed delivery is in the web app only. |
 | `ovld inputs list --mission-id <id> [--objective-id <id>] [--json]`                                        | List session instructions and the effective channel for one mission or objective; an objective display id supplies the mission. |
 | `ovld inputs send --channel-id <id> --body <text> [--kind <kind>] [--json]`                                | Retired: the backend rejects every call with `session_controls_gone` (410 error). No launch path currently creates a live session channel to address. |
 | `ovld agent-session capabilities [<agent>] [--json]`                                                       | Print the fixture-backed capability descriptor for a harness — offline, authoritative.                                          |
 | `ovld agent-session bind --agent <key> --native-session-id <id> [--mission-id <id>] [--objective-id <id>]` | Correlate a harness-native session id with this process's channel.                                                              |
 | `ovld agent-session event --agent <key> --payload-file -`                                                  | Push one native harness event (connector-internal; silent, never blocks).                                                       |
 | `ovld agent-session request --agent <key> --payload-file -`                                                | Wait for a remote decision or defer to the harness (connector-internal).                                                        |
-| `ovld agent-session inbox --agent <key> --payload-file -`                                                  | Claim one pending instruction and emit it natively (connector-internal).                                                        |
+| `ovld agent-session inbox --agent <key> --payload-file - [--wait-ms <ms>]`                                 | Claim one pending instruction and emit it natively (connector-internal). A final Claude Stop in a headless session polls up to 60 s. |
 | `ovld agent-session sidecar --agent <key> --port <port>`                                                   | Drive a control-plane harness event stream, such as OpenCode (connector-internal).                                              |
+| `ovld agent-session sidecar --agent codex-app-server [--socket <path>] [--thread-id <id>] [--prompt-file <path>] [--working-directory <dir>]` | Drive a private Codex app server (connector-internal, experimental: requires `OVERLORD_CODEX_APP_SERVER=1` and a session channel; `ovld launch` and runners start it in Codex app-server mode). |
+| `ovld agent-session attach [--objective-id <ref>] [--channel-id <id>]` | Open the Codex TUI on a running Codex app-server session on this machine (`codex --remote … resume <thread>`); approvals can be answered there or in the web app. |
 
 `agent-session event`, `request`, `inbox`, and `sidecar` are the adapter runtime commands
 connectors invoke from hooks and extensions; `capabilities` and `bind` are the ones you would
@@ -174,7 +179,7 @@ Every command below is available from `ovld protocol help`.
 | `ask`                              | Raise a blocking question for a human reviewer and open an answerable request (`--options-json` + `--no-free-text` for a fixed choice). |
 | `deliver`                          | Finish the session with summary, artifacts, optional declared paths, and an optional mission summary write (`--mission-summary-file`; see [Agent protocol](/docs-for-agents/agent-protocol/#mission-summary)). |
 | `resume-follow-up`                 | Reopen completed work for a follow-up.                                                                    |
-| `hook-event`                       | Record a connector lifecycle event.                                                                       |
+| `hook-event`                       | Record a connector lifecycle event (`UserPromptSubmit`, or read-only `Stop` delivery status). `--agent <key> --payload-file -` reads a native hook payload and prints `hookOutput`. |
 | `capture-change`                   | Locally capture direct, objective-bound native edit paths (connector use).                                |
 | `sync-changes`                     | Synchronize one bounded objective-ledger batch.                                                            |
 | `changes`                          | Local-only read of this checkout's recorded paths and hook health for an objective.                       |

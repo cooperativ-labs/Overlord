@@ -1,0 +1,20 @@
+{
+  "fixtureVersion": 1,
+  "kind": "source-guard",
+  "description": "A Codex launch in app-server mode mints the session channel its supervisor needs (ADR 0092), stages the credential only in the owner-only cache, and falls back to the terminal launch when it cannot. The guard fails if minting moves out of the app-server branch, if the credential is staged anywhere else, or if the raw credential is exported into the launch environment.",
+  "path": "cli/src/launch.ts",
+  "assert": {
+    "mustContain": [
+      "if (options.agent === 'codex' && options.harnessMode === 'appServer') {",
+      "const minted = await mintCodexLaunchChannel({",
+      "writeChannelCredential({ channelId: sessionChannelId, token: sessionChannelToken });",
+      "launching in the terminal (hooks) instead.",
+      "supervisorPid = startCodexSupervisorDetached({",
+      "env: supervisorEnv(env),"
+    ],
+    "mustNotContain": [
+      "OVERLORD_SESSION_CHANNEL_TOKEN: sessionChannelToken",
+      "OVERLORD_SESSION_CHANNEL_TOKEN: minted.token"
+    ]
+  }
+}

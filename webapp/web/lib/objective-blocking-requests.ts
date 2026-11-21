@@ -19,5 +19,7 @@ export type BlockingRequestLike = Pick<HumanAgentRequestDto, 'id' | 'kind' | 'st
  */
 export function isPendingBlockingRequest(request: BlockingRequestLike): boolean {
   if (request.status !== 'open') return false;
-  return request.kind === 'question' || request.kind === 'choice';
+  // An open approval exists only on a control-plane session (Codex app-server mode, ADR 0094):
+  // hook adapters mint no channel, so they open no cards.
+  return request.kind === 'question' || request.kind === 'choice' || request.kind === 'permission';
 }

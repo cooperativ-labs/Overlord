@@ -1,0 +1,28 @@
+{
+  "fixtureVersion": 1,
+  "kind": "native-payload",
+  "description": "Recorded live on codex-cli 0.170.0 (`codex exec --json`, read-only sandbox): a shell tool command in a root thread sees CODEX_SESSION_ID and CODEX_THREAD_ID, and both equal the thread id from `thread.started`. `ovld protocol attach` run by a Codex agent therefore indexes CODEX_SESSION_ID in the native-session index under the `codex` agent: the same id Codex hooks send as `session_id` (the root session, also inside subagents) and the id the status line provider reads as `thread.id` for a root thread.",
+  "payload": {
+    "threadStarted": {
+      "type": "thread.started",
+      "thread_id": "01a1fb0e-f2ae-7191-973b-836eea97f063"
+    },
+    "shellEnvironment": {
+      "CODEX_SESSION_ID": "01a1fb0e-f2ae-7191-973b-836eea97f063",
+      "CODEX_THREAD_ID": "01a1fb0e-f2ae-7191-973b-836eea97f063"
+    },
+    "codexVersion": "0.170.0"
+  },
+  "assert": {
+    "requiredPaths": [
+      "shellEnvironment.CODEX_SESSION_ID",
+      "shellEnvironment.CODEX_THREAD_ID"
+    ],
+    "equals": {
+      "shellEnvironment.CODEX_SESSION_ID": "01a1fb0e-f2ae-7191-973b-836eea97f063",
+      "shellEnvironment.CODEX_THREAD_ID": "01a1fb0e-f2ae-7191-973b-836eea97f063",
+      "threadStarted.thread_id": "01a1fb0e-f2ae-7191-973b-836eea97f063"
+    },
+    "bindingField": "shellEnvironment.CODEX_SESSION_ID"
+  }
+}

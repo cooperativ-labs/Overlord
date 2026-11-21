@@ -1491,6 +1491,85 @@ async function resolveFollowUpObjective({
   return { objective: latestCompletedObjective(objectives), session: undefined };
 }
 
+/** Whether a bound session's turn ended with its objective still undelivered. */
+export type HookDeliveryStatus = { needed: boolean; reason: string | null };
+
+const NO_DELIVERY_NEEDED: HookDeliveryStatus = { needed: false, reason: null };
+
+/**
+ * `Stop` hook: report whether the session that just ended a turn still owes a delivery.
+ *
+ * Read-only. It records no event, because a turn ending is not mission activity. Only an open
+ * session located by its protocol session key can be reminded. A native session id or a working
+ * directory never selects one. A session whose latest activity is an `ask` is waiting for a person
+ * and is never reminded. The connector decides whether and how often to surface the reminder.
+ */
+async function stopHookDeliveryStatus({
+  ctx,
+  missionId,
+  sessionKey
+}: {
+  ctx: ServiceContext;
+  missionId: string;
+  sessionKey: string | null;
+}): Promise<{
+  eventId: null;
+  objectiveId: string | null;
+  sessionId: string | null;
+  deliveryStatus: HookDeliveryStatus;
+}> {
+  const session = sessionKey ? await getSessionByKeyMaybeEnded(ctx, sessionKey) : undefined;
+  if (!session) {
+    return {
+      eventId: null,
+      objectiveId: null,
+      sessionId: null,
+      deliveryStatus: NO_DELIVERY_NEEDED
+    };
+  }
+  const mission = await getMissionSummary({ ctx, missionId });
+  if (session.mission_id !== mission.id) {
+    return {
+      eventId: null,
+      objectiveId: null,
+      sessionId: null,
+      deliveryStatus: NO_DELIVERY_NEEDED
+    };
+  }
+  const objective = (await listObjectives({ ctx, missionId: mission.id })).find(
+    candidate => candidate.id === session.objective_id
+  );
+  const latest = (await ctx.db.get(
+    `SELECT type FROM mission_events
+       WHERE workspace_id = ? AND session_id = ?
+       ORDER BY created_at DESC LIMIT 1`,
+    [ctx.workspace.id, session.id]
+  )) as { type: string } | undefined;
+  const identity = {
+    eventId: null,
+    objectiveId: objective?.id ?? session.objective_id,
+    sessionId: session.id
+  };
+  if (
+    !objective ||
+    objective.state !== 'executing' ||
+    session.delivery_state === 'delivered' ||
+    latest?.type === 'ask'
+  ) {
+    return { ...identity, deliveryStatus: NO_DELIVERY_NEEDED };
+  }
+  return {
+    ...identity,
+    deliveryStatus: {
+      needed: true,
+      reason:
+        `Objective ${objective.displayId} is still executing and has not been delivered. ` +
+        'If the work is complete, deliver it with `ovld protocol deliver`. If you are ' +
+        'blocked on a person, ask with `ovld protocol ask`. Otherwise continue the work.'
+    }
+  };
+}
+
 export async function recordHookEvent({
   ctx,
   missionId,
@@ -1507,7 +1586,15 @@ export async function recordHookEvent({
   sessionKey?: string | null;
   externalSessionId?: string | null;
   turnIndex?: string | null;
-}): Promise<{ eventId: string; objectiveId: string | null; sessionId: string | null }> {
+}): Promise<{
+  eventId: string | null;
+  objectiveId: string | null;
+  sessionId: string | null;
+  deliveryStatus?: HookDeliveryStatus;
+}> {
+  if (hookType === 'Stop') {
+    return stopHookDeliveryStatus({ ctx, missionId, sessionKey: sessionKey ?? null });
+  }
   if (hookType !== 'UserPromptSubmit') {
     throw new ServiceError(`Unsupported hook type: ${hookType}`, 'validation_error');
   }

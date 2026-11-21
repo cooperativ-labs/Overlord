@@ -1,14 +1,17 @@
 {
   "fixtureVersion": 1,
   "kind": "source-guard",
-  "description": "Channel 1 protocol hooks remain registered. Mechanical agent-session observe/decide/inject is no longer a live Overlord path.",
+  "description": "Channel 1 protocol hooks remain registered, now as mcp_tool calls to the plugin hooks server, which spawns the same `ovld protocol` commands the CLI fallback uses. Mechanical agent-session observe/decide/inject is not registered in the plugin.",
   "path": "connectors/adapters/claude/hooks/hooks.json",
   "assert": {
     "mustContain": [
-      "scripts/post-tool-use-hook.sh",
-      "scripts/user-prompt-submit-hook.sh"
+      "overlord_hook_post_tool_use",
+      "overlord_hook_user_prompt_submit",
+      "\"matcher\": \"Edit|Write|MultiEdit|NotebookEdit|Bash\""
     ],
     "mustNotContain": [
+      "scripts/post-tool-use-hook.sh",
+      "scripts/user-prompt-submit-hook.sh",
       "scripts/agent-session-event.sh",
       "scripts/agent-session-request.sh",
       "scripts/agent-session-inbox.sh"

@@ -1,0 +1,17 @@
+{
+  "fixtureVersion": 1,
+  "kind": "source-guard",
+  "description": "Every supervisor start reaps app servers whose supervisor died (SIGKILL, sleep) and undoes the Codex trust entry they recorded; a crashed server is respawned at most three times; exit always stops the server and removes the trust entry, state file and credential cache (ADR 0092). The guard fails if reaping, the restart bound or the exit cleanup is removed.",
+  "path": "cli/src/agent-session/codex-app-server/index.ts",
+  "assert": {
+    "mustContain": [
+      "reapOrphanedSessions({ ...(home ? { home } : {}), cleanup: cleanupTrust });",
+      "const MAX_SERVER_RESTARTS = 3;",
+      "if (serverRestarts >= MAX_SERVER_RESTARTS) throw new Error('app server restart limit');",
+      "if (current) await current.stop();",
+      "removeImplicitTrustEntry(state.trustEntryAdded, env) === 'removed';",
+      "removeSessionState(scope.channelId, home);",
+      "removeChannelCredential(scope.channelId);"
+    ]
+  }
+}

@@ -21,7 +21,7 @@ Overlord exposes its protocol through six parallel surfaces:
 |---------|----------|------------|
 | **API routes** | `apps/web/app/api/protocol/*/route.ts` | REST endpoints, kebab-case paths |
 | **CLI commands** | `packages/overlord-cli/bin/_cli/protocol.mjs` | `ovld protocol <subcommand>`, `--kebab-case` flags |
-| **MCP tools** | `supabase/functions/mcp/tools.ts` (hosted) + `plugins/overlord/scripts/overlord-mcp.mjs` (Codex local shim) + `plugins/antigravity/scripts/overlord-mcp.mjs` (Antigravity local shim, staged to `~/.ovld/antigravity/scripts/`) | Hosted: `snake_case` tool names, **camelCase** parameters matching API JSON. Local shims: `snake_case` parameters mapping to CLI flags. |
+| **MCP tools** | `supabase/functions/mcp/tools.ts` (hosted) + `plugins/overlord/scripts/overlord-mcp.mjs` (Codex local shim) + `connectors/core/scripts/overlord-mcp.mjs` rendered per adapter at `ovld agent-setup` (Antigravity copy installed to `~/.gemini/config/plugins/overlord/scripts/overlord-mcp.mjs`) | Hosted: `snake_case` tool names, **camelCase** parameters matching API JSON. Local shims: `snake_case` parameters mapping to CLI flags. |
 | **Agent plugins** | Adapter templates in `connectors/adapters/<agent>/skills/overlord-mission/`, rendered with `connectors/core/overlord-mission/` by `ovld agent-setup` | The single `overlord-mission` skill; user-facing “ticket” is a trigger synonym for “mission” |
 | **Public docs for agents** | `docs/public/` | AI-agent-facing explainers that help agents explain Overlord to end users |
 | **CLI README** | `packages/overlord-cli/README.md` | User-facing CLI documentation and examples |
@@ -54,9 +54,9 @@ If the task changes human launch commands, also read `packages/overlord-cli/bin/
 Read all applicable MCP sources:
 - `supabase/functions/mcp/tools.ts` — hosted MCP tool definitions (`TOOLS` array) and `supabase/functions/mcp/index.ts` dispatch
 - `plugins/overlord/scripts/overlord-mcp.mjs` — Codex local MCP shim (`tools` array + `searchTicketsTool`) and CLI flag mapping
-- `plugins/antigravity/scripts/overlord-mcp.mjs` — Antigravity local MCP shim (same `ovld protocol` delegation pattern; installed copy lives at `~/.ovld/antigravity/scripts/overlord-mcp.mjs`)
+- `connectors/core/scripts/overlord-mcp.mjs` — Antigravity local MCP shim source (same `ovld protocol` delegation pattern; rendered with the adapter key and installed to `~/.gemini/config/plugins/overlord/scripts/overlord-mcp.mjs`)
 
-When auditing Antigravity-only drift, also read the installed-path patch logic in `packages/overlord-cli/bin/_cli/setup.mjs` (`patchAntigravityInstalledPaths`) so MCP `args` and hook `command` paths match the staged runtime scripts.
+When auditing Antigravity-only drift, also check that `connectors/adapters/antigravity/mcp_config.json` `args` and any `hooks.json` `command` paths are relative to the plugin root (`./scripts/...`) and name managed files, and that the manifest `installPath` (`~/.gemini/config/plugins/overlord`) still matches the plugin locations in https://antigravity.google/docs/plugins/. `yarn connectors:antigravity:check` covers the schema and runs `agy plugin validate --strict` when `agy` is available.
 
 Extract for each tool:
 - `name`, `inputSchema.properties`, `inputSchema.required`

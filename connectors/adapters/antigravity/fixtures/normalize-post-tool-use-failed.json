@@ -1,0 +1,54 @@
+{
+  "fixtureVersion": 1,
+  "kind": "normalized-event",
+  "description": "Antigravity PostToolUse for a replace_file_content that failed. A non-empty `error` decodes to outcome error, so capture records outcome_partial and appends no path; the error text and the replaced content never appear.",
+  "codec": "codec/antigravity.codec.yaml",
+  "occurredAt": "2026-11-20T00:00:00.000Z",
+  "payload": {
+    "hookEventName": "PostToolUse",
+    "toolCall": {
+      "id": "toolu_edit_2",
+      "name": "replace_file_content",
+      "args": {
+        "TargetFile": "/workspace/project/src/config.ts",
+        "Instruction": "Rename the export",
+        "TargetContent": "export const token",
+        "ReplacementContent": "export const apiKey = 'hunter2-secret';",
+        "AllowMultiple": false
+      }
+    },
+    "stepIdx": 9,
+    "error": "target content not found in /workspace/project/src/config.ts",
+    "conversationId": "ec33ebf9-0cba-4100-8142-c61503f6c587",
+    "workspacePaths": ["/workspace/project"],
+    "transcriptPath": "/Users/dev/.gemini/antigravity-cli/brain/ec33ebf9-0cba-4100-8142-c61503f6c587/.system_generated/logs/transcript.jsonl",
+    "artifactDirectoryPath": "/Users/dev/.gemini/antigravity-cli/brain/ec33ebf9-0cba-4100-8142-c61503f6c587",
+    "modelName": "gemini-3.6-flash-medium",
+    "cwd": "/workspace/project"
+  },
+  "expect": {
+    "eventId": "ev_002004eb56748030ac1d512383db2feb",
+    "producerSequence": null,
+    "occurredAt": "2026-11-20T00:00:00.000Z",
+    "kind": "file.edited",
+    "severity": "info",
+    "nativeEvent": "PostToolUse",
+    "nativeTurnId": null,
+    "nativeCallId": "toolu_edit_2",
+    "subagentId": null,
+    "correlationId": "ec33ebf9-0cba-4100-8142-c61503f6c587",
+    "origin": "agent",
+    "summary": "Overwrite a file: src/config.ts: 39 bytes, replacing existing text [overwrites-existing]",
+    "payload": {
+      "tool": "edit",
+      "action": "Overwrite a file",
+      "subject": "src/config.ts",
+      "detail": "39 bytes, replacing existing text",
+      "riskMarkers": ["overwrites-existing"],
+      "paths": ["src/config.ts"],
+      "outcome": "error",
+      "formatterVersion": 1
+    }
+  },
+  "mustNotContain": ["hunter2-secret", "target content not found", "transcript.jsonl", "/Users/dev"]
+}

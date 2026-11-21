@@ -1,0 +1,24 @@
+{
+  "fixtureVersion": 1,
+  "kind": "source-guard",
+  "description": "The private app server listens only on an owner-only Unix socket, never on TCP, and is started with an allowlisted environment plus the control-plane surface marker. The guard fails if the listener moves to ws:// or a wildcard address, if the owner-only check on ~/.ovld/cx goes away, or if Overlord credentials or objective scope are added to the server's environment allowlist.",
+  "path": "cli/src/agent-session/codex-app-server/server.ts",
+  "assert": {
+    "mustContain": [
+      "['app-server', '--listen', `unix://${socketPath}`]",
+      "if ((stat.mode & 0o077) !== 0) {",
+      "out[CONTROL_PLANE_SURFACE_ENV] = CODEX_APP_SERVER_ADAPTER_KEY;",
+      "detached: true"
+    ],
+    "mustNotContain": [
+      "ws://",
+      "0.0.0.0",
+      "'OVERLORD_USER_TOKEN'",
+      "'OVERLORD_SESSION_CHANNEL_TOKEN'",
+      "'OVERLORD_SESSION_CHANNEL_ID'",
+      "'OVERLORD_OBJECTIVE_ID'",
+      "'MISSION_ID'",
+      "key.startsWith('OVERLORD_')"
+    ]
+  }
+}

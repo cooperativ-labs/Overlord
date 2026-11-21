@@ -5,10 +5,10 @@
 import { z } from 'zod';
 
 /** The contract version (contract/VERSION) this API description belongs to. */
-export const contractVersion = "179.1.0";
+export const contractVersion = "179.10.0";
 
 /** The API description's own version (OpenAPI `info.version`). */
-export const apiVersion = "6.1.0";
+export const apiVersion = "6.5.0";
 
 /** A non-JSON request or response body: raw bytes (G3). */
 export type BinaryBody = Uint8Array | ArrayBuffer | Blob;
@@ -185,11 +185,52 @@ export type AgentLaunchFlagInput = string | {
 };
 export const agentLaunchFlagInputSchema: z.ZodType<AgentLaunchFlagInput> = z.union([z.string(), z.object({ "name": z.string(), "value": z.exactOptional(z.string().nullable()) })]);
 
+export interface MintSessionChannelBody {
+  /**
+   * The control-plane adapter that will drive the session (`codex-app-server`).
+   */
+  adapterKey: string;
+  /**
+   * The adapter runtime version (the `ovld` version), recorded on the channel.
+   */
+  adapterVersion?: string;
+  /**
+   * The claimed execution request this launch serves; must belong to the objective.
+   */
+  executionRequestId?: string;
+  /**
+   * The execution target the session runs on; ignored when not in the workspace.
+   */
+  executionTargetId?: string;
+}
+export const mintSessionChannelBodySchema: z.ZodType<MintSessionChannelBody> = z.object({ "adapterKey": z.string(), "adapterVersion": z.exactOptional(z.string()), "executionRequestId": z.exactOptional(z.string()), "executionTargetId": z.exactOptional(z.string()) });
+
+export interface SessionChannelBootstrapDto {
+  channelId: string;
+  /**
+   * The scoped `osc_…` channel credential, returned only here. Never log or persist it outside the owner-only credential cache.
+   */
+  token: string;
+  expiresAt: DateTime;
+  launchKind: "control_plane";
+  launchPromptId: string | null;
+  adapterKey: string;
+  agentIdentifier: string;
+}
+export const sessionChannelBootstrapDtoSchema: z.ZodType<SessionChannelBootstrapDto> = z.object({ "channelId": z.string(), "token": z.string(), "expiresAt": dateTimeSchema, "launchKind": z.literal("control_plane"), "launchPromptId": z.string().nullable(), "adapterKey": z.string(), "agentIdentifier": z.string() });
+
+/**
+ * How an Overlord launch drives the agent on this machine (ADR 0092). `hooks` (the default when absent) runs the interactive terminal observed through the agent's hooks. `appServer` runs a Codex objective through a private Codex app server driven by Overlord's control-plane supervisor, with the terminal attached to it; it applies only to `codex` and is ignored for other agents. Experimental and off unless chosen.
+ */
+export type AgentHarnessMode = "hooks" | "appServer";
+export const agentHarnessModeSchema: z.ZodType<AgentHarnessMode> = z.enum(["hooks", "appServer"]);
+
 export interface AgentLaunchConfigDto {
   preCommand: string;
   flags: AgentLaunchFlagDto[];
+  harnessMode?: AgentHarnessMode;
 }
-export const agentLaunchConfigDtoSchema: z.ZodType<AgentLaunchConfigDto> = z.object({ "preCommand": z.string(), "flags": z.array(agentLaunchFlagDtoSchema) });
+export const agentLaunchConfigDtoSchema: z.ZodType<AgentLaunchConfigDto> = z.object({ "preCommand": z.string(), "flags": z.array(agentLaunchFlagDtoSchema), "harnessMode": z.exactOptional(agentHarnessModeSchema) });
 
 /**
  * Launch mechanics as accepted on input; omitted members default to empty.
@@ -3796,11 +3837,11 @@ export type JsonRpcResponse = ({
   jsonrpc: "2.0";
   id: JsonRpcId;
   error: {
-    code: -32600 | -32601 | -32000;
+    code: -32600 | -32601 | -32602 | -32000;
     message: string;
   };
 });
-export const jsonRpcResponseSchema: z.ZodType<JsonRpcResponse> = z.union([z.strictObject({ "jsonrpc": z.literal("2.0"), "id": z.exactOptional(jsonRpcIdSchema), "result": jsonValueSchema }), z.strictObject({ "jsonrpc": z.literal("2.0"), "id": jsonRpcIdSchema, "error": z.object({ "code": z.literal([-32600, -32601, -32000]), "message": z.string() }) })]);
+export const jsonRpcResponseSchema: z.ZodType<JsonRpcResponse> = z.union([z.strictObject({ "jsonrpc": z.literal("2.0"), "id": z.exactOptional(jsonRpcIdSchema), "result": jsonValueSchema }), z.strictObject({ "jsonrpc": z.literal("2.0"), "id": jsonRpcIdSchema, "error": z.object({ "code": z.literal([-32600, -32601, -32602, -32000]), "message": z.string() }) })]);
 
 export type AccountConnectionProvider = "knowledgebase" | "everhour" | "github";
 export const accountConnectionProviderSchema: z.ZodType<AccountConnectionProvider> = z.enum(["knowledgebase", "everhour", "github"]);
@@ -4349,6 +4390,21 @@ export interface AgentCatalogModelDto {
 }
 export const agentCatalogModelDtoSchema: z.ZodType<AgentCatalogModelDto> = z.object({ "id": z.string(), "displayName": z.string(), "reasoningOptions": z.array(z.string()), "enabled": z.boolean() });
 
+/**
+ * Present when the agent's models came from a harness installation's live list (`POST /api/workspaces/{id}/agent-catalog/live-models`) rather than the bundled defaults.
+ */
+export interface AgentCatalogLiveSourceDto {
+  /**
+   * The reporting harness version (for Codex, the app server's version), when known.
+   */
+  harnessVersion: string | null;
+  /**
+   * ISO 8601 time the report was stored.
+   */
+  reportedAt: string;
+}
+export const agentCatalogLiveSourceDtoSchema: z.ZodType<AgentCatalogLiveSourceDto> = z.object({ "harnessVersion": z.string().nullable(), "reportedAt": z.string() });
+
 export interface AgentCatalogAgentDto {
   /**
    * Stable connector key (`claude`, `codex`, `cursor`, …).
@@ -4363,8 +4419,9 @@ export interface AgentCatalogAgentDto {
    * Column heading for the reasoning options; defaults to `Thinking`.
    */
   reasoningLabel: string;
+  liveSource?: AgentCatalogLiveSourceDto;
 }
-export const agentCatalogAgentDtoSchema: z.ZodType<AgentCatalogAgentDto> = z.object({ "key": z.string(), "label": z.string(), "availableByDefault": z.boolean(), "models": z.array(agentCatalogModelDtoSchema), "defaultModel": z.string().nullable(), "defaultReasoningEffort": z.string().nullable(), "reasoningLabel": z.string() });
+export const agentCatalogAgentDtoSchema: z.ZodType<AgentCatalogAgentDto> = z.object({ "key": z.string(), "label": z.string(), "availableByDefault": z.boolean(), "models": z.array(agentCatalogModelDtoSchema), "defaultModel": z.string().nullable(), "defaultReasoningEffort": z.string().nullable(), "reasoningLabel": z.string(), "liveSource": z.exactOptional(agentCatalogLiveSourceDtoSchema) });
 
 export interface AgentCatalogDto {
   agents: AgentCatalogAgentDto[];
@@ -4375,6 +4432,34 @@ export interface AgentCatalogDto {
   defaultModel: string | null;
 }
 export const agentCatalogDtoSchema: z.ZodType<AgentCatalogDto> = z.object({ "agents": z.array(agentCatalogAgentDtoSchema), "defaultAgent": z.string(), "defaultModel": z.string().nullable() });
+
+/**
+ * One agent's live model list. Strings are trimmed; a non-string text field or one over 200 characters, a missing or blank `agent` or model `id`, a duplicate model `id`, an empty `models` list or more than 200 models answers 400. Blank and over-long reasoning options are dropped, and a `defaultReasoningEffort` outside the model's options is ignored.
+ */
+export interface AgentLiveModelsReportBody {
+  /**
+   * Catalog agent key, for example `codex`.
+   */
+  agent: string;
+  harnessVersion?: string | null;
+  models: Array<{
+    /**
+     * The model slug a launch passes to the harness.
+     */
+    id: string;
+    /**
+     * Blank defaults to the id.
+     */
+    displayName?: string;
+    reasoningOptions?: string[];
+    /**
+     * The harness's own default model.
+     */
+    isDefault?: boolean;
+    defaultReasoningEffort?: string | null;
+  }>;
+}
+export const agentLiveModelsReportBodySchema: z.ZodType<AgentLiveModelsReportBody> = z.object({ "agent": z.string(), "harnessVersion": z.exactOptional(z.string().nullable()), "models": z.array(z.object({ "id": z.string(), "displayName": z.exactOptional(z.string()), "reasoningOptions": z.exactOptional(z.array(z.string())), "isDefault": z.exactOptional(z.boolean()), "defaultReasoningEffort": z.exactOptional(z.string().nullable()) })).min(1).max(200) });
 
 /**
  * Each agent needs a non-blank `key` and `label` (trimmed) and a non-empty `models` list; each model needs a non-blank `id`, unique within the agent; a non-null `defaultModel` must name one of them; a non-null `defaultReasoningEffort` must be one of the default model's reasoning options when it has any. Each failure answers 400. A non-string `key`, `label`, model `id` or `displayName`, or a non-object agent or model, answers 500. A later agent with the same key replaces an earlier one.
@@ -4518,8 +4603,12 @@ export interface UpdateAgentLaunchConfigBody {
    * Normalized; a non-array value stores an empty list.
    */
   flags?: AgentLaunchFlagInput[];
+  /**
+   * Set the harness mode; `null` clears it (back to `hooks`). Omitted keeps the stored value.
+   */
+  harnessMode?: AgentHarnessMode | null;
 }
-export const updateAgentLaunchConfigBodySchema: z.ZodType<UpdateAgentLaunchConfigBody> = z.object({ "preCommand": z.exactOptional(z.string()), "flags": z.exactOptional(z.array(agentLaunchFlagInputSchema)) });
+export const updateAgentLaunchConfigBodySchema: z.ZodType<UpdateAgentLaunchConfigBody> = z.object({ "preCommand": z.exactOptional(z.string()), "flags": z.exactOptional(z.array(agentLaunchFlagInputSchema)), "harnessMode": z.exactOptional(agentHarnessModeSchema.nullable()) });
 
 export interface UpdateTerminalProfileBody {
   launcher?: string | null;
@@ -4915,8 +5004,16 @@ export interface AgentSessionHeartbeatDto {
   ok: true;
   leaseExpiresAt: DateTime;
   credentialExpiresAt: DateTime;
+  /**
+   * The channel's objective state (`deleted` when it is gone), or null when the channel has no objective. A control-plane supervisor stops when it is `complete` or `deleted` (ADR 0092).
+   */
+  objectiveState?: string | null;
+  /**
+   * The bound session's delivery state, or null before attach binds a session. A control-plane supervisor stops after `delivered` once its thread has been idle for a while (ADR 0092).
+   */
+  deliveryState?: string | null;
 }
-export const agentSessionHeartbeatDtoSchema: z.ZodType<AgentSessionHeartbeatDto> = z.object({ "ok": z.literal(true), "leaseExpiresAt": dateTimeSchema, "credentialExpiresAt": dateTimeSchema });
+export const agentSessionHeartbeatDtoSchema: z.ZodType<AgentSessionHeartbeatDto> = z.object({ "ok": z.literal(true), "leaseExpiresAt": dateTimeSchema, "credentialExpiresAt": dateTimeSchema, "objectiveState": z.exactOptional(z.string().nullable()), "deliveryState": z.exactOptional(z.string().nullable()) });
 
 export interface AgentSessionEventInput {
   /**
@@ -5039,8 +5136,14 @@ const agentRequestDtoShape = { "id": z.string(), "channelId": z.string(), "missi
 export const agentRequestDtoSchema: z.ZodType<AgentRequestDto> = z.object(agentRequestDtoShape);
 
 export interface AgentRequestDeliveryDto {
-  mode: "latch" | "read_only";
-  reason: ("no_latch_session" | "latch_session_exited" | "target_offline" | "request_closed") | null;
+  /**
+   * `latch`: answerable here; the answer is typed into the agent's Latch session. `control_plane`: answerable here; the request came from a control-plane session channel (Codex app-server mode, ADR 0094) and the channel's supervisor applies the answer itself. `read_only`: not answerable here, for `reason`.
+   */
+  mode: "latch" | "control_plane" | "read_only";
+  /**
+   * Why the request is `read_only`. `channel_ended`: its control-plane channel is no longer live. `not_session_owner`: a permission request on a control-plane channel, and the caller is not the member who launched the session.
+   */
+  reason: ("no_latch_session" | "latch_session_exited" | "target_offline" | "request_closed" | "channel_ended" | "not_session_owner") | null;
   state: ("emitted" | "applied" | "not_applied" | "unknown") | null;
   observedAt: DateTime | null;
   /**
@@ -5072,7 +5175,7 @@ export interface AgentRequestDeliveryDto {
    */
   sessionState?: string | null;
 }
-export const agentRequestDeliveryDtoSchema: z.ZodType<AgentRequestDeliveryDto> = z.object({ "mode": z.enum(["latch", "read_only"]), "reason": z.enum(["no_latch_session", "latch_session_exited", "target_offline", "request_closed"]).nullable(), "state": z.enum(["emitted", "applied", "not_applied", "unknown"]).nullable(), "observedAt": dateTimeSchema.nullable(), "stage": z.exactOptional(z.string().nullable()), "attempt": z.exactOptional(z.int().min(1).nullable()), "failureCode": z.exactOptional(z.string().nullable()), "failureMessage": z.exactOptional(z.string().max(300).nullable()), "canRedeliver": z.exactOptional(z.boolean()), "confirmationRequired": z.exactOptional(z.boolean()), "sessionState": z.exactOptional(z.string().nullable()) });
+export const agentRequestDeliveryDtoSchema: z.ZodType<AgentRequestDeliveryDto> = z.object({ "mode": z.enum(["latch", "control_plane", "read_only"]), "reason": z.enum(["no_latch_session", "latch_session_exited", "target_offline", "request_closed", "channel_ended", "not_session_owner"]).nullable(), "state": z.enum(["emitted", "applied", "not_applied", "unknown"]).nullable(), "observedAt": dateTimeSchema.nullable(), "stage": z.exactOptional(z.string().nullable()), "attempt": z.exactOptional(z.int().min(1).nullable()), "failureCode": z.exactOptional(z.string().nullable()), "failureMessage": z.exactOptional(z.string().max(300).nullable()), "canRedeliver": z.exactOptional(z.boolean()), "confirmationRequired": z.exactOptional(z.boolean()), "sessionState": z.exactOptional(z.string().nullable()) });
 
 /**
  * A request with its delivery mode, as the human routes return it.
@@ -6798,6 +6901,14 @@ export interface PostWorkspacesByIdAgentCatalogRefreshPathParams {
 }
 export const postWorkspacesByIdAgentCatalogRefreshPathParamsSchema: z.ZodType<PostWorkspacesByIdAgentCatalogRefreshPathParams> = z.object({ "id": z.string() });
 
+export interface PostWorkspacesByIdAgentCatalogLiveModelsPathParams {
+  /**
+   * Workspace UUID; a workspace the caller is not an active member of answers 404.
+   */
+  id: string;
+}
+export const postWorkspacesByIdAgentCatalogLiveModelsPathParamsSchema: z.ZodType<PostWorkspacesByIdAgentCatalogLiveModelsPathParams> = z.object({ "id": z.string() });
+
 export interface DeleteUserTokensByIdPathParams {
   /**
    * Token id (any string); a token another profile owns, or a deleted one, answers 404.
@@ -8102,6 +8213,14 @@ export interface PostObjectivesByIdLaunchPathParams {
   id: string;
 }
 export const postObjectivesByIdLaunchPathParamsSchema: z.ZodType<PostObjectivesByIdLaunchPathParams> = z.object({ "id": z.string() });
+
+export interface PostObjectivesByIdSessionChannelsPathParams {
+  /**
+   * Objective UUID, or full display id (`coo:756.k7xm`) resolved within the caller's organization; an ambiguous display id answers 409.
+   */
+  id: string;
+}
+export const postObjectivesByIdSessionChannelsPathParamsSchema: z.ZodType<PostObjectivesByIdSessionChannelsPathParams> = z.object({ "id": z.string() });
 
 export interface GetObjectivesByIdPromptPathParams {
   /**
@@ -10232,6 +10351,25 @@ export const apiOperations = {
     parameters: { path: postWorkspacesByIdAgentCatalogRefreshPathParamsSchema, query: null, header: null },
     requestBody: null,
     responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: agentCatalogDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+  },
+  /**
+   * POST /api/workspaces/{id}/agent-catalog/live-models: Record the models a harness installation reports
+   */
+  postWorkspacesByIdAgentCatalogLiveModels: {
+    operationId: "postWorkspacesByIdAgentCatalogLiveModels",
+    method: "POST",
+    path: "/api/workspaces/{id}/agent-catalog/live-models",
+    tags: ["agent-catalog"],
+    deprecated: false,
+    permission: "launch:configure",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["cli","runner"],
+    extension: null,
+    security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
+    parameters: { path: postWorkspacesByIdAgentCatalogLiveModelsPathParamsSchema, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: agentLiveModelsReportBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: agentCatalogDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
   },
   /**
    * GET /api/profile: Read the caller's own profile
@@ -12571,7 +12709,7 @@ export const apiOperations = {
     responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: agentRequestListResponseSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
   },
   /**
-   * POST /api/agent-requests/{id}/resolve: Answer an agent question
+   * POST /api/agent-requests/{id}/resolve: Answer an agent question or approval
    */
   postAgentRequestsByIdResolve: {
     operationId: "postAgentRequestsByIdResolve",
@@ -13063,6 +13201,25 @@ export const apiOperations = {
     parameters: { path: postObjectivesByIdLaunchPathParamsSchema, query: null, header: null },
     requestBody: { required: true, content: { "application/json": { kind: "json", schema: launchObjectiveBodySchema } } },
     responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: executionRequestDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * POST /api/objectives/{id}/session-channels: Mint the session channel for a control-plane launch
+   */
+  postObjectivesByIdSessionChannels: {
+    operationId: "postObjectivesByIdSessionChannels",
+    method: "POST",
+    path: "/api/objectives/{id}/session-channels",
+    tags: ["objectives"],
+    deprecated: false,
+    permission: "session:attach",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["cli"],
+    extension: null,
+    security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
+    parameters: { path: postObjectivesByIdSessionChannelsPathParamsSchema, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: mintSessionChannelBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: sessionChannelBootstrapDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
   },
   /**
    * GET /api/objectives/{id}/prompt: Copyable prompt for running an objective manually

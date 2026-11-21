@@ -1,12 +1,14 @@
 import { missionDisplayIdFromObjectiveRef } from '@overlord/contract';
 import type { NextFunction, Request, Response } from 'express';
 
+import { getActiveProfileId, getActiveTokenId, getActorWorkspaceUserId } from '../backend/db.ts';
 import type { ProtocolRequestBody } from '../backend/protocol.ts';
 import { runProtocolSubcommand } from '../backend/protocol.ts';
 
 import { isRecord } from './records.ts';
 import { compactRunQueueResponse } from './run-queue-detail.ts';
 import { compactSearchResponse } from './search-detail.ts';
+import { McpTaskError, McpTaskStore, MODEL_IMMEDIATE_RESPONSE_META_KEY } from './tasks.ts';
 import {
   HOSTED_MCP_DEFAULT_AGENT,
   hostedMcpToolDefinitions,
@@ -923,18 +925,77 @@ function failure(id: JsonRpcId | undefined, error: JsonRpcError): Record<string,
   return { jsonrpc: '2.0', id: id ?? null, error };
 }
 
-async function callTool(params: unknown): Promise<ToolCallResult> {
+async function runTool(tool: ToolEntry, args: Record<string, unknown>): Promise<ToolCallResult> {
+  try {
+    return jsonText(await tool.handler(args));
+  } catch (error) {
+    return toolErrorText(error);
+  }
+}
+
+/**
+ * Hosted task store (MCP 2025-11-25 tasks). It lives in this process: the backend runs one
+ * replica, and every task-capable tool is replay-safe through `operationId` and readable with
+ * `overlord_delivery_receipt`, so a task lost to a restart loses only its bookkeeping.
+ */
+let taskSettledListener: (() => void) | null = null;
+const taskStore = new McpTaskStore({ onSettled: () => taskSettledListener?.() });
+
+/**
+ * Registers the callback run when a background task finishes (the backend nudges its poll loops,
+ * as it does after a synchronous `/mcp` call).
+ */
+export function onHostedMcpTaskSettled(listener: (() => void) | null): void {
+  taskSettledListener = listener;
+}
+
+/**
+ * The authorization context a task is bound to: the authenticated profile and the credential
+ * (USER_TOKEN id, or a browser session), or the workspace actor when no profile resolved. A task
+ * is visible only to the same owner.
+ */
+function taskOwner(): string {
+  const profileId = getActiveProfileId();
+  return JSON.stringify([
+    profileId,
+    getActiveTokenId(),
+    profileId === null ? getActorWorkspaceUserId() : null
+  ]);
+}
+
+function immediateTaskResponse(toolName: string, taskId: string): string {
+  return `Overlord started ${toolName} in the background as task ${taskId}. Its result arrives when the task finishes. If the task is lost, read the outcome with overlord_delivery_receipt using the operationId you sent.`;
+}
+
+async function callTool(params: unknown): Promise<Record<string, unknown>> {
   if (!isRecord(params) || !isRecord(params.arguments)) {
     throw new Error('tools/call requires params.name and params.arguments');
   }
   const name = typeof params.name === 'string' ? params.name : '';
   const tool = tools.find(candidate => candidate.name === name);
   if (!tool) throw new Error(`Unknown MCP tool: ${name}`);
-  try {
-    return jsonText(await tool.handler(params.arguments));
-  } catch (error) {
-    return toolErrorText(error);
+  const args = params.arguments;
+  const taskSupport = tool.execution?.taskSupport ?? 'forbidden';
+
+  if (params.task === undefined) {
+    if (taskSupport === 'required') {
+      throw new McpTaskError(-32601, `Tool ${name} must be called as a task`);
+    }
+    return runTool(tool, args);
   }
+  if (taskSupport === 'forbidden') {
+    throw new McpTaskError(-32601, `Tool ${name} does not support task-augmented execution`);
+  }
+  const ttl = taskStore.grantedTtl(params.task)!;
+  const task = taskStore.create(taskOwner(), ttl, () => runTool(tool, args));
+  return {
+    task,
+    _meta: { [MODEL_IMMEDIATE_RESPONSE_META_KEY]: immediateTaskResponse(name, task.taskId) }
+  };
+}
+
+function taskIdParam(params: unknown): unknown {
+  return isRecord(params) ? params.taskId : undefined;
 }
 
 function readResource(params: unknown): Record<string, unknown> {
@@ -956,7 +1017,13 @@ function readResource(params: unknown): Record<string, unknown> {
   };
 }
 
-async function dispatch(request: JsonRpcRequest): Promise<Record<string, unknown> | null> {
+/**
+ * Answers one JSON-RPC message from an authenticated `/mcp` caller. Exported for tests; the HTTP
+ * route calls it through `handleMcpPost`.
+ */
+export async function dispatchMcpRequest(
+  request: JsonRpcRequest
+): Promise<Record<string, unknown> | null> {
   if (request.jsonrpc !== '2.0' || typeof request.method !== 'string') {
     return failure(request.id, { code: -32600, message: 'Invalid JSON-RPC request' });
   }
@@ -969,7 +1036,13 @@ async function dispatch(request: JsonRpcRequest): Promise<Record<string, unknown
           serverInfo: { name: 'overlord', version: '0.1.0' },
           instructions:
             'Overlord manages explicit user-authorized work. Resolve project identity before creating work, use read tools before writes, and call session lifecycle tools only when the user explicitly asks to begin, update, or deliver mission work.',
-          capabilities: { tools: {}, resources: {} }
+          capabilities: {
+            tools: {},
+            resources: {},
+            // Task-augmented tools/call (MCP 2025-11-25). No `cancel`: a delivery cannot be
+            // withdrawn once its handler runs, so the server never claims to stop one.
+            tasks: { list: {}, requests: { tools: { call: {} } } }
+          }
         });
       case 'notifications/initialized':
         return null;
@@ -979,6 +1052,18 @@ async function dispatch(request: JsonRpcRequest): Promise<Record<string, unknown
         return success(request.id, { tools: toolDefinitions() });
       case 'tools/call':
         return success(request.id, await callTool(request.params));
+      case 'tasks/get':
+        return success(request.id, taskStore.get(taskOwner(), taskIdParam(request.params)));
+      case 'tasks/result':
+        return success(
+          request.id,
+          await taskStore.result(taskOwner(), taskIdParam(request.params))
+        );
+      case 'tasks/list':
+        return success(
+          request.id,
+          taskStore.list(taskOwner(), isRecord(request.params) ? request.params.cursor : undefined)
+        );
       case 'resources/list':
         return success(request.id, { resources: hostedMcpWidgetResources });
       case 'resources/read':
@@ -990,6 +1075,9 @@ async function dispatch(request: JsonRpcRequest): Promise<Record<string, unknown
         });
     }
   } catch (err) {
+    if (err instanceof McpTaskError) {
+      return failure(request.id, { code: err.code, message: err.message });
+    }
     return failure(request.id, {
       code: -32000,
       message: err instanceof Error ? err.message : 'MCP tool failed'
@@ -1022,7 +1110,7 @@ export async function handleMcpPost(
     const requests = Array.isArray(body) ? body : [body];
     const responses: Array<Record<string, unknown>> = [];
     for (const item of requests) {
-      const response = await dispatch(isRecord(item) ? item : {});
+      const response = await dispatchMcpRequest(isRecord(item) ? item : {});
       if (response) responses.push(response);
     }
     if (Array.isArray(body)) {

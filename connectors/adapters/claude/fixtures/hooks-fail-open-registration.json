@@ -1,0 +1,32 @@
+{
+  "fixtureVersion": 1,
+  "kind": "source-guard",
+  "description": "The plugin's static hooks are mcp_tool calls to the bundled hooks server and all fail open: no onFailure, no command hook, no shell script, and no PermissionRequest or PreToolUse (the fail-closed decision hook is registered per launch only). This also bounds what Cursor can import from the Claude plugin (taxonomy-7.1). Nothing that crosses the privacy boundary is templated (no transcript or agent transcript path, tool response, permission suggestions or last assistant message). SubagentStop stays unregistered: a subagent's stop is not the end of the objective's work (fixtures/subagent-stop-background.json).",
+  "path": "connectors/adapters/claude/hooks/hooks.json",
+  "assert": {
+    "mustContain": [
+      "\"type\": \"mcp_tool\"",
+      "\"server\": \"plugin:overlord:overlord-hooks\"",
+      "\"UserPromptSubmit\"",
+      "\"PostToolUse\"",
+      "\"Stop\"",
+      "overlord_hook_user_prompt_submit",
+      "overlord_hook_post_tool_use",
+      "overlord_hook_stop"
+    ],
+    "mustNotContain": [
+      "\"onFailure\"",
+      "\"type\": \"command\"",
+      "\"command\":",
+      ".sh",
+      "\"PermissionRequest\"",
+      "\"PreToolUse\"",
+      "${transcript_path}",
+      "${tool_response}",
+      "${permission_suggestions}",
+      "${last_assistant_message}",
+      "${agent_transcript_path}",
+      "\"SubagentStop\""
+    ]
+  }
+}

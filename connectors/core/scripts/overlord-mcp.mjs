@@ -1,16 +1,36 @@
 #!/usr/bin/env node
 
-import { execFile } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import { existsSync, statSync } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { clearTimeout, setTimeout } from 'node:timers';
 import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
 const OVLD_BIN = process.env.OVLD_BIN?.trim() || 'ovld';
 const PROTOCOL_VERSION = '2025-06-18';
 const DEFAULT_AGENT = '__OVERLORD_ADAPTER_KEY__';
+/**
+ * `--hooks` serves only the harness hook tools (see "Hook tools" below) and lists no tools, so
+ * the model never sees them. Without it the shim is the model-facing Overlord tool server.
+ */
+const HOOKS_MODE = process.argv.slice(2).includes('--hooks');
 let buffer = Buffer.alloc(0);
+/**
+ * stdio framing, detected from the first byte the client sends and used for every reply.
+ * The MCP stdio transport (and Claude Code) is newline-delimited JSON (`{`); older clients
+ * send `Content-Length` headers (`C`).
+ */
+let framing = null;
 
 function send(message) {
   const json = JSON.stringify(message);
+  if (framing === 'ndjson') {
+    process.stdout.write(`${json}\n`);
+    return;
+  }
   const body = Buffer.from(json, 'utf8');
   const header = Buffer.from(`Content-Length: ${body.length}\r\n\r\n`, 'utf8');
   process.stdout.write(Buffer.concat([header, body]));
@@ -19,6 +39,26 @@ function send(message) {
 function parseMessages(chunk) {
   buffer = Buffer.concat([buffer, chunk]);
   const messages = [];
+  if (framing === null) {
+    const start = buffer.toString('utf8').trimStart();
+    if (!start) return messages;
+    framing = start.startsWith('{') ? 'ndjson' : 'content-length';
+  }
+  if (framing === 'ndjson') {
+    while (true) {
+      const newline = buffer.indexOf(0x0a);
+      if (newline === -1) break;
+      const line = buffer.subarray(0, newline).toString('utf8').trim();
+      buffer = buffer.subarray(newline + 1);
+      if (!line) continue;
+      try {
+        messages.push(JSON.parse(line));
+      } catch {
+        // A malformed line has no id to answer; skip it and keep the stream usable.
+      }
+    }
+    return messages;
+  }
   while (true) {
     const headerEnd = buffer.indexOf('\r\n\r\n');
     if (headerEnd === -1) break;
@@ -2587,57 +2627,647 @@ async function callOverlordTool(name, args) {
   throw new Error(`Unknown tool: ${name}`);
 }
 
-process.stdin.on('data', async chunk => {
-  for (const message of parseMessages(chunk)) {
-    if (!message || typeof message !== 'object' || !('id' in message)) continue;
-    if (message.method === 'initialize') {
-      send({
-        jsonrpc: '2.0',
-        id: message.id,
-        result: {
-          protocolVersion: PROTOCOL_VERSION,
-          capabilities: { tools: { listChanged: false } },
-          serverInfo: { name: 'overlord-__OVERLORD_ADAPTER_KEY__', version: '0.3.75' }
-        }
-      });
-      continue;
-    }
-    if (message.method === 'tools/list') {
-      send({
-        jsonrpc: '2.0',
-        id: message.id,
-        result: { tools }
-      });
-      continue;
-    }
-    if (message.method === 'tools/call') {
-      const toolName = message.params?.name;
-      const args = message.params?.arguments ?? {};
+// ---------------------------------------------------------------------------------------------
+// Hook tools (`--hooks` mode)
+//
+// The harness calls these from `mcp_tool` hooks (Claude Code >= 2.1.328). They hold no business
+// logic: each one gates, rebuilds the native hook payload from the templated hook `input`, spawns
+// the SAME `ovld` command the CLI fallback uses with that payload on stdin, and maps its stdout to
+// the hook answer. The CLI therefore stays the one implementation, and `ovld protocol ...` /
+// `ovld agent-session ...` remain the supported fallback when this server is unavailable.
+//
+// Rules for every hook tool:
+// - Answer with exactly one JSON object as text, `{}` at minimum. Never empty text, never
+//   `isError` for a business outcome: under `onFailure: "block"` an error means "the hook could
+//   not run", which denies.
+// - Scope gate before any spawn: an unbound session costs one environment read and at most one
+//   `stat`. This duplicates only the cheap part of the CLI's own gate (cli/src/hook-binding.ts).
+// - Each tool answers only its own event name.
+// ---------------------------------------------------------------------------------------------
+
+/** Tool name -> native event it serves and the templated hook inputs it accepts. */
+const HOOK_TOOLS = {
+  overlord_hook_user_prompt_submit: {
+    event: 'UserPromptSubmit',
+    fields: ['hook_event_name', 'session_id', 'cwd', 'prompt']
+  },
+  overlord_hook_post_tool_use: {
+    event: 'PostToolUse',
+    fields: ['hook_event_name', 'session_id', 'cwd', 'tool_name', 'tool_use_id', 'tool_input']
+  },
+  overlord_hook_stop: {
+    event: 'Stop',
+    fields: ['hook_event_name', 'session_id', 'cwd', 'stop_hook_active', 'background_tasks']
+  },
+  overlord_hook_permission_request: {
+    event: 'PermissionRequest',
+    fields: [
+      'hook_event_name',
+      'session_id',
+      'cwd',
+      'permission_mode',
+      'tool_name',
+      'tool_input',
+      'hookTimeoutSeconds'
+    ]
+  }
+};
+
+/** Object-valued hook fields arrive JSON-encoded through `${path}` templating. */
+const HOOK_JSON_FIELDS = new Set(['tool_input', 'background_tasks']);
+/** Follow-up recording keeps the old fire-and-forget latency: answer by then, finish later. */
+const HOOK_PROMPT_BUDGET_MS = 3_000;
+const HOOK_CAPTURE_BUDGET_MS = 10_000;
+/** The Stop delivery-reminder step: one bounded backend read. */
+const HOOK_STOP_STEP_BUDGET_MS = 10_000;
+/**
+ * The Stop inbox step: claim, emitted and acknowledged, each bounded at 5 s by the CLI, plus spawn.
+ * The CLI must finish inside this budget: an input it marks emitted after the hook already
+ * answered `{}` would be reported delivered but never shown.
+ */
+const HOOK_STOP_INBOX_BUDGET_MS = 16_000;
+/**
+ * Mirrors CLAUDE_HEADLESS_STOP_WAIT_MS in cli/src/agent-session/inbox.ts, which decides the wait;
+ * this server only sizes its budget so it never answers before the CLI. Keep the two equal (a
+ * test asserts it) and keep the plugin's Stop hook `timeout` above wait + both step budgets.
+ */
+const HOOK_HEADLESS_STOP_WAIT_MS = 60_000;
+/** The decision hook answers `{}` (native prompt) this long before the harness would time out. */
+const HOOK_DECISION_MARGIN_MS = 5_000;
+const HOOK_DEFAULT_DECISION_TIMEOUT_SECONDS = 300;
+const HOOK_MAX_STDOUT_CHARS = 1_000_000;
+
+function hookAnswer(output) {
+  return { content: [{ type: 'text', text: JSON.stringify(output) }] };
+}
+
+function envValue(name) {
+  const value = process.env[name];
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
+/** Rebuild the native payload: allowlisted fields, decoded values, no empty templated paths. */
+function rebuildHookPayload(toolName, args) {
+  const spec = HOOK_TOOLS[toolName];
+  const payload = {};
+  if (!spec || !args || typeof args !== 'object') return payload;
+  for (const field of spec.fields) {
+    const value = args[field];
+    // A missing `${path}` substitutes as "".
+    if (value === undefined || value === null || value === '') continue;
+    if (HOOK_JSON_FIELDS.has(field)) {
+      if (typeof value !== 'string') {
+        payload[field] = value;
+        continue;
+      }
       try {
-        send({
-          jsonrpc: '2.0',
-          id: message.id,
-          result: await callOverlordTool(toolName, args)
-        });
+        payload[field] = JSON.parse(value);
+      } catch {
+        // An undecodable object field is dropped; the codec then sees no input.
+      }
+      continue;
+    }
+    if (field === 'stop_hook_active') {
+      payload[field] = value === true || value === 'true';
+      continue;
+    }
+    if (field === 'hookTimeoutSeconds') {
+      const seconds = Number(value);
+      if (Number.isFinite(seconds) && seconds > 0) payload[field] = seconds;
+      continue;
+    }
+    payload[field] = value;
+  }
+  return payload;
+}
+
+function hookDataDir() {
+  const override = envValue('OVLD_HOME');
+  return override ? path.resolve(override) : path.join(os.homedir(), '.ovld');
+}
+
+/**
+ * Whether this server belongs to a Claude session started from inside another Claude session
+ * (`claude -p` run from a Bash tool). Claude Code exports `CLAUDE_PID` to its tool processes but
+ * not to its MCP servers, so a hooks server that sees a `CLAUDE_PID` other than its own parent's
+ * inherited it from an outer session (fixtures/nested-session-identity.json). Such a session has
+ * its own native session id, yet it inherits the outer launch environment.
+ */
+function isNestedSession() {
+  const outer = envValue('CLAUDE_PID');
+  return outer !== null && outer !== String(process.ppid);
+}
+
+/**
+ * The launch environment binds the session Overlord launched, not a nested one. A nested session
+ * may still bind through the native-session index, under its own native id, if its agent attached.
+ */
+const LAUNCH_BINDING_ENV = [
+  'OVERLORD_MISSION_ID',
+  'MISSION_ID',
+  'OVERLORD_OBJECTIVE_ID',
+  'OVERLORD_SESSION_CHANNEL_ID',
+  'OVERLORD_SESSION_CHANNEL_TOKEN',
+  'SESSION_KEY'
+];
+
+function hasLaunchMission() {
+  if (isNestedSession()) return false;
+  return Boolean(
+    envValue('OVERLORD_MISSION_ID') || envValue('MISSION_ID') || envValue('OVERLORD_OBJECTIVE_ID')
+  );
+}
+
+function hasSessionChannel() {
+  if (isNestedSession()) return false;
+  return Boolean(envValue('OVERLORD_SESSION_CHANNEL_ID'));
+}
+
+/** `claude -p` and the Agent SDK set `CLAUDE_CODE_ENTRYPOINT` to `sdk-*`; interactive is `cli`. */
+function isHeadlessSession() {
+  return /^sdk-/.test(envValue('CLAUDE_CODE_ENTRYPOINT') ?? '');
+}
+
+/** Same key as cli/src/hook-binding.ts `nativeSessionIndexPath`. */
+function hasIndexedSession(sessionId) {
+  if (typeof sessionId !== 'string' || !sessionId) return false;
+  const key = createHash('sha256').update(`${DEFAULT_AGENT}\0${sessionId}`).digest('hex');
+  return existsSync(path.join(hookDataDir(), 'native-session-index', key));
+}
+
+function hookCwd(payload) {
+  const cwd = typeof payload.cwd === 'string' ? payload.cwd : '';
+  try {
+    if (cwd && path.isAbsolute(cwd) && statSync(cwd).isDirectory()) return cwd;
+  } catch {
+    // Fall back to the server's own directory (the session's project directory).
+  }
+  return process.cwd();
+}
+
+/**
+ * Spawn one fixed `ovld` command with the payload on stdin. Argv is fixed per tool: no payload
+ * value ever reaches it. Resolves at exit or at the budget, whichever is first; past the budget
+ * the child keeps running unless `killOnTimeout` is set.
+ */
+function runOvldHook(
+  argv,
+  payload,
+  { cwd, timeoutMs, killOnTimeout = false, keepLaunchBinding = false }
+) {
+  return new Promise(resolve => {
+    const env = { ...process.env, AGENT_IDENTIFIER: process.env.AGENT_IDENTIFIER ?? DEFAULT_AGENT };
+    // A nested session must not reach the outer launch binding through the CLI either. File
+    // capture keeps it: the nested process edits the same checkout for the same objective.
+    if (!keepLaunchBinding && isNestedSession()) {
+      for (const name of LAUNCH_BINDING_ENV) delete env[name];
+    }
+    let child;
+    try {
+      child = spawn(OVLD_BIN, argv, {
+        cwd,
+        env,
+        stdio: ['pipe', 'pipe', 'ignore']
+      });
+    } catch {
+      resolve({ done: false, code: null, stdout: '' });
+      return;
+    }
+    let stdout = '';
+    let settled = false;
+    const finish = result => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve(result);
+    };
+    const timer = setTimeout(() => {
+      if (killOnTimeout) child.kill();
+      finish({ done: false, code: null, stdout: '' });
+    }, timeoutMs);
+    child.stdout.setEncoding('utf8');
+    child.stdout.on('data', data => {
+      if (stdout.length < HOOK_MAX_STDOUT_CHARS) stdout += data;
+    });
+    child.on('error', () => finish({ done: false, code: null, stdout: '' }));
+    child.on('close', code => finish({ done: true, code, stdout }));
+    child.stdin.on('error', () => {});
+    child.stdin.end(JSON.stringify(payload));
+  });
+}
+
+function parseHookObject(text) {
+  try {
+    const value = JSON.parse(String(text).trim());
+    return value && typeof value === 'object' && !Array.isArray(value) ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+/** `ovld protocol hook-event --agent <key>` prints a result whose `hookOutput` is the answer. */
+function hookEventOutput(result) {
+  const parsed = result.done && result.code === 0 ? parseHookObject(result.stdout) : null;
+  const output = parsed?.hookOutput;
+  return output && typeof output === 'object' && !Array.isArray(output) ? output : {};
+}
+
+async function callHookTool(name, args) {
+  const spec = Object.hasOwn(HOOK_TOOLS, name) ? HOOK_TOOLS[name] : null;
+  if (!spec) throw new Error(`Unknown tool: ${name}`);
+  const payload = rebuildHookPayload(name, args);
+  if (payload.hook_event_name !== spec.event) return hookAnswer({});
+  const cwd = hookCwd(payload);
+
+  if (spec.event === 'PostToolUse') {
+    // File capture needs the explicit launch objective; the native-session index never applies.
+    if (!envValue('OVERLORD_OBJECTIVE_ID')) return hookAnswer({});
+    await runOvldHook(['protocol', 'capture-change', '--agent', DEFAULT_AGENT], payload, {
+      cwd,
+      timeoutMs: HOOK_CAPTURE_BUDGET_MS,
+      keepLaunchBinding: true
+    });
+    return hookAnswer({});
+  }
+
+  if (spec.event === 'UserPromptSubmit') {
+    if (!hasLaunchMission() && !hasIndexedSession(payload.session_id)) return hookAnswer({});
+    const result = await runOvldHook(
+      [
+        'protocol',
+        'hook-event',
+        '--agent',
+        DEFAULT_AGENT,
+        '--hook-type',
+        'UserPromptSubmit',
+        '--payload-file',
+        '-'
+      ],
+      payload,
+      { cwd, timeoutMs: HOOK_PROMPT_BUDGET_MS }
+    );
+    return hookAnswer(hookEventOutput(result));
+  }
+
+  if (spec.event === 'Stop') {
+    // 1. A pending instruction for this session's channel continues the turn with it. The CLI
+    //    decides how long to poll (a final Stop in a headless session waits); this only sizes
+    //    the budget so the hook never answers before the CLI finishes.
+    if (hasSessionChannel()) {
+      const inbox = await runOvldHook(
+        ['agent-session', 'inbox', '--agent', DEFAULT_AGENT, '--payload-file', '-'],
+        payload,
+        {
+          cwd,
+          timeoutMs:
+            HOOK_STOP_INBOX_BUDGET_MS + (isHeadlessSession() ? HOOK_HEADLESS_STOP_WAIT_MS : 0)
+        }
+      );
+      const injected = inbox.done && inbox.code === 0 ? parseHookObject(inbox.stdout) : null;
+      if (injected?.decision === 'block' && typeof injected.reason === 'string') {
+        return hookAnswer({ decision: 'block', reason: injected.reason });
+      }
+    }
+    // 2. Otherwise, the once-per-objective delivery reminder.
+    if (!hasLaunchMission() && !hasIndexedSession(payload.session_id)) return hookAnswer({});
+    const result = await runOvldHook(
+      [
+        'protocol',
+        'hook-event',
+        '--agent',
+        DEFAULT_AGENT,
+        '--hook-type',
+        'Stop',
+        '--payload-file',
+        '-'
+      ],
+      payload,
+      { cwd, timeoutMs: HOOK_STOP_STEP_BUDGET_MS }
+    );
+    return hookAnswer(hookEventOutput(result));
+  }
+
+  // PermissionRequest: only a session with a channel has a remote decision path. Every
+  // no-decision outcome (unbound, unresolved, backend error, internal deadline) is `{}`, which
+  // leaves the native prompt in place. Nothing here can manufacture an approval.
+  if (!hasSessionChannel()) return hookAnswer({});
+  const timeoutSeconds = payload.hookTimeoutSeconds ?? HOOK_DEFAULT_DECISION_TIMEOUT_SECONDS;
+  const result = await runOvldHook(
+    ['agent-session', 'request', '--agent', DEFAULT_AGENT, '--payload-file', '-'],
+    payload,
+    {
+      cwd,
+      timeoutMs: Math.max(1_000, timeoutSeconds * 1_000 - HOOK_DECISION_MARGIN_MS),
+      killOnTimeout: true
+    }
+  );
+  const decision = result.done && result.code === 0 ? parseHookObject(result.stdout) : null;
+  return hookAnswer(decision ?? {});
+}
+
+// ---------------------------------------------------------------- Codex status line
+//
+// `terminal.statusSurface` for Codex (0.171+, feature `tui_extensions_statusline`). Codex finds a
+// statusline provider by a tool whose `_meta["openai/ui"].entrypoints` names a `statusline`
+// resource, then polls `resources/read` on that URI with the displayed thread's state in
+// `params._meta["com.openai/codex-statusline-state"]`: one read at a time, one second to answer,
+// one second between reads, and an error or a timeout stops polling until the person reselects
+// the provider. So a read never fails and never waits long:
+//
+// - The provider replaces Codex's built-in footer, so the read always renders the model, folder
+//   and context from the state Codex sent, fresh on every read.
+// - The Overlord segment comes from `ovld status-line --agent codex --native-session-id <thread>
+//   --ui-tree`, the same local-only command Claude's status line runs (binding by the native
+//   session index or the launch environment, never the working directory). Its answer is cached
+//   per thread for STATUS_LINE_SEGMENT_TTL_MS; one command runs at a time per thread, and a read
+//   waits at most STATUS_LINE_READ_BUDGET_MS for it before answering with the previous segment.
+
+const STATUS_LINE_ENABLED = DEFAULT_AGENT === 'codex' && !HOOKS_MODE;
+const STATUS_LINE_URI = 'ui://overlord/status-line';
+const STATUS_LINE_TOOL_NAME = 'overlord_status_line';
+const STATUS_LINE_STATE_META = 'com.openai/codex-statusline-state';
+const STATUS_LINE_SEGMENT_TTL_MS = 10_000;
+const STATUS_LINE_READ_BUDGET_MS = 500;
+const STATUS_LINE_COMMAND_TIMEOUT_MS = 5_000;
+const STATUS_LINE_MAX_THREADS = 32;
+const STATUS_LINE_MAX_ITEM_CHARS = 80;
+const STATUS_LINE_MAX_SEGMENT_CHARS = 16_384;
+
+const statusLineTool = {
+  name: STATUS_LINE_TOOL_NAME,
+  title: 'Overlord mission',
+  description:
+    "Codex status line provider: shows the Overlord mission and objective bound to the thread in Codex's footer. Select it in /statusline. Calling it only returns this description.",
+  inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+  annotations: { readOnlyHint: true },
+  _meta: {
+    'openai/ui': { entrypoints: [{ type: 'statusline', resourceUri: STATUS_LINE_URI }] }
+  }
+};
+
+/** threadKey -> { segment, at, pending } */
+const statusLineSegments = new Map();
+
+function boundedText(value, max = STATUS_LINE_MAX_ITEM_CHARS) {
+  if (typeof value !== 'string') return null;
+  const text = value.replace(/\s+/g, ' ').trim();
+  if (!text) return null;
+  const chars = [...text];
+  return chars.length <= max ? text : `${chars.slice(0, max - 1).join('')}…`;
+}
+
+function statusLineText(color, text) {
+  return { type: 'text', props: { color }, children: [text] };
+}
+
+/** The built-in items the provider replaces: model and effort, folder, context left. */
+function statusLineBaseItems(thread) {
+  const items = [];
+  const model = isPlainObject(thread.model) ? thread.model : {};
+  const modelName = boundedText(model.display_name);
+  if (modelName) {
+    const effort = boundedText(model.reasoning_level, 16);
+    items.push(statusLineText('status-model', effort ? `${modelName} ${effort}` : modelName));
+  }
+  const workspace = isPlainObject(thread.workspace) ? thread.workspace : {};
+  if (typeof workspace.cwd === 'string' && workspace.cwd.trim()) {
+    const folder = boundedText(path.basename(workspace.cwd.trim()) || workspace.cwd);
+    if (folder) items.push(statusLineText('status-path', folder));
+  }
+  const context = isPlainObject(thread.usage?.context) ? thread.usage.context : {};
+  const used = context.used_percentage;
+  if (typeof used === 'number' && Number.isFinite(used)) {
+    const left = Math.min(100, Math.max(0, Math.round(100 - used)));
+    items.push(statusLineText('status-usage', `${left}% context left`));
+  }
+  return items;
+}
+
+/** Accept only what `ovld status-line --ui-tree` prints: `null` or one element object. */
+function parseStatusLineSegment(stdout) {
+  const text = String(stdout).trim();
+  if (!text || text.length > STATUS_LINE_MAX_SEGMENT_CHARS) return null;
+  try {
+    const value = JSON.parse(text);
+    return isPlainObject(value) && typeof value.type === 'string' ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+function runStatusLineSegment(threadId) {
+  return new Promise(resolve => {
+    const argv = ['status-line', '--agent', DEFAULT_AGENT, '--ui-tree'];
+    if (threadId) argv.push('--native-session-id', threadId);
+    let child;
+    try {
+      child = spawn(OVLD_BIN, argv, { stdio: ['ignore', 'pipe', 'ignore'] });
+    } catch {
+      resolve(null);
+      return;
+    }
+    let stdout = '';
+    let settled = false;
+    const finish = segment => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve(segment);
+    };
+    const timer = setTimeout(() => {
+      child.kill();
+      finish(null);
+    }, STATUS_LINE_COMMAND_TIMEOUT_MS);
+    child.stdout.setEncoding('utf8');
+    child.stdout.on('data', data => {
+      if (stdout.length <= STATUS_LINE_MAX_SEGMENT_CHARS) stdout += data;
+    });
+    child.on('error', () => finish(null));
+    child.on('close', code => finish(code === 0 ? parseStatusLineSegment(stdout) : null));
+  });
+}
+
+/** The cached Overlord segment for a thread, refreshed in the background when it is old. */
+async function statusLineSegment(threadId) {
+  const key = threadId ?? '';
+  let entry = statusLineSegments.get(key);
+  if (!entry) {
+    if (statusLineSegments.size >= STATUS_LINE_MAX_THREADS) {
+      statusLineSegments.delete(statusLineSegments.keys().next().value);
+    }
+    entry = { segment: null, at: 0, pending: null };
+    statusLineSegments.set(key, entry);
+  }
+  if (Date.now() - entry.at < STATUS_LINE_SEGMENT_TTL_MS) return entry.segment;
+  if (!entry.pending) {
+    const current = entry;
+    current.pending = runStatusLineSegment(threadId).then(segment => {
+      current.segment = segment;
+      current.at = Date.now();
+      current.pending = null;
+    });
+  }
+  let budget;
+  await Promise.race([
+    entry.pending,
+    new Promise(resolve => {
+      budget = setTimeout(resolve, STATUS_LINE_READ_BUDGET_MS);
+    })
+  ]);
+  clearTimeout(budget);
+  return entry.segment;
+}
+
+/** The footer for one `resources/read`. Never throws. */
+async function renderCodexStatusLine(params) {
+  try {
+    const state = isPlainObject(params?._meta?.[STATUS_LINE_STATE_META])
+      ? params._meta[STATUS_LINE_STATE_META]
+      : {};
+    const thread = isPlainObject(state.thread) ? state.thread : {};
+    const threadId =
+      typeof thread.id === 'string' && /^[A-Za-z0-9._:-]{1,128}$/.test(thread.id)
+        ? thread.id
+        : null;
+    const items = statusLineBaseItems(thread);
+    const segment = await statusLineSegment(threadId);
+    if (segment) items.push(segment);
+    if (items.length === 0) return null;
+    const children = [];
+    for (const item of items) {
+      if (children.length > 0) children.push(statusLineText('status-metadata', '·'));
+      children.push(item);
+    }
+    return { type: 'row', props: { gap: 1, wrap: 'nowrap' }, children };
+  } catch {
+    return null;
+  }
+}
+
+async function handleStatusLineMethod(message) {
+  if (message.method === 'resources/list') {
+    return {
+      resources: [
+        {
+          name: 'overlord-status-line',
+          title: 'Overlord mission',
+          uri: STATUS_LINE_URI,
+          mimeType: 'application/json'
+        }
+      ]
+    };
+  }
+  if (message.method === 'resources/templates/list') return { resourceTemplates: [] };
+  if (message.method === 'resources/read') {
+    if (message.params?.uri !== STATUS_LINE_URI) {
+      throw Object.assign(new Error(`Unknown resource: ${String(message.params?.uri)}`), {
+        code: -32002
+      });
+    }
+    const tree = await renderCodexStatusLine(message.params);
+    return {
+      contents: [{ uri: STATUS_LINE_URI, mimeType: 'application/json', text: JSON.stringify(tree) }]
+    };
+  }
+  return undefined;
+}
+
+async function handleMessage(message) {
+  if (!message || typeof message !== 'object' || !('id' in message)) return;
+  if (message.method === 'initialize') {
+    send({
+      jsonrpc: '2.0',
+      id: message.id,
+      result: {
+        protocolVersion: PROTOCOL_VERSION,
+        capabilities: STATUS_LINE_ENABLED
+          ? { tools: { listChanged: false }, resources: { listChanged: false } }
+          : { tools: { listChanged: false } },
+        serverInfo: { name: 'overlord-__OVERLORD_ADAPTER_KEY__', version: '0.3.84' }
+      }
+    });
+    return;
+  }
+  if (message.method === 'tools/list') {
+    send({
+      jsonrpc: '2.0',
+      id: message.id,
+      // Hook tools are answered on tools/call but never listed: the harness hook names them
+      // directly, and the model must not see or call them.
+      result: { tools: HOOKS_MODE ? [] : STATUS_LINE_ENABLED ? [...tools, statusLineTool] : tools }
+    });
+    return;
+  }
+  if (STATUS_LINE_ENABLED && typeof message.method === 'string') {
+    if (message.method.startsWith('resources/')) {
+      try {
+        const result = await handleStatusLineMethod(message);
+        if (result !== undefined) {
+          send({ jsonrpc: '2.0', id: message.id, result });
+          return;
+        }
       } catch (error) {
         send({
           jsonrpc: '2.0',
           id: message.id,
-          error: { code: -32602, message: error instanceof Error ? error.message : String(error) }
+          error: {
+            code: typeof error?.code === 'number' ? error.code : -32603,
+            message: error instanceof Error ? error.message : String(error)
+          }
         });
+        return;
       }
-      continue;
     }
-    if (message.method === 'ping') {
-      send({ jsonrpc: '2.0', id: message.id, result: {} });
-      continue;
+    if (message.method === 'tools/call' && message.params?.name === STATUS_LINE_TOOL_NAME) {
+      send({
+        jsonrpc: '2.0',
+        id: message.id,
+        result: {
+          content: [
+            {
+              type: 'text',
+              text: `The Overlord status line is the resource ${STATUS_LINE_URI}. Select "Overlord mission" in /statusline to show it in the footer.`
+            }
+          ]
+        }
+      });
+      return;
     }
-    send({
-      jsonrpc: '2.0',
-      id: message.id,
-      error: { code: -32601, message: `Method not found: ${message.method}` }
-    });
   }
+  if (message.method === 'tools/call') {
+    const toolName = message.params?.name;
+    const args = message.params?.arguments ?? {};
+    try {
+      send({
+        jsonrpc: '2.0',
+        id: message.id,
+        result: HOOKS_MODE
+          ? await callHookTool(toolName, args)
+          : await callOverlordTool(toolName, args)
+      });
+    } catch (error) {
+      send({
+        jsonrpc: '2.0',
+        id: message.id,
+        error: { code: -32602, message: error instanceof Error ? error.message : String(error) }
+      });
+    }
+    return;
+  }
+  if (message.method === 'ping') {
+    send({ jsonrpc: '2.0', id: message.id, result: {} });
+    return;
+  }
+  send({
+    jsonrpc: '2.0',
+    id: message.id,
+    error: { code: -32601, message: `Method not found: ${message.method}` }
+  });
+}
+
+// Messages are handled concurrently: a held decision hook must not delay other hook calls.
+process.stdin.on('data', chunk => {
+  for (const message of parseMessages(chunk)) void handleMessage(message);
 });
 
 process.stdin.resume();

@@ -1,0 +1,14 @@
+{
+  "fixtureVersion": 1,
+  "kind": "source-guard",
+  "description": "A Codex approval for an item whose earlier approval already settled gets its own occurrence id, so the channel's dedupe by native request id never hands it the earlier card's answer; a replay of a still-open card keeps its id (unit test: cli/test/codex-app-server.test.ts, 'an approval asked again for the same item never inherits the earlier answer'). The guard fails if the occurrence id or the settle bookkeeping is removed.",
+  "path": "cli/src/agent-session/codex-app-server/decisions.ts",
+  "assert": {
+    "mustContain": [
+      "if (this.cards.has(card.nativeRequestId)) return card;",
+      ": { ...card, nativeRequestId: `${card.nativeRequestId}#${count + 1}` };",
+      "const card = this.occurrenceOf(baseCard);",
+      "this.settle(card, baseCard.nativeRequestId);"
+    ]
+  }
+}

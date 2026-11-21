@@ -1,0 +1,235 @@
+{
+  "fixtureVersion": 1,
+  "kind": "script-io",
+  "description": "inject.midTurn from recorded 0.170.0 frames: with a turn running, a claimed inbox instruction is sent as turn/steer with the expectedTurnId precondition, the input is reported delivered and acknowledged, and the steering text then arrives as a userMessage item inside the same turn.",
+  "script": "scripts/codex-app-server-replay.mjs",
+  "stdinMessages": [
+    {
+      "setup": {
+        "codec": "connectors/adapters/codex-app-server/codec/codex-app-server.codec.yaml",
+        "cwd": "/repo",
+        "threadId": "01a1faae-db57-7001-ab8b-329bc51062e9",
+        "report": [
+          "/inputs/input-"
+        ],
+        "channel": {
+          "POST /inputs/claim": [
+            {
+              "input": {
+                "id": "input-1",
+                "kind": "instruction",
+                "body": "Also make notes.md end with a second line: bye",
+                "leaseId": "lease-1",
+                "leaseExpiresAt": null
+              }
+            },
+            {
+              "input": null
+            }
+          ]
+        }
+      }
+    },
+    {
+      "await": {
+        "method": "initialize"
+      }
+    },
+    {
+      "server": {
+        "id": 1,
+        "result": {
+          "userAgent": "overlord/0.170.0 (Mac OS 27.2.1; arm64) xterm-256color (overlord; replay)",
+          "codexHome": "/home/user/.codex",
+          "platformFamily": "unix",
+          "platformOs": "macos"
+        }
+      }
+    },
+    {
+      "server": {
+        "method": "remoteControl/status/changed",
+        "params": {
+          "status": "disabled",
+          "serverName": "host",
+          "installationId": "00000000-0000-0000-0000-000000000000",
+          "environmentId": null
+        },
+        "emittedAtMs": 1795207125837
+      }
+    },
+    {
+      "await": {
+        "method": "thread/resume"
+      }
+    },
+    {
+      "server": {
+        "id": 2,
+        "result": {
+          "thread": {
+            "id": "01a1faae-db57-7001-ab8b-329bc51062e9",
+            "sessionId": "01a1faae-db57-7001-ab8b-329bc51062e9",
+            "status": {
+              "type": "active",
+              "activeFlags": []
+            },
+            "cwd": "/repo",
+            "turns": [
+              {
+                "id": "01a1faae-dd6f-7311-9876-5b672b9e8918",
+                "status": "inProgress",
+                "items": []
+              }
+            ]
+          },
+          "cwd": "/repo",
+          "approvalPolicy": "untrusted",
+          "approvalsReviewer": "user"
+        }
+      }
+    },
+    {
+      "await": {
+        "method": "turn/steer"
+      }
+    },
+    {
+      "server": {
+        "id": 3,
+        "result": {
+          "turnId": "01a1faae-dd6f-7311-9876-5b672b9e8918"
+        }
+      }
+    },
+    {
+      "await": {
+        "channel": "POST /inputs/input-1/acknowledged"
+      }
+    },
+    {
+      "server": {
+        "method": "item/completed",
+        "params": {
+          "item": {
+            "type": "userMessage",
+            "id": "01a1faae-f602-7331-9135-e0a1373f9e89",
+            "clientId": null,
+            "content": [
+              {
+                "type": "text",
+                "text": "Also make notes.md end with a second line: bye",
+                "text_elements": []
+              }
+            ],
+            "startedAtMs": 1795207132675,
+            "completedAtMs": 1795207132675
+          },
+          "threadId": "01a1faae-db57-7001-ab8b-329bc51062e9",
+          "turnId": "01a1faae-dd6f-7311-9876-5b672b9e8918",
+          "contentTokenCount": null,
+          "completedAtMs": 1795207132675
+        },
+        "emittedAtMs": 1795207132676
+      }
+    }
+  ],
+  "timeoutMs": 60000,
+  "expect": {
+    "exitCode": 0,
+    "stderr": "",
+    "responses": [
+      {
+        "id": "out-1",
+        "rpc": {
+          "id": 1,
+          "method": "initialize",
+          "params": {
+            "clientInfo": {
+              "name": "overlord",
+              "title": "Overlord",
+              "version": "replay"
+            },
+            "capabilities": {
+              "experimentalApi": true,
+              "requestAttestation": false,
+              "optOutNotificationMethods": [
+                "item/agentMessage/delta",
+                "item/reasoning/summaryTextDelta",
+                "item/reasoning/summaryPartAdded",
+                "item/reasoning/textDelta",
+                "item/commandExecution/outputDelta",
+                "item/fileChange/outputDelta",
+                "thread/tokenUsage/updated",
+                "account/rateLimits/updated",
+                "turn/moderationMetadata"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": "out-2",
+        "rpc": {
+          "method": "initialized"
+        }
+      },
+      {
+        "id": "out-3",
+        "rpc": {
+          "id": 2,
+          "method": "thread/resume",
+          "params": {
+            "threadId": "01a1faae-db57-7001-ab8b-329bc51062e9",
+            "approvalsReviewer": "user"
+          }
+        }
+      },
+      {
+        "id": "out-4",
+        "rpc": {
+          "id": 3,
+          "method": "turn/steer",
+          "params": {
+            "threadId": "01a1faae-db57-7001-ab8b-329bc51062e9",
+            "input": [
+              {
+                "type": "text",
+                "text": "Also make notes.md end with a second line: bye",
+                "text_elements": []
+              }
+            ],
+            "expectedTurnId": "01a1faae-dd6f-7311-9876-5b672b9e8918"
+          }
+        }
+      },
+      {
+        "id": "out-5",
+        "channel": {
+          "method": "POST",
+          "path": "/inputs/input-1/emitted",
+          "body": {
+            "leaseId": "lease-1",
+            "deliveryOutcome": "delivered"
+          }
+        }
+      },
+      {
+        "id": "out-6",
+        "channel": {
+          "method": "POST",
+          "path": "/inputs/input-1/acknowledged",
+          "body": {}
+        }
+      },
+      {
+        "id": "result",
+        "reason": "reconnect-exhausted",
+        "serverVersion": "0.170.0",
+        "threadId": "01a1faae-db57-7001-ab8b-329bc51062e9",
+        "injected": 1,
+        "interrupted": false
+      }
+    ]
+  }
+}

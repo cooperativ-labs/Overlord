@@ -1,0 +1,35 @@
+{
+  "fixtureVersion": 1,
+  "kind": "script-io",
+  "description": "With a session channel, the Antigravity Stop hook first claims a pending Overlord instruction through `ovld agent-session inbox`; a claimed instruction is answered as Antigravity's Stop `decision: continue` and the delivery reminder is not requested.",
+  "script": "connectors/adapters/antigravity/hooks/overlord-stop.sh",
+  "stdin": {
+    "hookEventName": "Stop",
+    "conversationId": "ec33ebf9-0cba-4100-8142-c61503f6c587",
+    "workspacePaths": ["/workspace/project"],
+    "cwd": "/workspace/project",
+    "executionNum": 3,
+    "terminationReason": "model_stop",
+    "fullyIdle": true,
+    "continuation_active": false,
+    "lastUserInput": "Ship it",
+    "modelName": "gemini-3.6-flash-medium"
+  },
+  "env": {
+    "MISSION_ID": "coo:825",
+    "OVERLORD_MISSION_ID": "coo:825",
+    "OVERLORD_OBJECTIVE_ID": "coo:825.abcd",
+    "OVERLORD_SESSION_CHANNEL_ID": "chan_1"
+  },
+  "spy": {
+    "stdout": "{\"decision\":\"continue\",\"reason\":\"Also update the changelog\"}\n"
+  },
+  "expect": {
+    "exitCode": 0,
+    "stdout": "{\"decision\":\"continue\",\"reason\":\"Also update the changelog\"}\n",
+    "stderr": "",
+    "cliInvocations": ["agent-session inbox --agent antigravity --payload-file -"],
+    "stdinForwarded": true,
+    "sandboxWrites": []
+  }
+}

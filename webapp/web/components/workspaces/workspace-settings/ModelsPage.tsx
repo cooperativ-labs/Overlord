@@ -310,6 +310,19 @@ function AgentModelsSection({
           <p className="text-sm text-muted-foreground">
             Drag rows to set the model order shown in launch pickers.
           </p>
+          {agent.liveSource ? (
+            <p className="text-xs text-muted-foreground">
+              Models reported by {agent.label}
+              {agent.liveSource.harnessVersion ? ` ${agent.liveSource.harnessVersion}` : ''} on{' '}
+              {new Date(agent.liveSource.reportedAt).toLocaleString()}. Run{' '}
+              <code className="font-mono">ovld models {agent.key} --sync</code> to update them.
+            </p>
+          ) : agent.key === 'codex' ? (
+            <p className="text-xs text-muted-foreground">
+              Bundled defaults. Run <code className="font-mono">ovld models codex --sync</code> to
+              offer the models your Codex installation supports.
+            </p>
+          ) : null}
         </div>
         <div className="flex items-center gap-2">
           <Label htmlFor={`${agent.key}-available`} className="text-xs text-muted-foreground">

@@ -1,0 +1,74 @@
+{
+  "fixtureVersion": 1,
+  "kind": "script-io",
+  "description": "The decision tool never manufactures an approval. When `ovld agent-session request` fails, even with allow-shaped stdout, the PermissionRequest tool answers `{}` (no decision), which leaves Claude's native prompt in place. Only a failure of the harness-to-tool hop denies (fixtures/probe-decision-fail-closed.json).",
+  "script": "connectors/core/scripts/overlord-mcp.mjs",
+  "adapterKey": "claude",
+  "args": ["--hooks"],
+  "stdinMessages": [
+    {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "tools/call",
+      "params": {
+        "name": "overlord_hook_permission_request",
+        "arguments": {
+          "hook_event_name": "PermissionRequest",
+          "session_id": "claude-session-1",
+          "cwd": "/repo",
+          "permission_mode": "default",
+          "tool_name": "Bash",
+          "tool_input": "{\"command\": \"ls\"}",
+          "hookTimeoutSeconds": 300
+        }
+      }
+    }
+  ],
+  "env": {
+    "MISSION_ID": null,
+    "OVERLORD_MISSION_ID": null,
+    "OVERLORD_OBJECTIVE_ID": null,
+    "OVERLORD_SESSION_CHANNEL_ID": "channel-1",
+    "OVERLORD_SESSION_CHANNEL_TOKEN": null,
+    "SESSION_KEY": null,
+    "OVLD_HOME": null,
+    "CLAUDE_CODE_SESSION_ID": null
+  },
+  "spy": {
+    "exitCode": 1,
+    "stdout": "{\"hookSpecificOutput\":{\"hookEventName\":\"PermissionRequest\",\"decision\":{\"behavior\":\"allow\"}}}"
+  },
+  "expect": {
+    "exitCode": 0,
+    "stderr": "",
+    "responses": [
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "{}"
+            }
+          ]
+        }
+      }
+    ],
+    "cliInvocations": ["agent-session request --agent claude --payload-file -"],
+    "cliStdin": [
+      {
+        "hook_event_name": "PermissionRequest",
+        "session_id": "claude-session-1",
+        "cwd": "/repo",
+        "permission_mode": "default",
+        "tool_name": "Bash",
+        "tool_input": {
+          "command": "ls"
+        },
+        "hookTimeoutSeconds": 300
+      }
+    ],
+    "sandboxWrites": []
+  }
+}

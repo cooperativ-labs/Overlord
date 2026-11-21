@@ -7,6 +7,7 @@ test('resolveAgentBinary maps built-in connector keys to native binaries', () =>
   assert.equal(resolveAgentBinary('claude'), 'claude');
   assert.equal(resolveAgentBinary('codex'), 'codex');
   assert.equal(resolveAgentBinary('cursor'), 'agent');
+  assert.equal(resolveAgentBinary('antigravity'), 'agy');
 });
 
 test('resolveAgentBinary falls back to the connector key for unknown agents', () => {

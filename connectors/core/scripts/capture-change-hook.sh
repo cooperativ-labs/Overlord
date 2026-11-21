@@ -7,6 +7,11 @@
 # unknown outcomes outcome_unavailable, shell calls shell_activity_unverified, and other
 # no-path callbacks direct_path_unavailable; none of them appends a path.
 
+# A harness process an Overlord control-plane supervisor drives (for example a private
+# `codex app-server`) carries OVERLORD_CONTROL_PLANE_SURFACE. The supervisor observes, decides
+# and captures for it, so this callback must not report a second time.
+[ -z "${OVERLORD_CONTROL_PLANE_SURFACE:-}" ] || exit 0
+
 OBJECTIVE_REF="${OVERLORD_OBJECTIVE_ID:-}"
 
 # Scope before reading stdin or spawning. Cwd and native session ids are never

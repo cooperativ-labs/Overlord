@@ -1,0 +1,16 @@
+{
+  "fixtureVersion": 1,
+  "kind": "source-guard",
+  "description": "`ovld status-line` answers from local state only: an unbound session reads no cache, spawns nothing and makes no network call, and a stale snapshot starts one detached, lock-guarded refresh. The refresh uses only side-effect-free reads (display-id mission search, the mission's objectives, the objective's open agent requests). It never reads `GET /api/missions/:id`, which marks the mission's blocking-question indicator seen, and never writes to stderr.",
+  "path": "cli/src/status-line.ts",
+  "assert": {
+    "mustContain": [
+      "`/api/missions/search?q=${missionRef}&limit=5`",
+      "`/api/missions/${missionRef}/objectives`",
+      "`/api/agent-requests?${requestParams.toString()}`",
+      "claimStatusLineRefresh(binding.missionId, binding.objectiveId, now)",
+      "detached: true"
+    ],
+    "mustNotContain": ["`/api/missions/${missionRef}`", "process.stderr", "console.error"]
+  }
+}

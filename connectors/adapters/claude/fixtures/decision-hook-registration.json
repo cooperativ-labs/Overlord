@@ -1,0 +1,17 @@
+{
+  "fixtureVersion": 1,
+  "kind": "source-guard",
+  "description": "The decision path is the only fail-closed hook: `ovld launch` registers PermissionRequest as an mcp_tool hook with onFailure block (through claude --settings, only for channel-bound launches), so a failure to reach the hooks server denies. The transcript path and permission suggestions are never templated.",
+  "path": "cli/src/claude-decision-hook.ts",
+  "assert": {
+    "mustContain": [
+      "PermissionRequest:",
+      "type: 'mcp_tool'",
+      "server: CLAUDE_HOOKS_SERVER",
+      "tool: CLAUDE_DECISION_HOOK_TOOL",
+      "onFailure: 'block'",
+      "timeout: CLAUDE_DECISION_HOOK_TIMEOUT_SECONDS"
+    ],
+    "mustNotContain": ["'${transcript_path}'", "'${permission_suggestions}'", "'${tool_response}'"]
+  }
+}

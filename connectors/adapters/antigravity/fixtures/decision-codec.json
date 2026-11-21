@@ -1,0 +1,51 @@
+{
+  "fixtureVersion": 1,
+  "kind": "decision-codec",
+  "description": "Antigravity PreToolUse request reduction and exact response bytes: a remote allow is auto_approve, deny is deny, and ask is silence so the native permission flow decides. No hook uses this codec yet.",
+  "codec": "codec/antigravity.decision-codec.yaml",
+  "payload": {
+    "hookEventName": "PreToolUse",
+    "conversationId": "ec33ebf9-0cba-4100-8142-c61503f6c587",
+    "cwd": "/workspace/project",
+    "workspacePaths": ["/workspace/project"],
+    "toolCall": {
+      "id": "toolu_cmd_9",
+      "name": "run_command",
+      "args": {
+        "CommandLine": "echo AKIAIOSFODNN7EXAMPLE",
+        "Cwd": "/workspace/project",
+        "WaitMsBeforeAsync": 5000
+      }
+    },
+    "stepIdx": 4,
+    "transcriptPath": "/Users/dev/.gemini/antigravity-cli/brain/x/transcript.jsonl"
+  },
+  "expect": {
+    "request": {
+      "kind": "permission",
+      "summary": "Run a shell command: echo [redacted] [secret-adjacent]",
+      "details": {
+        "tool": "shell",
+        "action": "Run a shell command",
+        "subject": "echo",
+        "detail": "echo [redacted]",
+        "riskMarkers": ["secret-adjacent"],
+        "formatterVersion": 1
+      },
+      "nativeRequestId": null,
+      "nativeCallId": "toolu_cmd_9",
+      "harnessTimeoutSeconds": null
+    },
+    "responses": {
+      "allow": "{\"decision\":\"auto_approve\"}\n",
+      "deny": "{\"decision\":\"deny\"}\n",
+      "ask": null
+    }
+  },
+  "mustNotContain": [
+    "AKIAIOSFODNN7EXAMPLE",
+    "transcript.jsonl",
+    "hookSpecificOutput",
+    "permissionDecision"
+  ]
+}

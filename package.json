@@ -121,9 +121,10 @@
     "connectors:capabilities:check": "node scripts/generate-harness-capabilities.mjs --check",
     "connectors:claude:check": "node --import tsx scripts/check-claude-plugin.mts",
     "connectors:claude:eval": "node --import tsx scripts/check-claude-plugin.mts --eval",
+    "connectors:antigravity:check": "node --import tsx scripts/check-antigravity-plugin.mts",
     "connectors:mcp-tools": "node --import tsx scripts/generate-mcp-tool-catalog.mts",
     "connectors:mcp-tools:check": "node --import tsx scripts/generate-mcp-tool-catalog.mts --check",
-    "connectors:check": "yarn connectors:version:check && yarn connectors:capabilities:check && yarn connectors:mcp-tools:check && yarn connectors:claude:check"
+    "connectors:check": "yarn connectors:version:check && yarn connectors:capabilities:check && yarn connectors:mcp-tools:check && yarn connectors:claude:check && yarn connectors:antigravity:check"
   },
   "dependencies": {
     "@overlord/auth": "workspace:*",

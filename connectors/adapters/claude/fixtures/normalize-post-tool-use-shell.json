@@ -42,11 +42,5 @@
       "formatterVersion": 1
     }
   },
-  "mustNotContain": [
-    "transcript",
-    ".jsonl",
-    "PASS 412 tests",
-    "hunter2",
-    "/Users/jake"
-  ]
+  "mustNotContain": ["transcript", ".jsonl", "PASS 412 tests", "hunter2", "/Users/jake"]
 }

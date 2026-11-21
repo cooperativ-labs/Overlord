@@ -163,7 +163,10 @@ test('the shared hook renders with a fixed action and no payload-controlled disp
     .split('\n')
     .filter(line => line.trim() !== '' && !line.trimStart().startsWith('#'));
   assert.deepEqual(executable, [
-    // The scope gate comes FIRST, before `command -v` and before the spawn. An unbound session
+    // Inside a harness a control-plane supervisor drives, the supervisor reports for it; the
+    // hook stays silent there (ADR 0091). Like the scope gate, it is one parameter expansion.
+    '[ -z "${OVERLORD_CONTROL_PLANE_SURFACE:-}" ] || exit 0',
+    // The scope gate comes before `command -v` and before the spawn. An unbound session
     // must cost nothing observable, and the only version of that check which can prevent a
     // process launch is the one that runs before it.
     '[ -n "${OVERLORD_SESSION_CHANNEL_ID:-}" ] || exit 0',
@@ -228,7 +231,7 @@ test('decision codecs are connector-owned, redact request cards, and emit exact 
   assert.equal(encodeNativeDecision('cursor', { decision: 'allow' }), '{"permission":"allow"}\n');
   assert.equal(
     encodeNativeDecision('claude', { decision: 'deny' }),
-    '{"hookSpecificOutput":{"hookEventName":"PermissionRequest","decision":"deny"}}\n'
+    '{"hookSpecificOutput":{"hookEventName":"PermissionRequest","decision":{"behavior":"deny","message":"Denied in Overlord."}}}\n'
   );
   assert.equal(encodeNativeDecision('codex', { decision: 'ask' }), null);
   assert.equal(encodeNativeDecision('unknown', { decision: 'allow' }), null);

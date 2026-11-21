@@ -3,10 +3,10 @@ info:
   title: Overlord API
   # info.version is the API description's own Semantic Version; it changes when
   # this document changes and is never compared with the contract version.
-  version: 6.1.0
+  version: 6.5.0
   # The contract version (contract/VERSION) this document belongs to. Written
   # only by `yarn version:contract`.
-  x-overlord-contract-version: 179.1.0
+  x-overlord-contract-version: 179.11.0
   description: >-
     Normative description of Overlord's REST surface (ADR 0006): one operation for every
     method and path the backend registers, at the path it is served (ADR 0007), excluding
@@ -703,12 +703,17 @@ paths:
       description: >-
         Registered only when `OVERLORD_MCP_ENABLED=true`. The transport only: a JSON-RPC 2.0 request, or a
         batch array, answered as JSON (never an SSE stream). Methods are `initialize`,
-        `notifications/initialized`, `ping`, `tools/list`, `tools/call`, `resources/list` and
-        `resources/read`; the tools, their arguments and their authorization are specified by the
-        generated tool catalog (ADR 0008). JSON-RPC errors are answered with HTTP 200: `-32600` for an
-        invalid request, `-32601` for an unknown method, `-32000` when a tool or resource fails (its
-        message carried). A single notification answers `{ jsonrpc: '2.0', result: null }`; a batch omits
-        notifications. Authentication as `GET /mcp`.
+        `notifications/initialized`, `ping`, `tools/list`, `tools/call`, `tasks/get`, `tasks/result`,
+        `tasks/list`, `resources/list` and `resources/read`; the tools, their arguments and their
+        authorization are specified by the generated tool catalog (ADR 0008). A `tools/call` with
+        `params.task` on a tool whose `execution.taskSupport` is `optional` answers a `CreateTaskResult`
+        at once and runs the tool in the background; `tasks/result` blocks until it finishes (MCP
+        2025-11-25 tasks, ADR 0089). JSON-RPC errors are answered with HTTP 200: `-32600` for an
+        invalid request, `-32601` for an unknown method or a task request to a tool without task
+        support, `-32602` for a malformed `params.task` or an unknown, expired or foreign task id or
+        list cursor, `-32000` when a tool or resource fails (its message carried) or the caller holds
+        too many unfinished tasks. A single notification answers `{ jsonrpc: '2.0', result: null }`; a
+        batch omits notifications. Authentication as `GET /mcp`.
       security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
       requestBody:
         required: true
@@ -3477,7 +3482,7 @@ paths:
       summary: Replace a workspace's agent catalog
       description: >-
         Requires `launch:configure` in the workspace. Replaces the stored catalog with the validated body,
-        keeping each surviving agent's stored launch defaults.
+        keeping each surviving agent's stored launch defaults and `liveSource`.
       security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
       requestBody:
         required: true
@@ -3513,7 +3518,8 @@ paths:
       description: >-
         Requires `launch:configure` in the workspace. Adds every bundled (or overlord.toml) agent the
         catalog lacks and every model an existing agent lacks, keeping workspace customisations, and
-        stores the result. Takes no body.
+        stores the result. An agent with `liveSource` (its models came from a harness installation)
+        gets no bundled models. Takes no body.
       security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
       responses:
         '200':
@@ -3525,6 +3531,49 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+  "/api/workspaces/{id}/agent-catalog/live-models":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Workspace UUID; a workspace the caller is not an active member of answers 404.
+        schema: { type: string }
+    post:
+      operationId: postWorkspacesByIdAgentCatalogLiveModels
+      tags: [agent-catalog]
+      x-overlord-permission: launch:configure
+      x-overlord-edition: both
+      x-overlord-consumers: [cli, runner]
+      summary: Record the models a harness installation reports
+      description: >-
+        Requires `launch:configure` in the workspace. Replaces one agent's models with the live list a
+        harness installation reported (for Codex, `model/list` from the user's own app server, sent by
+        `ovld models codex --sync` and the runner), so the model and effort picker offers what a launch
+        can run. Kept from the stored agent: its label, each surviving model's `enabled` flag, the
+        default model and effort while the live list still supports them, and the launch defaults.
+        Otherwise the default model becomes the reported `isDefault` model (else the first) with its
+        reported default effort. Models the installation no longer lists are dropped, the agent
+        records `liveSource`, and a later refresh no longer merges bundled models into it. An agent
+        key in neither the stored nor the instance catalog answers 400. The body carries no account
+        or provider data.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AgentLiveModelsReportBody' }
+      responses:
+        '200':
+          description: The catalog with the instance's default agent and model.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AgentCatalogDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
         '500': { $ref: '#/components/responses/InternalError' }
   /api/profile:
     get:
@@ -8539,8 +8588,10 @@ paths:
         is complete only after following `nextCursor` to a page whose `page.complete` is true. A cursor is
         bound to the mission, objective and status of the read that issued it; one that does not decode or
         names another scope answers 400 `invalid_input`. Authorization is evaluated on every page. Each
-        request carries its `delivery` mode: `latch` when it is open and its Latch session is alive on a
-        reachable eligible target, else `read_only` with the reason.
+        request carries its `delivery` mode: `control_plane` when it is open on a live control-plane
+        session channel (and, for a `permission` request, the caller launched that session); `latch` when
+        it is open and its Latch session is alive on a reachable eligible target; else `read_only` with
+        the reason.
       security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
       parameters:
         - name: missionId
@@ -8600,10 +8651,17 @@ paths:
       x-overlord-permission: session:attach
       x-overlord-edition: both
       x-overlord-consumers: [cli, mobile, webapp]
-      summary: Answer an agent question
+      summary: Answer an agent question or approval
       description: >-
-        Requires `session:attach` in the request's workspace. Only `question` and `choice` requests can be
-        answered here; other kinds answer 410 `session_controls_gone`. The request must be deliverable
+        Requires `session:attach` in the request's workspace. A request from a control-plane session
+        channel (delivery mode `control_plane`, ADR 0094) may be a `question`, `choice` or `permission`;
+        a `permission` request there can be answered only by the member who launched the session (403
+        `not_session_owner`), only with exactly `{ optionId }` or `{ decision }` naming one of its options (stored as `{ optionId }`), and never with text. Its answer is not
+        sent through Latch: the channel's supervisor reads it back through its own credential and applies
+        it, and `delivery.stage` stays `recorded` until the supervisor reports it applied (`confirmed`).
+        A control-plane request whose channel is no longer live answers 409 `request_not_deliverable`.
+        For every other request only `question` and `choice` can be answered here; other kinds answer
+        410 `session_controls_gone`. The request must be deliverable
         (delivery mode `latch`, else 409 `request_not_deliverable`), `expectedRevision` must be a number
         (409 `agent_request_conflict` otherwise, and when the request changed since), and the resolution
         needs a `text` (only when free text is allowed) or a known `optionId` (400 `invalid_resolution`).
@@ -8632,8 +8690,9 @@ paths:
         '409': { $ref: '#/components/responses/Conflict' }
         '410':
           description: >-
-            Always: `{ error: 'There are no active session-input controls. Permission and question prompts
-            remain with the native agent harness.', code: 'session_controls_gone' }`.
+            For a request kind this route cannot answer: `{ error: 'There are no active session-input
+            controls. Permission and question prompts remain with the native agent harness.', code:
+            'session_controls_gone' }`.
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ErrorEnvelope' }
@@ -8658,7 +8717,9 @@ paths:
       description: >-
         Requires `session:attach` in the request's workspace (ADR 0065). Starts one more delivery attempt
         for the answer already recorded on a resolved `question` or `choice` request; the answer itself
-        cannot be changed. Other kinds answer 410 `session_controls_gone`. Allowed only when
+        cannot be changed. Other kinds answer 410 `session_controls_gone`. A request from a control-plane
+        session channel is never redelivered (409 `request_not_deliverable`): its supervisor applies the
+        answer. Allowed only when
         `delivery.stage` is `failed`, or `unconfirmed` with `confirmUnconfirmed: true`, which states that
         a person checked the session; without it an unconfirmed delivery answers 409
         `delivery_confirmation_required`. For an unconfirmed delivery the execution target first asks
@@ -9468,6 +9529,51 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ExecutionRequestDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
+  "/api/objectives/{id}/session-channels":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: >-
+          Objective UUID, or full display id (`coo:756.k7xm`) resolved within the caller's organization;
+          an ambiguous display id answers 409.
+        schema: { type: string }
+    post:
+      operationId: postObjectivesByIdSessionChannels
+      tags: [objectives]
+      x-overlord-permission: session:attach
+      x-overlord-edition: both
+      x-overlord-consumers: [cli]
+      summary: Mint the session channel for a control-plane launch
+      description: >-
+        Requires `session:attach` in the objective's workspace (ADR 0092). Creates a `preparing` session
+        channel with `launch_kind = 'control_plane'` and a scoped credential for a control-plane adapter
+        (only `codex-app-server` today; any other adapter key answers 400 `adapter_not_control_plane`),
+        bound to the objective's mission and objective, and to the execution request and target when
+        given. Refused with 409 `objective_not_launchable` unless the objective is `draft`, `submitted`,
+        `launching`, `executing` or `pending_delivery`, and 404 when `executionRequestId` is not this
+        objective's. The raw credential is returned once; the caller stages it in its owner-only
+        credential cache, never in argv or a launch script. Protocol attach binds the channel by
+        objective. Every other launch still mints no channel (ADR 0065).
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MintSessionChannelBody' }
+      responses:
+        '200':
+          description: The new channel's bootstrap, including its credential.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SessionChannelBootstrapDto' }
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
@@ -11561,6 +11667,38 @@ components:
               oneOf:
                 - type: string
                 - type: 'null'
+    MintSessionChannelBody:
+      type: object
+      required: [ adapterKey ]
+      properties:
+        adapterKey:
+          type: string
+          description: The control-plane adapter that will drive the session (`codex-app-server`).
+        adapterVersion:
+          type: string
+          description: The adapter runtime version (the `ovld` version), recorded on the channel.
+        executionRequestId:
+          type: string
+          description: The claimed execution request this launch serves; must belong to the objective.
+        executionTargetId:
+          type: string
+          description: The execution target the session runs on; ignored when not in the workspace.
+    SessionChannelBootstrapDto:
+      type: object
+      required: [ channelId, token, expiresAt, launchKind, launchPromptId, adapterKey, agentIdentifier ]
+      properties:
+        channelId: { type: string }
+        token:
+          type: string
+          description: The scoped `osc_…` channel credential, returned only here. Never log or persist it outside the owner-only credential cache.
+        expiresAt: { $ref: '#/components/schemas/DateTime' }
+        launchKind: { const: control_plane }
+        launchPromptId:
+          oneOf:
+            - type: string
+            - type: 'null'
+        adapterKey: { type: string }
+        agentIdentifier: { type: string }
     AgentLaunchConfigDto:
       type: object
       required: [ preCommand, flags ]
@@ -11570,6 +11708,16 @@ components:
         flags:
           type: array
           items: { $ref: '#/components/schemas/AgentLaunchFlagDto' }
+        harnessMode: { $ref: '#/components/schemas/AgentHarnessMode' }
+    AgentHarnessMode:
+      type: string
+      enum: [ hooks, appServer ]
+      description: >-
+        How an Overlord launch drives the agent on this machine (ADR 0092). `hooks` (the default when
+        absent) runs the interactive terminal observed through the agent's hooks. `appServer` runs a
+        Codex objective through a private Codex app server driven by Overlord's control-plane
+        supervisor, with the terminal attached to it; it applies only to `codex` and is ignored for
+        other agents. Experimental and off unless chosen.
     AgentLaunchConfigInput:
       type: object
       description: Launch mechanics as accepted on input; omitted members default to empty.
@@ -16696,7 +16844,7 @@ components:
               type: object
               required: [ code, message ]
               properties:
-                code: { type: integer, enum: [ -32600, -32601, -32000 ] }
+                code: { type: integer, enum: [ -32600, -32601, -32602, -32000 ] }
                 message: { type: string }
     AccountConnectionProvider:
       type: string
@@ -17446,6 +17594,21 @@ components:
         reasoningLabel:
           type: string
           description: Column heading for the reasoning options; defaults to `Thinking`.
+        liveSource:
+          $ref: '#/components/schemas/AgentCatalogLiveSourceDto'
+    AgentCatalogLiveSourceDto:
+      type: object
+      description: >-
+        Present when the agent's models came from a harness installation's live list
+        (`POST /api/workspaces/{id}/agent-catalog/live-models`) rather than the bundled defaults.
+      required: [ harnessVersion, reportedAt ]
+      properties:
+        harnessVersion:
+          description: The reporting harness version (for Codex, the app server's version), when known.
+          oneOf:
+            - type: string
+            - type: 'null'
+        reportedAt: { type: string, description: ISO 8601 time the report was stored. }
     AgentCatalogDto:
       type: object
       required: [ agents, defaultAgent, defaultModel ]
@@ -17460,6 +17623,38 @@ components:
           oneOf:
             - type: string
             - type: 'null'
+    AgentLiveModelsReportBody:
+      type: object
+      description: >-
+        One agent's live model list. Strings are trimmed; a non-string text field or one over 200
+        characters, a missing or blank `agent` or model `id`, a duplicate model `id`, an empty
+        `models` list or more than 200 models answers 400. Blank and over-long reasoning options are
+        dropped, and a `defaultReasoningEffort` outside the model's options is ignored.
+      required: [ agent, models ]
+      properties:
+        agent: { type: string, description: 'Catalog agent key, for example `codex`.' }
+        harnessVersion:
+          oneOf:
+            - type: string
+            - type: 'null'
+        models:
+          type: array
+          minItems: 1
+          maxItems: 200
+          items:
+            type: object
+            required: [ id ]
+            properties:
+              id: { type: string, description: The model slug a launch passes to the harness. }
+              displayName: { type: string, description: Blank defaults to the id. }
+              reasoningOptions:
+                type: array
+                items: { type: string }
+              isDefault: { type: boolean, description: The harness's own default model. }
+              defaultReasoningEffort:
+                oneOf:
+                  - type: string
+                  - type: 'null'
     UpdateAgentCatalogBody:
       type: object
       description: >-
@@ -17629,6 +17824,11 @@ components:
           type: array
           description: Normalized; a non-array value stores an empty list.
           items: { $ref: '#/components/schemas/AgentLaunchFlagInput' }
+        harnessMode:
+          description: Set the harness mode; `null` clears it (back to `hooks`). Omitted keeps the stored value.
+          oneOf:
+            - { $ref: '#/components/schemas/AgentHarnessMode' }
+            - type: 'null'
     UpdateTerminalProfileBody:
       type: object
       properties:
@@ -18168,6 +18368,20 @@ components:
         ok: { const: true }
         leaseExpiresAt: { $ref: '#/components/schemas/DateTime' }
         credentialExpiresAt: { $ref: '#/components/schemas/DateTime' }
+        objectiveState:
+          description: >-
+            The channel's objective state (`deleted` when it is gone), or null when the channel has no
+            objective. A control-plane supervisor stops when it is `complete` or `deleted` (ADR 0092).
+          oneOf:
+            - type: string
+            - type: 'null'
+        deliveryState:
+          description: >-
+            The bound session's delivery state, or null before attach binds a session. A control-plane
+            supervisor stops after `delivered` once its thread has been idle for a while (ADR 0092).
+          oneOf:
+            - type: string
+            - type: 'null'
     AgentSessionEventInput:
       type: object
       required: [ eventId, kind ]
@@ -18327,11 +18541,28 @@ components:
       properties:
         mode:
           type: string
-          enum: [ latch, read_only ]
+          description: >-
+            `latch`: answerable here; the answer is typed into the agent's Latch session.
+            `control_plane`: answerable here; the request came from a control-plane session channel
+            (Codex app-server mode, ADR 0094) and the channel's supervisor applies the answer itself.
+            `read_only`: not answerable here, for `reason`.
+          enum: [ latch, control_plane, read_only ]
         reason:
+          description: >-
+            Why the request is `read_only`. `channel_ended`: its control-plane channel is no longer
+            live. `not_session_owner`: a permission request on a control-plane channel, and the caller
+            is not the member who launched the session.
           oneOf:
             - type: string
-              enum: [ no_latch_session, latch_session_exited, target_offline, request_closed ]
+              enum:
+                [
+                  no_latch_session,
+                  latch_session_exited,
+                  target_offline,
+                  request_closed,
+                  channel_ended,
+                  not_session_owner
+                ]
             - type: 'null'
         state:
           oneOf:

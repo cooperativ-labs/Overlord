@@ -37,9 +37,23 @@ Connectors:
                                                  Install/repair one connector; Codex --export
                                                  writes a package without installing it
   ${primaryCommand} agent-setup all [--dry-run]  Install/repair all supported connectors
+  ${primaryCommand} agent-setup claude|codex --status-line
+                                                 Also show the bound mission and objective in
+                                                 the agent's status line (never replaces yours;
+                                                 Codex 0.171+ with its custom status line flag)
+  ${primaryCommand} status-line --agent <key> [--payload-file -] [--native-session-id <id>]
+                     [--json|--ui-tree]          Status line for a harness session: mission,
+                                                 objective, awaiting/blocked; silent when unbound
+  ${primaryCommand} models [codex] [--provider <id>] [--sync] [--workspace-id <id>] [--json]
+                                                 Codex models and efforts this machine supports
+                                                 (live from codex app-server); --sync offers them
+                                                 in the workspace model picker
   ${primaryCommand} agent-session capabilities [<agent>] [--json]
                                                  What a harness can really do on the agent-session
                                                  surfaces — fixture-backed, offline, authoritative
+  ${primaryCommand} agent-session attach [--objective-id <ref>] [--channel-id <id>]
+                                                 Open the Codex TUI on a running app-server session
+                                                 on this machine (Codex app-server mode)
 
 Organizations:
   ${primaryCommand} org-setup --org-name "<name>" [--workspace-name <name>] [--workspace-slug <slug>]

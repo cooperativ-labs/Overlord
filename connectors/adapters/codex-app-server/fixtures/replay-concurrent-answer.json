@@ -1,0 +1,278 @@
+{
+  "fixtureVersion": 1,
+  "kind": "script-io",
+  "description": "terminal.concurrentAnswer, from recorded 0.170.0 frames: while Overlord holds a card for a patch approval, another client (the attached TUI, or here the live probe observer) answers first. Codex broadcasts serverRequest/resolved; Overlord closes its card as resolved elsewhere and sends no answer of its own for that request.",
+  "script": "scripts/codex-app-server-replay.mjs",
+  "stdinMessages": [
+    {
+      "setup": {
+        "codec": "connectors/adapters/codex-app-server/codec/codex-app-server.codec.yaml",
+        "cwd": "/repo",
+        "threadId": "01a1faaf-cd91-7372-a780-f5a9c5b457a7",
+        "report": [
+          "/requests",
+          "/requests/req-1/resolved-elsewhere"
+        ]
+      }
+    },
+    {
+      "await": {
+        "method": "initialize"
+      }
+    },
+    {
+      "server": {
+        "id": 1,
+        "result": {
+          "userAgent": "overlord/0.170.0 (Mac OS 27.2.1; arm64) xterm-256color (overlord; replay)",
+          "codexHome": "/home/user/.codex",
+          "platformFamily": "unix",
+          "platformOs": "macos"
+        }
+      }
+    },
+    {
+      "server": {
+        "method": "remoteControl/status/changed",
+        "params": {
+          "status": "disabled",
+          "serverName": "host",
+          "installationId": "00000000-0000-0000-0000-000000000000",
+          "environmentId": null
+        },
+        "emittedAtMs": 1795207125837
+      }
+    },
+    {
+      "await": {
+        "method": "thread/resume"
+      }
+    },
+    {
+      "server": {
+        "id": 2,
+        "result": {
+          "thread": {
+            "id": "01a1faaf-cd91-7372-a780-f5a9c5b457a7",
+            "sessionId": "01a1faaf-cd91-7372-a780-f5a9c5b457a7",
+            "status": {
+              "type": "active",
+              "activeFlags": []
+            },
+            "cwd": "/repo",
+            "turns": [
+              {
+                "id": "01a1faaf-d058-7193-bb3b-9f01dcfd8812",
+                "status": "inProgress",
+                "items": []
+              }
+            ]
+          },
+          "cwd": "/repo",
+          "approvalPolicy": "untrusted",
+          "approvalsReviewer": "user"
+        }
+      }
+    },
+    {
+      "server": {
+        "method": "item/started",
+        "params": {
+          "item": {
+            "type": "fileChange",
+            "id": "exec-cbfb07b2-1a28-4740-9992-676d9e62c3d7",
+            "changes": [
+              {
+                "path": "/repo/notes.md",
+                "kind": {
+                  "type": "add"
+                },
+                "diff": "hello\n"
+              }
+            ],
+            "status": "inProgress",
+            "startedAtMs": 1795207193624,
+            "completedAtMs": null
+          },
+          "threadId": "01a1faaf-cd91-7372-a780-f5a9c5b457a7",
+          "turnId": "01a1faaf-d058-7193-bb3b-9f01dcfd8812",
+          "startedAtMs": 1795207193624
+        },
+        "emittedAtMs": 1795207193624
+      }
+    },
+    {
+      "server": {
+        "method": "item/fileChange/requestApproval",
+        "id": 0,
+        "params": {
+          "threadId": "01a1faaf-cd91-7372-a780-f5a9c5b457a7",
+          "turnId": "01a1faaf-d058-7193-bb3b-9f01dcfd8812",
+          "itemId": "exec-cbfb07b2-1a28-4740-9992-676d9e62c3d7",
+          "startedAtMs": 1795207193625,
+          "reason": null,
+          "grantRoot": null
+        }
+      }
+    },
+    {
+      "await": {
+        "channel": "POST /requests/req-1/lease"
+      }
+    },
+    {
+      "server": {
+        "method": "serverRequest/resolved",
+        "params": {
+          "threadId": "01a1faaf-cd91-7372-a780-f5a9c5b457a7",
+          "requestId": 0
+        },
+        "emittedAtMs": 1795207193962
+      }
+    },
+    {
+      "await": {
+        "channel": "POST /requests/req-1/resolved-elsewhere"
+      }
+    },
+    {
+      "server": {
+        "method": "item/completed",
+        "params": {
+          "item": {
+            "type": "fileChange",
+            "id": "exec-cbfb07b2-1a28-4740-9992-676d9e62c3d7",
+            "changes": [
+              {
+                "path": "/repo/notes.md",
+                "kind": {
+                  "type": "add"
+                },
+                "diff": "hello\n"
+              }
+            ],
+            "status": "completed",
+            "startedAtMs": 1795207193624,
+            "completedAtMs": 1795207194005
+          },
+          "threadId": "01a1faaf-cd91-7372-a780-f5a9c5b457a7",
+          "turnId": "01a1faaf-d058-7193-bb3b-9f01dcfd8812",
+          "contentTokenCount": null,
+          "completedAtMs": 1795207194005
+        },
+        "emittedAtMs": 1795207194006
+      }
+    }
+  ],
+  "timeoutMs": 60000,
+  "expect": {
+    "exitCode": 0,
+    "stderr": "",
+    "responses": [
+      {
+        "id": "out-1",
+        "rpc": {
+          "id": 1,
+          "method": "initialize",
+          "params": {
+            "clientInfo": {
+              "name": "overlord",
+              "title": "Overlord",
+              "version": "replay"
+            },
+            "capabilities": {
+              "experimentalApi": true,
+              "requestAttestation": false,
+              "optOutNotificationMethods": [
+                "item/agentMessage/delta",
+                "item/reasoning/summaryTextDelta",
+                "item/reasoning/summaryPartAdded",
+                "item/reasoning/textDelta",
+                "item/commandExecution/outputDelta",
+                "item/fileChange/outputDelta",
+                "thread/tokenUsage/updated",
+                "account/rateLimits/updated",
+                "turn/moderationMetadata"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": "out-2",
+        "rpc": {
+          "method": "initialized"
+        }
+      },
+      {
+        "id": "out-3",
+        "rpc": {
+          "id": 2,
+          "method": "thread/resume",
+          "params": {
+            "threadId": "01a1faaf-cd91-7372-a780-f5a9c5b457a7",
+            "approvalsReviewer": "user"
+          }
+        }
+      },
+      {
+        "id": "out-4",
+        "channel": {
+          "method": "POST",
+          "path": "/requests",
+          "body": {
+            "kind": "permission",
+            "summary": "Write a file: notes.md",
+            "details": {
+              "tool": "edit",
+              "action": "Write a file",
+              "subject": "notes.md",
+              "detail": "1 file, +1 −0 lines",
+              "riskMarkers": [],
+              "paths": [
+                "notes.md"
+              ],
+              "changeKinds": [
+                "add"
+              ],
+              "formatterVersion": 1,
+              "codexKind": "fileChange",
+              "requiresPerson": true,
+              "requestsWriteRoot": false
+            },
+            "options": [
+              {
+                "optionId": "allow",
+                "label": "Allow once",
+                "kind": "allow"
+              },
+              {
+                "optionId": "deny",
+                "label": "Deny",
+                "kind": "deny"
+              }
+            ],
+            "nativeRequestId": "exec-cbfb07b2-1a28-4740-9992-676d9e62c3d7",
+            "nativeCallId": "exec-cbfb07b2-1a28-4740-9992-676d9e62c3d7"
+          }
+        }
+      },
+      {
+        "id": "out-5",
+        "channel": {
+          "method": "POST",
+          "path": "/requests/req-1/resolved-elsewhere",
+          "body": {}
+        }
+      },
+      {
+        "id": "result",
+        "reason": "reconnect-exhausted",
+        "serverVersion": "0.170.0",
+        "threadId": "01a1faaf-cd91-7372-a780-f5a9c5b457a7",
+        "injected": 0,
+        "interrupted": false
+      }
+    ]
+  }
+}

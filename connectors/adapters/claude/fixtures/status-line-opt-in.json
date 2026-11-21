@@ -1,0 +1,16 @@
+{
+  "fixtureVersion": 1,
+  "kind": "source-guard",
+  "description": "A Claude Code plugin cannot ship a `statusLine`, so `ovld agent-setup claude --status-line` writes one to the user's settings.json. It is opt-in, never replaces an existing status line (the user gets a hint to pipe the same stdin into `ovld status-line` from their own script) and leaves an unreadable settings file untouched. The command reads the status-line JSON on stdin and refreshes every 10 s so an answer or a new question shows while the session is idle.",
+  "path": "cli/src/claude-status-line.ts",
+  "assert": {
+    "mustContain": [
+      "'ovld status-line --agent claude --payload-file -'",
+      "type: 'command'",
+      "refreshInterval: CLAUDE_STATUS_LINE_REFRESH_SECONDS",
+      "status: 'kept-existing'",
+      "status: 'unreadable'"
+    ],
+    "mustNotContain": ["writeOwnerOnlyFileAtomically", "--dangerously"]
+  }
+}

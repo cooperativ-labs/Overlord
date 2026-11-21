@@ -15,7 +15,11 @@
  *                   is a recording spy) with a recorded stdin, and assert exit status,
  *                   stdout, stderr, every file the script created inside the sandbox, and
  *                   every CLI invocation it attempted. This is how the mandatory
- *                   unbound-session negative test is executed.
+ *                   unbound-session negative test is executed. A `.mjs` target runs under
+ *                   node with `args` (the MCP shim's `--hooks` mode); `stdinMessages` sends
+ *                   NDJSON JSON-RPC and `expect.responses` matches the replies by id. `spy`
+ *                   sets the spy's exit code and stdout, so a fixture can simulate a failing
+ *                   CLI or backend and prove what the hook answers then.
  *
  *   source-guard    Assert that a repo file does or does not contain declared markers —
  *                   the mechanism for "this dangerous harness flag must stay unset".
@@ -488,19 +492,30 @@ function runScriptIoFixture({ fixture, repoRoot }) {
     const bin = path.join(sandbox, 'bin');
     for (const dir of [home, work, temp, bin]) mkdirSync(dir, { recursive: true });
 
-    // The only `ovld` on PATH is a spy: it records the invocation and exits 0 without
-    // touching the network, so a fixture can assert exactly which CLI calls a script
-    // attempts from an unbound session.
+    // The only `ovld` on PATH is a spy: it records the invocation and exits (0 unless the
+    // fixture's `spy` says otherwise) without touching the network, so a fixture can assert
+    // exactly which CLI calls a script attempts from an unbound session.
     const spyLog = path.join(sandbox, 'ovld-invocations.log');
     const spyStdin = path.join(sandbox, 'ovld-stdin.log');
     const spyPath = path.join(bin, 'ovld');
+    const spyExit = Number.isInteger(fixture.spy?.exitCode) ? fixture.spy.exitCode : 0;
+    let spyStdout = '';
+    if (typeof fixture.spy?.stdout === 'string') {
+      const spyStdoutPath = path.join(sandbox, 'ovld-stdout.txt');
+      writeFileSync(spyStdoutPath, fixture.spy.stdout);
+      spyStdout = `cat ${JSON.stringify(spyStdoutPath)}\n`;
+    }
     writeFileSync(
       spyPath,
-      `#!/bin/sh\nprintf '%s\\n' "$*" >> ${JSON.stringify(spyLog)}\ncat >> ${JSON.stringify(spyStdin)}\nexit 0\n`,
+      `#!/bin/sh\nprintf '%s\\n' "$*" >> ${JSON.stringify(spyLog)}\ncat >> ${JSON.stringify(spyStdin)}\n${spyStdout}exit ${spyExit}\n`,
       { mode: 0o755 }
     );
 
-    const executablePath = renderedScript === null ? scriptPath : path.join(bin, 'callback.sh');
+    const isNodeScript = fixture.script.endsWith('.mjs');
+    const executablePath =
+      renderedScript === null
+        ? scriptPath
+        : path.join(bin, isNodeScript ? 'callback.mjs' : 'callback.sh');
     if (renderedScript !== null) {
       writeFileSync(executablePath, renderedScript, { mode: 0o755 });
     }
@@ -516,15 +531,23 @@ function runScriptIoFixture({ fixture, repoRoot }) {
       if (value === null) delete env[key];
     }
 
-    const stdin =
-      typeof fixture.stdin === 'string' ? fixture.stdin : `${JSON.stringify(fixture.stdin ?? {})}`;
-    const result = spawnSync('/bin/bash', [executablePath], {
-      cwd: work,
-      env,
-      input: stdin,
-      encoding: 'utf8',
-      timeout: fixture.timeoutMs ?? 20_000
-    });
+    const stdin = Array.isArray(fixture.stdinMessages)
+      ? fixture.stdinMessages.map(message => `${JSON.stringify(message)}\n`).join('')
+      : typeof fixture.stdin === 'string'
+        ? fixture.stdin
+        : `${JSON.stringify(fixture.stdin ?? {})}`;
+    const scriptArgs = Array.isArray(fixture.args) ? fixture.args.map(String) : [];
+    const result = spawnSync(
+      isNodeScript ? process.execPath : '/bin/bash',
+      [executablePath, ...scriptArgs],
+      {
+        cwd: work,
+        env,
+        input: stdin,
+        encoding: 'utf8',
+        timeout: fixture.timeoutMs ?? 20_000
+      }
+    );
 
     const expected = fixture.expect ?? {};
     // EPIPE is the *expected* outcome for a script that exits before reading stdin, which is
@@ -579,6 +602,40 @@ function runScriptIoFixture({ fixture, repoRoot }) {
       const wanted = JSON.stringify(expected.cliInvocations);
       if (actual !== wanted) failures.push(`cli invocations: expected ${wanted}, got ${actual}`);
     }
+    if (expected.cliStdin !== undefined) {
+      const wanted =
+        typeof expected.cliStdin === 'string'
+          ? expected.cliStdin
+          : expected.cliStdin.map(entry => JSON.stringify(entry)).join('');
+      if (capturedStdin !== wanted) {
+        failures.push(
+          `cli stdin: expected ${JSON.stringify(wanted)}, got ${JSON.stringify(capturedStdin)}`
+        );
+      }
+    }
+    if (expected.responses !== undefined) {
+      const byId = new Map();
+      for (const line of String(result.stdout).split('\n')) {
+        if (!line.trim()) continue;
+        try {
+          const message = JSON.parse(line);
+          byId.set(JSON.stringify(message.id), message);
+        } catch {
+          failures.push(`stdout line is not JSON: ${JSON.stringify(line)}`);
+        }
+      }
+      for (const wanted of expected.responses) {
+        const actual = byId.get(JSON.stringify(wanted.id));
+        if (JSON.stringify(actual) !== JSON.stringify(wanted)) {
+          failures.push(
+            `response ${JSON.stringify(wanted.id)}: expected ${JSON.stringify(wanted)}, got ${JSON.stringify(actual)}`
+          );
+        }
+      }
+      if (byId.size !== expected.responses.length) {
+        failures.push(`responses: expected ${expected.responses.length}, got ${byId.size}`);
+      }
+    }
     if (expected.stdinForwarded !== undefined) {
       const forwarded = capturedStdin === stdin;
       if (forwarded !== expected.stdinForwarded) {
@@ -605,6 +662,8 @@ function runScriptIoFixture({ fixture, repoRoot }) {
       failures,
       observed: {
         exitCode: result.status,
+        // An MCP server answers every request; `stdout` then holds JSON-RPC replies.
+        mcp: Array.isArray(fixture.stdinMessages),
         stdout: result.stdout,
         stderr: result.stderr,
         cliInvocations: invocations,

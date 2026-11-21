@@ -7,11 +7,7 @@ import { DueDatePickerButton } from '@/components/scheduling/DueDatePickerButton
 import { useMission, useUpdateMission } from '@/lib/queries.ts';
 import { cn } from '@/lib/utils';
 
-import {
-  MissionCompleteCheckbox,
-  MissionDueDateBadge,
-  MissionOriginMark
-} from '../../pages/MissionCardPrimitives.tsx';
+import { MissionCompleteCheckbox, MissionOriginMark } from '../../pages/MissionCardPrimitives.tsx';
 
 import { dueSoonLabel, overdueLabel } from './inbox-task-groups.ts';
 
@@ -125,6 +121,7 @@ export function InboxTriageMissionRow({
   onComplete?: (missionId: string) => void;
 }) {
   const navigate = useNavigate();
+  const updateMission = useUpdateMission(mission.id);
   const reason = triageReasonLabel(mission);
 
   return (
@@ -147,7 +144,16 @@ export function InboxTriageMissionRow({
           >
             {mission.displayId}
           </span>
-          <MissionDueDateBadge dueDatetime={mission.dueDatetime} />
+          <DueDatePickerButton
+            size="badge"
+            emptyLabel="Set due date"
+            heading="Due date"
+            description="Schedule when this mission is due."
+            value={mission.dueDatetime}
+            onChange={async next => {
+              await updateMission.mutateAsync({ dueDatetime: next });
+            }}
+          />
           <MissionOriginMark
             createdByKind={mission.createdByKind}
             createdByAgent={mission.createdByAgent}

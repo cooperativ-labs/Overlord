@@ -138,6 +138,12 @@ Does NOT own:
   organization and user images).
 - **Last administrator.** A workspace's last `ADMIN` cannot be removed or demoted, and an
   organization's last admin cannot be removed.
+- **Approval answers are owner-only (ADR 0094).** Answering a `permission` request (a command
+  or file-change approval) on a control-plane session channel runs code on the launching
+  member's machine, so `session:attach`, which every default role holds, is not enough: only
+  the workspace member who created the channel may answer it. The check is resource-derived and
+  applies to every credential family that reaches the resolve route; a channel credential can
+  never resolve a request at all.
 - **Post-delivery narrative publication (ADR 0076).** Protocol `delivery-summary-context`
   and `publish-delivery-summary` require live user or token authentication, current
   workspace membership, project scope and `event:create`, and act only on a publication

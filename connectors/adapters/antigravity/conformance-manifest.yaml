@@ -1,4 +1,4 @@
-contractVersion: "179.1.0"
+contractVersion: "179.11.0"
 componentType: connector
 componentKey: antigravity
 label: "Antigravity Connector"
@@ -10,19 +10,23 @@ connector:
   # Projected from connectors/adapters/antigravity/harness-capabilities.yaml by `yarn connectors:capabilities`.
   # The harness descriptor and its executable fixtures are the only capability source.
   integrationShape: callback
-  capabilityTier: 0
+  capabilityTier: 1
   harnessCapabilities:
     path: connectors/adapters/antigravity/harness-capabilities.yaml
     schemaVersion: 1
-    digest: "c5686f1ab4c02e6bb90adeef83c6acd61703f3238be12618fed1e2b833636b2a"
+    digest: "c99353d29093e78117e61a930e091a5bdba53952a29c578cad8c113b397a1474"
   # ── END GENERATED ────────────────────────────────────────────────────────────
-  installPath: "~/.gemini/antigravity-cli/plugins/overlord"
+  installPath: "~/.gemini/config/plugins/overlord"
   managedFiles:
     - "harness-capabilities.yaml"
     - "CAPABILITIES.md"
     - "plugin.json"
+    - "assets/logo.png"
     - "mcp_config.json"
     - "hooks.json"
+    - "hooks/overlord-pre-invocation.sh"
+    - "hooks/overlord-post-tool-use.sh"
+    - "hooks/overlord-stop.sh"
     - "README.md"
     - "prompt-wrapper.md"
     - "scripts/overlord-mcp.mjs"

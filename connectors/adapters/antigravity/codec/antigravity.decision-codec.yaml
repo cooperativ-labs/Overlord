@@ -1,0 +1,26 @@
+# Antigravity — PreToolUse request/decision codec.
+#
+# Declares the native request paths and the exact response literals for Antigravity's
+# PreToolUse `decision` (https://antigravity.google/docs/hooks#pretooluse). No hook registration
+# uses it yet: `decide.*` stays not-implemented until a session channel exists at launch, and the
+# connector registers no PreToolUse hook. The literals are pinned now so the decision path cannot
+# drift from the documented dialect when it is wired.
+#
+# `allow` in Antigravity's own dialect means "proceed, deferring to the next hook or default
+# policy", not an approval, so a remote allow is `auto_approve` (approve when the default policy
+# would prompt, still honoring explicit user rules and admin review since agy 1.5.7). Defer is
+# silence: no output leaves the native permission flow, which is the floor every failure path
+# must return to. Nothing here may manufacture `allow`/`auto_approve` on failure.
+codecVersion: 1
+adapter: antigravity
+eventNamePaths: [hookEventName]
+projectRootPaths: [cwd, workspacePaths.0]
+requests:
+  - native: PreToolUse
+    toolPath: toolCall.name
+    inputPath: toolCall.args
+    callIdPaths: [toolCall.id]
+responses:
+  allow: { body: { decision: auto_approve } }
+  deny: { body: { decision: deny } }
+  ask: { defer: true }

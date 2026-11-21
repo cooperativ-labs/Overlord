@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, statSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
 
@@ -267,6 +267,85 @@ test('buildLaunchPlan pins the Claude subagent caps and lets a project override 
     options: { agent: 'codex', missionId: 'coo:11', workingDirectory }
   });
   assert.equal(codex.env.CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS, undefined);
+});
+
+test('channel-bound Claude launches register the fail-closed decision hook only when the hooks server is installed', async () => {
+  const workingDirectory = mkdtempSync(path.join('/tmp', 'ovld-launch-decision-'));
+  const home = mkdtempSync(path.join('/tmp', 'ovld-launch-decision-home-'));
+  const configDir = path.join(home, '.claude');
+  const installPath = path.join(home, '.ovld', 'claude', 'marketplace', 'plugins', 'overlord');
+  mkdirSync(configDir, { recursive: true });
+  mkdirSync(path.join(home, '.ovld', 'connectors'), { recursive: true });
+  mkdirSync(installPath, { recursive: true });
+  const saved = { config: process.env.CLAUDE_CONFIG_DIR, home: process.env.OVERLORD_HOME };
+  process.env.CLAUDE_CONFIG_DIR = configDir;
+  process.env.OVERLORD_HOME = home;
+  const settingsArg = (args: string[]): Record<string, any> | null => {
+    const index = args.indexOf('--settings');
+    return index === -1 ? null : JSON.parse(args[index + 1] as string);
+  };
+  try {
+    const bound = {
+      agent: 'claude',
+      missionId: 'coo:11',
+      workingDirectory,
+      sessionChannelId: 'channel-1'
+    };
+
+    // Plugin not installed: no hook, and the launch says why.
+    const missing = await buildLaunchPlan({ runtime: runtime(), options: bound });
+    assert.equal(settingsArg(missing.args), null);
+    assert.match(missing.decisionHookWarning ?? '', /native|own permission prompts/);
+
+    writeFileSync(
+      path.join(configDir, 'settings.json'),
+      JSON.stringify({ enabledPlugins: { 'overlord@overlord-local': true } })
+    );
+    writeFileSync(
+      path.join(home, '.ovld', 'connectors', 'claude.json'),
+      JSON.stringify({ installPath })
+    );
+    writeFileSync(
+      path.join(installPath, '.mcp.json'),
+      JSON.stringify({ mcpServers: { 'overlord-hooks': { command: 'node' } } })
+    );
+
+    const plan = await buildLaunchPlan({ runtime: runtime(), options: bound });
+    assert.equal(plan.decisionHookWarning, null);
+    const settings = settingsArg(plan.args);
+    assert.ok(settings, 'claude --settings carries the decision hook');
+    const [group] = settings.hooks.PermissionRequest;
+    const [hook] = group.hooks;
+    assert.equal(hook.type, 'mcp_tool');
+    assert.equal(hook.server, 'plugin:overlord:overlord-hooks');
+    assert.equal(hook.tool, 'overlord_hook_permission_request');
+    assert.equal(hook.onFailure, 'block');
+    assert.equal(hook.timeout, 300);
+    assert.equal(hook.input.hookTimeoutSeconds, 300);
+    // Paths and suggestions never cross the privacy boundary.
+    assert.equal(JSON.stringify(hook.input).includes('transcript_path'), false);
+    assert.equal(JSON.stringify(hook.input).includes('permission_suggestions'), false);
+
+    // No session channel means no remote decision path, so nothing fail-closed is registered.
+    const unbound = await buildLaunchPlan({
+      runtime: runtime(),
+      options: { agent: 'claude', missionId: 'coo:11', workingDirectory }
+    });
+    assert.equal(settingsArg(unbound.args), null);
+    assert.equal(unbound.decisionHookWarning, null);
+
+    // Other harnesses never receive Claude settings.
+    const codex = await buildLaunchPlan({
+      runtime: runtime(),
+      options: { ...bound, agent: 'codex' }
+    });
+    assert.equal(codex.args.includes('--settings'), false);
+  } finally {
+    if (saved.config === undefined) delete process.env.CLAUDE_CONFIG_DIR;
+    else process.env.CLAUDE_CONFIG_DIR = saved.config;
+    if (saved.home === undefined) delete process.env.OVERLORD_HOME;
+    else process.env.OVERLORD_HOME = saved.home;
+  }
 });
 
 test('buildLaunchPlan passes PI model and thinking separately with a context file input', async () => {

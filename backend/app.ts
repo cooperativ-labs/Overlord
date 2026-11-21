@@ -13,7 +13,7 @@ import { fileURLToPath } from 'node:url';
 
 import { loadConfig } from '../cli/src/config.ts';
 import { isExplicitRuntimeEnv, resolveLayeredEnv } from '../cli/src/env.ts';
-import { handleMcpPost, mcpServerInfo } from '../mcp/server.ts';
+import { handleMcpPost, mcpServerInfo, onHostedMcpTaskSettled } from '../mcp/server.ts';
 import { Conversations } from '../packages/core/service/chat/conversations.ts';
 import { ChatRuns } from '../packages/core/service/chat/runs.ts';
 import type { LocalTargetBridgeCall } from '../packages/core/service/local-target/desktop-bridge.ts';
@@ -43,6 +43,7 @@ import {
   getObjectivePrompt,
   launchObjective
 } from './execution/launch.ts';
+import { mintObjectiveSessionChannel } from './execution/launch-channels.ts';
 import {
   getLaunchPreference,
   getLaunchSettings,
@@ -101,7 +102,12 @@ import {
   syncSqlStudioForWorkspace
 } from './sql-studio/sql-studio-manager.ts';
 import { listActivityFeed } from './activity-feed.ts';
-import { getAgentCatalog, refreshAgentCatalog, updateAgentCatalog } from './agent-catalog.ts';
+import {
+  getAgentCatalog,
+  refreshAgentCatalog,
+  reportAgentLiveModels,
+  updateAgentCatalog
+} from './agent-catalog.ts';
 import {
   AGENT_REQUEST_HUMAN_ROUTE_PREFIX,
   AGENT_SESSION_CHANNEL_ROUTE_PREFIX,
@@ -602,6 +608,8 @@ app.post(
 );
 
 if (mcpEnabled) {
+  // A task-augmented tool call finishes after its `/mcp` response; nudge the poll loops then too.
+  onHostedMcpTaskSettled(pollAfterMutation);
   app.get('/mcp', requireAuthenticatedSession, projectAutomationRouteGuard, (req, res) => {
     res.json(mcpServerInfo(req));
   });
@@ -971,6 +979,11 @@ app.put(
 app.post(
   '/api/workspaces/:id/agent-catalog/refresh',
   handle(req => refreshAgentCatalog(req.params.id), { mutates: true })
+);
+// A harness installation's live model list (`ovld models codex --sync`, the runner).
+app.post(
+  '/api/workspaces/:id/agent-catalog/live-models',
+  handle(req => reportAgentLiveModels(req.body, req.params.id), { mutates: true })
 );
 
 // ---- Profile -------------------------------------------------------------
@@ -1913,6 +1926,12 @@ app.post(
 app.post(
   '/api/objectives/:id/launch',
   handle(req => launchObjective(req.params.id, req.body), { mutates: true })
+);
+// Mint the session channel a control-plane launch (Codex app server) needs before the agent
+// starts (ADR 0092). Authorized against the objective's own workspace inside the handler.
+app.post(
+  '/api/objectives/:id/session-channels',
+  handle(req => mintObjectiveSessionChannel(req.params.id, req.body), { mutates: true })
 );
 app.get(
   '/api/objectives/:id/prompt',

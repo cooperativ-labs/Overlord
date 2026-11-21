@@ -226,6 +226,67 @@ Notes for headless use:
   installable connectors with `ovld agent-setup --json`.
 - `ovld agent-setup codex --export <dir>` renders the self-contained plugin
   package into an empty directory without changing the user's Codex setup.
+- Codex runs the Overlord hooks only after you approve them in Codex `/hooks`,
+  and needs approval again after every connector update. `codex exec` skips
+  unapproved hooks silently. `ovld agent-setup codex` and `ovld doctor` report
+  hooks that need approval. In an untrusted directory, `codex exec` also needs
+  `--trust` to load project config and MCP servers (Codex 0.169+).
+- Codex app-server mode (experimental, Codex 0.170+): with the Codex launch setting
+  *Run through the Codex app server* (Settings → Terminal & IDE), a project launch
+  env var `OVERLORD_CODEX_APP_SERVER=1`, or that variable in the runner's own
+  environment, `ovld launch` and runner claims run a Codex objective through a
+  private Codex app server driven by `ovld agent-session sidecar --agent
+  codex-app-server`. The terminal only attaches; a runner without a terminal needs
+  none. `ovld agent-session attach [--objective-id <ref>]` opens the Codex TUI on
+  a running session, and `ovld doctor` lists those sessions. The launch falls back
+  to the terminal when Codex is missing or older than 0.170 (tested with 0.171).
+  Approval cards are answered in the web app (only by the member who launched the
+  session) or in the attached TUI; follow-ups, steering and interrupts are typed in
+  the TUI. A direct `ovld launch` takes the session's approval policy and sandbox
+  from `--flag` (for example `--flag=--ask-for-approval=untrusted`); runners use
+  the saved launch flags. While the session runs Codex trusts its working
+  directory, so that checkout's Codex config, hooks and MCP servers load; the entry
+  is removed when the session ends. Security model and troubleshooting:
+  `connectors/adapters/codex-app-server/README.md`.
+- `ovld models codex [--provider <id>] [--json]` lists the models and reasoning
+  efforts the Codex installation on this machine supports, asked live through a
+  short-lived `codex app-server` (read only; it starts no thread). `--sync` also
+  makes them the workspace's Codex models, so the model and effort picker offers
+  what Codex can run (needs `launch:configure`; `--workspace-id <id>` picks the
+  workspace). `ovld runner start` and the runner service send the same report when
+  they start and every 6 hours. Your Codex account's email and ids never leave the
+  machine; only the account type and plan are shown. Without a reachable Codex the
+  command shows Overlord's bundled defaults. A Codex launch whose model or effort the
+  installation does not list stops with the list of available models instead of
+  failing in the terminal; when Codex cannot be asked, the launch is not checked.
+- Claude Code needs version 2.1.328 or later: the plugin's hooks are `mcp_tool`
+  hooks served by its bundled `plugin:overlord:overlord-hooks` MCP server, which
+  needs `node` on `PATH`. `ovld agent-setup claude` and `ovld doctor` report an
+  older Claude Code, a disabled plugin, or a hooks server that is not connected.
+  Until that is fixed, follow-up capture, file capture and the Stop reminder are
+  off; the `ovld protocol` commands still work as the fallback (declare changed
+  files with `--paths`). `ovld launch` adds the fail-closed permission-decision
+  hook only for sessions it launches with a session channel.
+- `ovld agent-setup claude --status-line` adds a Claude Code status line that shows
+  the session's bound mission and objective (display ids and titles) and whether it
+  is awaiting an answer or approval, blocked on a question, or delivered. It is
+  opt-in (an interactive `ovld agent-setup claude` asks, defaulting to no) and is
+  written only when `~/.claude/settings.json` has no `statusLine`; an existing status
+  line is kept, and setup prints how to pipe the same stdin into
+  `ovld status-line --agent claude --payload-file -` from your own script. The
+  command prints nothing in a session that is not bound to a mission, answers from a
+  local cache, and refreshes it in the background. Remove the `statusLine` key to
+  turn it off.
+- `ovld agent-setup codex --status-line` does the same for Codex 0.171+: it turns on
+  the experimental `tui_extensions_statusline` feature and selects the Overlord
+  plugin's status line provider (`overlord` / `overlord_status_line`) in
+  `~/.codex/config.toml`, only when no provider is selected and the feature is not
+  turned off. The provider replaces Codex's built-in footer, so it keeps the model,
+  folder and context left and adds the segment from
+  `ovld status-line --agent codex --ui-tree --native-session-id <thread id>`. A
+  thread binds through the native-session index, which `ovld protocol attach` writes
+  from `CODEX_SESSION_ID` and the app-server sidecar writes for its thread. Choose
+  another provider in `/statusline` to turn it off.
 - Set `OVLD_HOME=/some/writable/dir` if the default `~/.ovld` is not writable in
   your container; it relocates the entire CLI data directory.
 - Interactive `ovld auth login` / `ovld config set` (no args) and `ovld setup`

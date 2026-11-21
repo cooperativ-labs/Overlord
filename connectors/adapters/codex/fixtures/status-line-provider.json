@@ -1,0 +1,124 @@
+{
+  "fixtureVersion": 1,
+  "kind": "script-io",
+  "description": "The Codex statusline provider in the rendered MCP shim answers a recorded 0.171.0 `resources/read` with the built-in items it replaces (model and effort, folder, context left) followed by the Overlord segment from `ovld status-line --agent codex --ui-tree --native-session-id <thread id>`. The command gets no payload and no network access from the shim; binding is the CLI's (native-session index, else launch environment).",
+  "script": "connectors/core/scripts/overlord-mcp.mjs",
+  "adapterKey": "codex",
+  "args": [],
+  "stdinMessages": [
+    {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "resources/read",
+      "params": {
+        "uri": "ui://overlord/status-line",
+        "_meta": {
+          "com.openai/codex-statusline-state": {
+            "account": {
+              "rate_limits": [
+                {
+                  "limit_id": "codex",
+                  "limit_name": "codex",
+                  "primary_limit": {
+                    "used_percent": 11.0,
+                    "window_minutes": 10080,
+                    "resets_at": 1795595218
+                  },
+                  "secondary_limit": null
+                }
+              ]
+            },
+            "app": {
+              "cli_version": "0.171.0",
+              "display_mode": "standard"
+            },
+            "config": {
+              "statusline_items": [
+                "model-with-reasoning",
+                "current-dir",
+                "thread-name"
+              ]
+            },
+            "thread": {
+              "id": "01a1fb1c-6edf-7ef0-9756-07e84e072226",
+              "name": "Reply ready",
+              "agent": {
+                "state": "ready"
+              },
+              "model": {
+                "access_program": "standard",
+                "display_name": "GPT-6.2-Sol",
+                "id": "gpt-6.2-sol",
+                "provider": "openai",
+                "reasoning_level": "low",
+                "service_tier": "normal"
+              },
+              "workspace": {
+                "cwd": "/Users/dev/Overlord"
+              },
+              "usage": {
+                "context": {
+                  "context_window_size": 475000,
+                  "used_tokens": 26683,
+                  "used_percentage": 3
+                },
+                "total": {
+                  "total_input_tokens": 26678,
+                  "cache_read_input_tokens": 13696,
+                  "cache_write_input_tokens": 0,
+                  "other_input_tokens": 12982,
+                  "output_tokens": 5
+                }
+              },
+              "approval": {
+                "policy": "on-request",
+                "reviewer": "user"
+              },
+              "permissions": {
+                "display_name": "overlord",
+                "profile_id": "overlord",
+                "type": "managed",
+                "file_system": {
+                  "type": "restricted"
+                },
+                "network": "enabled"
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "env": {
+    "MISSION_ID": null,
+    "OVERLORD_MISSION_ID": null,
+    "OVERLORD_OBJECTIVE_ID": null,
+    "OVLD_HOME": null
+  },
+  "spy": {
+    "exitCode": 0,
+    "stdout": "{\"type\": \"row\", \"props\": {\"gap\": 1, \"wrap\": \"nowrap\"}, \"children\": [{\"type\": \"text\", \"props\": {\"color\": \"status-metadata\"}, \"children\": [\"ovld\"]}, {\"type\": \"bold\", \"children\": [\"coo:12\"]}, \"Ship the status line\", {\"type\": \"text\", \"props\": {\"color\": \"status-metadata\"}, \"children\": [\"›\"]}, {\"type\": \"bold\", \"children\": [\"ab12\"]}, \"Wire Codex\"]}"
+  },
+  "expect": {
+    "exitCode": 0,
+    "stderr": "",
+    "responses": [
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "result": {
+          "contents": [
+            {
+              "uri": "ui://overlord/status-line",
+              "mimeType": "application/json",
+              "text": "{\"type\":\"row\",\"props\":{\"gap\":1,\"wrap\":\"nowrap\"},\"children\":[{\"type\":\"text\",\"props\":{\"color\":\"status-model\"},\"children\":[\"GPT-6.2-Sol low\"]},{\"type\":\"text\",\"props\":{\"color\":\"status-metadata\"},\"children\":[\"·\"]},{\"type\":\"text\",\"props\":{\"color\":\"status-path\"},\"children\":[\"Overlord\"]},{\"type\":\"text\",\"props\":{\"color\":\"status-metadata\"},\"children\":[\"·\"]},{\"type\":\"text\",\"props\":{\"color\":\"status-usage\"},\"children\":[\"97% context left\"]},{\"type\":\"text\",\"props\":{\"color\":\"status-metadata\"},\"children\":[\"·\"]},{\"type\":\"row\",\"props\":{\"gap\":1,\"wrap\":\"nowrap\"},\"children\":[{\"type\":\"text\",\"props\":{\"color\":\"status-metadata\"},\"children\":[\"ovld\"]},{\"type\":\"bold\",\"children\":[\"coo:12\"]},\"Ship the status line\",{\"type\":\"text\",\"props\":{\"color\":\"status-metadata\"},\"children\":[\"›\"]},{\"type\":\"bold\",\"children\":[\"ab12\"]},\"Wire Codex\"]}]}"
+            }
+          ]
+        }
+      }
+    ],
+    "cliInvocations": [
+      "status-line --agent codex --ui-tree --native-session-id 01a1fb1c-6edf-7ef0-9756-07e84e072226"
+    ]
+  }
+}

@@ -1,0 +1,266 @@
+{
+  "fixtureVersion": 1,
+  "kind": "script-io",
+  "description": "A patch approval answered through Overlord, from recorded 0.170.0 frames. The approval request carries no diff, so the card is joined by item id to the pre-mutation fileChange item that arrived first: repo-relative paths, change kinds and line counts, never diff text. A person denies it: the exact reply is {\"decision\":\"decline\"}.",
+  "script": "scripts/codex-app-server-replay.mjs",
+  "stdinMessages": [
+    {
+      "setup": {
+        "codec": "connectors/adapters/codex-app-server/codec/codex-app-server.codec.yaml",
+        "cwd": "/repo",
+        "threadId": "01a1faaf-cd91-7372-a780-f5a9c5b457a7",
+        "report": [
+          "/requests",
+          "/requests/"
+        ],
+        "channel": {
+          "POST /requests/req-1/lease": [
+            {
+              "leaseId": "lease-1",
+              "status": "resolved",
+              "resolution": {
+                "decision": "deny"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "await": {
+        "method": "initialize"
+      }
+    },
+    {
+      "server": {
+        "id": 1,
+        "result": {
+          "userAgent": "overlord/0.170.0 (Mac OS 27.2.1; arm64) xterm-256color (overlord; replay)",
+          "codexHome": "/home/user/.codex",
+          "platformFamily": "unix",
+          "platformOs": "macos"
+        }
+      }
+    },
+    {
+      "server": {
+        "method": "remoteControl/status/changed",
+        "params": {
+          "status": "disabled",
+          "serverName": "host",
+          "installationId": "00000000-0000-0000-0000-000000000000",
+          "environmentId": null
+        },
+        "emittedAtMs": 1795207125837
+      }
+    },
+    {
+      "await": {
+        "method": "thread/resume"
+      }
+    },
+    {
+      "server": {
+        "id": 2,
+        "result": {
+          "thread": {
+            "id": "01a1faaf-cd91-7372-a780-f5a9c5b457a7",
+            "sessionId": "01a1faaf-cd91-7372-a780-f5a9c5b457a7",
+            "status": {
+              "type": "active",
+              "activeFlags": []
+            },
+            "cwd": "/repo",
+            "turns": [
+              {
+                "id": "01a1faaf-efd4-7651-adc0-9e8f3965ce1e",
+                "status": "inProgress",
+                "items": []
+              }
+            ]
+          },
+          "cwd": "/repo",
+          "approvalPolicy": "untrusted",
+          "approvalsReviewer": "user"
+        }
+      }
+    },
+    {
+      "server": {
+        "method": "item/started",
+        "params": {
+          "item": {
+            "type": "fileChange",
+            "id": "exec-19cb67b3-f0e4-4997-849a-b99645ec03dd",
+            "changes": [
+              {
+                "path": "/repo/notes.md",
+                "kind": {
+                  "type": "update",
+                  "move_path": null
+                },
+                "diff": "@@ -1 +1,2 @@\n hello\n+bye\n"
+              }
+            ],
+            "status": "inProgress",
+            "startedAtMs": 1795207199438,
+            "completedAtMs": null
+          },
+          "threadId": "01a1faaf-cd91-7372-a780-f5a9c5b457a7",
+          "turnId": "01a1faaf-efd4-7651-adc0-9e8f3965ce1e",
+          "startedAtMs": 1795207199438
+        },
+        "emittedAtMs": 1795207199439
+      }
+    },
+    {
+      "server": {
+        "method": "item/fileChange/requestApproval",
+        "id": 1,
+        "params": {
+          "threadId": "01a1faaf-cd91-7372-a780-f5a9c5b457a7",
+          "turnId": "01a1faaf-efd4-7651-adc0-9e8f3965ce1e",
+          "itemId": "exec-19cb67b3-f0e4-4997-849a-b99645ec03dd",
+          "startedAtMs": 1795207199439,
+          "reason": null,
+          "grantRoot": null
+        }
+      }
+    },
+    {
+      "await": {
+        "id": 1
+      }
+    }
+  ],
+  "timeoutMs": 60000,
+  "expect": {
+    "exitCode": 0,
+    "stderr": "",
+    "responses": [
+      {
+        "id": "out-1",
+        "rpc": {
+          "id": 1,
+          "method": "initialize",
+          "params": {
+            "clientInfo": {
+              "name": "overlord",
+              "title": "Overlord",
+              "version": "replay"
+            },
+            "capabilities": {
+              "experimentalApi": true,
+              "requestAttestation": false,
+              "optOutNotificationMethods": [
+                "item/agentMessage/delta",
+                "item/reasoning/summaryTextDelta",
+                "item/reasoning/summaryPartAdded",
+                "item/reasoning/textDelta",
+                "item/commandExecution/outputDelta",
+                "item/fileChange/outputDelta",
+                "thread/tokenUsage/updated",
+                "account/rateLimits/updated",
+                "turn/moderationMetadata"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": "out-2",
+        "rpc": {
+          "method": "initialized"
+        }
+      },
+      {
+        "id": "out-3",
+        "rpc": {
+          "id": 2,
+          "method": "thread/resume",
+          "params": {
+            "threadId": "01a1faaf-cd91-7372-a780-f5a9c5b457a7",
+            "approvalsReviewer": "user"
+          }
+        }
+      },
+      {
+        "id": "out-4",
+        "channel": {
+          "method": "POST",
+          "path": "/requests",
+          "body": {
+            "kind": "permission",
+            "summary": "Write a file: notes.md",
+            "details": {
+              "tool": "edit",
+              "action": "Write a file",
+              "subject": "notes.md",
+              "detail": "1 file, +1 −0 lines",
+              "riskMarkers": [],
+              "paths": [
+                "notes.md"
+              ],
+              "changeKinds": [
+                "update"
+              ],
+              "formatterVersion": 1,
+              "codexKind": "fileChange",
+              "requiresPerson": true,
+              "requestsWriteRoot": false
+            },
+            "options": [
+              {
+                "optionId": "allow",
+                "label": "Allow once",
+                "kind": "allow"
+              },
+              {
+                "optionId": "deny",
+                "label": "Deny",
+                "kind": "deny"
+              }
+            ],
+            "nativeRequestId": "exec-19cb67b3-f0e4-4997-849a-b99645ec03dd",
+            "nativeCallId": "exec-19cb67b3-f0e4-4997-849a-b99645ec03dd"
+          }
+        }
+      },
+      {
+        "id": "out-5",
+        "channel": {
+          "method": "POST",
+          "path": "/requests/req-1/lease",
+          "body": {}
+        }
+      },
+      {
+        "id": "out-6",
+        "channel": {
+          "method": "POST",
+          "path": "/requests/req-1/application",
+          "body": {
+            "applicationState": "emitted"
+          }
+        }
+      },
+      {
+        "id": "out-7",
+        "rpc": {
+          "id": 1,
+          "result": {
+            "decision": "decline"
+          }
+        }
+      },
+      {
+        "id": "result",
+        "reason": "reconnect-exhausted",
+        "serverVersion": "0.170.0",
+        "threadId": "01a1faaf-cd91-7372-a780-f5a9c5b457a7",
+        "injected": 0,
+        "interrupted": false
+      }
+    ]
+  }
+}

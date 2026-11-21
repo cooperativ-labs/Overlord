@@ -1,0 +1,384 @@
+# Codex app server — agent-session interaction capabilities.
+#
+# Authoritative and fixture-backed. Validated against contract/harness-capabilities.schema.yaml.
+# See connectors/AGENTS.md → "Harness capability descriptors" before writing any code here.
+#
+# The second controlPlane adapter, and the first built against a running binary: the adapter is
+# a JSON-RPC client of a private `codex app-server` that Overlord starts on an owner-only Unix
+# socket (runtime: cli/src/agent-session/codex-app-server/). Every fixture below either runs a
+# projected frame recorded from a live 0.170.0 server through the shipped codec, or replays
+# recorded frames through the shipped supervisor and asserts the exact JSON-RPC bytes it sends
+# back (scripts/codex-app-server-replay.mjs). Re-record with scripts/codex-app-server-record.mts.
+#
+# Child threads: subagents the agent spawns and forks made from an attached TUI are attributed to
+# the same Overlord session (`subagentId` = the child thread, `correlationId` = the root thread);
+# after a resume the supervisor imports the session tree's history so nothing done while
+# disconnected is missing (runtime: threads.ts, history.ts; coo:1325.nagv).
+#
+# User-started Codex sessions keep the hooks adapter (connectors/adapters/codex/). The two never
+# drive one session: the private server's environment silences Overlord's Codex plugin hooks.
+#
+# Overlord-launched Codex objectives use it in app-server mode (ADR 0092): launch mints the
+# session channel, starts the supervisor detached and attaches the terminal with
+# `ovld agent-session attach`. Off unless the agent launch setting, OVERLORD_CODEX_APP_SERVER=1 or
+# that project launch env var selects it.
+schemaVersion: 1
+adapter: codex-app-server
+codec: codex-app-server
+codecSpec: codec/codex-app-server.codec.yaml
+
+harness:
+  name: Codex app server
+  versionScheme: semver
+  verifiedVersion: 0.171.0
+  versionRange: '>=0.170.0'
+
+integrationShape: controlPlane
+
+binding:
+  source: env
+  field: OVERLORD_SESSION_CHANNEL_ID
+  status: supported
+  fixture: fixtures/replay-handshake.json
+  notes: >-
+    The supervisor is started by Overlord with the channel bootstrap in its own environment, so
+    it holds the authority before the thread exists. It starts (or resumes) one persistent
+    thread and records the thread id as the channel's native session alias with its first
+    heartbeat. The thread id is correlation only: Codex's own `sessionId`, `threadId` and the
+    socket path confer nothing.
+
+decisionHold:
+  status: supported
+  fixture: fixtures/replay-command-approval.json
+  notes: >-
+    Codex holds an approval as a pending JSON-RPC request until some subscribed client answers
+    it, with no harness timeout. The adapter therefore holds nothing: it renews a waiter lease on
+    the channel request while a person decides, and if it dies the lease lapses and the Codex
+    request simply stays open for the terminal.
+
+mutationHooks:
+  classification: paired
+  fixture: fixtures/mutation-window-evidence.json
+  notes: >-
+    `item/started` carries the fileChange item (paths and diff) before the patch approval and
+    before anything is written; `item/completed` carries the same item id and path with the
+    final status. The diff is used only for the approval card's line counts and never leaves
+    the machine.
+
+capabilities:
+  observe.prompt:
+    status: supported
+    native: item/completed:userMessage
+    fixtures:
+      - fixtures/normalize-user-message.json
+      - fixtures/normalize-steer-message.json
+      - fixtures/replay-history-import.json
+    notes: >-
+      Overlord's own steering input also arrives as a userMessage item, which is how an injected
+      instruction is observed as received.
+  observe.toolCall:
+    status: supported
+    native: item/started:commandExecution
+    fixtures: [fixtures/normalize-command-started.json, fixtures/normalize-file-change-started.json]
+  observe.toolResult:
+    status: supported
+    native: item/completed:commandExecution
+    fixtures: [fixtures/normalize-command-completed.json]
+  observe.fileEdit:
+    status: supported
+    native: item/completed:fileChange
+    fixtures:
+      - fixtures/normalize-file-change-completed.json
+      - fixtures/normalize-file-change-declined.json
+      - fixtures/mutation-window-evidence.json
+      - fixtures/normalize-child-file-change.json
+      - fixtures/replay-child-thread.json
+    notes: >-
+      A subagent's file changes arrive on the same connection with the child thread id and are
+      recorded for the parent session, with the child as `subagentId`, and reach change capture
+      like the root thread's.
+  observe.sessionLifecycle:
+    status: supported
+    native: thread/started
+    fixtures:
+      - fixtures/normalize-thread-started.json
+      - fixtures/normalize-turn-interrupted.json
+      - fixtures/normalize-subagent-started.json
+      - fixtures/normalize-fork-started.json
+    notes: >-
+      Codex sends no thread/started for a spawned subagent; its parent's `subAgentActivity` item
+      (started, completed, interrupted) is the child's lifecycle in the parent session. A fork
+      reports thread/started with `forkedFromId`.
+  decide.shell:
+    status: supported
+    native: item/commandExecution/requestApproval
+    fixtures: [fixtures/replay-command-approval.json, fixtures/human-answers-control-plane-cards.json]
+    notes: >-
+      The card is answered in Overlord (web, mobile, `ovld`) by the member who launched the
+      session (ADR 0094), or in the attached TUI, whichever is first. Verified live on 0.171.0:
+      four command approvals answered from the web app with the TUI attached.
+  decide.mcp:
+    status: unverified
+    native: mcpServer/elicitation/request
+    trackedAs: coo-1325-codex-mcp-elicitation-frames
+    notes: >-
+      MCP tool approvals arrive as MCP elicitations. None was raised against a live server, so
+      the adapter refuses the request (fail closed) and the terminal decides.
+  decide.fileWrite:
+    status: supported
+    native: item/fileChange/requestApproval
+    fixtures: [fixtures/replay-patch-approval.json, fixtures/replay-child-thread.json]
+    notes: >-
+      A subagent's patch approval is answered the same way; its card names the subagent
+      (`details.subagent`). Verified live on 0.171.0: a patch approval answered from the web app
+      with the TUI attached.
+  decide.anyTool:
+    status: unsupported
+    native: approvalPolicy
+    reason: >-
+      Codex gates by sandbox and approval policy, not per tool: web search, dynamic tools and
+      in-sandbox reads are never routed to a client for approval, so there is no request to
+      answer for an arbitrary tool.
+    evidenceRef: planning/feature-plans/codex-app-server-control-plane.md#33-approvals-and-questions
+  decide.universal:
+    status: unsupported
+    native: approvalPolicy
+    reason: >-
+      The app server has no pre-tool callback that every tool passes through; that exists only
+      on the hooks surface, which does not run in this mode.
+    evidenceRef: planning/feature-plans/codex-app-server-control-plane.md#54-capability-targets-per-matrix-row
+  answer.structuredQuestion:
+    status: unverified
+    native: item/tool/requestUserInput
+    trackedAs: coo-1325-codex-request-user-input-frames
+    notes: >-
+      The adapter routes a single, non-secret question to a channel request (code and unit
+      tests), but no live server raised `item/tool/requestUserInput` in either probe — the model
+      did not call the experimental tool when asked. Grade it supported only with a recorded
+      frame.
+  answer.persistentAllow:
+    status: not-implemented
+    native: acceptForSession
+    trackedAs: agent-session-phase-2
+    notes: >-
+      `acceptForSession` and execpolicy amendments exist and are never sent. Product policy hides
+      standing grants from remote surfaces, as for OpenCode.
+  inject.midTurn:
+    status: supported
+    native: turn/steer
+    fixtures: [fixtures/replay-inject-steer.json]
+  inject.turnBoundary:
+    status: supported
+    native: turn/start
+    fixtures: [fixtures/replay-inject-turn-boundary.json]
+  inject.nextTurn:
+    status: supported
+    native: turn/start
+    fixtures: [fixtures/replay-inject-turn-boundary.json]
+  terminal.concurrentAnswer:
+    status: supported
+    native: serverRequest/resolved
+    fixtures: [fixtures/replay-concurrent-answer.json]
+    notes: >-
+      Codex fans an approval out to every subscriber and takes the first answer; a person at
+      `codex --remote unix://… resume <thread>` can answer while Overlord holds a card, and the
+      card closes as resolved elsewhere.
+  terminal.statusSurface:
+    status: supported
+    native: statusline MCP provider (tui_extensions_statusline)
+    fixtures:
+      - fixtures/status-line-provider.json
+      - fixtures/status-line-thread-index.json
+    notes: >-
+      The private app server loads the same user Codex config and plugins, so a terminal
+      attached with `codex --remote unix://… resume <thread>` (Codex 0.171+, feature
+      `tui_extensions_statusline`, selected by `ovld agent-setup codex --status-line`) shows the
+      Codex hooks adapter's statusline provider. That provider runs inside the server's
+      allowlisted environment, which carries no launch binding, so the sidecar indexes the
+      session's thread under the `codex` agent when the thread is ready and removes the entry
+      on exit. Verified live on 0.171.0 against a private server on a Unix socket.
+
+hazards:
+  - id: experimental-surface-drift
+    severity: high
+    summary: >-
+      `codex app-server` and its WebSocket transport are labelled experimental, and 0.168–0.171
+      each changed app-server behavior. The adapter speaks only a pinned method list, refuses a
+      server whose initialize userAgent reports a version below the verified range, ignores
+      unknown notifications and refuses unknown server requests.
+    verification: verified
+    mitigation: implemented
+    fixture: fixtures/replay-version-gate.json
+  - id: auto-review-would-bypass-overlord
+    severity: high
+    summary: >-
+      A user config with `approvals_reviewer = "auto_review"` makes a Codex subagent decide
+      approvals the client never sees, and a thread started without an explicit reviewer
+      inherits it (spike, LIVE). Every thread is started or resumed with
+      `approvalsReviewer: "user"`.
+    verification: verified
+    mitigation: implemented
+    fixture: fixtures/replay-handshake.json
+  - id: control-socket-owns-the-session
+    severity: high
+    summary: >-
+      Anything that can connect to the app server can drive the agent. The server listens only
+      on `unix://` in an owner-only `~/.ovld/cx/` (Codex keeps the real 0600 socket in its own
+      0700 directory, and the supervisor connects only after checking that socket and directory
+      belong to this user and are not group- or world-writable), never on TCP and never on the
+      user's shared daemon socket; the supervisor
+      starts no thread until the server reports remote control `disabled` right after
+      `initialize`, and stops if it later reports anything else. A same-user local process can
+      still connect, exactly as the TUI does (see `same-user-agent-reaches-credentials`).
+    verification: verified
+    mitigation: implemented
+    fixture: fixtures/server-socket-owner-only.json
+  - id: server-env-carries-scope
+    severity: high
+    summary: >-
+      Commands the agent runs inherit the app server's environment. The server is started with
+      an allowlisted environment, so the user token, channel credentials and objective scope
+      never reach it, and with OVERLORD_CONTROL_PLANE_SURFACE so the Codex plugin's own hooks
+      stay silent inside it (see the codex adapter's
+      `plugin-hooks-fire-inside-app-server-threads`).
+    verification: verified
+    mitigation: implemented
+    fixture: fixtures/server-socket-owner-only.json
+  - id: stop-leaves-turn-running
+    severity: medium
+    summary: >-
+      Ending an Overlord session must not leave Codex working. When the channel stops honoring
+      the credential, or the supervisor is signalled, it interrupts the running turn before
+      closing the connection.
+    verification: verified
+    mitigation: implemented
+    fixture: fixtures/replay-interrupt.json
+  - id: launch-mints-no-channel
+    severity: high
+    summary: >-
+      The adapter needs a credentialed session channel, and launch minted none since contract 76
+      (ADR 0065). A Codex launch in app-server mode now mints one through
+      POST /api/objectives/{id}/session-channels, stages it in the owner-only cache and starts the
+      supervisor; every other launch still mints none (ADR 0092).
+    verification: verified
+    mitigation: implemented
+    fixture: fixtures/launch-mints-control-plane-channel.json
+  - id: human-session-controls-closed
+    severity: low
+    summary: >-
+      This adapter's approval, question and choice cards are answered from Overlord (delivery
+      mode `control_plane`, ADR 0094); an approval only by the member who launched the session.
+      Session inputs are still refused for every adapter (`POST /api/agent-session-inputs`
+      answers 410), so a follow-up, steer or interrupt is typed in the attached TUI
+      (`ovld agent-session attach`), not sent from web or mobile.
+    verification: verified
+    mitigation: required
+    trackedAs: coo-1325-control-plane-human-controls
+  - id: question-answer-double-delivery
+    severity: medium
+    summary: >-
+      A human answer to a question or choice request is delivered through Latch into the
+      session's terminal (ADR 0065). For a codex-app-server session that would type the answer
+      into an attached TUI as well as answering the JSON-RPC request. The resolve route now
+      records an answer to a control-plane request without any Latch delivery, and the
+      supervisor answers the JSON-RPC request from its waiter lease (ADR 0094).
+    verification: verified
+    mitigation: implemented
+    fixture: fixtures/human-answers-control-plane-cards.json
+  - id: supervisor-killed-leaves-server
+    severity: medium
+    summary: >-
+      The private server runs in its own process group so the supervisor can stop it, and it
+      ignores SIGTERM while a turn runs (LIVE), so stop escalates to SIGKILL. A supervisor that
+      is itself killed with SIGKILL would leave the server running its turn unsupervised, so a
+      detached `sh` watchdog started with the server ends the server's group within about a
+      second of the supervisor's pid disappearing. The next supervisor start and `ovld doctor`
+      still reap any server left behind, after checking the pid belongs to a Codex app server.
+    verification: verified
+    mitigation: implemented
+    fixture: fixtures/supervisor-watchdog.json
+  - id: reasked-approval-inherits-answer
+    severity: medium
+    summary: >-
+      Codex can ask twice about one item (a command that failed in the sandbox is asked again to
+      run outside it, with the same item id), and the channel dedupes cards by native request
+      id, returning the earlier card with its answer. The supervisor gives a later request for an
+      already-settled item its own occurrence id (`<item>#2`), so an earlier allow is never
+      applied to a new, possibly broader, approval; a replay of a still-open card keeps its id.
+    verification: verified
+    mitigation: implemented
+    fixture: fixtures/reasked-approval-occurrence.json
+  - id: same-user-agent-reaches-credentials
+    severity: medium
+    summary: >-
+      Commands the agent runs execute as the person's own OS user, and Codex's workspace-write
+      sandbox allows reading the whole filesystem. With network access (granted per command, or
+      a sandbox that allows it) such a command could read the person's `ovld` login and the
+      channel credential cache, or connect to this session's own socket, and answer the session's
+      cards. The server's environment carries no credential and the channel credential cannot
+      resolve a request, but the same-user boundary is the person's own account. Accepted and
+      documented; a sandbox that denies reading `~/.ovld` is the stronger control where Codex
+      supports it.
+    verification: verified
+    mitigation: accepted
+  - id: child-threads-share-the-connection
+    severity: high
+    summary: >-
+      The app server attaches every connection to every thread it creates (LIVE 0.170, and
+      `try_attach_thread_listener` in the 0.170 source), so a subagent's notifications and its
+      approval requests reach the Overlord connection with the child's thread id, and so do those
+      of a thread another client started from scratch. The supervisor keeps the session's thread
+      tree: a child announced by a tree thread's `subAgentActivity` or `spawnAgent` item, a
+      thread whose `thread/read` lineage (`parentThreadId`, `forkedFromId`, or the root's
+      inherited `sessionId`) points into the tree, or a fork reported by thread/started, is the
+      session's work and is attributed to it; any other thread is looked up once and then
+      ignored — no event, no capture, no card, and its approvals are left to its own client.
+    verification: verified
+    mitigation: implemented
+    fixture: fixtures/replay-child-thread.json
+  - id: notifications-missed-while-disconnected
+    severity: medium
+    summary: >-
+      Notifications are not replayed, so whatever a thread or its subagents did while the
+      supervisor's socket was down (server crash and respawn, dropped connection, a supervisor
+      started on an existing thread) would be missing from the session feed and the change
+      ledger. After every resume the supervisor pages `thread/turns/list` for each thread in the
+      tree (children found by `thread/list {parentThreadId}`) and replays completed items through
+      the live path. Event ids are content-derived and equal the live ones, and the change ledger
+      appends a path once, so nothing already captured is duplicated.
+    verification: verified
+    mitigation: implemented
+    fixture: fixtures/replay-history-import.json
+  - id: fork-history-repeats-source-turns
+    severity: low
+    summary: >-
+      A fork's `thread/turns/list` begins with its source's turns, with the same turn and item
+      ids (LIVE 0.170; 0.169 made paging work across fork segments). Importing them under the
+      fork would credit the source's work to the fork. The import walks the tree root first and
+      skips a turn it has already imported in the same pass. A fork is only known from its
+      thread/started, so one made while Overlord was disconnected is not found by the import
+      (`thread/list` has no fork filter); spawned subagents are.
+    verification: verified
+    mitigation: implemented
+    fixture: fixtures/replay-history-import.json
+  - id: implicit-folder-trust
+    severity: low
+    summary: >-
+      `thread/start` in an untrusted git checkout with a writable sandbox writes
+      `trust_level = "trusted"` for that path into the user's ~/.codex/config.toml (LIVE). The
+      supervisor records the entry its thread added and removes exactly that table when the
+      session ends, only while it holds nothing but that line (ADR 0092; LIVE on 0.170 and
+      0.171). A symlinked config is edited at its target, so the link survives.
+    verification: verified
+    mitigation: implemented
+    fixture: fixtures/trust-entry-cleanup.json
+
+decisionShape:
+  codec: codex-app-server
+  neverSend: [hookSpecificOutput, permissionDecision, acceptForSession, acceptWithExecpolicyAmendment]
+  notes: >-
+    Decisions are JSON-RPC results to Codex's own request id: `{"decision": "accept"}`,
+    `{"decision": "decline"}`, or `{"decision": "cancel"}` when Codex did not offer decline.
+    Hook-dialect fields mean nothing here, and standing grants are never sent.
+
+unboundSessionFixture: fixtures/unbound-session.json

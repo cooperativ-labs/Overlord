@@ -165,13 +165,18 @@ hazards:
   - id: reads-claude-hook-config
     severity: high
     summary: >-
-      Cursor resolves hooks from Claude's own project-local, project, and user configuration
-      in addition to its own. If plugin-provided hooks are expanded, Overlord's Claude hooks
-      may fire inside Cursor sessions and emit Claude-shaped decisions into a Cursor-shaped
-      contract — cross-connector misattribution with no code change on our side.
-    verification: unverified
-    mitigation: required
-    trackedAs: taxonomy-7.1
+      Cursor loads hooks from Claude's project-local, project and user settings and imports
+      installed, enabled Claude Code plugins' hooks/hooks.json (on by default in the IDE; it
+      cannot be turned off in cursor-agent), so Overlord's Claude hooks could fire inside
+      Cursor sessions with Cursor-shaped payloads. Verified from Cursor's third-party hooks
+      docs and forum (t/166558). Mitigated in coo:1323: the Claude plugin now ships only
+      fail-open `mcp_tool` hooks, and Cursor's importer copies only `command` hooks, so no
+      Overlord script runs in Cursor. The fail-closed decision hook is registered per Claude
+      launch and never lives in the plugin, and the plugin registers no PreToolUse. How Cursor
+      treats an `mcp_tool` entry is undocumented and was not observed in a live Cursor run.
+    verification: verified
+    mitigation: implemented
+    fixture: fixtures/claude-plugin-import-guard.json
   - id: allowlist-precedence
     severity: medium
     summary: >-

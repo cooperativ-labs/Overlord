@@ -1,0 +1,37 @@
+{
+  "fixtureVersion": 1,
+  "kind": "normalized-event",
+  "description": "Antigravity PreInvocation carries the latest user message as lastUserInput (common field since agy 1.4.7). The codec reads only that field into a prompt.submitted event, with secrets redacted; the transcript path is never read or retained.",
+  "codec": "codec/antigravity.codec.yaml",
+  "occurredAt": "2026-11-20T00:00:00.000Z",
+  "payload": {
+    "hookEventName": "PreInvocation",
+    "invocationNum": 0,
+    "initialNumSteps": 4,
+    "lastUserInput": "Also rotate the key ghp_abcdefghijklmnopqrstuvwxyz0123456789 and rerun the tests",
+    "conversationId": "ec33ebf9-0cba-4100-8142-c61503f6c587",
+    "workspacePaths": ["/workspace/project"],
+    "transcriptPath": "/Users/dev/.gemini/antigravity-cli/brain/ec33ebf9-0cba-4100-8142-c61503f6c587/.system_generated/logs/transcript.jsonl",
+    "artifactDirectoryPath": "/Users/dev/.gemini/antigravity-cli/brain/ec33ebf9-0cba-4100-8142-c61503f6c587",
+    "modelName": "gemini-3.6-flash-medium",
+    "cwd": "/workspace/project"
+  },
+  "expect": {
+    "eventId": "ev_b9a1cc5b21e917f337ee26f64ff3968a",
+    "producerSequence": null,
+    "occurredAt": "2026-11-20T00:00:00.000Z",
+    "kind": "prompt.submitted",
+    "severity": "info",
+    "nativeEvent": "PreInvocation",
+    "nativeTurnId": null,
+    "nativeCallId": null,
+    "subagentId": null,
+    "correlationId": "ec33ebf9-0cba-4100-8142-c61503f6c587",
+    "origin": "user",
+    "summary": "Also rotate the key [redacted] and rerun the tests",
+    "payload": {
+      "promptText": "Also rotate the key [redacted] and rerun the tests"
+    }
+  },
+  "mustNotContain": ["ghp_abcdefghijklmnopqrstuvwxyz0123456789", "transcript.jsonl", "/Users/dev"]
+}

@@ -3,6 +3,12 @@
 # This declarative dialect is compiled into the CLI.  Codex hook payloads carry the event name
 # and session id directly; they are correlation only.  The scoped channel credential remains
 # the sole authorization and mission-scope authority.
+#
+# Subagents: inside a spawned subagent Codex sends the *root* session's id as `session_id` (every
+# thread of a session tree shares its agent-control identity; codex-rs 0.170
+# `core/src/hook_runtime.rs`, `core/src/agent/control.rs`) and the child thread's id as
+# `agent_id` (`agent_type` is its role). So a subagent's hook events correlate with the session
+# that spawned it, and `agent_id` is recorded as the event's `subagentId`.
 codecVersion: 1
 adapter: codex
 
@@ -20,6 +26,7 @@ events:
     inputPath: tool_input
     callIdPath: tool_use_id
     turnIdPath: turn_id
+    subagentIdPath: agent_id
 
   - native: PostToolUse
     kind: tool.completed
@@ -28,6 +35,7 @@ events:
     inputPath: tool_input
     callIdPath: tool_use_id
     turnIdPath: turn_id
+    subagentIdPath: agent_id
     # Codex runs PostToolUse after a handler returns a result, but apply_patch reports its own
     # failure inside that result: `tool_response` is text whose first line is `Exit code: <n>`
     # (upstream codex-rs hook test `post_tool_use_records_additional_context_for_apply_patch`
@@ -53,6 +61,7 @@ events:
     origin: user
     promptPath: prompt
     turnIdPath: turn_id
+    subagentIdPath: agent_id
 
   - native: SessionStart
     kind: session.started

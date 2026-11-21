@@ -32,6 +32,10 @@
 #      free. This is the same gate `cli/src/agent-session/bind.ts` applies; it is duplicated
 #      here deliberately, because the only version that can prevent the spawn is the one that
 #      runs before it.
+# A harness process an Overlord control-plane supervisor drives (for example a private
+# `codex app-server`) carries OVERLORD_CONTROL_PLANE_SURFACE. The supervisor observes, decides
+# and captures for it, so this callback must not report a second time.
+[ -z "${OVERLORD_CONTROL_PLANE_SURFACE:-}" ] || exit 0
 [ -n "${OVERLORD_SESSION_CHANNEL_ID:-}" ] || exit 0
 command -v ovld >/dev/null 2>&1 || exit 0
 exec ovld agent-session __OVERLORD_SESSION_ACTION__ --agent __OVERLORD_ADAPTER_KEY__ --payload-file -

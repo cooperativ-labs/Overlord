@@ -1,0 +1,974 @@
+{
+  "fixtureVersion": 1,
+  "kind": "script-io",
+  "description": "History import after a resume, from thread/turns/list and thread/list pages recorded on a live 0.170.0 server. The supervisor pages the root thread oldest first with full items and replays each completed item as the item/completed notification it was, so event ids equal the live ones and the server drops anything it already has. The subAgentActivity item in the history admits the child, and thread/list {parentThreadId} confirms it; a fork another client makes as the import runs (thread/started with forkedFromId) is paged too, and the source turn its history starts with is skipped rather than attributed to the fork. Agent messages are never imported.",
+  "script": "scripts/codex-app-server-replay.mjs",
+  "timeoutMs": 60000,
+  "stdinMessages": [
+    {
+      "setup": {
+        "codec": "connectors/adapters/codex-app-server/codec/codex-app-server.codec.yaml",
+        "cwd": "/repo",
+        "threadId": "01a1faeb-d29d-77a2-91b0-89021afec101",
+        "importHistory": true,
+        "report": [
+          "/events"
+        ]
+      }
+    },
+    {
+      "await": {
+        "method": "initialize"
+      }
+    },
+    {
+      "server": {
+        "id": 1,
+        "result": {
+          "userAgent": "overlord/0.170.0 (Mac OS 27.2.1; arm64) xterm-256color (overlord; probe)",
+          "codexHome": "/home/user/.codex",
+          "platformFamily": "unix",
+          "platformOs": "macos"
+        }
+      }
+    },
+    {
+      "await": {
+        "method": "thread/resume"
+      }
+    },
+    {
+      "server": {
+        "id": 2,
+        "result": {
+          "thread": {
+            "id": "01a1faeb-d29d-77a2-91b0-89021afec101",
+            "environments": [
+              {
+                "environmentId": "local",
+                "cwd": "/repo",
+                "runtimeWorkspaceRoots": [
+                  "/repo"
+                ]
+              }
+            ],
+            "extra": null,
+            "sessionId": "01a1faeb-d29d-77a2-91b0-89021afec101",
+            "forkedFromId": null,
+            "attachedToThreadId": null,
+            "parentThreadId": null,
+            "preview": "",
+            "ephemeral": false,
+            "section": null,
+            "sectionEnteredAt": null,
+            "projectId": null,
+            "historyMode": "paginated",
+            "modelProvider": "openai",
+            "model": "gpt-6.2-sol",
+            "reasoningEffort": "medium",
+            "createdAt": 1795211121,
+            "updatedAt": 1795211121,
+            "recencyAt": 1795211121,
+            "status": {
+              "type": "idle"
+            },
+            "path": "/home/user/.codex/sessions/2026/11/20/rollout-2026-11-20T22-45-21-01a1faeb-d29d-77a2-91b0-89021afec101.jsonl",
+            "cwd": "/repo",
+            "cliVersion": "0.170.0",
+            "originator": "overlord",
+            "source": "vscode",
+            "canAcceptDirectInput": true,
+            "threadSource": null,
+            "agentNickname": null,
+            "agentRole": null,
+            "gitInfo": null,
+            "name": null,
+            "daybreakEnabled": null,
+            "turns": []
+          },
+          "model": "gpt-6.2-sol",
+          "modelProvider": "openai",
+          "serviceTier": "default",
+          "disabledPluginIds": [],
+          "cwd": "/repo",
+          "runtimeWorkspaceRoots": [
+            "/repo"
+          ],
+          "instructionSources": [],
+          "approvalPolicy": "untrusted",
+          "approvalsReviewer": "user",
+          "sandbox": {
+            "type": "workspaceWrite",
+            "writableRoots": [],
+            "networkAccess": false,
+            "excludeTmpdirEnvVar": false,
+            "excludeSlashTmp": false
+          },
+          "activePermissionProfile": null,
+          "reasoningEffort": "medium",
+          "multiAgentMode": "explicitRequestOnly"
+        }
+      }
+    },
+    {
+      "await": {
+        "method": "thread/turns/list"
+      }
+    },
+    {
+      "server": {
+        "method": "thread/started",
+        "params": {
+          "thread": {
+            "id": "01a1faec-2574-7e33-b31f-1a6f3abb3cd7",
+            "environments": [
+              {
+                "environmentId": "local",
+                "cwd": "/repo",
+                "runtimeWorkspaceRoots": [
+                  "/repo"
+                ]
+              }
+            ],
+            "extra": null,
+            "sessionId": "01a1faec-2574-7e33-b31f-1a6f3abb3cd7",
+            "forkedFromId": "01a1faeb-d29d-77a2-91b0-89021afec101",
+            "attachedToThreadId": null,
+            "parentThreadId": null,
+            "preview": "Spawn exactly one subagent (use your spawn_agent tool) and ask it to create a file named child.txt containing the single line \"from child\" using apply_patch, and nothing else. Wait for it to finish. Then yourself create parent.txt containing \"from parent\" using apply_patch. Reply \"done\".",
+            "ephemeral": false,
+            "section": null,
+            "sectionEnteredAt": null,
+            "projectId": null,
+            "historyMode": "paginated",
+            "modelProvider": "openai",
+            "model": "gpt-6.2-sol",
+            "reasoningEffort": "medium",
+            "createdAt": 1795211142,
+            "updatedAt": 1795211143,
+            "recencyAt": 1795211142,
+            "status": {
+              "type": "idle"
+            },
+            "path": "/home/user/.codex/sessions/2026/11/20/rollout-2026-11-20T22-45-42-01a1faec-2574-7e33-b31f-1a6f3abb3cd7.jsonl",
+            "cwd": "/repo",
+            "cliVersion": "0.170.0",
+            "originator": "overlord",
+            "source": "vscode",
+            "canAcceptDirectInput": true,
+            "threadSource": null,
+            "agentNickname": null,
+            "agentRole": null,
+            "gitInfo": {
+              "sha": "eaf3eadeb8141d9208cee6dc9fb4fe21a3f98b80",
+              "branch": "main",
+              "originUrl": null
+            },
+            "name": null,
+            "daybreakEnabled": null,
+            "turns": []
+          }
+        },
+        "emittedAtMs": 1795211143220
+      }
+    },
+    {
+      "server": {
+        "id": 3,
+        "result": {
+          "data": [
+            {
+              "id": "01a1faeb-d30f-7761-a52a-b80145730805",
+              "rootTurnId": "01a1faeb-d30f-7761-a52a-b80145730805",
+              "items": [
+                {
+                  "type": "userMessage",
+                  "id": "01a1faeb-dd5c-7d33-845f-e7581227cd53",
+                  "clientId": null,
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "Spawn exactly one subagent (use your spawn_agent tool) and ask it to create a file named child.txt containing the single line \"from child\" using apply_patch, and nothing else. Wait for it to finish. Then yourself create parent.txt containing \"from parent\" using apply_patch. Reply \"done\".",
+                      "text_elements": []
+                    }
+                  ],
+                  "startedAtMs": 1795211124061,
+                  "completedAtMs": 1795211124061
+                },
+                {
+                  "type": "agentMessage",
+                  "moderation": null,
+                  "id": "msg_05e30710725a8dca016b00bf75b2fc87d2816b72411a015e0b",
+                  "text": "I\u2019ll wait for the subagent to finish `child.txt` before creating `parent.txt`.",
+                  "phase": "commentary",
+                  "memoryCitation": null,
+                  "delivery": null,
+                  "questions": null,
+                  "startedAtMs": 1795211125720,
+                  "completedAtMs": 1795211126479
+                },
+                {
+                  "type": "subAgentActivity",
+                  "model": "gpt-6.2-sol",
+                  "reasoningEffort": "medium",
+                  "id": "call_2a2dae9d5eb745319b730abb1a5b95d5",
+                  "kind": "started",
+                  "agentThreadId": "01a1faeb-e92a-7711-8210-2250b334ce2f",
+                  "agentPath": "/root/child",
+                  "startedAtMs": 1795211127183,
+                  "completedAtMs": 1795211127183
+                },
+                {
+                  "type": "subAgentActivity",
+                  "model": null,
+                  "reasoningEffort": null,
+                  "id": "subagent-completed-01a1faeb-e98e-7f92-9764-6130255aed13",
+                  "kind": "completed",
+                  "agentThreadId": "01a1faeb-e92a-7711-8210-2250b334ce2f",
+                  "agentPath": "/root/child",
+                  "startedAtMs": 1795211133290,
+                  "completedAtMs": 1795211133290
+                },
+                {
+                  "type": "collabAgentToolCall",
+                  "id": "call_b8a2f12d981140a3b1c9517bd3b19a0b",
+                  "tool": "wait",
+                  "status": "completed",
+                  "senderThreadId": "01a1faeb-d29d-77a2-91b0-89021afec101",
+                  "receiverThreadIds": [],
+                  "prompt": null,
+                  "model": null,
+                  "reasoningEffort": null,
+                  "agentsStates": {},
+                  "startedAtMs": 1795211128998,
+                  "completedAtMs": 1795211133291
+                },
+                {
+                  "type": "fileChange",
+                  "id": "exec-6bdaaa2a-6f81-4276-acb6-9ce7913c6aeb",
+                  "changes": [
+                    {
+                      "path": "/repo/parent.txt",
+                      "kind": {
+                        "type": "add"
+                      },
+                      "diff": "from parent\n"
+                    }
+                  ],
+                  "status": "completed",
+                  "startedAtMs": 1795211135358,
+                  "completedAtMs": 1795211135385
+                },
+                {
+                  "type": "commandExecution",
+                  "id": "exec-73308a55-f6c3-47ee-ac96-7008611e4e71",
+                  "pluginId": null,
+                  "scriptPath": null,
+                  "command": "/bin/zsh -lc \"python3 -c 'from pathlib import Path; assert Path(\\\"child.txt\\\").read_bytes() == b\\\"from child\\\\n\\\"; assert Path(\\\"parent.txt\\\").read_bytes() == b\\\"from parent\\\\n\\\"'\"",
+                  "cwd": "/repo",
+                  "processId": "35626",
+                  "source": "unifiedExecStartup",
+                  "status": "completed",
+                  "commandActions": [
+                    {
+                      "type": "unknown",
+                      "command": "python3 -c 'from pathlib import Path; assert Path(\"child.txt\").read_bytes() == b\"from child\\n\"; assert Path(\"parent.txt\").read_bytes() == b\"from parent\\n\"'"
+                    }
+                  ],
+                  "aggregatedOutput": null,
+                  "exitCode": 0,
+                  "durationMs": 0,
+                  "startedAtMs": 1795211138405,
+                  "completedAtMs": 1795211138533
+                },
+                {
+                  "type": "agentMessage",
+                  "moderation": null,
+                  "id": "msg_05e30710725a8dca016b00bf83de2c87d28827785a0f85d3e0",
+                  "text": "done",
+                  "phase": "final_answer",
+                  "memoryCitation": null,
+                  "delivery": null,
+                  "questions": null,
+                  "startedAtMs": 1795211140982,
+                  "completedAtMs": 1795211140982
+                }
+              ],
+              "itemsView": "full",
+              "status": "completed",
+              "error": null,
+              "startedAt": 1795211121,
+              "completedAt": 1795211140,
+              "durationMs": 19565
+            }
+          ],
+          "nextCursor": null,
+          "backwardsCursor": "{\"requestedThreadId\":\"01a1faeb-d29d-77a2-91b0-89021afec101\",\"rolloutOrdinal\":1,\"includeAnchor\":true,\"scope\":{\"kind\":\"turns\"}}"
+        }
+      }
+    },
+    {
+      "await": {
+        "id": 4
+      }
+    },
+    {
+      "server": {
+        "id": 4,
+        "result": {
+          "data": [
+            {
+              "id": "01a1faeb-e92a-7711-8210-2250b334ce2f",
+              "environments": [
+                {
+                  "environmentId": "local",
+                  "cwd": "/repo",
+                  "runtimeWorkspaceRoots": [
+                    "/repo"
+                  ]
+                }
+              ],
+              "extra": null,
+              "sessionId": "01a1faeb-e92a-7711-8210-2250b334ce2f",
+              "forkedFromId": null,
+              "attachedToThreadId": null,
+              "parentThreadId": "01a1faeb-d29d-77a2-91b0-89021afec101",
+              "preview": "",
+              "ephemeral": false,
+              "section": null,
+              "sectionEnteredAt": null,
+              "projectId": null,
+              "historyMode": "paginated",
+              "modelProvider": "openai",
+              "model": "gpt-6.2-sol",
+              "reasoningEffort": "medium",
+              "createdAt": 1795211127,
+              "updatedAt": 1795211133,
+              "recencyAt": 1795211127,
+              "status": {
+                "type": "idle"
+              },
+              "path": "/home/user/.codex/sessions/2026/11/20/rollout-2026-11-20T22-45-27-01a1faeb-e92a-7711-8210-2250b334ce2f.jsonl",
+              "cwd": "/repo",
+              "cliVersion": "0.170.0",
+              "originator": "overlord",
+              "source": {
+                "subAgent": {
+                  "thread_spawn": {
+                    "parent_thread_id": "01a1faeb-d29d-77a2-91b0-89021afec101",
+                    "depth": 1,
+                    "agent_path": "/root/child",
+                    "agent_nickname": "Carver",
+                    "agent_role": null
+                  }
+                }
+              },
+              "canAcceptDirectInput": false,
+              "threadSource": null,
+              "agentNickname": "Carver",
+              "agentRole": null,
+              "gitInfo": {
+                "sha": "eaf3eadeb8141d9208cee6dc9fb4fe21a3f98b80",
+                "branch": "main",
+                "originUrl": null
+              },
+              "name": null,
+              "daybreakEnabled": null,
+              "turns": []
+            }
+          ],
+          "readStates": {},
+          "nextCursor": null,
+          "backwardsCursor": "2026-11-20T21:45:26.999Z"
+        }
+      }
+    },
+    {
+      "await": {
+        "id": 5
+      }
+    },
+    {
+      "server": {
+        "id": 5,
+        "result": {
+          "data": [
+            {
+              "id": "01a1faeb-d30f-7761-a52a-b80145730805",
+              "rootTurnId": "01a1faeb-d30f-7761-a52a-b80145730805",
+              "items": [
+                {
+                  "type": "userMessage",
+                  "id": "01a1faeb-dd5c-7d33-845f-e7581227cd53",
+                  "clientId": null,
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "Spawn exactly one subagent (use your spawn_agent tool) and ask it to create a file named child.txt containing the single line \"from child\" using apply_patch, and nothing else. Wait for it to finish. Then yourself create parent.txt containing \"from parent\" using apply_patch. Reply \"done\".",
+                      "text_elements": []
+                    }
+                  ],
+                  "startedAtMs": 1795211124061,
+                  "completedAtMs": 1795211124061
+                },
+                {
+                  "type": "agentMessage",
+                  "moderation": null,
+                  "id": "msg_05e30710725a8dca016b00bf75b2fc87d2816b72411a015e0b",
+                  "text": "I\u2019ll wait for the subagent to finish `child.txt` before creating `parent.txt`.",
+                  "phase": "commentary",
+                  "memoryCitation": null,
+                  "delivery": null,
+                  "questions": null,
+                  "startedAtMs": 1795211125720,
+                  "completedAtMs": 1795211126479
+                },
+                {
+                  "type": "subAgentActivity",
+                  "model": "gpt-6.2-sol",
+                  "reasoningEffort": "medium",
+                  "id": "call_2a2dae9d5eb745319b730abb1a5b95d5",
+                  "kind": "started",
+                  "agentThreadId": "01a1faeb-e92a-7711-8210-2250b334ce2f",
+                  "agentPath": "/root/child",
+                  "startedAtMs": 1795211127183,
+                  "completedAtMs": 1795211127183
+                },
+                {
+                  "type": "subAgentActivity",
+                  "model": null,
+                  "reasoningEffort": null,
+                  "id": "subagent-completed-01a1faeb-e98e-7f92-9764-6130255aed13",
+                  "kind": "completed",
+                  "agentThreadId": "01a1faeb-e92a-7711-8210-2250b334ce2f",
+                  "agentPath": "/root/child",
+                  "startedAtMs": 1795211133290,
+                  "completedAtMs": 1795211133290
+                },
+                {
+                  "type": "collabAgentToolCall",
+                  "id": "call_b8a2f12d981140a3b1c9517bd3b19a0b",
+                  "tool": "wait",
+                  "status": "completed",
+                  "senderThreadId": "01a1faeb-d29d-77a2-91b0-89021afec101",
+                  "receiverThreadIds": [],
+                  "prompt": null,
+                  "model": null,
+                  "reasoningEffort": null,
+                  "agentsStates": {},
+                  "startedAtMs": 1795211128998,
+                  "completedAtMs": 1795211133291
+                },
+                {
+                  "type": "fileChange",
+                  "id": "exec-6bdaaa2a-6f81-4276-acb6-9ce7913c6aeb",
+                  "changes": [
+                    {
+                      "path": "/repo/parent.txt",
+                      "kind": {
+                        "type": "add"
+                      },
+                      "diff": "from parent\n"
+                    }
+                  ],
+                  "status": "completed",
+                  "startedAtMs": 1795211135358,
+                  "completedAtMs": 1795211135385
+                },
+                {
+                  "type": "commandExecution",
+                  "id": "exec-73308a55-f6c3-47ee-ac96-7008611e4e71",
+                  "pluginId": null,
+                  "scriptPath": null,
+                  "command": "/bin/zsh -lc \"python3 -c 'from pathlib import Path; assert Path(\\\"child.txt\\\").read_bytes() == b\\\"from child\\\\n\\\"; assert Path(\\\"parent.txt\\\").read_bytes() == b\\\"from parent\\\\n\\\"'\"",
+                  "cwd": "/repo",
+                  "processId": "35626",
+                  "source": "unifiedExecStartup",
+                  "status": "completed",
+                  "commandActions": [
+                    {
+                      "type": "unknown",
+                      "command": "python3 -c 'from pathlib import Path; assert Path(\"child.txt\").read_bytes() == b\"from child\\n\"; assert Path(\"parent.txt\").read_bytes() == b\"from parent\\n\"'"
+                    }
+                  ],
+                  "aggregatedOutput": null,
+                  "exitCode": 0,
+                  "durationMs": 0,
+                  "startedAtMs": 1795211138405,
+                  "completedAtMs": 1795211138533
+                },
+                {
+                  "type": "agentMessage",
+                  "moderation": null,
+                  "id": "msg_05e30710725a8dca016b00bf83de2c87d28827785a0f85d3e0",
+                  "text": "done",
+                  "phase": "final_answer",
+                  "memoryCitation": null,
+                  "delivery": null,
+                  "questions": null,
+                  "startedAtMs": 1795211140982,
+                  "completedAtMs": 1795211140982
+                }
+              ],
+              "itemsView": "full",
+              "status": "completed",
+              "error": null,
+              "startedAt": 1795211121,
+              "completedAt": 1795211140,
+              "durationMs": 19565
+            }
+          ],
+          "nextCursor": null,
+          "backwardsCursor": "{\"requestedThreadId\":\"01a1faec-2574-7e33-b31f-1a6f3abb3cd7\",\"rolloutOrdinal\":1,\"includeAnchor\":true,\"scope\":{\"kind\":\"turns\"}}"
+        }
+      }
+    },
+    {
+      "await": {
+        "id": 6
+      }
+    },
+    {
+      "server": {
+        "id": 6,
+        "result": {
+          "data": [],
+          "readStates": {},
+          "nextCursor": null,
+          "backwardsCursor": null
+        }
+      }
+    },
+    {
+      "await": {
+        "id": 7
+      }
+    },
+    {
+      "server": {
+        "id": 7,
+        "result": {
+          "data": [
+            {
+              "id": "01a1faeb-e98e-7f92-9764-6130255aed13",
+              "rootTurnId": "01a1faeb-d30f-7761-a52a-b80145730805",
+              "items": [
+                {
+                  "type": "fileChange",
+                  "id": "exec-f6cb83ed-662d-4e02-9a5f-dfb15ad4e227",
+                  "changes": [
+                    {
+                      "path": "/repo/child.txt",
+                      "kind": {
+                        "type": "add"
+                      },
+                      "diff": "from child\n"
+                    }
+                  ],
+                  "status": "completed",
+                  "startedAtMs": 1795211131003,
+                  "completedAtMs": 1795211131054
+                },
+                {
+                  "type": "agentMessage",
+                  "moderation": null,
+                  "id": "msg_07e7402c19b31926016b00bf7c2a0887d2be007a0c1e62ecd2",
+                  "text": "Created `child.txt` with the single line `from child` using `apply_patch`.",
+                  "phase": "final_answer",
+                  "memoryCitation": null,
+                  "delivery": null,
+                  "questions": null,
+                  "startedAtMs": 1795211132209,
+                  "completedAtMs": 1795211132915
+                }
+              ],
+              "itemsView": "full",
+              "status": "completed",
+              "error": null,
+              "startedAt": 1795211127,
+              "completedAt": 1795211133,
+              "durationMs": 6097
+            }
+          ],
+          "nextCursor": null,
+          "backwardsCursor": "{\"requestedThreadId\":\"01a1faeb-e92a-7711-8210-2250b334ce2f\",\"rolloutOrdinal\":18,\"includeAnchor\":true,\"scope\":{\"kind\":\"turns\"}}"
+        }
+      }
+    },
+    {
+      "await": {
+        "id": 8
+      }
+    },
+    {
+      "server": {
+        "id": 8,
+        "result": {
+          "data": [],
+          "readStates": {},
+          "nextCursor": null,
+          "backwardsCursor": null
+        }
+      }
+    }
+  ],
+  "expect": {
+    "exitCode": 0,
+    "stderr": "",
+    "responses": [
+      {
+        "id": "out-1",
+        "rpc": {
+          "id": 1,
+          "method": "initialize",
+          "params": {
+            "clientInfo": {
+              "name": "overlord",
+              "title": "Overlord",
+              "version": "replay"
+            },
+            "capabilities": {
+              "experimentalApi": true,
+              "requestAttestation": false,
+              "optOutNotificationMethods": [
+                "item/agentMessage/delta",
+                "item/reasoning/summaryTextDelta",
+                "item/reasoning/summaryPartAdded",
+                "item/reasoning/textDelta",
+                "item/commandExecution/outputDelta",
+                "item/fileChange/outputDelta",
+                "thread/tokenUsage/updated",
+                "account/rateLimits/updated",
+                "turn/moderationMetadata"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": "out-2",
+        "rpc": {
+          "method": "initialized"
+        }
+      },
+      {
+        "id": "out-3",
+        "rpc": {
+          "id": 2,
+          "method": "thread/resume",
+          "params": {
+            "threadId": "01a1faeb-d29d-77a2-91b0-89021afec101",
+            "approvalsReviewer": "user"
+          }
+        }
+      },
+      {
+        "id": "out-4",
+        "rpc": {
+          "id": 3,
+          "method": "thread/turns/list",
+          "params": {
+            "threadId": "01a1faeb-d29d-77a2-91b0-89021afec101",
+            "cursor": null,
+            "limit": 20,
+            "sortDirection": "asc",
+            "itemsView": "full"
+          }
+        }
+      },
+      {
+        "id": "out-5",
+        "channel": {
+          "method": "POST",
+          "path": "/events",
+          "body": {
+            "nativeSessionId": "01a1faeb-d29d-77a2-91b0-89021afec101",
+            "events": [
+              {
+                "eventId": "ev_2ede597a455b0bd70742a4206a4b26a3",
+                "producerSequence": null,
+                "occurredAt": "2026-11-20T21:45:24.061Z",
+                "kind": "prompt.submitted",
+                "severity": "info",
+                "nativeEvent": "item/completed:userMessage",
+                "nativeTurnId": "01a1faeb-d30f-7761-a52a-b80145730805",
+                "nativeCallId": null,
+                "subagentId": null,
+                "correlationId": "01a1faeb-d29d-77a2-91b0-89021afec101",
+                "origin": "user",
+                "summary": "Spawn exactly one subagent (use your spawn_agent tool) and ask it to create a file named child.txt containing the single line \"from child\" using apply_patch, and nothing else. Wait for it to finish. T\u2026[+88 chars]",
+                "payload": {
+                  "promptText": "Spawn exactly one subagent (use your spawn_agent tool) and ask it to create a file named child.txt containing the single line \"from child\" using apply_patch, and nothing else. Wait for it to finish. Then yourself create parent.txt containing \"from parent\" using apply_patch. Reply \"done\"."
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": "out-6",
+        "channel": {
+          "method": "POST",
+          "path": "/events",
+          "body": {
+            "nativeSessionId": "01a1faeb-d29d-77a2-91b0-89021afec101",
+            "events": [
+              {
+                "eventId": "ev_226d8efb3d1f9eba963b872be51afeb1",
+                "producerSequence": null,
+                "occurredAt": "2026-11-20T21:45:27.183Z",
+                "kind": "session.started",
+                "severity": "info",
+                "nativeEvent": "item/completed:subAgentActivity:started",
+                "nativeTurnId": "01a1faeb-d30f-7761-a52a-b80145730805",
+                "nativeCallId": "call_2a2dae9d5eb745319b730abb1a5b95d5",
+                "subagentId": "01a1faeb-e92a-7711-8210-2250b334ce2f",
+                "correlationId": "01a1faeb-d29d-77a2-91b0-89021afec101",
+                "origin": "agent",
+                "summary": "Session started",
+                "payload": {
+                  "detail": "/root/child"
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": "out-7",
+        "channel": {
+          "method": "POST",
+          "path": "/events",
+          "body": {
+            "nativeSessionId": "01a1faeb-d29d-77a2-91b0-89021afec101",
+            "events": [
+              {
+                "eventId": "ev_79b07ac85e60baffd379ae3490246f1e",
+                "producerSequence": null,
+                "occurredAt": "2026-11-20T21:45:33.290Z",
+                "kind": "session.ended",
+                "severity": "info",
+                "nativeEvent": "item/completed:subAgentActivity:completed",
+                "nativeTurnId": "01a1faeb-d30f-7761-a52a-b80145730805",
+                "nativeCallId": "subagent-completed-01a1faeb-e98e-7f92-9764-6130255aed13",
+                "subagentId": "01a1faeb-e92a-7711-8210-2250b334ce2f",
+                "correlationId": "01a1faeb-d29d-77a2-91b0-89021afec101",
+                "origin": "agent",
+                "summary": "Session ended",
+                "payload": {
+                  "detail": "/root/child"
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": "out-8",
+        "channel": {
+          "method": "POST",
+          "path": "/events",
+          "body": {
+            "nativeSessionId": "01a1faeb-d29d-77a2-91b0-89021afec101",
+            "events": [
+              {
+                "eventId": "ev_811398a030b010ee5c97a485f0e6d0e2",
+                "producerSequence": null,
+                "occurredAt": "2026-11-20T21:45:35.385Z",
+                "kind": "file.edited",
+                "severity": "info",
+                "nativeEvent": "item/completed:fileChange",
+                "nativeTurnId": "01a1faeb-d30f-7761-a52a-b80145730805",
+                "nativeCallId": "exec-6bdaaa2a-6f81-4276-acb6-9ce7913c6aeb",
+                "subagentId": null,
+                "correlationId": "01a1faeb-d29d-77a2-91b0-89021afec101",
+                "origin": "agent",
+                "summary": "Write a file: parent.txt",
+                "payload": {
+                  "tool": "edit",
+                  "action": "Write a file",
+                  "subject": "parent.txt",
+                  "paths": [
+                    "parent.txt"
+                  ],
+                  "outcome": "ok",
+                  "formatterVersion": 1
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": "out-9",
+        "channel": {
+          "method": "POST",
+          "path": "/events",
+          "body": {
+            "nativeSessionId": "01a1faeb-d29d-77a2-91b0-89021afec101",
+            "events": [
+              {
+                "eventId": "ev_d201df66e6b27f8c257a9e3208bdde4b",
+                "producerSequence": null,
+                "occurredAt": "2026-11-20T21:45:38.533Z",
+                "kind": "tool.completed",
+                "severity": "info",
+                "nativeEvent": "item/completed:commandExecution",
+                "nativeTurnId": "01a1faeb-d30f-7761-a52a-b80145730805",
+                "nativeCallId": "exec-73308a55-f6c3-47ee-ac96-7008611e4e71",
+                "subagentId": null,
+                "correlationId": "01a1faeb-d29d-77a2-91b0-89021afec101",
+                "origin": "agent",
+                "summary": "Run a shell command: /bin/zsh -lc \"python3 -c 'from pathlib import Path; assert Path(\\\"child.txt\\\").read_bytes() == b\\\"from child\\\\n\\\"; assert Path(\\\"parent.txt\\\").read_bytes() == b\\\"from parent\\\\n\\\"'\"",
+                "payload": {
+                  "tool": "shell",
+                  "action": "Run a shell command",
+                  "subject": "zsh",
+                  "detail": "/bin/zsh -lc \"python3 -c 'from pathlib import Path; assert Path(\\\"child.txt\\\").read_bytes() == b\\\"from child\\\\n\\\"; assert Path(\\\"parent.txt\\\").read_bytes() == b\\\"from parent\\\\n\\\"'\"",
+                  "outcome": "ok",
+                  "formatterVersion": 1
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": "out-10",
+        "rpc": {
+          "id": 4,
+          "method": "thread/list",
+          "params": {
+            "parentThreadId": "01a1faeb-d29d-77a2-91b0-89021afec101",
+            "limit": 50
+          }
+        }
+      },
+      {
+        "id": "out-11",
+        "rpc": {
+          "id": 5,
+          "method": "thread/turns/list",
+          "params": {
+            "threadId": "01a1faec-2574-7e33-b31f-1a6f3abb3cd7",
+            "cursor": null,
+            "limit": 20,
+            "sortDirection": "asc",
+            "itemsView": "full"
+          }
+        }
+      },
+      {
+        "id": "out-12",
+        "rpc": {
+          "id": 6,
+          "method": "thread/list",
+          "params": {
+            "parentThreadId": "01a1faec-2574-7e33-b31f-1a6f3abb3cd7",
+            "limit": 50
+          }
+        }
+      },
+      {
+        "id": "out-13",
+        "rpc": {
+          "id": 7,
+          "method": "thread/turns/list",
+          "params": {
+            "threadId": "01a1faeb-e92a-7711-8210-2250b334ce2f",
+            "cursor": null,
+            "limit": 20,
+            "sortDirection": "asc",
+            "itemsView": "full"
+          }
+        }
+      },
+      {
+        "id": "out-14",
+        "channel": {
+          "method": "POST",
+          "path": "/events",
+          "body": {
+            "nativeSessionId": "01a1faeb-d29d-77a2-91b0-89021afec101",
+            "events": [
+              {
+                "eventId": "ev_b28233da24a2e47e766dbdc5ebea35ea",
+                "producerSequence": null,
+                "occurredAt": "2026-11-20T21:45:31.054Z",
+                "kind": "file.edited",
+                "severity": "info",
+                "nativeEvent": "item/completed:fileChange",
+                "nativeTurnId": "01a1faeb-e98e-7f92-9764-6130255aed13",
+                "nativeCallId": "exec-f6cb83ed-662d-4e02-9a5f-dfb15ad4e227",
+                "subagentId": "01a1faeb-e92a-7711-8210-2250b334ce2f",
+                "correlationId": "01a1faeb-d29d-77a2-91b0-89021afec101",
+                "origin": "agent",
+                "summary": "Write a file: child.txt",
+                "payload": {
+                  "tool": "edit",
+                  "action": "Write a file",
+                  "subject": "child.txt",
+                  "paths": [
+                    "child.txt"
+                  ],
+                  "outcome": "ok",
+                  "formatterVersion": 1
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": "out-15",
+        "rpc": {
+          "id": 8,
+          "method": "thread/list",
+          "params": {
+            "parentThreadId": "01a1faeb-e92a-7711-8210-2250b334ce2f",
+            "limit": 50
+          }
+        }
+      },
+      {
+        "id": "out-16",
+        "channel": {
+          "method": "POST",
+          "path": "/events",
+          "body": {
+            "nativeSessionId": "01a1faeb-d29d-77a2-91b0-89021afec101",
+            "events": [
+              {
+                "eventId": "ev_a04c1723c1f16eecff6b00b5bc6fec18",
+                "producerSequence": null,
+                "occurredAt": "2026-01-01T00:00:00.000Z",
+                "kind": "session.started",
+                "severity": "info",
+                "nativeEvent": "thread/started",
+                "nativeTurnId": null,
+                "nativeCallId": null,
+                "subagentId": "01a1faec-2574-7e33-b31f-1a6f3abb3cd7",
+                "correlationId": "01a1faeb-d29d-77a2-91b0-89021afec101",
+                "origin": "system",
+                "summary": "Session started",
+                "payload": {
+                  "detail": "fork of 01a1faeb-d29d-77a2-91b0-89021afec101"
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": "result",
+        "reason": "reconnect-exhausted",
+        "serverVersion": "0.170.0",
+        "threadId": "01a1faeb-d29d-77a2-91b0-89021afec101",
+        "injected": 0,
+        "interrupted": false,
+        "childThreads": 2,
+        "historyItems": 7
+      }
+    ]
+  }
+}

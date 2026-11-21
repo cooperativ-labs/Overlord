@@ -1,0 +1,13 @@
+{
+  "fixtureVersion": 1,
+  "kind": "source-guard",
+  "description": "The mandatory negative test in the form a control-plane adapter admits. Nothing is installed into Codex and no hook exists for an unbound session to start: the sidecar runs only when Overlord starts it, and its entry point runs the scope gate before the feature flag, the codex --version probe, the server spawn or any network call. With no channel credential it returns no-scope having done nothing, and it has no fallback to a broader credential.",
+  "path": "cli/src/agent-session/codex-app-server/index.ts",
+  "assert": {
+    "mustContain": [
+      "const scope = resolveAgentSessionScope({ agent: CODEX_APP_SERVER_ADAPTER_KEY, env });\n  if (!scope) return { reason: 'no-scope' };",
+      "createChannelClient({ baseUrl, channelId: scope.channelId, token: scope.token })"
+    ],
+    "mustNotContain": ["USER_TOKEN", "loadConfig"]
+  }
+}

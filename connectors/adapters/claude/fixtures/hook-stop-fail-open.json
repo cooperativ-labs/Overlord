@@ -1,0 +1,61 @@
+{
+  "fixtureVersion": 1,
+  "kind": "script-io",
+  "description": "Stop fails open. With a bound mission and session channel, both Stop steps (inbox, then the delivery reminder) run; when the CLI fails, the Stop hook tool answers `{}`, so the turn ends normally. A failing command's block-shaped stdout is ignored, so a failure can never keep the agent running.",
+  "script": "connectors/core/scripts/overlord-mcp.mjs",
+  "adapterKey": "claude",
+  "args": ["--hooks"],
+  "stdinMessages": [
+    {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "tools/call",
+      "params": {
+        "name": "overlord_hook_stop",
+        "arguments": {
+          "hook_event_name": "Stop",
+          "session_id": "claude-session-1",
+          "cwd": "/repo",
+          "stop_hook_active": "false"
+        }
+      }
+    }
+  ],
+  "env": {
+    "MISSION_ID": "coo:825",
+    "OVERLORD_MISSION_ID": "coo:825",
+    "OVERLORD_OBJECTIVE_ID": "coo:825.abcd",
+    "OVERLORD_SESSION_CHANNEL_ID": "channel-1",
+    "OVERLORD_SESSION_CHANNEL_TOKEN": null,
+    "SESSION_KEY": null,
+    "OVLD_HOME": null,
+    "CLAUDE_CODE_SESSION_ID": null
+  },
+  "spy": {
+    "exitCode": 1,
+    "stdout": "{\"decision\":\"block\",\"reason\":\"must not surface\"}"
+  },
+  "expect": {
+    "exitCode": 0,
+    "stderr": "",
+    "responses": [
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "{}"
+            }
+          ]
+        }
+      }
+    ],
+    "cliInvocations": [
+      "agent-session inbox --agent claude --payload-file -",
+      "protocol hook-event --agent claude --hook-type Stop --payload-file -"
+    ],
+    "sandboxWrites": []
+  }
+}

@@ -3,19 +3,24 @@
 # Authoritative and fixture-backed. Validated against contract/harness-capabilities.schema.yaml.
 # See connectors/AGENTS.md → "Harness capability descriptors" before writing any code here.
 #
-# Antigravity was outside the five-harness verification survey, so its interaction
-# capabilities begin conservatively as `unverified` rather than inherited from a harness that
-# looks similar. Omitting a shipped connector from the generated matrix would make it less
-# truthful than the hand-written table it replaces; guessing its capabilities would be worse.
-# No UI control may be derived from the agent name — only from a proven capability.
+# Sources: the first-party hook contract (https://antigravity.google/docs/hooks), the plugin
+# build guide (https://antigravity.google/docs/build-plugins), and the agy release notes
+# (`agy changelog`). The plugin ships three fail-open command hooks in its `hooks.json`:
+# PreInvocation (prompt capture, next-invocation inject), PostToolUse (file capture), and Stop
+# (delivery reminder, turn-boundary inject). It registers no PreToolUse decision hook.
 schemaVersion: 1
 adapter: antigravity
 codec: antigravity
+codecSpec: codec/antigravity.codec.yaml
+decisionCodecSpec: codec/antigravity.decision-codec.yaml
 
 harness:
   name: Antigravity CLI
-  verifiedVersion: 'docs: Antigravity CLI v1.1.11 / Antigravity 2.0 v2.6.0'
-  versionScheme: opaque
+  verifiedVersion: 'docs + agy changelog 1.5.13'
+  # `hookEventName`, `cwd` and `toolCall.id` reach hook input in 1.5.4; the codec names events by
+  # `hookEventName`, so an older agy produces no normalized events (its hooks stay harmless).
+  versionRange: '>=1.5.4'
+  versionScheme: semver
 
 integrationShape: callback
 
@@ -23,77 +28,126 @@ binding:
   source: payload
   field: conversationId
   status: supported
-  fixture: fixtures/official-pre-tool-use.json
+  fixture: fixtures/normalize-pre-invocation.json
   notes: >-
-    The first-party hook contract defines `conversationId` as the unique UUID of the active
-    agent conversation and includes it in every hook payload. It remains a correlation alias;
-    the verified channel credential is the authorization and mission scope. The local `agy`
-    binary was unavailable for an empirical resume test, so no interaction capability is
-    promoted solely from this binding proof.
+    The first-party hook contract defines `conversationId` as the UUID of the active
+    conversation and includes it in every hook payload; the codec reads it as the native session
+    id and `hook-event` persists it as the session's external id. It remains a correlation
+    alias: the launch environment (or a verified channel credential) is the authorization and
+    mission scope. Antigravity exports no conversation id to tool processes, so a chat-started
+    attach cannot index itself and its hooks stay unbound.
 
 decisionHold:
   status: unverified
-  trackedAs: agent-session-verify-antigravity
+  trackedAs: latch-engine
+  timeoutField: timeout
+  timeoutUnit: seconds
+  defaultTimeoutSeconds: 30
+  maxTimeoutSeconds: null
   notes: >-
-    The first-party docs define command-hook timeouts (30 seconds by default) and a synchronous
-    PreToolUse `decision` response, but do not define timeout, crash, non-zero-exit, or malformed
-    JSON fallback behavior. Keep the remote decision hold unverified until an installed binary
-    exercises those failure paths.
+    Hook `timeout` is in seconds with a 30-second default; no maximum is documented. The build
+    guide states that a non-zero exit is logged and ignored ("failing open"), and agy 1.4.3 made a
+    failing PostToolUse hook (missing command, error exit, timeout, invalid JSON) leave the tool
+    result unchanged. Whether a PreToolUse hook held past its timeout falls back to the native
+    permission prompt has not been exercised, and no decision hook is registered, so the hold
+    stays unverified.
 
 mutationHooks:
-  classification: unsupported
+  classification: post-only
   fixture: fixtures/mutation-window-evidence.json
-  reason: No recorded PostToolUse payload or empirical agy hook execution proves a pair.
+  notes: >-
+    Only PostToolUse is registered, so evidence is post-only. A `write_to_file`,
+    `replace_file_content` or `multi_replace_file_content` completion names its destination in
+    `TargetFile`; the codec normalizes it to `file.edited` and decodes the outcome from `error`
+    (empty or absent is success per the hook contract). Only an `ok` edit records
+    objective-bound, non-exclusive `declared_edit`/`direct` evidence; a failed edit records
+    `outcome_partial`, and `run_command` records `shell_activity_unverified`.
 
 capabilities:
   observe.prompt:
-    status: unsupported
+    status: supported
     native: PreInvocation
-    reason: >-
-      PreInvocation exposes invocation counters and common metadata but no submitted prompt.
-      Reading transcriptPath to reconstruct one would violate the raw-transcript privacy boundary.
-    evidenceRef: https://antigravity.google/docs/hooks#preinvocation
+    fixtures:
+      - fixtures/normalize-pre-invocation.json
+      - fixtures/pre-invocation-hook.json
+      - fixtures/pre-invocation-unbound.json
+    notes: >-
+      PreInvocation carries the latest user message as `lastUserInput` (a common hook field since
+      agy 1.4.7, documented in the hook contract). It fires before every model invocation, so
+      `hook-event` records a prompt only when it differs from the last one recorded for the
+      conversation, and the launch prompt (turn 0) is skipped as for other adapters. The
+      transcript is never read.
   observe.toolCall:
     status: not-implemented
     native: PreToolUse
-    trackedAs: agent-session-verify-antigravity
+    trackedAs: latch-engine
+    fixtures: [fixtures/official-pre-tool-use.json]
+    notes: >-
+      The codec normalizes PreToolUse, but no PreToolUse hook is registered: the observation has
+      no live path until Overlord has a native Conversation Hub client.
   observe.toolResult:
-    status: not-implemented
+    status: supported
     native: PostToolUse
-    trackedAs: agent-session-verify-antigravity
+    fixtures:
+      - fixtures/normalize-post-tool-use-shell.json
+      - fixtures/normalize-post-tool-use-failed.json
+    notes: >-
+      PostToolUse carries the call and any `error`, never the tool output (build guide). The
+      codec reduces it to a tool card with a decoded `ok`/`error` outcome; the error text is not
+      retained.
   observe.fileEdit:
-    status: not-implemented
+    status: supported
     native: PostToolUse
-    trackedAs: agent-session-verify-antigravity
+    fixtures:
+      - fixtures/normalize-post-tool-use-write.json
+      - fixtures/normalize-post-tool-use-failed.json
+      - fixtures/post-tool-use-hook.json
+      - fixtures/post-tool-use-unbound.json
+    notes: >-
+      The PostToolUse hook (matcher `write_to_file|replace_file_content|
+      multi_replace_file_content|run_command`) runs the rendered core capture callback, which
+      forwards the payload to local `capture-change --agent antigravity` only when
+      `OVERLORD_OBJECTIVE_ID` is in the launch environment.
   observe.sessionLifecycle:
     status: not-implemented
-    native: Stop
-    trackedAs: agent-session-verify-antigravity
+    native: SessionStart
+    trackedAs: latch-engine
   decide.shell:
     status: not-implemented
     native: PreToolUse
-    trackedAs: agent-session-verify-antigravity
+    trackedAs: latch-engine
+    notes: >-
+      PreToolUse returns `decision` for `run_command`. The decision codec pins the exact bytes
+      (fixtures/decision-codec.json), but no launch creates a session channel and no PreToolUse
+      hook is registered, so Antigravity's native permission flow stays the only authority.
   decide.mcp:
     status: unverified
     trackedAs: agent-session-verify-antigravity
+    notes: >-
+      The name a plugin MCP tool has in PreToolUse is not documented: the plugin docs namespace
+      tools as `<plugin>_<server>` while the build guide's matcher example is `mcp_.*`.
   decide.fileWrite:
     status: not-implemented
     native: PreToolUse
-    trackedAs: agent-session-verify-antigravity
+    trackedAs: latch-engine
   decide.anyTool:
     status: not-implemented
     native: PreToolUse
-    trackedAs: agent-session-verify-antigravity
+    trackedAs: latch-engine
   decide.universal:
     status: unverified
     trackedAs: agent-session-verify-antigravity
+    notes: >-
+      PreToolUse sees every tool call, but whether every approval Antigravity would prompt for
+      (sandbox escapes, admin review) is decided through it is not documented; agy 1.5.7 made
+      admin-enforced review ignore `auto_approve`.
   answer.structuredQuestion:
     status: unverified
     trackedAs: agent-session-verify-antigravity
   answer.persistentAllow:
     status: not-implemented
     native: PreToolUse.permissionOverrides
-    trackedAs: agent-session-verify-antigravity
+    trackedAs: latch-engine
   inject.midTurn:
     status: unsupported
     reason: >-
@@ -101,13 +155,27 @@ capabilities:
       surface has no path to deliver input while a model or tool call is actively running.
     evidenceRef: https://antigravity.google/docs/hooks#preinvocation
   inject.turnBoundary:
-    status: not-implemented
+    status: supported
     native: Stop
-    trackedAs: agent-session-verify-antigravity
+    fixtures:
+      - fixtures/stop-delivery-reminder.json
+      - fixtures/stop-inbox-inject.json
+      - fixtures/stop-hook-failure.json
+      - fixtures/official-stop.json
+    notes: >-
+      Stop `decision: "continue"` keeps the agent from stopping and injects `reason` as a system
+      message. The live path is the once-per-objective delivery reminder from `hook-event`; it is
+      skipped while `continuation_active` is true or `fullyIdle` is false. With a session channel
+      the inbox instruction takes precedence, which is not a live path today.
   inject.nextTurn:
     status: not-implemented
     native: PreInvocation.injectSteps.userMessage
-    trackedAs: agent-session-verify-antigravity
+    trackedAs: latch-engine
+    fixtures: [fixtures/pre-invocation-inject.json]
+    notes: >-
+      The PreInvocation hook and the inbox encoder emit `injectSteps: [{ userMessage }]` before the
+      next model call, proven by the fixture, but only for a session channel, which no launch
+      creates today.
   terminal.concurrentAnswer:
     status: unverified
     trackedAs: agent-session-verify-antigravity
@@ -119,20 +187,34 @@ hazards:
   - id: outside-verification-survey
     severity: medium
     summary: >-
-      Antigravity was not part of the original harness verification survey. The current
-      first-party docs now establish hook names, payload fields, and response shapes, but the
-      `agy` binary was unavailable for empirical timeout, failure, resume, and headless tests.
-      The connector must stay at its fixture-proven tier until those paths are exercised.
-    verification: unverified
-    mitigation: required
-    trackedAs: agent-session-verify-antigravity
+      Antigravity was not part of the original harness verification survey. Its hook names,
+      payload fields, response shapes and failure behavior are now established by the first-party
+      hook contract, the build guide ("any non-zero exit code is logged ... and ignored (failing
+      open)") and the agy release notes, and every graded capability is fixture-proven against
+      that contract. The connector registers only fail-open observational, reminder and inject
+      hooks; it registers no decision hook, so no hook failure can block or approve a tool call.
+      No live agy session at the 1.5.4 floor has been recorded (the local agy was 1.0.4).
+    verification: verified
+    mitigation: implemented
+    fixture: fixtures/hooks-registration.json
+  - id: per-invocation-hook-spawn
+    severity: low
+    summary: >-
+      PreInvocation runs before every model call, so a launched session spawns `ovld` once per
+      invocation to record a prompt that usually has not changed. Repeats are dropped locally
+      before any backend call; unlaunched sessions spawn nothing.
+    verification: verified
+    mitigation: accepted
 decisionShape:
   codec: antigravity
-  neverSend: [allow_tool, hookSpecificOutput, permissionDecision, permission]
+  allowFixture: fixtures/decision-codec.json
+  denyFixture: fixtures/decision-codec.json
+  deferFixture: fixtures/decision-codec.json
+  neverSend: [allow_tool, hookSpecificOutput, permissionDecision, permission, overwrite]
   notes: >-
-    The first-party response is `{ decision, reason?, permissionOverrides? }`, with decision
-    values allow, deny, ask, force_ask, and deny_unless_prior_grant. No decision codec ships
-    until an installed binary verifies failure fallback and exact emitted bytes; in particular,
-    no failure path may manufacture `decision: allow`.
+    The PreToolUse response is `{ decision, reason?, overwrite?, permissionOverrides? }`.
+    Antigravity's `allow` only defers to the next hook or default policy, so a remote approval is
+    `auto_approve`; deny is `deny`; ask is silence, leaving the native permission flow. The
+    connector never emits `overwrite`, which would rewrite tool arguments a person approved.
 
 unboundSessionFixture: fixtures/unbound-session.json

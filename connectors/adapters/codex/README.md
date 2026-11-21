@@ -7,7 +7,10 @@ Codex plugin that exposes the Overlord local mission workflow to Codex chat sess
 - [For Users](#for-users)
   - [Requirements](#requirements)
   - [Install](#install)
+  - [Approve the hooks](#approve-the-hooks)
+  - [Headless `codex exec`](#headless-codex-exec)
   - [Permission warmup](#permission-warmup)
+  - [Status line (optional)](#status-line-optional)
   - [Namespaced components](#namespaced-components)
 - [For Developers](#for-developers)
   - [Overlord layer map](#overlord-layer-map)
@@ -38,6 +41,16 @@ ovld agent-setup codex
 ovld doctor
 ```
 
+### Approve the hooks
+
+Codex runs plugin hooks only after you approve them. Since Codex 0.164 the approval is tied to the exact plugin contents, so you approve the Overlord hooks after the first install and again after every connector update. Until then Codex skips them: the interactive terminal asks you to review them, but `codex exec` skips them without a message, and Overlord stops recording follow-up prompts and file changes.
+
+After `ovld agent-setup codex`, open Codex, run `/hooks`, and approve the Overlord `UserPromptSubmit` and `PostToolUse` hooks. `ovld agent-setup codex` and `ovld doctor` tell you when they need approval. Overlord never approves hooks for you.
+
+### Headless `codex exec`
+
+Since Codex 0.169, `codex exec` keeps project configuration and MCP servers turned off in a directory you have not trusted, even with `--sandbox workspace-write`. If you run `codex exec` yourself in a new worktree, pass `--trust` (or trust the directory in an interactive session first). Overlord-launched sessions start the interactive Codex terminal, which asks you to trust the folder, so they are not affected.
+
 ### Permission warmup
 
 Codex may still prompt once for `ovld protocol` approval on first use. Run this inside a Codex session and approve the prefix when prompted:
@@ -45,6 +58,18 @@ Codex may still prompt once for `ovld protocol` approval on first use. Run this 
 ```bash
 ovld protocol help
 ```
+
+### Status line (optional)
+
+Codex 0.171 and later can show the bound Overlord mission and objective in the footer, through the experimental custom status line. Turn it on at setup:
+
+```bash
+ovld agent-setup codex --status-line
+```
+
+This sets `tui_extensions_statusline = true` under `[features]` and `status_line_provider = { server = "overlord", tool = "overlord_status_line" }` under `[tui]` in `~/.codex/config.toml`, only when you have not selected a provider and have not turned the feature off. Codex reads the selection only from user config. Restart Codex, then check `/statusline` → "Choose a status line provider" → "Overlord mission".
+
+The provider replaces Codex's built-in footer, so it shows the model and effort, folder and context left, then `ovld <mission> <title> › <objective> <title>` and the state (awaiting answer or approval, blocked, delivered). A thread shows the mission once its agent ran `ovld protocol attach` (which records the Codex session id), or when Overlord runs it in app-server mode. Other threads show only the built-in items. The provider answers each read at once from a local cache and never fails a read, so Codex keeps polling. Choose another provider in `/statusline` to turn it off.
 
 ### Namespaced components
 
@@ -79,7 +104,7 @@ This connector is intentionally reviewable against the four connector layers in 
   unknown, and unmapped callbacks, record unavailable evidence health. Mechanical harness
   observation, permission, and injection are not live Overlord connector paths under Latch v2;
   native Codex prompts retain control.
-- `.mcp.json` + `scripts/overlord-mcp.mjs` — MCP bridge to common `ovld protocol` operations. The shim is **generated**: it is rendered from `connectors/core/scripts/overlord-mcp.mjs` at setup time with the adapter key substituted, and there is no copy in this directory to edit.
+- `.mcp.json` + `scripts/overlord-mcp.mjs` — MCP bridge to common `ovld protocol` operations, and the Codex statusline provider (`overlord_status_line`, resource `ui://overlord/status-line`), which only the Codex rendering advertises. The shim is **generated**: it is rendered from `connectors/core/scripts/overlord-mcp.mjs` at setup time with the adapter key substituted, and there is no copy in this directory to edit.
 - `assets/` — branded plugin assets for Codex install surfaces.
 - `conformance-manifest.yaml` — connector conformance declaration for the Overlord contract.
 - `prompt-wrapper.md` — Codex launch guidance.
@@ -89,9 +114,10 @@ The shared Connector Core source lives at `connectors/core/overlord-mission`. `o
 ### Omissions
 
 - **No `commands/` directory.** Codex reaches protocol operations through the MCP bridge and the mission skill. This is unported rather than declined — no Codex constraint is recorded against slash commands — so treat it as open work with its own mission, not as a settled decision.
-- **No app-server integration.** The app server remains experimental and is intentionally not
-  started beside a hook-driven session: two integration surfaces could race to decide the same
-  permission. The connector uses documented hooks only; a future app-server adapter must be a
-  separately selected integration shape with its own verified fixtures.
+- **App-server mode is a separate adapter.** Overlord-launched objectives can instead run
+  through a private Codex app server ([`../codex-app-server/`](../codex-app-server/README.md),
+  off unless chosen). The two never drive one session: the private server's environment silences
+  this connector's hooks, so two integration surfaces cannot race to decide the same permission.
+  Sessions you start yourself always use these hooks.
 
 See the [adapter capability matrix](../../README.md#adapter-capability-matrix) for how this compares across adapters.

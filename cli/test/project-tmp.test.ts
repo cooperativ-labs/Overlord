@@ -15,11 +15,15 @@ import path from 'node:path';
 import test from 'node:test';
 
 import {
+  claudeCodeTmpDir,
   ensureHarnessScratchDir,
+  ensureHarnessTmpDir,
   ensureProjectTmpDir,
+  PROJECT_TMP_HARNESS_DIRNAME,
   PROJECT_TMP_RETENTION_MS,
   PROJECT_TMP_SESSION_RETENTION_MS,
   PROJECT_TMP_SESSIONS_DIRNAME,
+  projectHarnessTmpDir,
   projectTmpDir,
   pruneProjectTmpContents,
   pruneStaleProjectTmp,
@@ -190,6 +194,46 @@ test('pruneProjectTmpContents keeps live session scratch unless forced', () => {
 
   const forced = pruneProjectTmpContents(workingDirectory, { isSessionLive, force: true });
   assert.equal(forced.skippedCount, 0);
+  assert.deepEqual(readdirSync(tmpDir), []);
+});
+
+test('claudeCodeTmpDir points at the checkout harness root when the socket path fits', () => {
+  assert.equal(
+    claudeCodeTmpDir('/Users/you/src/overlord'),
+    '/Users/you/src/overlord/.overlord/tmp/harness'
+  );
+  // `<dir>/cc-socks/<pid>.sock` must stay under the 104-byte Unix socket limit.
+  const deep = `/Users/you/${'nested/'.repeat(10)}overlord`;
+  assert.equal(claudeCodeTmpDir(deep), null);
+});
+
+test('ensureHarnessTmpDir creates a private harness root', () => {
+  const workingDirectory = makeProjectDir();
+  ensureHarnessTmpDir(workingDirectory);
+  const harnessDir = projectHarnessTmpDir(workingDirectory);
+  if (claudeCodeTmpDir(workingDirectory) === null) {
+    assert.equal(existsSync(harnessDir), false);
+    return;
+  }
+  assert.equal(statSync(harnessDir).mode & 0o777, 0o700);
+});
+
+test('pruneProjectTmpContents ages out harness files unless forced', () => {
+  const workingDirectory = makeProjectDir();
+  const tmpDir = ensureProjectTmpDir(workingDirectory);
+  const sessionDir = path.join(tmpDir, PROJECT_TMP_HARNESS_DIRNAME, 'claude-501', 'proj', 'sess');
+  mkdirSync(sessionDir, { recursive: true });
+  const staleFile = path.join(sessionDir, 'stale.output');
+  writeFileSync(staleFile, 'x\n');
+  writeFileSync(path.join(sessionDir, 'fresh.output'), 'x\n');
+  const staleTime = new Date(Date.now() - PROJECT_TMP_RETENTION_MS - 60_000);
+  utimesSync(staleFile, staleTime, staleTime);
+
+  const kept = pruneProjectTmpContents(workingDirectory);
+  assert.equal(kept.skippedCount, 0);
+  assert.deepEqual(readdirSync(sessionDir), ['fresh.output']);
+
+  pruneProjectTmpContents(workingDirectory, { force: true });
   assert.deepEqual(readdirSync(tmpDir), []);
 });
 

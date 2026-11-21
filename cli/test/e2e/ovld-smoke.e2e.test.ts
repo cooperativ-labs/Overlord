@@ -94,10 +94,13 @@ test('ovld agent-setup lists packaged connectors outside the source checkout', a
   // (its descriptor and codec, which `ovld doctor` compares digests against). It is a
   // control-plane adapter, so unlike the others there is no harness-side hook to install and
   // nothing for OpenCode itself to invoke — see connectors/adapters/opencode/README.md.
+  // `codex-app-server` is listed for the same reason: a control-plane connector whose managed
+  // files are its descriptor, codec and README (connectors/adapters/codex-app-server/).
   assert.deepEqual(payload.available.sort(), [
     'antigravity',
     'claude',
     'codex',
+    'codex-app-server',
     'cursor',
     'opencode',
     'pi'

@@ -9,6 +9,8 @@
     "transcript_path": "/Users/jake/.codex/sessions/secret.jsonl",
     "cwd": "/repo",
     "hook_event_name": "SessionStart",
+    "model": "gpt-6.2-astra",
+    "permission_mode": "default",
     "source": "startup"
   },
   "expect": {

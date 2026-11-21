@@ -1,0 +1,66 @@
+# Antigravity — agent-session event codec.
+#
+# Field names come from the first-party hook contract (https://antigravity.google/docs/hooks)
+# and the agy release notes, never from a guess. Payloads are camelCase JSON on stdin:
+#
+#   `hookEventName`, `cwd`, `toolCall.id` — added in agy 1.5.4 ("so a single hook command can
+#                                            handle several events")
+#   `conversationId`, `workspacePaths`     — common fields on every event
+#   `lastUserInput`                        — common field since agy 1.4.7
+#   `toolCall{name,args}`, `error`         — PostToolUse; `error` is "empty if successful"
+#
+# The event name lives in the payload only from 1.5.4, which is the descriptor's version floor.
+# An older payload resolves no event name, matches no rule, and is therefore silence — never a
+# misattributed event. The hook scripts also pass the canonical hook type explicitly, so the
+# lifecycle hooks (`hook-event`) keep working without it.
+codecVersion: 1
+adapter: antigravity
+
+eventNamePath: hookEventName
+
+# Correlation only. `conversationId` is the harness's UUID for the conversation and appears on
+# every hook payload. The channel credential (or the launch environment) is the authority.
+nativeSessionPaths:
+  - conversationId
+
+# Used only to relativize file paths. `cwd` is the agent's working directory (1.5.4); the first
+# mounted workspace is the fallback for a payload that predates it.
+projectRootPaths:
+  - cwd
+  - workspacePaths.0
+
+events:
+  # PreInvocation runs before every model invocation and carries the latest user message as
+  # `lastUserInput`. It is the only native place a submitted prompt appears; there is no
+  # per-submission event. One prompt therefore arrives once per invocation of its turn, so the
+  # event id is derived from the prompt itself (repeat invocations collapse to one id) and the
+  # lifecycle hook records a prompt only when it differs from the last one it recorded.
+  - native: PreInvocation
+    kind: prompt.submitted
+    origin: user
+    promptPath: lastUserInput
+
+  # Fires before the call runs. Observational here; Overlord registers no PreToolUse hook, so
+  # nothing in this rule can allow, deny, or delay a tool call.
+  - native: PreToolUse
+    kind: tool.called
+    origin: agent
+    toolPath: toolCall.name
+    inputPath: toolCall.args
+    callIdPath: toolCall.id
+
+  # Fires after the call ran, success or failure. `error` is documented as "empty if successful"
+  # (hooks doc, PostToolUse input), and agy 1.4.3 made a failing PostToolUse hook leave the tool
+  # result unchanged, so this rule is observational by construction. Only the decoded outcome is
+  # kept; the error text is never retained. `write_to_file`, `replace_file_content`, and
+  # `multi_replace_file_content` name their destination in `TargetFile`.
+  - native: PostToolUse
+    kind: tool.completed
+    origin: agent
+    toolPath: toolCall.name
+    inputPath: toolCall.args
+    callIdPath: toolCall.id
+    outcomeErrorPath: error
+    fileEditKind: file.edited
+    filePathPaths:
+      - TargetFile

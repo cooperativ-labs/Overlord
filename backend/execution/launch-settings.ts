@@ -12,7 +12,7 @@ import type {
   UpdateTerminalProfileBody,
   UpdateWorktreeBranchAutomationBody
 } from '@overlord/contract';
-import { normalizeAgentLaunchFlags } from '@overlord/contract';
+import { normalizeAgentHarnessMode, normalizeAgentLaunchFlags } from '@overlord/contract';
 import type { ServiceContext } from '@overlord/core/service/context';
 import {
   DEFAULT_LAUNCH_SESSION_DEFAULTS,
@@ -258,7 +258,7 @@ export async function getLaunchSettings(workspaceId?: string): Promise<LaunchSet
   return launchSettingsDto({ target, ctx: scope.ctx });
 }
 
-/** Persist the acting user's launch mechanics (pre-command/flags) for one agent. */
+/** Persist the acting user's launch mechanics (pre-command/flags/harness mode) for one agent. */
 export async function updateAgentLaunchConfig(
   agentKey: string,
   body: UpdateAgentLaunchConfigBody,
@@ -283,6 +283,12 @@ export async function updateAgentLaunchConfig(
           ? normalizeAgentLaunchFlags(body.flags)
           : (target.agentConfigs[key]?.flags ?? [])
     };
+    // `null` clears the mode (back to hooks); omitted keeps what is stored (ADR 0092).
+    const harnessMode =
+      body.harnessMode === undefined
+        ? target.agentConfigs[key]?.harnessMode
+        : normalizeAgentHarnessMode(body.harnessMode);
+    if (harnessMode) next.harnessMode = harnessMode;
     const configs = { ...target.agentConfigs, [key]: next };
 
     await tx.run(

@@ -1,0 +1,79 @@
+{
+  "fixtureVersion": 1,
+  "kind": "normalized-event",
+  "description": "A fork of the session thread (live 0.170.0 thread/started after thread/fork): forkedFromId points into the session tree, so the fork is attributed to the same session with the fork as subagentId and \"fork of <root>\" as its lineage. On 0.170 a fork has its own sessionId; lineage, not sessionId, admits it.",
+  "codec": "codec/codex-app-server.codec.yaml",
+  "nativeEventName": "thread/started",
+  "occurredAt": "2026-01-01T00:00:00.000Z",
+  "payload": {
+    "thread": {
+      "id": "01a1faec-2574-7e33-b31f-1a6f3abb3cd7",
+      "environments": [
+        {
+          "environmentId": "local",
+          "cwd": "/repo",
+          "runtimeWorkspaceRoots": [
+            "/repo"
+          ]
+        }
+      ],
+      "extra": null,
+      "sessionId": "01a1faec-2574-7e33-b31f-1a6f3abb3cd7",
+      "forkedFromId": "01a1faeb-d29d-77a2-91b0-89021afec101",
+      "attachedToThreadId": null,
+      "parentThreadId": null,
+      "preview": "Spawn exactly one subagent (use your spawn_agent tool) and ask it to create a file named child.txt containing the single line \"from child\" using apply_patch, and nothing else. Wait for it to finish. Then yourself create parent.txt containing \"from parent\" using apply_patch. Reply \"done\".",
+      "ephemeral": false,
+      "section": null,
+      "sectionEnteredAt": null,
+      "projectId": null,
+      "historyMode": "paginated",
+      "modelProvider": "openai",
+      "model": "gpt-6.2-sol",
+      "reasoningEffort": "medium",
+      "createdAt": 1795211142,
+      "updatedAt": 1795211143,
+      "recencyAt": 1795211142,
+      "status": {
+        "type": "idle"
+      },
+      "path": "/home/user/.codex/sessions/2026/11/20/rollout-2026-11-20T22-45-42-01a1faec-2574-7e33-b31f-1a6f3abb3cd7.jsonl",
+      "cwd": "/repo",
+      "cliVersion": "0.170.0",
+      "originator": "overlord",
+      "source": "vscode",
+      "canAcceptDirectInput": true,
+      "threadSource": null,
+      "agentNickname": null,
+      "agentRole": null,
+      "gitInfo": {
+        "sha": "eaf3eadeb8141d9208cee6dc9fb4fe21a3f98b80",
+        "branch": "main",
+        "originUrl": null
+      },
+      "name": null,
+      "daybreakEnabled": null,
+      "turns": []
+    },
+    "event": "thread/started",
+    "context": {
+      "cwd": "/repo",
+      "rootThreadId": "01a1faeb-d29d-77a2-91b0-89021afec101"
+    }
+  },
+  "expect": {
+    "eventId": "ev_de2a92841b284a8b65aae487a8bd10d5",
+    "producerSequence": null,
+    "occurredAt": "2026-01-01T00:00:00.000Z",
+    "kind": "session.started",
+    "severity": "info",
+    "nativeEvent": "thread/started",
+    "nativeTurnId": null,
+    "nativeCallId": null,
+    "subagentId": null,
+    "correlationId": "01a1faeb-d29d-77a2-91b0-89021afec101",
+    "origin": "system",
+    "summary": "Session started",
+    "payload": {}
+  }
+}

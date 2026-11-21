@@ -118,6 +118,17 @@ test('redact: secret families are masked and reported', () => {
   const assigned = redactSecrets('DATABASE_PASSWORD=hunter2 node app.js');
   assert.equal(assigned.text, 'DATABASE_PASSWORD=[redacted] node app.js');
 
+  // A protocol session key in an agent's own `ovld protocol` command (coo:1325.ke1y, observed
+  // live: the shell summary stored it in full).
+  const sessionKey = redactSecrets(
+    "ovld protocol update --session-key 'sess_QwOz0HCVw-RDR7abcdEFGH1234' --mission-id e2e:1"
+  );
+  assert.equal(
+    sessionKey.text,
+    "ovld protocol update --session-key '[redacted]' --mission-id e2e:1"
+  );
+  assert.deepEqual(sessionKey.redactedPatterns, ['overlord-session-key']);
+
   assert.deepEqual(redactSecrets('nothing here').redactedPatterns, []);
 });
 
@@ -621,4 +632,101 @@ test('codec: successOnly seals ok only when no outcome was decoded', () => {
     occurredAt: '2026-08-01T00:00:00.000Z'
   });
   assert.equal(withoutGuarantee?.payload.outcome, undefined);
+});
+
+const ANTIGRAVITY_POST_TOOL_CODEC: CodecSpec = {
+  codecVersion: 1,
+  adapter: 'antigravity',
+  eventNamePath: 'hookEventName',
+  nativeSessionPaths: ['conversationId'],
+  projectRootPaths: ['cwd', 'workspacePaths.0'],
+  events: [
+    {
+      native: 'PostToolUse',
+      kind: 'tool.completed',
+      origin: 'agent',
+      toolPath: 'toolCall.name',
+      inputPath: 'toolCall.args',
+      callIdPath: 'toolCall.id',
+      outcomeErrorPath: 'error',
+      fileEditKind: 'file.edited',
+      filePathPaths: ['TargetFile']
+    }
+  ]
+};
+
+function antigravityPostToolUse(extra: Record<string, unknown>) {
+  return normalizeNativeEvent({
+    codec: ANTIGRAVITY_POST_TOOL_CODEC,
+    payload: {
+      hookEventName: 'PostToolUse',
+      conversationId: 'conv-1',
+      workspacePaths: ['/repo'],
+      toolCall: {
+        id: 'call-1',
+        name: 'replace_file_content',
+        args: { TargetFile: '/repo/src/a.ts', TargetContent: 'a', ReplacementContent: 'b' }
+      },
+      ...extra
+    },
+    occurredAt: '2026-11-20T00:00:00.000Z'
+  });
+}
+
+test('codec: outcomeErrorPath decodes an absent or empty error as ok and a message as error', () => {
+  assert.equal(antigravityPostToolUse({}).payload.outcome, 'ok');
+  assert.equal(antigravityPostToolUse({ error: '' }).payload.outcome, 'ok');
+  assert.equal(antigravityPostToolUse({ error: '   ' }).payload.outcome, 'ok');
+  const failed = antigravityPostToolUse({ error: 'target content not found: hunter2' });
+  assert.equal(failed?.payload.outcome, 'error');
+  assert.ok(!JSON.stringify(failed).includes('hunter2'), 'the error text is never retained');
+  // A non-string error proves nothing.
+  assert.equal(antigravityPostToolUse({ error: { code: 1 } }).payload.outcome, undefined);
+  // The workspace path relativizes TargetFile when the payload has no cwd.
+  assert.deepEqual(antigravityPostToolUse({}).payload.paths, ['src/a.ts']);
+  assert.equal(antigravityPostToolUse({}).kind, 'file.edited');
+});
+
+test('codec: an Antigravity payload without hookEventName matches no rule', () => {
+  const event = normalizeNativeEvent({
+    codec: ANTIGRAVITY_POST_TOOL_CODEC,
+    payload: { conversationId: 'conv-1', toolCall: { name: 'write_to_file', args: {} } },
+    occurredAt: '2026-11-20T00:00:00.000Z'
+  });
+  assert.equal(event, null);
+});
+
+test('tool-normalize: Antigravity built-in tools map onto the normalized vocabulary', () => {
+  assert.equal(normalizeToolName('run_command'), 'shell');
+  assert.equal(normalizeToolName('write_to_file'), 'write');
+  assert.equal(normalizeToolName('replace_file_content'), 'edit');
+  assert.equal(normalizeToolName('multi_replace_file_content'), 'edit');
+  assert.equal(normalizeToolName('view_file'), 'read');
+  assert.equal(normalizeToolName('grep_search'), 'search');
+  assert.equal(normalizeToolName('find_by_name'), 'search');
+  assert.equal(normalizeToolName('read_url_content'), 'fetch');
+  assert.equal(normalizeToolName('search_web'), 'fetch');
+});
+
+test('describe: Antigravity argument names reach the shell, write and read formatters', () => {
+  assert.equal(
+    describe({
+      tool: 'shell',
+      input: { CommandLine: 'npm test', Cwd: '/repo' },
+      projectRoot: '/repo'
+    }).detail,
+    'npm test'
+  );
+  const write = describe({
+    tool: 'write',
+    input: { TargetFile: '/repo/src/a.ts', CodeContent: 'abc', Overwrite: true },
+    projectRoot: '/repo'
+  });
+  assert.equal(write.subject, 'src/a.ts');
+  assert.ok(write.riskMarkers.includes('overwrites-existing'));
+  assert.equal(
+    describe({ tool: 'read', input: { AbsolutePath: '/repo/README.md' }, projectRoot: '/repo' })
+      .subject,
+    'README.md'
+  );
 });

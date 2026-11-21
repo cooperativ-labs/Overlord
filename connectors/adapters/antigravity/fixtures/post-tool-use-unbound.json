@@ -1,0 +1,35 @@
+{
+  "fixtureVersion": 1,
+  "kind": "script-io",
+  "description": "The Antigravity PostToolUse capture callback exits before reading stdin, spawning the CLI, or writing when no objective is explicitly bound.",
+  "script": "connectors/core/scripts/capture-change-hook.sh",
+  "adapterKey": "antigravity",
+  "stdin": {
+    "hookEventName": "PostToolUse",
+    "conversationId": "ec33ebf9-0cba-4100-8142-c61503f6c587",
+    "workspacePaths": ["/workspace/project"],
+    "cwd": "/workspace/project",
+    "toolCall": {
+      "id": "toolu_write_1",
+      "name": "write_to_file",
+      "args": {
+        "TargetFile": "/workspace/project/src/config.ts",
+        "CodeContent": "export {};\n"
+      }
+    },
+    "stepIdx": 7
+  },
+  "env": {
+    "MISSION_ID": null,
+    "OVERLORD_MISSION_ID": null,
+    "OVERLORD_OBJECTIVE_ID": null,
+    "OVERLORD_SESSION_CHANNEL_ID": null
+  },
+  "expect": {
+    "exitCode": 0,
+    "stdout": "",
+    "stderr": "",
+    "cliInvocations": [],
+    "sandboxWrites": []
+  }
+}

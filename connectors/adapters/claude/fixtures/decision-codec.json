@@ -1,17 +1,16 @@
 {
   "fixtureVersion": 1,
   "kind": "decision-codec",
-  "description": "Claude request reduction and exact allow/deny/defer output.",
+  "description": "Claude PermissionRequest reduction and exact allow/deny/defer output. The payload is the documented PermissionRequest input as the mcp_tool hook rebuilds it (tool_input JSON-decoded, hookTimeoutSeconds supplied as a literal hook input).",
   "codec": "codec/claude.decision-codec.yaml",
   "payload": {
     "hook_event_name": "PermissionRequest",
     "session_id": "session-1",
     "cwd": "/repo",
+    "permission_mode": "default",
     "tool_name": "Bash",
     "tool_input": { "command": "echo AKIAIOSFODNN7EXAMPLE" },
-    "request_id": "req-1",
-    "tool_use_id": "call-1",
-    "timeout": 45
+    "hookTimeoutSeconds": 300
   },
   "expect": {
     "request": {
@@ -25,13 +24,13 @@
         "riskMarkers": ["secret-adjacent"],
         "formatterVersion": 1
       },
-      "nativeRequestId": "req-1",
-      "nativeCallId": "call-1",
-      "harnessTimeoutSeconds": 45
+      "nativeRequestId": null,
+      "nativeCallId": null,
+      "harnessTimeoutSeconds": 300
     },
     "responses": {
-      "allow": "{\"hookSpecificOutput\":{\"hookEventName\":\"PermissionRequest\",\"decision\":\"allow\"}}\n",
-      "deny": "{\"hookSpecificOutput\":{\"hookEventName\":\"PermissionRequest\",\"decision\":\"deny\"}}\n",
+      "allow": "{\"hookSpecificOutput\":{\"hookEventName\":\"PermissionRequest\",\"decision\":{\"behavior\":\"allow\"}}}\n",
+      "deny": "{\"hookSpecificOutput\":{\"hookEventName\":\"PermissionRequest\",\"decision\":{\"behavior\":\"deny\",\"message\":\"Denied in Overlord.\"}}}\n",
       "ask": null
     }
   },

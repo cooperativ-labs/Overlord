@@ -1,0 +1,17 @@
+{
+  "fixtureVersion": 1,
+  "kind": "source-guard",
+  "description": "A request from a control-plane session channel is answered from Overlord and applied by the supervisor (ADR 0094): the resolve route records it without any Latch delivery, an approval is answerable only by the member who launched the session and only with one of its own options, an ended channel refuses the answer, and redelivery is refused. The guard fails if control-plane answers fall back to the Latch path, if the owner check or option check is removed, or if redelivery is allowed.",
+  "path": "backend/agent-session-routes.ts",
+  "assert": {
+    "mustContain": [
+      "if (controlPlane) {\n        return await resolveControlPlaneRequest({",
+      "if (request.kind !== 'permission') return true;",
+      "channel.createdByWorkspaceUserId === ctx.actorWorkspaceUserId",
+      "'Only the member who launched this session can answer its approvals',",
+      "'An approval is answered with one of its options only',",
+      "'This answer is applied by the session supervisor and cannot be sent again',",
+      "return { mode: 'control_plane', reason: null, ...base };"
+    ]
+  }
+}

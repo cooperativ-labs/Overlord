@@ -1,0 +1,40 @@
+{
+  "fixtureVersion": 1,
+  "kind": "native-payload",
+  "description": "Recorded Claude Code 2.1.329 behavior (claude -p --output-format stream-json, isolated settings, 2026-11-20): a Stop mcp_tool hook whose tool answered after 45 s, with timeout 90, did not time out, and the stream carried a progress heartbeat (tool_progress, heartbeat: true) at 30 s while it ran (2.1.323). The run then completed normally. This is why a headless final Stop may hold the inbox open for 60 s, and why the plugin's Stop hook timeout (100 s) is above that wait plus both step budgets.",
+  "payload": {
+    "claudeCodeVersion": "2.1.329",
+    "registration": {
+      "event": "Stop",
+      "type": "mcp_tool",
+      "timeout": 90
+    },
+    "toolHeldMs": 45001,
+    "heartbeats": [
+      {
+        "type": "tool_progress",
+        "tool_name": "Stop",
+        "heartbeat": true,
+        "elapsed_time_seconds": 30
+      }
+    ],
+    "result": {
+      "subtype": "success",
+      "is_error": false,
+      "terminal_reason": "completed"
+    }
+  },
+  "assert": {
+    "requiredPaths": [
+      "heartbeats.0.elapsed_time_seconds"
+    ],
+    "equals": {
+      "heartbeats.0.type": "tool_progress",
+      "heartbeats.0.tool_name": "Stop",
+      "heartbeats.0.heartbeat": true,
+      "heartbeats.0.elapsed_time_seconds": 30,
+      "result.subtype": "success",
+      "result.is_error": false
+    }
+  }
+}

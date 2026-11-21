@@ -3,9 +3,12 @@
 # Authoritative and fixture-backed. Validated against contract/harness-capabilities.schema.yaml.
 # See connectors/AGENTS.md → "Harness capability descriptors" before writing any code here.
 #
-# The supported hook surface is proven by recorded payload fixtures and the published Codex
-# hook schema. The app-server remains intentionally unselected: it is experimental and would
-# introduce a second authority capable of racing hook decisions.
+# The supported hook surface is proven by payload fixtures recorded live from codex-cli 0.170.0
+# and checked against the published 0.171.0 hook schemas. An Overlord-launched objective in
+# hooks mode was re-run live end to end on 0.171.0 (coo:1325.tg2w): attach, PostToolUse change
+# capture of an apply_patch edit, delivery. Overlord-launched objectives may instead run through
+# the separate `codex-app-server` adapter (app-server mode, ADR 0092); the two never drive one
+# session, and this adapter claims no decide.* row, so no second authority races hook decisions.
 schemaVersion: 1
 adapter: codex
 codec: codex
@@ -14,7 +17,7 @@ decisionCodecSpec: codec/codex.decision-codec.yaml
 
 harness:
   name: Codex CLI
-  verifiedVersion: '0.147.0'
+  verifiedVersion: '0.171.0'
   versionRange: '>=0.124.0'
   versionScheme: semver
 
@@ -26,10 +29,14 @@ binding:
   status: supported
   fixture: fixtures/normalize-session-start.json
   notes: >-
-    `CODEX_THREAD_ID` exists in the environment but is NOT known to equal the hook payload's
-    `session_id`; the binary distinguishes session ids, turn ids, and thread ids. Assuming
-    symmetry with Claude here is exactly the guess that produces silent misattribution, so
-    binding stays on the payload field until the equality is settled by fixture.
+    Shell tools see `CODEX_SESSION_ID` (the root session, which hooks send as `session_id`)
+    and `CODEX_THREAD_ID`; in a root thread both equal the thread id
+    (fixtures/shell-session-env.json). Binding stays on the payload field; attach run by a
+    Codex agent indexes `CODEX_SESSION_ID` in the native-session index, so the payload id can
+    find it. Inside a spawned
+    subagent `session_id` is the root session's id (root-session inheritance, verified in the
+    0.170 source) and `agent_id` names the child thread, so a subagent's hook events bind to the
+    session that spawned it and record the child as `subagentId`.
 
 decisionHold:
   status: supported
@@ -41,10 +48,14 @@ decisionHold:
   trackedAs: agent-session-phase-4
   notes: >-
     Per-hook timeouts in seconds; the documentation gives a 600-second default. The adapter
-    must set `timeout` explicitly from the window policy and well below that default. A local
-    0.147.0 `codex exec --approve-for-me` smoke test still emitted PermissionRequest after the
-    workspace sandbox failed and automatic review retried the shell command, so auto-review does
-    not bypass the installed request hook.
+    must set `timeout` explicitly from the window policy and well below that default. The bound
+    is the handler's `timeout` key in hooks.json: the PermissionRequest payload carries no
+    timeout, request id or tool_use_id (0.170.0 live, 0.171.0 schema). Local
+    `codex exec --approve-for-me` smoke tests on 0.147.0 and again on 0.170.0 still emitted
+    PermissionRequest for an escalated shell command before automatic review decided it, so
+    auto-review does not bypass the installed request hook. A 0.170.0 `codex exec -s read-only -c
+    approval_policy="on-request"` run emitted PermissionRequest for the escalated shell command
+    and honored both the allow and the deny bytes in decision-codec.json.
 
 mutationHooks:
   classification: post-only
@@ -77,6 +88,7 @@ capabilities:
       - fixtures/normalize-post-tool-use.json
       - fixtures/normalize-post-tool-use-failed.json
       - fixtures/normalize-post-tool-use-rename.json
+      - fixtures/normalize-post-tool-use-subagent.json
       - fixtures/agent-session-hooks.json
       - fixtures/post-tool-use-hook.json
       - fixtures/post-tool-use-unbound.json
@@ -88,7 +100,8 @@ capabilities:
       read, search, and fetch callbacks are
       silent no-ops; mutation-capable callbacks without a normalized edit path, plus shell,
       generic, unknown, and unmapped callbacks, record unavailable evidence health. It remains
-      separate from mechanical agent-session observation.
+      separate from mechanical agent-session observation. A subagent's edits run in the same
+      Codex process and environment, so they are captured for the same objective.
   observe.sessionLifecycle:
     status: not-implemented
     native: SessionStart
@@ -138,6 +151,9 @@ capabilities:
     status: not-implemented
     native: Stop
     trackedAs: latch-engine
+    fixtures: [fixtures/stop.json]
+    notes: >-
+      The recorded Stop payload is shape evidence only; the connector registers no Stop hook.
   inject.nextTurn:
     status: not-implemented
     native: Stop
@@ -150,8 +166,29 @@ capabilities:
       integration could change this; it would be a different integrationShape.)
     evidenceRef: connector-harness-taxonomy.md#12-the-axis-that-actually-matters
   terminal.statusSurface:
-    status: unverified
-    trackedAs: taxonomy-7.9
+    status: supported
+    native: statusline MCP provider (tui_extensions_statusline)
+    fixtures:
+      - fixtures/status-line-state.json
+      - fixtures/status-line-provider.json
+      - fixtures/shell-session-env.json
+      - fixtures/status-line-opt-in.json
+    notes: >-
+      Codex 0.171+ with the experimental feature `tui_extensions_statusline` (off by default)
+      renders an MCP statusline provider in the TUI footer. The Overlord plugin's MCP server
+      advertises one (`overlord_status_line`, resource `ui://overlord/status-line`); Codex reads
+      it about once a second with the displayed thread's state, allows one second per read and
+      stops polling after an error, so the shim always answers at once: the model, folder and
+      context items it replaces, then the Overlord segment from `ovld status-line --agent codex
+      --ui-tree --native-session-id <thread id>` (mission and objective, awaiting answer or
+      approval, blocked, delivered), cached per thread for 10 s. Binding is the native-session
+      index, written by attach from `CODEX_SESSION_ID` (equal to a root thread's id), else the
+      launch environment; an unbound thread shows only the built-in items. In 0.171 the TUI
+      reads through a shared app-server daemon that outlives the session, so the launch
+      environment is only reliable for the session that started the daemon; the index is the
+      binding that holds. Opt-in: `ovld agent-setup codex --status-line` turns the feature on
+      when unset and selects the provider in user config only when none is selected. A child
+      thread viewed in the TUI is not indexed and shows no segment. Verified live on 0.171.0.
 
 hazards:
   - id: two-integration-surfaces-could-disagree
@@ -159,17 +196,62 @@ hazards:
     summary: >-
       Hooks and `codex app-server` can both answer a permission. A session driven by both
       would race in a way no revision CAS can settle, so exactly one surface must be chosen
-      and documented before either is built.
+      and documented before either is built. Chosen per session: user-started Codex sessions use
+      this hooks adapter, which claims no `decide.*`; Overlord-driven sessions use the separate
+      `codex-app-server` adapter, whose server environment silences these hooks
+      (`plugin-hooks-fire-inside-app-server-threads`).
     verification: verified
     mitigation: implemented
     fixture: fixtures/agent-session-hooks.json
+  - id: plugin-hooks-fire-inside-app-server-threads
+    severity: high
+    summary: >-
+      The installed Overlord Codex plugin's hooks run inside `codex app-server` threads too
+      (spike coo:1325.gqfy: hook/started for userPromptSubmit and postToolUse inside app-server
+      turns). When the `codex-app-server` adapter drives a session, a hook that still reported
+      would capture every edit twice and could attribute a thread to whatever objective started
+      the server. The supervisor starts the server with an allowlisted environment (no
+      objective, mission or channel scope) plus OVERLORD_CONTROL_PLANE_SURFACE, and every
+      Overlord callback exits before any work when that marker is set. In app-server mode only
+      the adapter observes and answers, which also keeps `two-integration-surfaces-could-disagree`
+      closed by construction.
+    verification: verified
+    mitigation: implemented
+    fixture: fixtures/control-plane-surface-guard.json
+  - id: prompt-hook-inside-app-server-threads
+    severity: medium
+    summary: >-
+      The plugin's UserPromptSubmit callback writes the native-session alias and spawns
+      `ovld protocol hook-event`; inside an Overlord-driven app server it must do neither, for
+      the same reason as the PostToolUse callback.
+    verification: verified
+    mitigation: implemented
+    fixture: fixtures/control-plane-surface-prompt-guard.json
+  - id: subagent-hooks-share-the-root-session
+    severity: medium
+    summary: >-
+      Codex runs the plugin's hooks inside spawned subagents too. In 0.170 every thread of a
+      session tree shares the root's agent-control identity, so a subagent's hook payload carries
+      the root session's `session_id` plus `agent_id` (the child thread) and `agent_type` (its
+      role) — codex-rs `core/src/hook_runtime.rs` and `core/src/agent/control.rs`; the 0.168
+      `InheritedSessionId` extension does the same for host-started child threads. The codec
+      records `agent_id` as `subagentId`, so a user-started session's subagent work correlates
+      with the parent session instead of appearing as a separate one. Not covered: a 0.170 fork
+      (`/fork`) gets a new session id and correlates as its own session; release notes say 0.171
+      makes forks inherit the root session id, which has not been run here. SubagentStart and
+      SubagentStop hooks exist but are not registered; the parent's tool calls already show the
+      spawn.
+    verification: verified
+    mitigation: implemented
+    fixture: fixtures/normalize-post-tool-use-subagent.json
   - id: prompt-and-agent-hook-handlers-inert
     severity: low
     summary: >-
-      Codex 0.146.0 accepts three hook handler types — `command`, `prompt`, and `agent` — but
-      only `command` runs. Hook discovery parses `prompt` and `agent` and then skips them with
-      a "not supported yet" warning, so a manifest that used either would install cleanly,
-      list in `hooks`, and never execute. The connector must keep emitting `command` handlers
+      Codex parses `prompt` and `agent` hook handlers and then skips them with a "not supported
+      yet" warning (re-checked live on 0.170.0 and in the 0.171.0 hook discovery source), so a
+      manifest that used either would install cleanly, list in `hooks`, and never execute.
+      `command` runs, and since 0.148 an `mcp_tool` handler can call an MCP tool; the connector
+      uses neither `mcp_tool` nor the inert types. The connector must keep emitting `command` handlers
       only, and must not read the presence of these variants in the schema as availability.
       `command` is a shell command line run through `$SHELL -lc` (`/bin/sh` when SHELL is
       unset) — it is not restricted to Bash and not restricted to shell scripting, since the
@@ -181,9 +263,25 @@ hazards:
     summary: >-
       Hooks were experimental behind `features.codex_hooks` before v0.124. The connector
       requires Codex >=0.124; installations outside that range must be treated as unavailable.
+      Re-checked at 0.171.0: `hooks` is a stable feature and the hook schemas the connector
+      reads are unchanged, but nothing yet enforces the lower bound at install or launch.
     verification: verified
     mitigation: required
     trackedAs: agent-session-phase-4
+  - id: plugin-hook-trust-pinned-to-bundle
+    severity: high
+    summary: >-
+      Codex runs a plugin hook only after the user approves it in `/hooks`, and from 0.164 the
+      approval (`trusted_content_hash` in config.toml) pins a fingerprint of the whole installed
+      plugin bundle. A fresh `ovld agent-setup codex`, and every connector update after it
+      (each one bumps plugin.json), leaves the Overlord hooks unapproved. The interactive TUI
+      asks for review; `codex exec` skips them silently, so prompt capture and change
+      capture stop without an error. `ovld agent-setup codex` and `ovld doctor` reproduce the
+      fingerprint and name the hooks that will not run. Overlord never writes hook trust:
+      approving a hook stays the user's decision, and `--dangerously-bypass-hook-trust` is
+      not used.
+    verification: verified
+    mitigation: accepted
 
 decisionShape:
   codec: codex

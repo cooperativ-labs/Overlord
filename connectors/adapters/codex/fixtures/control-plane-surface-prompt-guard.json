@@ -1,0 +1,24 @@
+{
+  "fixtureVersion": 1,
+  "kind": "script-io",
+  "description": "The Codex plugin's UserPromptSubmit callback also stays silent inside an Overlord-driven app server (OVERLORD_CONTROL_PLANE_SURFACE set): no native-session write, no log, no `ovld protocol hook-event`, even with a mission in scope. The supervisor records prompts from the thread's userMessage items instead.",
+  "script": "connectors/adapters/codex/scripts/user-prompt-submit-hook.sh",
+  "stdin": {
+    "session_id": "01a1faaf-cd91-7372-a780-f5a9c5b457a7",
+    "hook_event_name": "UserPromptSubmit",
+    "turn_number": 2,
+    "prompt": "Also make notes.md end with a second line: bye"
+  },
+  "env": {
+    "OVERLORD_CONTROL_PLANE_SURFACE": "codex-app-server",
+    "MISSION_ID": "coo:1",
+    "CODEX_THREAD_ID": "01a1faaf-cd91-7372-a780-f5a9c5b457a7"
+  },
+  "expect": {
+    "exitCode": 0,
+    "stdout": "",
+    "stderr": "",
+    "cliInvocations": [],
+    "sandboxWrites": []
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "fixtureVersion": 1,
+  "kind": "source-guard",
+  "description": "The private app server is started with a detached watchdog that ends the server's process group when the supervisor pid disappears (a supervisor killed with SIGKILL), and graceful stop ends the watchdog first. The watchdog carries no credential: its environment is a fixed PATH and its arguments are two pids. The guard fails if the watchdog is no longer started with the server, or if it inherits the supervisor's environment.",
+  "path": "cli/src/agent-session/codex-app-server/server.ts",
+  "assert": {
+    "mustContain": [
+      "const watchdog = child.pid ? startServerWatchdog(process.pid, child.pid) : null;",
+      "watchdog?.kill('SIGTERM');",
+      "'while kill -0 \"$sup\" 2>/dev/null && kill -0 \"$srv\" 2>/dev/null; do sleep 1; done',",
+      "{ detached: true, stdio: 'ignore', env: { PATH: '/usr/bin:/bin' } }"
+    ]
+  }
+}

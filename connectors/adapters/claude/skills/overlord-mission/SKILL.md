@@ -9,10 +9,10 @@ description: Use for chat-started Overlord work, when the user refers to an Over
 
 - Agent identifier: `claude-code` for `ovld protocol create` and `ovld protocol prompt`.
 - Native commands: `/overlord:attach`, `/overlord:connect`, `/overlord:load`, `/overlord:create`, `/overlord:prompt`, `/overlord:discuss-objective`, `/overlord:add-objectives`, `/overlord:record-work`.
-- Follow-up capture: the installed `UserPromptSubmit` hook records ordinary post-delivery user messages. Do not manually publish `user_follow_up` unless the hook is unavailable.
-- Permission capture: the installed `PermissionRequest` hook publishes permission activity through `ovld protocol`.
-- Stop hook: the installed `Stop` hook may print pending-delivery guidance but does not deliver for you.
-- Authentication: the plugin `user_token` config is passed to child `ovld protocol` calls as `Overlord_USER_TOKEN`, after preserving existing `Overlord_USER_TOKEN` / `OVLD_USER_TOKEN` environment fallback behavior.
+- Hooks: the plugin's hooks are `mcp_tool` hooks served by its bundled `overlord-hooks` MCP server (Claude Code 2.1.328 or later). They record follow-up messages (`UserPromptSubmit`), capture changed files (`PostToolUse`) and remind you to deliver (`Stop`). Do not manually publish `user_follow_up` while they work. The Stop reminder does not deliver for you.
+- Permission decisions: Overlord-launched sessions with a session channel also get a `PermissionRequest` hook. If the hooks server cannot be reached, Claude denies the request; do not work around that denial. Ask the user to run `ovld doctor`.
+- CLI fallback: if Overlord MCP tools or hooks fail or are unavailable (for example `/mcp` shows `plugin:overlord:overlord-hooks` as failed, or a hook reports that its MCP server is not connected), use the equivalent `ovld protocol` command instead: `attach`, `update`, `ask`, `deliver`, `changes`. Declare the files you changed with `--paths` on `update` or `deliver`, because automatic capture is off. `ovld doctor` names the fix.
+- Authentication: hooks and the CLI use shared `ovld auth` credentials, Overlord-launched environment variables, or `Overlord_USER_TOKEN` / `OVLD_USER_TOKEN`.
 
 ## Claude Command Mapping
 

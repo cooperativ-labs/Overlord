@@ -1,0 +1,15 @@
+{
+  "fixtureVersion": 1,
+  "kind": "source-guard",
+  "description": "The app-server sidecar indexes the session thread under the `codex` agent once the thread is ready, so the Codex statusline provider (running in the server environment, which has no launch binding) can bind it, and removes the entry on exit only while it still names this objective.",
+  "path": "cli/src/agent-session/codex-app-server/index.ts",
+  "assert": {
+    "mustContain": [
+      "const STATUS_LINE_INDEX_AGENT = 'codex';",
+      "indexThreadForStatusLine(state, id);",
+      "unindexThreadForStatusLine(state, state.threadId);",
+      "objectiveIds: [state.objectiveId]"
+    ],
+    "mustNotContain": []
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "fixtureVersion": 1,
+  "kind": "source-guard",
+  "description": "Only the Codex project trust table that thread/start added for the session's directory is removed, and only while it holds nothing but trust_level = \"trusted\"; an orphan is killed only when its pid still belongs to a Codex app server (ADR 0092). The guard fails if removal stops checking the table's content or the pid check goes away.",
+  "path": "cli/src/agent-session/codex-app-server/trust.ts",
+  "assert": {
+    "mustContain": [
+      "if (content.length !== 1 || !/^\\s*trust_level\\s*=\\s*\"trusted\"\\s*$/.test(content[0]!)) {",
+      "return 'changed-concurrently';",
+      "if (!existed && projectTrustLevel(candidate, env) === 'trusted') return candidate;"
+    ]
+  }
+}

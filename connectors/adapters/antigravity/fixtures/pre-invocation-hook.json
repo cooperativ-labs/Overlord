@@ -1,0 +1,35 @@
+{
+  "fixtureVersion": 1,
+  "kind": "script-io",
+  "description": "A launched Antigravity session's PreInvocation hook forwards the native payload to `ovld protocol hook-event` as a UserPromptSubmit, which records lastUserInput as a follow-up once per distinct prompt, and answers `{}` so the invocation proceeds unchanged.",
+  "script": "connectors/adapters/antigravity/hooks/overlord-pre-invocation.sh",
+  "stdin": {
+    "hookEventName": "PreInvocation",
+    "conversationId": "ec33ebf9-0cba-4100-8142-c61503f6c587",
+    "workspacePaths": ["/workspace/project"],
+    "cwd": "/workspace/project",
+    "invocationNum": 2,
+    "initialNumSteps": 11,
+    "lastUserInput": "Also update the changelog",
+    "modelName": "gemini-3.6-flash-medium"
+  },
+  "env": {
+    "MISSION_ID": "coo:825",
+    "OVERLORD_MISSION_ID": "coo:825",
+    "OVERLORD_OBJECTIVE_ID": "coo:825.abcd",
+    "OVERLORD_SESSION_CHANNEL_ID": null
+  },
+  "spy": {
+    "stdout": "{}\n"
+  },
+  "expect": {
+    "exitCode": 0,
+    "stdout": "{}\n",
+    "stderr": "",
+    "cliInvocations": [
+      "protocol hook-event --agent antigravity --hook-type UserPromptSubmit --hook-output --payload-file -"
+    ],
+    "stdinForwarded": true,
+    "sandboxWrites": []
+  }
+}

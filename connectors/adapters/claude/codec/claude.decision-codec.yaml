@@ -3,21 +3,29 @@ adapter: claude
 eventNamePaths: [hook_event_name]
 projectRootPaths: [cwd]
 requests:
+  # Claude Code's PermissionRequest input carries tool_name, tool_input, permission_mode and
+  # permission_suggestions. It has no request id, call id or timeout. The `mcp_tool` hook supplies
+  # its own timeout as the literal input `hookTimeoutSeconds`, so the answer window matches the
+  # hook that is actually waiting.
   - native: PermissionRequest
     toolPath: tool_name
     inputPath: tool_input
-    requestIdPaths: [request_id]
-    callIdPaths: [tool_use_id]
-    timeoutPaths: [timeout]
+    timeoutPaths: [hookTimeoutSeconds]
 responses:
+  # "PermissionRequest decision control": `decision` is an object whose `behavior` is allow or
+  # deny. A string `decision` fails Claude's output schema, which a fail-closed hook turns into a
+  # deny, so the shape is pinned by fixtures/decision-codec.json.
   allow:
     body:
       hookSpecificOutput:
         hookEventName: PermissionRequest
-        decision: allow
+        decision:
+          behavior: allow
   deny:
     body:
       hookSpecificOutput:
         hookEventName: PermissionRequest
-        decision: deny
+        decision:
+          behavior: deny
+          message: Denied in Overlord.
   ask: { defer: true }

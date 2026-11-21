@@ -1,4 +1,4 @@
-import { projectTmpDir } from './project-tmp.js';
+import { claudeCodeTmpDir, projectTmpDir } from './project-tmp.js';
 import {
   appleScriptKeystrokeClause,
   parseTerminalLaunchChord,
@@ -89,13 +89,26 @@ export function extractAppNameFromLauncher(launcher: string): string | null {
 /**
  * The TMPDIR-family environment Overlord pins to the project `.overlord/tmp/`,
  * or to one launch's private `sessions/<id>/` scratch directory when given.
+ *
+ * Claude Code ignores `TMPDIR` and reads only `CLAUDE_CODE_TMPDIR`, so that is
+ * pinned to the checkout's shared `.overlord/tmp/harness/` root instead of the
+ * system `/tmp`. It is exported for every agent so a Claude process started from
+ * another harness lands there too, and omitted when the checkout path is too deep
+ * for Claude's messaging socket.
  */
 export function tmpEnvFor(
   workingDirectory: string,
   scratchDir?: string | null
 ): Record<string, string> {
   const tmpDir = scratchDir?.trim() ? scratchDir : projectTmpDir(workingDirectory);
-  return { TMPDIR: tmpDir, TMP: tmpDir, TEMP: tmpDir, OVERLORD_TMPDIR: tmpDir };
+  const claudeTmpDir = claudeCodeTmpDir(workingDirectory);
+  return {
+    TMPDIR: tmpDir,
+    TMP: tmpDir,
+    TEMP: tmpDir,
+    OVERLORD_TMPDIR: tmpDir,
+    ...(claudeTmpDir ? { CLAUDE_CODE_TMPDIR: claudeTmpDir } : {})
+  };
 }
 
 /** The agent invocation as a single shell line, optionally wrapped by a pre-command. */

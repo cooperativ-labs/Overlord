@@ -1,0 +1,143 @@
+{
+  "fixtureVersion": 1,
+  "kind": "native-payload",
+  "description": "Recorded Claude Code 2.1.329 hook payloads (claude -p, isolated settings, 2026-11-20). Subagents and forks: every hook inside a subagent, including a fork, carries the PARENT's session_id and adds agent_id and agent_type; mcp_tool templating of ${agent_id}/${agent_type} gives the same values and \"\" in the main agent. Compaction: PreCompact, PostCompact and the post-compaction SessionStart keep the session_id and carry no agent_id for main-thread compaction (the compaction itself runs as an internal subagent whose SubagentStop has an empty agent_type). Nested claude -p (run from a Bash tool of another session): it gets its own session_id, also with CLAUDE_CODE_DISABLE_NESTED_SESSION_ID=1 on this version; its hooks server sets CLAUDE_CODE_ENTRYPOINT itself but inherits the outer session's CLAUDE_PID, which differs from the server's parent pid. A top-level hooks server has no CLAUDE_PID. So session_id binding routes subagent and fork work to the parent's binding, survives compaction, and never matches a nested session's own id.",
+  "payload": {
+    "claudeCodeVersion": "2.1.329",
+    "subagent": {
+      "parentSessionId": "07b92dcb-df48-43c7-a0b9-cfa4ae04952c",
+      "subagentStart": {
+        "hook_event_name": "SubagentStart",
+        "session_id": "07b92dcb-df48-43c7-a0b9-cfa4ae04952c",
+        "agent_id": "a80c7982385fd680b",
+        "agent_type": "general-purpose"
+      },
+      "subagentPostToolUse": {
+        "hook_event_name": "PostToolUse",
+        "session_id": "07b92dcb-df48-43c7-a0b9-cfa4ae04952c",
+        "agent_id": "a80c7982385fd680b",
+        "agent_type": "general-purpose",
+        "tool_name": "Bash"
+      },
+      "mainPostToolUse": {
+        "hook_event_name": "PostToolUse",
+        "session_id": "07b92dcb-df48-43c7-a0b9-cfa4ae04952c",
+        "tool_name": "Bash"
+      },
+      "mcpToolInputs": [
+        {
+          "hook_event_name": "PostToolUse",
+          "session_id": "07b92dcb-df48-43c7-a0b9-cfa4ae04952c",
+          "agent_id": "a80c7982385fd680b",
+          "agent_type": "general-purpose"
+        },
+        {
+          "hook_event_name": "PostToolUse",
+          "session_id": "07b92dcb-df48-43c7-a0b9-cfa4ae04952c",
+          "agent_id": "",
+          "agent_type": ""
+        }
+      ]
+    },
+    "fork": {
+      "subagentStart": {
+        "hook_event_name": "SubagentStart",
+        "session_id": "3a993469-c74b-4b7f-9078-039cc65ab8d1",
+        "agent_id": "a637d505a0e4fac48",
+        "agent_type": "fork"
+      },
+      "subagentPostToolUse": {
+        "hook_event_name": "PostToolUse",
+        "session_id": "3a993469-c74b-4b7f-9078-039cc65ab8d1",
+        "agent_id": "a637d505a0e4fac48",
+        "agent_type": "fork",
+        "tool_name": "Bash"
+      }
+    },
+    "compaction": {
+      "preCompact": {
+        "hook_event_name": "PreCompact",
+        "session_id": "07b92dcb-df48-43c7-a0b9-cfa4ae04952c",
+        "trigger": "manual"
+      },
+      "postCompact": {
+        "hook_event_name": "PostCompact",
+        "session_id": "07b92dcb-df48-43c7-a0b9-cfa4ae04952c",
+        "trigger": "manual"
+      },
+      "sessionStartAfterCompact": {
+        "hook_event_name": "SessionStart",
+        "session_id": "07b92dcb-df48-43c7-a0b9-cfa4ae04952c",
+        "source": "compact"
+      },
+      "compactionSubagentStop": {
+        "hook_event_name": "SubagentStop",
+        "session_id": "07b92dcb-df48-43c7-a0b9-cfa4ae04952c",
+        "agent_id": "a0f73ba34b44ca4c8",
+        "agent_type": ""
+      }
+    },
+    "nested": {
+      "topLevelHooksServer": {
+        "CLAUDE_PID": null,
+        "CLAUDE_CODE_ENTRYPOINT": "sdk-cli"
+      },
+      "default": {
+        "disableNestedSessionId": false,
+        "parentSessionId": "2c00e064-b073-432d-815a-752e3ed1d20f",
+        "parentClaudePid": "9917",
+        "nestedSessionId": "7bc827e6-1f00-4bd4-a1d0-add0b072f9ec",
+        "nestedClaudePid": "14053",
+        "hooksServer": {
+          "CLAUDE_CODE_SESSION_ID": "7bc827e6-1f00-4bd4-a1d0-add0b072f9ec",
+          "CLAUDE_PID": "9917",
+          "ppid": "14053",
+          "CLAUDE_CODE_ENTRYPOINT": "sdk-cli"
+        }
+      },
+      "disableNestedSessionId": {
+        "disableNestedSessionId": true,
+        "parentSessionId": "2c00e064-b073-432d-815a-752e3ed1d20f",
+        "parentClaudePid": "9917",
+        "nestedSessionId": "2119e9f3-22d7-4468-a284-63218ac7c5b9",
+        "nestedClaudePid": "14055",
+        "hooksServer": {
+          "CLAUDE_CODE_SESSION_ID": "2119e9f3-22d7-4468-a284-63218ac7c5b9",
+          "CLAUDE_PID": "9917",
+          "ppid": "14055",
+          "CLAUDE_CODE_ENTRYPOINT": "sdk-cli"
+        }
+      }
+    }
+  },
+  "assert": {
+    "requiredPaths": [
+      "subagent.subagentStart.agent_id",
+      "subagent.subagentPostToolUse.agent_id",
+      "subagent.subagentPostToolUse.agent_type",
+      "fork.subagentPostToolUse.agent_id",
+      "nested.default.nestedSessionId",
+      "nested.default.hooksServer.CLAUDE_PID"
+    ],
+    "equals": {
+      "subagent.subagentStart.session_id": "07b92dcb-df48-43c7-a0b9-cfa4ae04952c",
+      "subagent.subagentPostToolUse.session_id": "07b92dcb-df48-43c7-a0b9-cfa4ae04952c",
+      "subagent.subagentPostToolUse.agent_type": "general-purpose",
+      "subagent.mainPostToolUse.session_id": "07b92dcb-df48-43c7-a0b9-cfa4ae04952c",
+      "subagent.mcpToolInputs.0.agent_id": "a80c7982385fd680b",
+      "subagent.mcpToolInputs.1.agent_id": "",
+      "fork.subagentStart.agent_type": "fork",
+      "fork.subagentPostToolUse.session_id": "3a993469-c74b-4b7f-9078-039cc65ab8d1",
+      "compaction.preCompact.session_id": "07b92dcb-df48-43c7-a0b9-cfa4ae04952c",
+      "compaction.postCompact.session_id": "07b92dcb-df48-43c7-a0b9-cfa4ae04952c",
+      "compaction.sessionStartAfterCompact.session_id": "07b92dcb-df48-43c7-a0b9-cfa4ae04952c",
+      "compaction.sessionStartAfterCompact.source": "compact",
+      "nested.topLevelHooksServer.CLAUDE_PID": null,
+      "nested.default.parentSessionId": "2c00e064-b073-432d-815a-752e3ed1d20f",
+      "nested.default.nestedSessionId": "7bc827e6-1f00-4bd4-a1d0-add0b072f9ec",
+      "nested.default.hooksServer.CLAUDE_PID": "9917",
+      "nested.default.hooksServer.CLAUDE_CODE_ENTRYPOINT": "sdk-cli",
+      "nested.disableNestedSessionId.nestedSessionId": "2119e9f3-22d7-4468-a284-63218ac7c5b9"
+    }
+  }
+}

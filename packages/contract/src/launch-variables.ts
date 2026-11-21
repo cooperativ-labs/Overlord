@@ -117,6 +117,13 @@ export const LAUNCH_VARIABLES: readonly LaunchVariableDefinition[] = [
     availableAt: ['plan_build', 'terminal_env']
   },
   {
+    name: 'CLAUDE_CODE_TMPDIR',
+    description:
+      "Temp root for Claude Code, which ignores TMPDIR: the checkout's shared `.overlord/tmp/harness/` (0700). Exported to every agent; omitted when the path is too long for Claude's Unix messaging socket, so Claude keeps its default. Files age out with the `.overlord/tmp` retention.",
+    example: '/Users/you/src/overlord/.overlord/tmp/harness',
+    availableAt: ['terminal_env']
+  },
+  {
     name: 'OVERLORD_PROJECT_RESOURCES',
     description:
       'JSON array of every project resource for this execution target (resourceKey, path, state, flags, accessMode). Set only when the project has resources.',

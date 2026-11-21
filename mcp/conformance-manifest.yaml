@@ -1,5 +1,5 @@
-contractVersion: "179.0.0"
+contractVersion: "179.4.0"
 componentType: mcp-server
 componentKey: overlord
 label: 'Overlord Hosted MCP Server'
-description: 'OAuth-protected, mission-first MCP server for hosted ChatGPT Apps and other MCP clients. The overlord_create_mission and overlord_add_objectives tools support per-objective agent/model selection. Run Queue tools include overlord_list_run_queues, overlord_reorder_run_queue, and overlord_manage_run_queue; overlord_queue_objective supports queue, predecessor, front, and rank placement. overlord_search_missions adds an exhaustive exact-reference mode (reference + projectId, cursor continuation, complete flag) for canonical kb-feature: Knowledgebase Feature references.'
+description: 'OAuth-protected, mission-first MCP server for hosted ChatGPT Apps and other MCP clients. The overlord_create_mission and overlord_add_objectives tools support per-objective agent/model selection. Run Queue tools include overlord_list_run_queues, overlord_reorder_run_queue, and overlord_manage_run_queue; overlord_queue_objective supports queue, predecessor, front, and rank placement. overlord_search_missions adds an exhaustive exact-reference mode (reference + projectId, cursor continuation, complete flag) for canonical kb-feature: Knowledgebase Feature references. overlord_deliver_session and overlord_record_work accept MCP 2025-11-25 task-augmented calls (tasks/get, tasks/result, tasks/list; no cancel).'

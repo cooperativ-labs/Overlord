@@ -1,0 +1,51 @@
+{
+  "fixtureVersion": 1,
+  "kind": "normalized-event",
+  "description": "A subagent spawned by the root thread (live 0.170.0): the parent turn completes a subAgentActivity item of kind \"started\" before any frame of the child thread. It becomes session.started in the parent turn, correlated with the root thread, with the child thread as subagentId and its agent path as the lineage detail. The model and reasoning effort Codex reports are not kept.",
+  "codec": "codec/codex-app-server.codec.yaml",
+  "nativeEventName": "item/completed:subAgentActivity:started",
+  "occurredAt": "2026-01-01T00:00:00.000Z",
+  "payload": {
+    "item": {
+      "type": "subAgentActivity",
+      "model": "gpt-6.2-sol",
+      "reasoningEffort": "medium",
+      "id": "call_2a2dae9d5eb745319b730abb1a5b95d5",
+      "kind": "started",
+      "agentThreadId": "01a1faeb-e92a-7711-8210-2250b334ce2f",
+      "agentPath": "/root/child",
+      "startedAtMs": 1795211127183,
+      "completedAtMs": 1795211127183
+    },
+    "threadId": "01a1faeb-d29d-77a2-91b0-89021afec101",
+    "turnId": "01a1faeb-d30f-7761-a52a-b80145730805",
+    "contentTokenCount": null,
+    "completedAtMs": 1795211127183,
+    "event": "item/completed:subAgentActivity:started",
+    "context": {
+      "cwd": "/repo",
+      "rootThreadId": "01a1faeb-d29d-77a2-91b0-89021afec101"
+    }
+  },
+  "expect": {
+    "eventId": "ev_226d8efb3d1f9eba963b872be51afeb1",
+    "producerSequence": null,
+    "occurredAt": "2026-01-01T00:00:00.000Z",
+    "kind": "session.started",
+    "severity": "info",
+    "nativeEvent": "item/completed:subAgentActivity:started",
+    "nativeTurnId": "01a1faeb-d30f-7761-a52a-b80145730805",
+    "nativeCallId": "call_2a2dae9d5eb745319b730abb1a5b95d5",
+    "subagentId": "01a1faeb-e92a-7711-8210-2250b334ce2f",
+    "correlationId": "01a1faeb-d29d-77a2-91b0-89021afec101",
+    "origin": "agent",
+    "summary": "Session started",
+    "payload": {
+      "detail": "/root/child"
+    }
+  },
+  "mustNotContain": [
+    "gpt-6.2-sol",
+    "medium"
+  ]
+}

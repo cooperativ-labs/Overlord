@@ -3,6 +3,11 @@
 # Codex exposes turn_number in the hook body; turn 0 is the initial injected
 # mission/objective prompt, which `ovld protocol hook-event` skips.
 
+# A harness process an Overlord control-plane supervisor drives (for example a private
+# `codex app-server`) carries OVERLORD_CONTROL_PLANE_SURFACE. The supervisor observes, decides
+# and captures for it, so this callback must not report a second time.
+[ -z "${OVERLORD_CONTROL_PLANE_SURFACE:-}" ] || exit 0
+
 BODY=$(cat -)
 HOOK_NAME="codex"
 LOG_DIR="${HOME:-}/.ovld/logs"

@@ -23,12 +23,20 @@ invoke `ovld protocol …`). Tests enforce that it never reaches further.
 dispatch. `yarn connectors:check` includes `yarn connectors:claude:check`, which
 uses the setup managed-file renderer to stage the complete Claude plugin in a
 temporary directory, including the shared skill, references and post-tool hook.
-It runs `claude plugin validate --strict` and removes staging on success or
-failure. Install Claude Code 2.1.303, the CI tooling pin, to run it locally.
-This pin does not update the fixture-backed verified `HARNESS-MATRIX` version.
+It first checks, without Claude Code, that `plugin.json` `engines["claude-code"]`
+equals the descriptor `versionRange` and that no manifest uses the deprecated
+`pluginDigests`. It then lays the plugin out in a local marketplace built by the
+installer's own `buildClaudeMarketplaceManifest`, runs
+`claude plugin validate --strict` on the plugin and on the marketplace, and
+removes staging on success or failure. The Claude Code step is skipped (exit 0)
+when `claude` is not on `PATH` or is older than the `versionRange` floor; set
+`OVERLORD_REQUIRE_CLAUDE_VALIDATE=1` to fail instead, as CI does. Install Claude
+Code 2.1.329, the CI tooling pin, to run it locally. The pin is separate from
+the fixture-backed verified version in `HARNESS-MATRIX`, which is re-recorded
+against a live Claude Code (`fixtures/native-payload-shapes.json`).
 
 `claude plugin test` runs mod handler tests (`.test.ts`/`.test.tsx`). Overlord's
-shell-hook/skill plugin has no mod handlers, so the checker reports it as not
+`mcp_tool`-hook/skill plugin has no mod handlers, so the checker reports it as not
 applicable. Hook behavior remains covered by executable descriptor fixtures in
 `connectors:capabilities:check`. A future mod must add native tests and wire
 `claude plugin test` into this job when it ships.

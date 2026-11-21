@@ -76,7 +76,8 @@ function extractArgv0(command: string): string | null {
 function readCommand(input: unknown): string | null {
   if (!input || typeof input !== 'object') return null;
   const record = input as Record<string, unknown>;
-  for (const key of ['command', 'cmd', 'shell_command', 'commandLine', 'script']) {
+  // `CommandLine` is Antigravity's `run_command` argument.
+  for (const key of ['command', 'cmd', 'shell_command', 'commandLine', 'CommandLine', 'script']) {
     const value = record[key];
     if (typeof value === 'string' && value.trim() !== '') return value;
   }

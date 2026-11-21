@@ -1,18 +1,33 @@
 {
   "fixtureVersion": 1,
   "kind": "native-payload",
-  "description": "Recorded Codex PermissionRequest shape used by the callback request codec.",
+  "description": "Codex PermissionRequest recorded live from codex-cli 0.170.0 (`codex exec -s read-only -c approval_policy=\"on-request\"`, shell escalation) and checked against the published 0.171.0 permission-request input schema. Only cwd is redacted. Codex sends no timeout, request id or tool_use_id on this event: the hold bound is the handler's `timeout` key in hooks.json, not a payload field.",
   "payload": {
-    "session_id": "codex-session-1",
-    "turn_id": "turn-1",
+    "session_id": "01a1f9e9-6c82-70f1-952e-a38b5da8afe2",
+    "turn_id": "01a1f9e9-6fa9-7b52-837a-65b9fcd0bd40",
+    "transcript_path": null,
+    "cwd": "/repo",
     "hook_event_name": "PermissionRequest",
+    "model": "gpt-6.2-astra",
+    "permission_mode": "default",
     "tool_name": "Bash",
-    "timeout": 35,
-    "tool_input": { "command": "git push" }
+    "tool_input": {
+      "command": "touch created.txt",
+      "description": "Allow touch created.txt to write in the current directory?"
+    }
   },
   "assert": {
-    "requiredPaths": ["session_id", "hook_event_name", "tool_name", "timeout"],
-    "equals": { "hook_event_name": "PermissionRequest" },
+    "requiredPaths": [
+      "session_id",
+      "turn_id",
+      "cwd",
+      "hook_event_name",
+      "model",
+      "permission_mode",
+      "tool_name",
+      "tool_input.command"
+    ],
+    "equals": { "hook_event_name": "PermissionRequest", "tool_name": "Bash" },
     "bindingField": "session_id"
   }
 }

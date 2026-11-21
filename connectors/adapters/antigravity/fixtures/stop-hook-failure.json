@@ -1,0 +1,37 @@
+{
+  "fixtureVersion": 1,
+  "kind": "script-io",
+  "description": "When `ovld` fails, the Antigravity Stop hook still exits 0 and answers `{}`, which lets the stop happen. No failure path can keep the agent running.",
+  "script": "connectors/adapters/antigravity/hooks/overlord-stop.sh",
+  "stdin": {
+    "hookEventName": "Stop",
+    "conversationId": "ec33ebf9-0cba-4100-8142-c61503f6c587",
+    "workspacePaths": ["/workspace/project"],
+    "cwd": "/workspace/project",
+    "executionNum": 3,
+    "terminationReason": "model_stop",
+    "fullyIdle": true,
+    "continuation_active": false,
+    "lastUserInput": "Ship it",
+    "modelName": "gemini-3.6-flash-medium"
+  },
+  "env": {
+    "MISSION_ID": "coo:825",
+    "OVERLORD_MISSION_ID": "coo:825",
+    "OVERLORD_OBJECTIVE_ID": "coo:825.abcd",
+    "OVERLORD_SESSION_CHANNEL_ID": null
+  },
+  "spy": {
+    "exitCode": 1,
+    "stdout": "not json"
+  },
+  "expect": {
+    "exitCode": 0,
+    "stdout": "{}\n",
+    "stderr": "",
+    "cliInvocations": [
+      "protocol hook-event --agent antigravity --hook-type Stop --hook-output --payload-file -"
+    ],
+    "sandboxWrites": []
+  }
+}

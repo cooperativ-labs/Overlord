@@ -2511,6 +2511,12 @@ only a notification preference.
 
 Rules that are contract, not implementation detail:
 
+- **A control-plane launch channel carries a credential (ADR 0092).** A Codex objective launched
+  in app-server mode creates its channel through `POST /api/objectives/{id}/session-channels` with
+  `launch_kind = 'control_plane'`, `adapter_key = 'codex-app-server'`, `agent_identifier =
+  'codex'`, state `preparing` and a scoped credential, so the supervisor can post before attach;
+  attach binds it by objective. No other launch creates a channel. Binding never replaces a known
+  `agent_identifier` with attach's `unknown` placeholder.
 - **A protocol channel is correlation only (ADR 0065).** `ovld protocol ask` opens a channel with
   `launch_kind = 'protocol'`, state `online`, and null credential and lease columns when its
   session has none, so the question has a request row. Nothing can authenticate as it and the

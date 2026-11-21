@@ -1,0 +1,48 @@
+{
+  "fixtureVersion": 1,
+  "kind": "native-payload",
+  "description": "Recorded Claude Code 2.1.329 behavior (claude -p, isolated settings, 2026-11-20): UserPromptSubmit, PostToolUse and Stop mcp_tool hooks without onFailure, all pointing at an MCP server that is not connected, do not block. The prompt ran, the Bash command ran and the turn ended with the requested reply; the Stop failure surfaced only as a non-blocking notification.",
+  "payload": {
+    "claudeCodeVersion": "2.1.329",
+    "registrations": [
+      {
+        "event": "UserPromptSubmit",
+        "type": "mcp_tool",
+        "server": "nosuch",
+        "timeout": 10
+      },
+      {
+        "event": "PostToolUse",
+        "type": "mcp_tool",
+        "server": "nosuch",
+        "timeout": 15
+      },
+      {
+        "event": "Stop",
+        "type": "mcp_tool",
+        "server": "nosuch",
+        "timeout": 30
+      }
+    ],
+    "commandRan": true,
+    "result": {
+      "subtype": "success",
+      "result": "DONE"
+    },
+    "notification": {
+      "type": "system",
+      "subtype": "notification",
+      "key": "stop-hook-error",
+      "text": "stop hook problem · ctrl+o to see"
+    }
+  },
+  "assert": {
+    "requiredPaths": ["registrations.0.event", "registrations.2.event"],
+    "equals": {
+      "commandRan": true,
+      "result.subtype": "success",
+      "result.result": "DONE",
+      "notification.key": "stop-hook-error"
+    }
+  }
+}

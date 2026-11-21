@@ -1,0 +1,242 @@
+{
+  "fixtureVersion": 1,
+  "kind": "script-io",
+  "description": "Handshake and thread binding against recorded 0.170.0 frames: the exact initialize request (experimentalApi for requestUserInput only, high-volume notifications opted out), the version gate passing on the userAgent version, thread/start with approvalsReviewer \"user\" (the invariant that keeps approvals with Overlord and the person), a persistent thread, the heartbeat recording the thread id as the native session alias, and the objective prompt as the first turn.",
+  "script": "scripts/codex-app-server-replay.mjs",
+  "stdinMessages": [
+    {
+      "setup": {
+        "codec": "connectors/adapters/codex-app-server/codec/codex-app-server.codec.yaml",
+        "cwd": "/repo",
+        "firstPrompt": "Run the tests.",
+        "threadSettings": {
+          "approvalPolicy": "untrusted",
+          "sandbox": "workspace-write"
+        },
+        "report": [
+          "/heartbeat"
+        ]
+      }
+    },
+    {
+      "await": {
+        "method": "initialize"
+      }
+    },
+    {
+      "server": {
+        "id": 1,
+        "result": {
+          "userAgent": "overlord/0.170.0 (Mac OS 27.2.1; arm64) xterm-256color (overlord; replay)",
+          "codexHome": "/home/user/.codex",
+          "platformFamily": "unix",
+          "platformOs": "macos"
+        }
+      }
+    },
+    {
+      "server": {
+        "method": "remoteControl/status/changed",
+        "params": {
+          "status": "disabled",
+          "serverName": "host",
+          "installationId": "00000000-0000-0000-0000-000000000000",
+          "environmentId": null
+        },
+        "emittedAtMs": 1795207125837
+      }
+    },
+    {
+      "await": {
+        "method": "thread/start"
+      }
+    },
+    {
+      "server": {
+        "id": 2,
+        "result": {
+          "thread": {
+            "id": "01a1faae-db57-7001-ab8b-329bc51062e9",
+            "environments": [
+              {
+                "environmentId": "local",
+                "cwd": "/repo",
+                "runtimeWorkspaceRoots": [
+                  "/repo"
+                ]
+              }
+            ],
+            "extra": null,
+            "sessionId": "01a1faae-db57-7001-ab8b-329bc51062e9",
+            "forkedFromId": null,
+            "attachedToThreadId": null,
+            "parentThreadId": null,
+            "preview": "",
+            "ephemeral": false,
+            "section": null,
+            "sectionEnteredAt": null,
+            "projectId": null,
+            "historyMode": "paginated",
+            "modelProvider": "openai",
+            "model": "gpt-6.2-sol",
+            "reasoningEffort": "low",
+            "createdAt": 1795207126,
+            "updatedAt": 1795207126,
+            "recencyAt": 1795207126,
+            "status": {
+              "type": "idle"
+            },
+            "path": "/home/user/.codex/sessions/2026/11/20/rollout-2026-11-20T21-38-46-01a1faae-db57-7001-ab8b-329bc51062e9.jsonl",
+            "cwd": "/repo",
+            "cliVersion": "0.170.0",
+            "originator": "overlord",
+            "source": "vscode",
+            "canAcceptDirectInput": true,
+            "threadSource": null,
+            "agentNickname": null,
+            "agentRole": null,
+            "gitInfo": null,
+            "name": null,
+            "daybreakEnabled": null,
+            "turns": []
+          },
+          "model": "gpt-6.2-sol",
+          "modelProvider": "openai",
+          "serviceTier": "default",
+          "disabledPluginIds": [],
+          "cwd": "/repo",
+          "runtimeWorkspaceRoots": [
+            "/repo"
+          ],
+          "instructionSources": [],
+          "approvalPolicy": "untrusted",
+          "approvalsReviewer": "user",
+          "sandbox": {
+            "type": "workspaceWrite",
+            "writableRoots": [],
+            "networkAccess": false,
+            "excludeTmpdirEnvVar": false,
+            "excludeSlashTmp": false
+          },
+          "activePermissionProfile": null,
+          "reasoningEffort": "low",
+          "multiAgentMode": "explicitRequestOnly"
+        }
+      }
+    },
+    {
+      "await": {
+        "method": "turn/start"
+      }
+    },
+    {
+      "server": {
+        "id": 3,
+        "result": {
+          "turn": {
+            "id": "01a1faae-dd6f-7311-9876-5b672b9e8918",
+            "rootTurnId": "01a1faae-dd6f-7311-9876-5b672b9e8918",
+            "items": [],
+            "itemsView": "notLoaded",
+            "status": "inProgress",
+            "error": null,
+            "startedAt": null,
+            "completedAt": null,
+            "durationMs": null
+          }
+        }
+      }
+    }
+  ],
+  "timeoutMs": 60000,
+  "expect": {
+    "exitCode": 0,
+    "stderr": "",
+    "responses": [
+      {
+        "id": "out-1",
+        "rpc": {
+          "id": 1,
+          "method": "initialize",
+          "params": {
+            "clientInfo": {
+              "name": "overlord",
+              "title": "Overlord",
+              "version": "replay"
+            },
+            "capabilities": {
+              "experimentalApi": true,
+              "requestAttestation": false,
+              "optOutNotificationMethods": [
+                "item/agentMessage/delta",
+                "item/reasoning/summaryTextDelta",
+                "item/reasoning/summaryPartAdded",
+                "item/reasoning/textDelta",
+                "item/commandExecution/outputDelta",
+                "item/fileChange/outputDelta",
+                "thread/tokenUsage/updated",
+                "account/rateLimits/updated",
+                "turn/moderationMetadata"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": "out-2",
+        "rpc": {
+          "method": "initialized"
+        }
+      },
+      {
+        "id": "out-3",
+        "rpc": {
+          "id": 2,
+          "method": "thread/start",
+          "params": {
+            "cwd": "/repo",
+            "approvalsReviewer": "user",
+            "approvalPolicy": "untrusted",
+            "sandbox": "workspace-write",
+            "ephemeral": false
+          }
+        }
+      },
+      {
+        "id": "out-4",
+        "channel": {
+          "method": "POST",
+          "path": "/heartbeat",
+          "body": {
+            "nativeSessionId": "01a1faae-db57-7001-ab8b-329bc51062e9"
+          }
+        }
+      },
+      {
+        "id": "out-5",
+        "rpc": {
+          "id": 3,
+          "method": "turn/start",
+          "params": {
+            "threadId": "01a1faae-db57-7001-ab8b-329bc51062e9",
+            "input": [
+              {
+                "type": "text",
+                "text": "Run the tests.",
+                "text_elements": []
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": "result",
+        "reason": "reconnect-exhausted",
+        "serverVersion": "0.170.0",
+        "threadId": "01a1faae-db57-7001-ab8b-329bc51062e9",
+        "injected": 0,
+        "interrupted": false
+      }
+    ]
+  }
+}

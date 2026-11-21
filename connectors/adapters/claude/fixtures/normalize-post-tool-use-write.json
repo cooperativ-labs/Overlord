@@ -33,18 +33,10 @@
       "action": "Write a file",
       "subject": "config/secrets.ts",
       "detail": "99 bytes",
-      "paths": [
-        "config/secrets.ts"
-      ],
+      "paths": ["config/secrets.ts"],
       "outcome": "ok",
       "formatterVersion": 1
     }
   },
-  "mustNotContain": [
-    "AKIAIOSFODNN7EXAMPLE",
-    "hunter2",
-    "postgres://",
-    "/Users/jake",
-    ".jsonl"
-  ]
+  "mustNotContain": ["AKIAIOSFODNN7EXAMPLE", "hunter2", "postgres://", "/Users/jake", ".jsonl"]
 }

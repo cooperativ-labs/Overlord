@@ -22,24 +22,53 @@ import {
  */
 
 function readPath(record: Record<string, unknown>): unknown {
-  for (const key of ['file_path', 'filePath', 'path', 'notebook_path', 'notebookPath', 'target']) {
+  // `TargetFile` is Antigravity's `write_to_file` / `replace_file_content` path argument.
+  for (const key of [
+    'file_path',
+    'filePath',
+    'path',
+    'notebook_path',
+    'notebookPath',
+    'target',
+    'TargetFile'
+  ]) {
     if (typeof record[key] === 'string') return record[key];
   }
   return null;
 }
 
 function readContent(record: Record<string, unknown>): unknown {
-  for (const key of ['content', 'contents', 'new_string', 'newText', 'new_source', 'text']) {
+  for (const key of [
+    'content',
+    'contents',
+    'new_string',
+    'newText',
+    'new_source',
+    'text',
+    // Antigravity `write_to_file` and `replace_file_content`.
+    'CodeContent',
+    'ReplacementContent'
+  ]) {
     if (typeof record[key] === 'string') return record[key];
   }
   return null;
 }
 
 function isOverwrite(record: Record<string, unknown>): boolean {
-  for (const key of ['old_string', 'oldText', 'old_source', 'replace_all', 'edits']) {
+  for (const key of [
+    'old_string',
+    'oldText',
+    'old_source',
+    'replace_all',
+    'edits',
+    // Antigravity `replace_file_content` and `multi_replace_file_content`.
+    'TargetContent',
+    'ReplacementChunks'
+  ]) {
     if (record[key] !== undefined && record[key] !== null) return true;
   }
-  return false;
+  // Antigravity `write_to_file` states replacement explicitly as a boolean.
+  return record.Overwrite === true;
 }
 
 export function describeWrite({ input, projectRoot }: DescribeInput): Description {

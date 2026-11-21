@@ -141,7 +141,7 @@ Subcommands:
   publish-delivery-summary
                          Publish one reconciled mission summary for your accepted delivery
   resume-follow-up       Reopen a completed objective for post-delivery follow-up work
-  hook-event             Record a connector lifecycle hook (e.g. UserPromptSubmit)
+  hook-event             Record a connector lifecycle hook (UserPromptSubmit, Stop)
   capture-change         Local-only: append direct-path hook evidence to an objective ledger
   changes                Local-only: sync and read this checkout's evidence for one objective
                          (synced + pending paths, capture/sync warnings); never arbitrate peers
@@ -1211,14 +1211,22 @@ resume-follow-up:
 hook-event:
   Purpose:
     Record a connector lifecycle hook without requiring a live session key.
+    UserPromptSubmit records a follow-up; Stop returns deliveryStatus (read-only).
   Required:
-    --hook-type UserPromptSubmit
+    --hook-type UserPromptSubmit|Stop
     --mission-id <id>
   Optional:
     --prompt or --prompt-file <path|->
     --session-key <key>
     --external-session-id <id>
     --turn-index <n>
+  Native hook mode (the CLI fallback for harness hooks, and what Claude mcp_tool hooks run):
+    --agent <key> --payload-file -   Read the native hook payload on stdin. The binding comes
+                                     from the launch environment or the session attach indexed.
+                                     Prints hookOutput: the exact JSON the hook answers with.
+    --hook-output                    Print only that hookOutput object, on one line.
+    --hook-type is optional here and must match the payload's event, or the canonical type
+    the connector codec maps it to (Antigravity PreInvocation -> UserPromptSubmit).
 
 read-context:
   Purpose:

@@ -89,6 +89,41 @@ test('CAS conflicts remain a lost-race condition and delivery copy is explicit',
   assert.match(deliveryStateText('unknown') ?? '', /Do not send/);
 });
 
+test('a control-plane approval is answerable only when the server says so (ADR 0094)', () => {
+  const approval = (delivery: HumanAgentRequestDto['delivery']) =>
+    request({
+      kind: 'permission',
+      allowsFreeText: false,
+      options: [
+        { optionId: 'allow', label: 'Allow once', kind: 'allow' },
+        { optionId: 'deny', label: 'Deny', kind: 'deny' }
+      ],
+      delivery
+    });
+  assert.equal(
+    isQuestionDeliveryAnswerable(
+      approval({ mode: 'control_plane', reason: null, state: null, observedAt: null })
+    ),
+    true
+  );
+  const notOwner = approval({
+    mode: 'read_only',
+    reason: 'not_session_owner',
+    state: null,
+    observedAt: null
+  });
+  assert.equal(isQuestionDeliveryAnswerable(notOwner), false);
+  assert.match(questionReadOnlyReason(notOwner), /launched this session/);
+  const ended = approval({
+    mode: 'read_only',
+    reason: 'channel_ended',
+    state: null,
+    observedAt: null
+  });
+  assert.match(questionReadOnlyReason(ended), /session has ended/);
+  assert.equal(questionAllowsFreeText(notOwner), false);
+});
+
 function answered(
   delivery: Partial<HumanAgentRequestDto['delivery']>,
   overrides: Partial<HumanAgentRequestDto> = {}
@@ -129,6 +164,16 @@ test('a recorded answer is never reported as delivered until Latch confirms it',
   assert.match(confirmed?.text ?? '', /Delivered/);
   assert.equal(answerNeedsFollowUp(answered({ stage: 'confirmed' })), false);
   assert.equal(answerNeedsFollowUp(answered({ stage: 'queued' })), true);
+  // An answered approval reports the supervisor's application the same way.
+  const allowed = answered(
+    { stage: 'recorded' },
+    { kind: 'permission', resolution: { optionId: 'allow' } }
+  );
+  assert.equal(answerOutcome(allowed)?.tone, 'pending');
+  assert.equal(
+    answerOutcome(answered({ stage: 'confirmed' }, { kind: 'permission' }))?.tone,
+    'confirmed'
+  );
 });
 
 test('failed and unconfirmed deliveries expose the server recovery, guarded for ambiguity', () => {

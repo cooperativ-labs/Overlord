@@ -1,0 +1,15 @@
+{
+  "fixtureVersion": 1,
+  "kind": "source-guard",
+  "description": "The Antigravity plugin registers only the observational PostToolUse capture, the PreInvocation prompt hook and the Stop hook. It registers no PreToolUse decision hook: the remote decision path is not wired, and an unregistered hook leaves Antigravity's native permission flow as the floor.",
+  "path": "connectors/adapters/antigravity/hooks.json",
+  "assert": {
+    "mustContain": [
+      "./hooks/overlord-pre-invocation.sh",
+      "./hooks/overlord-post-tool-use.sh",
+      "./hooks/overlord-stop.sh",
+      "write_to_file|replace_file_content|multi_replace_file_content|run_command"
+    ],
+    "mustNotContain": ["PreToolUse", "PLUGIN_ROOT", "auto_approve"]
+  }
+}

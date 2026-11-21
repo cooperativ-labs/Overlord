@@ -1,0 +1,74 @@
+{
+  "fixtureVersion": 1,
+  "kind": "normalized-event",
+  "description": "A file the subagent wrote (live 0.170.0, the child thread completed its own fileChange item). The edit is posted to the parent session: correlationId is the root thread, subagentId the child thread, and the path is repo-relative evidence for change capture. Never the diff.",
+  "codec": "codec/codex-app-server.codec.yaml",
+  "nativeEventName": "item/completed:fileChange",
+  "occurredAt": "2026-01-01T00:00:00.000Z",
+  "payload": {
+    "item": {
+      "type": "fileChange",
+      "id": "exec-f6cb83ed-662d-4e02-9a5f-dfb15ad4e227",
+      "changes": [
+        {
+          "path": "/repo/child.txt",
+          "kind": {
+            "type": "add"
+          },
+          "diff": "from child\n"
+        }
+      ],
+      "status": "completed",
+      "startedAtMs": 1795211131003,
+      "completedAtMs": 1795211131054
+    },
+    "threadId": "01a1faeb-e92a-7711-8210-2250b334ce2f",
+    "turnId": "01a1faeb-e98e-7f92-9764-6130255aed13",
+    "contentTokenCount": null,
+    "completedAtMs": 1795211131054,
+    "event": "item/completed:fileChange",
+    "context": {
+      "cwd": "/repo",
+      "rootThreadId": "01a1faeb-d29d-77a2-91b0-89021afec101",
+      "subagentThreadId": "01a1faeb-e92a-7711-8210-2250b334ce2f",
+      "parentThreadId": "01a1faeb-d29d-77a2-91b0-89021afec101",
+      "lineage": "subagent /root/child of 01a1faeb-d29d-77a2-91b0-89021afec101 (depth 1)"
+    },
+    "change": {
+      "path": "/repo/child.txt",
+      "kind": {
+        "type": "add"
+      },
+      "diff": "from child\n"
+    },
+    "changeIndex": 0
+  },
+  "expect": {
+    "eventId": "ev_b28233da24a2e47e766dbdc5ebea35ea",
+    "producerSequence": null,
+    "occurredAt": "2026-01-01T00:00:00.000Z",
+    "kind": "file.edited",
+    "severity": "info",
+    "nativeEvent": "item/completed:fileChange",
+    "nativeTurnId": "01a1faeb-e98e-7f92-9764-6130255aed13",
+    "nativeCallId": "exec-f6cb83ed-662d-4e02-9a5f-dfb15ad4e227",
+    "subagentId": "01a1faeb-e92a-7711-8210-2250b334ce2f",
+    "correlationId": "01a1faeb-d29d-77a2-91b0-89021afec101",
+    "origin": "agent",
+    "summary": "Write a file: child.txt",
+    "payload": {
+      "tool": "edit",
+      "action": "Write a file",
+      "subject": "child.txt",
+      "paths": [
+        "child.txt"
+      ],
+      "outcome": "ok",
+      "formatterVersion": 1
+    }
+  },
+  "mustNotContain": [
+    "from child",
+    "diff"
+  ]
+}

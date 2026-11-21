@@ -1,27 +1,68 @@
 {
   "fixtureVersion": 1,
   "kind": "script-io",
-  "description": "A bound Claude PostToolUse callback forwards the native payload to local capture-change with an explicit objective id, recovers mission scope from that binding, and persists no adapter log.",
-  "script": "connectors/core/scripts/capture-change-hook.sh",
+  "description": "A bound Claude PostToolUse mcp_tool call forwards the rebuilt native payload (tool_input JSON-decoded, no transcript path or tool output) to local `ovld protocol capture-change` only when the launch names an explicit objective, and answers `{}`.",
+  "script": "connectors/core/scripts/overlord-mcp.mjs",
   "adapterKey": "claude",
-  "stdin": {
-    "session_id": "claude-session-1",
-    "hook_event_name": "PostToolUse",
-    "cwd": "/repo",
-    "tool_name": "Write",
-    "tool_input": { "file_path": "/repo/src/a.ts" }
-  },
+  "args": ["--hooks"],
+  "stdinMessages": [
+    {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "tools/call",
+      "params": {
+        "name": "overlord_hook_post_tool_use",
+        "arguments": {
+          "hook_event_name": "PostToolUse",
+          "session_id": "claude-session-1",
+          "cwd": "/repo",
+          "tool_name": "Write",
+          "tool_use_id": "toolu_1",
+          "tool_input": "{\"file_path\": \"/repo/src/a.ts\"}"
+        }
+      }
+    }
+  ],
   "env": {
     "MISSION_ID": null,
     "OVERLORD_MISSION_ID": null,
-    "OVERLORD_OBJECTIVE_ID": "coo:825.abcd"
+    "OVERLORD_OBJECTIVE_ID": "coo:825.abcd",
+    "OVERLORD_SESSION_CHANNEL_ID": null,
+    "OVERLORD_SESSION_CHANNEL_TOKEN": null,
+    "SESSION_KEY": null,
+    "OVLD_HOME": null,
+    "CLAUDE_CODE_SESSION_ID": null
   },
   "expect": {
     "exitCode": 0,
-    "stdout": "",
     "stderr": "",
-    "cliInvocations": ["protocol capture-change --agent claude --objective-id coo:825.abcd"],
-    "stdinForwarded": true,
+    "responses": [
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "{}"
+            }
+          ]
+        }
+      }
+    ],
+    "cliInvocations": ["protocol capture-change --agent claude"],
+    "cliStdin": [
+      {
+        "hook_event_name": "PostToolUse",
+        "session_id": "claude-session-1",
+        "cwd": "/repo",
+        "tool_name": "Write",
+        "tool_use_id": "toolu_1",
+        "tool_input": {
+          "file_path": "/repo/src/a.ts"
+        }
+      }
+    ],
     "sandboxWrites": []
   }
 }

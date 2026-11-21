@@ -1,7 +1,7 @@
 {
   "name": "overlord",
-  "version": "0.3.75",
-  "description": "Overlord mission protocol workflow for Claude Code — attach/update/ask/deliver, slash commands, and hook-driven activity capture.",
+  "version": "0.3.84",
+  "description": "Overlord mission protocol workflow for Claude Code — attach/update/ask/deliver, slash commands, and mcp_tool hook activity capture.",
   "author": {
     "name": "Cooperativ",
     "url": "https://github.com/cooperativ-labs"
@@ -9,6 +9,9 @@
   "homepage": "https://www.ovld.ai",
   "repository": "https://github.com/cooperativ-labs/overlord",
   "license": "UNLICENSED",
+  "engines": {
+    "claude-code": ">=2.1.328"
+  },
   "keywords": [
     "overlord",
     "ticket",
@@ -24,12 +27,6 @@
       "title": "Overlord URL",
       "description": "Overlord platform URL (e.g. https://www.ovld.ai or http://localhost:3000).",
       "sensitive": false
-    },
-    "user_token": {
-      "type": "string",
-      "title": "User token",
-      "description": "Overlord USER_TOKEN for non-interactive CLI authentication. Create one with `ovld user-token create`; the raw `out_...` secret is shown once. The connector passes this value to `ovld protocol` as Overlord_USER_TOKEN.",
-      "sensitive": true
     }
   }
 }

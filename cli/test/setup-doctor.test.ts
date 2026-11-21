@@ -294,7 +294,14 @@ test('codex setup merges marketplace and rules without corrupting managed hook c
     );
     assert.equal(commandsFor('PermissionRequest').length, 0);
 
-    inspectAndAssertHealthy(home, 'codex');
+    // A fresh temp home has never approved the Overlord hooks. When a hook-trust-aware Codex is
+    // on PATH, doctor must say so (`/hooks`); every other check must still pass.
+    const report = inspectConnector({ agentKey: 'codex', home });
+    assert.ok(report.installed);
+    assert.deepEqual(
+      report.problems.filter(problem => !problem.includes('`/hooks`')),
+      []
+    );
   } finally {
     rmSync(home, { recursive: true, force: true });
   }
@@ -436,6 +443,128 @@ test('contract version staleness compares the major version', () => {
   assert.equal(isStaleContractVersion({ installed: '167', declared: '168.0.0' }), true);
   assert.equal(isStaleContractVersion({ installed: '0.0-ancient', declared: '168.0.0' }), true);
   assert.equal(isStaleContractVersion({ installed: 'custom', declared: 'custom' }), false);
+});
+
+test('antigravity connector installs to the Antigravity global plugin directory', () => {
+  assert.ok(listAvailableConnectors().includes('antigravity'));
+  const manifest = readConnectorManifest('antigravity');
+  assert.equal(manifest.connector.installPath, '~/.gemini/config/plugins/overlord');
+  const sourceDir = path.join(repoRoot, 'connectors', 'adapters', 'antigravity');
+  for (const relativePath of manifest.connector.managedFiles) {
+    assert.ok(
+      managedFileSourceExists({ sourceDir, relativePath, adapterKey: 'antigravity' }),
+      `missing managed source: ${relativePath}`
+    );
+  }
+  const pluginJson = JSON.parse(readFileSync(path.join(sourceDir, 'plugin.json'), 'utf8'));
+  assert.equal(pluginJson.displayName, 'Overlord');
+  assert.ok(manifest.connector.managedFiles.includes(pluginJson.logo));
+});
+
+/** Simulate an install an earlier connector version made at the old Antigravity CLI path. */
+function seedLegacyAntigravityInstall(home: string): {
+  legacyRoot: string;
+  statePath: string;
+  state: { installPath: string; files: Array<{ path: string; sha256: string }> };
+} {
+  const first = setupConnector({ agentKey: 'antigravity', home });
+  const legacyRoot = path.join(home, '.gemini', 'antigravity-cli', 'plugins', 'overlord');
+  const statePath = path.join(home, '.ovld', 'connectors', 'antigravity.json');
+  const state = JSON.parse(readFileSync(statePath, 'utf8'));
+  for (const file of state.files as Array<{ path: string }>) {
+    const target = path.join(legacyRoot, file.path);
+    mkdirSync(path.dirname(target), { recursive: true });
+    writeFileSync(target, readFileSync(path.join(first.installPath, file.path)));
+  }
+  rmSync(first.installPath, { recursive: true, force: true });
+  state.installPath = legacyRoot;
+  writeFileSync(statePath, `${JSON.stringify(state, null, 2)}\n`);
+  return { legacyRoot, statePath, state };
+}
+
+test('antigravity setup migrates an install from the legacy path and keeps edited files', () => {
+  const home = tempHome();
+  try {
+    const { legacyRoot } = seedLegacyAntigravityInstall(home);
+    const editedPath = 'skills/attach.md';
+    writeFileSync(
+      path.join(legacyRoot, editedPath),
+      `${readFileSync(path.join(legacyRoot, editedPath), 'utf8')}\n<!-- user edit -->\n`
+    );
+
+    const legacyReport = inspectConnector({ agentKey: 'antigravity', home });
+    assert.equal(legacyReport.healthy, false);
+    assert.ok(
+      legacyReport.problems.some(problem => problem.includes('.gemini/config/plugins/overlord')),
+      legacyReport.problems.join('; ')
+    );
+
+    const dryRun = setupConnector({ agentKey: 'antigravity', home, dryRun: true });
+    assert.ok(
+      dryRun.files.some(file => file.action === 'would-remove' && file.root === legacyRoot)
+    );
+    assert.ok(existsSync(path.join(legacyRoot, 'plugin.json')), 'dry run must not remove files');
+
+    const migrated = setupConnector({ agentKey: 'antigravity', home });
+    assert.equal(migrated.installPath, path.join(home, '.gemini', 'config', 'plugins', 'overlord'));
+    const removed = migrated.files.filter(file => file.action === 'removed');
+    assert.ok(removed.length > 0);
+    assert.ok(removed.every(file => file.root === legacyRoot));
+    assert.equal(existsSync(path.join(legacyRoot, 'plugin.json')), false);
+    assert.equal(existsSync(path.join(legacyRoot, 'scripts')), false, 'emptied dirs are pruned');
+    assert.ok(existsSync(path.join(legacyRoot, editedPath)), 'edited file is preserved');
+    assert.ok(
+      migrated.warnings.some(warning => warning.includes(editedPath)),
+      migrated.warnings.join('; ')
+    );
+    assert.ok(existsSync(path.join(migrated.installPath, 'plugin.json')));
+    assert.ok(existsSync(path.join(migrated.installPath, 'assets', 'logo.png')));
+
+    const report = inspectConnector({ agentKey: 'antigravity', home });
+    assert.ok(report.healthy, report.problems.join('; '));
+    assert.equal(report.installPath, migrated.installPath);
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('antigravity setup removes an unedited legacy install entirely', () => {
+  const home = tempHome();
+  try {
+    const { legacyRoot } = seedLegacyAntigravityInstall(home);
+    setupConnector({ agentKey: 'antigravity', home });
+    assert.equal(existsSync(legacyRoot), false);
+    assert.ok(existsSync(path.join(home, '.gemini', 'antigravity-cli', 'plugins')));
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('antigravity setup and doctor name unmanaged files in the plugin directory', () => {
+  const home = tempHome();
+  try {
+    const installPath = path.join(home, '.gemini', 'config', 'plugins', 'overlord');
+    const stray = path.join(installPath, 'skills', 'overlord-ticket', 'SKILL.md');
+    mkdirSync(path.dirname(stray), { recursive: true });
+    writeFileSync(stray, '---\nname: overlord-ticket\n---\n');
+
+    const result = setupConnector({ agentKey: 'antigravity', home });
+    assert.ok(existsSync(stray), 'setup must not delete files it does not manage');
+    assert.ok(
+      result.warnings.some(warning => warning.includes('skills/overlord-ticket/SKILL.md')),
+      result.warnings.join('; ')
+    );
+
+    const report = inspectConnector({ agentKey: 'antigravity', home });
+    assert.equal(report.healthy, false);
+    assert.ok(report.problems.some(problem => problem.includes('skills/overlord-ticket/SKILL.md')));
+
+    rmSync(path.join(installPath, 'skills', 'overlord-ticket'), { recursive: true });
+    const cleanReport = inspectConnector({ agentKey: 'antigravity', home });
+    assert.ok(cleanReport.healthy, cleanReport.problems.join('; '));
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
 });
 
 test('inspect reports not-installed connectors', () => {

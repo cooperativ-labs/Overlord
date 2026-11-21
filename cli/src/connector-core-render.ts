@@ -20,13 +20,15 @@ export const CONNECTOR_CORE_MCP_SHIM_RELATIVE_PATH = 'scripts/overlord-mcp.mjs';
 export const CONNECTOR_ADAPTER_KEY_PLACEHOLDER = '__OVERLORD_ADAPTER_KEY__';
 
 /**
- * One post-tool capture callback is rendered into the three harness-native paths.
- * The path remains adapter-owned; the executable implementation does not.
+ * One post-tool capture callback is rendered into the harness-native paths of the adapters that
+ * still register shell hooks. The path remains adapter-owned; the executable implementation does
+ * not. Claude is absent: its PostToolUse hook is an `mcp_tool` call to the rendered MCP shim in
+ * `--hooks` mode, which spawns the same `ovld protocol capture-change`.
  */
 export const CONNECTOR_CORE_CAPTURE_CHANGE_HOOK_SOURCE = 'capture-change-hook.sh';
 export const CONNECTOR_CORE_CAPTURE_CHANGE_HOOK_PATHS: Readonly<Record<string, string>> =
   Object.freeze({
-    claude: 'scripts/post-tool-use-hook.sh',
+    antigravity: 'hooks/overlord-post-tool-use.sh',
     codex: 'scripts/post-tool-use-hook.sh',
     cursor: 'hooks/overlord-post-tool-use.sh'
   });

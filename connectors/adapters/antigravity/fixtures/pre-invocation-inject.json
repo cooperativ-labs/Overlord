@@ -1,0 +1,36 @@
+{
+  "fixtureVersion": 1,
+  "kind": "script-io",
+  "description": "With a session channel, the Antigravity PreInvocation hook records the prompt and then claims a pending Overlord instruction through `ovld agent-session inbox`, answering with the exact `injectSteps` userMessage the inbox emits.",
+  "script": "connectors/adapters/antigravity/hooks/overlord-pre-invocation.sh",
+  "stdin": {
+    "hookEventName": "PreInvocation",
+    "conversationId": "ec33ebf9-0cba-4100-8142-c61503f6c587",
+    "workspacePaths": ["/workspace/project"],
+    "cwd": "/workspace/project",
+    "invocationNum": 2,
+    "initialNumSteps": 11,
+    "lastUserInput": "Also update the changelog",
+    "modelName": "gemini-3.6-flash-medium"
+  },
+  "env": {
+    "MISSION_ID": "coo:825",
+    "OVERLORD_MISSION_ID": "coo:825",
+    "OVERLORD_OBJECTIVE_ID": "coo:825.abcd",
+    "OVERLORD_SESSION_CHANNEL_ID": "chan_1"
+  },
+  "spy": {
+    "stdout": "{\"injectSteps\":[{\"userMessage\":\"Also update the changelog\"}]}\n"
+  },
+  "expect": {
+    "exitCode": 0,
+    "stdout": "{\"injectSteps\":[{\"userMessage\":\"Also update the changelog\"}]}\n",
+    "stderr": "",
+    "cliInvocations": [
+      "protocol hook-event --agent antigravity --hook-type UserPromptSubmit --hook-output --payload-file -",
+      "agent-session inbox --agent antigravity --payload-file -"
+    ],
+    "cliStdin": "{\"hookEventName\":\"PreInvocation\",\"conversationId\":\"ec33ebf9-0cba-4100-8142-c61503f6c587\",\"workspacePaths\":[\"/workspace/project\"],\"cwd\":\"/workspace/project\",\"invocationNum\":2,\"initialNumSteps\":11,\"lastUserInput\":\"Also update the changelog\",\"modelName\":\"gemini-3.6-flash-medium\"}{\"hookEventName\":\"PreInvocation\",\"conversationId\":\"ec33ebf9-0cba-4100-8142-c61503f6c587\",\"workspacePaths\":[\"/workspace/project\"],\"cwd\":\"/workspace/project\",\"invocationNum\":2,\"initialNumSteps\":11,\"lastUserInput\":\"Also update the changelog\",\"modelName\":\"gemini-3.6-flash-medium\"}",
+    "sandboxWrites": []
+  }
+}

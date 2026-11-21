@@ -15,6 +15,47 @@
 import type { CodecSpec } from '@overlord/core/service/agent-session/pure/codec';
 
 export const AGENT_SESSION_CODECS: Record<string, CodecSpec> = {
+  "antigravity": {
+    "codecVersion": 1,
+    "adapter": "antigravity",
+    "eventNamePath": "hookEventName",
+    "nativeSessionPaths": [
+      "conversationId"
+    ],
+    "projectRootPaths": [
+      "cwd",
+      "workspacePaths.0"
+    ],
+    "events": [
+      {
+        "native": "PreInvocation",
+        "kind": "prompt.submitted",
+        "origin": "user",
+        "promptPath": "lastUserInput"
+      },
+      {
+        "native": "PreToolUse",
+        "kind": "tool.called",
+        "origin": "agent",
+        "toolPath": "toolCall.name",
+        "inputPath": "toolCall.args",
+        "callIdPath": "toolCall.id"
+      },
+      {
+        "native": "PostToolUse",
+        "kind": "tool.completed",
+        "origin": "agent",
+        "toolPath": "toolCall.name",
+        "inputPath": "toolCall.args",
+        "callIdPath": "toolCall.id",
+        "outcomeErrorPath": "error",
+        "fileEditKind": "file.edited",
+        "filePathPaths": [
+          "TargetFile"
+        ]
+      }
+    ]
+  },
   "claude": {
     "codecVersion": 1,
     "adapter": "claude",
@@ -73,7 +114,8 @@ export const AGENT_SESSION_CODECS: Record<string, CodecSpec> = {
         "toolPath": "tool_name",
         "inputPath": "tool_input",
         "callIdPath": "tool_use_id",
-        "turnIdPath": "turn_id"
+        "turnIdPath": "turn_id",
+        "subagentIdPath": "agent_id"
       },
       {
         "native": "PostToolUse",
@@ -83,6 +125,7 @@ export const AGENT_SESSION_CODECS: Record<string, CodecSpec> = {
         "inputPath": "tool_input",
         "callIdPath": "tool_use_id",
         "turnIdPath": "turn_id",
+        "subagentIdPath": "agent_id",
         "outcomePath": "tool_response",
         "outcomeExitCodePrefix": "Exit code: ",
         "fileEditKind": "file.edited",
@@ -101,13 +144,141 @@ export const AGENT_SESSION_CODECS: Record<string, CodecSpec> = {
         "kind": "prompt.submitted",
         "origin": "user",
         "promptPath": "prompt",
-        "turnIdPath": "turn_id"
+        "turnIdPath": "turn_id",
+        "subagentIdPath": "agent_id"
       },
       {
         "native": "SessionStart",
         "kind": "session.started",
         "origin": "system",
         "detailPath": "source"
+      }
+    ]
+  },
+  "codex-app-server": {
+    "codecVersion": 1,
+    "adapter": "codex-app-server",
+    "eventNamePath": "event",
+    "nativeSessionPaths": [
+      "context.rootThreadId",
+      "threadId",
+      "thread.id"
+    ],
+    "projectRootPaths": [
+      "context.cwd",
+      "item.cwd"
+    ],
+    "events": [
+      {
+        "native": "item/completed:userMessage",
+        "kind": "prompt.submitted",
+        "origin": "user",
+        "subagentIdPath": "context.subagentThreadId",
+        "promptPath": "item.content.0.text",
+        "turnIdPath": "turnId"
+      },
+      {
+        "native": "item/started:commandExecution",
+        "kind": "tool.called",
+        "origin": "agent",
+        "subagentIdPath": "context.subagentThreadId",
+        "toolPath": "item.type",
+        "inputPath": "item",
+        "callIdPath": "item.id",
+        "turnIdPath": "turnId"
+      },
+      {
+        "native": "item/completed:commandExecution",
+        "kind": "tool.completed",
+        "origin": "agent",
+        "subagentIdPath": "context.subagentThreadId",
+        "toolPath": "item.type",
+        "inputPath": "item",
+        "callIdPath": "item.id",
+        "turnIdPath": "turnId",
+        "outcomePath": "item.status"
+      },
+      {
+        "native": "item/started:fileChange",
+        "kind": "tool.called",
+        "origin": "agent",
+        "subagentIdPath": "context.subagentThreadId",
+        "toolPath": "item.type",
+        "inputPath": "change",
+        "callIdPath": "item.id",
+        "turnIdPath": "turnId"
+      },
+      {
+        "native": "item/completed:fileChange",
+        "kind": "tool.completed",
+        "origin": "agent",
+        "subagentIdPath": "context.subagentThreadId",
+        "toolPath": "item.type",
+        "inputPath": "change",
+        "callIdPath": "item.id",
+        "turnIdPath": "turnId",
+        "outcomePath": "item.status",
+        "fileEditKind": "file.edited",
+        "filePathPaths": [
+          "path",
+          "kind.move_path"
+        ]
+      },
+      {
+        "native": "thread/started",
+        "kind": "session.started",
+        "origin": "system",
+        "subagentIdPath": "context.subagentThreadId",
+        "detailPath": "context.lineage"
+      },
+      {
+        "native": "thread/closed",
+        "kind": "session.ended",
+        "origin": "system",
+        "subagentIdPath": "context.subagentThreadId"
+      },
+      {
+        "native": "turn/started",
+        "kind": "notice",
+        "origin": "system",
+        "subagentIdPath": "context.subagentThreadId",
+        "turnIdPath": "turn.id",
+        "detailPath": "turn.status"
+      },
+      {
+        "native": "turn/completed",
+        "kind": "notice",
+        "origin": "system",
+        "subagentIdPath": "context.subagentThreadId",
+        "turnIdPath": "turn.id",
+        "detailPath": "turn.status"
+      },
+      {
+        "native": "item/completed:subAgentActivity:started",
+        "kind": "session.started",
+        "origin": "agent",
+        "subagentIdPath": "item.agentThreadId",
+        "callIdPath": "item.id",
+        "turnIdPath": "turnId",
+        "detailPath": "item.agentPath"
+      },
+      {
+        "native": "item/completed:subAgentActivity:completed",
+        "kind": "session.ended",
+        "origin": "agent",
+        "subagentIdPath": "item.agentThreadId",
+        "callIdPath": "item.id",
+        "turnIdPath": "turnId",
+        "detailPath": "item.agentPath"
+      },
+      {
+        "native": "item/completed:subAgentActivity:interrupted",
+        "kind": "notice",
+        "origin": "agent",
+        "subagentIdPath": "item.agentThreadId",
+        "callIdPath": "item.id",
+        "turnIdPath": "turnId",
+        "detailPath": "item.agentPath"
       }
     ]
   },

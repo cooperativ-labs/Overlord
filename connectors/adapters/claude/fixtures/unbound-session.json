@@ -1,26 +1,148 @@
 {
   "fixtureVersion": 1,
   "kind": "script-io",
-  "description": "Mandatory negative test: the Claude PostToolUse hook exits before reading stdin, spawning the CLI, or writing a log when no objective is explicitly bound.",
-  "script": "connectors/core/scripts/capture-change-hook.sh",
+  "description": "Mandatory negative test. In a Claude session with no Overlord binding, the plugin hooks server (the rendered shim in --hooks mode, which every hook calls) lists no tools and answers every hook tool with `{}` without spawning the CLI or writing a file.",
+  "script": "connectors/core/scripts/overlord-mcp.mjs",
   "adapterKey": "claude",
-  "stdin": {
-    "session_id": "11111111-2222-3333-4444-555555555555",
-    "hook_event_name": "PostToolUse",
-    "cwd": "/private/unrelated-project",
-    "tool_name": "Write",
-    "tool_input": { "file_path": "/private/unrelated-project/notes.md" }
-  },
+  "args": ["--hooks"],
+  "stdinMessages": [
+    {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "tools/list"
+    },
+    {
+      "jsonrpc": "2.0",
+      "id": 2,
+      "method": "tools/call",
+      "params": {
+        "name": "overlord_hook_user_prompt_submit",
+        "arguments": {
+          "hook_event_name": "UserPromptSubmit",
+          "session_id": "11111111-2222-3333-4444-555555555555",
+          "cwd": "/private/unrelated-project",
+          "prompt": "hello"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "id": 3,
+      "method": "tools/call",
+      "params": {
+        "name": "overlord_hook_post_tool_use",
+        "arguments": {
+          "hook_event_name": "PostToolUse",
+          "session_id": "11111111-2222-3333-4444-555555555555",
+          "cwd": "/private/unrelated-project",
+          "tool_name": "Write",
+          "tool_use_id": "toolu_1",
+          "tool_input": "{\"file_path\": \"/private/unrelated-project/notes.md\"}"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "id": 4,
+      "method": "tools/call",
+      "params": {
+        "name": "overlord_hook_stop",
+        "arguments": {
+          "hook_event_name": "Stop",
+          "session_id": "11111111-2222-3333-4444-555555555555",
+          "cwd": "/private/unrelated-project",
+          "stop_hook_active": "false"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "id": 5,
+      "method": "tools/call",
+      "params": {
+        "name": "overlord_hook_permission_request",
+        "arguments": {
+          "hook_event_name": "PermissionRequest",
+          "session_id": "11111111-2222-3333-4444-555555555555",
+          "cwd": "/private/unrelated-project",
+          "permission_mode": "default",
+          "tool_name": "Bash",
+          "tool_input": "{\"command\": \"ls\"}",
+          "hookTimeoutSeconds": 300
+        }
+      }
+    }
+  ],
   "env": {
     "MISSION_ID": null,
-    "SESSION_KEY": null,
+    "OVERLORD_MISSION_ID": null,
+    "OVERLORD_OBJECTIVE_ID": null,
     "OVERLORD_SESSION_CHANNEL_ID": null,
-    "OVERLORD_SESSION_CHANNEL_TOKEN": null
+    "OVERLORD_SESSION_CHANNEL_TOKEN": null,
+    "SESSION_KEY": null,
+    "OVLD_HOME": null,
+    "CLAUDE_CODE_SESSION_ID": null
   },
   "expect": {
     "exitCode": 0,
-    "stdout": "",
     "stderr": "",
+    "responses": [
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "result": {
+          "tools": []
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 2,
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "{}"
+            }
+          ]
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 3,
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "{}"
+            }
+          ]
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 4,
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "{}"
+            }
+          ]
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "id": 5,
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "{}"
+            }
+          ]
+        }
+      }
+    ],
     "cliInvocations": [],
     "sandboxWrites": []
   }

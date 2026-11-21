@@ -5,6 +5,248 @@ is the current version and must equal [VERSION](VERSION); `yarn version:contract
 writes its skeleton. Dates use ISO 8601 and describe the contract change, not
 merely the files edited.
 
+## [179.11.0] - 2026-11-21
+
+Contract impact: minor. Launched agents export `CLAUDE_CODE_TMPDIR` so Claude Code keeps its temp
+files in the checkout's `.overlord/tmp/harness/` instead of the system `/tmp` (ADR 0095,
+coo:1277.1rkx).
+
+- Launch environment (`architecture.md`, `LAUNCH_VARIABLES`): new `CLAUDE_CODE_TMPDIR`
+  (`terminal_env` only), exported for every agent and pointing at `.overlord/tmp/harness/`, created
+  with mode 0700 at launch. It is omitted when the path leaves no room for Claude Code's
+  `cc-socks/<pid>.sock` within the 104-byte Unix socket limit. `TMPDIR`/`TMP`/`TEMP`/
+  `OVERLORD_TMPDIR` are unchanged.
+- `.overlord/tmp` pruning (CLI behavior): `ovld prune` without `--force` keeps the shared
+  `harness/` root and removes only files past the 7-day retention there; Unix socket files are
+  never aged out by the launch-time stale prune.
+
+## [179.10.0] - 2026-11-20
+
+Contract impact: minor. Control-plane requests are answered from Overlord; approvals only by the
+session owner (ADR 0094, coo:1325.tg2w).
+
+- REST (`contract/api/openapi.yaml`, info 6.5.0): `AgentRequestDeliveryDto.mode` gains
+  `control_plane` and `reason` gains `channel_ended` and `not_session_owner`. A request on a
+  `launch_kind = 'control_plane'` channel projects `control_plane` while open on a live channel.
+  `POST /api/agent-requests/{id}/resolve` answers such a request's `question`, `choice` and
+  `permission` kinds with no Latch delivery; the channel's supervisor reads the resolution back
+  through its waiter lease and applies it, and `delivery.stage` is `recorded` until it records the
+  application. A `permission` request is answered only by the member who created the channel
+  (403 `not_session_owner`) and only with exactly `{ optionId }` or `{ decision }` naming one of its own options (400 `invalid_resolution`).
+  An ended channel answers 409 `request_not_deliverable`, and `/redeliver` refuses every
+  control-plane request (409). Every other request keeps the previous rules (410 for kinds other
+  than question/choice). `POST /api/agent-session-inputs` is unchanged (410).
+- Protocol (`protocol.md`): a "Control-plane answers" rule. Authorization (`authorization.md`):
+  approval answers are owner-only, a resource-derived check beyond `session:attach`.
+- Web app: open approval cards count as blocking requests and render Allow once / Deny; a
+  non-owner sees the card read-only with the reason.
+- Codex app-server supervisor (connector runtime, no wire change): a re-asked approval for an
+  already-settled item gets its own occurrence id; no thread starts until the server reports
+  remote control `disabled`; a watchdog ends the server if the supervisor is killed; the
+  supervisor's environment carries no user token; trust cleanup follows a symlinked config.
+- Connector descriptors: `codex` and `codex-app-server` verified at Codex 0.171.0; hazards
+  `question-answer-double-delivery` (implemented), `reasked-approval-inherits-answer`
+  (implemented), `same-user-agent-reaches-credentials` (accepted) and an updated
+  `human-session-controls-closed` (inputs still closed) and `supervisor-killed-leaves-server`.
+
+## [179.9.0] - 2026-11-20
+
+Contract impact: minor. Codex status line through an MCP statusline provider (ADR 0093,
+coo:1325.fx4f).
+
+- CLI Layer (`components.yaml`): `ovld status-line` gains `--ui-tree`, which prints the same
+  mission/objective/state segment as a Codex statusline UI tree (`null` when unbound). The payload
+  reader also accepts Codex's `thread.id` and `thread.workspace.cwd`. Binding rules are unchanged.
+- Connector MCP shim: the `codex` rendering of `connectors/core/scripts/overlord-mcp.mjs` declares
+  `resources`, lists `overlord_status_line` with a `statusline` entrypoint
+  (`ui://overlord/status-line`) and answers `resources/list`, `resources/templates/list` and
+  `resources/read`. A read renders the model, folder and context items it replaces plus the
+  segment from `ovld status-line --agent codex --ui-tree --native-session-id <thread id>`, cached
+  per thread for 10 s, and never errors or waits more than 500 ms. Other renderings are unchanged.
+- Hook binding (`protocol.md`): `attach`, `connect` and `resume-follow-up` run by a Codex agent
+  index `CODEX_SESSION_ID` (else `CODEX_THREAD_ID`) under `codex` when no Claude session id is
+  exported, and the `codex-app-server` sidecar indexes its thread while it runs.
+- `ovld agent-setup codex --status-line` (or a yes at its prompt on Codex 0.171+) turns on
+  `features.tui_extensions_statusline` only when unset and selects the provider in
+  `~/.codex/config.toml` only when none is selected; it never overrides an explicit `false` or
+  another selection.
+- `codex` and `codex-app-server` adapters: `terminal.statusSurface` is `supported`, backed by state
+  recorded live on Codex 0.171.0, a `script-io` fixture of the provider and source guards.
+
+## [179.8.0] - 2026-11-20
+
+Contract impact: minor. Codex model and effort picker from the installation's live `model/list`
+(coo:1325.2dp2).
+
+- REST API: new `POST /api/workspaces/{id}/agent-catalog/live-models` (`launch:configure`,
+  consumers `cli`, `runner`) replaces one agent's catalog models with a harness installation's
+  live list, keeping the label, each surviving model's `enabled` flag, a still-supported default
+  model and effort, and the launch defaults. `AgentCatalogAgentDto` gains optional `liveSource`
+  (`harnessVersion`, `reportedAt`); the catalog PUT keeps it, and the catalog refresh no longer
+  merges bundled models into an agent that has it. The body carries models only. OpenAPI
+  `info.version` 6.4.0. All additive.
+- CLI Layer (`components.yaml`): new `ovld models [codex] [--provider <id>] [--sync]
+  [--workspace-id <id>] [--json]`, which asks a short-lived stdio `codex app-server` for
+  `model/list`, `modelProvider/list` and `account/read` (read only; no thread). The account's
+  email and ids are dropped at parse time and never cached or sent; provider endpoints are not
+  kept. Without a reachable Codex it shows the bundled catalog and `--sync` fails. `ovld runner
+  start|supervise` reports the live list at start and every 6 hours, best effort. A Codex launch
+  (terminal or app-server mode) is refused before a channel is minted when the installation does
+  not list its model or the model does not support its effort; it is not checked when Codex
+  cannot be asked. The live list is cached owner-only for 10 minutes.
+
+## [179.7.0] - 2026-11-20
+
+Contract impact: minor. Launch Codex objectives through the app-server control plane (ADR 0092,
+coo:1325.ke1y).
+
+- REST API: new `POST /api/objectives/{id}/session-channels` (`session:attach`, consumer `cli`)
+  mints a `preparing` channel with `launch_kind = 'control_plane'` and a scoped credential for a
+  control-plane adapter (`codex-app-server` only; others answer 400 `adapter_not_control_plane`).
+  `AgentLaunchConfigDto` and `UpdateAgentLaunchConfigBody` gain optional `harnessMode` (`hooks` |
+  `appServer`; `null` clears it). `AgentSessionHeartbeatDto` gains optional `objectiveState` and
+  `deliveryState`. OpenAPI `info.version` 6.3.0. All additive.
+- Architecture / protocol / data: launch still mints no channel except for a control-plane launch,
+  which attach binds by objective; binding no longer replaces a known `agent_identifier` with
+  `unknown`. The control-plane supervisor stops on an ended objective or a delivered, idle session.
+- CLI Layer (`components.yaml`): app-server mode for `ovld launch` and runner claims (setting,
+  flag or project launch env var; fallback to the terminal launch), new sidecar flags
+  `--model`, `--effort`, `--approval-policy`, `--sandbox`, `--codex-bin`, the new
+  `ovld agent-session attach`, crash respawn with a continuation turn, orphan reaping, removal of
+  the Codex trust entry the session caused, and a `codex-harness-mode` doctor check.
+- Connector interaction core: protocol session keys (`sess_…`) are redacted from summaries.
+- Web: Settings → Terminal & IDE has a Codex "Run through the Codex app server (experimental)"
+  switch. Off unless chosen.
+
+## [179.6.0] - 2026-11-20
+
+Contract impact: minor. Codex app-server control-plane adapter (ADR 0091, coo:1325.scn0).
+
+- Connector Layer: new `codex-app-server` connector (agent identifier `codex`, integration shape
+  `controlPlane`, derived tier 3) beside the unchanged `codex` hooks connector. Its runtime is a
+  JSON-RPC client of a private `codex app-server` on an owner-only Unix socket; its fixtures replay
+  frames recorded from a live 0.170.0 server through the shipped supervisor. Experimental behind
+  `OVERLORD_CODEX_APP_SERVER=1`; launch does not start it.
+- CLI Layer (`components.yaml`): `ovld agent-session sidecar --agent codex-app-server [--socket
+  <path>] [--thread-id <id>] [--prompt-file <path>] [--working-directory <dir>]` selects that
+  transport by adapter key (no new subcommand). It spawns the server with an allowlisted
+  environment, refuses a Codex below the verified version, starts every thread with
+  `approvalsReviewer: "user"`, maps approvals to channel requests and answers with
+  `accept`/`decline`/`cancel` (never a standing grant), injects with `turn/steer` or `turn/start`,
+  closes a card as resolved elsewhere when another client answers first, and interrupts the
+  running turn when the channel ends or the sidecar is signalled.
+- Agent Session Surface (`protocol.md`): a harness process that a control-plane supervisor
+  drives carries `OVERLORD_CONTROL_PLANE_SURFACE`, and every Overlord callback hook exits before
+  any work when it is set. `resolveInjectPath` routes `codex-app-server` from thread state, and
+  `ovld agent-session inbox` never claims an input for a control-plane adapter.
+- Pure core: the tool table maps the Codex item types `commandExecution` (shell) and
+  `fileChange` (edit); an outcome of `declined` decodes to `blocked`.
+
+## [179.5.0] - 2026-11-20
+
+Contract impact: minor. Antigravity lifecycle hooks (ADR 0090, coo:1324.2kwc).
+
+- Connector Layer: the event codec dialect gains `outcomeErrorPath` (an error-message string that
+  is empty or omitted on success: non-empty → `error`, empty or absent → `ok`, other values
+  unknown; the message is never retained; `tool.completed` rules only, exclusive with
+  `outcomePath` and `successOnly`). The Antigravity adapter ships `hooks.json` with fail-open
+  `PreInvocation`, `PostToolUse` and `Stop` command hooks, an event codec and a decision codec,
+  and installs the core capture callback at `hooks/overlord-post-tool-use.sh`. Its derived tier
+  is 1.
+- `hook-event` (`protocol-commands.yaml`): native mode gains `--hook-output` (print only the
+  `hookOutput` object on one line). The connector codec maps a native event to the canonical hook
+  type (a `prompt.submitted` rule is `UserPromptSubmit`); a prompt from a per-invocation event is
+  recorded only when it differs from the last one recorded for the conversation. The binding's
+  working directory comes from the payload's declared project root when it names an existing
+  directory. The Stop reminder is `decision: "continue"` for Antigravity and `"block"` for Claude
+  and Codex, and is skipped on Antigravity `continuation_active: true` or `fullyIdle: false`.
+- CLI Layer (`components.yaml`): `ovld agent-session inbox` emits Antigravity Stop
+  `{"decision":"continue","reason":…}` and PreInvocation `{"injectSteps":[{"userMessage":…}]}`,
+  both reported Delivered.
+
+## [179.4.0] - 2026-11-20
+
+Contract impact: minor. Hosted MCP task-augmented tool calls (ADR 0089, coo:1318.c8f4).
+
+- MCP Server: `initialize` declares `capabilities.tasks` (`list`, `requests.tools.call`; no
+  `cancel`). `overlord_deliver_session` and `overlord_record_work` carry
+  `execution: { taskSupport: 'optional' }`; a `tools/call` with `params.task` answers a
+  `CreateTaskResult` at once and runs the same handler in the background. New methods
+  `tasks/get`, `tasks/result` (blocks until the task settles, returns the unchanged
+  `CallToolResult` with related-task `_meta`) and `tasks/list`. Tasks are bound to the caller,
+  held in backend memory (default ttl 15 minutes, maximum 60, at most 10 unfinished per caller),
+  and recoverable after a restart through `overlord_delivery_receipt`. Calls without
+  `params.task` are unchanged. The local connector shim declares no task capability.
+- `POST /mcp` (`api/openapi.yaml` 6.2.0): the description lists the task methods, and `-32602`
+  joins the JSON-RPC error codes, answered only to the new task inputs.
+
+## [179.3.0] - 2026-11-20
+
+Contract impact: minor. `ovld status-line`, the Claude `terminal.statusSurface` (coo:1323.dsnh).
+
+- CLI Layer (`components.yaml`): new command `ovld status-line --agent <key> [--payload-file -]
+  [--native-session-id <id>] [--json]`. A harness runs it on every status refresh. It binds
+  through the native-session index under the payload's native session id, else the launch
+  environment, never the working directory. An unbound session prints nothing and makes no cache
+  read, write, spawn or network call. It prints the mission and objective display ids, titles and
+  one state (awaiting answer, awaiting approval, blocked, delivered) from an owner-only local
+  snapshot. A stale snapshot starts one detached, lock-guarded refresh that uses only
+  side-effect-free reads, never `GET /api/missions/:id`. Every path exits 0 without stderr.
+- `ovld agent-setup claude --status-line` (or a yes at its interactive prompt) writes the
+  command to Claude Code's user settings, only when no status line is configured. It never
+  replaces an existing one.
+- Claude adapter: `terminal.statusSurface` is `supported` (`statusLine`), backed by a status-line
+  payload recorded on Claude Code 2.1.329 and two source guards. Other adapters are unchanged.
+  The Codex status line (coo:1325.fx4f) is expected to reuse the same command with
+  `--agent codex`.
+
+## [179.2.2] - 2026-11-20
+
+Contract impact: patch. Claude hook identity, nesting and the headless Stop wait (ADR 0088, coo:1323.n938).
+
+- Hook Surface, native hook mode: a harness-written prompt (Claude `<task-notification>`, sent
+  when a background subagent finishes) records no `user_follow_up` (`skipped: harness_notification`),
+  and the Stop reminder is deferred while the payload lists a running background task
+  (`skipped: background_tasks_running`) to the Stop that follows.
+- Hook binding: the launch environment binds only the launched session. A hooks server that
+  detects a nested harness session uses no launch binding for follow-up, Stop or decision hooks;
+  the index may still bind it under its own native id, and file capture keeps the launch
+  objective. Subagent and fork hooks carry the parent's native session id.
+- Recorded on Claude Code 2.1.329: subagent identity (`agent_id`, `agent_type`), compaction
+  identity, nested session ids and the 30 s headless hook heartbeat, as Claude adapter fixtures.
+
+## [179.2.1] - 2026-11-20
+
+Contract impact: patch. The Claude connector switches to `mcp_tool` hooks (ADR 0087, coo:1323).
+
+- Connector Layer: `capture-change-hook.sh` is the only *shell* post-tool callback. A connector
+  whose hooks are `mcp_tool` calls (Claude) ships no hook script and reaches the same
+  `ovld protocol capture-change` through the shim's `--hooks` mode.
+- Connector Layer: for such a connector, setup and doctor report a harness below the
+  descriptor's `versionRange` floor, a plugin that is not enabled, and a hooks MCP server that is
+  not registered or not connected, naming the fix and the `ovld protocol` CLI fallback.
+
+## [179.2.0] - 2026-11-20
+
+Contract impact: minor. Claude `mcp_tool` hook tools over a local hooks server (ADR 0087, coo:1323).
+
+- Hook Surface transport adds harness `mcp_tool` calls to a connector-bundled local stdio server.
+  Its unlisted `overlord_hook_*` tools spawn the same `ovld` commands as the CLI fallback and add
+  no logic of their own. The connector shim serves them only with `--hooks`, speaks NDJSON or
+  `Content-Length` framing (detected from the first byte), and omits them from `tools/list`.
+- `hook-event` gains a `contract/protocol-commands.yaml` entry (it had none), `--hook-type Stop`
+  (read-only `deliveryStatus { needed, reason }`), and a CLI native mode
+  (`--agent <key> --payload-file -`) that prints `hookOutput`, the exact harness answer.
+- Hook binding: the launch environment, else a native-session index that attach, connect and
+  resume-follow-up write and delivery removes. It replaces the cwd-keyed temp file that nothing
+  wrote. It never feeds file capture.
+- Agent Session Surface: a connector may register a fail-closed decision hook only for sessions
+  it launched and bound; a failure to reach the local hook tool then denies, never approves. The
+  scope gate allows an idle connector-bundled hooks server in unbound sessions.
+- The Claude decision codec emits `decision: { behavior }` (the documented PermissionRequest
+  shape) and takes its timeout from the hook input `hookTimeoutSeconds`.
+- `integrationShapes.callback` comment covers `mcp_tool` calls; no vocabulary value changes.
+
 ## [179.1.0] - 2026-11-20
 
 Contract impact: minor. People can delete mission artifacts (ADR 0086).

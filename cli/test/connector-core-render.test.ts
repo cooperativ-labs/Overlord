@@ -97,8 +97,8 @@ test('connectors install one mission skill that recognizes ticket terminology', 
   }
 });
 
-const MCP_SHIM_ADAPTERS = ['codex', 'cursor', 'antigravity'] as const;
-const CAPTURE_CHANGE_HOOK_ADAPTERS = ['claude', 'codex', 'cursor'] as const;
+const MCP_SHIM_ADAPTERS = ['claude', 'codex', 'cursor', 'antigravity'] as const;
+const CAPTURE_CHANGE_HOOK_ADAPTERS = ['codex', 'cursor'] as const;
 
 test('rendered MCP shims differ from the core source only by the adapter key', () => {
   const coreSource = readFileSync(

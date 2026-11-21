@@ -86,26 +86,42 @@ the design to build against, not live behavior. Run
 `ovld agent-session capabilities claude --json` to confirm current status before
 relying on either path.
 
-- `UserPromptSubmit` records follow-up activity. `PostToolUse` sends its native payload to local
-  `capture-change`; only an objective-bound event that the Claude codec normalizes as
-  `file.edited` can record `declared_edit` / `direct` path evidence.
-- The decision response is Claude's `hookSpecificOutput` shape. Cursor's flat `permission`
-  response is never valid here.
-- `asyncRewake` reports Delivered only after Claude's documented stderr plus exit-2 signal is
-  emitted. The Stop path can block once to continue delivery.
-- If a callback fires twice, inspect Claude plugin registrations and Cursor compatibility
-  configuration; Cursor can load Claude hooks.
+Claude Code **2.1.328 or later** is required. Every Overlord Claude hook is an `mcp_tool` hook:
+Claude Code calls a tool on the plugin's bundled local MCP server
+(`plugin:overlord:overlord-hooks`), and the tool runs the same `ovld` command as the CLI
+fallback. The server lists no tools, so the model never sees them. No shell or Python hook script
+ships.
+
+| Hook | Runs | On failure |
+| --- | --- | --- |
+| `UserPromptSubmit` | `ovld protocol hook-event --hook-type UserPromptSubmit`: records follow-up activity | continues |
+| `PostToolUse` | `ovld protocol capture-change`: only an objective-bound event that the Claude codec normalizes as `file.edited` records `declared_edit` / `direct` path evidence | continues |
+| `Stop` | `ovld agent-session inbox`, then `ovld protocol hook-event --hook-type Stop`: a delivery reminder, at most once per session and objective | continues |
+| `PermissionRequest` | `ovld agent-session request`: the remote decision | **denies** |
+
+- The first three hooks are in the plugin and do nothing until the session is bound to a
+  mission. The `PermissionRequest` hook is never in the plugin: `ovld launch` registers it through
+  `claude --settings` only for sessions it launched with a session channel, with
+  `onFailure: "block"`. If Claude Code cannot reach the hooks server, it denies the request. If
+  the CLI or backend fails, the tool returns no decision, so Claude shows its normal prompt. No
+  failure manufactures an approval.
+- Subagent and fork hooks carry the parent's session id and bind to the parent's mission.
+  `SubagentStop` is not registered. While background subagents run, the Stop reminder waits for
+  the later Stop, and the harness's `<task-notification>` prompt is not recorded as a follow-up.
+  A nested `claude -p` does not inherit the launch binding (file capture excepted).
+- In a headless session (`claude -p`, Agent SDK) the final Stop polls the inbox for up to 60 s
+  (`ovld agent-session inbox --wait-ms` overrides, up to 120 s). Interactive sessions never wait.
+- The decision response is Claude's `hookSpecificOutput.decision: { behavior }` shape. Cursor's
+  flat `permission` response is never valid here.
+- **CLI fallback.** Claude Code has no automatic fallback from a failed `mcp_tool` hook. If the
+  hooks server is not connected, follow-up capture, file capture and the Stop reminder are off
+  but the session keeps working. Use `ovld protocol attach`, `update`, `ask`, `deliver` and
+  `changes` directly, and declare changed files with `--paths`. `ovld doctor` reports a Claude
+  Code version below 2.1.328, a disabled plugin, or a disconnected hooks server, and names the
+  fix (`ovld agent-setup claude`).
+- Cursor imports Claude plugin hooks but copies only `command` hooks, so it runs none of these.
 - Fork/subagent native identity remains a declared hazard. Do not bind a child session by cwd or
   assume it shares the parent's native id.
-- Two named hazards from `connectors/adapters/claude/CAPABILITIES.md` explain the
-  `not-implemented` statuses above rather than just restating them: the shipped
-  `PermissionRequest` hook script (`scripts/permission-hook.sh`) calls a
-  `ovld protocol permission-request` subcommand that does not exist, backgrounds the call with
-  `& disown`, and is gated on a mission-id environment variable a launched session does not
-  always set — it is structurally incapable of returning a decision, and it is not even
-  registered in `hooks/hooks.json` (only `UserPromptSubmit`, `PostToolUse`, and `Stop` are). The
-  shipped `Stop` hook similarly calls `ovld protocol hook-event --hook-type Stop`, which the CLI
-  rejects, and parses a `deliveryStatus` field nothing produces.
 
 ## Codex
 
@@ -199,6 +215,29 @@ file-edit, structured-question, and persistent-allow are `not-implemented`.
   request resolved elsewhere; do not apply callback-only waiter assumptions.
 - Injection uses `POST /session/{id}/prompt_async`. OpenCode's standing `always` permission is
   intentionally hidden from remote controls.
+
+## Codex app server (experimental)
+
+**Shape:** supervised control-plane sidecar, a JSON-RPC client of a private `codex app-server`.
+Per `connectors/adapters/codex-app-server/CAPABILITIES.md` (capability tier 3): prompt, tool call
+and result, file edit (paired pre/post), lifecycle, `decide.shell`, `decide.fileWrite`, all three
+`inject.*` paths and concurrent terminal answers are `supported`; `decide.mcp` and
+`answer.structuredQuestion` are `unverified`; `decide.anyTool` and `decide.universal` are
+`unsupported`. User-started Codex sessions keep the hooks adapter in the Codex section above.
+
+- `ovld agent-session sidecar --agent codex-app-server` runs only with
+  `OVERLORD_CODEX_APP_SERVER=1` and a session channel. Launch does not start it yet, and the human
+  answer and input routes currently refuse permission answers and new inputs, so web and mobile
+  cannot drive it end to end.
+- The private server listens only on `unix://` in `~/.ovld/cx/`; its environment carries no
+  Overlord token or objective scope, plus `OVERLORD_CONTROL_PLANE_SURFACE`, which silences
+  Overlord's own Codex plugin hooks inside it. Never point it at the user's shared daemon.
+- Every thread uses `approvalsReviewer: "user"`. A deny is `decline`, or `cancel` when Codex did
+  not offer decline; standing grants are never sent.
+- A TUI attached with `codex --remote unix://<socket> resume <thread>` can answer first; the card
+  then closes as resolved elsewhere.
+- Instructions go in with `turn/steer` while a turn runs and `turn/start` otherwise. Ending the
+  channel or signalling the sidecar interrupts the running turn.
 
 ## Antigravity
 

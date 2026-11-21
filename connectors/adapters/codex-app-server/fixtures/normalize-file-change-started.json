@@ -1,0 +1,64 @@
+{
+  "fixtureVersion": 1,
+  "kind": "normalized-event",
+  "description": "Pre-mutation evidence (live 0.170.0): Codex emits the fileChange item with its diff before it asks for the patch approval and before anything is written. The diff never reaches the envelope.",
+  "codec": "codec/codex-app-server.codec.yaml",
+  "nativeEventName": "item/started:fileChange",
+  "occurredAt": "2026-01-01T00:00:00.000Z",
+  "payload": {
+    "item": {
+      "type": "fileChange",
+      "id": "exec-cbfb07b2-1a28-4740-9992-676d9e62c3d7",
+      "changes": [
+        {
+          "path": "/repo/notes.md",
+          "kind": {
+            "type": "add"
+          },
+          "diff": "hello\n"
+        }
+      ],
+      "status": "inProgress",
+      "startedAtMs": 1795207193624,
+      "completedAtMs": null
+    },
+    "threadId": "01a1faaf-cd91-7372-a780-f5a9c5b457a7",
+    "turnId": "01a1faaf-d058-7193-bb3b-9f01dcfd8812",
+    "startedAtMs": 1795207193624,
+    "event": "item/started:fileChange",
+    "context": {
+      "cwd": "/repo"
+    },
+    "change": {
+      "path": "/repo/notes.md",
+      "kind": {
+        "type": "add"
+      },
+      "diff": "hello\n"
+    },
+    "changeIndex": 0
+  },
+  "expect": {
+    "eventId": "ev_7379f5c7ca784f78422c07041879c09c",
+    "producerSequence": null,
+    "occurredAt": "2026-01-01T00:00:00.000Z",
+    "kind": "tool.called",
+    "severity": "info",
+    "nativeEvent": "item/started:fileChange",
+    "nativeTurnId": "01a1faaf-d058-7193-bb3b-9f01dcfd8812",
+    "nativeCallId": "exec-cbfb07b2-1a28-4740-9992-676d9e62c3d7",
+    "subagentId": null,
+    "correlationId": "01a1faaf-cd91-7372-a780-f5a9c5b457a7",
+    "origin": "agent",
+    "summary": "Write a file: notes.md",
+    "payload": {
+      "tool": "edit",
+      "action": "Write a file",
+      "subject": "notes.md",
+      "formatterVersion": 1
+    }
+  },
+  "mustNotContain": [
+    "hello"
+  ]
+}

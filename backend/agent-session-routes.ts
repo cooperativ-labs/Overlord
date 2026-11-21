@@ -21,6 +21,7 @@ import {
   APPLICATION_STATES,
   authenticateChannelCredential,
   beginAnswerRedelivery,
+  CONTROL_PLANE_LAUNCH_KIND,
   createRequest,
   DELIVERY_OUTCOMES,
   describeDeliveryOutcome,
@@ -36,6 +37,7 @@ import {
   markInputFailed,
   markRequestResolvedElsewhere,
   readAnswerDelivery,
+  readChannelLifecycle,
   readRequestDismissals,
   recordAnswerDeliveryOutcome,
   recordRequestApplication,
@@ -237,7 +239,11 @@ export function createAgentSessionChannelRouter(): Router {
         nativeSessionId: optionalString(body.nativeSessionId),
         adapterVersion: optionalString(body.adapterVersion)
       });
-      return { ok: true, ...lease };
+      // A control-plane supervisor stops on its own when its objective ends or its session has
+      // delivered and gone idle (ADR 0092); the hook adapters ignore these fields.
+      const bound = await getChannel({ ctx, channelId: channel.id });
+      const lifecycle = await readChannelLifecycle({ ctx, channel: bound });
+      return { ok: true, ...lease, ...lifecycle };
     })
   );
 
@@ -654,6 +660,111 @@ async function answerDeliveryStage(
   }
 }
 
+type ControlPlaneChannel = {
+  id: string;
+  state: string;
+  createdByWorkspaceUserId: string | null;
+};
+
+const LIVE_CHANNEL_STATES = new Set(['preparing', 'online', 'degraded']);
+
+/**
+ * The control-plane session channel a request came from, or null for every other request
+ * (ADR 0094). A control-plane channel (`launch_kind = 'control_plane'`, today only Codex
+ * app-server mode) is driven by a supervisor that holds a waiter lease on each card and applies
+ * the answer itself, so its requests are answered here and never typed into a terminal.
+ */
+async function controlPlaneChannelFor(
+  ctx: ServiceContext,
+  request: RequestRow
+): Promise<ControlPlaneChannel | null> {
+  if (!request.channel_id) return null;
+  const channel = await ctx.db.get<{
+    id: string;
+    state: string;
+    launch_kind: string | null;
+    created_by_workspace_user_id: string | null;
+  }>(
+    `SELECT id, state, launch_kind, created_by_workspace_user_id
+       FROM agent_session_channels
+      WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
+    [request.channel_id, ctx.workspace.id]
+  );
+  if (!channel || channel.launch_kind !== CONTROL_PLANE_LAUNCH_KIND) return null;
+  return {
+    id: channel.id,
+    state: channel.state,
+    createdByWorkspaceUserId: channel.created_by_workspace_user_id
+  };
+}
+
+/**
+ * A permission request (a command or patch approval) runs code on the machine of the member who
+ * launched the session. Only that member may answer it from Overlord; `session:attach`, which
+ * every workspace member holds by default, is not enough (ADR 0094). Questions and choices keep
+ * the workspace-wide rule.
+ */
+function mayAnswerControlPlaneRequest(
+  ctx: ServiceContext,
+  request: RequestRow,
+  channel: ControlPlaneChannel
+): boolean {
+  if (request.kind !== 'permission') return true;
+  return (
+    channel.createdByWorkspaceUserId !== null &&
+    channel.createdByWorkspaceUserId === ctx.actorWorkspaceUserId
+  );
+}
+
+/**
+ * Delivery for a control-plane request. The answer is recorded here and the supervisor reads it
+ * back through its channel credential; when it has written the answer to the harness it reports
+ * the request's application, which is the only thing that makes the stage `confirmed`.
+ */
+function controlPlaneDelivery(
+  ctx: ServiceContext,
+  request: RequestRow,
+  channel: ControlPlaneChannel,
+  state: AgentRequestDeliveryDto['state']
+): AgentRequestDeliveryDto {
+  const base = {
+    state,
+    observedAt: request.application_observed_at,
+    stage: controlPlaneStage(request),
+    attempt: null,
+    failureCode: null,
+    failureMessage: null,
+    canRedeliver: false,
+    confirmationRequired: false,
+    sessionState: channel.state
+  };
+  if (request.status !== 'open') return { mode: 'read_only', reason: 'request_closed', ...base };
+  if (!LIVE_CHANNEL_STATES.has(channel.state)) {
+    return { mode: 'read_only', reason: 'channel_ended', ...base };
+  }
+  if (!mayAnswerControlPlaneRequest(ctx, request, channel)) {
+    return { mode: 'read_only', reason: 'not_session_owner', ...base };
+  }
+  return { mode: 'control_plane', reason: null, ...base };
+}
+
+function controlPlaneStage(request: RequestRow): AnswerDeliveryStage | null {
+  if (request.status !== 'resolved') return null;
+  // A supervisor answer always records an observation; a human resolve clears it.
+  if (!request.application_observed_at) return 'recorded';
+  switch (request.application_state) {
+    case 'emitted':
+    case 'applied':
+      return 'confirmed';
+    case 'not_applied':
+      return 'failed';
+    case 'unknown':
+      return 'unconfirmed';
+    default:
+      return 'recorded';
+  }
+}
+
 async function requestDelivery(
   ctx: ServiceContext,
   request: RequestRow
@@ -661,6 +772,8 @@ async function requestDelivery(
   const state = APPLICATION_STATES.includes(request.application_state as never)
     ? (request.application_state as AgentRequestDeliveryDto['state'])
     : null;
+  const controlPlane = await controlPlaneChannelFor(ctx, request);
+  if (controlPlane) return controlPlaneDelivery(ctx, request, controlPlane, state);
   const record = readAnswerDelivery(request);
   const stage = await answerDeliveryStage(ctx, request, record.attempt);
   const base = {
@@ -799,6 +912,80 @@ function validateQuestionResolution({
     throw new ServiceError('An answer text or optionId is required', 'invalid_resolution', 400);
   }
   return { text, optionId: optionId || null };
+}
+
+/**
+ * The option an approval answer names: exactly `{ optionId }` (web, mobile) or `{ decision }`
+ * (`ovld requests resolve --decision allow|deny`), and it must be one of the request's own
+ * options. Nothing else is accepted, so no client can attach a standing grant or free text.
+ */
+function permissionOptionId(request: RequestRow, resolution: Record<string, unknown>): string {
+  const keys = Object.keys(resolution);
+  const value = keys.length === 1 ? resolution[keys[0]!] : undefined;
+  const optionId =
+    (keys[0] === 'optionId' || keys[0] === 'decision') && typeof value === 'string'
+      ? value.trim()
+      : '';
+  if (!optionId || !requestOptions(request).some(option => option.optionId === optionId)) {
+    throw new ServiceError(
+      'An approval is answered with one of its options only',
+      'invalid_resolution',
+      400
+    );
+  }
+  return optionId;
+}
+
+/**
+ * Record a person's answer to a control-plane request (ADR 0094). Nothing is sent from here: the
+ * supervisor holding the card's waiter lease reads the resolution and answers the harness.
+ */
+async function resolveControlPlaneRequest({
+  ctx,
+  request,
+  channel,
+  body
+}: {
+  ctx: ServiceContext;
+  request: RequestRow;
+  channel: ControlPlaneChannel;
+  body: unknown;
+}): Promise<Record<string, unknown>> {
+  if (!['question', 'choice', 'permission'].includes(request.kind)) sessionControlsGone();
+  if (!mayAnswerControlPlaneRequest(ctx, request, channel)) {
+    throw new ServiceError(
+      'Only the member who launched this session can answer its approvals',
+      'not_session_owner',
+      403
+    );
+  }
+  if (request.status === 'open' && !LIVE_CHANNEL_STATES.has(channel.state)) {
+    throw new ServiceError(
+      'This session has ended, so it cannot receive an answer',
+      'request_not_deliverable',
+      409
+    );
+  }
+  const record = asRecord(body);
+  if (typeof record.expectedRevision !== 'number') {
+    throw new ServiceError('expectedRevision is required', 'agent_request_conflict', 409);
+  }
+  let resolution = record.resolution ? asRecord(record.resolution) : {};
+  if (request.kind === 'permission') {
+    resolution = { optionId: permissionOptionId(request, resolution) };
+  } else {
+    validateQuestionResolution({ request, resolution });
+  }
+  const result = await resolveRequest({
+    ctx,
+    requestId: request.id,
+    resolution,
+    expectedRevision: record.expectedRevision
+  });
+  return {
+    resolved: result.resolved,
+    request: await humanRequestDto(ctx, await getRequest({ ctx, requestId: request.id }))
+  };
 }
 
 /**
@@ -1247,6 +1434,15 @@ export function createAgentRequestHumanRouter(): Router {
         workspaceUserId
       );
       const request = await getRequest({ ctx, requestId: req.params.id });
+      const controlPlane = await controlPlaneChannelFor(ctx, request);
+      if (controlPlane) {
+        return await resolveControlPlaneRequest({
+          ctx,
+          request,
+          channel: controlPlane,
+          body: req.body
+        });
+      }
       if (request.kind !== 'question' && request.kind !== 'choice') sessionControlsGone();
       const delivery = await requestDelivery(ctx, request);
       if (delivery.mode !== 'latch') {
@@ -1316,6 +1512,14 @@ export function createAgentRequestHumanRouter(): Router {
         );
       }
       const request = await getRequest({ ctx, requestId: req.params.id });
+      if (await controlPlaneChannelFor(ctx, request)) {
+        // The supervisor applies a control-plane answer; there is no Latch attempt to repeat.
+        throw new ServiceError(
+          'This answer is applied by the session supervisor and cannot be sent again',
+          'request_not_deliverable',
+          409
+        );
+      }
       if (request.kind !== 'question' && request.kind !== 'choice') sessionControlsGone();
       const wasUnconfirmed = request.application_state === 'unknown';
       // Checked before the attempt starts: an answer that cannot be routed is refused with the

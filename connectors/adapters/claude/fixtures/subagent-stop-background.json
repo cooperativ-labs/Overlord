@@ -1,0 +1,95 @@
+{
+  "fixtureVersion": 1,
+  "kind": "native-payload",
+  "description": "Recorded Claude Code 2.1.329 subagent lifecycle (claude -p, isolated settings, 2026-11-20). A background subagent is still running when the main agent's first Stop fires; that Stop reports it in background_tasks. The subagent's end fires SubagentStop (parent session_id plus agent_id/agent_type), not Stop. Claude then wakes the main agent with a harness-written UserPromptSubmit whose prompt is a <task-notification>, and that turn ends in a second main Stop with background_tasks empty. Templated into an mcp_tool hook, ${background_tasks} arrives as a JSON string. So the main Stop does run after subagent work completes; Overlord defers its delivery reminder and headless inbox wait while background_tasks has a running entry, and never records a <task-notification> prompt as a user follow-up. Paths and the task output file are redacted from the recorded prompt.",
+  "payload": {
+    "claudeCodeVersion": "2.1.329",
+    "firstStop": {
+      "hook_event_name": "Stop",
+      "session_id": "07b92dcb-df48-43c7-a0b9-cfa4ae04952c",
+      "stop_hook_active": false,
+      "background_tasks": [
+        {
+          "id": "a80c7982385fd680b",
+          "type": "subagent",
+          "status": "running",
+          "description": "Run echo from-sub",
+          "agent_type": "general-purpose"
+        }
+      ]
+    },
+    "subagentStop": {
+      "hook_event_name": "SubagentStop",
+      "session_id": "07b92dcb-df48-43c7-a0b9-cfa4ae04952c",
+      "agent_id": "a80c7982385fd680b",
+      "agent_type": "general-purpose",
+      "stop_hook_active": false
+    },
+    "taskNotificationPrompt": {
+      "hook_event_name": "UserPromptSubmit",
+      "session_id": "07b92dcb-df48-43c7-a0b9-cfa4ae04952c",
+      "prompt": "<task-notification>\n<task-id>a80c7982385fd680b</task-id>\n<status>completed</status>\n<summary>Agent \"Run echo from-sub\" finished</summary>\n<result>from-sub</result>\n</task-notification>"
+    },
+    "finalStop": {
+      "hook_event_name": "Stop",
+      "session_id": "07b92dcb-df48-43c7-a0b9-cfa4ae04952c",
+      "stop_hook_active": false,
+      "background_tasks": []
+    },
+    "result": {
+      "num_turns": 2,
+      "origin": {
+        "kind": "task-notification"
+      },
+      "subagent_stats": {
+        "started_in_background": 1,
+        "completed": 1
+      }
+    },
+    "mcpToolStopInputs": [
+      {
+        "hook_event_name": "Stop",
+        "stop_hook_active": "false",
+        "background_tasks": "[{\"id\":\"a637d505a0e4fac48\",\"type\":\"subagent\",\"status\":\"running\",\"description\":\"Run sleep and echo command\",\"agent_type\":\"fork\"}]",
+        "agent_id": ""
+      },
+      {
+        "hook_event_name": "SubagentStop",
+        "stop_hook_active": "false",
+        "background_tasks": "[{\"id\":\"a637d505a0e4fac48\",\"type\":\"subagent\",\"status\":\"running\",\"description\":\"Run sleep and echo command\",\"agent_type\":\"fork\"}]",
+        "agent_id": "a637d505a0e4fac48"
+      },
+      {
+        "hook_event_name": "Stop",
+        "stop_hook_active": "false",
+        "background_tasks": "[]",
+        "agent_id": ""
+      }
+    ]
+  },
+  "assert": {
+    "requiredPaths": [
+      "firstStop.background_tasks.0.status",
+      "subagentStop.agent_id",
+      "taskNotificationPrompt.prompt",
+      "finalStop.background_tasks"
+    ],
+    "equals": {
+      "firstStop.hook_event_name": "Stop",
+      "firstStop.stop_hook_active": false,
+      "firstStop.background_tasks.0.type": "subagent",
+      "firstStop.background_tasks.0.status": "running",
+      "subagentStop.hook_event_name": "SubagentStop",
+      "subagentStop.session_id": "07b92dcb-df48-43c7-a0b9-cfa4ae04952c",
+      "subagentStop.agent_id": "a80c7982385fd680b",
+      "taskNotificationPrompt.session_id": "07b92dcb-df48-43c7-a0b9-cfa4ae04952c",
+      "finalStop.hook_event_name": "Stop",
+      "result.origin.kind": "task-notification",
+      "result.num_turns": 2,
+      "mcpToolStopInputs.0.hook_event_name": "Stop",
+      "mcpToolStopInputs.0.background_tasks": "[{\"id\":\"a637d505a0e4fac48\",\"type\":\"subagent\",\"status\":\"running\",\"description\":\"Run sleep and echo command\",\"agent_type\":\"fork\"}]",
+      "mcpToolStopInputs.1.hook_event_name": "SubagentStop",
+      "mcpToolStopInputs.2.background_tasks": "[]"
+    }
+  }
+}

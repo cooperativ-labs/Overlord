@@ -1,0 +1,24 @@
+contractVersion: "179.11.0"
+componentType: connector
+componentKey: codex-app-server
+label: "Codex app-server Connector"
+description: "Codex app-server control-plane adapter for the Overlord agent-session runtime (experimental, behind OVERLORD_CODEX_APP_SERVER=1)."
+
+connector:
+  agentIdentifier: codex
+  # ── GENERATED: do not edit by hand ───────────────────────────────────────────
+  # Projected from connectors/adapters/codex-app-server/harness-capabilities.yaml by `yarn connectors:capabilities`.
+  # The harness descriptor and its executable fixtures are the only capability source.
+  integrationShape: controlPlane
+  capabilityTier: 3
+  harnessCapabilities:
+    path: connectors/adapters/codex-app-server/harness-capabilities.yaml
+    schemaVersion: 1
+    digest: "62fe3dc93ee7f64f6fb52d48e88e10679c9a32a92abc6b16ace29571284fcbf2"
+  # ── END GENERATED ────────────────────────────────────────────────────────────
+  installPath: "~/.ovld/codex-app-server"
+  managedFiles:
+    - "harness-capabilities.yaml"
+    - "CAPABILITIES.md"
+    - "README.md"
+    - "codec/codex-app-server.codec.yaml"

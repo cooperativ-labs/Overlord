@@ -16,6 +16,11 @@ export interface StoredCatalogAgent {
   reasoningLabel: string;
   /** Optional workspace-wide launch default (lowest-priority config source). */
   launchDefaults?: AgentLaunchConfigDto;
+  /**
+   * Set when the models came from a harness installation's own live list
+   * (`POST /api/workspaces/:id/agent-catalog/live-models`) rather than the bundled defaults.
+   */
+  liveSource?: { harnessVersion: string | null; reportedAt: string };
 }
 
 export type StoredAgentCatalog = {

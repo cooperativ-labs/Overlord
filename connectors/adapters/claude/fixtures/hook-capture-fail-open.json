@@ -1,0 +1,60 @@
+{
+  "fixtureVersion": 1,
+  "kind": "script-io",
+  "description": "Capture fails open. When `ovld protocol capture-change` fails, the PostToolUse hook tool still answers `{}` and never `isError`, so the tool call that already ran is never blocked. The hook registration has no onFailure (fixtures/hooks-fail-open-registration.json).",
+  "script": "connectors/core/scripts/overlord-mcp.mjs",
+  "adapterKey": "claude",
+  "args": ["--hooks"],
+  "stdinMessages": [
+    {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "tools/call",
+      "params": {
+        "name": "overlord_hook_post_tool_use",
+        "arguments": {
+          "hook_event_name": "PostToolUse",
+          "session_id": "claude-session-1",
+          "cwd": "/repo",
+          "tool_name": "Write",
+          "tool_use_id": "toolu_1",
+          "tool_input": "{\"file_path\": \"/repo/src/a.ts\"}"
+        }
+      }
+    }
+  ],
+  "env": {
+    "MISSION_ID": null,
+    "OVERLORD_MISSION_ID": null,
+    "OVERLORD_OBJECTIVE_ID": "coo:825.abcd",
+    "OVERLORD_SESSION_CHANNEL_ID": null,
+    "OVERLORD_SESSION_CHANNEL_TOKEN": null,
+    "SESSION_KEY": null,
+    "OVLD_HOME": null,
+    "CLAUDE_CODE_SESSION_ID": null
+  },
+  "spy": {
+    "exitCode": 1,
+    "stdout": "{\"decision\":\"block\",\"reason\":\"must not surface\"}"
+  },
+  "expect": {
+    "exitCode": 0,
+    "stderr": "",
+    "responses": [
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "{}"
+            }
+          ]
+        }
+      }
+    ],
+    "cliInvocations": ["protocol capture-change --agent claude"],
+    "sandboxWrites": []
+  }
+}

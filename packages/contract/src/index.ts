@@ -34,12 +34,14 @@ import type {
 } from './generated/api.js';
 
 export {
+  AGENT_HARNESS_MODES,
   type AgentLaunchFlagDto,
   agentLaunchFlagKey,
   agentLaunchFlagsToArgv,
   formatAgentLaunchFlagText,
   formatOvldLaunchCommand,
   formatShellWord,
+  normalizeAgentHarnessMode,
   normalizeAgentLaunchFlags,
   parseAgentLaunchFlagText
 } from './agent-launch-flags.js';
@@ -57,10 +59,12 @@ export type {
   AddOrganizationAdminBody,
   AgentCatalogAgentDto,
   AgentCatalogDto,
+  AgentCatalogLiveSourceDto,
   AgentCatalogModelDto,
   AgentLaunchConfigDto,
   AgentLaunchConfigInput,
   AgentLaunchFlagInput,
+  AgentLiveModelsReportBody,
   AgentRequestDeliveryDto,
   AgentRequestDto,
   AgentRequestKind,

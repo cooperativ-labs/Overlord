@@ -1,0 +1,29 @@
+{
+  "fixtureVersion": 1,
+  "kind": "native-payload",
+  "description": "Recorded live on Claude Code 2.1.329 (interactive, tmux, `--settings` with a `statusLine` command and `refreshInterval: 2`): the JSON Claude pipes to a status line command on stdin, trimmed of usage fields and with local paths replaced. It carries the conversation's `session_id` (the same value the command's environment exports as `CLAUDE_CODE_SESSION_ID`), so `ovld status-line --agent claude --payload-file -` can look up the native-session index that attach wrote. The command's environment also inherits the launch environment (`OVERLORD_MISSION_ID`, `OVERLORD_OBJECTIVE_ID`) and `COLUMNS`. Claude runs the command at session start, after each assistant message and other UI events (debounced 300 ms, an in-flight run is cancelled) and every `refreshInterval` seconds; output is shown only after exit 0, and empty output leaves the line blank.",
+  "payload": {
+    "session_id": "131fb042-ffe6-4876-9e5d-72b0ede9819c",
+    "transcript_path": "/home/user/.claude/projects/-repo/131fb042-ffe6-4876-9e5d-72b0ede9819c.jsonl",
+    "cwd": "/repo",
+    "effort": { "level": "medium" },
+    "model": { "id": "claude-haiku-5-5", "display_name": "Haiku 5.5" },
+    "workspace": { "current_dir": "/repo", "project_dir": "/repo", "added_dirs": [] },
+    "version": "2.1.329",
+    "output_style": { "name": "default" },
+    "cost": {
+      "total_cost_usd": 0,
+      "total_duration_ms": 24477,
+      "total_api_duration_ms": 0,
+      "total_lines_added": 0,
+      "total_lines_removed": 0
+    },
+    "exceeds_200k_tokens": false,
+    "fast_mode": false,
+    "thinking": { "enabled": true }
+  },
+  "assert": {
+    "requiredPaths": ["session_id", "cwd", "workspace.current_dir", "version"],
+    "bindingField": "session_id"
+  }
+}

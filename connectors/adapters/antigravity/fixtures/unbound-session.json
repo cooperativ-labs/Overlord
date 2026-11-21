@@ -1,14 +1,31 @@
 {
   "fixtureVersion": 1,
-  "kind": "source-guard",
-  "description": "Mandatory negative test: the Antigravity adapter registers no callback in an unbound session while its native decision and prompt-capture paths remain unimplemented.",
-  "path": "connectors/adapters/antigravity/hooks.json",
-  "assert": {
-    "mustNotContain": [
-      "PreInvocation",
-      "PreToolUse",
-      "pre-invocation-hook.sh",
-      "pre-tool-use-hook.sh"
-    ]
+  "kind": "script-io",
+  "description": "Mandatory negative test: in a session Overlord did not launch (no mission or objective in the environment), the Antigravity Stop hook exits before reading stdin or spawning anything, writes nothing and prints nothing.",
+  "script": "connectors/adapters/antigravity/hooks/overlord-stop.sh",
+  "stdin": {
+    "hookEventName": "Stop",
+    "conversationId": "ec33ebf9-0cba-4100-8142-c61503f6c587",
+    "workspacePaths": ["/workspace/project"],
+    "cwd": "/workspace/project",
+    "executionNum": 3,
+    "terminationReason": "model_stop",
+    "fullyIdle": true,
+    "continuation_active": false,
+    "lastUserInput": "Ship it",
+    "modelName": "gemini-3.6-flash-medium"
+  },
+  "env": {
+    "MISSION_ID": null,
+    "OVERLORD_MISSION_ID": null,
+    "OVERLORD_OBJECTIVE_ID": null,
+    "OVERLORD_SESSION_CHANNEL_ID": null
+  },
+  "expect": {
+    "exitCode": 0,
+    "stdout": "",
+    "stderr": "",
+    "cliInvocations": [],
+    "sandboxWrites": []
   }
 }

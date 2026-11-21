@@ -40,6 +40,32 @@ const TIER_NAMES = ['Unsupported', 'Observational', 'Answerable', 'Conversationa
 const DO_NOT_EDIT =
   '<!-- GENERATED FILE — DO NOT EDIT. Source: harness-capabilities.yaml. Regenerate with `yarn connectors:capabilities`. -->';
 
+/** Every reply is an empty tool list or a single `{}` hook answer. */
+function isSilentMcpOutput(stdout) {
+  const lines = String(stdout ?? '')
+    .split('\n')
+    .filter(line => line.trim() !== '');
+  if (lines.length === 0) return false;
+  return lines.every(line => {
+    let message;
+    try {
+      message = JSON.parse(line);
+    } catch {
+      return false;
+    }
+    const result = message?.result;
+    if (!result || message.error) return false;
+    if (Array.isArray(result.tools)) return result.tools.length === 0;
+    const content = result.content;
+    return (
+      Array.isArray(content) &&
+      content.length === 1 &&
+      content[0]?.type === 'text' &&
+      content[0]?.text === '{}' &&
+      result.isError !== true
+    );
+  });
+}
 function readYaml(filePath) {
   return parseYaml(readFileSync(filePath, 'utf8'));
 }
@@ -288,7 +314,12 @@ function runAdapterFixtures({ adapter, descriptor, errors }) {
     if ((unboundResult.observed?.sandboxWrites?.length ?? 0) > 0) {
       errors.push(`${adapter}: unbound-session fixture wrote inside its sandbox`);
     }
-    if (unboundResult.observed?.stdout !== '' || unboundResult.observed?.stderr !== '') {
+    // A hook script must print nothing. An MCP hooks server must answer, so its silence is an
+    // empty tool list and the empty hook answer `{}` for every call, and nothing else.
+    const silent = unboundResult.observed?.mcp
+      ? isSilentMcpOutput(unboundResult.observed?.stdout)
+      : unboundResult.observed?.stdout === '';
+    if (!silent || unboundResult.observed?.stderr !== '') {
       errors.push(`${adapter}: unbound-session fixture must be silent`);
     }
   }
@@ -644,6 +675,7 @@ const CODEC_RULE_KEYS = new Set([
   'detailPath',
   'outcomePath',
   'outcomeExitCodePrefix',
+  'outcomeErrorPath',
   'successOnly',
   'fileEditKind',
   'filePathPaths',
@@ -766,6 +798,25 @@ export function validateCodec({ adapter, codec, errors, integrationShape }) {
       ) {
         errors.push(
           `${at(`events.${rule.native}`)}: outcomeExitCodePrefix must be a 1-40 character single-line string`
+        );
+      }
+    }
+    if (rule.outcomeErrorPath !== undefined) {
+      // An error-message outcome turns an absent field into success, so it is only meaningful on
+      // a completion event and cannot be combined with another outcome source.
+      if (!isBoundedDottedPath(rule.outcomeErrorPath)) {
+        errors.push(
+          `${at(`events.${rule.native}`)}: outcomeErrorPath must be a bounded dotted path`
+        );
+      }
+      if (rule.kind !== 'tool.completed') {
+        errors.push(
+          `${at(`events.${rule.native}`)}: outcomeErrorPath is only valid on a tool.completed rule`
+        );
+      }
+      if (rule.outcomePath !== undefined || rule.successOnly !== undefined) {
+        errors.push(
+          `${at(`events.${rule.native}`)}: outcomeErrorPath cannot be combined with outcomePath or successOnly`
         );
       }
     }

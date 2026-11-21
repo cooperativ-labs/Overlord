@@ -1,0 +1,29 @@
+{
+  "fixtureVersion": 1,
+  "kind": "mutation-window",
+  "description": "Codex app server pairs pre- and post-mutation evidence for one fileChange item: item/started carries the change (with its diff) before the patch approval and before the write; item/completed carries the same item id and path with the final status. Both payloads are projected recorded frames from a live 0.170.0 server.",
+  "classification": "paired",
+  "preFixture": "fixtures/normalize-file-change-started.json",
+  "postFixture": "fixtures/normalize-file-change-completed.json",
+  "proof": {
+    "pre": {
+      "session": "threadId",
+      "call": "item.id",
+      "workspace": "context.cwd",
+      "tool": "item.type",
+      "directPath": "change.path"
+    },
+    "post": {
+      "session": "threadId",
+      "call": "item.id",
+      "workspace": "context.cwd",
+      "tool": "item.type",
+      "directPath": "change.path",
+      "outcome": "item.status",
+      "completion": {
+        "path": "item.status",
+        "equals": "completed"
+      }
+    }
+  }
+}

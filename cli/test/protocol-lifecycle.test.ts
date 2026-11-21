@@ -1,6 +1,7 @@
 import { createMissionWithObjectives } from '@overlord/core/service/missions';
 import { addProjectResource, createProject } from '@overlord/core/service/projects';
 import {
+  askQuestion,
   attachSession,
   closeAgentMissionItems,
   deliverSession,
@@ -158,6 +159,60 @@ test('hook-event persists external session id on the active agent session', asyn
     [attached.session.id]
   )) as { external_session_id: string | null };
   assert.equal(sessionRow.external_session_id, 'cursor-conversation-abc');
+
+  await db.close();
+});
+
+test('hook-event Stop reports delivery status read-only for the bound session', async () => {
+  const { db, ctx } = await createSeededCliContext({ source: 'protocol' });
+
+  const project = await createProject({ ctx, name: 'Hook stop status test' });
+  const { mission, objectives } = await createMissionWithObjectives({
+    ctx,
+    projectId: project.id,
+    objectives: [{ instructions: 'Remind before stopping' }]
+  });
+  await ctx.db.run(`UPDATE objectives SET state = 'submitted' WHERE id = ?`, [objectives[0]?.id]);
+  const attached = await attachSession({ ctx, missionId: mission.id, agentIdentifier: 'claude' });
+  const countEvents = async () =>
+    (
+      (await ctx.db.get(`SELECT COUNT(*) AS n FROM mission_events WHERE mission_id = ?`, [
+        mission.id
+      ])) as { n: number }
+    ).n;
+  const before = await countEvents();
+
+  const stop = (sessionKey: string | null) =>
+    recordHookEvent({
+      ctx,
+      missionId: mission.displayId,
+      hookType: 'Stop',
+      prompt: '',
+      sessionKey
+    });
+
+  const executing = await stop(attached.sessionKey);
+  assert.equal(executing.eventId, null);
+  assert.equal(executing.sessionId, attached.session.id);
+  assert.equal(executing.deliveryStatus?.needed, true);
+  assert.match(String(executing.deliveryStatus?.reason), /still executing/);
+  assert.equal(await countEvents(), before, 'Stop records no mission event');
+
+  // No session key, or an unknown one, never selects a session.
+  assert.deepEqual((await stop(null)).deliveryStatus, { needed: false, reason: null });
+  assert.deepEqual((await stop('sess_unknown')).deliveryStatus, { needed: false, reason: null });
+
+  // A session waiting on a person is not reminded.
+  await askQuestion({
+    ctx,
+    missionId: mission.displayId,
+    sessionKey: attached.sessionKey,
+    question: 'Which branch should this land on?'
+  });
+  assert.deepEqual((await stop(attached.sessionKey)).deliveryStatus, {
+    needed: false,
+    reason: null
+  });
 
   await db.close();
 });

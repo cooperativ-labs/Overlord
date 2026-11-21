@@ -39,6 +39,9 @@ import { hasNonAscii, safeText } from './text.js';
 const SECRET_PATTERNS: { name: string; pattern: RegExp }[] = [
   { name: 'overlord-user-token', pattern: /out_[A-Za-z0-9_-]{8,}/g },
   { name: 'overlord-channel-token', pattern: /osc_[A-Za-z0-9_-]{8,}/g },
+  // Protocol session keys authorize a session, and every `ovld protocol … --session-key` command
+  // an agent runs carries one (`--session-key value` has no `=`, so `assigned-secret` misses it).
+  { name: 'overlord-session-key', pattern: /sess_[A-Za-z0-9_-]{16,}/g },
   { name: 'anthropic-key', pattern: /sk-ant-[A-Za-z0-9_-]{16,}/g },
   { name: 'openai-key', pattern: /sk-[A-Za-z0-9]{20,}/g },
   { name: 'github-token', pattern: /gh[pousr]_[A-Za-z0-9]{16,}/g },

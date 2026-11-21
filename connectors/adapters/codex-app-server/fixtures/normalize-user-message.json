@@ -1,0 +1,50 @@
+{
+  "fixtureVersion": 1,
+  "kind": "normalized-event",
+  "description": "A user message item from a live 0.170.0 server: the objective prompt Overlord sent as the first turn/start. Prompt text is the one deliberate exception in the privacy rules and is kept (redacted, bounded).",
+  "codec": "codec/codex-app-server.codec.yaml",
+  "nativeEventName": "item/completed:userMessage",
+  "occurredAt": "2026-01-01T00:00:00.000Z",
+  "payload": {
+    "item": {
+      "type": "userMessage",
+      "id": "01a1faae-e6e0-77e1-93e0-d3b07b5f472f",
+      "clientId": null,
+      "content": [
+        {
+          "type": "text",
+          "text": "Run the shell command `sleep 4 && echo step-one`. Then create a file notes.md whose only line is: hello. Do nothing else.",
+          "text_elements": []
+        }
+      ],
+      "startedAtMs": 1795207128801,
+      "completedAtMs": 1795207128801
+    },
+    "threadId": "01a1faae-db57-7001-ab8b-329bc51062e9",
+    "turnId": "01a1faae-dd6f-7311-9876-5b672b9e8918",
+    "contentTokenCount": null,
+    "completedAtMs": 1795207128801,
+    "event": "item/completed:userMessage",
+    "context": {
+      "cwd": "/repo"
+    }
+  },
+  "expect": {
+    "eventId": "ev_7cf4b47141cb53f1ce353468f0e923ac",
+    "producerSequence": null,
+    "occurredAt": "2026-01-01T00:00:00.000Z",
+    "kind": "prompt.submitted",
+    "severity": "info",
+    "nativeEvent": "item/completed:userMessage",
+    "nativeTurnId": "01a1faae-dd6f-7311-9876-5b672b9e8918",
+    "nativeCallId": null,
+    "subagentId": null,
+    "correlationId": "01a1faae-db57-7001-ab8b-329bc51062e9",
+    "origin": "user",
+    "summary": "Run the shell command `sleep 4 && echo step-one`. Then create a file notes.md whose only line is: hello. Do nothing else.",
+    "payload": {
+      "promptText": "Run the shell command `sleep 4 && echo step-one`. Then create a file notes.md whose only line is: hello. Do nothing else."
+    }
+  },
+  "mustNotContain": []
+}

@@ -28,9 +28,5 @@
       "promptText": "please deploy using [redacted] and then tell me what happened"
     }
   },
-  "mustNotContain": [
-    "out_abcdefgh12345678",
-    ".jsonl",
-    "/Users/jake"
-  ]
+  "mustNotContain": ["out_abcdefgh12345678", ".jsonl", "/Users/jake"]
 }

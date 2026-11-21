@@ -1,0 +1,465 @@
+{
+  "fixtureVersion": 1,
+  "kind": "script-io",
+  "description": "Command approvals answered through Overlord, from recorded 0.170.0 frames. Each approval becomes a bounded permission card (the command through the core shell formatter). A person allows the first: the exact reply is {\"decision\":\"accept\"}. A person denies the second; Codex offered [\"accept\", {acceptWithExecpolicyAmendment}, \"cancel\"] without \"decline\" (approvalPolicy untrusted), so the deny maps to \"cancel\". acceptForSession and policy amendments are never sent.",
+  "script": "scripts/codex-app-server-replay.mjs",
+  "stdinMessages": [
+    {
+      "setup": {
+        "codec": "connectors/adapters/codex-app-server/codec/codex-app-server.codec.yaml",
+        "cwd": "/repo",
+        "threadId": "01a1faae-db57-7001-ab8b-329bc51062e9",
+        "report": [
+          "/requests",
+          "/requests/"
+        ],
+        "channel": {
+          "POST /requests/req-1/lease": [
+            {
+              "leaseId": "lease-1",
+              "status": "resolved",
+              "resolution": {
+                "decision": "allow"
+              }
+            }
+          ],
+          "POST /requests/req-2/lease": [
+            {
+              "leaseId": "lease-2",
+              "status": "resolved",
+              "resolution": {
+                "decision": "deny"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "await": {
+        "method": "initialize"
+      }
+    },
+    {
+      "server": {
+        "id": 1,
+        "result": {
+          "userAgent": "overlord/0.170.0 (Mac OS 27.2.1; arm64) xterm-256color (overlord; replay)",
+          "codexHome": "/home/user/.codex",
+          "platformFamily": "unix",
+          "platformOs": "macos"
+        }
+      }
+    },
+    {
+      "server": {
+        "method": "remoteControl/status/changed",
+        "params": {
+          "status": "disabled",
+          "serverName": "host",
+          "installationId": "00000000-0000-0000-0000-000000000000",
+          "environmentId": null
+        },
+        "emittedAtMs": 1795207125837
+      }
+    },
+    {
+      "await": {
+        "method": "thread/resume"
+      }
+    },
+    {
+      "server": {
+        "id": 2,
+        "result": {
+          "thread": {
+            "id": "01a1faae-db57-7001-ab8b-329bc51062e9",
+            "sessionId": "01a1faae-db57-7001-ab8b-329bc51062e9",
+            "status": {
+              "type": "active",
+              "activeFlags": []
+            },
+            "cwd": "/repo",
+            "turns": [
+              {
+                "id": "01a1faae-dd6f-7311-9876-5b672b9e8918",
+                "status": "inProgress",
+                "items": []
+              }
+            ]
+          },
+          "cwd": "/repo",
+          "approvalPolicy": "untrusted",
+          "approvalsReviewer": "user"
+        }
+      }
+    },
+    {
+      "server": {
+        "method": "item/started",
+        "params": {
+          "item": {
+            "type": "commandExecution",
+            "id": "exec-b3bfb94f-845b-4747-a141-1e095c8b8264",
+            "pluginId": null,
+            "scriptPath": null,
+            "command": "/bin/zsh -lc 'sleep 4 && echo step-one'",
+            "cwd": "/repo",
+            "processId": null,
+            "source": "agent",
+            "status": "inProgress",
+            "commandActions": [
+              {
+                "type": "unknown",
+                "command": "sleep 4 && echo step-one"
+              }
+            ],
+            "aggregatedOutput": null,
+            "exitCode": null,
+            "durationMs": null,
+            "startedAtMs": 1795207131748,
+            "completedAtMs": null
+          },
+          "threadId": "01a1faae-db57-7001-ab8b-329bc51062e9",
+          "turnId": "01a1faae-dd6f-7311-9876-5b672b9e8918",
+          "startedAtMs": 1795207131748
+        },
+        "emittedAtMs": 1795207131748
+      }
+    },
+    {
+      "server": {
+        "method": "thread/status/changed",
+        "params": {
+          "threadId": "01a1faae-db57-7001-ab8b-329bc51062e9",
+          "status": {
+            "type": "active",
+            "activeFlags": [
+              "waitingOnApproval"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "server": {
+        "method": "item/commandExecution/requestApproval",
+        "id": 0,
+        "params": {
+          "kind": "command",
+          "threadId": "01a1faae-db57-7001-ab8b-329bc51062e9",
+          "turnId": "01a1faae-dd6f-7311-9876-5b672b9e8918",
+          "itemId": "exec-b3bfb94f-845b-4747-a141-1e095c8b8264",
+          "startedAtMs": 1795207131748,
+          "environmentId": "local",
+          "command": "/bin/zsh -lc 'sleep 4 && echo step-one'",
+          "cwd": "/repo",
+          "commandActions": [
+            {
+              "type": "unknown",
+              "command": "sleep 4 && echo step-one"
+            }
+          ],
+          "proposedExecpolicyAmendment": [
+            "sleep",
+            "4"
+          ],
+          "availableDecisions": [
+            "accept",
+            {
+              "acceptWithExecpolicyAmendment": {
+                "execpolicy_amendment": [
+                  "sleep",
+                  "4"
+                ]
+              }
+            },
+            "cancel"
+          ]
+        }
+      }
+    },
+    {
+      "await": {
+        "id": 0
+      }
+    },
+    {
+      "server": {
+        "method": "item/started",
+        "params": {
+          "item": {
+            "type": "commandExecution",
+            "id": "exec-90f02303-2ce7-441e-8989-b83f0b77fe4a",
+            "pluginId": null,
+            "scriptPath": null,
+            "command": "/bin/zsh -lc \"printf '%s\\\\n' 'hello' > notes.md\"",
+            "cwd": "/repo",
+            "processId": null,
+            "source": "agent",
+            "status": "inProgress",
+            "commandActions": [
+              {
+                "type": "unknown",
+                "command": "printf '%s\\n' 'hello' > notes.md"
+              }
+            ],
+            "aggregatedOutput": null,
+            "exitCode": null,
+            "durationMs": null,
+            "startedAtMs": 1795207136645,
+            "completedAtMs": null
+          },
+          "threadId": "01a1faae-db57-7001-ab8b-329bc51062e9",
+          "turnId": "01a1faae-dd6f-7311-9876-5b672b9e8918",
+          "startedAtMs": 1795207136645
+        },
+        "emittedAtMs": 1795207136645
+      }
+    },
+    {
+      "server": {
+        "method": "thread/status/changed",
+        "params": {
+          "threadId": "01a1faae-db57-7001-ab8b-329bc51062e9",
+          "status": {
+            "type": "active",
+            "activeFlags": [
+              "waitingOnApproval"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "server": {
+        "method": "item/commandExecution/requestApproval",
+        "id": 1,
+        "params": {
+          "kind": "command",
+          "threadId": "01a1faae-db57-7001-ab8b-329bc51062e9",
+          "turnId": "01a1faae-dd6f-7311-9876-5b672b9e8918",
+          "itemId": "exec-90f02303-2ce7-441e-8989-b83f0b77fe4a",
+          "startedAtMs": 1795207136645,
+          "environmentId": "local",
+          "command": "/bin/zsh -lc \"printf '%s\\\\n' 'hello' > notes.md\"",
+          "cwd": "/repo",
+          "commandActions": [
+            {
+              "type": "unknown",
+              "command": "printf '%s\\n' 'hello' > notes.md"
+            }
+          ],
+          "proposedExecpolicyAmendment": [
+            "/bin/zsh",
+            "-lc",
+            "printf '%s\\n' 'hello' > notes.md"
+          ],
+          "availableDecisions": [
+            "accept",
+            {
+              "acceptWithExecpolicyAmendment": {
+                "execpolicy_amendment": [
+                  "/bin/zsh",
+                  "-lc",
+                  "printf '%s\\n' 'hello' > notes.md"
+                ]
+              }
+            },
+            "cancel"
+          ]
+        }
+      }
+    },
+    {
+      "await": {
+        "id": 1
+      }
+    }
+  ],
+  "timeoutMs": 60000,
+  "expect": {
+    "exitCode": 0,
+    "stderr": "",
+    "responses": [
+      {
+        "id": "out-1",
+        "rpc": {
+          "id": 1,
+          "method": "initialize",
+          "params": {
+            "clientInfo": {
+              "name": "overlord",
+              "title": "Overlord",
+              "version": "replay"
+            },
+            "capabilities": {
+              "experimentalApi": true,
+              "requestAttestation": false,
+              "optOutNotificationMethods": [
+                "item/agentMessage/delta",
+                "item/reasoning/summaryTextDelta",
+                "item/reasoning/summaryPartAdded",
+                "item/reasoning/textDelta",
+                "item/commandExecution/outputDelta",
+                "item/fileChange/outputDelta",
+                "thread/tokenUsage/updated",
+                "account/rateLimits/updated",
+                "turn/moderationMetadata"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": "out-2",
+        "rpc": {
+          "method": "initialized"
+        }
+      },
+      {
+        "id": "out-3",
+        "rpc": {
+          "id": 2,
+          "method": "thread/resume",
+          "params": {
+            "threadId": "01a1faae-db57-7001-ab8b-329bc51062e9",
+            "approvalsReviewer": "user"
+          }
+        }
+      },
+      {
+        "id": "out-4",
+        "channel": {
+          "method": "POST",
+          "path": "/requests",
+          "body": {
+            "kind": "permission",
+            "summary": "Run a shell command: /bin/zsh -lc 'sleep 4 && echo step-one'",
+            "details": {
+              "tool": "shell",
+              "action": "Run a shell command",
+              "subject": "zsh",
+              "detail": "/bin/zsh -lc 'sleep 4 && echo step-one'",
+              "riskMarkers": [],
+              "formatterVersion": 1,
+              "codexKind": "command",
+              "requiresPerson": false
+            },
+            "options": [
+              {
+                "optionId": "allow",
+                "label": "Allow once",
+                "kind": "allow"
+              },
+              {
+                "optionId": "deny",
+                "label": "Deny",
+                "kind": "deny"
+              }
+            ],
+            "nativeRequestId": "exec-b3bfb94f-845b-4747-a141-1e095c8b8264",
+            "nativeCallId": "exec-b3bfb94f-845b-4747-a141-1e095c8b8264"
+          }
+        }
+      },
+      {
+        "id": "out-5",
+        "channel": {
+          "method": "POST",
+          "path": "/requests/req-1/lease",
+          "body": {}
+        }
+      },
+      {
+        "id": "out-6",
+        "channel": {
+          "method": "POST",
+          "path": "/requests/req-1/application",
+          "body": {
+            "applicationState": "emitted"
+          }
+        }
+      },
+      {
+        "id": "out-7",
+        "rpc": {
+          "id": 0,
+          "result": {
+            "decision": "accept"
+          }
+        }
+      },
+      {
+        "id": "out-8",
+        "channel": {
+          "method": "POST",
+          "path": "/requests",
+          "body": {
+            "kind": "permission",
+            "summary": "Run a shell command: /bin/zsh -lc \"printf '%s\\\\n' 'hello' > notes.md\"",
+            "details": {
+              "tool": "shell",
+              "action": "Run a shell command",
+              "subject": "zsh",
+              "detail": "/bin/zsh -lc \"printf '%s\\\\n' 'hello' > notes.md\"",
+              "riskMarkers": [],
+              "formatterVersion": 1,
+              "codexKind": "command",
+              "requiresPerson": false
+            },
+            "options": [
+              {
+                "optionId": "allow",
+                "label": "Allow once",
+                "kind": "allow"
+              },
+              {
+                "optionId": "deny",
+                "label": "Deny",
+                "kind": "deny"
+              }
+            ],
+            "nativeRequestId": "exec-90f02303-2ce7-441e-8989-b83f0b77fe4a",
+            "nativeCallId": "exec-90f02303-2ce7-441e-8989-b83f0b77fe4a"
+          }
+        }
+      },
+      {
+        "id": "out-9",
+        "channel": {
+          "method": "POST",
+          "path": "/requests/req-2/lease",
+          "body": {}
+        }
+      },
+      {
+        "id": "out-10",
+        "channel": {
+          "method": "POST",
+          "path": "/requests/req-2/application",
+          "body": {
+            "applicationState": "emitted"
+          }
+        }
+      },
+      {
+        "id": "out-11",
+        "rpc": {
+          "id": 1,
+          "result": {
+            "decision": "cancel"
+          }
+        }
+      },
+      {
+        "id": "result",
+        "reason": "reconnect-exhausted",
+        "serverVersion": "0.170.0",
+        "threadId": "01a1faae-db57-7001-ab8b-329bc51062e9",
+        "injected": 0,
+        "interrupted": false
+      }
+    ]
+  }
+}

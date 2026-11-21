@@ -24,7 +24,9 @@ const DB_FREE_COMMANDS = new Set([
   'user-token',
   'prune',
   'contract',
-  'agent-session'
+  'agent-session',
+  'status-line',
+  'models'
 ]);
 
 const KNOWN_COMMANDS = new Set([
@@ -127,6 +129,20 @@ async function dispatchCommand({
       const [subcommand, ...rest] = args;
       const { runAgentSessionCommand } = await import('./agent-session/index.js');
       await runAgentSessionCommand({ subcommand, args: rest, primaryCommand });
+      return;
+    }
+    case 'models': {
+      // Asks the Codex installation on this machine for its models (a short-lived app server);
+      // only `--sync` talks to the backend.
+      const { runModelsCommand } = await import('./models-command.js');
+      await runModelsCommand({ rest: args });
+      return;
+    }
+    case 'status-line': {
+      // A harness status surface. Answers from local state only and exits 0 on every path; a
+      // stale cache starts one detached refresh (cli/src/status-line.ts).
+      const { runStatusLineCommand } = await import('./status-line.js');
+      await runStatusLineCommand({ flags: parseArgs(args).flags });
       return;
     }
     case 'contract': {

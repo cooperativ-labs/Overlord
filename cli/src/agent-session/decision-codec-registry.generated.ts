@@ -6,6 +6,42 @@
 import type { DecisionCodecSpec } from '@overlord/core/service/agent-session/pure/decision';
 
 export const AGENT_SESSION_DECISION_CODECS: Record<string, DecisionCodecSpec> = {
+  "antigravity": {
+    "codecVersion": 1,
+    "adapter": "antigravity",
+    "eventNamePaths": [
+      "hookEventName"
+    ],
+    "projectRootPaths": [
+      "cwd",
+      "workspacePaths.0"
+    ],
+    "requests": [
+      {
+        "native": "PreToolUse",
+        "toolPath": "toolCall.name",
+        "inputPath": "toolCall.args",
+        "callIdPaths": [
+          "toolCall.id"
+        ]
+      }
+    ],
+    "responses": {
+      "allow": {
+        "body": {
+          "decision": "auto_approve"
+        }
+      },
+      "deny": {
+        "body": {
+          "decision": "deny"
+        }
+      },
+      "ask": {
+        "defer": true
+      }
+    }
+  },
   "claude": {
     "codecVersion": 1,
     "adapter": "claude",
@@ -20,14 +56,8 @@ export const AGENT_SESSION_DECISION_CODECS: Record<string, DecisionCodecSpec> = 
         "native": "PermissionRequest",
         "toolPath": "tool_name",
         "inputPath": "tool_input",
-        "requestIdPaths": [
-          "request_id"
-        ],
-        "callIdPaths": [
-          "tool_use_id"
-        ],
         "timeoutPaths": [
-          "timeout"
+          "hookTimeoutSeconds"
         ]
       }
     ],
@@ -36,7 +66,9 @@ export const AGENT_SESSION_DECISION_CODECS: Record<string, DecisionCodecSpec> = 
         "body": {
           "hookSpecificOutput": {
             "hookEventName": "PermissionRequest",
-            "decision": "allow"
+            "decision": {
+              "behavior": "allow"
+            }
           }
         }
       },
@@ -44,7 +76,10 @@ export const AGENT_SESSION_DECISION_CODECS: Record<string, DecisionCodecSpec> = 
         "body": {
           "hookSpecificOutput": {
             "hookEventName": "PermissionRequest",
-            "decision": "deny"
+            "decision": {
+              "behavior": "deny",
+              "message": "Denied in Overlord."
+            }
           }
         }
       },

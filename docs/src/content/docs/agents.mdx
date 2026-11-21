@@ -26,6 +26,39 @@ ovld agent-setup opencode
 see the intended changes without applying them, or `all` to prepare every
 supported connector.
 
+### Claude Code status line
+
+Claude Code can show the mission and objective a session is working on, and
+whether it is waiting for your answer or approval, blocked on a question, or
+delivered:
+
+```bash
+ovld agent-setup claude --status-line
+```
+
+This is opt-in. Setup adds the status line to `~/.claude/settings.json` only
+when you have none; if you already use one, it keeps yours and shows how to add
+`ovld status-line --agent claude --payload-file -` to your own script, which
+receives the same input. Sessions that are not working on a mission show no
+Overlord line. Remove the `statusLine` key to turn it off.
+
+### Codex status line
+
+Codex 0.171 and later can show the same information in its footer, through
+its experimental custom status line:
+
+```bash
+ovld agent-setup codex --status-line
+```
+
+Setup turns on `tui_extensions_statusline` and selects the Overlord provider
+in `~/.codex/config.toml`, only when you have not chosen a status line
+provider and have not turned the feature off. Restart Codex afterwards. The
+footer keeps the model, folder and context left, and adds the mission and
+objective when the thread is working on one: a thread whose agent attached,
+or one Overlord runs through its private app server. To switch back, open
+`/statusline` and choose another provider.
+
 ## Launch from Overlord
 
 Once an agent is configured, choose it for an objective in the app or launch it
@@ -38,6 +71,77 @@ ovld launch codex --mission-id <mission-id>
 You can select a model or thinking level when the agent supports it. Overlord
 records that choice with the objective, so later review shows how the work was
 run.
+
+### Codex app-server mode (experimental)
+
+Overlord can run a Codex objective through a private Codex app server on your
+machine instead of an interactive `codex` terminal. Overlord then sees each
+command and file change as it happens, turns Codex's approval prompts into
+Overlord cards you can answer from the web app, and keeps the session running if
+you close the terminal. It is off unless you choose it.
+
+**Requirements.** Codex 0.170 or later (tested with 0.171) on macOS or Linux,
+signed in to Codex on the machine that runs the objective. Codex sessions you
+start yourself keep using the hooks connector.
+
+**Turning it on.** Choose **Settings → Terminal & IDE → Codex → Run through the
+Codex app server** for all your launches on that machine. You can also set the
+`OVERLORD_CODEX_APP_SERVER=1` launch environment variable on a project, or in the
+environment of `ovld runner`. If Codex is missing or too old, the objective
+launches in the terminal as usual, with a warning.
+
+Codex launch flags that set the approval policy or sandbox (`-a`, `-s`,
+`--full-auto`) become the session's settings; other flags and a pre-command are
+ignored in this mode. They decide how many approvals you see: with the default
+(`on-request` and a `workspace-write` sandbox) Codex runs commands and edits
+inside the project without asking. For a direct launch pass them with `--flag`,
+for example `ovld launch codex --objective-id <id> --flag=--ask-for-approval=untrusted`.
+
+**Answering approvals.** Each command or file-change approval appears on the
+mission as an **Approval needed** card with **Allow once** and **Deny**. Only the
+person who launched the session can answer it; other members see it read-only.
+You can also answer in the attached terminal; whichever answer comes first wins
+and the other closes. Allow is always once: Overlord never grants a standing
+permission. The mobile app shows these cards read-only for now.
+
+**Terminal attach.** The terminal Overlord opens is attached to the session. To
+open it again, or to watch a session a runner started without a terminal, run:
+
+```bash
+ovld agent-session attach --objective-id <objective-id>
+```
+
+Type follow-ups, steer a running turn or press Esc to interrupt there; Overlord
+cannot send instructions to the session yet. Closing the terminal leaves the
+session running. When the objective completes, or the session has delivered and
+stayed idle for 15 minutes, Overlord stops it. `ovld doctor` lists the
+app-server sessions running on the machine.
+
+**Security model.** The app server listens only on a private socket that your OS
+user can reach; there is no network listener, and Overlord stops the session if
+Codex remote control is on. No token is passed on a command line, and the
+server and the agent's commands get an environment without your Overlord
+credentials. Any process running as your user can still reach the socket, the
+same as the Codex terminal, and so can commands the agent runs, because they
+run as you. Use this mode only for work you would let run as you.
+
+**Trust.** While a session runs, Codex trusts its working directory: that
+checkout's own Codex config, hooks and MCP servers load and can run code, as if
+you had chosen "Trust" in Codex. Overlord removes that trust entry when the
+session ends, but use app-server mode only on repositories you trust.
+
+**Troubleshooting.**
+
+- *No approval cards appear*: the approval policy lets Codex work without asking;
+  set a stricter `-a` flag.
+- *A card is read-only*: someone else launched the session, or it has ended.
+- *The agent cannot reach Overlord*: Codex's sandbox blocks network; approve the
+  agent's request to rerun the command with more access, or allow the backend in
+  your Codex network settings.
+- *The terminal shows "Reconnecting to server"*: the session has ended; nothing
+  to fix.
+- *The status line or Overlord tools are missing in Codex*: rerun
+  `ovld agent-setup codex`.
 
 ## Let agents report work
 

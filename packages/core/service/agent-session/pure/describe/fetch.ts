@@ -21,6 +21,8 @@ export function describeFetch({ input }: DescribeInput): Description {
     (typeof record.url === 'string' && record.url) ||
     (typeof record.uri === 'string' && record.uri) ||
     (typeof record.endpoint === 'string' && record.endpoint) ||
+    // Antigravity `read_url_content`.
+    (typeof record.Url === 'string' && record.Url) ||
     null;
   const url = reduceUrl(raw);
 

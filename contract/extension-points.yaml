@@ -183,7 +183,7 @@ agentSession:
     - not-implemented # The harness can; Overlord has not built it. Requires trackedAs
     - unverified # Nobody knows. Find out before relying on it. Requires trackedAs
   integrationShapes:
-    - callback # A subprocess the harness spawns per event; decision on stdout
+    - callback # A per-event harness callback (spawned subprocess or mcp_tool call); decision in stdout or tool text
     - extension # In-process module; decision is a resolved promise
     - controlPlane # Client of the harness's own API; decision is an HTTP call
   capabilityTiers:

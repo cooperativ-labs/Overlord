@@ -7,16 +7,19 @@ import {
   RequestSummaryText
 } from '../agent-session/AgentSessionCardShell.tsx';
 import { BlockingQuestionCard } from '../agent-session/BlockingQuestionCard.tsx';
+import { PermissionRequestCard } from '../agent-session/PermissionRequestCard.tsx';
 import { AnswerDeliveryStatus, answerOutcome } from '../agent-session/QuestionAnswerForm.tsx';
 import { StructuredChoiceCard } from '../agent-session/StructuredChoiceCard.tsx';
 
 /**
- * The existing answer card for one open request: `BlockingQuestionCard` for a question and
- * `StructuredChoiceCard` for a choice. The answer form is never forked (plan §5).
+ * The existing answer card for one open request: `BlockingQuestionCard` for a question,
+ * `StructuredChoiceCard` for a choice and `PermissionRequestCard` for an approval. The answer form
+ * is never forked (plan §5).
  */
 export function AgentRequestCard({ request }: { request: HumanAgentRequestDto }) {
   if (request.kind === 'question') return <BlockingQuestionCard request={request} />;
   if (request.kind === 'choice') return <StructuredChoiceCard request={request} />;
+  if (request.kind === 'permission') return <PermissionRequestCard request={request} />;
   return null;
 }
 
@@ -76,7 +79,13 @@ export function AnsweredAgentRequestCard({
       <div className="relative min-w-0">
         <AgentSessionCardShell
           icon={MessageSquareReply}
-          title={request.kind === 'choice' ? 'Choice answered' : 'Question answered'}
+          title={
+            request.kind === 'choice'
+              ? 'Choice answered'
+              : request.kind === 'permission'
+                ? 'Approval answered'
+                : 'Question answered'
+          }
           tone={tone === 'failed' ? 'alert' : tone === 'unconfirmed' ? 'question' : 'neutral'}
           timestamp={request.resolvedAt ?? request.createdAt}
         >
