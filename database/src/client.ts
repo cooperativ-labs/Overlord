@@ -100,28 +100,70 @@ export interface DatabaseClient {
 }
 
 /**
- * Rewrite positional `?` placeholders to Postgres `$1..$n`, skipping any `?`
- * inside single-quoted string literals. Our SQL never embeds a literal `?` in a
- * string, but the scan keeps the translation correct if one ever appears.
+ * Rewrite positional `?` placeholders to Postgres `$1..$n`.
+ *
+ * Skips `?` inside single-quoted strings and inside `--` or block comments. A
+ * quote in a comment must not start a string: otherwise every later `?` is left
+ * literal, Postgres reads it as the `?` operator, and the following comma is a
+ * syntax error.
  */
 export function toPostgresPlaceholders(sql: string): string {
   let out = '';
   let index = 0;
   let inString = false;
+  let inLineComment = false;
+  let inBlockComment = false;
   for (let i = 0; i < sql.length; i++) {
     const ch = sql[i];
-    if (ch === "'") {
+    const next = sql[i + 1];
+
+    if (inLineComment) {
+      out += ch;
+      if (ch === '\n') inLineComment = false;
+      continue;
+    }
+
+    if (inBlockComment) {
+      if (ch === '*' && next === '/') {
+        out += '*/';
+        i++;
+        inBlockComment = false;
+        continue;
+      }
+      out += ch;
+      continue;
+    }
+
+    if (inString) {
       // A doubled '' inside a string is an escaped quote, not a terminator.
-      if (inString && sql[i + 1] === "'") {
+      if (ch === "'" && next === "'") {
         out += "''";
         i++;
         continue;
       }
-      inString = !inString;
+      out += ch;
+      if (ch === "'") inString = false;
+      continue;
+    }
+
+    if (ch === '-' && next === '-') {
+      out += '--';
+      i++;
+      inLineComment = true;
+      continue;
+    }
+    if (ch === '/' && next === '*') {
+      out += '/*';
+      i++;
+      inBlockComment = true;
+      continue;
+    }
+    if (ch === "'") {
+      inString = true;
       out += ch;
       continue;
     }
-    if (ch === '?' && !inString) {
+    if (ch === '?') {
       index++;
       out += `$${index}`;
       continue;
