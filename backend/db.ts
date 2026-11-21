@@ -909,11 +909,31 @@ export async function enqueueWebhookEventRest(
   });
 }
 
+/** Hold PostgreSQL feed writers until the reader has observed all earlier
+ * inserts. An identity sequence alone is not ordered by commit. PostgreSQL's
+ * INSERT takes ROW EXCLUSIVE before allocating its identity; SHARE waits for
+ * those transactions and prevents new inserts until the read completes. */
+export async function withCommittedFeed<T>(
+  client: DatabaseClient,
+  read: (client: DatabaseClient) => Promise<T>
+): Promise<T> {
+  return client.transaction(async tx => {
+    if (tx.dialect === 'postgres') {
+      await tx.exec("SET LOCAL lock_timeout = '2s'");
+      await tx.exec('LOCK TABLE entity_changes IN SHARE MODE');
+    }
+    return read(tx);
+  });
+}
+
 export async function currentMaxSeq(
   client: DatabaseClient = requireDatabaseClient()
 ): Promise<number> {
-  const row = await client.get<{ seq: number | null }>(
-    `SELECT MAX(seq) AS seq FROM entity_changes`
-  );
-  return row?.seq ?? 0;
+  return withCommittedFeed(client, async tx => {
+    const row = await tx.get<{ seq: number | null; retained_through: number }>(
+      `SELECT (SELECT MAX(seq) FROM entity_changes) AS seq, retained_through FROM entity_change_retention WHERE id = 1`
+    );
+    if (!row) throw new Error('Change-feed retention boundary is missing');
+    return Math.max(Number(row.seq ?? 0), Number(row.retained_through));
+  });
 }

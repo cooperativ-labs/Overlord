@@ -113560,19 +113560,56 @@ function toPostgresPlaceholders(sql2) {
   let out = "";
   let index = 0;
   let inString = false;
+  let inLineComment = false;
+  let inBlockComment = false;
   for (let i5 = 0; i5 < sql2.length; i5++) {
     const ch = sql2[i5];
-    if (ch === "'") {
-      if (inString && sql2[i5 + 1] === "'") {
+    const next = sql2[i5 + 1];
+    if (inLineComment) {
+      out += ch;
+      if (ch === "\n")
+        inLineComment = false;
+      continue;
+    }
+    if (inBlockComment) {
+      if (ch === "*" && next === "/") {
+        out += "*/";
+        i5++;
+        inBlockComment = false;
+        continue;
+      }
+      out += ch;
+      continue;
+    }
+    if (inString) {
+      if (ch === "'" && next === "'") {
         out += "''";
         i5++;
         continue;
       }
-      inString = !inString;
+      out += ch;
+      if (ch === "'")
+        inString = false;
+      continue;
+    }
+    if (ch === "-" && next === "-") {
+      out += "--";
+      i5++;
+      inLineComment = true;
+      continue;
+    }
+    if (ch === "/" && next === "*") {
+      out += "/*";
+      i5++;
+      inBlockComment = true;
+      continue;
+    }
+    if (ch === "'") {
+      inString = true;
       out += ch;
       continue;
     }
-    if (ch === "?" && !inString) {
+    if (ch === "?") {
       index++;
       out += `$${index}`;
       continue;
@@ -135559,7 +135596,7 @@ var entityChangeOperationSchema = external_exports.enum(["insert", "update", "de
 var entityChangeDtoSchema = external_exports.object({ "seq": external_exports.int().min(1), "workspaceId": external_exports.string(), "entityType": external_exports.string(), "entityId": external_exports.string(), "operation": entityChangeOperationSchema, "projectId": external_exports.string().nullable(), "missionId": external_exports.string().nullable(), "objectiveId": external_exports.string().nullable(), "changedFields": external_exports.array(external_exports.string()), "occurredAt": dateTimeSchema });
 var syncChangesDtoSchema = external_exports.object({ "changes": external_exports.array(entityChangeDtoSchema), "cursor": external_exports.int().min(0), "hasMore": external_exports.boolean() });
 var realtimeChangeEventDtoSchema = external_exports.object({ "type": external_exports.literal("change"), "changes": external_exports.array(entityChangeDtoSchema), "cursor": external_exports.int().min(0) });
-var realtimeStreamEventSchema = external_exports.union([external_exports.object({ "type": external_exports.literal("hello"), "cursor": external_exports.int().min(0) }), realtimeChangeEventDtoSchema, external_exports.object({ "type": external_exports.literal("refresh") })]);
+var realtimeStreamEventSchema = external_exports.union([external_exports.object({ "type": external_exports.literal("hello"), "cursor": external_exports.int().min(0) }), realtimeChangeEventDtoSchema, external_exports.object({ "type": external_exports.literal("refresh") }), external_exports.object({ "type": external_exports.literal("snapshot_required"), "cursor": external_exports.int().min(0) })]);
 var oAuthScopeSchema = external_exports.enum(["overlord.workspace.read", "overlord.mission.read", "overlord.mission.write", "overlord.session.write"]);
 var oAuthProtectedResourceMetadataSchema = external_exports.object({ "resource": external_exports.string(), "authorization_servers": external_exports.array(external_exports.string()), "bearer_methods_supported": external_exports.array(external_exports.literal("header")), "resource_documentation": external_exports.string(), "scopes_supported": external_exports.array(oAuthScopeSchema) });
 var oAuthAuthorizationServerMetadataSchema = external_exports.object({ "issuer": external_exports.string(), "authorization_endpoint": external_exports.string(), "token_endpoint": external_exports.string(), "registration_endpoint": external_exports.string(), "revocation_endpoint": external_exports.string(), "response_types_supported": external_exports.array(external_exports.literal("code")), "grant_types_supported": external_exports.array(external_exports.literal("authorization_code")), "code_challenge_methods_supported": external_exports.array(external_exports.literal("S256")), "token_endpoint_auth_methods_supported": external_exports.array(external_exports.literal("none")), "scopes_supported": external_exports.array(oAuthScopeSchema) });
@@ -135858,7 +135895,9 @@ var getStreamQueryParamsSchema = external_exports.object({ "after": external_exp
 var getStreamHeaderParamsSchema = external_exports.object({ "last-event-id": external_exports.exactOptional(external_exports.string()) });
 var getRealtimeQueryParamsSchema = external_exports.object({ "after": external_exports.exactOptional(external_exports.string()) });
 var getRealtimeHeaderParamsSchema = external_exports.object({ "last-event-id": external_exports.exactOptional(external_exports.string()) });
+var getSyncBaselineResponse200Schema = external_exports.object({ "cursor": external_exports.int().min(0) });
 var getSyncChangesQueryParamsSchema = external_exports.object({ "after": external_exports.string() });
+var getSyncChangesResponse409Schema = external_exports.object({ "error": external_exports.string(), "code": external_exports.literal("snapshot_required"), "cursor": external_exports.int().min(0) });
 var getProjectsQueryParamsSchema = external_exports.object({ "lifecycle": external_exports.exactOptional(projectListLifecycleSchema) });
 var getProjectsByIdPathParamsSchema = external_exports.object({ "id": external_exports.string() });
 var deleteProjectsByIdPathParamsSchema = external_exports.object({ "id": external_exports.string() });
@@ -138119,6 +138158,25 @@ var apiOperations = {
     responses: { "200": { headers: [], content: { "text/event-stream": { kind: "event-stream", event: realtimeStreamEventSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
   },
   /**
+   * GET /sync/baseline: Acquire a commit-safe state refresh cursor
+   */
+  getSyncBaseline: {
+    operationId: "getSyncBaseline",
+    method: "GET",
+    path: "/sync/baseline",
+    tags: ["realtime"],
+    deprecated: false,
+    permission: "project:read",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["mobile", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: null, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: ["Cache-Control"], content: { "application/json": { kind: "json", schema: getSyncBaselineResponse200Schema } } }, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "500": apiResponses.InternalError }
+  },
+  /**
    * GET /sync/changes: Change feed catch-up
    */
   getSyncChanges: {
@@ -138135,7 +138193,7 @@ var apiOperations = {
     security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
     parameters: { path: null, query: getSyncChangesQueryParamsSchema, header: null },
     requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: syncChangesDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: syncChangesDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": { headers: ["Cache-Control"], content: { "application/json": { kind: "json", schema: getSyncChangesResponse409Schema } } }, "500": apiResponses.InternalError }
   },
   /**
    * GET /api/projects: List readable projects across the caller's workspaces
@@ -143783,11 +143841,23 @@ async function enqueueWebhookEventRest(input2, client = requireDatabaseClient())
     entity: input2.entity
   });
 }
+async function withCommittedFeed(client, read) {
+  return client.transaction(async (tx) => {
+    if (tx.dialect === "postgres") {
+      await tx.exec("SET LOCAL lock_timeout = '2s'");
+      await tx.exec("LOCK TABLE entity_changes IN SHARE MODE");
+    }
+    return read(tx);
+  });
+}
 async function currentMaxSeq(client = requireDatabaseClient()) {
-  const row = await client.get(
-    `SELECT MAX(seq) AS seq FROM entity_changes`
-  );
-  return row?.seq ?? 0;
+  return withCommittedFeed(client, async (tx) => {
+    const row = await tx.get(
+      `SELECT (SELECT MAX(seq) FROM entity_changes) AS seq, retained_through FROM entity_change_retention WHERE id = 1`
+    );
+    if (!row) throw new Error("Change-feed retention boundary is missing");
+    return Math.max(Number(row.seq ?? 0), Number(row.retained_through));
+  });
 }
 
 // ../packages/core/service/errors.ts
@@ -158127,6 +158197,7 @@ async function publishDeliverySummary({
 }
 
 // ../packages/core/service/execution-target-runners.ts
+var import_node_util = require("node:util");
 var RUNNER_HEARTBEAT_STALE_MS = 5 * 60 * 1e3;
 var LIVE_RUNNER_HEALTH = ["healthy", "degraded"];
 function isStaleHeartbeat(lastHeartbeatAt, now2) {
@@ -158242,25 +158313,95 @@ async function recordRunnerHeartbeat({
   health = "healthy",
   lastErrorCode = null
 }) {
-  const now2 = nowIso();
-  const capabilitiesJson = JSON.stringify(capabilities2 ?? {});
-  const supportedAgentsJson = JSON.stringify(supportedAgents ?? []);
-  const existing = await ctx.db.get(
-    `SELECT id, revision, health, last_heartbeat_at FROM execution_target_runner_registrations
-        WHERE workspace_id = ? AND runner_instance_id = ? AND deleted_at IS NULL`,
-    [ctx.workspace.id, runnerInstanceId]
-  );
-  const reconnected = !existing || existing.health !== health && health === "healthy" || isStaleHeartbeat(existing.last_heartbeat_at, now2);
-  if (existing) {
-    await ctx.db.run(
-      `UPDATE execution_target_runner_registrations
+  return ctx.db.transaction(async (db) => {
+    ctx = { ...ctx, db };
+    const capabilitiesJson = JSON.stringify(capabilities2 ?? {});
+    const supportedAgentsJson = JSON.stringify(supportedAgents ?? []);
+    const existing = await ctx.db.get(
+      `SELECT id, revision, health, last_heartbeat_at, execution_target_id, relation, label,
+            runner_version, capabilities_json, supported_agents_json, last_error_code
+       FROM execution_target_runner_registrations
+        WHERE workspace_id = ? AND runner_instance_id = ? AND deleted_at IS NULL${db.dialect === "postgres" ? " FOR UPDATE" : ""}`,
+      [ctx.workspace.id, runnerInstanceId]
+    );
+    const now2 = nowIso();
+    const reconnected = !existing || existing.health !== health && health === "healthy" || isStaleHeartbeat(existing.last_heartbeat_at, now2);
+    if (existing) {
+      const changedFields = [];
+      if (existing.execution_target_id !== executionTargetId)
+        changedFields.push("execution_target_id");
+      if (existing.relation !== relation) changedFields.push("relation");
+      if (existing.label !== trimmed7(label)) changedFields.push("label");
+      if (existing.runner_version !== trimmed7(runnerVersion)) changedFields.push("runner_version");
+      const jsonChanged = (stored, value2) => {
+        try {
+          return !(0, import_node_util.isDeepStrictEqual)(JSON.parse(stored), value2);
+        } catch {
+          return true;
+        }
+      };
+      if (jsonChanged(existing.capabilities_json, capabilities2 ?? {}))
+        changedFields.push("capabilities");
+      if (jsonChanged(existing.supported_agents_json, supportedAgents ?? []))
+        changedFields.push("supported_agents");
+      if (existing.health !== health) changedFields.push("health");
+      if (existing.last_error_code !== lastErrorCode) changedFields.push("last_error_code");
+      await ctx.db.run(
+        `UPDATE execution_target_runner_registrations
           SET execution_target_id = ?, relation = ?, label = ?, runner_version = ?,
               capabilities_json = ?, supported_agents_json = ?, health = ?,
               last_heartbeat_at = ?, last_error_code = ?, updated_at = ?,
               revision = revision + 1
         WHERE id = ?`,
-      [
+        [
+          executionTargetId,
+          relation,
+          trimmed7(label),
+          trimmed7(runnerVersion),
+          capabilitiesJson,
+          supportedAgentsJson,
+          health,
+          now2,
+          lastErrorCode,
+          now2,
+          existing.id
+        ]
+      );
+      if (changedFields.length || reconnected)
+        await recordChange({
+          ctx,
+          entityType: "execution_target_runner_registration",
+          entityId: existing.id,
+          operation: "update",
+          entityRevision: existing.revision + 1,
+          changedFields: [...changedFields, "last_heartbeat_at"]
+        });
+      if (reconnected) await enqueueRunQueueDispatchForWorkspace(ctx.db, ctx.workspace.id);
+      return {
+        id: existing.id,
         executionTargetId,
+        runnerInstanceId,
+        relation,
+        label: trimmed7(label),
+        runnerVersion: trimmed7(runnerVersion),
+        supportedAgents: supportedAgents ?? [],
+        health,
+        lastHeartbeatAt: now2,
+        lastErrorCode
+      };
+    }
+    const id2 = newId();
+    await ctx.db.run(
+      `INSERT INTO execution_target_runner_registrations
+        (id, workspace_id, execution_target_id, runner_instance_id, relation, label,
+         runner_version, capabilities_json, supported_agents_json, health,
+         last_heartbeat_at, last_error_code, created_at, updated_at, revision)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+      [
+        id2,
+        ctx.workspace.id,
+        executionTargetId,
+        runnerInstanceId,
         relation,
         trimmed7(label),
         trimmed7(runnerVersion),
@@ -158270,20 +158411,19 @@ async function recordRunnerHeartbeat({
         now2,
         lastErrorCode,
         now2,
-        existing.id
+        now2
       ]
     );
     await recordChange({
       ctx,
       entityType: "execution_target_runner_registration",
-      entityId: existing.id,
-      operation: "update",
-      entityRevision: existing.revision + 1,
-      changedFields: ["health", "last_heartbeat_at", "relation", "execution_target_id"]
+      entityId: id2,
+      operation: "insert",
+      entityRevision: 1
     });
     if (reconnected) await enqueueRunQueueDispatchForWorkspace(ctx.db, ctx.workspace.id);
     return {
-      id: existing.id,
+      id: id2,
       executionTargetId,
       runnerInstanceId,
       relation,
@@ -158294,51 +158434,7 @@ async function recordRunnerHeartbeat({
       lastHeartbeatAt: now2,
       lastErrorCode
     };
-  }
-  const id2 = newId();
-  await ctx.db.run(
-    `INSERT INTO execution_target_runner_registrations
-        (id, workspace_id, execution_target_id, runner_instance_id, relation, label,
-         runner_version, capabilities_json, supported_agents_json, health,
-         last_heartbeat_at, last_error_code, created_at, updated_at, revision)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
-    [
-      id2,
-      ctx.workspace.id,
-      executionTargetId,
-      runnerInstanceId,
-      relation,
-      trimmed7(label),
-      trimmed7(runnerVersion),
-      capabilitiesJson,
-      supportedAgentsJson,
-      health,
-      now2,
-      lastErrorCode,
-      now2,
-      now2
-    ]
-  );
-  await recordChange({
-    ctx,
-    entityType: "execution_target_runner_registration",
-    entityId: id2,
-    operation: "insert",
-    entityRevision: 1
   });
-  if (reconnected) await enqueueRunQueueDispatchForWorkspace(ctx.db, ctx.workspace.id);
-  return {
-    id: id2,
-    executionTargetId,
-    runnerInstanceId,
-    relation,
-    label: trimmed7(label),
-    runnerVersion: trimmed7(runnerVersion),
-    supportedAgents: supportedAgents ?? [],
-    health,
-    lastHeartbeatAt: now2,
-    lastErrorCode
-  };
 }
 async function listRunnerRegistrations({
   ctx,
@@ -166367,6 +166463,13 @@ function entityChangeDtoFromRow(row) {
     occurredAt: row.occurred_at
   };
 }
+var ExpiredChangeCursor = class extends Error {
+  constructor(cursor3) {
+    super("Change-feed cursor expired; refresh authorized state.");
+    this.cursor = cursor3;
+  }
+  cursor;
+};
 async function readableChangeFeedWorkspaceIds() {
   const authorized = getAuthorizedWorkspacesContext();
   if (!authorized) return [];
@@ -166386,36 +166489,44 @@ async function readChangesAfter(afterSeq, workspaceIds, limit2 = CHANGE_BATCH_LI
   const requestedLimit = Number.isFinite(limit2) ? Math.floor(limit2) : CHANGE_BATCH_LIMIT;
   const normalizedLimit = Math.max(1, Math.min(requestedLimit, CHANGE_BATCH_LIMIT));
   const client = requireDatabaseClient();
-  const scanThroughSeq = Math.max(normalizedAfter, await currentMaxSeq(client));
-  const authorizedWorkspaceIds = [...new Set(workspaceIds.filter(Boolean))];
-  if (authorizedWorkspaceIds.length === 0 || scanThroughSeq === normalizedAfter) {
-    return { changes: [], cursor: scanThroughSeq, hasMore: false };
-  }
-  const workspacePlaceholders = authorizedWorkspaceIds.map(() => "?").join(", ");
-  if (projectIds !== null && projectIds.length === 0) {
-    return { changes: [], cursor: scanThroughSeq, hasMore: false };
-  }
-  const projectPredicate = projectIds === null ? "" : ` AND project_id IN (${projectIds.map(() => "?").join(", ")})`;
-  const rows = await client.all(
-    `SELECT seq, workspace_id, entity_type, entity_id, operation, project_id, mission_id,
+  return withCommittedFeed(client, async (client2) => {
+    const scanThroughSeq = Math.max(normalizedAfter, await currentMaxSeq(client2));
+    const state2 = await client2.get(
+      `SELECT retained_through FROM entity_change_retention WHERE id = 1`
+    );
+    if (!state2) throw new Error("Change-feed retention boundary is missing");
+    if (normalizedAfter < Number(state2.retained_through))
+      throw new ExpiredChangeCursor(scanThroughSeq);
+    const authorizedWorkspaceIds = [...new Set(workspaceIds.filter(Boolean))];
+    if (authorizedWorkspaceIds.length === 0 || scanThroughSeq === normalizedAfter) {
+      return { changes: [], cursor: scanThroughSeq, hasMore: false };
+    }
+    const workspacePlaceholders = authorizedWorkspaceIds.map(() => "?").join(", ");
+    if (projectIds !== null && projectIds.length === 0) {
+      return { changes: [], cursor: scanThroughSeq, hasMore: false };
+    }
+    const projectPredicate = projectIds === null ? "" : ` AND project_id IN (${projectIds.map(() => "?").join(", ")})`;
+    const rows = await client2.all(
+      `SELECT seq, workspace_id, entity_type, entity_id, operation, project_id, mission_id,
             objective_id, changed_fields_json, occurred_at
        FROM entity_changes
       WHERE seq > ? AND seq <= ? AND workspace_id IN (${workspacePlaceholders})${projectPredicate}
       ORDER BY seq ASC
       LIMIT ?`,
-    [
-      normalizedAfter,
-      scanThroughSeq,
-      ...authorizedWorkspaceIds,
-      ...projectIds ?? [],
-      normalizedLimit + 1
-    ]
-  );
-  const hasMore = rows.length > normalizedLimit;
-  const returnedRows = hasMore ? rows.slice(0, normalizedLimit) : rows;
-  const changes = returnedRows.map(entityChangeDtoFromRow);
-  const cursor3 = hasMore ? changes[changes.length - 1].seq : scanThroughSeq;
-  return { changes, cursor: cursor3, hasMore };
+      [
+        normalizedAfter,
+        scanThroughSeq,
+        ...authorizedWorkspaceIds,
+        ...projectIds ?? [],
+        normalizedLimit + 1
+      ]
+    );
+    const hasMore = rows.length > normalizedLimit;
+    const returnedRows = hasMore ? rows.slice(0, normalizedLimit) : rows;
+    const changes = returnedRows.map(entityChangeDtoFromRow);
+    const cursor3 = hasMore ? changes[changes.length - 1].seq : scanThroughSeq;
+    return { changes, cursor: cursor3, hasMore };
+  });
 }
 var RealtimeHub = class extends PollLoop {
   clients = /* @__PURE__ */ new Map();
@@ -166447,12 +166558,37 @@ var RealtimeHub = class extends PollLoop {
     const client = {
       response: res,
       workspaceIds: new Set(options.workspaceIds),
-      projectIds: options.projectIds === null || options.projectIds === void 0 ? null : new Set(options.projectIds)
+      projectIds: options.projectIds === null || options.projectIds === void 0 ? null : new Set(options.projectIds),
+      replaying: options.afterSeq !== void 0,
+      pending: []
     };
     this.clients.set(res, client);
     this.send(res, "hello", { type: "hello", cursor: this.cursor });
-    if (options.afterSeq !== void 0 && options.afterSeq < this.cursor) {
-      void this.sendCatchUp(res, options.afterSeq);
+    if (options.afterSeq !== void 0) {
+      void this.sendCatchUp(res, options.afterSeq).then((cursor3) => {
+        const current = this.clients.get(res);
+        if (!current) return;
+        for (const pending of current.pending) {
+          const changes = pending.changes.filter((change) => change.seq > cursor3);
+          if (changes.length)
+            this.send(res, "change", { type: "change", changes, cursor: pending.cursor });
+          cursor3 = Math.max(cursor3, pending.cursor);
+        }
+        current.pending = [];
+        current.replaying = false;
+      }).catch((error64) => {
+        if (!this.clients.has(res)) return;
+        if (error64 instanceof ExpiredChangeCursor) {
+          this.send(res, "snapshot_required", {
+            type: "snapshot_required",
+            cursor: error64.cursor
+          });
+        } else {
+          this.onPollError(error64);
+        }
+        this.removeClient(res);
+        res.end();
+      });
     }
   }
   removeClient(res) {
@@ -166481,7 +166617,33 @@ var RealtimeHub = class extends PollLoop {
       this.lastDataVersion = await client.sqliteDataVersion?.() ?? null;
       return;
     }
-    const rows = await client.all(SELECT_CHANGES_SQL, [this.cursor, CHANGE_BATCH_LIMIT]);
+    const pass2 = await withCommittedFeed(client, async (tx) => {
+      const state2 = await tx.get(
+        `SELECT retained_through FROM entity_change_retention WHERE id = 1`
+      );
+      if (!state2) throw new Error("Change-feed retention boundary is missing");
+      if (this.cursor < Number(state2.retained_through)) {
+        return { expired: true, cursor: await currentMaxSeq(tx), rows: [] };
+      }
+      return {
+        expired: false,
+        cursor: this.cursor,
+        rows: await tx.all(SELECT_CHANGES_SQL, [this.cursor, CHANGE_BATCH_LIMIT])
+      };
+    });
+    if (pass2.expired) {
+      this.cursor = pass2.cursor;
+      for (const { response } of [...this.clients.values()]) {
+        this.send(response, "snapshot_required", {
+          type: "snapshot_required",
+          cursor: pass2.cursor
+        });
+        this.removeClient(response);
+        response.end();
+      }
+      return;
+    }
+    const rows = pass2.rows;
     if (rows.length > 0) {
       this.cursor = rows[rows.length - 1].seq;
       if (rows.some((row) => AUTHORIZATION_CHANGE_ENTITY_TYPES.has(row.entity_type))) {
@@ -166510,7 +166672,15 @@ var RealtimeHub = class extends PollLoop {
         (row) => client.workspaceIds.has(row.workspace_id) && (client.projectIds === null || row.project_id !== null && client.projectIds.has(row.project_id))
       ).map(entityChangeDtoFromRow);
       if (changes.length > 0) {
-        this.send(client.response, "change", { type: "change", changes, cursor: cursor3 });
+        if (client.replaying) {
+          client.pending.push({ changes, cursor: cursor3 });
+          if (client.pending.length > 100) {
+            this.removeClient(client.response);
+            client.response.end();
+          }
+        } else {
+          this.send(client.response, "change", { type: "change", changes, cursor: cursor3 });
+        }
       }
     }
   }
@@ -166530,19 +166700,20 @@ var RealtimeHub = class extends PollLoop {
         CHANGE_BATCH_LIMIT,
         client.projectIds === null ? null : [...client.projectIds]
       );
-      if (!this.clients.has(res)) return;
+      if (!this.clients.has(res)) return cursor3;
       if (batch.changes.length > 0) {
         this.send(res, "change", { type: "change", changes: batch.changes, cursor: batch.cursor });
       }
       cursor3 = batch.cursor;
-      if (!batch.hasMore) return;
+      if (!batch.hasMore) return cursor3;
     }
+    return cursor3;
   }
   send(res, event, data) {
     res.write(`event: ${event}
 `);
     const cursor3 = typeof data === "object" && data && "cursor" in data ? Number(data.cursor) : NaN;
-    if (Number.isFinite(cursor3)) res.write(`id: ${cursor3}
+    if (Number.isFinite(cursor3) && event === "change") res.write(`id: ${cursor3}
 `);
     res.write(`data: ${JSON.stringify(data)}
 
@@ -186978,11 +187149,11 @@ function assignmentCatalogProjection(value2) {
 
 // ../packages/core/service/chat/runs.ts
 var import_node_crypto30 = require("node:crypto");
-var import_node_util2 = require("node:util");
+var import_node_util3 = require("node:util");
 
 // ../packages/core/service/chat/store.ts
 var import_node_crypto29 = require("node:crypto");
-var import_node_util = require("node:util");
+var import_node_util2 = require("node:util");
 var ChatError = class extends ServiceError {
   /**
    * @param detail Optional specific reason for the assistant's own tool results (for example
@@ -187267,7 +187438,7 @@ var ChatStore = class _ChatStore {
         "SELECT id, locator_json FROM chat_source_refs WHERE thread_id = ? AND scope_key = ?",
         [threadId, source.scopeKey]
       );
-      if (!(0, import_node_util.isDeepStrictEqual)(identity(JSON.parse(row.locator_json)), identity(source.locator)))
+      if (!(0, import_node_util2.isDeepStrictEqual)(identity(JSON.parse(row.locator_json)), identity(source.locator)))
         throw new ChatError("invalid_request");
       ids.push(row.id);
     }
@@ -187899,7 +188070,7 @@ var ChatRuns = class _ChatRuns extends ChatStore {
         [a5.runId, turn]
       );
       if (old.length) {
-        if (!(0, import_node_util2.isDeepStrictEqual)(
+        if (!(0, import_node_util3.isDeepStrictEqual)(
           old.map((o3) => [
             o3.operation_id,
             o3.provider_call_id,
@@ -197063,6 +197234,72 @@ function missionRoute(permission, fn) {
   };
 }
 
+// ../packages/core/service/change-feed-retention.ts
+var CHANGE_FEED_RETENTION_MS = 21 * 24 * 60 * 60 * 1e3;
+var ERASED_EVERHOUR_ACTOR = "!overlord:erased-actor";
+var MAX_BATCH = 1e3;
+async function eraseEverhourActorEvidence(db, actorId) {
+  if (actorId === ERASED_EVERHOUR_ACTOR) return;
+  const insertion = db.dialect === "postgres" ? `INSERT INTO ext_everhour_connection_attribution (connection_id, actor_workspace_user_id)` : `INSERT OR IGNORE INTO ext_everhour_connection_attribution (connection_id, actor_workspace_user_id)`;
+  const conflict = db.dialect === "postgres" ? " ON CONFLICT DO NOTHING" : "";
+  await db.run(
+    `${insertion}
+    SELECT connection_id, ? FROM ext_everhour_connection_attribution WHERE actor_workspace_user_id = ?
+    UNION
+    SELECT entity_id, ? FROM entity_changes WHERE entity_type = 'everhour:workspace_connection'
+      AND operation IN ('insert', 'update') AND actor_workspace_user_id = ?${conflict}`,
+    [ERASED_EVERHOUR_ACTOR, actorId, ERASED_EVERHOUR_ACTOR, actorId]
+  );
+  await db.run(
+    `DELETE FROM ext_everhour_connection_attribution WHERE actor_workspace_user_id = ?`,
+    [actorId]
+  );
+}
+async function pruneChangeFeedBatch(db, options = {}) {
+  const limit2 = Math.max(1, Math.min(MAX_BATCH, Math.floor(options.limit ?? MAX_BATCH)));
+  const cutoff = new Date(
+    (options.now ?? /* @__PURE__ */ new Date()).getTime() - CHANGE_FEED_RETENTION_MS
+  ).toISOString();
+  return db.transaction(async (tx) => {
+    if (tx.dialect === "postgres") {
+      await tx.exec("SET LOCAL lock_timeout = '2s'");
+      await tx.exec("LOCK TABLE entity_changes IN SHARE ROW EXCLUSIVE MODE");
+    }
+    const state2 = await tx.get(
+      `SELECT retained_through FROM entity_change_retention WHERE id = 1`
+    );
+    if (!state2) throw new Error("Change-feed retention boundary is missing");
+    const floor = Number(state2.retained_through);
+    const rows = await tx.all(
+      `SELECT seq, occurred_at FROM entity_changes WHERE seq > ? ORDER BY seq LIMIT ?`,
+      [floor, limit2]
+    );
+    let boundary = floor;
+    for (const row of rows) {
+      if (row.occurred_at >= cutoff) break;
+      boundary = row.seq;
+    }
+    if (boundary === floor) return { deleted: 0, retainedThrough: floor };
+    const insertion = tx.dialect === "postgres" ? `INSERT INTO ext_everhour_connection_attribution (connection_id, actor_workspace_user_id)` : `INSERT OR IGNORE INTO ext_everhour_connection_attribution (connection_id, actor_workspace_user_id)`;
+    const conflict = tx.dialect === "postgres" ? " ON CONFLICT DO NOTHING" : "";
+    await tx.run(
+      `${insertion}
+      SELECT DISTINCT entity_id, actor_workspace_user_id FROM entity_changes
+      WHERE seq > ? AND seq <= ? AND entity_type = 'everhour:workspace_connection'
+        AND operation IN ('insert', 'update') AND actor_workspace_user_id IS NOT NULL${conflict}`,
+      [floor, boundary]
+    );
+    const deleted = await tx.run(`DELETE FROM entity_changes WHERE seq > ? AND seq <= ?`, [
+      floor,
+      boundary
+    ]);
+    await tx.run(`UPDATE entity_change_retention SET retained_through = ? WHERE id = 1`, [
+      boundary
+    ]);
+    return { deleted: deleted.changes, retainedThrough: boundary };
+  });
+}
+
 // ext/everhour/service.ts
 var EVERHOUR_BASE_URL = "https://api.everhour.com";
 async function everhourFetch(apiKey, path29, init2 = {}) {
@@ -197177,16 +197414,21 @@ function createEverhourService(connections) {
     profileId
   }) {
     const actors = await client.all(
-      `SELECT DISTINCT actor_workspace_user_id
+      `SELECT actor_workspace_user_id
+       FROM ext_everhour_connection_attribution
+      WHERE connection_id = ?
+      UNION
+      SELECT DISTINCT actor_workspace_user_id
        FROM entity_changes
       WHERE entity_type = 'everhour:workspace_connection'
         AND entity_id = ?
         AND operation IN ('insert', 'update')
         AND actor_workspace_user_id IS NOT NULL`,
-      [connectionId]
+      [connectionId, connectionId]
     );
     if (actors.length === 0) return false;
     for (const actor of actors) {
+      if (actor.actor_workspace_user_id === ERASED_EVERHOUR_ACTOR) return false;
       const membership = await client.get(
         `SELECT profile_id FROM workspace_users WHERE id = ?`,
         [actor.actor_workspace_user_id]
@@ -201113,6 +201355,10 @@ async function resolveSessionFromBrowserRequest({
 // account-deletion.ts
 async function cascadeDeleteAccount(profileId) {
   const cleanupImages = await requireDatabaseClient().transaction(async (tx) => {
+    if (tx.dialect === "postgres") {
+      await tx.exec("SET LOCAL lock_timeout = '2s'");
+      await tx.exec("LOCK TABLE entity_changes IN SHARE ROW EXCLUSIVE MODE");
+    }
     const profile = await tx.get(`SELECT id FROM profiles WHERE id = ?`, [
       profileId
     ]);
@@ -201190,6 +201436,7 @@ async function cascadeDeleteAccount(profileId) {
     }
     cleanup.push(...await tombstoneInboxItemAttachmentsTx(tx, { profileId }));
     for (const membership of memberships) {
+      await eraseEverhourActorEvidence(tx, membership.id);
       await tx.run(`DELETE FROM workspace_users WHERE id = ?`, [membership.id]);
       await recordChange2(
         {
@@ -201899,6 +202146,23 @@ function createChatRouter(options) {
   });
   return router2;
 }
+
+// change-feed-retention-worker.ts
+var ChangeFeedRetentionWorker = class extends PollLoop {
+  nextScanAt = 0;
+  constructor() {
+    super({ intervalMs: 5e3, logPrefix: "change-feed-retention", unref: true });
+  }
+  async runOnce() {
+    if (process.env.OVERLORD_CHANGE_FEED_PRUNING_ENABLED !== "true") return;
+    if (Date.now() < this.nextScanAt) return;
+    const db = requireDatabaseClient();
+    if (db.dialect !== "postgres") return;
+    const result2 = await pruneChangeFeedBatch(db);
+    if (result2.deleted < 1e3) this.nextScanAt = Date.now() + 60 * 60 * 1e3;
+    if (result2.deleted) console.info("[change-feed-retention]", result2);
+  }
+};
 
 // chat-notification-dispatcher.ts
 var import_node_crypto46 = require("node:crypto");
@@ -205291,7 +205555,7 @@ var ALLOWED = [
   ["GET", /^\/api\/search\/v3$/],
   ["GET", /^\/api\/objectives\/[^/]+\/attachments$/],
   ["GET", /^\/api\/storage\/attachments\/[^/]+$/],
-  ["GET", /^\/(?:api\/stream|realtime|sync\/changes|mcp)$/],
+  ["GET", /^\/(?:api\/stream|realtime|sync\/(?:changes|baseline)|mcp)$/],
   ["POST", /^\/mcp$/],
   [
     "POST",
@@ -207262,6 +207526,20 @@ var streamRealtime = asyncRoute(async (req, res) => {
 app.get("/api/stream", streamRealtime);
 app.get("/realtime", requireAuthenticatedSession, projectAutomationRouteGuard, streamRealtime);
 app.get(
+  "/sync/baseline",
+  requireAuthenticatedSession,
+  projectAutomationRouteGuard,
+  asyncRoute(async (_req, res) => {
+    const workspaceIds = await readableChangeFeedWorkspaceIds();
+    if (workspaceIds.length === 0) {
+      res.status(403).json({ error: "Permission denied: realtime catch-up" });
+      return;
+    }
+    res.setHeader("Cache-Control", "private, no-store");
+    res.json({ cursor: await currentMaxSeq() });
+  })
+);
+app.get(
   "/sync/changes",
   requireAuthenticatedSession,
   projectAutomationRouteGuard,
@@ -207276,7 +207554,13 @@ app.get(
       res.status(400).json({ error: 'Query parameter "after" must be a non-negative integer' });
       return;
     }
-    res.json(await readChangesAfter(afterSeq, workspaceIds));
+    try {
+      res.json(await readChangesAfter(afterSeq, workspaceIds));
+    } catch (error64) {
+      if (!(error64 instanceof ExpiredChangeCursor)) throw error64;
+      res.setHeader("Cache-Control", "private, no-store");
+      res.status(409).json({ error: error64.message, code: "snapshot_required", cursor: error64.cursor });
+    }
   })
 );
 app.get(
@@ -208201,7 +208485,8 @@ async function start() {
   const backgroundLoops = [
     ...mutationPollLoops,
     runQueueDispatchWorker,
-    terminalSessionObserver
+    terminalSessionObserver,
+    new ChangeFeedRetentionWorker()
   ];
   if (chatCloud()) {
     const chatWorker = new ChatWorker(

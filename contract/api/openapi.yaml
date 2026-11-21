@@ -3,10 +3,10 @@ info:
   title: Overlord API
   # info.version is the API description's own Semantic Version; it changes when
   # this document changes and is never compared with the contract version.
-  version: 6.5.1
+  version: 7.0.0
   # The contract version (contract/VERSION) this document belongs to. Written
   # only by `yarn version:contract`.
-  x-overlord-contract-version: 179.12.0
+  x-overlord-contract-version: 180.0.0
   description: >-
     Normative description of Overlord's REST surface (ADR 0006): one operation for every
     method and path the backend registers, at the path it is served (ADR 0007), excluding
@@ -4293,7 +4293,8 @@ paths:
         '200':
           description: >-
             `text/event-stream`. Events: `hello` with `{ type: 'hello', cursor }` (the server's current
-            global cursor); `change` with `RealtimeChangeEventDto`; `refresh` with `{ type: 'refresh' }`.
+            global cursor); `change` with `RealtimeChangeEventDto`; `refresh` with `{ type: 'refresh' }`;
+            or `snapshot_required` with a safe cursor when replay has expired, followed by stream closure.
             Headers `Cache-Control: no-cache, no-transform` and `X-Accel-Buffering: no`.
           content:
             text/event-stream:
@@ -4340,7 +4341,8 @@ paths:
         '200':
           description: >-
             `text/event-stream`. Events: `hello` with `{ type: 'hello', cursor }` (the server's current
-            global cursor); `change` with `RealtimeChangeEventDto`; `refresh` with `{ type: 'refresh' }`.
+            global cursor); `change` with `RealtimeChangeEventDto`; `refresh` with `{ type: 'refresh' }`;
+            or `snapshot_required` with a safe cursor when replay has expired, followed by stream closure.
             Headers `Cache-Control: no-cache, no-transform` and `X-Accel-Buffering: no`.
           content:
             text/event-stream:
@@ -4349,6 +4351,36 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+  /sync/baseline:
+    get:
+      operationId: getSyncBaseline
+      tags: [realtime]
+      x-overlord-permission: project:read
+      x-overlord-edition: both
+      x-overlord-consumers: [mobile, webapp]
+      summary: Acquire a commit-safe state refresh cursor
+      description: >-
+        Returns a commit-safe global cursor to an authenticated caller with project:read in at least
+        one authorized workspace. Acquire it before refreshing all authorized state and removing
+        stale records; replay changes after the cursor once refresh completes. It contains no state.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      responses:
+        '200':
+          description: Commit-safe cursor captured before refreshing state; response is private and not cacheable.
+          headers:
+            Cache-Control:
+              required: true
+              schema: { type: string, const: 'private, no-store' }
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ cursor ]
+                properties:
+                  cursor: { type: integer, minimum: 0 }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
         '500': { $ref: '#/components/responses/InternalError' }
   /sync/changes:
     get:
@@ -4365,6 +4397,10 @@ paths:
         The server scans up to its current high-water mark: `cursor` advances past rows the caller may not
         see, so a page can be empty with `hasMore: false` and a larger `cursor`. At most 500 changes per
         page; `hasMore` means call again with `after` set to `cursor`.
+        An expired cursor returns 409 `snapshot_required` with a commit-safe `cursor`. Refresh the
+        entire authorized state, remove stale records, then replay from that cursor; writes during
+        refresh remain in the feed. The SSE stream signals the same condition with a
+        `snapshot_required` event and closes.
       security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
       parameters:
         - name: after
@@ -4384,6 +4420,21 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: Cursor expired; refresh authorized state then replay from the supplied cursor. This response is private and not cacheable.
+          headers:
+            Cache-Control:
+              required: true
+              schema: { type: string, const: 'private, no-store' }
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ error, code, cursor ]
+                properties:
+                  error: { type: string }
+                  code: { const: snapshot_required }
+                  cursor: { type: integer, minimum: 0 }
         '500': { $ref: '#/components/responses/InternalError' }
   /api/projects:
     get:
@@ -16561,6 +16612,11 @@ components:
           required: [ type ]
           properties:
             type: { const: refresh }
+        - type: object
+          required: [ type, cursor ]
+          properties:
+            type: { const: snapshot_required }
+            cursor: { type: integer, minimum: 0 }
     OAuthScope:
       type: string
       enum:

@@ -16,7 +16,7 @@ const ALLOWED: readonly [string, RegExp][] = [
   ['GET', /^\/api\/search\/v3$/],
   ['GET', /^\/api\/objectives\/[^/]+\/attachments$/],
   ['GET', /^\/api\/storage\/attachments\/[^/]+$/],
-  ['GET', /^\/(?:api\/stream|realtime|sync\/changes|mcp)$/],
+  ['GET', /^\/(?:api\/stream|realtime|sync\/(?:changes|baseline)|mcp)$/],
   ['POST', /^\/mcp$/],
   [
     'POST',

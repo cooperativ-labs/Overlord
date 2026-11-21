@@ -54,7 +54,7 @@ async function waitFor(predicate: () => boolean): Promise<void> {
 
 const fixture = await setupSecondaryWorkspaceFixture({ namePrefix: 'Realtime Isolation' });
 const dbModule = await import('./db.ts');
-const { RealtimeHub, readableChangeFeedWorkspaceIds, readChangesAfter } =
+const { ExpiredChangeCursor, RealtimeHub, readableChangeFeedWorkspaceIds, readChangesAfter } =
   await import('./realtime.ts');
 const { seedAuthenticatedOperatorClient, DEFAULT_TEST_ORGANIZATION_ID } =
   await import('./test-helpers.ts');
@@ -126,6 +126,55 @@ before(async () => {
 });
 
 describe('realtime workspace isolation', () => {
+  it('requires a snapshot for an expired cursor on catch-up and SSE', async () => {
+    const seq = await appendChange(fixture.workspaceAId, 'retention-boundary');
+    await client.run(`UPDATE entity_change_retention SET retained_through = ? WHERE id = 1`, [seq]);
+    const hub = new RealtimeHub();
+    const sink = fakeSseResponse();
+    try {
+      await assert.rejects(
+        () => readChangesAfter(0, [fixture.workspaceAId]),
+        error => error instanceof ExpiredChangeCursor && error.cursor >= seq
+      );
+      hub.addClient(sink.response, { afterSeq: 0, workspaceIds: [fixture.workspaceAId] });
+      await waitFor(() => sink.ended);
+      assert.match(sink.chunks.join(''), /event: snapshot_required/);
+      const snapshotFrame = sink.chunks
+        .join('')
+        .split('\n\n')
+        .find(frame => frame.startsWith('event: snapshot_required'));
+      assert.ok(snapshotFrame);
+      assert.doesNotMatch(
+        snapshotFrame,
+        /\nid:/,
+        'recovery must not acknowledge an unrefreshed cursor'
+      );
+      const batch = await readChangesAfter(seq, [fixture.workspaceAId]);
+      assert.ok(batch.cursor >= seq);
+    } finally {
+      hub.removeClient(sink.response);
+      await client.run(`UPDATE entity_change_retention SET retained_through = 0 WHERE id = 1`);
+    }
+  });
+
+  it('forces snapshot recovery if pruning overtakes a live hub', async () => {
+    const hub = new RealtimeHub();
+    await hub.pollNow();
+    const sink = fakeSseResponse();
+    hub.addClient(sink.response, { workspaceIds: [fixture.workspaceAId] });
+    try {
+      const seq = await appendChange(fixture.workspaceAId, 'hub-overtaken');
+      await client.run(`UPDATE entity_change_retention SET retained_through = ? WHERE id = 1`, [
+        seq
+      ]);
+      await hub.pollNow();
+      assert.equal(sink.ended, true);
+      assert.match(sink.chunks.join(''), /event: snapshot_required/);
+    } finally {
+      hub.removeClient(sink.response);
+      await client.run(`UPDATE entity_change_retention SET retained_through = 0 WHERE id = 1`);
+    }
+  });
   it('GET /sync/changes semantics expose only readable workspaces and converge across global gaps', async () => {
     const beforeSeq = await dbModule.currentMaxSeq(client);
     await appendChange(fixture.secondary.id, 'pull-hidden-before');
@@ -218,6 +267,61 @@ describe('realtime workspace isolation', () => {
       assert.equal(events.at(-1)!.id, trailingHiddenSeq);
     } finally {
       hub.removeClient(sink.response);
+    }
+  });
+
+  it('buffers live events until catch-up is sent in order', async () => {
+    const hub = new RealtimeHub();
+    await hub.pollNow();
+    const beforeSeq = await dbModule.currentMaxSeq(client);
+    await appendChange(fixture.workspaceAId, 'ordered-backlog');
+    await hub.pollNow();
+    let unblock!: () => void;
+    let paused!: () => void;
+    const ready = new Promise<void>(resolve => {
+      paused = resolve;
+    });
+    const gate = new Promise<void>(resolve => {
+      unblock = resolve;
+    });
+    let armed = false;
+    const delayed = new Proxy(client, {
+      get(target, key) {
+        if (key === 'transaction')
+          return async (fn: Parameters<typeof client.transaction>[0]) => {
+            const result = await target.transaction(fn);
+            if (armed) {
+              armed = false;
+              paused();
+              await gate;
+            }
+            return result;
+          };
+        const value = Reflect.get(target, key, target);
+        return typeof value === 'function' ? value.bind(target) : value;
+      }
+    });
+    await dbModule.bindDatabaseClient(delayed);
+    const sink = fakeSseResponse();
+    try {
+      armed = true;
+      hub.addClient(sink.response, { afterSeq: beforeSeq, workspaceIds: [fixture.workspaceAId] });
+      await ready;
+      await appendChange(fixture.workspaceAId, 'ordered-live');
+      await hub.pollNow();
+      assert.equal(changeEvents(sink.chunks).length, 0, 'live events wait for replay');
+      unblock();
+      await waitFor(() => changeEvents(sink.chunks).length === 2);
+      assert.deepEqual(
+        changeEvents(sink.chunks).flatMap(event =>
+          event.data.changes.map(change => change.entityId)
+        ),
+        ['ordered-backlog', 'ordered-live']
+      );
+    } finally {
+      unblock();
+      hub.removeClient(sink.response);
+      await dbModule.bindDatabaseClient(client);
     }
   });
 

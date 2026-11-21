@@ -583,7 +583,15 @@ Owns:
   objective display id supplies its mission; a UUID requires `missionId`. With `objectiveId`,
   returned rows and the `liveChannel` projection are restricted to that objective, and a
   mismatched mission/objective pair is refused.
-- The realtime Server-Sent Events endpoint (`getRealtime`, alias `getStream`).
+- The realtime Server-Sent Events endpoint (`getRealtime`, alias `getStream`),
+  authorized catch-up and the commit-safe refresh baseline (`getSyncBaseline`).
+  Expired cursors require clients to refresh authorized state and replay from
+  the supplied baseline; feed retention and synchronization are in the data
+  contract and ADR 0097.
+- The retention service is the sole core writer of the Everhour extension's
+  preserved legacy connection-actor evidence. It copies only non-secret actor
+  identifiers while pruning their source feed rows in the same transaction;
+  the Everhour service owns interpretation of that evidence (ADR 0097).
 - SQL Studio launch metadata in `getMeta` when the optional external SQL Studio process is
   enabled.
 - **Webhook subscription management** (`/api/webhooks*`, gated by `webhook:*` permissions):

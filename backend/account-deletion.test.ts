@@ -128,6 +128,42 @@ test('cascadeDeleteAccount is a no-op for an already-deleted profile', async () 
   await assert.doesNotReject(cascadeDeleteAccount('no-such-profile'));
 });
 
+test('account erasure removes actor identifiers from retained Everhour evidence', async () => {
+  const profileId = 'evidence-erasure-user';
+  const workspaceUserId = 'evidence-erasure-member';
+  seedAuthenticatedOperator({ db, profileId, workspaceUserId });
+  db.prepare(
+    `INSERT INTO ext_everhour_connection_attribution (connection_id, actor_workspace_user_id) VALUES (?, ?)`
+  ).run('already-preserved', workspaceUserId);
+  db.prepare(
+    `INSERT INTO entity_changes (id, workspace_id, entity_type, entity_id, operation, actor_workspace_user_id, source, occurred_at)
+    VALUES ('evidence-erasure-change', ?, 'everhour:workspace_connection', 'still-in-feed', 'insert', ?, 'test', ?)`
+  ).run(testWorkspaceContext.WORKSPACE.id, workspaceUserId, new Date().toISOString());
+  await cascadeDeleteAccount(profileId);
+  assert.deepEqual(
+    db
+      .prepare(
+        `SELECT connection_id, actor_workspace_user_id FROM ext_everhour_connection_attribution
+    WHERE connection_id IN ('already-preserved', 'still-in-feed') ORDER BY connection_id`
+      )
+      .all(),
+    [
+      { connection_id: 'already-preserved', actor_workspace_user_id: '!overlord:erased-actor' },
+      { connection_id: 'still-in-feed', actor_workspace_user_id: '!overlord:erased-actor' }
+    ]
+  );
+  assert.equal(
+    (
+      db
+        .prepare(
+          `SELECT actor_workspace_user_id AS actor FROM entity_changes WHERE id = 'evidence-erasure-change'`
+        )
+        .get() as { actor: string | null }
+    ).actor,
+    null
+  );
+});
+
 test('cascadeDeleteAccount does not attribute entity_changes to the membership it is deleting', async () => {
   // The `deleteUser` beforeDelete hook runs outside any request context, so
   // the ambient "active workspace user" can resolve to this very profile's

@@ -6,7 +6,8 @@ import {
   currentMaxSeq,
   getActiveTokenProjectIds,
   getAuthorizedWorkspacesContext,
-  requireDatabaseClient
+  requireDatabaseClient,
+  withCommittedFeed
 } from './db.ts';
 import { PollLoop } from './poll-loop.ts';
 import { actorCan } from './rbac.ts';
@@ -70,6 +71,12 @@ export function entityChangeDtoFromRow(row: ChangeRow): EntityChangeDto {
 
 export type ChangeFeedBatch = SyncChangesDto;
 
+export class ExpiredChangeCursor extends Error {
+  constructor(public readonly cursor: number) {
+    super('Change-feed cursor expired; refresh authorized state.');
+  }
+}
+
 /**
  * Select every workspace in the authentication boundary's immutable request
  * snapshot where the caller may read projects. Token consent and live
@@ -101,47 +108,57 @@ export async function readChangesAfter(
   const requestedLimit = Number.isFinite(limit) ? Math.floor(limit) : CHANGE_BATCH_LIMIT;
   const normalizedLimit = Math.max(1, Math.min(requestedLimit, CHANGE_BATCH_LIMIT));
   const client = requireDatabaseClient();
-  // Snapshot the global high-water mark before the filtered read. When the
-  // visible page is exhausted, advancing to this value skips unauthorized
-  // gaps without skipping a row committed after the snapshot.
-  const scanThroughSeq = Math.max(normalizedAfter, await currentMaxSeq(client));
-  const authorizedWorkspaceIds = [...new Set(workspaceIds.filter(Boolean))];
-  if (authorizedWorkspaceIds.length === 0 || scanThroughSeq === normalizedAfter) {
-    return { changes: [], cursor: scanThroughSeq, hasMore: false };
-  }
-  const workspacePlaceholders = authorizedWorkspaceIds.map(() => '?').join(', ');
-  if (projectIds !== null && projectIds.length === 0) {
-    return { changes: [], cursor: scanThroughSeq, hasMore: false };
-  }
-  const projectPredicate =
-    projectIds === null ? '' : ` AND project_id IN (${projectIds.map(() => '?').join(', ')})`;
-  const rows = await client.all<ChangeRow>(
-    `SELECT seq, workspace_id, entity_type, entity_id, operation, project_id, mission_id,
+  return withCommittedFeed(client, async client => {
+    // Snapshot the global high-water mark before the filtered read. When the
+    // visible page is exhausted, advancing to this value skips unauthorized
+    // gaps without skipping a row committed after the snapshot.
+    const scanThroughSeq = Math.max(normalizedAfter, await currentMaxSeq(client));
+    const state = await client.get<{ retained_through: number }>(
+      `SELECT retained_through FROM entity_change_retention WHERE id = 1`
+    );
+    if (!state) throw new Error('Change-feed retention boundary is missing');
+    if (normalizedAfter < Number(state.retained_through))
+      throw new ExpiredChangeCursor(scanThroughSeq);
+    const authorizedWorkspaceIds = [...new Set(workspaceIds.filter(Boolean))];
+    if (authorizedWorkspaceIds.length === 0 || scanThroughSeq === normalizedAfter) {
+      return { changes: [], cursor: scanThroughSeq, hasMore: false };
+    }
+    const workspacePlaceholders = authorizedWorkspaceIds.map(() => '?').join(', ');
+    if (projectIds !== null && projectIds.length === 0) {
+      return { changes: [], cursor: scanThroughSeq, hasMore: false };
+    }
+    const projectPredicate =
+      projectIds === null ? '' : ` AND project_id IN (${projectIds.map(() => '?').join(', ')})`;
+    const rows = await client.all<ChangeRow>(
+      `SELECT seq, workspace_id, entity_type, entity_id, operation, project_id, mission_id,
             objective_id, changed_fields_json, occurred_at
        FROM entity_changes
       WHERE seq > ? AND seq <= ? AND workspace_id IN (${workspacePlaceholders})${projectPredicate}
       ORDER BY seq ASC
       LIMIT ?`,
-    [
-      normalizedAfter,
-      scanThroughSeq,
-      ...authorizedWorkspaceIds,
-      ...(projectIds ?? []),
-      normalizedLimit + 1
-    ]
-  );
-  const hasMore = rows.length > normalizedLimit;
-  const returnedRows = hasMore ? rows.slice(0, normalizedLimit) : rows;
-  const changes = returnedRows.map(entityChangeDtoFromRow);
-  const cursor = hasMore ? changes[changes.length - 1]!.seq : scanThroughSeq;
+      [
+        normalizedAfter,
+        scanThroughSeq,
+        ...authorizedWorkspaceIds,
+        ...(projectIds ?? []),
+        normalizedLimit + 1
+      ]
+    );
+    const hasMore = rows.length > normalizedLimit;
+    const returnedRows = hasMore ? rows.slice(0, normalizedLimit) : rows;
+    const changes = returnedRows.map(entityChangeDtoFromRow);
+    const cursor = hasMore ? changes[changes.length - 1]!.seq : scanThroughSeq;
 
-  return { changes, cursor, hasMore };
+    return { changes, cursor, hasMore };
+  });
 }
 
 interface RealtimeClient {
   response: Response;
   workspaceIds: Set<string>;
   projectIds: Set<string> | null;
+  replaying: boolean;
+  pending: Array<{ changes: EntityChangeDto[]; cursor: number }>;
 }
 
 export interface AddRealtimeClientOptions {
@@ -197,12 +214,39 @@ export class RealtimeHub extends PollLoop {
       projectIds:
         options.projectIds === null || options.projectIds === undefined
           ? null
-          : new Set(options.projectIds)
+          : new Set(options.projectIds),
+      replaying: options.afterSeq !== undefined,
+      pending: []
     };
     this.clients.set(res, client);
     this.send(res, 'hello', { type: 'hello', cursor: this.cursor });
-    if (options.afterSeq !== undefined && options.afterSeq < this.cursor) {
-      void this.sendCatchUp(res, options.afterSeq);
+    if (options.afterSeq !== undefined) {
+      void this.sendCatchUp(res, options.afterSeq)
+        .then(cursor => {
+          const current = this.clients.get(res);
+          if (!current) return;
+          for (const pending of current.pending) {
+            const changes = pending.changes.filter(change => change.seq > cursor);
+            if (changes.length)
+              this.send(res, 'change', { type: 'change', changes, cursor: pending.cursor });
+            cursor = Math.max(cursor, pending.cursor);
+          }
+          current.pending = [];
+          current.replaying = false;
+        })
+        .catch(error => {
+          if (!this.clients.has(res)) return;
+          if (error instanceof ExpiredChangeCursor) {
+            this.send(res, 'snapshot_required', {
+              type: 'snapshot_required',
+              cursor: error.cursor
+            });
+          } else {
+            this.onPollError(error);
+          }
+          this.removeClient(res);
+          res.end();
+        });
     }
   }
 
@@ -238,7 +282,33 @@ export class RealtimeHub extends PollLoop {
       return;
     }
 
-    const rows = await client.all<ChangeRow>(SELECT_CHANGES_SQL, [this.cursor, CHANGE_BATCH_LIMIT]);
+    const pass = await withCommittedFeed(client, async tx => {
+      const state = await tx.get<{ retained_through: number }>(
+        `SELECT retained_through FROM entity_change_retention WHERE id = 1`
+      );
+      if (!state) throw new Error('Change-feed retention boundary is missing');
+      if (this.cursor < Number(state.retained_through)) {
+        return { expired: true as const, cursor: await currentMaxSeq(tx), rows: [] as ChangeRow[] };
+      }
+      return {
+        expired: false as const,
+        cursor: this.cursor,
+        rows: await tx.all<ChangeRow>(SELECT_CHANGES_SQL, [this.cursor, CHANGE_BATCH_LIMIT])
+      };
+    });
+    if (pass.expired) {
+      this.cursor = pass.cursor;
+      for (const { response } of [...this.clients.values()]) {
+        this.send(response, 'snapshot_required', {
+          type: 'snapshot_required',
+          cursor: pass.cursor
+        });
+        this.removeClient(response);
+        response.end();
+      }
+      return;
+    }
+    const rows = pass.rows;
     if (rows.length > 0) {
       this.cursor = rows[rows.length - 1]!.seq;
       // The authorization set is immutable for a request. End each stream
@@ -283,7 +353,15 @@ export class RealtimeHub extends PollLoop {
         )
         .map(entityChangeDtoFromRow);
       if (changes.length > 0) {
-        this.send(client.response, 'change', { type: 'change', changes, cursor });
+        if (client.replaying) {
+          client.pending.push({ changes, cursor });
+          if (client.pending.length > 100) {
+            this.removeClient(client.response);
+            client.response.end();
+          }
+        } else {
+          this.send(client.response, 'change', { type: 'change', changes, cursor });
+        }
       }
     }
   }
@@ -295,7 +373,7 @@ export class RealtimeHub extends PollLoop {
     }
   }
 
-  private async sendCatchUp(res: Response, afterSeq: number): Promise<void> {
+  private async sendCatchUp(res: Response, afterSeq: number): Promise<number> {
     let cursor = afterSeq;
     while (this.clients.has(res)) {
       const client = this.clients.get(res)!;
@@ -307,13 +385,14 @@ export class RealtimeHub extends PollLoop {
       );
       // A concurrent poll may have ended this stream because its authorization
       // snapshot changed while the filtered query was in flight.
-      if (!this.clients.has(res)) return;
+      if (!this.clients.has(res)) return cursor;
       if (batch.changes.length > 0) {
         this.send(res, 'change', { type: 'change', changes: batch.changes, cursor: batch.cursor });
       }
       cursor = batch.cursor;
-      if (!batch.hasMore) return;
+      if (!batch.hasMore) return cursor;
     }
+    return cursor;
   }
 
   private send(res: Response, event: string, data: unknown): void {
@@ -322,7 +401,7 @@ export class RealtimeHub extends PollLoop {
       typeof data === 'object' && data && 'cursor' in data
         ? Number((data as { cursor?: unknown }).cursor)
         : NaN;
-    if (Number.isFinite(cursor)) res.write(`id: ${cursor}\n`);
+    if (Number.isFinite(cursor) && event === 'change') res.write(`id: ${cursor}\n`);
     res.write(`data: ${JSON.stringify(data)}\n\n`);
   }
 }
