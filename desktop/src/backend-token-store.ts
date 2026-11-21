@@ -43,3 +43,22 @@ export function setSessionToken({ profileId, token }: { profileId: string; token
 export function clearSessionToken(profileId: string): void {
   store.delete(sessionStorageKey(profileId));
 }
+
+const LOCAL_OPENROUTER_KEY = 'localOpenRouterKey';
+
+export function getLocalOpenRouterKey(): string | null {
+  return readEncryptedToken(LOCAL_OPENROUTER_KEY);
+}
+
+export function setLocalOpenRouterKey(value: string): void {
+  const trimmed = value.trim();
+  if (!trimmed) throw new Error('Enter an OpenRouter API key.');
+  if (process.platform === 'linux' && safeStorage.getSelectedStorageBackend() === 'basic_text') {
+    throw new Error('Secure storage is unavailable on this system.');
+  }
+  writeEncryptedToken({ key: LOCAL_OPENROUTER_KEY, token: trimmed });
+}
+
+export function clearLocalOpenRouterKey(): void {
+  store.delete(LOCAL_OPENROUTER_KEY);
+}

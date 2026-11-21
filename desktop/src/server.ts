@@ -1,8 +1,10 @@
-import { type UtilityProcess, utilityProcess } from 'electron';
+import { app, type UtilityProcess, utilityProcess } from 'electron';
 import http from 'node:http';
 import net from 'node:net';
 
+import { getLocalOpenRouterKey } from './backend-token-store.js';
 import { createProcessSupervisor } from './backend-process.js';
+import { localOpenRouterEnvironment } from './local-openrouter-env.js';
 import { serverBundlePath, webappDistPath } from './paths.js';
 
 /**
@@ -35,11 +37,12 @@ const supervisor = createProcessSupervisor<UtilityProcess>({
 });
 
 function forkServer({ host, port }: ServerOptions): UtilityProcess {
+  const userKey = getLocalOpenRouterKey();
   const child = utilityProcess.fork(serverBundlePath(), [], {
     serviceName: 'overlord-server',
     stdio: 'pipe',
     env: {
-      ...process.env,
+      ...localOpenRouterEnvironment({ environment: process.env, userKey, packaged: app.isPackaged }),
       OVERLORD_WEB_HOST: host,
       OVERLORD_WEB_PORT: String(port),
       OVERLORD_WEBAPP_DIST: webappDistPath(),
