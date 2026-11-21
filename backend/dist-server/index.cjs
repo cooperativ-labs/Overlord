@@ -105525,7 +105525,7 @@ var require_dist_cjs16 = __commonJS({
     var { setCredentialFeature: setCredentialFeature2 } = (init_client3(), __toCommonJS(client_exports2));
     var { CredentialsProviderError: CredentialsProviderError2, readFile: readFile4, parseKnownFiles: parseKnownFiles2, getProfileName: getProfileName2 } = (init_config2(), __toCommonJS(config_exports));
     var { HttpRequest: HttpRequest2 } = (init_protocols(), __toCommonJS(protocols_exports));
-    var { createHash: createHash33, createPrivateKey, createPublicKey, sign: sign2 } = require("node:crypto");
+    var { createHash: createHash34, createPrivateKey, createPublicKey, sign: sign2 } = require("node:crypto");
     var { promises } = require("node:fs");
     var { homedir: homedir2 } = require("node:os");
     var { dirname, join: join6 } = require("node:path");
@@ -105686,7 +105686,7 @@ var require_dist_cjs16 = __commonJS({
       getTokenFilePath() {
         const directory = process.env.AWS_LOGIN_CACHE_DIRECTORY ?? join6(homedir2(), ".aws", "login", "cache");
         const loginSessionBytes = Buffer.from(this.loginSession, "utf8");
-        const loginSessionSha256 = createHash33("sha256").update(loginSessionBytes).digest("hex");
+        const loginSessionSha256 = createHash34("sha256").update(loginSessionBytes).digest("hex");
         return join6(directory, `${loginSessionSha256}.json`);
       }
       derToRawSignature(derSignature) {
@@ -113560,19 +113560,56 @@ function toPostgresPlaceholders(sql2) {
   let out = "";
   let index = 0;
   let inString = false;
+  let inLineComment = false;
+  let inBlockComment = false;
   for (let i5 = 0; i5 < sql2.length; i5++) {
     const ch = sql2[i5];
-    if (ch === "'") {
-      if (inString && sql2[i5 + 1] === "'") {
+    const next = sql2[i5 + 1];
+    if (inLineComment) {
+      out += ch;
+      if (ch === "\n")
+        inLineComment = false;
+      continue;
+    }
+    if (inBlockComment) {
+      if (ch === "*" && next === "/") {
+        out += "*/";
+        i5++;
+        inBlockComment = false;
+        continue;
+      }
+      out += ch;
+      continue;
+    }
+    if (inString) {
+      if (ch === "'" && next === "'") {
         out += "''";
         i5++;
         continue;
       }
-      inString = !inString;
+      out += ch;
+      if (ch === "'")
+        inString = false;
+      continue;
+    }
+    if (ch === "-" && next === "-") {
+      out += "--";
+      i5++;
+      inLineComment = true;
+      continue;
+    }
+    if (ch === "/" && next === "*") {
+      out += "/*";
+      i5++;
+      inBlockComment = true;
+      continue;
+    }
+    if (ch === "'") {
+      inString = true;
       out += ch;
       continue;
     }
-    if (ch === "?" && !inString) {
+    if (ch === "?") {
       index++;
       out += `$${index}`;
       continue;
@@ -135559,7 +135596,7 @@ var entityChangeOperationSchema = external_exports.enum(["insert", "update", "de
 var entityChangeDtoSchema = external_exports.object({ "seq": external_exports.int().min(1), "workspaceId": external_exports.string(), "entityType": external_exports.string(), "entityId": external_exports.string(), "operation": entityChangeOperationSchema, "projectId": external_exports.string().nullable(), "missionId": external_exports.string().nullable(), "objectiveId": external_exports.string().nullable(), "changedFields": external_exports.array(external_exports.string()), "occurredAt": dateTimeSchema });
 var syncChangesDtoSchema = external_exports.object({ "changes": external_exports.array(entityChangeDtoSchema), "cursor": external_exports.int().min(0), "hasMore": external_exports.boolean() });
 var realtimeChangeEventDtoSchema = external_exports.object({ "type": external_exports.literal("change"), "changes": external_exports.array(entityChangeDtoSchema), "cursor": external_exports.int().min(0) });
-var realtimeStreamEventSchema = external_exports.union([external_exports.object({ "type": external_exports.literal("hello"), "cursor": external_exports.int().min(0) }), realtimeChangeEventDtoSchema, external_exports.object({ "type": external_exports.literal("refresh") })]);
+var realtimeStreamEventSchema = external_exports.union([external_exports.object({ "type": external_exports.literal("hello"), "cursor": external_exports.int().min(0) }), realtimeChangeEventDtoSchema, external_exports.object({ "type": external_exports.literal("refresh") }), external_exports.object({ "type": external_exports.literal("snapshot_required"), "cursor": external_exports.int().min(0) })]);
 var oAuthScopeSchema = external_exports.enum(["overlord.workspace.read", "overlord.mission.read", "overlord.mission.write", "overlord.session.write"]);
 var oAuthProtectedResourceMetadataSchema = external_exports.object({ "resource": external_exports.string(), "authorization_servers": external_exports.array(external_exports.string()), "bearer_methods_supported": external_exports.array(external_exports.literal("header")), "resource_documentation": external_exports.string(), "scopes_supported": external_exports.array(oAuthScopeSchema) });
 var oAuthAuthorizationServerMetadataSchema = external_exports.object({ "issuer": external_exports.string(), "authorization_endpoint": external_exports.string(), "token_endpoint": external_exports.string(), "registration_endpoint": external_exports.string(), "revocation_endpoint": external_exports.string(), "response_types_supported": external_exports.array(external_exports.literal("code")), "grant_types_supported": external_exports.array(external_exports.literal("authorization_code")), "code_challenge_methods_supported": external_exports.array(external_exports.literal("S256")), "token_endpoint_auth_methods_supported": external_exports.array(external_exports.literal("none")), "scopes_supported": external_exports.array(oAuthScopeSchema) });
@@ -135858,7 +135895,9 @@ var getStreamQueryParamsSchema = external_exports.object({ "after": external_exp
 var getStreamHeaderParamsSchema = external_exports.object({ "last-event-id": external_exports.exactOptional(external_exports.string()) });
 var getRealtimeQueryParamsSchema = external_exports.object({ "after": external_exports.exactOptional(external_exports.string()) });
 var getRealtimeHeaderParamsSchema = external_exports.object({ "last-event-id": external_exports.exactOptional(external_exports.string()) });
+var getSyncBaselineResponse200Schema = external_exports.object({ "cursor": external_exports.int().min(0) });
 var getSyncChangesQueryParamsSchema = external_exports.object({ "after": external_exports.string() });
+var getSyncChangesResponse409Schema = external_exports.object({ "error": external_exports.string(), "code": external_exports.literal("snapshot_required"), "cursor": external_exports.int().min(0) });
 var getProjectsQueryParamsSchema = external_exports.object({ "lifecycle": external_exports.exactOptional(projectListLifecycleSchema) });
 var getProjectsByIdPathParamsSchema = external_exports.object({ "id": external_exports.string() });
 var deleteProjectsByIdPathParamsSchema = external_exports.object({ "id": external_exports.string() });
@@ -138119,6 +138158,25 @@ var apiOperations = {
     responses: { "200": { headers: [], content: { "text/event-stream": { kind: "event-stream", event: realtimeStreamEventSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
   },
   /**
+   * GET /sync/baseline: Acquire a commit-safe state refresh cursor
+   */
+  getSyncBaseline: {
+    operationId: "getSyncBaseline",
+    method: "GET",
+    path: "/sync/baseline",
+    tags: ["realtime"],
+    deprecated: false,
+    permission: "project:read",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["mobile", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: null, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: ["Cache-Control"], content: { "application/json": { kind: "json", schema: getSyncBaselineResponse200Schema } } }, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "500": apiResponses.InternalError }
+  },
+  /**
    * GET /sync/changes: Change feed catch-up
    */
   getSyncChanges: {
@@ -138135,7 +138193,7 @@ var apiOperations = {
     security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
     parameters: { path: null, query: getSyncChangesQueryParamsSchema, header: null },
     requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: syncChangesDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: syncChangesDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": { headers: ["Cache-Control"], content: { "application/json": { kind: "json", schema: getSyncChangesResponse409Schema } } }, "500": apiResponses.InternalError }
   },
   /**
    * GET /api/projects: List readable projects across the caller's workspaces
@@ -143783,11 +143841,23 @@ async function enqueueWebhookEventRest(input2, client = requireDatabaseClient())
     entity: input2.entity
   });
 }
+async function withCommittedFeed(client, read) {
+  return client.transaction(async (tx) => {
+    if (tx.dialect === "postgres") {
+      await tx.exec("SET LOCAL lock_timeout = '2s'");
+      await tx.exec("LOCK TABLE entity_changes IN SHARE MODE");
+    }
+    return read(tx);
+  });
+}
 async function currentMaxSeq(client = requireDatabaseClient()) {
-  const row = await client.get(
-    `SELECT MAX(seq) AS seq FROM entity_changes`
-  );
-  return row?.seq ?? 0;
+  return withCommittedFeed(client, async (tx) => {
+    const row = await tx.get(
+      `SELECT (SELECT MAX(seq) FROM entity_changes) AS seq, retained_through FROM entity_change_retention WHERE id = 1`
+    );
+    if (!row) throw new Error("Change-feed retention boundary is missing");
+    return Math.max(Number(row.seq ?? 0), Number(row.retained_through));
+  });
 }
 
 // ../packages/core/service/errors.ts
@@ -151320,7 +151390,8 @@ async function forgetLatchProviderSession({
   ctx,
   missionId,
   executionRequestId,
-  providerSessionId
+  providerSessionId,
+  backgroundObservation
 }) {
   const sessionId = providerSessionId.trim();
   if (!sessionId) {
@@ -151328,9 +151399,11 @@ async function forgetLatchProviderSession({
   }
   return ctx.db.transaction(async (tx) => {
     const rows = await tx.all(
-      executionRequestId ? `SELECT id, project_id, mission_id, objective_id, metadata_json, updated_at, revision
+      executionRequestId ? `SELECT id, project_id, mission_id, objective_id, metadata_json, updated_at, revision,
+                  COALESCE(claimed_by_execution_target_id, execution_target_id) AS target_id
              FROM execution_requests
-            WHERE id = ? AND mission_id = ? AND workspace_id = ? AND deleted_at IS NULL` : `SELECT id, project_id, mission_id, objective_id, metadata_json, updated_at, revision
+            WHERE id = ? AND mission_id = ? AND workspace_id = ? AND deleted_at IS NULL` : `SELECT id, project_id, mission_id, objective_id, metadata_json, updated_at, revision,
+                  COALESCE(claimed_by_execution_target_id, execution_target_id) AS target_id
              FROM execution_requests
             WHERE mission_id = ? AND workspace_id = ? AND deleted_at IS NULL
             ORDER BY updated_at DESC, created_at DESC`,
@@ -151343,6 +151416,8 @@ async function forgetLatchProviderSession({
     if (!row) return { forgotten: false, executionRequestId: executionRequestId ?? null };
     const previous = parseMetadata(row.metadata_json);
     const mapped = providerSessionFromMetadata(previous);
+    if (backgroundObservation && (!mapped || (mapped.executionTargetId ?? row.target_id) !== backgroundObservation.executionTargetId || mapped.lastObservedState === "exited" || mapped.lastObservedAt && mapped.lastObservedAt > backgroundObservation.startedAt || mapped.endRequestedAt && mapped.endRequestedAt > backgroundObservation.startedAt))
+      return { forgotten: false, executionRequestId: row.id };
     const stripped = parseMetadata(
       stripProviderSessionFromMetadata({ metadataJson: row.metadata_json })
     );
@@ -151498,6 +151573,7 @@ async function createLocalTargetMutationRequest({
   input: input2,
   operationId = null,
   resourceKey = null,
+  backgroundProbeKey = null,
   eventSummary
 }) {
   const mission = missionId === null ? null : await resolveMissionId(ctx, missionId);
@@ -151506,11 +151582,11 @@ async function createLocalTargetMutationRequest({
   const idempotencyKey = operationId?.trim() || null;
   if (idempotencyKey !== null) {
     const existing = await ctx.db.get(
-      `SELECT id FROM execution_requests
+      `SELECT id, created_at FROM execution_requests
         WHERE workspace_id = ? AND idempotency_key = ? AND deleted_at IS NULL`,
       [ctx.workspace.id, idempotencyKey]
     );
-    if (existing) return { id: existing.id, reused: true };
+    if (existing) return { id: existing.id, reused: true, createdAt: existing.created_at };
   }
   const now2 = nowIso();
   const id2 = newId();
@@ -151523,8 +151599,8 @@ async function createLocalTargetMutationRequest({
             requested_agent, requested_model, requested_reasoning_effort, launch_mode,
             launch_flags_json, requested_source, idempotency_key, status,
             requested_by_workspace_user_id, resolved_resource_id, resolved_working_directory,
-            metadata_json, created_at, updated_at, revision)
-         VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, NULL, 'run', '{}', ?, ?, 'queued', ?, NULL, NULL, ?, ?, ?, 1)`,
+            metadata_json, created_at, updated_at, revision, background_probe_key)
+         VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, NULL, 'run', '{}', ?, ?, 'queued', ?, NULL, NULL, ?, ?, ?, 1, ?)`,
       [
         id2,
         ctx.workspace.id,
@@ -151537,20 +151613,22 @@ async function createLocalTargetMutationRequest({
         ctx.actorWorkspaceUserId,
         JSON.stringify(metadata),
         now2,
-        now2
+        now2,
+        backgroundProbeKey
       ]
     );
-    await recordChange({
-      ctx: txCtx,
-      entityType: "execution_request",
-      entityId: id2,
-      operation: "insert",
-      entityRevision: 1,
-      projectId: resolvedProjectId,
-      missionId: mission?.id ?? null,
-      objectiveId,
-      changedFields: ["status", "requested_source", "metadata_json"]
-    });
+    if (backgroundProbeKey === null)
+      await recordChange({
+        ctx: txCtx,
+        entityType: "execution_request",
+        entityId: id2,
+        operation: "insert",
+        entityRevision: 1,
+        projectId: resolvedProjectId,
+        missionId: mission?.id ?? null,
+        objectiveId,
+        changedFields: ["status", "requested_source", "metadata_json"]
+      });
     if (mission !== null && objectiveId !== null) {
       await txCtx.db.run(
         `INSERT INTO mission_events
@@ -151571,7 +151649,7 @@ async function createLocalTargetMutationRequest({
       );
     }
   });
-  return { id: id2, reused: false };
+  return { id: id2, reused: false, createdAt: now2 };
 }
 function sleep(ms, signal = null) {
   return new Promise((resolve) => {
@@ -151662,6 +151740,7 @@ async function completeLocalTargetMutationRequest({
 }) {
   const row = await ctx.db.get(
     `SELECT id, workspace_id, project_id, mission_id, objective_id, status, revision, metadata_json,
+            background_probe_key,
             requested_source, COALESCE(claimed_by_execution_target_id, execution_target_id) AS target_id
        FROM execution_requests
       WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
@@ -151677,6 +151756,8 @@ async function completeLocalTargetMutationRequest({
       409
     );
   }
+  const mutation = parseLocalTargetMutation(row.metadata_json);
+  if (row.background_probe_key && mutation?.result) return mutation;
   if (row.status !== "launching" && row.status !== "claimed") {
     throw new ServiceError(
       `Cannot complete local-target mutation from status ${row.status}.`,
@@ -151684,7 +151765,6 @@ async function completeLocalTargetMutationRequest({
       409
     );
   }
-  const mutation = parseLocalTargetMutation(row.metadata_json);
   if (!mutation) {
     throw new ServiceError(
       "Execution request is missing local-target mutation metadata.",
@@ -151707,7 +151787,7 @@ async function completeLocalTargetMutationRequest({
   const revision3 = row.revision + 1;
   const nextStatus = result2.ok ? "launched" : "failed";
   const lastError = result2.ok ? null : result2.message;
-  await ctx.db.transaction(async (tx) => {
+  return ctx.db.transaction(async (tx) => {
     const txCtx = { ...ctx, db: tx };
     const updated = await txCtx.db.run(
       `UPDATE execution_requests
@@ -151731,23 +151811,32 @@ async function completeLocalTargetMutationRequest({
       ]
     );
     if (updated.changes === 0) {
+      if (row.background_probe_key) {
+        const current = await tx.get(
+          "SELECT metadata_json FROM execution_requests WHERE id = ? AND workspace_id = ?",
+          [row.id, ctx.workspace.id]
+        );
+        const completed = current && parseLocalTargetMutation(current.metadata_json);
+        if (completed?.result) return completed;
+      }
       throw new ServiceError(
         "Execution request changed while completing local-target mutation.",
         "execution_request_conflict",
         409
       );
     }
-    await recordChange({
-      ctx: txCtx,
-      entityType: "execution_request",
-      entityId: row.id,
-      operation: "update",
-      entityRevision: revision3,
-      projectId: row.project_id,
-      missionId: row.mission_id,
-      objectiveId: row.objective_id,
-      changedFields: ["status", "metadata_json", "last_error", "launch_completed_at"]
-    });
+    if (row.background_probe_key === null)
+      await recordChange({
+        ctx: txCtx,
+        entityType: "execution_request",
+        entityId: row.id,
+        operation: "update",
+        entityRevision: revision3,
+        projectId: row.project_id,
+        missionId: row.mission_id,
+        objectiveId: row.objective_id,
+        changedFields: ["status", "metadata_json", "last_error", "launch_completed_at"]
+      });
     if (row.mission_id !== null && row.objective_id !== null) {
       await txCtx.db.run(
         `INSERT INTO mission_events
@@ -151766,7 +151855,7 @@ async function completeLocalTargetMutationRequest({
         ]
       );
     }
-    if (mutation.capability === "inspectLatchSession" && !result2.ok && result2.code === "LATCH_SESSION_ABSENT" && row.target_id && typeof mutation.input.providerSessionId === "string") {
+    if (row.background_probe_key === null && mutation.capability === "inspectLatchSession" && !result2.ok && result2.code === "LATCH_SESSION_ABSENT" && row.target_id && typeof mutation.input.providerSessionId === "string") {
       await forgetAbsentLatchProviderSessions({
         ctx: txCtx,
         projectId: row.project_id,
@@ -151775,8 +151864,8 @@ async function completeLocalTargetMutationRequest({
       });
     }
     await recordAnswerDeliveryOutcome2({ ctx: txCtx, mutation, result: result2 });
+    return { ...mutation, result: storedResult };
   });
-  return parseLocalTargetMutation(JSON.stringify(metadata));
 }
 async function recordAnswerDeliveryOutcome2({
   ctx,
@@ -151819,7 +151908,7 @@ async function cancelQueuedLocalTargetMutation({
   return await ctx.db.transaction(async (tx) => {
     const txCtx = { ...ctx, db: tx };
     const row = await tx.get(
-      `SELECT id, project_id, mission_id, objective_id, revision, metadata_json
+      `SELECT id, project_id, mission_id, objective_id, revision, metadata_json, background_probe_key
          FROM execution_requests
         WHERE id = ? AND workspace_id = ? AND requested_source = ?
           AND status = 'queued' AND deleted_at IS NULL`,
@@ -151833,17 +151922,18 @@ async function cancelQueuedLocalTargetMutation({
       ["Withdrawn before any runner claimed it.", now2, row.revision + 1, row.id, row.revision]
     );
     if (updated.changes === 0) return { cancelled: false };
-    await recordChange({
-      ctx: txCtx,
-      entityType: "execution_request",
-      entityId: row.id,
-      operation: "update",
-      entityRevision: row.revision + 1,
-      projectId: row.project_id,
-      missionId: row.mission_id,
-      objectiveId: row.objective_id,
-      changedFields: ["status", "last_error"]
-    });
+    if (row.background_probe_key === null)
+      await recordChange({
+        ctx: txCtx,
+        entityType: "execution_request",
+        entityId: row.id,
+        operation: "update",
+        entityRevision: row.revision + 1,
+        projectId: row.project_id,
+        missionId: row.mission_id,
+        objectiveId: row.objective_id,
+        changedFields: ["status", "last_error"]
+      });
     await recordAnswerDeliveryForTerminalRequest({
       ctx: txCtx,
       metadataJson: row.metadata_json,
@@ -158127,6 +158217,7 @@ async function publishDeliverySummary({
 }
 
 // ../packages/core/service/execution-target-runners.ts
+var import_node_util = require("node:util");
 var RUNNER_HEARTBEAT_STALE_MS = 5 * 60 * 1e3;
 var LIVE_RUNNER_HEALTH = ["healthy", "degraded"];
 function isStaleHeartbeat(lastHeartbeatAt, now2) {
@@ -158242,25 +158333,95 @@ async function recordRunnerHeartbeat({
   health = "healthy",
   lastErrorCode = null
 }) {
-  const now2 = nowIso();
-  const capabilitiesJson = JSON.stringify(capabilities2 ?? {});
-  const supportedAgentsJson = JSON.stringify(supportedAgents ?? []);
-  const existing = await ctx.db.get(
-    `SELECT id, revision, health, last_heartbeat_at FROM execution_target_runner_registrations
-        WHERE workspace_id = ? AND runner_instance_id = ? AND deleted_at IS NULL`,
-    [ctx.workspace.id, runnerInstanceId]
-  );
-  const reconnected = !existing || existing.health !== health && health === "healthy" || isStaleHeartbeat(existing.last_heartbeat_at, now2);
-  if (existing) {
-    await ctx.db.run(
-      `UPDATE execution_target_runner_registrations
+  return ctx.db.transaction(async (db) => {
+    ctx = { ...ctx, db };
+    const capabilitiesJson = JSON.stringify(capabilities2 ?? {});
+    const supportedAgentsJson = JSON.stringify(supportedAgents ?? []);
+    const existing = await ctx.db.get(
+      `SELECT id, revision, health, last_heartbeat_at, execution_target_id, relation, label,
+            runner_version, capabilities_json, supported_agents_json, last_error_code
+       FROM execution_target_runner_registrations
+        WHERE workspace_id = ? AND runner_instance_id = ? AND deleted_at IS NULL${db.dialect === "postgres" ? " FOR UPDATE" : ""}`,
+      [ctx.workspace.id, runnerInstanceId]
+    );
+    const now2 = nowIso();
+    const reconnected = !existing || existing.health !== health && health === "healthy" || isStaleHeartbeat(existing.last_heartbeat_at, now2);
+    if (existing) {
+      const changedFields = [];
+      if (existing.execution_target_id !== executionTargetId)
+        changedFields.push("execution_target_id");
+      if (existing.relation !== relation) changedFields.push("relation");
+      if (existing.label !== trimmed7(label)) changedFields.push("label");
+      if (existing.runner_version !== trimmed7(runnerVersion)) changedFields.push("runner_version");
+      const jsonChanged = (stored, value2) => {
+        try {
+          return !(0, import_node_util.isDeepStrictEqual)(JSON.parse(stored), value2);
+        } catch {
+          return true;
+        }
+      };
+      if (jsonChanged(existing.capabilities_json, capabilities2 ?? {}))
+        changedFields.push("capabilities");
+      if (jsonChanged(existing.supported_agents_json, supportedAgents ?? []))
+        changedFields.push("supported_agents");
+      if (existing.health !== health) changedFields.push("health");
+      if (existing.last_error_code !== lastErrorCode) changedFields.push("last_error_code");
+      await ctx.db.run(
+        `UPDATE execution_target_runner_registrations
           SET execution_target_id = ?, relation = ?, label = ?, runner_version = ?,
               capabilities_json = ?, supported_agents_json = ?, health = ?,
               last_heartbeat_at = ?, last_error_code = ?, updated_at = ?,
               revision = revision + 1
         WHERE id = ?`,
-      [
+        [
+          executionTargetId,
+          relation,
+          trimmed7(label),
+          trimmed7(runnerVersion),
+          capabilitiesJson,
+          supportedAgentsJson,
+          health,
+          now2,
+          lastErrorCode,
+          now2,
+          existing.id
+        ]
+      );
+      if (changedFields.length || reconnected)
+        await recordChange({
+          ctx,
+          entityType: "execution_target_runner_registration",
+          entityId: existing.id,
+          operation: "update",
+          entityRevision: existing.revision + 1,
+          changedFields: [...changedFields, "last_heartbeat_at"]
+        });
+      if (reconnected) await enqueueRunQueueDispatchForWorkspace(ctx.db, ctx.workspace.id);
+      return {
+        id: existing.id,
         executionTargetId,
+        runnerInstanceId,
+        relation,
+        label: trimmed7(label),
+        runnerVersion: trimmed7(runnerVersion),
+        supportedAgents: supportedAgents ?? [],
+        health,
+        lastHeartbeatAt: now2,
+        lastErrorCode
+      };
+    }
+    const id2 = newId();
+    await ctx.db.run(
+      `INSERT INTO execution_target_runner_registrations
+        (id, workspace_id, execution_target_id, runner_instance_id, relation, label,
+         runner_version, capabilities_json, supported_agents_json, health,
+         last_heartbeat_at, last_error_code, created_at, updated_at, revision)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+      [
+        id2,
+        ctx.workspace.id,
+        executionTargetId,
+        runnerInstanceId,
         relation,
         trimmed7(label),
         trimmed7(runnerVersion),
@@ -158270,20 +158431,19 @@ async function recordRunnerHeartbeat({
         now2,
         lastErrorCode,
         now2,
-        existing.id
+        now2
       ]
     );
     await recordChange({
       ctx,
       entityType: "execution_target_runner_registration",
-      entityId: existing.id,
-      operation: "update",
-      entityRevision: existing.revision + 1,
-      changedFields: ["health", "last_heartbeat_at", "relation", "execution_target_id"]
+      entityId: id2,
+      operation: "insert",
+      entityRevision: 1
     });
     if (reconnected) await enqueueRunQueueDispatchForWorkspace(ctx.db, ctx.workspace.id);
     return {
-      id: existing.id,
+      id: id2,
       executionTargetId,
       runnerInstanceId,
       relation,
@@ -158294,51 +158454,7 @@ async function recordRunnerHeartbeat({
       lastHeartbeatAt: now2,
       lastErrorCode
     };
-  }
-  const id2 = newId();
-  await ctx.db.run(
-    `INSERT INTO execution_target_runner_registrations
-        (id, workspace_id, execution_target_id, runner_instance_id, relation, label,
-         runner_version, capabilities_json, supported_agents_json, health,
-         last_heartbeat_at, last_error_code, created_at, updated_at, revision)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
-    [
-      id2,
-      ctx.workspace.id,
-      executionTargetId,
-      runnerInstanceId,
-      relation,
-      trimmed7(label),
-      trimmed7(runnerVersion),
-      capabilitiesJson,
-      supportedAgentsJson,
-      health,
-      now2,
-      lastErrorCode,
-      now2,
-      now2
-    ]
-  );
-  await recordChange({
-    ctx,
-    entityType: "execution_target_runner_registration",
-    entityId: id2,
-    operation: "insert",
-    entityRevision: 1
   });
-  if (reconnected) await enqueueRunQueueDispatchForWorkspace(ctx.db, ctx.workspace.id);
-  return {
-    id: id2,
-    executionTargetId,
-    runnerInstanceId,
-    relation,
-    label: trimmed7(label),
-    runnerVersion: trimmed7(runnerVersion),
-    supportedAgents: supportedAgents ?? [],
-    health,
-    lastHeartbeatAt: now2,
-    lastErrorCode
-  };
 }
 async function listRunnerRegistrations({
   ctx,
@@ -159217,6 +159333,48 @@ async function registerActingExecutionTarget({
   };
 }
 
+// ../packages/core/service/terminal-probe-policy.ts
+var TERMINAL_PROBE_TIMEOUT_MS = 1e4;
+var TERMINAL_PROBE_RESULT_REUSE_MS = 5e3;
+var TERMINAL_PROBE_RETENTION_MS = 15 * 6e4;
+var ABANDONED_PROBE_RETENTION_MS = 60 * 6e4;
+var LEGACY_PROBE_RETENTION_MS = 21 * 24 * 60 * 6e4;
+async function pruneTerminalProbes(db, now2 = Date.now()) {
+  const lock = db.dialect === "postgres" ? "FOR UPDATE SKIP LOCKED" : "";
+  const result2 = await db.run(
+    `DELETE FROM execution_requests AS probe WHERE id IN (
+       SELECT er.id FROM execution_requests er
+        WHERE er.background_probe_key IS NOT NULL AND er.updated_at < ?
+          AND (er.status NOT IN ('claimed', 'launching') OR er.updated_at < ?)
+        ORDER BY er.updated_at, er.id LIMIT 1000 ${lock}
+     ) AND NOT EXISTS (
+       SELECT 1 FROM entity_changes c WHERE c.entity_type = 'execution_request' AND c.entity_id = probe.id
+     )`,
+    [
+      new Date(now2 - TERMINAL_PROBE_RETENTION_MS).toISOString(),
+      new Date(now2 - ABANDONED_PROBE_RETENTION_MS).toISOString()
+    ]
+  );
+  return result2.changes;
+}
+async function pruneLegacyTerminalProbes(db, now2 = Date.now()) {
+  const result2 = await db.run(
+    `DELETE FROM execution_requests AS probe WHERE id IN (
+       SELECT er.id FROM execution_requests er
+        WHERE er.requested_source = 'local_target_mutation'
+          AND er.idempotency_key LIKE 'terminal-observe:%'
+          AND er.metadata_json->'overlord.localTargetMutation'->>'capability' = 'inspectLatchSession'
+          AND er.status IN ('launched', 'failed', 'cancelled', 'cleared', 'expired')
+          AND er.updated_at < ?
+        ORDER BY er.updated_at, er.id LIMIT 1000 FOR UPDATE SKIP LOCKED
+     ) AND NOT EXISTS (
+       SELECT 1 FROM entity_changes c WHERE c.entity_type = 'execution_request' AND c.entity_id = probe.id
+     )`,
+    [new Date(now2 - LEGACY_PROBE_RETENTION_MS).toISOString()]
+  );
+  return result2.changes;
+}
+
 // ../packages/core/service/execution-requests.ts
 var ACTIVE_EXECUTION_REQUEST_STATUSES = ["queued", "claimed", "launching"];
 var LAUNCHABLE_OBJECTIVE_STATES2 = [
@@ -159347,7 +159505,7 @@ async function getExecutionRequestStateRow({
 }) {
   const row = await ctx.db.get(
     `SELECT id, workspace_id, project_id, mission_id, objective_id, execution_target_id,
-              status, revision, launch_flags_json, launched_session_id
+              status, revision, launch_flags_json, launched_session_id, background_probe_key
          FROM execution_requests
         WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
     [requestId, ctx.workspace.id]
@@ -159415,6 +159573,7 @@ async function recordExecutionRequestUpdate({
   revision: revision3,
   changedFields
 }) {
+  if (row.background_probe_key !== null) return;
   await recordChange({
     ctx,
     entityType: "execution_request",
@@ -159617,7 +159776,11 @@ async function listExecutionRequests({
   includeInactive = false,
   limit: limit2 = 50
 }) {
-  const conditions = ["er.workspace_id = ?", "er.deleted_at IS NULL"];
+  const conditions = [
+    "er.workspace_id = ?",
+    "er.deleted_at IS NULL",
+    "er.background_probe_key IS NULL"
+  ];
   const params = [ctx.workspace.id];
   if (!includeInactive) {
     conditions.push(
@@ -159667,13 +159830,15 @@ async function claimNextExecutionRequest({
     "er.deleted_at IS NULL",
     "o.deleted_at IS NULL",
     `(er.requested_source = ? OR o.state IN (${LAUNCHABLE_OBJECTIVE_STATES2.map(() => "?").join(", ")}))`,
-    "(er.execution_target_id IS NULL OR er.execution_target_id = ?)"
+    "(er.execution_target_id IS NULL OR er.execution_target_id = ?)",
+    "(er.background_probe_key IS NULL OR er.created_at >= ?)"
   ];
   const params = [
     ctx.workspace.id,
     LOCAL_TARGET_MUTATION_REQUESTED_SOURCE,
     ...LAUNCHABLE_OBJECTIVE_STATES2,
-    target.executionTargetId
+    target.executionTargetId,
+    new Date(Date.now() - TERMINAL_PROBE_TIMEOUT_MS).toISOString()
   ];
   if (projectId) {
     conditions.push("er.project_id = ?");
@@ -159685,6 +159850,7 @@ async function claimNextExecutionRequest({
       `SELECT er.id, er.workspace_id, er.project_id, er.mission_id, er.objective_id,
                 er.execution_target_id, er.status, er.revision, er.launch_flags_json,
                 er.launched_session_id, er.resolved_working_directory, er.metadata_json,
+                er.background_probe_key,
                 o.resource_key
            FROM execution_requests er
            LEFT JOIN objectives o ON o.id = er.objective_id
@@ -159717,16 +159883,18 @@ async function claimNextExecutionRequest({
     const expires = new Date(Date.now() + claimTtlMs).toISOString();
     const revision3 = candidate.revision + 1;
     let metadataJson = candidate.metadata_json;
-    try {
-      const session = await resolveLaunchSessionForExecutionTarget({
-        ctx: txCtx,
-        executionTargetId: candidate.execution_target_id ?? target.executionTargetId
-      });
-      metadataJson = JSON.stringify({
-        ...parseJsonObject(candidate.metadata_json),
-        [LAUNCH_SESSION_METADATA_KEY]: toLaunchSessionSnapshot(session, now2)
-      });
-    } catch {
+    if (candidate.background_probe_key === null) {
+      try {
+        const session = await resolveLaunchSessionForExecutionTarget({
+          ctx: txCtx,
+          executionTargetId: candidate.execution_target_id ?? target.executionTargetId
+        });
+        metadataJson = JSON.stringify({
+          ...parseJsonObject(candidate.metadata_json),
+          [LAUNCH_SESSION_METADATA_KEY]: toLaunchSessionSnapshot(session, now2)
+        });
+      } catch {
+      }
     }
     const updated = await txCtx.db.run(
       `UPDATE execution_requests
@@ -160009,7 +160177,7 @@ async function clearExecutionRequests({
     }
     const rows = await txCtx.db.all(
       `SELECT id, workspace_id, project_id, mission_id, objective_id, execution_target_id,
-                status, revision, launch_flags_json, launched_session_id
+                status, revision, launch_flags_json, launched_session_id, background_probe_key
            FROM execution_requests
           WHERE ${conditions.join(" AND ")}`,
       params
@@ -160063,7 +160231,7 @@ async function expireStaleExecutionRequests({
     const rows = await txCtx.db.all(
       `SELECT er.id, er.workspace_id, er.project_id, er.mission_id, er.objective_id,
                 er.execution_target_id, er.status, er.revision, er.launch_flags_json,
-                er.launched_session_id
+                er.launched_session_id, er.background_probe_key
            FROM execution_requests er
            LEFT JOIN objectives o ON o.id = er.objective_id
           WHERE er.workspace_id = ?
@@ -160149,7 +160317,7 @@ async function linkExecutionRequestToSession({
     const txCtx = { ...ctx, db: tx };
     const row = executionRequestId ? await txCtx.db.get(
       `SELECT id, workspace_id, project_id, mission_id, objective_id, execution_target_id,
-                    status, revision, launch_flags_json, launched_session_id
+                    status, revision, launch_flags_json, launched_session_id, background_probe_key
                FROM execution_requests
               WHERE id = ?
                 AND workspace_id = ?
@@ -160159,7 +160327,7 @@ async function linkExecutionRequestToSession({
       [executionRequestId, ctx.workspace.id, missionId, objectiveId]
     ) : await txCtx.db.get(
       `SELECT id, workspace_id, project_id, mission_id, objective_id, execution_target_id,
-                    status, revision, launch_flags_json, launched_session_id
+                    status, revision, launch_flags_json, launched_session_id, background_probe_key
                FROM execution_requests
               WHERE workspace_id = ?
                 AND mission_id = ?
@@ -166367,6 +166535,13 @@ function entityChangeDtoFromRow(row) {
     occurredAt: row.occurred_at
   };
 }
+var ExpiredChangeCursor = class extends Error {
+  constructor(cursor3) {
+    super("Change-feed cursor expired; refresh authorized state.");
+    this.cursor = cursor3;
+  }
+  cursor;
+};
 async function readableChangeFeedWorkspaceIds() {
   const authorized = getAuthorizedWorkspacesContext();
   if (!authorized) return [];
@@ -166386,36 +166561,44 @@ async function readChangesAfter(afterSeq, workspaceIds, limit2 = CHANGE_BATCH_LI
   const requestedLimit = Number.isFinite(limit2) ? Math.floor(limit2) : CHANGE_BATCH_LIMIT;
   const normalizedLimit = Math.max(1, Math.min(requestedLimit, CHANGE_BATCH_LIMIT));
   const client = requireDatabaseClient();
-  const scanThroughSeq = Math.max(normalizedAfter, await currentMaxSeq(client));
-  const authorizedWorkspaceIds = [...new Set(workspaceIds.filter(Boolean))];
-  if (authorizedWorkspaceIds.length === 0 || scanThroughSeq === normalizedAfter) {
-    return { changes: [], cursor: scanThroughSeq, hasMore: false };
-  }
-  const workspacePlaceholders = authorizedWorkspaceIds.map(() => "?").join(", ");
-  if (projectIds !== null && projectIds.length === 0) {
-    return { changes: [], cursor: scanThroughSeq, hasMore: false };
-  }
-  const projectPredicate = projectIds === null ? "" : ` AND project_id IN (${projectIds.map(() => "?").join(", ")})`;
-  const rows = await client.all(
-    `SELECT seq, workspace_id, entity_type, entity_id, operation, project_id, mission_id,
+  return withCommittedFeed(client, async (client2) => {
+    const scanThroughSeq = Math.max(normalizedAfter, await currentMaxSeq(client2));
+    const state2 = await client2.get(
+      `SELECT retained_through FROM entity_change_retention WHERE id = 1`
+    );
+    if (!state2) throw new Error("Change-feed retention boundary is missing");
+    if (normalizedAfter < Number(state2.retained_through))
+      throw new ExpiredChangeCursor(scanThroughSeq);
+    const authorizedWorkspaceIds = [...new Set(workspaceIds.filter(Boolean))];
+    if (authorizedWorkspaceIds.length === 0 || scanThroughSeq === normalizedAfter) {
+      return { changes: [], cursor: scanThroughSeq, hasMore: false };
+    }
+    const workspacePlaceholders = authorizedWorkspaceIds.map(() => "?").join(", ");
+    if (projectIds !== null && projectIds.length === 0) {
+      return { changes: [], cursor: scanThroughSeq, hasMore: false };
+    }
+    const projectPredicate = projectIds === null ? "" : ` AND project_id IN (${projectIds.map(() => "?").join(", ")})`;
+    const rows = await client2.all(
+      `SELECT seq, workspace_id, entity_type, entity_id, operation, project_id, mission_id,
             objective_id, changed_fields_json, occurred_at
        FROM entity_changes
       WHERE seq > ? AND seq <= ? AND workspace_id IN (${workspacePlaceholders})${projectPredicate}
       ORDER BY seq ASC
       LIMIT ?`,
-    [
-      normalizedAfter,
-      scanThroughSeq,
-      ...authorizedWorkspaceIds,
-      ...projectIds ?? [],
-      normalizedLimit + 1
-    ]
-  );
-  const hasMore = rows.length > normalizedLimit;
-  const returnedRows = hasMore ? rows.slice(0, normalizedLimit) : rows;
-  const changes = returnedRows.map(entityChangeDtoFromRow);
-  const cursor3 = hasMore ? changes[changes.length - 1].seq : scanThroughSeq;
-  return { changes, cursor: cursor3, hasMore };
+      [
+        normalizedAfter,
+        scanThroughSeq,
+        ...authorizedWorkspaceIds,
+        ...projectIds ?? [],
+        normalizedLimit + 1
+      ]
+    );
+    const hasMore = rows.length > normalizedLimit;
+    const returnedRows = hasMore ? rows.slice(0, normalizedLimit) : rows;
+    const changes = returnedRows.map(entityChangeDtoFromRow);
+    const cursor3 = hasMore ? changes[changes.length - 1].seq : scanThroughSeq;
+    return { changes, cursor: cursor3, hasMore };
+  });
 }
 var RealtimeHub = class extends PollLoop {
   clients = /* @__PURE__ */ new Map();
@@ -166447,12 +166630,37 @@ var RealtimeHub = class extends PollLoop {
     const client = {
       response: res,
       workspaceIds: new Set(options.workspaceIds),
-      projectIds: options.projectIds === null || options.projectIds === void 0 ? null : new Set(options.projectIds)
+      projectIds: options.projectIds === null || options.projectIds === void 0 ? null : new Set(options.projectIds),
+      replaying: options.afterSeq !== void 0,
+      pending: []
     };
     this.clients.set(res, client);
     this.send(res, "hello", { type: "hello", cursor: this.cursor });
-    if (options.afterSeq !== void 0 && options.afterSeq < this.cursor) {
-      void this.sendCatchUp(res, options.afterSeq);
+    if (options.afterSeq !== void 0) {
+      void this.sendCatchUp(res, options.afterSeq).then((cursor3) => {
+        const current = this.clients.get(res);
+        if (!current) return;
+        for (const pending of current.pending) {
+          const changes = pending.changes.filter((change) => change.seq > cursor3);
+          if (changes.length)
+            this.send(res, "change", { type: "change", changes, cursor: pending.cursor });
+          cursor3 = Math.max(cursor3, pending.cursor);
+        }
+        current.pending = [];
+        current.replaying = false;
+      }).catch((error64) => {
+        if (!this.clients.has(res)) return;
+        if (error64 instanceof ExpiredChangeCursor) {
+          this.send(res, "snapshot_required", {
+            type: "snapshot_required",
+            cursor: error64.cursor
+          });
+        } else {
+          this.onPollError(error64);
+        }
+        this.removeClient(res);
+        res.end();
+      });
     }
   }
   removeClient(res) {
@@ -166481,7 +166689,33 @@ var RealtimeHub = class extends PollLoop {
       this.lastDataVersion = await client.sqliteDataVersion?.() ?? null;
       return;
     }
-    const rows = await client.all(SELECT_CHANGES_SQL, [this.cursor, CHANGE_BATCH_LIMIT]);
+    const pass2 = await withCommittedFeed(client, async (tx) => {
+      const state2 = await tx.get(
+        `SELECT retained_through FROM entity_change_retention WHERE id = 1`
+      );
+      if (!state2) throw new Error("Change-feed retention boundary is missing");
+      if (this.cursor < Number(state2.retained_through)) {
+        return { expired: true, cursor: await currentMaxSeq(tx), rows: [] };
+      }
+      return {
+        expired: false,
+        cursor: this.cursor,
+        rows: await tx.all(SELECT_CHANGES_SQL, [this.cursor, CHANGE_BATCH_LIMIT])
+      };
+    });
+    if (pass2.expired) {
+      this.cursor = pass2.cursor;
+      for (const { response } of [...this.clients.values()]) {
+        this.send(response, "snapshot_required", {
+          type: "snapshot_required",
+          cursor: pass2.cursor
+        });
+        this.removeClient(response);
+        response.end();
+      }
+      return;
+    }
+    const rows = pass2.rows;
     if (rows.length > 0) {
       this.cursor = rows[rows.length - 1].seq;
       if (rows.some((row) => AUTHORIZATION_CHANGE_ENTITY_TYPES.has(row.entity_type))) {
@@ -166510,7 +166744,15 @@ var RealtimeHub = class extends PollLoop {
         (row) => client.workspaceIds.has(row.workspace_id) && (client.projectIds === null || row.project_id !== null && client.projectIds.has(row.project_id))
       ).map(entityChangeDtoFromRow);
       if (changes.length > 0) {
-        this.send(client.response, "change", { type: "change", changes, cursor: cursor3 });
+        if (client.replaying) {
+          client.pending.push({ changes, cursor: cursor3 });
+          if (client.pending.length > 100) {
+            this.removeClient(client.response);
+            client.response.end();
+          }
+        } else {
+          this.send(client.response, "change", { type: "change", changes, cursor: cursor3 });
+        }
       }
     }
   }
@@ -166530,19 +166772,20 @@ var RealtimeHub = class extends PollLoop {
         CHANGE_BATCH_LIMIT,
         client.projectIds === null ? null : [...client.projectIds]
       );
-      if (!this.clients.has(res)) return;
+      if (!this.clients.has(res)) return cursor3;
       if (batch.changes.length > 0) {
         this.send(res, "change", { type: "change", changes: batch.changes, cursor: batch.cursor });
       }
       cursor3 = batch.cursor;
-      if (!batch.hasMore) return;
+      if (!batch.hasMore) return cursor3;
     }
+    return cursor3;
   }
   send(res, event, data) {
     res.write(`event: ${event}
 `);
     const cursor3 = typeof data === "object" && data && "cursor" in data ? Number(data.cursor) : NaN;
-    if (Number.isFinite(cursor3)) res.write(`id: ${cursor3}
+    if (Number.isFinite(cursor3) && event === "change") res.write(`id: ${cursor3}
 `);
     res.write(`data: ${JSON.stringify(data)}
 
@@ -166736,11 +166979,13 @@ async function recordTerminalObservation({
   state: state2,
   endedAt,
   endReason,
+  backgroundObservation,
   requestEnd = false
 }) {
   return ctx.db.transaction(async (tx) => {
     const row = await tx.get(
-      `SELECT project_id, mission_id, objective_id, metadata_json, revision
+      `SELECT project_id, mission_id, objective_id, metadata_json, revision,
+              COALESCE(claimed_by_execution_target_id, execution_target_id) AS target_id
       FROM execution_requests WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
       [executionRequestId, ctx.workspace.id]
     );
@@ -166749,11 +166994,19 @@ async function recordTerminalObservation({
     if (!row || !metadata || !mapping || mapping.providerSessionId !== providerSessionId)
       throw new ServiceError("Terminal session changed", "terminal_session_conflict", 409);
     if (mapping.lastObservedState === "exited") return "exited";
+    if (backgroundObservation) {
+      const currentState = mapping.lastObservedState === "running" || mapping.lastObservedState === "stopping" ? mapping.lastObservedState : "lost";
+      if ((mapping.executionTargetId ?? row.target_id) !== backgroundObservation.executionTargetId)
+        return currentState;
+      const { startedAt } = backgroundObservation;
+      if (state2 !== "exited" && (mapping.endRequestedAt && mapping.endRequestedAt > startedAt || mapping.lastObservedAt && (mapping.lastObservedAt > startedAt || mapping.lastObservedAt === startedAt && (mapping.lastObservedState !== "lost" || state2 === "lost"))))
+        return currentState;
+    }
     const now2 = nowIso();
     const next = {
       ...mapping,
       lastObservedState: state2,
-      lastObservedAt: now2,
+      lastObservedAt: backgroundObservation?.startedAt ?? now2,
       ...requestEnd ? { endRequestedAt: mapping.endRequestedAt ?? now2 } : {},
       ...state2 === "exited" ? {
         endedAt: endedAt && Number.isFinite(Date.parse(endedAt)) ? new Date(endedAt).toISOString() : now2,
@@ -186978,11 +187231,11 @@ function assignmentCatalogProjection(value2) {
 
 // ../packages/core/service/chat/runs.ts
 var import_node_crypto30 = require("node:crypto");
-var import_node_util2 = require("node:util");
+var import_node_util3 = require("node:util");
 
 // ../packages/core/service/chat/store.ts
 var import_node_crypto29 = require("node:crypto");
-var import_node_util = require("node:util");
+var import_node_util2 = require("node:util");
 var ChatError = class extends ServiceError {
   /**
    * @param detail Optional specific reason for the assistant's own tool results (for example
@@ -187267,7 +187520,7 @@ var ChatStore = class _ChatStore {
         "SELECT id, locator_json FROM chat_source_refs WHERE thread_id = ? AND scope_key = ?",
         [threadId, source.scopeKey]
       );
-      if (!(0, import_node_util.isDeepStrictEqual)(identity(JSON.parse(row.locator_json)), identity(source.locator)))
+      if (!(0, import_node_util2.isDeepStrictEqual)(identity(JSON.parse(row.locator_json)), identity(source.locator)))
         throw new ChatError("invalid_request");
       ids.push(row.id);
     }
@@ -187899,7 +188152,7 @@ var ChatRuns = class _ChatRuns extends ChatStore {
         [a5.runId, turn]
       );
       if (old.length) {
-        if (!(0, import_node_util2.isDeepStrictEqual)(
+        if (!(0, import_node_util3.isDeepStrictEqual)(
           old.map((o3) => [
             o3.operation_id,
             o3.provider_call_id,
@@ -197063,6 +197316,72 @@ function missionRoute(permission, fn) {
   };
 }
 
+// ../packages/core/service/change-feed-retention.ts
+var CHANGE_FEED_RETENTION_MS = 21 * 24 * 60 * 60 * 1e3;
+var ERASED_EVERHOUR_ACTOR = "!overlord:erased-actor";
+var MAX_BATCH = 1e3;
+async function eraseEverhourActorEvidence(db, actorId) {
+  if (actorId === ERASED_EVERHOUR_ACTOR) return;
+  const insertion = db.dialect === "postgres" ? `INSERT INTO ext_everhour_connection_attribution (connection_id, actor_workspace_user_id)` : `INSERT OR IGNORE INTO ext_everhour_connection_attribution (connection_id, actor_workspace_user_id)`;
+  const conflict = db.dialect === "postgres" ? " ON CONFLICT DO NOTHING" : "";
+  await db.run(
+    `${insertion}
+    SELECT connection_id, ? FROM ext_everhour_connection_attribution WHERE actor_workspace_user_id = ?
+    UNION
+    SELECT entity_id, ? FROM entity_changes WHERE entity_type = 'everhour:workspace_connection'
+      AND operation IN ('insert', 'update') AND actor_workspace_user_id = ?${conflict}`,
+    [ERASED_EVERHOUR_ACTOR, actorId, ERASED_EVERHOUR_ACTOR, actorId]
+  );
+  await db.run(
+    `DELETE FROM ext_everhour_connection_attribution WHERE actor_workspace_user_id = ?`,
+    [actorId]
+  );
+}
+async function pruneChangeFeedBatch(db, options = {}) {
+  const limit2 = Math.max(1, Math.min(MAX_BATCH, Math.floor(options.limit ?? MAX_BATCH)));
+  const cutoff = new Date(
+    (options.now ?? /* @__PURE__ */ new Date()).getTime() - CHANGE_FEED_RETENTION_MS
+  ).toISOString();
+  return db.transaction(async (tx) => {
+    if (tx.dialect === "postgres") {
+      await tx.exec("SET LOCAL lock_timeout = '2s'");
+      await tx.exec("LOCK TABLE entity_changes IN SHARE ROW EXCLUSIVE MODE");
+    }
+    const state2 = await tx.get(
+      `SELECT retained_through FROM entity_change_retention WHERE id = 1`
+    );
+    if (!state2) throw new Error("Change-feed retention boundary is missing");
+    const floor = Number(state2.retained_through);
+    const rows = await tx.all(
+      `SELECT seq, occurred_at FROM entity_changes WHERE seq > ? ORDER BY seq LIMIT ?`,
+      [floor, limit2]
+    );
+    let boundary = floor;
+    for (const row of rows) {
+      if (row.occurred_at >= cutoff) break;
+      boundary = row.seq;
+    }
+    if (boundary === floor) return { deleted: 0, retainedThrough: floor };
+    const insertion = tx.dialect === "postgres" ? `INSERT INTO ext_everhour_connection_attribution (connection_id, actor_workspace_user_id)` : `INSERT OR IGNORE INTO ext_everhour_connection_attribution (connection_id, actor_workspace_user_id)`;
+    const conflict = tx.dialect === "postgres" ? " ON CONFLICT DO NOTHING" : "";
+    await tx.run(
+      `${insertion}
+      SELECT DISTINCT entity_id, actor_workspace_user_id FROM entity_changes
+      WHERE seq > ? AND seq <= ? AND entity_type = 'everhour:workspace_connection'
+        AND operation IN ('insert', 'update') AND actor_workspace_user_id IS NOT NULL${conflict}`,
+      [floor, boundary]
+    );
+    const deleted = await tx.run(`DELETE FROM entity_changes WHERE seq > ? AND seq <= ?`, [
+      floor,
+      boundary
+    ]);
+    await tx.run(`UPDATE entity_change_retention SET retained_through = ? WHERE id = 1`, [
+      boundary
+    ]);
+    return { deleted: deleted.changes, retainedThrough: boundary };
+  });
+}
+
 // ext/everhour/service.ts
 var EVERHOUR_BASE_URL = "https://api.everhour.com";
 async function everhourFetch(apiKey, path29, init2 = {}) {
@@ -197177,16 +197496,21 @@ function createEverhourService(connections) {
     profileId
   }) {
     const actors = await client.all(
-      `SELECT DISTINCT actor_workspace_user_id
+      `SELECT actor_workspace_user_id
+       FROM ext_everhour_connection_attribution
+      WHERE connection_id = ?
+      UNION
+      SELECT DISTINCT actor_workspace_user_id
        FROM entity_changes
       WHERE entity_type = 'everhour:workspace_connection'
         AND entity_id = ?
         AND operation IN ('insert', 'update')
         AND actor_workspace_user_id IS NOT NULL`,
-      [connectionId]
+      [connectionId, connectionId]
     );
     if (actors.length === 0) return false;
     for (const actor of actors) {
+      if (actor.actor_workspace_user_id === ERASED_EVERHOUR_ACTOR) return false;
       const membership = await client.get(
         `SELECT profile_id FROM workspace_users WHERE id = ?`,
         [actor.actor_workspace_user_id]
@@ -201113,6 +201437,10 @@ async function resolveSessionFromBrowserRequest({
 // account-deletion.ts
 async function cascadeDeleteAccount(profileId) {
   const cleanupImages = await requireDatabaseClient().transaction(async (tx) => {
+    if (tx.dialect === "postgres") {
+      await tx.exec("SET LOCAL lock_timeout = '2s'");
+      await tx.exec("LOCK TABLE entity_changes IN SHARE ROW EXCLUSIVE MODE");
+    }
     const profile = await tx.get(`SELECT id FROM profiles WHERE id = ?`, [
       profileId
     ]);
@@ -201190,6 +201518,7 @@ async function cascadeDeleteAccount(profileId) {
     }
     cleanup.push(...await tombstoneInboxItemAttachmentsTx(tx, { profileId }));
     for (const membership of memberships) {
+      await eraseEverhourActorEvidence(tx, membership.id);
       await tx.run(`DELETE FROM workspace_users WHERE id = ?`, [membership.id]);
       await recordChange2(
         {
@@ -201899,6 +202228,23 @@ function createChatRouter(options) {
   });
   return router2;
 }
+
+// change-feed-retention-worker.ts
+var ChangeFeedRetentionWorker = class extends PollLoop {
+  nextScanAt = 0;
+  constructor() {
+    super({ intervalMs: 5e3, logPrefix: "change-feed-retention", unref: true });
+  }
+  async runOnce() {
+    if (process.env.OVERLORD_CHANGE_FEED_PRUNING_ENABLED !== "true") return;
+    if (Date.now() < this.nextScanAt) return;
+    const db = requireDatabaseClient();
+    if (db.dialect !== "postgres") return;
+    const result2 = await pruneChangeFeedBatch(db);
+    if (result2.deleted < 1e3) this.nextScanAt = Date.now() + 60 * 60 * 1e3;
+    if (result2.deleted) console.info("[change-feed-retention]", result2);
+  }
+};
 
 // chat-notification-dispatcher.ts
 var import_node_crypto46 = require("node:crypto");
@@ -205291,7 +205637,7 @@ var ALLOWED = [
   ["GET", /^\/api\/search\/v3$/],
   ["GET", /^\/api\/objectives\/[^/]+\/attachments$/],
   ["GET", /^\/api\/storage\/attachments\/[^/]+$/],
-  ["GET", /^\/(?:api\/stream|realtime|sync\/changes|mcp)$/],
+  ["GET", /^\/(?:api\/stream|realtime|sync\/(?:changes|baseline)|mcp)$/],
   ["POST", /^\/mcp$/],
   [
     "POST",
@@ -205667,8 +206013,109 @@ var RunQueueDispatchWorker = class extends WorkerJobPoller {
 };
 var runQueueDispatchWorker = new RunQueueDispatchWorker();
 
+// ../packages/core/service/terminal-observation-probes.ts
+var import_node_crypto51 = require("node:crypto");
+async function inspectTerminalInBackground({
+  ctx,
+  projectId,
+  missionId,
+  mappingId,
+  providerSessionId,
+  executionTargetId,
+  eligibilityMember,
+  createListener
+}) {
+  await resolveProjectId(ctx, projectId);
+  const job = await ctx.db.transaction(async (tx) => {
+    const lock = tx.dialect === "postgres" ? "FOR NO KEY UPDATE" : "";
+    const mappingRow = await tx.get(
+      `SELECT metadata_json, requested_by_workspace_user_id,
+              COALESCE(claimed_by_execution_target_id, execution_target_id) AS target_id
+         FROM execution_requests
+        WHERE id = ? AND workspace_id = ? AND project_id = ? AND mission_id = ?
+          AND deleted_at IS NULL ${lock}`,
+      [mappingId, ctx.workspace.id, projectId, missionId]
+    );
+    if (!mappingRow || mappingRow.requested_by_workspace_user_id !== ctx.actorWorkspaceUserId)
+      return null;
+    const metadata = JSON.parse(mappingRow.metadata_json);
+    const mapping = providerSessionFromMetadata(metadata);
+    if (!mapping || mapping.providerSessionId !== providerSessionId || mapping.lastObservedState === "exited" || (mapping.executionTargetId ?? mappingRow.target_id) !== executionTargetId)
+      return null;
+    const anchor2 = await tx.get(
+      `SELECT resource_key FROM objectives
+        WHERE mission_id = ? AND workspace_id = ? AND deleted_at IS NULL
+        ORDER BY position LIMIT 1`,
+      [missionId, ctx.workspace.id]
+    );
+    if (!anchor2) return null;
+    const executable = launchSessionSnapshotFromMetadata(metadata)?.executionProvider.executable ?? "latch";
+    const backgroundProbeKey = (0, import_node_crypto51.createHash)("sha256").update(
+      JSON.stringify([
+        ctx.workspace.id,
+        projectId,
+        missionId,
+        mappingId,
+        providerSessionId,
+        executionTargetId,
+        ctx.actorWorkspaceUserId,
+        eligibilityMember,
+        ctx.actorTokenId ?? null,
+        anchor2.resource_key,
+        executable
+      ])
+    ).digest("hex");
+    const now2 = Date.now();
+    const existing = await tx.get(
+      `SELECT id, created_at FROM execution_requests
+        WHERE background_probe_key = ? AND workspace_id = ? AND execution_target_id = ?
+          AND deleted_at IS NULL AND created_at >= ?
+          AND (status IN ('queued', 'claimed', 'launching') OR (status = 'launched' AND created_at >= ?))
+        ORDER BY created_at DESC, id LIMIT 1`,
+      [
+        backgroundProbeKey,
+        ctx.workspace.id,
+        executionTargetId,
+        new Date(now2 - TERMINAL_PROBE_TIMEOUT_MS).toISOString(),
+        new Date(now2 - TERMINAL_PROBE_RESULT_REUSE_MS).toISOString()
+      ]
+    );
+    if (existing)
+      return {
+        id: existing.id,
+        startedAt: new Date(existing.created_at).toISOString(),
+        reused: true
+      };
+    const { id: id2, createdAt } = await createLocalTargetMutationRequest({
+      ctx: { ...ctx, db: tx },
+      projectId,
+      executionTargetId,
+      kind: "capability_call",
+      capability: "inspectLatchSession",
+      input: { providerSessionId, executable },
+      resourceKey: anchor2.resource_key,
+      backgroundProbeKey
+    });
+    return { id: id2, startedAt: createdAt, reused: false };
+  });
+  if (!job) return null;
+  const result2 = await waitForLocalTargetMutationResult({
+    ctx,
+    requestId: job.id,
+    target: { executionTargetId, deviceLabel: null, transport: "runner_queue" },
+    timeoutMs: Date.parse(job.startedAt) + TERMINAL_PROBE_TIMEOUT_MS - Date.now(),
+    createListener
+  });
+  return {
+    ...job,
+    result: result2.ok ? { ...result2, value: result2.value } : result2
+  };
+}
+
 // terminal-session-observer.ts
 var TerminalSessionObserver = class extends PollLoop {
+  nextReportAt = Date.now() + 60 * 6e4;
+  metrics = { enqueued: 0, reused: 0, timeouts: 0, maxResultAgeMs: 0, pruned: 0 };
   constructor() {
     super({ intervalMs: 3e4, logPrefix: "terminal-sessions", runOnStart: true });
   }
@@ -205691,6 +206138,7 @@ var TerminalSessionObserver = class extends PollLoop {
       ORDER BY COALESCE(${field("lastObservedAt")}, CAST(er.created_at AS TEXT)), er.id LIMIT 20`);
     const results = await Promise.allSettled(
       rows.map(async (row) => {
+        let startedAt = (/* @__PURE__ */ new Date()).toISOString();
         const mapping = providerSessionFromMetadata(parseMetadataJson(row.metadata_json));
         if (!mapping) return;
         const ctx = {
@@ -205703,47 +206151,55 @@ var TerminalSessionObserver = class extends PollLoop {
         };
         const targetId = mapping.executionTargetId ?? row.target_id;
         const eligibilityMember = row.requested_by_workspace_user_id ?? (targetId === row.claimed_by_execution_target_id ? row.claiming_target_owner_id : null);
-        const eligibleTargets = eligibilityMember ? await listEligibleProjectExecutionTargets({
-          ctx: { ...ctx, actorWorkspaceUserId: eligibilityMember },
-          projectId: row.project_id
-        }) : [];
-        const target = eligibleTargets.find((t) => t.executionTargetId === targetId);
+        const findEligibleTarget = async () => {
+          if (!eligibilityMember) return void 0;
+          const active = await db.get(
+            `SELECT id FROM workspace_users WHERE id = ? AND workspace_id = ?
+               AND status = 'active' AND deleted_at IS NULL`,
+            [eligibilityMember, row.workspace_id]
+          );
+          if (!active) return void 0;
+          const targets = await listEligibleProjectExecutionTargets({
+            ctx: { ...ctx, actorWorkspaceUserId: eligibilityMember },
+            projectId: row.project_id
+          });
+          return targets.find((target2) => target2.executionTargetId === targetId);
+        };
+        const target = await findEligibleTarget();
         let state2 = "lost";
         let endedAt = null;
-        if (target?.reachable) {
-          const provider = resolveDefaultLocalTargetProvider({
-            target: {
-              executionTargetId: target.executionTargetId,
-              type: target.type,
-              reachable: true
-            },
-            options: {
-              callerExecutionTargetId: null,
-              runnerQueue: {
-                ctx,
-                projectId: row.project_id,
-                missionId: row.mission_id,
-                readTimeoutMs: 1e4,
-                // Replicas in the same sweep share the read-only inspection job.
-                operationId: `terminal-observe:${row.id}:${Math.floor(Date.now() / 3e4)}`
-              }
-            }
-          });
-          const snapshot = launchSessionSnapshotFromMetadata(parseMetadataJson(row.metadata_json));
-          const result2 = await provider.inspectLatchSession({
+        if (target?.reachable && target.type === "local" && eligibilityMember) {
+          const inspection = await inspectTerminalInBackground({
+            ctx,
+            projectId: row.project_id,
+            missionId: row.mission_id,
+            mappingId: row.id,
             providerSessionId: mapping.providerSessionId,
-            executable: snapshot?.executionProvider.executable ?? "latch"
+            executionTargetId: target.executionTargetId,
+            eligibilityMember
           });
-          if (!result2.ok && result2.code === "LATCH_SESSION_ABSENT") {
+          if (!inspection) return;
+          const { result: result2 } = inspection;
+          startedAt = inspection.startedAt;
+          this.metrics[inspection.reused ? "reused" : "enqueued"]++;
+          if (!result2.ok && result2.code === "LOCAL_TARGET_TIMEOUT") this.metrics.timeouts++;
+          else
+            this.metrics.maxResultAgeMs = Math.max(
+              this.metrics.maxResultAgeMs,
+              Date.now() - Date.parse(startedAt)
+            );
+          const stillEligible = await findEligibleTarget();
+          if (stillEligible && !result2.ok && result2.code === "LATCH_SESSION_ABSENT") {
             await forgetLatchProviderSession({
               ctx,
               missionId: row.mission_id,
               executionRequestId: row.id,
-              providerSessionId: mapping.providerSessionId
+              providerSessionId: mapping.providerSessionId,
+              backgroundObservation: { executionTargetId: target.executionTargetId, startedAt }
             });
             return;
           }
-          if (result2.ok) {
+          if (stillEligible && result2.ok && result2.value?.providerSessionId === mapping.providerSessionId) {
             state2 = result2.value.state;
             endedAt = result2.value.endedAt ?? null;
           }
@@ -205753,7 +206209,8 @@ var TerminalSessionObserver = class extends PollLoop {
           executionRequestId: row.id,
           providerSessionId: mapping.providerSessionId,
           state: state2,
-          endedAt
+          endedAt,
+          backgroundObservation: { executionTargetId: targetId, startedAt }
         });
       })
     );
@@ -205761,17 +206218,26 @@ var TerminalSessionObserver = class extends PollLoop {
       if (result2.status === "rejected") {
         console.warn("[terminal-sessions] observation failed", result2.reason);
       }
+    this.metrics.pruned += await pruneTerminalProbes(db);
+    if (db.dialect === "postgres" && process.env.OVERLORD_CHANGE_FEED_PRUNING_ENABLED === "true") {
+      this.metrics.pruned += await pruneLegacyTerminalProbes(db);
+    }
+    if (Date.now() >= this.nextReportAt) {
+      console.info("[terminal-sessions] background probes", this.metrics);
+      this.metrics = { enqueued: 0, reused: 0, timeouts: 0, maxResultAgeMs: 0, pruned: 0 };
+      this.nextReportAt = Date.now() + 60 * 6e4;
+    }
   }
 };
 var terminalSessionObserver = new TerminalSessionObserver();
 
 // webhook-security.ts
-var import_node_crypto51 = require("node:crypto");
+var import_node_crypto52 = require("node:crypto");
 var import_promises6 = __toESM(require("node:dns/promises"), 1);
 var import_node_net = require("node:net");
 function signWebhookPayload(secret, rawBody) {
   const timestamp2 = Math.floor(Date.now() / 1e3);
-  const signature = (0, import_node_crypto51.createHmac)("sha256", secret).update(`${timestamp2}.${rawBody}`).digest("hex");
+  const signature = (0, import_node_crypto52.createHmac)("sha256", secret).update(`${timestamp2}.${rawBody}`).digest("hex");
   return { header: `t=${timestamp2},v1=${signature}`, timestamp: timestamp2 };
 }
 function internalHostPatterns() {
@@ -206108,7 +206574,7 @@ async function recordSubscriptionFailure(client, subscriptionId, currentConsecut
 var webhookDispatcher = new WebhookDispatcher();
 
 // webhooks.ts
-var import_node_crypto52 = require("node:crypto");
+var import_node_crypto53 = require("node:crypto");
 var WEBHOOK_SECRET_SCHEME = "whsec";
 var SUBSCRIPTION_COLUMNS = "id, workspace_id, project_id, name, endpoint_url, secret, event_types_json, payload_mode, created_by_workspace_user_id, enabled, disabled_reason, consecutive_failures, last_success_at, last_failure_at, created_at, updated_at, revision";
 function parseEventTypes(json2) {
@@ -206141,7 +206607,7 @@ function toSubscriptionDto(row) {
   };
 }
 function generateWebhookSecret() {
-  return { secret: `${WEBHOOK_SECRET_SCHEME}_${(0, import_node_crypto52.randomBytes)(24).toString("hex")}` };
+  return { secret: `${WEBHOOK_SECRET_SCHEME}_${(0, import_node_crypto53.randomBytes)(24).toString("hex")}` };
 }
 function normalizeEventTypes(input2) {
   if (!Array.isArray(input2) || input2.length === 0) {
@@ -207262,6 +207728,20 @@ var streamRealtime = asyncRoute(async (req, res) => {
 app.get("/api/stream", streamRealtime);
 app.get("/realtime", requireAuthenticatedSession, projectAutomationRouteGuard, streamRealtime);
 app.get(
+  "/sync/baseline",
+  requireAuthenticatedSession,
+  projectAutomationRouteGuard,
+  asyncRoute(async (_req, res) => {
+    const workspaceIds = await readableChangeFeedWorkspaceIds();
+    if (workspaceIds.length === 0) {
+      res.status(403).json({ error: "Permission denied: realtime catch-up" });
+      return;
+    }
+    res.setHeader("Cache-Control", "private, no-store");
+    res.json({ cursor: await currentMaxSeq() });
+  })
+);
+app.get(
   "/sync/changes",
   requireAuthenticatedSession,
   projectAutomationRouteGuard,
@@ -207276,7 +207756,13 @@ app.get(
       res.status(400).json({ error: 'Query parameter "after" must be a non-negative integer' });
       return;
     }
-    res.json(await readChangesAfter(afterSeq, workspaceIds));
+    try {
+      res.json(await readChangesAfter(afterSeq, workspaceIds));
+    } catch (error64) {
+      if (!(error64 instanceof ExpiredChangeCursor)) throw error64;
+      res.setHeader("Cache-Control", "private, no-store");
+      res.status(409).json({ error: error64.message, code: "snapshot_required", cursor: error64.cursor });
+    }
   })
 );
 app.get(
@@ -208201,7 +208687,8 @@ async function start() {
   const backgroundLoops = [
     ...mutationPollLoops,
     runQueueDispatchWorker,
-    terminalSessionObserver
+    terminalSessionObserver,
+    new ChangeFeedRetentionWorker()
   ];
   if (chatCloud()) {
     const chatWorker = new ChatWorker(
