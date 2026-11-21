@@ -166052,6 +166052,116 @@ ${diff}`,
   return message2?.trim() || null;
 }
 
+// execution/pg-listen.ts
+async function connectWithTimeout({
+  client,
+  timeoutMs
+}) {
+  let timer;
+  const connectPromise = Promise.resolve(client.connect());
+  try {
+    await Promise.race([
+      connectPromise,
+      new Promise((_, reject) => {
+        timer = setTimeout(() => {
+          reject(new Error(`LISTEN connect timed out after ${timeoutMs}ms`));
+        }, timeoutMs);
+      })
+    ]);
+  } finally {
+    if (timer !== void 0) clearTimeout(timer);
+    void connectPromise.catch(() => void 0);
+  }
+}
+async function subscribePostgres({
+  connectionString,
+  channel,
+  onWake,
+  onDisconnect
+}) {
+  const { default: pg2 } = await Promise.resolve().then(() => (init_esm(), esm_exports));
+  const timeoutMs = 3e3;
+  const client = new pg2.Client({
+    connectionString,
+    application_name: channel,
+    connectionTimeoutMillis: timeoutMs,
+    query_timeout: timeoutMs,
+    keepAlive: true,
+    keepAliveInitialDelayMillis: 5e3
+  });
+  let closed = false;
+  const close = async () => {
+    if (closed) return;
+    closed = true;
+    await client.end().catch(() => void 0);
+  };
+  const disconnected = () => {
+    if (closed) return;
+    void close();
+    onDisconnect();
+  };
+  client.on("error", disconnected);
+  client.on("end", disconnected);
+  client.on("notification", (notice) => {
+    if (!closed && notice.channel === channel) onWake();
+  });
+  try {
+    await connectWithTimeout({ client, timeoutMs });
+    await client.query(`LISTEN ${channel}`);
+    if (closed) throw new Error("Postgres listener disconnected while arming");
+    return close;
+  } catch (error64) {
+    await close();
+    throw error64;
+  }
+}
+async function armPostgresListener({
+  connectionString,
+  channel,
+  connectTimeoutMs,
+  createClient
+}) {
+  if (!connectionString) return null;
+  const client = createClient ? await createClient(connectionString) : await (async () => {
+    const pg2 = await Promise.resolve().then(() => (init_esm(), esm_exports));
+    const Client3 = (pg2.default ?? pg2).Client;
+    return new Client3({
+      connectionString,
+      connectionTimeoutMillis: connectTimeoutMs
+    });
+  })();
+  try {
+    await connectWithTimeout({ client, timeoutMs: connectTimeoutMs });
+    await client.query(`LISTEN ${channel}`);
+  } catch {
+    await client.end().catch(() => void 0);
+    return null;
+  }
+  let settled = false;
+  let resolveWait = null;
+  const finish = () => {
+    if (settled) return;
+    settled = true;
+    resolveWait?.();
+  };
+  client.on("notification", finish);
+  client.on("error", finish);
+  return {
+    wait: (timeoutMs) => new Promise((resolve) => {
+      const timer = setTimeout(finish, timeoutMs);
+      resolveWait = () => {
+        clearTimeout(timer);
+        resolve();
+      };
+      if (settled) resolveWait();
+    }),
+    close: async () => {
+      settled = true;
+      await client.end().catch(() => void 0);
+    }
+  };
+}
+
 // poll-loop.ts
 var DEFAULT_DRAIN_TIMEOUT_MS = 5e3;
 var PollLoop = class {
@@ -166496,6 +166606,10 @@ async function listOrganizationAdminProfileIds(organizationId, client = requireD
 
 // realtime.ts
 var CHANGE_BATCH_LIMIT = 500;
+var POSTGRES_WAKE_CHANNEL = "overlord_entity_changes";
+var POLL_INTERVAL_MS = 500;
+var RECONCILIATION_MS = 5e3;
+var LISTENER_RETRY_MS = 5e3;
 var AUTHORIZATION_CHANGE_ENTITY_TYPES = /* @__PURE__ */ new Set([
   "role_assignment",
   "user_token",
@@ -166601,23 +166715,91 @@ async function readChangesAfter(afterSeq, workspaceIds, limit2 = CHANGE_BATCH_LI
   });
 }
 var RealtimeHub = class extends PollLoop {
+  constructor(connectionString = process.env.DATABASE_URL?.trim()) {
+    super({ intervalMs: POLL_INTERVAL_MS, logPrefix: "realtime" });
+    this.connectionString = connectionString;
+  }
+  connectionString;
   clients = /* @__PURE__ */ new Map();
   cursor = 0;
   lastDataVersion = null;
   heartbeatTimer = null;
-  constructor() {
-    super({ intervalMs: 500, logPrefix: "realtime" });
-  }
-  start() {
+  postgres = false;
+  wakePending = false;
+  lastPassAt = 0;
+  stopListening = null;
+  listenerRetry = null;
+  listenerAttempt = null;
+  async start() {
     if (this.heartbeatTimer) return;
-    void this.initializeCursor().catch((error64) => this.onPollError(error64));
-    super.start();
     this.heartbeatTimer = setInterval(() => this.heartbeat(), 25e3);
+    this.postgres = requireDatabaseClient().dialect === "postgres";
+    if (this.postgres) {
+      const epoch2 = this.heartbeatTimer;
+      if (this.clients.size === 0) {
+        try {
+          const baseline = await currentMaxSeq();
+          if (this.heartbeatTimer === epoch2 && this.clients.size === 0) this.cursor = baseline;
+        } catch (error64) {
+          this.onPollError(error64);
+        }
+      }
+      if (this.heartbeatTimer !== epoch2) return;
+      super.start();
+      if (this.connectionString) this.connectListener(this.connectionString);
+    } else {
+      void this.initializeCursor().catch((error64) => this.onPollError(error64));
+      super.start();
+    }
   }
-  stop() {
+  async stop() {
     if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
     this.heartbeatTimer = null;
-    return super.stop();
+    if (this.listenerRetry) clearTimeout(this.listenerRetry);
+    this.listenerRetry = null;
+    const close = this.stopListening;
+    this.stopListening = null;
+    await Promise.all([super.stop(), close?.(), this.listenerAttempt]);
+  }
+  connectListener(connectionString) {
+    const epoch2 = this.heartbeatTimer;
+    if (!epoch2) return;
+    const retry = () => {
+      if (this.heartbeatTimer !== epoch2 || this.listenerRetry) return;
+      this.listenerRetry = setTimeout(() => {
+        this.listenerRetry = null;
+        this.connectListener(connectionString);
+      }, LISTENER_RETRY_MS);
+      this.listenerRetry.unref();
+    };
+    this.listenerAttempt = subscribePostgres({
+      connectionString,
+      channel: POSTGRES_WAKE_CHANNEL,
+      onWake: () => {
+        if (this.heartbeatTimer === epoch2) void this.pollNow();
+      },
+      onDisconnect: () => {
+        if (this.heartbeatTimer !== epoch2) return;
+        this.stopListening = null;
+        retry();
+        void this.pollNow();
+      }
+    }).then(async (close) => {
+      if (this.heartbeatTimer !== epoch2) {
+        await close();
+        return;
+      }
+      this.stopListening = close;
+      void this.pollNow();
+    }).catch(retry);
+  }
+  async pollNow() {
+    if (this.postgres) this.wakePending = true;
+    await super.pollNow();
+  }
+  shouldPoll() {
+    if (!this.postgres) return true;
+    return this.clients.size > 0 && (this.wakePending || !this.stopListening || performance.now() - this.lastPassAt >= RECONCILIATION_MS);
   }
   addClient(res, options) {
     res.writeHead(200, {
@@ -166631,9 +166813,11 @@ var RealtimeHub = class extends PollLoop {
       response: res,
       workspaceIds: new Set(options.workspaceIds),
       projectIds: options.projectIds === null || options.projectIds === void 0 ? null : new Set(options.projectIds),
+      lastCursor: options.afterSeq ?? this.cursor,
       replaying: options.afterSeq !== void 0,
       pending: []
     };
+    const firstClient = this.clients.size === 0;
     this.clients.set(res, client);
     this.send(res, "hello", { type: "hello", cursor: this.cursor });
     if (options.afterSeq !== void 0) {
@@ -166646,6 +166830,7 @@ var RealtimeHub = class extends PollLoop {
             this.send(res, "change", { type: "change", changes, cursor: pending.cursor });
           cursor3 = Math.max(cursor3, pending.cursor);
         }
+        current.lastCursor = cursor3;
         current.pending = [];
         current.replaying = false;
       }).catch((error64) => {
@@ -166662,6 +166847,7 @@ var RealtimeHub = class extends PollLoop {
         res.end();
       });
     }
+    if (firstClient && this.postgres) void this.pollNow();
   }
   removeClient(res) {
     this.clients.delete(res);
@@ -166683,6 +166869,8 @@ var RealtimeHub = class extends PollLoop {
   }
   /** One feed pass; `pollNow()` runs it right after a local mutation for snappy echoes. */
   async runOnce() {
+    this.wakePending = false;
+    this.lastPassAt = performance.now();
     const client = requireDatabaseClient();
     if (this.clients.size === 0) {
       this.cursor = await currentMaxSeq(client);
@@ -166694,8 +166882,9 @@ var RealtimeHub = class extends PollLoop {
         `SELECT retained_through FROM entity_change_retention WHERE id = 1`
       );
       if (!state2) throw new Error("Change-feed retention boundary is missing");
-      if (this.cursor < Number(state2.retained_through)) {
-        return { expired: true, cursor: await currentMaxSeq(tx), rows: [] };
+      const retainedThrough = Number(state2.retained_through);
+      if (this.cursor < retainedThrough) {
+        return { expired: true, retainedThrough, cursor: await currentMaxSeq(tx) };
       }
       return {
         expired: false,
@@ -166704,8 +166893,8 @@ var RealtimeHub = class extends PollLoop {
       };
     });
     if (pass2.expired) {
-      this.cursor = pass2.cursor;
-      for (const { response } of [...this.clients.values()]) {
+      for (const { response, lastCursor } of [...this.clients.values()]) {
+        if (this.postgres && lastCursor >= pass2.retainedThrough) continue;
         this.send(response, "snapshot_required", {
           type: "snapshot_required",
           cursor: pass2.cursor
@@ -166713,6 +166902,8 @@ var RealtimeHub = class extends PollLoop {
         this.removeClient(response);
         response.end();
       }
+      this.cursor = this.clients.size > 0 ? pass2.retainedThrough : pass2.cursor;
+      if (this.clients.size > 0) setImmediate(() => void this.pollNow()).unref();
       return;
     }
     const rows = pass2.rows;
@@ -166723,6 +166914,9 @@ var RealtimeHub = class extends PollLoop {
       } else {
         this.broadcastChanges(rows, this.cursor);
       }
+    }
+    if (this.postgres && (rows.length === CHANGE_BATCH_LIMIT || this.wakePending)) {
+      setImmediate(() => void this.pollNow()).unref();
     }
     const version4 = await client.sqliteDataVersion?.() ?? null;
     if (version4 !== null && version4 !== this.lastDataVersion) {
@@ -166741,7 +166935,7 @@ var RealtimeHub = class extends PollLoop {
   broadcastChanges(rows, cursor3) {
     for (const client of this.clients.values()) {
       const changes = rows.filter(
-        (row) => client.workspaceIds.has(row.workspace_id) && (client.projectIds === null || row.project_id !== null && client.projectIds.has(row.project_id))
+        (row) => row.seq > client.lastCursor && client.workspaceIds.has(row.workspace_id) && (client.projectIds === null || row.project_id !== null && client.projectIds.has(row.project_id))
       ).map(entityChangeDtoFromRow);
       if (changes.length > 0) {
         if (client.replaying) {
@@ -166751,6 +166945,7 @@ var RealtimeHub = class extends PollLoop {
             client.response.end();
           }
         } else {
+          client.lastCursor = cursor3;
           this.send(client.response, "change", { type: "change", changes, cursor: cursor3 });
         }
       }
@@ -167666,74 +167861,6 @@ async function recordRunnerBranchEvent(tx, {
      VALUES (?, ?, ?, ?, ?, 'update', 'execute', ?, ?, 'runner', NULL, ?)`,
     [newId2(), workspaceId2, projectId, missionId, objectiveId, summary, JSON.stringify(payload), now2]
   );
-}
-
-// execution/pg-listen.ts
-async function connectWithTimeout({
-  client,
-  timeoutMs
-}) {
-  let timer;
-  const connectPromise = Promise.resolve(client.connect());
-  try {
-    await Promise.race([
-      connectPromise,
-      new Promise((_, reject) => {
-        timer = setTimeout(() => {
-          reject(new Error(`LISTEN connect timed out after ${timeoutMs}ms`));
-        }, timeoutMs);
-      })
-    ]);
-  } finally {
-    if (timer !== void 0) clearTimeout(timer);
-    void connectPromise.catch(() => void 0);
-  }
-}
-async function armPostgresListener({
-  connectionString,
-  channel,
-  connectTimeoutMs,
-  createClient
-}) {
-  if (!connectionString) return null;
-  const client = createClient ? await createClient(connectionString) : await (async () => {
-    const pg2 = await Promise.resolve().then(() => (init_esm(), esm_exports));
-    const Client3 = (pg2.default ?? pg2).Client;
-    return new Client3({
-      connectionString,
-      connectionTimeoutMillis: connectTimeoutMs
-    });
-  })();
-  try {
-    await connectWithTimeout({ client, timeoutMs: connectTimeoutMs });
-    await client.query(`LISTEN ${channel}`);
-  } catch {
-    await client.end().catch(() => void 0);
-    return null;
-  }
-  let settled = false;
-  let resolveWait = null;
-  const finish = () => {
-    if (settled) return;
-    settled = true;
-    resolveWait?.();
-  };
-  client.on("notification", finish);
-  client.on("error", finish);
-  return {
-    wait: (timeoutMs) => new Promise((resolve) => {
-      const timer = setTimeout(finish, timeoutMs);
-      resolveWait = () => {
-        clearTimeout(timer);
-        resolve();
-      };
-      if (settled) resolveWait();
-    }),
-    close: async () => {
-      settled = true;
-      await client.end().catch(() => void 0);
-    }
-  };
 }
 
 // execution/local-target-completion-notify.ts
@@ -206043,9 +206170,9 @@ async function inspectTerminalInBackground({
     if (!mapping || mapping.providerSessionId !== providerSessionId || mapping.lastObservedState === "exited" || (mapping.executionTargetId ?? mappingRow.target_id) !== executionTargetId)
       return null;
     const anchor2 = await tx.get(
-      `SELECT resource_key FROM objectives
+      `SELECT 1 FROM objectives
         WHERE mission_id = ? AND workspace_id = ? AND deleted_at IS NULL
-        ORDER BY position LIMIT 1`,
+        LIMIT 1`,
       [missionId, ctx.workspace.id]
     );
     if (!anchor2) return null;
@@ -206061,7 +206188,8 @@ async function inspectTerminalInBackground({
         ctx.actorWorkspaceUserId,
         eligibilityMember,
         ctx.actorTokenId ?? null,
-        anchor2.resource_key,
+        // Reuse older unscoped probes without matching resource-addressed jobs.
+        null,
         executable
       ])
     ).digest("hex");
@@ -206093,7 +206221,6 @@ async function inspectTerminalInBackground({
       kind: "capability_call",
       capability: "inspectLatchSession",
       input: { providerSessionId, executable },
-      resourceKey: anchor2.resource_key,
       backgroundProbeKey
     });
     return { id: id2, startedAt: createdAt, reused: false };
@@ -206340,7 +206467,7 @@ function redactSecretLikeTokens(text) {
 }
 
 // webhook-dispatcher.ts
-var POLL_INTERVAL_MS = 1e3;
+var POLL_INTERVAL_MS2 = 1e3;
 var CLAIM_BATCH_SIZE3 = 10;
 var REQUEST_TIMEOUT_MS = 1e4;
 var RESPONSE_SNIPPET_LIMIT = 1e3;
@@ -206348,7 +206475,7 @@ var RETRY_BACKOFF_MS2 = [3e4, 12e4, 6e5, 36e5, 216e5, 864e5];
 var AUTO_DISABLE_FAILURE_THRESHOLD = 20;
 var WebhookDispatcher = class extends PollLoop {
   constructor() {
-    super({ intervalMs: POLL_INTERVAL_MS, logPrefix: "webhook-dispatcher" });
+    super({ intervalMs: POLL_INTERVAL_MS2, logPrefix: "webhook-dispatcher" });
   }
   shouldPoll() {
     return process.env.OVERLORD_WEBHOOKS_DISABLED !== "1";
@@ -208704,7 +208831,7 @@ async function start() {
     });
     backgroundLoops.push(chatWorker, chatNotificationDispatcher);
   }
-  for (const loop of backgroundLoops) loop.start();
+  for (const loop of backgroundLoops) await loop.start();
   stopOnTermination(backgroundLoops);
   if (chatCloud()) {
     const connections = connectionsModule().config;
