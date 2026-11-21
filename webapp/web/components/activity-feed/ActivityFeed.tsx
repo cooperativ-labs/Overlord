@@ -53,7 +53,7 @@ function LiveIndicator() {
  * workspace the operator can read. The server groups launching missions above
  * executing ones, so this renders the order it is given. Freshness rides the
  * existing realtime change link — this component never polls. Scrolling loads
- * the next two weeks of delivered missions.
+ * the next three days of delivered missions.
  */
 export function ActivityFeed({
   onOpenMission
@@ -191,7 +191,7 @@ export function ActivityFeed({
               <p className="text-sm font-medium text-(--color-ink)">No missions to show</p>
               <p className="mt-1 text-xs text-(--color-ink-dim)">
                 Launch an objective and its mission will appear here while it runs. Delivered
-                missions from the last two weeks appear here too.
+                missions from the last three days appear here too.
               </p>
             </div>
           ) : visible.length === 0 && items.length > 0 ? (
@@ -237,7 +237,7 @@ export function ActivityFeed({
             <div ref={sentinelRef} className="flex flex-col items-center gap-2 py-3">
               {isFetchingNextPage ? <Spinner /> : null}
               <p className="text-[11px] text-(--color-ink-dim)">
-                Scroll to load the previous two weeks of delivered missions
+                Scroll to load the previous three days of delivered missions
               </p>
             </div>
           ) : null}

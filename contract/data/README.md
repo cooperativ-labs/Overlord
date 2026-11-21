@@ -1040,6 +1040,7 @@ Indexes:
 - Live `(workspace_id, created_at, id)` (`idx_objectives_transcript_created`, migration `20261021090000_objective_transcript_index`) supports bounded Compose history walks on both editions.
 - `(project_id, state, updated_at)`.
 - `(mission_id, state, position)`.
+- `(workspace_id, state, updated_at)` (`idx_objectives_workspace_state_updated`, migration `20261121100000_activity_feed_indexes`) supports the activity feed's live-run read across workspaces.
 
 Services should set `completed_at` when an objective enters `complete`, and `reopened_at` when an objective that has already executed is set back to `draft`. A null `launch_config_json` means the runner should inherit resource-source, execution-target, or workspace launch defaults; a non-null object means the objective intentionally overrides those defaults, even when the override contains empty flags or no pre-command. Overrides are keyed by execution-target id and agent; `*` is the target key for an explicit override captured before a specific target is selected.
 
@@ -1260,6 +1261,7 @@ Indexes:
 
 - `(mission_id, created_at)`.
 - `(objective_id, created_at)`.
+- `(workspace_id, type, created_at)` (`idx_mission_events_workspace_type_created`, migration `20261121100000_activity_feed_indexes`) supports the activity feed's recent-`ask` read across workspaces.
 - Unique `(workspace_id, source, idempotency_key)` where `idempotency_key` is present.
 
 When a protocol write omits `objective_id`, services should resolve it to the active executing objective for the mission, then the most recently completed objective. Postgres adapters may implement the same behavior with triggers, but service behavior is the portable contract.
@@ -1503,6 +1505,7 @@ Indexes:
 - `(mission_id, delivered_at)`.
 - `(objective_id, delivered_at)`.
 - `(session_id)`.
+- `(workspace_id, delivered_at)` (`idx_deliveries_workspace_delivered`, migration `20261121100000_activity_feed_indexes`) supports the activity feed's delivered-window and older-delivery reads.
 
 Delivery-report item provenance (`source`) is `agent` or `deterministic_rule`;
 `TradeoffMadeV1.source` is only `agent`, and composed tradeoffs may cite only agent

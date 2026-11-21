@@ -5,10 +5,10 @@
 import { z } from 'zod';
 
 /** The contract version (contract/VERSION) this API description belongs to. */
-export const contractVersion = "179.10.0";
+export const contractVersion = "179.12.0";
 
 /** The API description's own version (OpenAPI `info.version`). */
-export const apiVersion = "6.5.0";
+export const apiVersion = "6.5.1";
 
 /** A non-JSON request or response body: raw bytes (G3). */
 export type BinaryBody = Uint8Array | ArrayBuffer | Blob;
@@ -2373,7 +2373,7 @@ export interface ActivityFeedMissionObjectiveDto {
 export const activityFeedMissionObjectiveDtoSchema: z.ZodType<ActivityFeedMissionObjectiveDto> = z.object({ "objectiveId": z.string(), "displayId": z.string(), "title": z.string().nullable(), "state": objectiveStateSchema, "position": z.int().min(0), "assignedAgent": z.string().nullable(), "autoAdvance": z.boolean(), "blocked": z.boolean() });
 
 /**
- * A mission card: live work (`mission_run`) or a mission whose most recent live delivery falls in the page's two-week window (`mission_delivered`). Chrome fields describe the primary objective: the launching one, else the oldest active one, else the objective behind the latest delivery.
+ * A mission card: live work (`mission_run`) or a mission whose most recent live delivery falls in the page's three-day window (`mission_delivered`). Chrome fields describe the primary objective: the launching one, else the oldest active one, else the objective behind the latest delivery.
  */
 export interface ActivityFeedMissionItemDto {
   /**
@@ -2476,7 +2476,7 @@ export interface ActivityFeedDto {
     mission_delivered: number;
   };
   /**
-   * Pass as `before` for the next older two-week delivered window; null when none is older.
+   * Pass as `before` for the next older three-day delivered window; null when none is older.
    */
   nextBefore: DateTime | null;
 }
@@ -7235,7 +7235,7 @@ export const patchProjectsByIdStatusesByStatusIdPathParamsSchema: z.ZodType<Patc
 
 export interface GetActivityFeedQueryParams {
   /**
-   * `YYYY-MM-DDTHH:mm:ss.sssZ` exactly (400 otherwise; blank is ignored). Selects the two-week delivered window ending there and omits live runs and questions.
+   * `YYYY-MM-DDTHH:mm:ss.sssZ` exactly (400 otherwise; blank is ignored). Selects the three-day delivered window ending there and omits live runs and questions.
    */
   before?: string;
 }

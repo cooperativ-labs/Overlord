@@ -110,7 +110,7 @@ export function elapsedLabel(startedAt: string | null, nowIso: string): string {
 
 /**
  * Whether the feed truncated a live source. Delivered missions paginate by
- * two-week windows instead of a cap, so they are not part of this note.
+ * three-day windows instead of a cap, so they are not part of this note.
  */
 export function truncationNote(
   counts: Record<string, number>,

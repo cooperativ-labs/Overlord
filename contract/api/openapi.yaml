@@ -3,10 +3,10 @@ info:
   title: Overlord API
   # info.version is the API description's own Semantic Version; it changes when
   # this document changes and is never compared with the contract version.
-  version: 6.5.0
+  version: 6.5.1
   # The contract version (contract/VERSION) this document belongs to. Written
   # only by `yarn version:contract`.
-  x-overlord-contract-version: 179.11.0
+  x-overlord-contract-version: 179.12.0
   description: >-
     Normative description of Overlord's REST surface (ADR 0006): one operation for every
     method and path the backend registers, at the path it is served (ADR 0007), excluding
@@ -5085,7 +5085,7 @@ paths:
           in: query
           required: false
           description: >-
-            `YYYY-MM-DDTHH:mm:ss.sssZ` exactly (400 otherwise; blank is ignored). Selects the two-week
+            `YYYY-MM-DDTHH:mm:ss.sssZ` exactly (400 otherwise; blank is ignored). Selects the three-day
             delivered window ending there and omits live runs and questions.
           schema: { type: string }
       responses:
@@ -15096,7 +15096,7 @@ components:
       type: object
       description: >-
         A mission card: live work (`mission_run`) or a mission whose most recent live delivery falls
-        in the page's two-week window (`mission_delivered`). Chrome fields describe the primary
+        in the page's three-day window (`mission_delivered`). Chrome fields describe the primary
         objective: the launching one, else the oldest active one, else the objective behind the latest
         delivery.
       required:
@@ -15317,7 +15317,7 @@ components:
             blocking_question: { type: integer, minimum: 0 }
             mission_delivered: { type: integer, minimum: 0 }
         nextBefore:
-          description: Pass as `before` for the next older two-week delivered window; null when none is older.
+          description: Pass as `before` for the next older three-day delivered window; null when none is older.
           oneOf:
             - $ref: '#/components/schemas/DateTime'
             - type: 'null'

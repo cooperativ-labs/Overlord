@@ -10,6 +10,36 @@ interface QueryInvalidator {
     queryKey?: QueryKey;
     predicate?: (query: { queryKey: QueryKey }) => boolean;
   }): unknown;
+  /** `QueryClient.isFetching`; optional so lightweight test doubles need not implement it. */
+  isFetching?(filters?: { queryKey?: QueryKey }): number;
+}
+
+/** How long a feed invalidation waits before re-checking whether the feed is still loading. */
+const FEED_INVALIDATION_RETRY_MS = 500;
+const ACTIVITY_FEED_KEY = JSON.stringify(keys.activityFeed);
+/** Clients with a feed invalidation already waiting for an in-flight load to finish. */
+const deferredFeedInvalidations = new WeakSet<QueryInvalidator>();
+
+/**
+ * The activity feed is a multi-page, cross-workspace read, and almost every
+ * mission event in every workspace invalidates it. `invalidateQueries` cancels
+ * and restarts an in-flight fetch by default, so under a steady event stream the
+ * first load (or a scroll's `fetchNextPage`) could be cancelled over and over
+ * and never settle. While the feed is loading, hold the invalidation and apply
+ * it once — however many changes arrived — after the load finishes, so the
+ * change that landed mid-fetch is still picked up (coo:1344).
+ */
+function invalidateActivityFeed(queryClient: QueryInvalidator): void {
+  if (deferredFeedInvalidations.has(queryClient)) return;
+  if ((queryClient.isFetching?.({ queryKey: keys.activityFeed }) ?? 0) > 0) {
+    deferredFeedInvalidations.add(queryClient);
+    setTimeout(() => {
+      deferredFeedInvalidations.delete(queryClient);
+      invalidateActivityFeed(queryClient);
+    }, FEED_INVALIDATION_RETRY_MS);
+    return;
+  }
+  void queryClient.invalidateQueries({ queryKey: keys.activityFeed });
 }
 
 export type RealtimeInvalidationMode = 'targeted' | 'full';
@@ -47,6 +77,10 @@ function unique(keysToInvalidate: QueryKey[]): QueryKey[] {
 
 function invalidate(queryClient: QueryInvalidator, queryKeys: QueryKey[]): void {
   for (const queryKey of unique(queryKeys)) {
+    if (JSON.stringify(queryKey) === ACTIVITY_FEED_KEY) {
+      invalidateActivityFeed(queryClient);
+      continue;
+    }
     void queryClient.invalidateQueries({ queryKey });
   }
 }

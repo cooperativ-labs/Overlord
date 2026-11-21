@@ -267,14 +267,14 @@ test('a recent delivered mission appears as a mission card, not a delivery card'
   const project = await createProject({ name: 'AF Deliveries' });
   const mission = await createMission({ projectId: project.id, firstObjective: 'Deliver' });
   const objective = mission.objectives[0]!;
-  const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
+  const twoDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString();
   seedDelivery({
     workspaceId: mission.workspaceId,
     projectId: project.id,
     missionId: mission.id,
     objectiveId: objective.id,
     summary: 'Shipped it',
-    deliveredAt: threeDaysAgo
+    deliveredAt: twoDaysAgo
   });
 
   const feed = await listActivityFeed();
@@ -288,48 +288,48 @@ test('a recent delivered mission appears as a mission card, not a delivery card'
   assert.deepEqual(item.activeObjectiveIds, []);
 });
 
-test('a delivery older than two weeks stays off the first page', async () => {
+test('a delivery older than three days stays off the first page', async () => {
   const project = await createProject({ name: 'AF Aged Delivery' });
   const mission = await createMission({ projectId: project.id, firstObjective: 'Old ship' });
-  const twentyDaysAgo = new Date(Date.now() - 20 * 24 * 60 * 60 * 1000).toISOString();
+  const fiveDaysAgo = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString();
   seedDelivery({
     workspaceId: mission.workspaceId,
     projectId: project.id,
     missionId: mission.id,
     objectiveId: mission.objectives[0]!.id,
-    summary: 'Shipped last month',
-    deliveredAt: twentyDaysAgo
+    summary: 'Shipped last week',
+    deliveredAt: fiveDaysAgo
   });
 
   const feed = await listActivityFeed();
   assert.ok(
     !feed.items.some(entry => entry.missionId === mission.id),
-    'first page is only the last two weeks of deliveries'
+    'first page is only the last three days of deliveries'
   );
   assert.ok(feed.nextBefore, 'older delivered missions remain reachable by scrolling');
 });
 
-test('scrolling before loads the next two weeks of delivered missions', async () => {
+test('scrolling before loads the next three days of delivered missions', async () => {
   const project = await createProject({ name: 'AF Scroll Delivery' });
   const recent = await createMission({ projectId: project.id, firstObjective: 'Recent ship' });
   const older = await createMission({ projectId: project.id, firstObjective: 'Older ship' });
-  const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
-  const twentyDaysAgo = new Date(Date.now() - 20 * 24 * 60 * 60 * 1000).toISOString();
+  const oneDayAgo = new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString();
+  const fiveDaysAgo = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString();
   seedDelivery({
     workspaceId: recent.workspaceId,
     projectId: project.id,
     missionId: recent.id,
     objectiveId: recent.objectives[0]!.id,
-    summary: 'This week',
-    deliveredAt: threeDaysAgo
+    summary: 'Yesterday',
+    deliveredAt: oneDayAgo
   });
   seedDelivery({
     workspaceId: older.workspaceId,
     projectId: project.id,
     missionId: older.id,
     objectiveId: older.objectives[0]!.id,
-    summary: 'Three weeks ago',
-    deliveredAt: twentyDaysAgo
+    summary: 'Five days ago',
+    deliveredAt: fiveDaysAgo
   });
 
   const first = await listActivityFeed();
@@ -340,7 +340,7 @@ test('scrolling before loads the next two weeks of delivered missions', async ()
   const second = await listActivityFeed({ before: first.nextBefore });
   assert.ok(
     second.items.some(entry => entry.missionId === older.id),
-    'the next two-week window includes the older delivery'
+    'the next three-day window includes the older delivery'
   );
   assert.ok(
     !second.items.some(entry => entry.kind === 'mission_run' || entry.kind === 'blocking_question'),
@@ -369,7 +369,7 @@ test('a live mission with a delivery is one running card, not also a delivered c
   assert.equal(cards[0]!.kind === 'mission_run' && cards[0]!.runState, 'executing');
 });
 
-test('the most recent delivery decides which two-week window a mission belongs to', async () => {
+test('the most recent delivery decides which three-day window a mission belongs to', async () => {
   const project = await createProject({ name: 'AF Latest Delivery' });
   const mission = await createMission({ projectId: project.id, firstObjective: 'Follow-up' });
   const objective = mission.objectives[0]!;

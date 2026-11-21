@@ -41,8 +41,11 @@ function summaryPreview(summary: string | null | undefined): string | null {
   return text ? truncate(text, INSTRUCTION_PREVIEW_CHARS) : null;
 }
 const EVENT_SUMMARY_CHARS = 240;
-/** First page, and each scroll page, of delivered missions. */
-const DELIVERED_WINDOW_MS = 14 * 24 * 60 * 60 * 1000;
+/**
+ * First page, and each scroll page, of delivered missions: three days keeps the
+ * first paint to recent work, and scrolling walks further back (coo:1344).
+ */
+const DELIVERED_WINDOW_MS = 3 * 24 * 60 * 60 * 1000;
 const ISO_UTC = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
 
 /** Objective states that make a mission live work worth a feed card. */
@@ -254,19 +257,18 @@ async function loadRuns(workspaceIds: string[]): Promise<RunRow[]> {
             o.title AS objective_title, o.instruction_text, o.summary, o.state, o.position,
             o.branch, o.resource_key, o.assigned_agent, o.model,
             o.updated_at AS objective_updated_at, o.launched_at, o.started_at,
-            (SELECT s.agent_identifier FROM agent_sessions s
-              WHERE s.objective_id = o.id AND s.deleted_at IS NULL
-              ORDER BY s.started_at DESC, s.id DESC LIMIT 1) AS session_agent_identifier,
-            (SELECT s.model_identifier FROM agent_sessions s
-              WHERE s.objective_id = o.id AND s.deleted_at IS NULL
-              ORDER BY s.started_at DESC, s.id DESC LIMIT 1) AS session_model_identifier,
-            (SELECT s.started_at FROM agent_sessions s
-              WHERE s.objective_id = o.id AND s.deleted_at IS NULL
-              ORDER BY s.started_at DESC, s.id DESC LIMIT 1) AS session_started_at,
+            s.agent_identifier AS session_agent_identifier,
+            s.model_identifier AS session_model_identifier,
+            s.started_at AS session_started_at,
             (SELECT r.created_at FROM execution_requests r
               WHERE r.objective_id = o.id AND r.deleted_at IS NULL
               ORDER BY r.created_at DESC, r.id DESC LIMIT 1) AS request_created_at
        FROM objectives o${CONTEXT_JOIN}
+       -- The objective's newest session, resolved once rather than once per column.
+       LEFT JOIN agent_sessions s ON s.id = (
+         SELECT x.id FROM agent_sessions x
+          WHERE x.objective_id = o.id AND x.deleted_at IS NULL
+          ORDER BY x.started_at DESC, x.id DESC LIMIT 1)
       WHERE o.deleted_at IS NULL
         AND o.state IN (${sqlPlaceholders(RUNNING_STATES.length)})
         AND o.workspace_id IN (${sqlPlaceholders(workspaceIds.length)})
@@ -399,7 +401,7 @@ async function loadQuestions(workspaceIds: string[]): Promise<QuestionRow[]> {
   )) as QuestionRow[];
 }
 
-function twoWeeksBefore(iso: string): string {
+function deliveredWindowStart(iso: string): string {
   return new Date(Date.parse(iso) - DELIVERED_WINDOW_MS).toISOString();
 }
 
@@ -467,8 +469,11 @@ async function latestDeliveredAtOnOrBefore({
   workspaceIds: string[];
   onOrBefore: string;
 }): Promise<string | null> {
+  // Newest-first with LIMIT 1 rather than MAX(): the (workspace_id, delivered_at)
+  // index lets the walk stop at the first qualifying delivery instead of running
+  // the per-row latest/live checks over the workspace's whole delivery history.
   const row = (await requireDatabaseClient().get(
-    `SELECT MAX(d.delivered_at) AS latest
+    `SELECT d.delivered_at AS latest
        FROM deliveries d
       WHERE d.deleted_at IS NULL
         AND d.workspace_id IN (${sqlPlaceholders(workspaceIds.length)})
@@ -485,7 +490,9 @@ async function latestDeliveredAtOnOrBefore({
            WHERE live.mission_id = d.mission_id
              AND live.deleted_at IS NULL
              AND live.state IN (${sqlPlaceholders(RUNNING_STATES.length)})
-        )`,
+        )
+      ORDER BY d.delivered_at DESC
+      LIMIT 1`,
     [...workspaceIds, onOrBefore, ...RUNNING_STATES]
   )) as { latest: string | null } | undefined;
   return row?.latest ?? null;
@@ -502,10 +509,10 @@ async function hasOlderDelivered({
 }
 
 /**
- * One two-week window of delivered missions ending at `windowEnd`.
+ * One three-day window of delivered missions ending at `windowEnd`.
  *
  * The first page (`skipEmpty: false`) stays strictly inside that window even
- * when it is empty, so "the last two weeks" means that. A scroll page may jump
+ * when it is empty, so "the last three days" means that. A scroll page may jump
  * backward over an empty calendar hole so the operator actually sees missions.
  */
 async function loadDeliveredPage({
@@ -518,13 +525,13 @@ async function loadDeliveredPage({
   skipEmpty: boolean;
 }): Promise<{ rows: DeliveredRow[]; nextBefore: string | null }> {
   let end = windowEnd;
-  let start = twoWeeksBefore(end);
+  let start = deliveredWindowStart(end);
   let rows = await loadDelivered({ workspaceIds, windowStart: start, windowEnd: end });
   if (rows.length === 0 && skipEmpty) {
     const olderAt = await latestDeliveredAtOnOrBefore({ workspaceIds, onOrBefore: start });
     if (!olderAt) return { rows: [], nextBefore: null };
     end = olderAt;
-    start = twoWeeksBefore(end);
+    start = deliveredWindowStart(end);
     rows = await loadDelivered({ workspaceIds, windowStart: start, windowEnd: end });
   }
   const older = await hasOlderDelivered({ workspaceIds, onOrBefore: start });
@@ -693,8 +700,8 @@ function newestFirst(a: ActivityFeedItemDto, b: ActivityFeedItemDto): number {
  * The first page is grouped rather than purely time-descending: blocking
  * questions lead (an agent is stopped until a person answers), then launching
  * missions, then executing ones, then delivered missions whose most recent
- * delivery is within the past two weeks. `before` pages drop live work and questions and return
- * the next older two-week window of delivered missions.
+ * delivery is within the past three days. `before` pages drop live work and questions and return
+ * the next older three-day window of delivered missions.
  */
 export async function listActivityFeed({
   before

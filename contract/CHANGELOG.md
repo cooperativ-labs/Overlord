@@ -5,6 +5,25 @@ is the current version and must equal [VERSION](VERSION); `yarn version:contract
 writes its skeleton. Dates use ISO 8601 and describe the contract change, not
 merely the files edited.
 
+## [179.12.0] - 2026-11-21
+
+Contract impact: minor. The activity feed's delivered window shrinks from two weeks to three days,
+and three workspace-leading indexes back its reads (ADR 0096, coo:1344.2v7x).
+
+- REST (`contract/api/openapi.yaml`, info 6.5.1, `architecture.md`, `components.yaml`):
+  `GET /api/activity-feed` returns delivered missions whose most recent live delivery falls in the
+  last three days, and `before` / `nextBefore` page by three-day windows. Live runs, blocking
+  questions (still the past 3 days), DTO shapes, grouping and authorization are unchanged.
+  Clients that follow `nextBefore` see the same missions across more, smaller pages.
+- Data (`data/README.md`, migration `20261121100000_activity_feed_indexes`, both adapters): new
+  indexes `deliveries (workspace_id, delivered_at)`, `mission_events (workspace_id, type,
+  created_at)` and `objectives (workspace_id, state, updated_at)`. No column, constraint or data
+  meaning changes.
+
+### Version
+
+- Minor contract version 179.12.0, from 179.11.0.
+
 ## [179.11.0] - 2026-11-21
 
 Contract impact: minor. Launched agents export `CLAUDE_CODE_TMPDIR` so Claude Code keeps its temp

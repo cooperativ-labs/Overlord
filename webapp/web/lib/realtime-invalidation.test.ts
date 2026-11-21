@@ -287,3 +287,39 @@ test('routes mission summary changes to the summary envelope only', () => {
   assert.equal(mode, 'targeted');
   assert.deepEqual(calls, [['mission', 'mission-1', 'summary']]);
 });
+
+test('holds activity-feed invalidations while the feed is loading, then applies one', t => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const calls: InvalidationCall[] = [];
+  let feedFetching = 1;
+  const client = {
+    invalidateQueries(filters?: { queryKey?: readonly unknown[] }) {
+      calls.push(filters?.queryKey ?? 'all');
+    },
+    isFetching(filters?: { queryKey?: readonly unknown[] }) {
+      return JSON.stringify(filters?.queryKey) === JSON.stringify(['activity-feed'])
+        ? feedFetching
+        : 0;
+    }
+  };
+  const event = change({ entityType: 'mission_event', entityId: 'event-1' });
+
+  // Two bursts land while the feed's first load is still in flight.
+  invalidateRealtimeChanges(client, [event]);
+  invalidateRealtimeChanges(client, [event]);
+  assert.deepEqual(calls, [
+    ['mission', 'mission-1', 'events'],
+    ['mission', 'mission-1', 'deliveries'],
+    ['mission', 'mission-1', 'events'],
+    ['mission', 'mission-1', 'deliveries']
+  ]);
+
+  // Still loading: the held invalidation waits again rather than cancelling the load.
+  t.mock.timers.tick(500);
+  assert.equal(calls.filter(call => JSON.stringify(call) === '["activity-feed"]').length, 0);
+
+  // The load settles: exactly one invalidation picks up everything that arrived.
+  feedFetching = 0;
+  t.mock.timers.tick(500);
+  assert.equal(calls.filter(call => JSON.stringify(call) === '["activity-feed"]').length, 1);
+});

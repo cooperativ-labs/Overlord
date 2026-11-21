@@ -330,9 +330,9 @@ Owns:
   objective: the launching one when there is one, else the oldest active one.
   `pending_delivery` counts as live work, so a re-attached objective keeps its mission on the
   feed between its last update and delivery. A mission whose most recent live delivery falls in
-  the requested two-week window and that has no live objective is a `mission_delivered` card
+  the requested three-day window and that has no live objective is a `mission_delivered` card
   with `runState: 'delivered'` and empty `activeObjectiveIds`. `before` selects the next older
-  two-week delivered window and omits live runs and questions; `nextBefore` is that window's
+  three-day delivered window and omits live runs and questions; `nextBefore` is that window's
   start when older delivered missions exist, else null. `blocking_question` items are unseen
   `ask` mission events from the past 3 days. Items are grouped rather than purely
   time-descending: launching missions, then executing ones, then questions, then delivered,

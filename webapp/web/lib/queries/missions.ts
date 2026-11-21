@@ -466,7 +466,7 @@ export function useInboxMissions() {
  * Cross-workspace objective activity for the Feed page. Freshness comes from the
  * realtime change link invalidating `keys.activityFeed`, not from polling — the
  * `refetchOnWindowFocus` default is the only fallback for a dropped stream.
- * Older delivered missions load two weeks at a time as the operator scrolls.
+ * Older delivered missions load three days at a time as the operator scrolls.
  */
 export function useActivityFeed() {
   return useInfiniteQuery({
