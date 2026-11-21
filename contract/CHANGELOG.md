@@ -5,6 +5,34 @@ is the current version and must equal [VERSION](VERSION); `yarn version:contract
 writes its skeleton. Dates use ISO 8601 and describe the contract change, not
 merely the files edited.
 
+## [182.0.3] - 2026-11-21
+
+Contract impact: patch. Search indexing skips identical projections and reuses
+the full-text projection for metadata-only updates. Both adapters synchronize
+event project moves. See ADR 0102.
+
+### Version
+
+- Patch contract version 182.0.3, from 182.0.2.
+
+## [182.0.2] - 2026-11-21
+
+Contract impact: patch. PostgreSQL realtime uses commit-delivered wake hints and
+reconciles active streams from the durable feed. The cursor, authorization, and
+SQLite behavior continue to follow the existing contract. See ADR 0101.
+
+### Version
+
+- Patch contract version 182.0.2, from 182.0.1.
+
+## [182.0.1] - 2026-11-21
+
+Contract impact: patch. Both database adapters index only populated change-feed project and mission references. The project index supports sequence-ordered catch-up and the mission index supports foreign-key maintenance. See ADR 0100.
+
+### Version
+
+- Patch contract version 182.0.1, from 182.0.0.
+
 ## [182.0.0] - 2026-11-21
 
 Contract impact: major. Desktop packages contain no provider API key. Local desktop users may save or remove their own OpenRouter key in encrypted OS-backed storage; it is supplied only to the local backend on restart and never returned to the renderer. Without a key, provider features use existing unavailable/fallback behavior. Cloud backend credentials remain server-managed. See ADR 0099.

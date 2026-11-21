@@ -63,11 +63,10 @@ export async function inspectTerminalInBackground({
     )
       return null;
 
-    // Preserve the old mission-anchored job's working-directory resolution.
-    const anchor = await tx.get<{ resource_key: string | null }>(
-      `SELECT resource_key FROM objectives
+    const anchor = await tx.get(
+      `SELECT 1 FROM objectives
         WHERE mission_id = ? AND workspace_id = ? AND deleted_at IS NULL
-        ORDER BY position LIMIT 1`,
+        LIMIT 1`,
       [missionId, ctx.workspace.id]
     );
     if (!anchor) return null;
@@ -85,7 +84,8 @@ export async function inspectTerminalInBackground({
           ctx.actorWorkspaceUserId,
           eligibilityMember,
           ctx.actorTokenId ?? null,
-          anchor.resource_key,
+          // Reuse older unscoped probes without matching resource-addressed jobs.
+          null,
           executable
         ])
       )
@@ -119,7 +119,6 @@ export async function inspectTerminalInBackground({
       kind: 'capability_call',
       capability: 'inspectLatchSession',
       input: { providerSessionId, executable },
-      resourceKey: anchor.resource_key,
       backgroundProbeKey
     });
     return { id, startedAt: createdAt, reused: false };

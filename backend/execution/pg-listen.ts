@@ -14,7 +14,7 @@ async function connectWithTimeout({
   client,
   timeoutMs
 }: {
-  client: NotificationClient;
+  client: Pick<NotificationClient, 'connect'>;
   timeoutMs: number;
 }): Promise<void> {
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -32,6 +32,55 @@ async function connectWithTimeout({
     if (timer !== undefined) clearTimeout(timer);
     // If the race lost to the timeout, a later connect rejection must not become unhandled.
     void connectPromise.catch(() => undefined);
+  }
+}
+
+/** Subscribe on a dedicated session. Postgres channels are internal constants. */
+export async function subscribePostgres({
+  connectionString,
+  channel,
+  onWake,
+  onDisconnect
+}: {
+  connectionString: string;
+  channel: string;
+  onWake: () => void;
+  onDisconnect: () => void;
+}): Promise<() => Promise<void>> {
+  const { default: pg } = await import('pg');
+  const timeoutMs = 3_000;
+  const client = new pg.Client({
+    connectionString,
+    application_name: channel,
+    connectionTimeoutMillis: timeoutMs,
+    query_timeout: timeoutMs,
+    keepAlive: true,
+    keepAliveInitialDelayMillis: 5_000
+  });
+  let closed = false;
+  const close = async () => {
+    if (closed) return;
+    closed = true;
+    await client.end().catch(() => undefined);
+  };
+  const disconnected = () => {
+    if (closed) return;
+    void close();
+    onDisconnect();
+  };
+  client.on('error', disconnected);
+  client.on('end', disconnected);
+  client.on('notification', notice => {
+    if (!closed && notice.channel === channel) onWake();
+  });
+  try {
+    await connectWithTimeout({ client, timeoutMs });
+    await client.query(`LISTEN ${channel}`);
+    if (closed) throw new Error('Postgres listener disconnected while arming');
+    return close;
+  } catch (error) {
+    await close();
+    throw error;
   }
 }
 

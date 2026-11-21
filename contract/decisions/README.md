@@ -135,3 +135,6 @@ record and the index disagree.
 - [0097 — Suppress timestamp-only runner change events](0097-runner-heartbeat-events.md)
 - [0098 — Ephemeral Latch observer probes](0098-ephemeral-latch-observer-probes.md)
 - [0099 — User-supplied OpenRouter key for the local desktop backend](0099-desktop-local-openrouter-key.md)
+- [0100 — Index populated project and mission references in the change feed](0100-partial-change-feed-indexes.md)
+- [0101 — Wake PostgreSQL realtime readers on feed commits](0101-postgres-realtime-wakeups.md)
+- [0102 — Reuse unchanged search projections](0102-reuse-search-projections.md)

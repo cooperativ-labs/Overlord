@@ -2403,7 +2403,7 @@ export async function start(): Promise<void> {
     });
     backgroundLoops.push(chatWorker, chatNotificationDispatcher);
   }
-  for (const loop of backgroundLoops) loop.start();
+  for (const loop of backgroundLoops) await loop.start();
   stopOnTermination(backgroundLoops);
 
   // Knowledgebase readiness (contract v156): the server and key source, never the key itself.

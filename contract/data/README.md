@@ -2645,8 +2645,8 @@ Indexes:
 - Primary/unique `seq`.
 - Unique `id`.
 - `(workspace_id, seq)`.
-- `(project_id, seq)`.
-- `(mission_id, seq)`.
+- Partial `(project_id, seq)` where `project_id IS NOT NULL`, for project-filtered catch-up and project foreign-key maintenance.
+- Partial `(mission_id)` where `mission_id IS NOT NULL`, for mission foreign-key maintenance.
 - `(entity_type, entity_id, seq)`.
 
 Usage:
@@ -3257,7 +3257,7 @@ Portable search indexing table. Adapters can replace or augment this with SQLite
 | `content_hash`    | text         | no       | Hash of indexed title/body/source metadata for incremental reindex.                                                                                                            |
 | `source_revision` | integer      | no       | Source entity revision indexed.                                                                                                                                                |
 | `metadata_json`   | Json         | yes      | Filter fields.                                                                                                                                                                 |
-| `indexed_at`      | TimestampUTC | yes      |                                                                                                                                                                                |
+| `indexed_at`      | TimestampUTC | yes      | Time the stored search projection was last inserted or changed, including a scope or source revision change. |
 
 Indexes:
 
@@ -3290,6 +3290,11 @@ Ranking aggregates per-document relevance into one score per mission with `max(d
 V3 retrieval selects `entity_id` so matching objectives and deliveries are identifiable. SQLite joins `search_documents` from `search_documents_fts.rowid` rather than adding `entity_id` to the FTS virtual table. Each workspace fetch is `ORDER BY doc_score DESC LIMIT 500`; when that cap is hit, `truncatedCandidates` is true and envelope counts are lower bounds. Entity weights are mission 3.0, objective 2.0, delivery 1.5, event 1.0. Child matches inside a group are ranked `docScore + 0.15 * missionScore` and capped by `matchesPerResult`. Events remain corroboration-only.
 
 The index is maintained by adapter triggers, not application writes: insert/update/delete on `missions`, `objectives`, `mission_events`, and `deliveries` keep `search_documents` (and the adapter full-text index) in sync, and a soft delete of a mission removes every document for that mission so deleted missions never surface. Workspace moves first remove the old workspace's document and then upsert the new one. Delivery rows are omitted once soft-deleted. `content_hash` and `source_revision` allow incremental reindexing instead of blind rebuilds.
+
+An update that leaves the stored title, body, scope, and source revision identical
+leaves `indexed_at` intact. A live document still records the current source
+revision when only that revision changes. Adapters may reuse the existing
+full-text projection when indexed text is identical.
 
 Mission document bodies concatenate the title/display ID with `constraints_text`, `output_format_text`, and `notes_text`. `notes_text` remains excluded from attach/load context and prompt assembly, but is searchable by every authorized caller, including agents. Delivery document bodies concatenate `summary`, `verification_summary`, `follow_up_notes`, and only `deliveryReport.agentReport.humanActions`, `knownRisks`, `deferredWork` (each item's `title`, `change`, `location`, and `doneWhen`; the `20261024140100_deferred_work_structured_cutover` migration recreated the delivery triggers and cleared historical string items), `assumptions`, and each `tradeoffsMade[].decision`; adapters cap that resulting body at 20,000 characters. Text beyond that cap is not searchable. Artifacts are not indexed.
 
@@ -3809,7 +3814,13 @@ SQLite implementation:
 Postgres implementation:
 
 - Use the same `entity_changes` table.
-- Optionally call `NOTIFY` after commit with the latest `seq`.
+- Inserts into `entity_changes` send a payload-free `overlord_entity_changes`
+  wake hint delivered on commit. The backend listens on a dedicated PostgreSQL
+  session while periodically reconciling active streams from the durable feed.
+  After startup or listener reconnect, the backend reads the feed once LISTEN
+  is armed. Listener failure falls back to short polling for active streams.
+  A hint carries neither a cursor nor tenant data. Only the commit-safe read
+  advances the cursor and supplies rows for authorization and projection.
 - Use `FOR UPDATE SKIP LOCKED` where available for worker and runner queues.
 
 ## Local Client DB Sync

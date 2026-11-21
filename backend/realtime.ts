@@ -9,10 +9,15 @@ import {
   requireDatabaseClient,
   withCommittedFeed
 } from './db.ts';
+import { subscribePostgres } from './execution/pg-listen.ts';
 import { PollLoop } from './poll-loop.ts';
 import { actorCan } from './rbac.ts';
 
 const CHANGE_BATCH_LIMIT = 500;
+const POSTGRES_WAKE_CHANNEL = 'overlord_entity_changes';
+const POLL_INTERVAL_MS = 500;
+const RECONCILIATION_MS = 5_000;
+const LISTENER_RETRY_MS = 5_000;
 const AUTHORIZATION_CHANGE_ENTITY_TYPES = new Set([
   'role_assignment',
   'user_token',
@@ -157,6 +162,7 @@ interface RealtimeClient {
   response: Response;
   workspaceIds: Set<string>;
   projectIds: Set<string> | null;
+  lastCursor: number;
   replaying: boolean;
   pending: Array<{ changes: EntityChangeDto[]; cursor: number }>;
 }
@@ -182,22 +188,102 @@ export class RealtimeHub extends PollLoop {
   private cursor = 0;
   private lastDataVersion: number | null = null;
   private heartbeatTimer: NodeJS.Timeout | null = null;
+  private postgres = false;
+  private wakePending = false;
+  private lastPassAt = 0;
+  private stopListening: (() => Promise<void>) | null = null;
+  private listenerRetry: NodeJS.Timeout | null = null;
+  private listenerAttempt: Promise<void> | null = null;
 
-  constructor() {
-    super({ intervalMs: 500, logPrefix: 'realtime' });
+  constructor(private readonly connectionString = process.env.DATABASE_URL?.trim()) {
+    super({ intervalMs: POLL_INTERVAL_MS, logPrefix: 'realtime' });
   }
 
-  override start(): void {
+  override async start(): Promise<void> {
     if (this.heartbeatTimer) return;
-    void this.initializeCursor().catch(error => this.onPollError(error));
-    super.start();
     this.heartbeatTimer = setInterval(() => this.heartbeat(), 25_000);
+    this.postgres = requireDatabaseClient().dialect === 'postgres';
+    if (this.postgres) {
+      // Bootstrap before the HTTP server admits streams. A failed baseline
+      // leaves the prior cursor in place so the first subscriber can recover.
+      const epoch = this.heartbeatTimer;
+      if (this.clients.size === 0) {
+        try {
+          const baseline = await currentMaxSeq();
+          if (this.heartbeatTimer === epoch && this.clients.size === 0) this.cursor = baseline;
+        } catch (error) {
+          this.onPollError(error);
+        }
+      }
+      if (this.heartbeatTimer !== epoch) return;
+      super.start();
+      if (this.connectionString) this.connectListener(this.connectionString);
+    } else {
+      void this.initializeCursor().catch(error => this.onPollError(error));
+      super.start();
+    }
   }
 
-  override stop(): Promise<void> {
+  override async stop(): Promise<void> {
     if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
     this.heartbeatTimer = null;
-    return super.stop();
+    if (this.listenerRetry) clearTimeout(this.listenerRetry);
+    this.listenerRetry = null;
+    const close = this.stopListening;
+    this.stopListening = null;
+    await Promise.all([super.stop(), close?.(), this.listenerAttempt]);
+  }
+
+  private connectListener(connectionString: string): void {
+    const epoch = this.heartbeatTimer;
+    if (!epoch) return;
+    const retry = () => {
+      if (this.heartbeatTimer !== epoch || this.listenerRetry) return;
+      this.listenerRetry = setTimeout(() => {
+        this.listenerRetry = null;
+        this.connectListener(connectionString);
+      }, LISTENER_RETRY_MS);
+      this.listenerRetry.unref();
+    };
+    this.listenerAttempt = subscribePostgres({
+      connectionString,
+      channel: POSTGRES_WAKE_CHANNEL,
+      onWake: () => {
+        if (this.heartbeatTimer === epoch) void this.pollNow();
+      },
+      onDisconnect: () => {
+        if (this.heartbeatTimer !== epoch) return;
+        this.stopListening = null;
+        retry();
+        void this.pollNow();
+      }
+    })
+      .then(async close => {
+        if (this.heartbeatTimer !== epoch) {
+          await close();
+          return;
+        }
+        this.stopListening = close;
+        // LISTEN only sees subsequent commits. Read after it is armed to catch
+        // rows committed during startup or while the connection was down.
+        void this.pollNow();
+      })
+      .catch(retry);
+  }
+
+  override async pollNow(): Promise<void> {
+    if (this.postgres) this.wakePending = true;
+    await super.pollNow();
+  }
+
+  protected override shouldPoll(): boolean {
+    if (!this.postgres) return true;
+    return (
+      this.clients.size > 0 &&
+      (this.wakePending ||
+        !this.stopListening ||
+        performance.now() - this.lastPassAt >= RECONCILIATION_MS)
+    );
   }
 
   addClient(res: Response, options: AddRealtimeClientOptions): void {
@@ -215,9 +301,11 @@ export class RealtimeHub extends PollLoop {
         options.projectIds === null || options.projectIds === undefined
           ? null
           : new Set(options.projectIds),
+      lastCursor: options.afterSeq ?? this.cursor,
       replaying: options.afterSeq !== undefined,
       pending: []
     };
+    const firstClient = this.clients.size === 0;
     this.clients.set(res, client);
     this.send(res, 'hello', { type: 'hello', cursor: this.cursor });
     if (options.afterSeq !== undefined) {
@@ -231,6 +319,7 @@ export class RealtimeHub extends PollLoop {
               this.send(res, 'change', { type: 'change', changes, cursor: pending.cursor });
             cursor = Math.max(cursor, pending.cursor);
           }
+          current.lastCursor = cursor;
           current.pending = [];
           current.replaying = false;
         })
@@ -248,6 +337,7 @@ export class RealtimeHub extends PollLoop {
           res.end();
         });
     }
+    if (firstClient && this.postgres) void this.pollNow();
   }
 
   removeClient(res: Response): void {
@@ -273,6 +363,8 @@ export class RealtimeHub extends PollLoop {
 
   /** One feed pass; `pollNow()` runs it right after a local mutation for snappy echoes. */
   protected async runOnce(): Promise<void> {
+    this.wakePending = false;
+    this.lastPassAt = performance.now();
     const client = requireDatabaseClient();
     if (this.clients.size === 0) {
       // Keep the cursor moving even with no subscribers so a later client does
@@ -287,8 +379,9 @@ export class RealtimeHub extends PollLoop {
         `SELECT retained_through FROM entity_change_retention WHERE id = 1`
       );
       if (!state) throw new Error('Change-feed retention boundary is missing');
-      if (this.cursor < Number(state.retained_through)) {
-        return { expired: true as const, cursor: await currentMaxSeq(tx), rows: [] as ChangeRow[] };
+      const retainedThrough = Number(state.retained_through);
+      if (this.cursor < retainedThrough) {
+        return { expired: true as const, retainedThrough, cursor: await currentMaxSeq(tx) };
       }
       return {
         expired: false as const,
@@ -297,8 +390,8 @@ export class RealtimeHub extends PollLoop {
       };
     });
     if (pass.expired) {
-      this.cursor = pass.cursor;
-      for (const { response } of [...this.clients.values()]) {
+      for (const { response, lastCursor } of [...this.clients.values()]) {
+        if (this.postgres && lastCursor >= pass.retainedThrough) continue;
         this.send(response, 'snapshot_required', {
           type: 'snapshot_required',
           cursor: pass.cursor
@@ -306,6 +399,8 @@ export class RealtimeHub extends PollLoop {
         this.removeClient(response);
         response.end();
       }
+      this.cursor = this.clients.size > 0 ? pass.retainedThrough : pass.cursor;
+      if (this.clients.size > 0) setImmediate(() => void this.pollNow()).unref();
       return;
     }
     const rows = pass.rows;
@@ -321,6 +416,11 @@ export class RealtimeHub extends PollLoop {
       } else {
         this.broadcastChanges(rows, this.cursor);
       }
+    }
+    if (this.postgres && (rows.length === CHANGE_BATCH_LIMIT || this.wakePending)) {
+      // A full page can span many commits summarized by a single wake. Yield
+      // between pages so a backlog never monopolizes the event loop.
+      setImmediate(() => void this.pollNow()).unref();
     }
 
     // SQLite-only external-write net: `sqliteDataVersion()` returns null on
@@ -347,6 +447,7 @@ export class RealtimeHub extends PollLoop {
       const changes = rows
         .filter(
           row =>
+            row.seq > client.lastCursor &&
             client.workspaceIds.has(row.workspace_id) &&
             (client.projectIds === null ||
               (row.project_id !== null && client.projectIds.has(row.project_id)))
@@ -360,6 +461,7 @@ export class RealtimeHub extends PollLoop {
             client.response.end();
           }
         } else {
+          client.lastCursor = cursor;
           this.send(client.response, 'change', { type: 'change', changes, cursor });
         }
       }

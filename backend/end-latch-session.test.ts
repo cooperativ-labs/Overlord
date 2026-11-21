@@ -52,7 +52,7 @@ after(async () => {
   rmSync(harness.tempDir, { recursive: true, force: true });
 });
 
-async function fixture() {
+async function fixture(resourceKey?: string) {
   const ctx = await dbModule.buildWebappServiceContextForWorkspace(
     'local-workspace',
     client,
@@ -69,11 +69,12 @@ async function fixture() {
   await createProjectResource(project.id, {
     directoryPath: createIsolatedCheckout('end-terminal-'),
     executionTargetId: target.executionTargetId,
-    isPrimary: true
+    isPrimary: true,
+    ...(resourceKey ? { resourceKey } : {})
   });
   const mission = await createMission({
     projectId: project.id,
-    firstObjective: 'Stop this attempt'
+    objectives: [{ instructions: 'Stop this attempt', ...(resourceKey ? { resourceKey } : {}) }]
   });
   const objectiveId = mission.objectives[0]!.id;
   await postRunQueueEntry(project.id, { objectiveId });
@@ -254,6 +255,34 @@ test('observer recovers an automated launch with no requester on its claiming ta
   );
   assert.ok(probe);
   assert.equal(probe.requested_by_workspace_user_id, null);
+});
+
+test('observer inspects a resource-bound objective on the owning runner', async () => {
+  const f = await fixture('terminal-repo');
+  assert.equal(f.mission.objectives[0]?.resourceKey, 'terminal-repo');
+
+  await withRunner(f, () => new TerminalSessionObserver().runOnce(), 'exited', 'exited');
+
+  const probe = await client.get<{
+    status: string;
+    last_error: string | null;
+    metadata_json: string;
+  }>(
+    `SELECT status, last_error, metadata_json FROM execution_requests
+      WHERE project_id = ? AND execution_target_id = ? AND background_probe_key IS NOT NULL`,
+    [f.project.id, f.target.executionTargetId]
+  );
+  assert.ok(probe);
+  assert.equal(probe.last_error, null);
+  assert.equal(probe.status, 'launched');
+  const mutation = parseLocalTargetMutation(probe.metadata_json);
+  assert.equal(mutation?.resourceKey, undefined);
+  assert.equal(mutation?.input.providerSessionId, f.mapping.providerSessionId);
+  assert.equal(mutation?.result?.ok, true);
+  assert.equal(
+    (await getMissionDetail(f.mission.id)).terminalSessions[0]?.lastObservedState,
+    'exited'
+  );
 });
 
 test('history is bounded, paged, mission scoped and retained when forgotten', async () => {
@@ -530,7 +559,7 @@ test(
     skip: process.env.OVERLORD_LIVE_LATCH_TEST !== '1'
   },
   async () => {
-    const f = await fixture();
+    const f = await fixture('terminal-repo');
     const home = mkdtempSync('/tmp/ovld-end-latch-');
     const keys = [
       'LATCH_HOME',

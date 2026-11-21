@@ -84,8 +84,25 @@ async function runMissionProjectMoveCase(): Promise<void> {
     report,
     attribution: { actorWorkspaceUserId: null, actorTokenId: null, source: 'webapp' }
   });
+  const eventId = `event-move-${mission.id}`;
+  await db.run(
+    `INSERT INTO mission_events (id, workspace_id, project_id, mission_id, type, summary, source, created_at)
+     VALUES (?, ?, ?, ?, 'update', 'Confirm project move', 'agent', ?)`,
+    [eventId, mission.workspaceId, p1.id, mission.id, delivery.deliveredAt]
+  );
 
   const updated = await updateMission(mission.id, { projectId: p2.id });
+  const indexedProjects = await db.all<{ entity_id: string; project_id: string }>(
+    'SELECT entity_id, project_id FROM search_documents WHERE mission_id = ? AND workspace_id = ?',
+    [mission.id, mission.workspaceId]
+  );
+  for (const id of [mission.id, mission.objectives[0]!.id, delivery.id, eventId]) {
+    assert.equal(
+      indexedProjects.find(doc => doc.entity_id === id)?.project_id,
+      p2.id,
+      `search document ${id} follows the mission to its new project`
+    );
+  }
   const movedItems = await db.all<{ id: string; project_id: string }>(
     'SELECT id, project_id FROM mission_items WHERE mission_id = ?',
     [mission.id]
