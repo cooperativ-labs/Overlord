@@ -1401,9 +1401,9 @@ function formatError(error64, mapper = (issue2) => issue2.message) {
           let i5 = 0;
           while (i5 < fullpath.length) {
             const el = fullpath[i5];
-            const terminal = i5 === fullpath.length - 1;
+            const terminal2 = i5 === fullpath.length - 1;
             if (el === "_errors") {
-              if (terminal)
+              if (terminal2)
                 curr._errors.push(mapper(issue2));
               i5++;
               continue;
@@ -1417,7 +1417,7 @@ function formatError(error64, mapper = (issue2) => issue2.message) {
               });
             }
             const node2 = curr[el];
-            if (terminal) {
+            if (terminal2) {
               node2._errors.push(mapper(issue2));
             }
             curr = node2;
@@ -1451,7 +1451,7 @@ function treeifyError(error64, mapper = (issue2) => issue2.message) {
         let i5 = 0;
         while (i5 < fullpath.length) {
           const el = fullpath[i5];
-          const terminal = i5 === fullpath.length - 1;
+          const terminal2 = i5 === fullpath.length - 1;
           if (typeof el === "string") {
             curr.properties ?? (curr.properties = {});
             if (!Object.prototype.hasOwnProperty.call(curr.properties, el)) {
@@ -1468,7 +1468,7 @@ function treeifyError(error64, mapper = (issue2) => issue2.message) {
             (_a8 = curr.items)[el] ?? (_a8[el] = { errors: [] });
             curr = curr.items[el];
           }
-          if (terminal) {
+          if (terminal2) {
             curr.errors.push(mapper(issue2));
           }
           i5++;
@@ -68597,7 +68597,7 @@ var require_route = __commonJS({
       }
       return methods3;
     };
-    Route.prototype.dispatch = function dispatch2(req, res, done) {
+    Route.prototype.dispatch = function dispatch(req, res, done) {
       var idx = 0;
       var stack = this.stack;
       var sync = 0;
@@ -111951,6 +111951,9 @@ function formatOvldLaunchCommand({ agent, missionDisplayId, objectiveId = null, 
   }
   return parts.join(" ");
 }
+function normalizeAgentHarnessMode(input2) {
+  return input2 === "appServer" || input2 === "hooks" ? input2 : void 0;
+}
 
 // ../packages/contract/dist/vocabulary.js
 function vocabulary() {
@@ -112121,6 +112124,12 @@ var LAUNCH_VARIABLES = [
     description: "Same path as OVERLORD_TMPDIR \u2014 Windows-style temp-dir alias.",
     example: "/Users/you/src/overlord/.overlord/tmp/sessions/objective-coo-359-k7xm-4f1c",
     availableAt: ["plan_build", "terminal_env"]
+  },
+  {
+    name: "CLAUDE_CODE_TMPDIR",
+    description: "Temp root for Claude Code, which ignores TMPDIR: the checkout's shared `.overlord/tmp/harness/` (0700). Exported to every agent; omitted when the path is too long for Claude's Unix messaging socket, so Claude keeps its default. Files age out with the `.overlord/tmp` retention.",
+    example: "/Users/you/src/overlord/.overlord/tmp/harness",
+    availableAt: ["terminal_env"]
   },
   {
     name: "OVERLORD_PROJECT_RESOURCES",
@@ -135323,7 +135332,10 @@ var projectLifecycleSchema = external_exports.enum(["active", "archived"]);
 var projectListLifecycleSchema = external_exports.enum(["active", "archived", "all"]);
 var agentLaunchFlagDtoSchema = external_exports.object({ "name": external_exports.string(), "value": external_exports.exactOptional(external_exports.string().nullable()) });
 var agentLaunchFlagInputSchema = external_exports.union([external_exports.string(), external_exports.object({ "name": external_exports.string(), "value": external_exports.exactOptional(external_exports.string().nullable()) })]);
-var agentLaunchConfigDtoSchema = external_exports.object({ "preCommand": external_exports.string(), "flags": external_exports.array(agentLaunchFlagDtoSchema) });
+var mintSessionChannelBodySchema = external_exports.object({ "adapterKey": external_exports.string(), "adapterVersion": external_exports.exactOptional(external_exports.string()), "executionRequestId": external_exports.exactOptional(external_exports.string()), "executionTargetId": external_exports.exactOptional(external_exports.string()) });
+var sessionChannelBootstrapDtoSchema = external_exports.object({ "channelId": external_exports.string(), "token": external_exports.string(), "expiresAt": dateTimeSchema, "launchKind": external_exports.literal("control_plane"), "launchPromptId": external_exports.string().nullable(), "adapterKey": external_exports.string(), "agentIdentifier": external_exports.string() });
+var agentHarnessModeSchema = external_exports.enum(["hooks", "appServer"]);
+var agentLaunchConfigDtoSchema = external_exports.object({ "preCommand": external_exports.string(), "flags": external_exports.array(agentLaunchFlagDtoSchema), "harnessMode": external_exports.exactOptional(agentHarnessModeSchema) });
 var agentLaunchConfigInputSchema = external_exports.object({ "preCommand": external_exports.exactOptional(external_exports.string()), "flags": external_exports.exactOptional(external_exports.array(agentLaunchFlagInputSchema)) });
 var projectDtoSchema = external_exports.object({ "id": external_exports.string(), "workspaceId": external_exports.string(), "slug": external_exports.string(), "name": external_exports.string(), "description": external_exports.string().nullable(), "color": external_exports.string().nullable(), "defaultBranch": external_exports.string().nullable(), "status": projectLifecycleSchema, "createdAt": dateTimeSchema, "updatedAt": dateTimeSchema, "revision": external_exports.int().min(1), "missionCount": external_exports.int().min(0), "position": external_exports.int().min(0), "preLaunchCommands": external_exports.array(external_exports.string()), "launchEnvVars": external_exports.record(external_exports.string(), external_exports.string()) });
 var projectStatusDtoSchema = external_exports.object({ "id": external_exports.string(), "workspaceId": external_exports.string(), "projectId": external_exports.string(), "key": external_exports.string(), "name": external_exports.string(), "type": statusTypeSchema, "position": external_exports.int().min(0), "isDefault": external_exports.boolean(), "isTerminal": external_exports.boolean() });
@@ -135567,7 +135579,7 @@ var oAuthApproveResultDtoSchema = external_exports.object({ "redirectTo": extern
 var mcpServerInfoDtoSchema = external_exports.object({ "name": external_exports.literal("overlord"), "protocolVersion": external_exports.string(), "endpoint": external_exports.string(), "capabilities": external_exports.object({ "tools": external_exports.array(jsonValueSchema), "resources": external_exports.array(jsonValueSchema) }), "instructions": external_exports.string() });
 var jsonRpcIdSchema = external_exports.union([external_exports.string(), external_exports.number(), external_exports.null()]);
 var jsonRpcRequestSchema = external_exports.object({ "jsonrpc": external_exports.literal("2.0"), "id": external_exports.exactOptional(jsonRpcIdSchema), "method": external_exports.string(), "params": external_exports.exactOptional(jsonValueSchema) });
-var jsonRpcResponseSchema = external_exports.union([external_exports.strictObject({ "jsonrpc": external_exports.literal("2.0"), "id": external_exports.exactOptional(jsonRpcIdSchema), "result": jsonValueSchema }), external_exports.strictObject({ "jsonrpc": external_exports.literal("2.0"), "id": jsonRpcIdSchema, "error": external_exports.object({ "code": external_exports.literal([-32600, -32601, -32e3]), "message": external_exports.string() }) })]);
+var jsonRpcResponseSchema = external_exports.union([external_exports.strictObject({ "jsonrpc": external_exports.literal("2.0"), "id": external_exports.exactOptional(jsonRpcIdSchema), "result": jsonValueSchema }), external_exports.strictObject({ "jsonrpc": external_exports.literal("2.0"), "id": jsonRpcIdSchema, "error": external_exports.object({ "code": external_exports.literal([-32600, -32601, -32602, -32e3]), "message": external_exports.string() }) })]);
 var accountConnectionProviderSchema = external_exports.enum(["knowledgebase", "everhour", "github"]);
 var accountConnectionScopeSchema = external_exports.enum(["organization", "profile"]);
 var accountConnectionCredentialKindSchema = external_exports.enum(["oauth", "api_key"]);
@@ -135611,8 +135623,10 @@ var reportResourceObservationsBodySchema = external_exports.object({ "observatio
 var reportMissionBranchObservationsBodySchema = external_exports.object({ "observations": external_exports.array(external_exports.object({ "missionId": external_exports.string(), "resourceKey": external_exports.string(), "status": external_exports.enum(["created", "published", "merged_unpushed", "merged"]), "dirty": external_exports.boolean(), "worktreePath": external_exports.exactOptional(external_exports.string().nullable()), "observedAt": external_exports.string() })).min(1) });
 var recordedObservationsDtoSchema = external_exports.object({ "recorded": external_exports.int().min(1) });
 var agentCatalogModelDtoSchema = external_exports.object({ "id": external_exports.string(), "displayName": external_exports.string(), "reasoningOptions": external_exports.array(external_exports.string()), "enabled": external_exports.boolean() });
-var agentCatalogAgentDtoSchema = external_exports.object({ "key": external_exports.string(), "label": external_exports.string(), "availableByDefault": external_exports.boolean(), "models": external_exports.array(agentCatalogModelDtoSchema), "defaultModel": external_exports.string().nullable(), "defaultReasoningEffort": external_exports.string().nullable(), "reasoningLabel": external_exports.string() });
+var agentCatalogLiveSourceDtoSchema = external_exports.object({ "harnessVersion": external_exports.string().nullable(), "reportedAt": external_exports.string() });
+var agentCatalogAgentDtoSchema = external_exports.object({ "key": external_exports.string(), "label": external_exports.string(), "availableByDefault": external_exports.boolean(), "models": external_exports.array(agentCatalogModelDtoSchema), "defaultModel": external_exports.string().nullable(), "defaultReasoningEffort": external_exports.string().nullable(), "reasoningLabel": external_exports.string(), "liveSource": external_exports.exactOptional(agentCatalogLiveSourceDtoSchema) });
 var agentCatalogDtoSchema = external_exports.object({ "agents": external_exports.array(agentCatalogAgentDtoSchema), "defaultAgent": external_exports.string(), "defaultModel": external_exports.string().nullable() });
+var agentLiveModelsReportBodySchema = external_exports.object({ "agent": external_exports.string(), "harnessVersion": external_exports.exactOptional(external_exports.string().nullable()), "models": external_exports.array(external_exports.object({ "id": external_exports.string(), "displayName": external_exports.exactOptional(external_exports.string()), "reasoningOptions": external_exports.exactOptional(external_exports.array(external_exports.string())), "isDefault": external_exports.exactOptional(external_exports.boolean()), "defaultReasoningEffort": external_exports.exactOptional(external_exports.string().nullable()) })).min(1).max(200) });
 var updateAgentCatalogBodySchema = external_exports.object({ "agents": external_exports.array(external_exports.object({ "key": external_exports.string(), "label": external_exports.string(), "availableByDefault": external_exports.exactOptional(external_exports.boolean()), "models": external_exports.array(external_exports.object({ "id": external_exports.string(), "displayName": external_exports.exactOptional(external_exports.string()), "reasoningOptions": external_exports.exactOptional(external_exports.array(external_exports.string())), "enabled": external_exports.exactOptional(external_exports.boolean()) })).min(1), "defaultModel": external_exports.exactOptional(external_exports.string().nullable()), "defaultReasoningEffort": external_exports.exactOptional(external_exports.string().nullable()), "reasoningLabel": external_exports.exactOptional(external_exports.string()) })) });
 var executionProviderDtoSchema = external_exports.object({ "kind": external_exports.enum(["direct", "latch"]), "executable": external_exports.string() });
 var terminalProfileDtoSchema = external_exports.object({ "launcher": external_exports.string().nullable(), "placement": external_exports.string(), "chord": external_exports.string().nullable(), "background": external_exports.boolean(), "executionProvider": executionProviderDtoSchema.nullable(), "openViewerOnLaunch": external_exports.boolean().nullable() });
@@ -135620,7 +135634,7 @@ var launchSessionDefaultsDtoSchema = external_exports.object({ "executionProvide
 var launchSessionSourceSchema = external_exports.enum(["target", "user_default"]);
 var resolvedLaunchSessionDtoSchema = external_exports.object({ "version": external_exports.literal(1), "executionProvider": executionProviderDtoSchema, "viewer": external_exports.object({ "kind": external_exports.enum(["iterm", "terminal", "inline", "custom"]), "launcher": external_exports.string().nullable(), "openOnLaunch": external_exports.boolean(), "openAs": external_exports.enum(["window", "tab"]), "background": external_exports.boolean() }), "executionProviderSource": launchSessionSourceSchema, "viewerOpenSource": launchSessionSourceSchema });
 var launchSettingsDtoSchema = external_exports.object({ "executionTargetId": external_exports.string().nullable(), "deviceLabel": external_exports.string().nullable(), "agentConfigs": external_exports.record(external_exports.string(), agentLaunchConfigDtoSchema), "terminalProfile": terminalProfileDtoSchema, "launchSessionDefaults": launchSessionDefaultsDtoSchema, "resolvedLaunchSession": resolvedLaunchSessionDtoSchema.nullable(), "worktreeBranchAutomationEnabled": external_exports.boolean() });
-var updateAgentLaunchConfigBodySchema = external_exports.object({ "preCommand": external_exports.exactOptional(external_exports.string()), "flags": external_exports.exactOptional(external_exports.array(agentLaunchFlagInputSchema)) });
+var updateAgentLaunchConfigBodySchema = external_exports.object({ "preCommand": external_exports.exactOptional(external_exports.string()), "flags": external_exports.exactOptional(external_exports.array(agentLaunchFlagInputSchema)), "harnessMode": external_exports.exactOptional(agentHarnessModeSchema.nullable()) });
 var updateTerminalProfileBodySchema = external_exports.object({ "launcher": external_exports.exactOptional(external_exports.string().nullable()), "placement": external_exports.exactOptional(external_exports.enum(["window", "tab", "chord"])), "chord": external_exports.exactOptional(external_exports.string().nullable()), "background": external_exports.exactOptional(external_exports.boolean()), "executionProvider": external_exports.exactOptional(executionProviderDtoSchema.nullable()), "openViewerOnLaunch": external_exports.exactOptional(external_exports.boolean().nullable()) });
 var updateLaunchSessionDefaultsBodySchema = external_exports.object({ "executionProvider": external_exports.exactOptional(executionProviderDtoSchema.nullable()), "openViewerOnLaunch": external_exports.exactOptional(external_exports.boolean().nullable()), "worktreeBranchAutomationEnabled": external_exports.exactOptional(external_exports.boolean().nullable()) });
 var updateWorktreeBranchAutomationBodySchema = external_exports.object({ "enabled": external_exports.exactOptional(external_exports.boolean()) });
@@ -135652,7 +135666,7 @@ var agentRequestKindSchema = external_exports.enum(["question", "permission", "c
 var agentRequestStatusSchema = external_exports.enum(["open", "resolved", "released_to_terminal", "expired", "cancelled"]);
 var agentSessionChannelSelfDtoSchema = external_exports.object({ "channelId": external_exports.string(), "state": agentSessionChannelStateSchema, "bound": external_exports.boolean(), "missionId": external_exports.string(), "adapterKey": external_exports.string().nullable(), "capabilities": jsonValueSchema, "leaseExpiresAt": dateTimeSchema.nullable() });
 var agentSessionHeartbeatBodySchema = external_exports.object({ "state": external_exports.exactOptional(external_exports.enum(["online", "degraded"])), "capabilities": external_exports.exactOptional(external_exports.record(external_exports.string(), jsonValueSchema)), "nativeSessionId": external_exports.exactOptional(external_exports.string()), "adapterVersion": external_exports.exactOptional(external_exports.string()) });
-var agentSessionHeartbeatDtoSchema = external_exports.object({ "ok": external_exports.literal(true), "leaseExpiresAt": dateTimeSchema, "credentialExpiresAt": dateTimeSchema });
+var agentSessionHeartbeatDtoSchema = external_exports.object({ "ok": external_exports.literal(true), "leaseExpiresAt": dateTimeSchema, "credentialExpiresAt": dateTimeSchema, "objectiveState": external_exports.exactOptional(external_exports.string().nullable()), "deliveryState": external_exports.exactOptional(external_exports.string().nullable()) });
 var agentSessionEventInputSchema = external_exports.object({ "eventId": external_exports.string(), "kind": external_exports.string(), "producerSequence": external_exports.exactOptional(external_exports.number()), "occurredAt": external_exports.exactOptional(external_exports.string()), "severity": external_exports.exactOptional(external_exports.string()), "actionability": external_exports.exactOptional(external_exports.string()), "nativeEvent": external_exports.exactOptional(external_exports.string()), "nativeTurnId": external_exports.exactOptional(external_exports.string()), "nativeCallId": external_exports.exactOptional(external_exports.string()), "subagentId": external_exports.exactOptional(external_exports.string()), "correlationId": external_exports.exactOptional(external_exports.string()), "origin": external_exports.exactOptional(external_exports.string()), "summary": external_exports.exactOptional(external_exports.string()), "payload": external_exports.exactOptional(external_exports.record(external_exports.string(), jsonValueSchema)) });
 var appendAgentSessionEventsBodySchema = external_exports.union([external_exports.object({ "events": external_exports.array(agentSessionEventInputSchema).max(100) }), agentSessionEventInputSchema]);
 var appendAgentSessionEventsDtoSchema = external_exports.object({ "accepted": external_exports.array(external_exports.object({ "id": external_exports.string(), "channelSequence": external_exports.int().min(1), "duplicate": external_exports.boolean() })) });
@@ -135661,7 +135675,7 @@ var createAgentRequestBodySchema = external_exports.object({ "kind": external_ex
 var createdAgentRequestDtoSchema = external_exports.object({ "requestId": external_exports.string(), "status": agentRequestStatusSchema, "revision": external_exports.int().min(1), "windowExpiresAt": external_exports.string().nullable() });
 var agentRequestDtoShape = { "id": external_exports.string(), "channelId": external_exports.string(), "missionId": external_exports.string().nullable(), "objectiveId": external_exports.string().nullable(), "kind": agentRequestKindSchema, "summary": external_exports.string(), "options": external_exports.array(agentRequestOptionSchema), "allowsFreeText": external_exports.boolean(), "status": agentRequestStatusSchema, "resolution": jsonValueSchema, "revision": external_exports.int().min(1), "windowExpiresAt": external_exports.string().nullable(), "releasedReason": external_exports.string().nullable(), "applicationState": external_exports.string(), "resolvedAt": dateTimeSchema.nullable(), "createdAt": dateTimeSchema };
 var agentRequestDtoSchema = external_exports.object(agentRequestDtoShape);
-var agentRequestDeliveryDtoSchema = external_exports.object({ "mode": external_exports.enum(["latch", "read_only"]), "reason": external_exports.enum(["no_latch_session", "latch_session_exited", "target_offline", "request_closed"]).nullable(), "state": external_exports.enum(["emitted", "applied", "not_applied", "unknown"]).nullable(), "observedAt": dateTimeSchema.nullable(), "stage": external_exports.exactOptional(external_exports.string().nullable()), "attempt": external_exports.exactOptional(external_exports.int().min(1).nullable()), "failureCode": external_exports.exactOptional(external_exports.string().nullable()), "failureMessage": external_exports.exactOptional(external_exports.string().max(300).nullable()), "canRedeliver": external_exports.exactOptional(external_exports.boolean()), "confirmationRequired": external_exports.exactOptional(external_exports.boolean()), "sessionState": external_exports.exactOptional(external_exports.string().nullable()) });
+var agentRequestDeliveryDtoSchema = external_exports.object({ "mode": external_exports.enum(["latch", "control_plane", "read_only"]), "reason": external_exports.enum(["no_latch_session", "latch_session_exited", "target_offline", "request_closed", "channel_ended", "not_session_owner"]).nullable(), "state": external_exports.enum(["emitted", "applied", "not_applied", "unknown"]).nullable(), "observedAt": dateTimeSchema.nullable(), "stage": external_exports.exactOptional(external_exports.string().nullable()), "attempt": external_exports.exactOptional(external_exports.int().min(1).nullable()), "failureCode": external_exports.exactOptional(external_exports.string().nullable()), "failureMessage": external_exports.exactOptional(external_exports.string().max(300).nullable()), "canRedeliver": external_exports.exactOptional(external_exports.boolean()), "confirmationRequired": external_exports.exactOptional(external_exports.boolean()), "sessionState": external_exports.exactOptional(external_exports.string().nullable()) });
 var humanAgentRequestDtoSchema = external_exports.object({ ...agentRequestDtoShape, "delivery": agentRequestDeliveryDtoSchema, "dismissed": external_exports.exactOptional(external_exports.boolean()), "dismissedAt": external_exports.exactOptional(dateTimeSchema.nullable()) });
 var agentRequestPageDtoSchema = external_exports.object({ "complete": external_exports.boolean(), "nextCursor": external_exports.string().nullable(), "limit": external_exports.int().min(1).max(200), "status": external_exports.enum(["open"]).nullable() });
 var agentRequestListResponseSchema = external_exports.object({ "requests": external_exports.array(humanAgentRequestDtoSchema), "page": external_exports.exactOptional(agentRequestPageDtoSchema) });
@@ -135824,6 +135838,7 @@ var patchWorkspacesByIdExecutionTargetsByTargetIdPathParamsSchema = external_exp
 var getWorkspacesByIdAgentCatalogPathParamsSchema = external_exports.object({ "id": external_exports.string() });
 var putWorkspacesByIdAgentCatalogPathParamsSchema = external_exports.object({ "id": external_exports.string() });
 var postWorkspacesByIdAgentCatalogRefreshPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var postWorkspacesByIdAgentCatalogLiveModelsPathParamsSchema = external_exports.object({ "id": external_exports.string() });
 var deleteUserTokensByIdPathParamsSchema = external_exports.object({ "id": external_exports.string() });
 var patchUserTokensByIdPathParamsSchema = external_exports.object({ "id": external_exports.string() });
 var postUserTokensByIdRevokePathParamsSchema = external_exports.object({ "id": external_exports.string() });
@@ -135949,6 +135964,7 @@ var getMissionsByIdArtifactsPathParamsSchema = external_exports.object({ "id": e
 var postMissionsByIdArtifactsPathParamsSchema = external_exports.object({ "id": external_exports.string() });
 var getMissionsByIdContextPathParamsSchema = external_exports.object({ "id": external_exports.string() });
 var putMissionsByIdContextPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var deleteMissionsByIdArtifactsByArtifactIdPathParamsSchema = external_exports.object({ "id": external_exports.string(), "artifactId": external_exports.string() });
 var patchMissionsByIdArtifactsByArtifactIdPathParamsSchema = external_exports.object({ "id": external_exports.string(), "artifactId": external_exports.string() });
 var getMissionsByIdFileChangesPathParamsSchema = external_exports.object({ "id": external_exports.string() });
 var getMissionsByIdFileChangesQueryParamsSchema = external_exports.object({ "objectiveId": external_exports.exactOptional(external_exports.string()) });
@@ -135960,6 +135976,7 @@ var deleteObjectivesByIdPathParamsSchema = external_exports.object({ "id": exter
 var patchObjectivesByIdPathParamsSchema = external_exports.object({ "id": external_exports.string() });
 var postObjectivesByIdSummaryRequestsPathParamsSchema = external_exports.object({ "id": external_exports.string() });
 var postObjectivesByIdLaunchPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var postObjectivesByIdSessionChannelsPathParamsSchema = external_exports.object({ "id": external_exports.string() });
 var getObjectivesByIdPromptPathParamsSchema = external_exports.object({ "id": external_exports.string() });
 var getObjectivesByIdLaunchCommandPathParamsSchema = external_exports.object({ "id": external_exports.string() });
 var getObjectivesByIdLaunchCommandQueryParamsSchema = external_exports.object({ "agent": external_exports.string(), "model": external_exports.exactOptional(external_exports.string()), "reasoningEffort": external_exports.exactOptional(external_exports.string()), "executionTargetId": external_exports.exactOptional(external_exports.string()) });
@@ -137663,6 +137680,25 @@ var apiOperations = {
     parameters: { path: postWorkspacesByIdAgentCatalogRefreshPathParamsSchema, query: null, header: null },
     requestBody: null,
     responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: agentCatalogDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+  },
+  /**
+   * POST /api/workspaces/{id}/agent-catalog/live-models: Record the models a harness installation reports
+   */
+  postWorkspacesByIdAgentCatalogLiveModels: {
+    operationId: "postWorkspacesByIdAgentCatalogLiveModels",
+    method: "POST",
+    path: "/api/workspaces/{id}/agent-catalog/live-models",
+    tags: ["agent-catalog"],
+    deprecated: false,
+    permission: "launch:configure",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["cli", "runner"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: postWorkspacesByIdAgentCatalogLiveModelsPathParamsSchema, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: agentLiveModelsReportBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: agentCatalogDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
   },
   /**
    * GET /api/profile: Read the caller's own profile
@@ -140002,7 +140038,7 @@ var apiOperations = {
     responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: agentRequestListResponseSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
   },
   /**
-   * POST /api/agent-requests/{id}/resolve: Answer an agent question
+   * POST /api/agent-requests/{id}/resolve: Answer an agent question or approval
    */
   postAgentRequestsByIdResolve: {
     operationId: "postAgentRequestsByIdResolve",
@@ -140222,7 +140258,7 @@ var apiOperations = {
     permission: "artifact:create",
     permissionCandidates: [],
     edition: "both",
-    consumers: ["unverified"],
+    consumers: ["mobile", "webapp"],
     extension: null,
     security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
     parameters: { path: postMissionsByIdArtifactsPathParamsSchema, query: null, header: null },
@@ -140266,6 +140302,25 @@ var apiOperations = {
     parameters: { path: putMissionsByIdContextPathParamsSchema, query: null, header: null },
     requestBody: { required: true, content: { "application/json": { kind: "json", schema: upsertSharedContextBodySchema } } },
     responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: sharedContextEntryDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * DELETE /api/missions/{id}/artifacts/{artifactId}: Delete a mission artifact
+   */
+  deleteMissionsByIdArtifactsByArtifactId: {
+    operationId: "deleteMissionsByIdArtifactsByArtifactId",
+    method: "DELETE",
+    path: "/api/missions/{id}/artifacts/{artifactId}",
+    tags: ["missions"],
+    deprecated: false,
+    permission: "mission:update",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["mobile", "webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: deleteMissionsByIdArtifactsByArtifactIdPathParamsSchema, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: okResponseSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "500": apiResponses.InternalError }
   },
   /**
    * PATCH /api/missions/{id}/artifacts/{artifactId}: Edit an artifact's human-facing fields
@@ -140475,6 +140530,25 @@ var apiOperations = {
     parameters: { path: postObjectivesByIdLaunchPathParamsSchema, query: null, header: null },
     requestBody: { required: true, content: { "application/json": { kind: "json", schema: launchObjectiveBodySchema } } },
     responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: executionRequestDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * POST /api/objectives/{id}/session-channels: Mint the session channel for a control-plane launch
+   */
+  postObjectivesByIdSessionChannels: {
+    operationId: "postObjectivesByIdSessionChannels",
+    method: "POST",
+    path: "/api/objectives/{id}/session-channels",
+    tags: ["objectives"],
+    deprecated: false,
+    permission: "session:attach",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["cli"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: postObjectivesByIdSessionChannelsPathParamsSchema, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: mintSessionChannelBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: sessionChannelBootstrapDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
   },
   /**
    * GET /api/objectives/{id}/prompt: Copyable prompt for running an objective manually
@@ -142753,6 +142827,969 @@ function applyDatabaseEnv(config4) {
   }
 }
 
+// db.ts
+var import_node_async_hooks2 = require("node:async_hooks");
+var import_node_crypto11 = require("node:crypto");
+var import_node_path10 = __toESM(require("node:path"), 1);
+
+// ../packages/core/service/util.ts
+var import_node_crypto9 = require("node:crypto");
+var SESSION_KEY_PREFIX = "sess_";
+function isTruthyFlag(value2) {
+  return value2 === true || value2 === 1;
+}
+function nowIso() {
+  return (/* @__PURE__ */ new Date()).toISOString();
+}
+function newId() {
+  return (0, import_node_crypto9.randomUUID)();
+}
+function slugify3(input2) {
+  const base = input2.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 48);
+  return base.length > 0 ? base : "project";
+}
+function initialTitleFromInstruction(instruction) {
+  const firstLine2 = instruction.split("\n")[0]?.trim() ?? instruction.trim();
+  if (firstLine2.length <= 80) return firstLine2;
+  return `${firstLine2.slice(0, 77)}...`;
+}
+function generateSessionKey() {
+  const rawKey2 = SESSION_KEY_PREFIX + (0, import_node_crypto9.randomBytes)(24).toString("base64url");
+  const prefix = rawKey2.slice(0, SESSION_KEY_PREFIX.length + 8);
+  const hash2 = (0, import_node_crypto9.createHash)("sha256").update(rawKey2).digest("hex");
+  return { rawKey: rawKey2, prefix, hash: hash2 };
+}
+function hashSessionKey(rawKey2) {
+  return (0, import_node_crypto9.createHash)("sha256").update(rawKey2).digest("hex");
+}
+function jsonTextFieldSql(column, field, dialect) {
+  return dialect === "postgres" ? `${column}->>'${field}'` : `json_extract(${column}, '$.${field}')`;
+}
+function toCreatedByKind(value2) {
+  return value2 === "agent" || value2 === "automation" ? value2 : "human";
+}
+function sqlPlaceholders(count) {
+  return new Array(count).fill("?").join(", ");
+}
+
+// ../packages/core/service/change-feed.ts
+async function insertEntityChange(client, fields) {
+  await client.run(
+    `INSERT INTO entity_changes (
+         id, workspace_id, project_id, mission_id, objective_id,
+         entity_type, entity_id, operation, entity_revision,
+         changed_fields_json, actor_workspace_user_id, actor_token_id, source, occurred_at
+       ) VALUES (
+         ?, ?, ?, ?, ?,
+         ?, ?, ?, ?,
+         ?, ?, ?, ?, ?
+       )`,
+    [
+      newId(),
+      fields.workspaceId,
+      fields.projectId ?? null,
+      fields.missionId ?? null,
+      fields.objectiveId ?? null,
+      fields.entityType,
+      fields.entityId,
+      fields.operation,
+      fields.entityRevision ?? null,
+      JSON.stringify(fields.changedFields ?? []),
+      fields.actorWorkspaceUserId,
+      fields.actorTokenId ?? null,
+      fields.source,
+      nowIso()
+    ]
+  );
+}
+async function recordChange({
+  ctx,
+  entityType,
+  entityId,
+  operation: operation2,
+  entityRevision,
+  projectId,
+  missionId,
+  objectiveId,
+  changedFields
+}) {
+  await insertEntityChange(ctx.db, {
+    workspaceId: ctx.workspace.id,
+    projectId,
+    missionId,
+    objectiveId,
+    entityType,
+    entityId,
+    operation: operation2,
+    entityRevision,
+    changedFields,
+    actorWorkspaceUserId: ctx.actorWorkspaceUserId,
+    // The protocol/service path does not attribute changes to a token; the REST
+    // layer passes the authenticating token through on the context.
+    actorTokenId: ctx.actorTokenId ?? null,
+    source: ctx.source
+  });
+}
+
+// ../packages/core/service/delivery-report.ts
+var import_node_crypto10 = require("node:crypto");
+init_zod();
+var MAX_ITEMS = DELIVERY_REPORT_MAX_ITEMS;
+var MAX_ALTERNATIVES = DELIVERY_REPORT_MAX_ALTERNATIVES;
+var MAX_ACTION_LENGTH = DELIVERY_REPORT_MAX_ACTION_LENGTH;
+var MAX_DETAIL_LENGTH = DELIVERY_REPORT_MAX_DETAIL_LENGTH;
+var MAX_COMMAND_LENGTH = DELIVERY_REPORT_MAX_COMMAND_LENGTH;
+var MAX_LINK_LENGTH = DELIVERY_REPORT_MAX_LINK_LENGTH;
+var linkSchema = humanActionLinkSchema;
+var humanActionSchema = external_exports.strictObject({
+  action: actionTextSchema,
+  reason: conciseTextSchema.optional(),
+  category: humanActionCategorySchema.optional(),
+  blocking: external_exports.boolean().optional(),
+  command: commandTextSchema.optional(),
+  verify: conciseTextSchema.optional(),
+  link: linkSchema.optional()
+});
+function isValidHumanActionLink(link) {
+  return linkSchema.safeParse(link).success;
+}
+var tradeoffSchema = external_exports.strictObject({
+  decision: actionTextSchema,
+  alternativesConsidered: external_exports.array(conciseTextSchema).max(MAX_ALTERNATIVES).optional(),
+  rationale: conciseTextSchema,
+  impact: conciseTextSchema.optional()
+});
+var deferredWorkFields = deferredWorkFieldSchemas;
+var deferredWorkInputSchema = external_exports.strictObject(deferredWorkFields);
+function deferredWorkInputProblem(deliveryReport) {
+  if (typeof deliveryReport !== "object" || deliveryReport === null) return null;
+  const agentReport = deliveryReport.agentReport;
+  if (typeof agentReport !== "object" || agentReport === null) return null;
+  const deferredWork = agentReport.deferredWork;
+  if (deferredWork === void 0) return null;
+  const field = "deliveryReport.agentReport.deferredWork";
+  if (!Array.isArray(deferredWork)) return `${field} must be an array`;
+  for (const [index, item] of deferredWork.slice(0, MAX_ITEMS).entries()) {
+    if (typeof item !== "object" || item === null || Array.isArray(item)) {
+      return `${field}[${index}] must be an object with title, change, location, and doneWhen; string items are not accepted`;
+    }
+    const parsed = deferredWorkInputSchema.safeParse(item);
+    if (!parsed.success) {
+      const issue2 = parsed.error.issues[0];
+      const key = issue2?.path.length ? `.${issue2.path.join(".")}` : "";
+      return `${field}[${index}]${key}: ${issue2?.message ?? "invalid deferred-work item"}`;
+    }
+  }
+  return null;
+}
+function deferredWorkId(index, item) {
+  const canonical = JSON.stringify([
+    item.title.trim(),
+    item.change.trim(),
+    item.location.trim(),
+    item.doneWhen.trim()
+  ]);
+  const digest6 = (0, import_node_crypto10.createHash)("sha256").update(canonical, "utf8").digest("hex").slice(0, 16);
+  return `deferred-work-${index}-${digest6}`;
+}
+var GIT_ACTION_PATTERN = /\b(?:git\s+(?:commit|push|pull|merge|rebase|checkout|switch|branch)|(?:commit|push|pull|merge|rebase|create|open)\s+(?:a\s+)?(?:branch|pull request|pr))\b/i;
+var ROUTINE_QA_PATTERN = /\b(?:code review|review (?:the )?code|run (?:the )?tests?|test (?:the )?(?:code|feature)|verify (?:the )?(?:code|feature|implementation|it)(?:\s+(?:works|is working))?|qa)\b/i;
+function isDisplayableHumanAction(action) {
+  return !GIT_ACTION_PATTERN.test(action) && !ROUTINE_QA_PATTERN.test(action);
+}
+function normalizeAgentReport(input2) {
+  const humanActionInputs = input2.humanActions ?? [];
+  const tradeoffInputs = input2.tradeoffsMade ?? [];
+  const humanActions = humanActionInputs.filter((action) => isDisplayableHumanAction(action.action)).map((action, index) => ({
+    id: `human-action-${index + 1}`,
+    action: action.action,
+    ...action.reason ? { reason: action.reason } : {},
+    category: action.category ?? "other",
+    ...action.blocking === void 0 ? {} : { blocking: action.blocking },
+    ...action.command ? { command: action.command } : {},
+    ...action.verify ? { verify: action.verify } : {},
+    ...action.link ? { link: action.link } : {},
+    source: "agent"
+  }));
+  const tradeoffsMade = tradeoffInputs.map((tradeoff, index) => ({
+    id: `tradeoff-${index + 1}`,
+    decision: tradeoff.decision,
+    alternativesConsidered: tradeoff.alternativesConsidered ?? [],
+    rationale: tradeoff.rationale,
+    ...tradeoff.impact ? { impact: tradeoff.impact } : {},
+    source: "agent"
+  }));
+  const deferredWork = (input2.deferredWork ?? []).map((item, index) => ({
+    id: deferredWorkId(index, item),
+    title: item.title,
+    change: item.change,
+    location: item.location,
+    doneWhen: item.doneWhen
+  }));
+  return {
+    humanActions,
+    tradeoffsMade,
+    knownRisks: input2.knownRisks ?? [],
+    deferredWork,
+    assumptions: input2.assumptions ?? []
+  };
+}
+var MAX_WARNINGS = DELIVERY_REPORT_MAX_WARNINGS;
+var DELIVERY_REPORT_ROOT_KEYS = /* @__PURE__ */ new Set(["schemaVersion", "agentReport"]);
+var AGENT_REPORT_INPUT_KEYS = /* @__PURE__ */ new Set([
+  "humanActions",
+  "tradeoffsMade",
+  "knownRisks",
+  "deferredWork",
+  "assumptions"
+]);
+function reportWarning(warnings, message2) {
+  if (warnings.length < MAX_WARNINGS) warnings.push(message2);
+}
+function salvageArray(value2, schema2, field, warnings) {
+  if (value2 === void 0) return [];
+  if (!Array.isArray(value2)) {
+    reportWarning(warnings, `Ignored deliveryReport.${field}: expected an array.`);
+    return [];
+  }
+  if (value2.length > MAX_ITEMS) {
+    reportWarning(
+      warnings,
+      `Ignored ${value2.length - MAX_ITEMS} excess deliveryReport.${field} item(s).`
+    );
+  }
+  return value2.slice(0, MAX_ITEMS).flatMap((item, index) => {
+    const parsed = schema2.safeParse(item);
+    if (parsed.success) return [parsed.data];
+    reportWarning(warnings, `Ignored deliveryReport.${field}[${index}]: invalid advisory item.`);
+    return [];
+  });
+}
+function salvageWireAgentReport(deliveryReport) {
+  const warnings = [];
+  if (deliveryReport === void 0 || deliveryReport === null) return { input: {}, warnings };
+  if (typeof deliveryReport !== "object" || Array.isArray(deliveryReport)) {
+    reportWarning(warnings, "Ignored deliveryReport: expected an object.");
+    return { input: {}, warnings };
+  }
+  const root5 = deliveryReport;
+  if (root5.schemaVersion !== 1) {
+    reportWarning(warnings, "Ignored deliveryReport: schemaVersion must be 1.");
+    return { input: {}, warnings };
+  }
+  if (Object.keys(root5).some((key) => !DELIVERY_REPORT_ROOT_KEYS.has(key))) {
+    reportWarning(warnings, "Ignored unsupported deliveryReport fields.");
+  }
+  const candidate = root5.agentReport;
+  if (candidate === void 0) return { input: {}, warnings };
+  if (typeof candidate !== "object" || candidate === null || Array.isArray(candidate)) {
+    reportWarning(warnings, "Ignored deliveryReport.agentReport: expected an object.");
+    return { input: {}, warnings };
+  }
+  const report2 = candidate;
+  if (Object.keys(report2).some((key) => !AGENT_REPORT_INPUT_KEYS.has(key))) {
+    reportWarning(warnings, "Ignored unsupported deliveryReport.agentReport fields.");
+  }
+  return {
+    input: {
+      humanActions: salvageArray(
+        report2.humanActions,
+        humanActionSchema,
+        "agentReport.humanActions",
+        warnings
+      ),
+      tradeoffsMade: salvageArray(
+        report2.tradeoffsMade,
+        tradeoffSchema,
+        "agentReport.tradeoffsMade",
+        warnings
+      ),
+      knownRisks: salvageArray(
+        report2.knownRisks,
+        conciseTextSchema,
+        "agentReport.knownRisks",
+        warnings
+      ),
+      deferredWork: salvageArray(
+        report2.deferredWork,
+        deferredWorkInputSchema,
+        "agentReport.deferredWork",
+        warnings
+      ),
+      assumptions: salvageArray(
+        report2.assumptions,
+        conciseTextSchema,
+        "agentReport.assumptions",
+        warnings
+      )
+    },
+    warnings
+  };
+}
+function buildDeliveryReport({
+  summary,
+  deliveryReport
+}) {
+  const { input: input2, warnings } = salvageWireAgentReport(deliveryReport);
+  const agentReport = normalizeAgentReport(input2);
+  return {
+    schemaVersion: 1,
+    agentReport,
+    ...warnings.length > 0 ? { warnings } : {},
+    presentation: {
+      status: "deterministic",
+      markdown: summary,
+      humanActions: agentReport.humanActions,
+      tradeoffsMade: agentReport.tradeoffsMade,
+      knownRisks: agentReport.knownRisks,
+      deferredWork: agentReport.deferredWork,
+      assumptions: agentReport.assumptions,
+      generatedBy: "deterministic"
+    }
+  };
+}
+function readDeliveryReport2({
+  summary,
+  deliveryReport
+}) {
+  return readDeliveryReport({ summary, deliveryReport });
+}
+function markDeliveryPresentationPending(report2) {
+  return {
+    ...report2,
+    presentation: {
+      ...report2.presentation,
+      status: "pending"
+    }
+  };
+}
+var DELIVERY_REPORT_LIMITS = {
+  maxItems: MAX_ITEMS,
+  maxAlternatives: MAX_ALTERNATIVES,
+  maxActionLength: MAX_ACTION_LENGTH,
+  maxDetailLength: MAX_DETAIL_LENGTH,
+  maxCommandLength: MAX_COMMAND_LENGTH,
+  maxLinkLength: MAX_LINK_LENGTH
+};
+
+// ../packages/core/service/webhook-events.ts
+var WEBHOOK_EVENT_TYPES = vocabulary()([
+  "mission.delivered",
+  "mission.status_changed",
+  "objective.completed",
+  "mission.blocked",
+  "mission.unblocked"
+]);
+function isWebhookEventType(value2) {
+  return WEBHOOK_EVENT_TYPES.includes(value2);
+}
+var WEBHOOK_OUTBOX_TOPIC = "webhook.deliver.v1";
+var WEBHOOK_API_VERSION = "2026-07-01";
+async function enqueueWebhookEvent(ctx, {
+  type,
+  projectId,
+  entity
+}) {
+  const enabledParam = bindBool(ctx.db.dialect, true);
+  const subscriptions = await ctx.db.all(
+    `SELECT id, event_types_json, created_by_workspace_user_id
+       FROM webhook_subscriptions
+       WHERE workspace_id = ? AND enabled = ? AND deleted_at IS NULL
+         AND (project_id IS NULL OR project_id = ?)`,
+    [ctx.workspace.id, enabledParam, projectId]
+  );
+  if (subscriptions.length === 0) return;
+  const now2 = nowIso();
+  for (const subscription of subscriptions) {
+    let eventTypes;
+    try {
+      eventTypes = JSON.parse(subscription.event_types_json);
+    } catch {
+      continue;
+    }
+    if (!eventTypes.includes(type)) continue;
+    const owner = await ctx.db.get(
+      `SELECT id FROM workspace_users
+         WHERE id = ? AND workspace_id = ? AND status = 'active' AND deleted_at IS NULL`,
+      [subscription.created_by_workspace_user_id, ctx.workspace.id]
+    );
+    if (!owner) continue;
+    const payload = {
+      subscriptionId: subscription.id,
+      eventType: type,
+      entity,
+      occurredAt: now2
+    };
+    await ctx.db.run(
+      `INSERT INTO outbox_messages
+           (id, workspace_id, topic, payload_json, status, available_at, attempt_count, created_at, updated_at)
+         VALUES (?, ?, ?, ?, 'pending', ?, 0, ?, ?)`,
+      [newId(), ctx.workspace.id, WEBHOOK_OUTBOX_TOPIC, JSON.stringify(payload), now2, now2, now2]
+    );
+  }
+}
+var FULL_ENVELOPE_ARRAY_LIMIT = 50;
+async function buildWebhookEnvelope(ctx, {
+  outboxMessageId,
+  type,
+  entity,
+  occurredAt,
+  mode
+}) {
+  const mission = await ctx.db.get(
+    `SELECT m.id, m.display_id, m.project_id, m.title, m.priority, m.created_at,
+            s.id AS status_id, s.type AS status_type, s.name AS status_name
+       FROM missions m
+       JOIN project_statuses s ON s.id = m.status_id AND s.project_id = m.project_id
+       WHERE m.id = ? AND m.workspace_id = ?`,
+    [entity.missionId, ctx.workspace.id]
+  );
+  if (!mission) {
+    throw new Error(`Mission not found for webhook envelope: ${entity.missionId}`);
+  }
+  const project = mode === "full" ? await ctx.db.get(`SELECT id, name FROM projects WHERE id = ?`, [mission.project_id]) : null;
+  const links = {
+    mission: `/api/missions/${mission.id}`,
+    events: `/api/missions/${mission.id}/events`,
+    fileChanges: `/api/missions/${mission.id}/file-changes`,
+    artifacts: `/api/missions/${mission.id}/artifacts`
+  };
+  const envelope2 = {
+    id: outboxMessageId,
+    apiVersion: WEBHOOK_API_VERSION,
+    type,
+    occurredAt,
+    workspace: { id: ctx.workspace.id },
+    project: mission.project_id ? { id: mission.project_id } : null,
+    mission: { id: mission.id, displayId: mission.display_id },
+    links
+  };
+  if (entity.objectiveId) envelope2.objective = { id: entity.objectiveId };
+  if (entity.sessionId) envelope2.session = { id: entity.sessionId };
+  if (entity.deliveryId) envelope2.delivery = { id: entity.deliveryId };
+  if (mode === "thin") {
+    return envelope2;
+  }
+  envelope2.workspace.name = ctx.workspace.name;
+  if (project) envelope2.project = { id: project.id, name: project.name };
+  envelope2.mission = {
+    ...envelope2.mission,
+    title: mission.title,
+    status: { id: mission.status_id, type: mission.status_type, label: mission.status_name },
+    priority: mission.priority,
+    createdAt: mission.created_at
+  };
+  if (entity.objectiveId) {
+    const objective = await ctx.db.get(
+      `SELECT id, position, title, state, display_key FROM objectives WHERE id = ? AND workspace_id = ?`,
+      [entity.objectiveId, ctx.workspace.id]
+    );
+    if (objective) {
+      envelope2.objective = {
+        id: objective.id,
+        // Consumers should key off `displayId` rather than `position`: position
+        // changes when objectives are reordered, the display id never does.
+        displayId: formatObjectiveDisplayId({
+          missionDisplayId: mission.display_id,
+          displayKey: objective.display_key
+        }),
+        position: objective.position,
+        title: objective.title,
+        state: objective.state
+      };
+    }
+  }
+  if (entity.sessionId) {
+    const session = await ctx.db.get(
+      `SELECT id, agent_identifier, model_identifier FROM agent_sessions WHERE id = ? AND workspace_id = ?`,
+      [entity.sessionId, ctx.workspace.id]
+    );
+    if (session) {
+      envelope2.session = {
+        id: session.id,
+        agentIdentifier: session.agent_identifier,
+        modelIdentifier: session.model_identifier
+      };
+    }
+  }
+  if (entity.deliveryId) {
+    const delivery = await ctx.db.get(
+      `SELECT id, summary, verification_summary, follow_up_notes, payload_json
+         FROM deliveries WHERE id = ? AND workspace_id = ?`,
+      [entity.deliveryId, ctx.workspace.id]
+    );
+    if (delivery) {
+      const artifactRows = await ctx.db.all(
+        `SELECT type, label, content_text, external_url FROM artifacts WHERE delivery_id = ? ORDER BY created_at ASC`,
+        [delivery.id]
+      );
+      let payload = null;
+      try {
+        payload = delivery.payload_json ? JSON.parse(delivery.payload_json) : null;
+      } catch {
+      }
+      envelope2.delivery = {
+        id: delivery.id,
+        summary: delivery.summary,
+        verificationSummary: delivery.verification_summary,
+        followUpNotes: delivery.follow_up_notes,
+        report: readDeliveryReport2({
+          summary: delivery.summary,
+          deliveryReport: payload?.deliveryReport
+        }),
+        artifacts: artifactRows.map((row) => ({
+          type: row.type,
+          label: row.label,
+          content: row.content_text,
+          url: row.external_url
+        }))
+      };
+      const changedFileRows = await ctx.db.all(
+        `SELECT cf.file_path, cf.source, COALESCE(pr.resource_key, o.resource_key) AS resource_key
+           FROM changed_files cf
+           LEFT JOIN objectives o ON o.id = cf.objective_id AND o.deleted_at IS NULL
+           LEFT JOIN project_resources pr ON pr.id = cf.resource_id AND pr.deleted_at IS NULL
+          WHERE cf.objective_id = ? AND cf.deleted_at IS NULL
+          ORDER BY cf.last_observed_at DESC, cf.id DESC LIMIT ?`,
+        [entity.objectiveId, FULL_ENVELOPE_ARRAY_LIMIT + 1]
+      );
+      envelope2.changedFiles = truncateArray(
+        changedFileRows.map((row) => ({
+          filePath: row.file_path,
+          resourceKey: row.resource_key?.trim() || null,
+          source: row.source === "declared_edit" || row.source === "agent_declared" ? row.source : null
+        }))
+      );
+    }
+  }
+  const eventRows = await ctx.db.all(
+    `SELECT id, type, summary, created_at FROM mission_events
+       WHERE mission_id = ? AND workspace_id = ?
+       ORDER BY created_at DESC LIMIT ?`,
+    [mission.id, ctx.workspace.id, FULL_ENVELOPE_ARRAY_LIMIT + 1]
+  );
+  envelope2.missionEvents = truncateArray(
+    eventRows.map((row) => ({
+      id: row.id,
+      type: row.type,
+      summary: row.summary,
+      createdAt: row.created_at
+    }))
+  );
+  return envelope2;
+}
+function truncateArray(rows) {
+  if (rows.length <= FULL_ENVELOPE_ARRAY_LIMIT) return rows;
+  const truncated = rows.slice(0, FULL_ENVELOPE_ARRAY_LIMIT);
+  truncated.truncated = true;
+  return truncated;
+}
+
+// db.ts
+loadEnvDefaults(REPO_ROOT, ENV_PROFILE);
+function resolveDatabasePath2() {
+  const explicit = process.env.OVERLORD_SQLITE_PATH;
+  if (explicit) {
+    return import_node_path10.default.isAbsolute(explicit) ? explicit : import_node_path10.default.resolve(REPO_ROOT, explicit);
+  }
+  const config4 = loadConfig(import_node_path10.default.join(REPO_ROOT, "overlord.toml"), ENV_PROFILE);
+  applyDatabaseEnv(config4);
+  return resolveDatabasePath(config4, REPO_ROOT);
+}
+var databasePath = resolveDatabasePath2();
+var adapter = resolveAdapter({ databasePath });
+var sqliteDb = null;
+if (adapter.type === "sqlite") {
+  sqliteDb = openDatabase({ databasePath });
+  migrateDatabase(sqliteDb);
+  fixupLocalStoragePaths(sqliteDb, databasePath);
+}
+var DATABASE_DIALECT = adapter.type;
+var databaseClient = sqliteDb === null ? null : createSqliteClient(sqliteDb);
+var databaseInitPromise = null;
+async function initDatabase() {
+  if (databaseClient) {
+    await refreshActiveWorkspaceFromClient(databaseClient);
+    return databaseClient;
+  }
+  if (!databaseInitPromise) {
+    databaseInitPromise = (async () => {
+      const client = await openDatabaseClient(adapter);
+      if (client.dialect === "postgres") {
+        await migratePostgres(client);
+        await applyHostedS3StorageBackend(client);
+      }
+      databaseClient = client;
+      await refreshActiveWorkspaceFromClient(client);
+      return client;
+    })();
+  }
+  return databaseInitPromise;
+}
+var DATABASE_PATH = databasePath;
+function nowIso2() {
+  return (/* @__PURE__ */ new Date()).toISOString();
+}
+function newId2() {
+  return (0, import_node_crypto11.randomUUID)();
+}
+async function oldestWorkspaceRowFromClient(client) {
+  return client.get(
+    `SELECT id, slug, name, kind, created_at FROM workspaces
+       WHERE deleted_at IS NULL ORDER BY created_at ASC LIMIT 1`
+  );
+}
+async function findActiveMembershipId(workspaceId2, profileId, client = requireDatabaseClient()) {
+  const row = await client.get(
+    `SELECT wu.id FROM workspace_users wu
+       JOIN workspaces w ON w.id = wu.workspace_id AND w.deleted_at IS NULL
+      WHERE wu.workspace_id = ? AND wu.profile_id = ?
+        AND wu.status = 'active' AND wu.deleted_at IS NULL
+      ORDER BY wu.created_at ASC LIMIT 1`,
+    [workspaceId2, profileId]
+  );
+  return row?.id ?? null;
+}
+async function resolveActorForWorkspace(workspaceId2, client = requireDatabaseClient()) {
+  const row = await client.get(
+    `SELECT id FROM workspace_users
+       WHERE workspace_id = ? AND status = 'active' AND deleted_at IS NULL
+       ORDER BY created_at ASC LIMIT 1`,
+    [workspaceId2]
+  );
+  return row?.id ?? null;
+}
+async function resolveRequestActorForWorkspace(workspaceId2, client = requireDatabaseClient()) {
+  const context = requestContextStorage.getStore();
+  if (!context) return null;
+  let profileId = context.activeProfileId;
+  if (!profileId && context.actorWorkspaceUserId) {
+    const actorRow = await client.get(
+      `SELECT profile_id FROM workspace_users WHERE id = ?`,
+      [context.actorWorkspaceUserId]
+    );
+    profileId = actorRow?.profile_id ?? null;
+  }
+  if (!profileId) return null;
+  return findActiveMembershipId(workspaceId2, profileId, client);
+}
+var defaultWorkspace = null;
+var ACTOR_WORKSPACE_USER_ID = null;
+function defaultRequestContext() {
+  return {
+    activeProfileId: null,
+    actorWorkspaceUserId: ACTOR_WORKSPACE_USER_ID,
+    activeTokenId: ACTIVE_TOKEN_ID,
+    activeTokenScopes: ACTIVE_TOKEN_SCOPES,
+    activeTokenProjectIds: ACTIVE_TOKEN_PROJECT_IDS,
+    clientDevice: null,
+    authorizedWorkspaces: null,
+    resolvedWorkspaceId: null,
+    activeWorkspace: defaultWorkspace
+  };
+}
+var requestContextStorage = new import_node_async_hooks2.AsyncLocalStorage();
+async function withRequestContextAsync(fn) {
+  return requestContextStorage.run(defaultRequestContext(), fn);
+}
+function requestContext() {
+  const store = requestContextStorage.getStore();
+  if (store) return store;
+  return defaultRequestContext();
+}
+function mutateRequestContext(next) {
+  const store = requestContextStorage.getStore();
+  if (store) {
+    store.actorWorkspaceUserId = next.actorWorkspaceUserId;
+    store.activeProfileId = next.activeProfileId;
+    store.activeTokenId = next.activeTokenId;
+    store.activeTokenScopes = next.activeTokenScopes;
+    store.activeTokenProjectIds = next.activeTokenProjectIds;
+    store.clientDevice = next.clientDevice;
+    store.authorizedWorkspaces = next.authorizedWorkspaces;
+    store.resolvedWorkspaceId = next.resolvedWorkspaceId;
+    store.activeWorkspace = next.activeWorkspace;
+    return;
+  }
+  ACTOR_WORKSPACE_USER_ID = next.actorWorkspaceUserId;
+  ACTIVE_TOKEN_ID = next.activeTokenId;
+  ACTIVE_TOKEN_SCOPES = next.activeTokenScopes;
+  ACTIVE_TOKEN_PROJECT_IDS = next.activeTokenProjectIds;
+}
+function setAuthorizedWorkspacesContext(authorizedWorkspaces) {
+  mutateRequestContext({ ...requestContext(), authorizedWorkspaces });
+}
+function getAuthorizedWorkspacesContext() {
+  return requestContext().authorizedWorkspaces;
+}
+async function getResourceLookupWorkspaceIds(client = requireDatabaseClient()) {
+  const authorized = getAuthorizedWorkspacesContext();
+  if (authorized) {
+    return authorized.workspaces.map((workspace2) => workspace2.workspaceId);
+  }
+  const profileId = await resolveActiveProfileId(client);
+  if (!profileId) return [];
+  const rows = await client.all(
+    `SELECT wu.workspace_id
+       FROM workspace_users wu
+       JOIN workspaces w ON w.id = wu.workspace_id AND w.deleted_at IS NULL
+      WHERE wu.profile_id = ? AND wu.status = 'active' AND wu.deleted_at IS NULL
+      ORDER BY wu.created_at ASC, wu.id ASC`,
+    [profileId]
+  );
+  return rows.map((row) => row.workspace_id);
+}
+function getAuthorizedWorkspace(workspaceId2) {
+  return requestContext().authorizedWorkspaces?.workspaces.find(
+    (workspace2) => workspace2.workspaceId === workspaceId2
+  ) ?? null;
+}
+function setResolvedWorkspaceId(workspaceId2) {
+  if (workspaceId2 && getAuthorizedWorkspacesContext() && !getAuthorizedWorkspace(workspaceId2)) {
+    throw new Error("Resolved workspace is not authorized for this request");
+  }
+  mutateRequestContext({ ...requestContext(), resolvedWorkspaceId: workspaceId2 });
+}
+function getActiveProfileId() {
+  return requestContext().activeProfileId;
+}
+function setActiveProfileId(profileId) {
+  mutateRequestContext({ ...requestContext(), activeProfileId: profileId });
+}
+function getActorWorkspaceUserId() {
+  return requestContext().actorWorkspaceUserId;
+}
+async function resolveActiveProfileId(client = requireDatabaseClient()) {
+  const activeProfileId = getActiveProfileId();
+  if (activeProfileId) return activeProfileId;
+  const actorWorkspaceUserId = getActorWorkspaceUserId();
+  if (actorWorkspaceUserId) {
+    const row = await client.get(
+      `SELECT profile_id FROM workspace_users WHERE id = ?`,
+      [actorWorkspaceUserId]
+    );
+    if (row) return row.profile_id;
+  }
+  return null;
+}
+function getActiveWorkspace() {
+  const workspace2 = requestContext().activeWorkspace;
+  if (workspace2 === null) {
+    throw new Error(
+      "No active workspace for this request: the authenticated user has no active workspace membership."
+    );
+  }
+  return workspace2;
+}
+function getActiveWorkspaceId() {
+  return getActiveWorkspace().id;
+}
+function getActiveWorkspaceIdOrNull() {
+  return requestContext().activeWorkspace?.id ?? null;
+}
+function getBootstrapWorkspaceIdOrNull() {
+  return defaultWorkspace?.id ?? null;
+}
+function getImplicitWorkspaceIdOrNull() {
+  return getActiveWorkspaceIdOrNull() ?? (getAuthorizedWorkspacesContext() ? null : getBootstrapWorkspaceIdOrNull());
+}
+function setActiveWorkspaceContext(workspace2) {
+  mutateRequestContext({ ...requestContext(), activeWorkspace: workspace2 });
+}
+function getActiveTokenId() {
+  return requestContext().activeTokenId;
+}
+function getActiveTokenScopes() {
+  return requestContext().activeTokenScopes;
+}
+var ACTIVE_TOKEN_PROJECT_IDS = null;
+function getActiveTokenProjectIds() {
+  return requestContext().activeTokenProjectIds;
+}
+function projectInTokenScope(projectId) {
+  const ids = getActiveTokenProjectIds();
+  return ids === null || ids.includes(projectId);
+}
+function getClientDeviceIdentity() {
+  return requestContext().clientDevice;
+}
+function setClientDeviceIdentity(clientDevice) {
+  mutateRequestContext({ ...requestContext(), clientDevice });
+}
+function buildWebappServiceContext(client = requireDatabaseClient()) {
+  const workspace2 = getActiveWorkspace();
+  return {
+    db: client,
+    workspace: { id: workspace2.id, slug: workspace2.slug, name: workspace2.name },
+    actorWorkspaceUserId: getActorWorkspaceUserId(),
+    actorTokenId: getActiveTokenId(),
+    allowedProjectIds: getActiveTokenProjectIds(),
+    source: "webapp",
+    clientDevice: getClientDeviceIdentity()
+  };
+}
+async function buildWebappServiceContextForWorkspace(workspaceId2, client = requireDatabaseClient(), actorWorkspaceUserId = getActorWorkspaceUserId()) {
+  const workspace2 = await client.get(
+    `SELECT id, slug, name FROM workspaces WHERE id = ? AND deleted_at IS NULL`,
+    [workspaceId2]
+  );
+  if (!workspace2) {
+    throw new Error(`Workspace ${workspaceId2} not found`);
+  }
+  return {
+    db: client,
+    workspace: workspace2,
+    actorWorkspaceUserId,
+    actorTokenId: getActiveTokenId(),
+    allowedProjectIds: getActiveTokenProjectIds(),
+    source: "webapp",
+    clientDevice: getClientDeviceIdentity()
+  };
+}
+function setProcessDefaultWorkspace(workspace2, actorWorkspaceUserId) {
+  defaultWorkspace = workspace2;
+  ACTOR_WORKSPACE_USER_ID = actorWorkspaceUserId;
+}
+async function setActiveWorkspace(id2) {
+  const row = await loadWorkspaceRowAsync(id2);
+  if (!row) return null;
+  const workspace2 = { id: row.id, slug: row.slug, name: row.name, kind: row.kind };
+  if (!requestContextStorage.getStore()) {
+    const actorWorkspaceUserId2 = await resolveActorForWorkspace(row.id);
+    setProcessDefaultWorkspace(workspace2, actorWorkspaceUserId2);
+    return row;
+  }
+  const actorWorkspaceUserId = await resolveRequestActorForWorkspace(row.id) ?? await resolveActorForWorkspace(row.id);
+  mutateRequestContext({
+    ...requestContext(),
+    activeWorkspace: workspace2,
+    actorWorkspaceUserId
+  });
+  return row;
+}
+async function loadWorkspaceRowAsync(id2, client = requireDatabaseClient()) {
+  return client.get(
+    `SELECT id, slug, name, kind, created_at FROM workspaces
+       WHERE id = ? AND deleted_at IS NULL`,
+    [id2]
+  );
+}
+async function refreshActiveWorkspaceFromClient(client) {
+  const row = await oldestWorkspaceRowFromClient(client);
+  if (!row) {
+    setProcessDefaultWorkspace(null, null);
+    return;
+  }
+  setProcessDefaultWorkspace(
+    { id: row.id, slug: row.slug, name: row.name, kind: row.kind },
+    await resolveActorForWorkspace(row.id, client)
+  );
+}
+var ACTIVE_TOKEN_SCOPES = null;
+var ACTIVE_TOKEN_ID = null;
+function setActiveWorkspaceUser(workspaceUserId) {
+  mutateRequestContext({
+    ...requestContext(),
+    actorWorkspaceUserId: workspaceUserId,
+    activeTokenId: null,
+    activeTokenScopes: null,
+    activeTokenProjectIds: null
+  });
+}
+function setActiveTokenAuth({
+  workspaceUserId,
+  tokenId,
+  scopeGrants,
+  projectIds = null
+}) {
+  mutateRequestContext({
+    ...requestContext(),
+    actorWorkspaceUserId: workspaceUserId,
+    activeTokenId: tokenId,
+    activeTokenScopes: projectIds !== null ? scopeGrants ?? [] : scopeGrants && scopeGrants.length > 0 ? scopeGrants : null,
+    activeTokenProjectIds: projectIds === null ? null : Object.freeze([...projectIds])
+  });
+}
+async function reloadActiveWorkspace() {
+  const id2 = getActiveWorkspaceId();
+  const row = await loadWorkspaceRowAsync(id2);
+  if (!row) return;
+  const refreshed = { id: row.id, slug: row.slug, name: row.name, kind: row.kind };
+  if (id2 === defaultWorkspace?.id) defaultWorkspace = refreshed;
+  if (requestContextStorage.getStore()) setActiveWorkspaceContext(refreshed);
+}
+function requireDatabaseClient() {
+  if (!databaseClient) {
+    throw new Error(
+      "Database has not been initialized. Call initDatabase() during server startup."
+    );
+  }
+  return databaseClient;
+}
+function authDomainDatabase() {
+  return requireDatabaseClient();
+}
+function serviceDatabaseClient() {
+  return requireDatabaseClient();
+}
+async function recordChange2(input2, client = requireDatabaseClient()) {
+  let actorWorkspaceUserId = input2.actorWorkspaceUserId;
+  if (actorWorkspaceUserId === void 0) {
+    const profileId = await resolveActiveProfileId(client);
+    actorWorkspaceUserId = profileId ? await findActiveMembershipId(input2.workspaceId, profileId, client) : null;
+  } else if (actorWorkspaceUserId) {
+    const matchingMembership = await client.get(
+      `SELECT 1 FROM workspace_users
+        WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
+      [actorWorkspaceUserId, input2.workspaceId]
+    );
+    if (!matchingMembership) {
+      throw new Error("recordChange actor membership does not belong to the supplied workspace");
+    }
+  }
+  await insertEntityChange(client, {
+    workspaceId: input2.workspaceId,
+    projectId: input2.projectId,
+    missionId: input2.missionId,
+    objectiveId: input2.objectiveId,
+    entityType: input2.entityType,
+    entityId: input2.entityId,
+    operation: input2.operation,
+    entityRevision: input2.entityRevision,
+    changedFields: input2.changedFields,
+    actorWorkspaceUserId,
+    actorTokenId: getActiveTokenId(),
+    source: "webapp"
+  });
+}
+async function restChangeAttribution(workspaceId2, client = requireDatabaseClient(), actorWorkspaceUserId) {
+  let actor = actorWorkspaceUserId;
+  if (actor === void 0) {
+    const profileId = await resolveActiveProfileId(client);
+    actor = profileId ? await findActiveMembershipId(workspaceId2, profileId, client) : null;
+  }
+  return { actorWorkspaceUserId: actor, actorTokenId: getActiveTokenId(), source: "webapp" };
+}
+async function enqueueWebhookEventRest(input2, client = requireDatabaseClient()) {
+  const ctx = {
+    db: client,
+    workspace: { id: input2.scope.workspaceId, slug: "", name: "" },
+    actorWorkspaceUserId: input2.scope.workspaceUserId,
+    source: "webapp"
+  };
+  await enqueueWebhookEvent(ctx, {
+    type: input2.type,
+    projectId: input2.projectId,
+    entity: input2.entity
+  });
+}
+async function currentMaxSeq(client = requireDatabaseClient()) {
+  const row = await client.get(
+    `SELECT MAX(seq) AS seq FROM entity_changes`
+  );
+  return row?.seq ?? 0;
+}
+
 // ../packages/core/service/errors.ts
 var ServiceError = class extends Error {
   constructor(message2, code, status = 400, details) {
@@ -142984,105 +144021,6 @@ async function loadObjectiveByKey({
     projectId: projectId ?? row.project_id,
     workspaceId: row.workspace_id
   };
-}
-
-// ../packages/core/service/util.ts
-var import_node_crypto9 = require("node:crypto");
-var SESSION_KEY_PREFIX = "sess_";
-function isTruthyFlag(value2) {
-  return value2 === true || value2 === 1;
-}
-function nowIso() {
-  return (/* @__PURE__ */ new Date()).toISOString();
-}
-function newId() {
-  return (0, import_node_crypto9.randomUUID)();
-}
-function slugify3(input2) {
-  const base = input2.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 48);
-  return base.length > 0 ? base : "project";
-}
-function initialTitleFromInstruction(instruction) {
-  const firstLine2 = instruction.split("\n")[0]?.trim() ?? instruction.trim();
-  if (firstLine2.length <= 80) return firstLine2;
-  return `${firstLine2.slice(0, 77)}...`;
-}
-function generateSessionKey() {
-  const rawKey2 = SESSION_KEY_PREFIX + (0, import_node_crypto9.randomBytes)(24).toString("base64url");
-  const prefix = rawKey2.slice(0, SESSION_KEY_PREFIX.length + 8);
-  const hash2 = (0, import_node_crypto9.createHash)("sha256").update(rawKey2).digest("hex");
-  return { rawKey: rawKey2, prefix, hash: hash2 };
-}
-function hashSessionKey(rawKey2) {
-  return (0, import_node_crypto9.createHash)("sha256").update(rawKey2).digest("hex");
-}
-function jsonTextFieldSql(column, field, dialect) {
-  return dialect === "postgres" ? `${column}->>'${field}'` : `json_extract(${column}, '$.${field}')`;
-}
-function toCreatedByKind(value2) {
-  return value2 === "agent" || value2 === "automation" ? value2 : "human";
-}
-function sqlPlaceholders(count) {
-  return new Array(count).fill("?").join(", ");
-}
-
-// ../packages/core/service/change-feed.ts
-async function insertEntityChange(client, fields) {
-  await client.run(
-    `INSERT INTO entity_changes (
-         id, workspace_id, project_id, mission_id, objective_id,
-         entity_type, entity_id, operation, entity_revision,
-         changed_fields_json, actor_workspace_user_id, actor_token_id, source, occurred_at
-       ) VALUES (
-         ?, ?, ?, ?, ?,
-         ?, ?, ?, ?,
-         ?, ?, ?, ?, ?
-       )`,
-    [
-      newId(),
-      fields.workspaceId,
-      fields.projectId ?? null,
-      fields.missionId ?? null,
-      fields.objectiveId ?? null,
-      fields.entityType,
-      fields.entityId,
-      fields.operation,
-      fields.entityRevision ?? null,
-      JSON.stringify(fields.changedFields ?? []),
-      fields.actorWorkspaceUserId,
-      fields.actorTokenId ?? null,
-      fields.source,
-      nowIso()
-    ]
-  );
-}
-async function recordChange({
-  ctx,
-  entityType,
-  entityId,
-  operation: operation2,
-  entityRevision,
-  projectId,
-  missionId,
-  objectiveId,
-  changedFields
-}) {
-  await insertEntityChange(ctx.db, {
-    workspaceId: ctx.workspace.id,
-    projectId,
-    missionId,
-    objectiveId,
-    entityType,
-    entityId,
-    operation: operation2,
-    entityRevision,
-    changedFields,
-    actorWorkspaceUserId: ctx.actorWorkspaceUserId,
-    // The protocol/service path does not attribute changes to a token; the REST
-    // layer passes the authenticating token through on the context.
-    actorTokenId: ctx.actorTokenId ?? null,
-    source: ctx.source
-  });
 }
 
 // ../packages/core/service/manual-agent.ts
@@ -144865,7 +145803,7 @@ function mergeWorkspaceSearchV3({
 }
 
 // ../packages/core/service/objective-brief.ts
-var import_node_crypto10 = require("node:crypto");
+var import_node_crypto12 = require("node:crypto");
 
 // ../packages/core/service/objective-summary-placement.ts
 var OBJECTIVE_SWAP_WARN_RATIO = 1.5;
@@ -145258,7 +146196,7 @@ var EMPTY_OBJECTIVE_BRIEF_STATE = {
 function hashObjectiveInstruction(instructionText) {
   const trimmed9 = (instructionText ?? "").trim();
   if (!trimmed9) return null;
-  return (0, import_node_crypto10.createHash)("sha256").update(trimmed9, "utf8").digest("hex");
+  return (0, import_node_crypto12.createHash)("sha256").update(trimmed9, "utf8").digest("hex");
 }
 function isSummaryEligibleInstruction(instructionText) {
   return (instructionText ?? "").trim().length >= OBJECTIVE_SUMMARY_MIN_INSTRUCTION_CHARS;
@@ -146041,7 +146979,7 @@ function planReopenToQueueHead(rows, reopenedId) {
 
 // ../packages/core/service/projects.ts
 var import_node_fs15 = require("node:fs");
-var import_node_path17 = __toESM(require("node:path"), 1);
+var import_node_path18 = __toESM(require("node:path"), 1);
 
 // ../packages/core/service/local-target/git-run.ts
 var import_node_child_process = require("node:child_process");
@@ -146277,18 +147215,18 @@ function runInspectionGit({
 // ../packages/core/service/local-target/worktree-git.ts
 var import_node_fs6 = require("node:fs");
 var import_node_os5 = __toESM(require("node:os"), 1);
-var import_node_path10 = __toESM(require("node:path"), 1);
+var import_node_path11 = __toESM(require("node:path"), 1);
 function resolveManagedWorktreeRoot() {
   const override = process.env.OVERLORD_WORKTREE_ROOT?.trim();
-  if (override) return import_node_path10.default.resolve(override);
+  if (override) return import_node_path11.default.resolve(override);
   const home = process.env.OVLD_HOME?.trim() || process.env.OVERLORD_HOME?.trim();
-  return import_node_path10.default.join(home ? import_node_path10.default.resolve(home) : import_node_path10.default.join(import_node_os5.default.homedir(), ".ovld"), "worktrees");
+  return import_node_path11.default.join(home ? import_node_path11.default.resolve(home) : import_node_path11.default.join(import_node_os5.default.homedir(), ".ovld"), "worktrees");
 }
 function resolveRealPath(targetPath) {
   try {
     return import_node_fs6.realpathSync.native(targetPath);
   } catch {
-    return import_node_path10.default.resolve(targetPath);
+    return import_node_path11.default.resolve(targetPath);
   }
 }
 function worktreeIsDirty(worktreePath) {
@@ -146349,7 +147287,7 @@ function collectManagedWorktrees({
     const flush2 = () => {
       if (!currentPath) return;
       const resolved = resolveRealPath(currentPath);
-      const underRoot = resolved === resolvedRoot || resolved.startsWith(resolvedRoot + import_node_path10.default.sep);
+      const underRoot = resolved === resolvedRoot || resolved.startsWith(resolvedRoot + import_node_path11.default.sep);
       if (underRoot && !seen.has(resolved)) {
         seen.add(resolved);
         entries.push({
@@ -146381,7 +147319,7 @@ function removeManagedWorktree({
   primaryRepoPath,
   force
 }) {
-  const target = import_node_path10.default.resolve(worktreePath);
+  const target = import_node_path11.default.resolve(worktreePath);
   if (!force && worktreeIsDirty(target)) {
     return {
       removed: [],
@@ -146397,7 +147335,7 @@ function purgeManagedWorktrees({
   const removed = [];
   const skipped = [];
   for (const entry of entries) {
-    const target = import_node_path10.default.resolve(entry.path);
+    const target = import_node_path11.default.resolve(entry.path);
     if (worktreeIsDirty(target)) {
       skipped.push({ path: target, reason: "uncommitted changes" });
       continue;
@@ -146664,7 +147602,7 @@ var import_node_fs9 = require("node:fs");
 
 // ../packages/core/service/local-target/repository-paths.ts
 var import_node_fs7 = require("node:fs");
-var import_node_path11 = __toESM(require("node:path"), 1);
+var import_node_path12 = __toESM(require("node:path"), 1);
 var MAX_RELATIVE_PATH_CHARS = 1024;
 function normalizeRepositoryRelativePath(value2) {
   if (value2 === void 0 || value2 === null) return { ok: true, relativePath: "" };
@@ -146678,7 +147616,7 @@ function normalizeRepositoryRelativePath(value2) {
       reason: "Absolute paths are not accepted; use a repository-relative path."
     };
   }
-  const normalized = import_node_path11.default.posix.normalize(slashed === "" ? "." : slashed).replace(/\/+$/, "");
+  const normalized = import_node_path12.default.posix.normalize(slashed === "" ? "." : slashed).replace(/\/+$/, "");
   if (normalized === "." || normalized === "") return { ok: true, relativePath: "" };
   if (normalized === ".." || normalized.startsWith("../")) {
     return { ok: false, reason: "Path escapes the repository." };
@@ -146760,7 +147698,7 @@ function resolveContainedRepositoryPath(root5, relative) {
   } catch {
     return { ok: false, outcome: "not_found", message: "The resource directory is not present." };
   }
-  const candidate = import_node_path11.default.join(realRoot, ...checked.relativePath.split("/").filter(Boolean));
+  const candidate = import_node_path12.default.join(realRoot, ...checked.relativePath.split("/").filter(Boolean));
   if (checked.relativePath && isSensitiveRepositoryPath(checked.relativePath)) {
     return { ok: false, outcome: "denied", message: "This path is excluded as sensitive." };
   }
@@ -146770,10 +147708,10 @@ function resolveContainedRepositoryPath(root5, relative) {
   } catch {
     return { ok: false, outcome: "not_found", message: "No such path in the repository." };
   }
-  if (realCandidate !== realRoot && !realCandidate.startsWith(realRoot + import_node_path11.default.sep)) {
+  if (realCandidate !== realRoot && !realCandidate.startsWith(realRoot + import_node_path12.default.sep)) {
     return { ok: false, outcome: "denied", message: "The path resolves outside the repository." };
   }
-  const realRelative = import_node_path11.default.relative(realRoot, realCandidate).split(import_node_path11.default.sep).join("/");
+  const realRelative = import_node_path12.default.relative(realRoot, realCandidate).split(import_node_path12.default.sep).join("/");
   if (realRelative && (isSensitiveRepositoryPath(realRelative) || realRelative.split("/").some((segment) => segment.toLowerCase() === ".git"))) {
     return { ok: false, outcome: "denied", message: "This path is excluded as sensitive." };
   }
@@ -147368,7 +148306,7 @@ var import_node_fs14 = require("node:fs");
 
 // ../packages/core/repository/git-tree.ts
 var import_node_child_process2 = require("node:child_process");
-var import_node_path12 = __toESM(require("node:path"), 1);
+var import_node_path13 = __toESM(require("node:path"), 1);
 var RepositoryReadError = class extends Error {
   code;
   constructor(code, message2) {
@@ -147399,17 +148337,17 @@ function gitPath(cwd, args) {
   }
 }
 function addDirectoryAncestors(paths2, filePath) {
-  let parent = import_node_path12.default.posix.dirname(filePath);
+  let parent = import_node_path13.default.posix.dirname(filePath);
   while (parent !== "." && parent !== "/") {
     paths2.add(parent);
-    parent = import_node_path12.default.posix.dirname(parent);
+    parent = import_node_path13.default.posix.dirname(parent);
   }
 }
 function toEntry(entryPath, type) {
-  const parentPath = import_node_path12.default.posix.dirname(entryPath);
+  const parentPath = import_node_path13.default.posix.dirname(entryPath);
   return {
     path: entryPath,
-    name: import_node_path12.default.posix.basename(entryPath),
+    name: import_node_path13.default.posix.basename(entryPath),
     type,
     parentPath: parentPath === "." ? null : parentPath,
     depth: entryPath.split("/").length - 1
@@ -147420,7 +148358,7 @@ function compareEntries(a5, b5) {
   return a5.path < b5.path ? -1 : 1;
 }
 function readRepositoryTree(rootPath, options = {}) {
-  const resolvedRoot = import_node_path12.default.resolve(rootPath);
+  const resolvedRoot = import_node_path13.default.resolve(rootPath);
   const gitRoot = gitPath(resolvedRoot, ["rev-parse", "--show-toplevel"]);
   if (!gitRoot) {
     throw new RepositoryReadError(
@@ -147445,7 +148383,7 @@ function readRepositoryTree(rootPath, options = {}) {
   const truncated = entries.length > maxEntries;
   return {
     rootPath: resolvedRoot,
-    gitRoot: import_node_path12.default.resolve(gitRoot),
+    gitRoot: import_node_path13.default.resolve(gitRoot),
     branch: gitPath(gitRoot, ["branch", "--show-current"]),
     commit: gitPath(gitRoot, ["rev-parse", "--short", "HEAD"]),
     entries: truncated ? entries.slice(0, maxEntries) : entries,
@@ -147457,7 +148395,7 @@ function readRepositoryTree(rootPath, options = {}) {
 var import_node_child_process3 = require("node:child_process");
 var import_node_fs10 = require("node:fs");
 var import_node_os6 = __toESM(require("node:os"), 1);
-var import_node_path13 = __toESM(require("node:path"), 1);
+var import_node_path14 = __toESM(require("node:path"), 1);
 
 // ../packages/core/service/latch-environment.ts
 var UTF8_LOCALE_PATTERN = /utf-?8/i;
@@ -147672,8 +148610,8 @@ var REQUIRED_LATCH_CAPABILITIES = ["create"];
 var LATCH_STANDALONE_INSTALL_COMMAND = "curl -fsSL https://raw.githubusercontent.com/jchaselubitz/Latch/main/scripts/install-cli.sh | bash";
 var LATCH_DISCOVERY_CACHE_FILENAME = "latch-discovery.json";
 function defaultLatchDiscoveryCachePath() {
-  const home = process.env.OVLD_HOME?.trim() || import_node_path13.default.join(import_node_os6.default.homedir(), ".ovld");
-  return import_node_path13.default.join(home, LATCH_DISCOVERY_CACHE_FILENAME);
+  const home = process.env.OVLD_HOME?.trim() || import_node_path14.default.join(import_node_os6.default.homedir(), ".ovld");
+  return import_node_path14.default.join(home, LATCH_DISCOVERY_CACHE_FILENAME);
 }
 function trimmed2(value2) {
   return typeof value2 === "string" && value2.trim() ? value2.trim() : null;
@@ -147783,17 +148721,17 @@ function resolveLatchExecutablePathFromEnvironment({
   fileExists = import_node_fs10.existsSync
 }) {
   const name2 = trimmed2(executable) ?? DEFAULT_LATCH_EXECUTABLE;
-  if (import_node_path13.default.isAbsolute(name2) || name2.includes("/") || name2.includes("\\")) {
-    return fileExists(name2) ? import_node_path13.default.resolve(name2) : null;
+  if (import_node_path14.default.isAbsolute(name2) || name2.includes("/") || name2.includes("\\")) {
+    return fileExists(name2) ? import_node_path14.default.resolve(name2) : null;
   }
   const resolvedOnPath = resolveOnPath(name2);
   if (resolvedOnPath) return resolvedOnPath;
   const fallbacks = [
-    import_node_path13.default.join(homeDirectory, ".local", "bin", name2),
+    import_node_path14.default.join(homeDirectory, ".local", "bin", name2),
     ...platform4 === "darwin" ? [`/opt/homebrew/bin/${name2}`, `/usr/local/bin/${name2}`] : []
   ];
   const fallback2 = fallbacks.find(fileExists);
-  return fallback2 ? import_node_path13.default.resolve(fallback2) : null;
+  return fallback2 ? import_node_path14.default.resolve(fallback2) : null;
 }
 function resolveLatchExecutablePath(executable) {
   return resolveLatchExecutablePathFromEnvironment({ executable });
@@ -147911,7 +148849,7 @@ function writeLatchDiscoveryCacheFile({
   filePath,
   cache: cache8
 }) {
-  (0, import_node_fs10.mkdirSync)(import_node_path13.default.dirname(filePath), { recursive: true });
+  (0, import_node_fs10.mkdirSync)(import_node_path14.default.dirname(filePath), { recursive: true });
   (0, import_node_fs10.writeFileSync)(filePath, `${JSON.stringify(cache8, null, 2)}
 `, { mode: 384 });
 }
@@ -147971,7 +148909,7 @@ function latchBinaryMissingMessage(executable) {
 // ../packages/core/service/latch-gateway.ts
 var import_node_fs12 = require("node:fs");
 var import_node_os7 = __toESM(require("node:os"), 1);
-var import_node_path14 = __toESM(require("node:path"), 1);
+var import_node_path15 = __toESM(require("node:path"), 1);
 var DEFAULT_LATCH_GATEWAY_URL = "http://127.0.0.1:4610";
 var LATCH_GATEWAY_SUBPROTOCOL_PREFIX = "latch.v2.";
 var LATCH_SERVE_TOKEN_FILENAME = "serve.token";
@@ -147991,7 +148929,7 @@ function isLoopbackHostname(hostname5) {
   return /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(host);
 }
 function latchHomeDirectory(env3 = process.env) {
-  return trimmed4(env3.LATCH_HOME) ?? import_node_path14.default.join(import_node_os7.default.homedir(), ".latch");
+  return trimmed4(env3.LATCH_HOME) ?? import_node_path15.default.join(import_node_os7.default.homedir(), ".latch");
 }
 var LATCH_REMOTE_LINK_RUNTIME_PATH = ["remote-access", "runtime"];
 var LATCH_REMOTE_LINK_READY_FILENAME = "remote-link-gateway-ready.json";
@@ -148029,9 +148967,9 @@ function readGatewayToken(tokenFile, files) {
   return token;
 }
 function remoteLinkGatewayConfig(env3, files) {
-  const runtime = import_node_path14.default.join(latchHomeDirectory(env3), ...LATCH_REMOTE_LINK_RUNTIME_PATH);
-  const readyFile = import_node_path14.default.join(runtime, LATCH_REMOTE_LINK_READY_FILENAME);
-  const tokenFile = import_node_path14.default.join(runtime, LATCH_REMOTE_LINK_TOKEN_FILENAME);
+  const runtime = import_node_path15.default.join(latchHomeDirectory(env3), ...LATCH_REMOTE_LINK_RUNTIME_PATH);
+  const readyFile = import_node_path15.default.join(runtime, LATCH_REMOTE_LINK_READY_FILENAME);
+  const tokenFile = import_node_path15.default.join(runtime, LATCH_REMOTE_LINK_TOKEN_FILENAME);
   if (!files.fileExists(readyFile) || !files.fileExists(tokenFile)) return null;
   try {
     const ready = JSON.parse(files.readFile(readyFile));
@@ -148057,7 +148995,7 @@ function resolveLatchGatewayCandidates({
   const inlineToken = trimmed4(env3.LATCH_GATEWAY_TOKEN);
   if (inlineToken) return [{ baseUrl, token: inlineToken }];
   const explicitTokenFile = trimmed4(env3.LATCH_SERVE_TOKEN_FILE);
-  const tokenFile = explicitTokenFile ?? import_node_path14.default.join(latchHomeDirectory(env3), LATCH_SERVE_TOKEN_FILENAME);
+  const tokenFile = explicitTokenFile ?? import_node_path15.default.join(latchHomeDirectory(env3), LATCH_SERVE_TOKEN_FILENAME);
   if (explicitUrl || explicitTokenFile) {
     return [{ baseUrl, token: readGatewayToken(tokenFile, files) }];
   }
@@ -148776,7 +149714,7 @@ function runLocalTargetDoctorChecks() {
 // ../packages/core/service/local-target/project-metadata.ts
 var import_node_child_process6 = require("node:child_process");
 var import_node_fs13 = require("node:fs");
-var import_node_path15 = __toESM(require("node:path"), 1);
+var import_node_path16 = __toESM(require("node:path"), 1);
 var PROJECT_JSON_VERSION = 3;
 var PROJECT_JSON_WARNING = "STRICTLY PROTECTED: This file is managed exclusively by Overlord. Agents and users must not edit, replace, stage, commit, or delete it. Re-link the resource with Overlord to change it.";
 var INSTRUCTION_BLOCK_START = "<!-- OVERLORD PROJECT METADATA PROTECTION: START -->";
@@ -148804,13 +149742,13 @@ function replaceManagedBlock(content, block) {
 }
 function ensureAgentInstructions(checkoutPath) {
   for (const filename of ["AGENTS.md", "CLAUDE.md"]) {
-    const instructionPath = import_node_path15.default.join(checkoutPath, filename);
+    const instructionPath = import_node_path16.default.join(checkoutPath, filename);
     const existing = (0, import_node_fs13.existsSync)(instructionPath) ? (0, import_node_fs13.readFileSync)(instructionPath, "utf8") : "";
     writeIfChanged(instructionPath, replaceManagedBlock(existing, PROJECT_METADATA_INSTRUCTION));
   }
 }
 function ensureGitignore(checkoutPath) {
-  const gitignorePath = import_node_path15.default.join(checkoutPath, ".gitignore");
+  const gitignorePath = import_node_path16.default.join(checkoutPath, ".gitignore");
   const existing = (0, import_node_fs13.existsSync)(gitignorePath) ? (0, import_node_fs13.readFileSync)(gitignorePath, "utf8") : "";
   const existingPatterns = new Set(
     existing.split(/\r?\n/).map((line2) => line2.trim().replace(/^\//, "")).filter(Boolean)
@@ -148957,12 +149895,12 @@ function writeProjectJson({
   executionTargetId,
   isPrimary
 }) {
-  const overlordDir = import_node_path15.default.join(directoryPath, ".overlord");
+  const overlordDir = import_node_path16.default.join(directoryPath, ".overlord");
   (0, import_node_fs13.mkdirSync)(overlordDir, { recursive: true });
-  (0, import_node_fs13.mkdirSync)(import_node_path15.default.join(overlordDir, "tmp"), { recursive: true });
-  (0, import_node_fs13.mkdirSync)(import_node_path15.default.join(overlordDir, "logs"), { recursive: true });
+  (0, import_node_fs13.mkdirSync)(import_node_path16.default.join(overlordDir, "tmp"), { recursive: true });
+  (0, import_node_fs13.mkdirSync)(import_node_path16.default.join(overlordDir, "logs"), { recursive: true });
   protectProjectMetadata(directoryPath);
-  const projectJsonPath = import_node_path15.default.join(overlordDir, "project.json");
+  const projectJsonPath = import_node_path16.default.join(overlordDir, "project.json");
   const existing = parseProjectJson(projectJsonPath);
   const existingProjects = existing?.projects ?? [];
   const existingEntry = existingProjects.find((entry) => entry.projectId === projectId);
@@ -149518,470 +150456,22 @@ async function enqueueLiveActivityStartForMission({
   return enqueueLiveActivityStartJob({ db, workspaceId: workspaceId2, profileId, missionId, now: now2 });
 }
 
-// ../packages/core/service/delivery-report.ts
-var import_node_crypto11 = require("node:crypto");
-init_zod();
-var MAX_ITEMS = DELIVERY_REPORT_MAX_ITEMS;
-var MAX_ALTERNATIVES = DELIVERY_REPORT_MAX_ALTERNATIVES;
-var MAX_ACTION_LENGTH = DELIVERY_REPORT_MAX_ACTION_LENGTH;
-var MAX_DETAIL_LENGTH = DELIVERY_REPORT_MAX_DETAIL_LENGTH;
-var MAX_COMMAND_LENGTH = DELIVERY_REPORT_MAX_COMMAND_LENGTH;
-var MAX_LINK_LENGTH = DELIVERY_REPORT_MAX_LINK_LENGTH;
-var linkSchema = humanActionLinkSchema;
-var humanActionSchema = external_exports.strictObject({
-  action: actionTextSchema,
-  reason: conciseTextSchema.optional(),
-  category: humanActionCategorySchema.optional(),
-  blocking: external_exports.boolean().optional(),
-  command: commandTextSchema.optional(),
-  verify: conciseTextSchema.optional(),
-  link: linkSchema.optional()
-});
-function isValidHumanActionLink(link) {
-  return linkSchema.safeParse(link).success;
-}
-var tradeoffSchema = external_exports.strictObject({
-  decision: actionTextSchema,
-  alternativesConsidered: external_exports.array(conciseTextSchema).max(MAX_ALTERNATIVES).optional(),
-  rationale: conciseTextSchema,
-  impact: conciseTextSchema.optional()
-});
-var deferredWorkFields = deferredWorkFieldSchemas;
-var deferredWorkInputSchema = external_exports.strictObject(deferredWorkFields);
-function deferredWorkInputProblem(deliveryReport) {
-  if (typeof deliveryReport !== "object" || deliveryReport === null) return null;
-  const agentReport = deliveryReport.agentReport;
-  if (typeof agentReport !== "object" || agentReport === null) return null;
-  const deferredWork = agentReport.deferredWork;
-  if (deferredWork === void 0) return null;
-  const field = "deliveryReport.agentReport.deferredWork";
-  if (!Array.isArray(deferredWork)) return `${field} must be an array`;
-  for (const [index, item] of deferredWork.slice(0, MAX_ITEMS).entries()) {
-    if (typeof item !== "object" || item === null || Array.isArray(item)) {
-      return `${field}[${index}] must be an object with title, change, location, and doneWhen; string items are not accepted`;
-    }
-    const parsed = deferredWorkInputSchema.safeParse(item);
-    if (!parsed.success) {
-      const issue2 = parsed.error.issues[0];
-      const key = issue2?.path.length ? `.${issue2.path.join(".")}` : "";
-      return `${field}[${index}]${key}: ${issue2?.message ?? "invalid deferred-work item"}`;
-    }
-  }
-  return null;
-}
-function deferredWorkId(index, item) {
-  const canonical = JSON.stringify([
-    item.title.trim(),
-    item.change.trim(),
-    item.location.trim(),
-    item.doneWhen.trim()
-  ]);
-  const digest6 = (0, import_node_crypto11.createHash)("sha256").update(canonical, "utf8").digest("hex").slice(0, 16);
-  return `deferred-work-${index}-${digest6}`;
-}
-var GIT_ACTION_PATTERN = /\b(?:git\s+(?:commit|push|pull|merge|rebase|checkout|switch|branch)|(?:commit|push|pull|merge|rebase|create|open)\s+(?:a\s+)?(?:branch|pull request|pr))\b/i;
-var ROUTINE_QA_PATTERN = /\b(?:code review|review (?:the )?code|run (?:the )?tests?|test (?:the )?(?:code|feature)|verify (?:the )?(?:code|feature|implementation|it)(?:\s+(?:works|is working))?|qa)\b/i;
-function isDisplayableHumanAction(action) {
-  return !GIT_ACTION_PATTERN.test(action) && !ROUTINE_QA_PATTERN.test(action);
-}
-function normalizeAgentReport(input2) {
-  const humanActionInputs = input2.humanActions ?? [];
-  const tradeoffInputs = input2.tradeoffsMade ?? [];
-  const humanActions = humanActionInputs.filter((action) => isDisplayableHumanAction(action.action)).map((action, index) => ({
-    id: `human-action-${index + 1}`,
-    action: action.action,
-    ...action.reason ? { reason: action.reason } : {},
-    category: action.category ?? "other",
-    ...action.blocking === void 0 ? {} : { blocking: action.blocking },
-    ...action.command ? { command: action.command } : {},
-    ...action.verify ? { verify: action.verify } : {},
-    ...action.link ? { link: action.link } : {},
-    source: "agent"
-  }));
-  const tradeoffsMade = tradeoffInputs.map((tradeoff, index) => ({
-    id: `tradeoff-${index + 1}`,
-    decision: tradeoff.decision,
-    alternativesConsidered: tradeoff.alternativesConsidered ?? [],
-    rationale: tradeoff.rationale,
-    ...tradeoff.impact ? { impact: tradeoff.impact } : {},
-    source: "agent"
-  }));
-  const deferredWork = (input2.deferredWork ?? []).map((item, index) => ({
-    id: deferredWorkId(index, item),
-    title: item.title,
-    change: item.change,
-    location: item.location,
-    doneWhen: item.doneWhen
-  }));
-  return {
-    humanActions,
-    tradeoffsMade,
-    knownRisks: input2.knownRisks ?? [],
-    deferredWork,
-    assumptions: input2.assumptions ?? []
-  };
-}
-var MAX_WARNINGS = DELIVERY_REPORT_MAX_WARNINGS;
-var DELIVERY_REPORT_ROOT_KEYS = /* @__PURE__ */ new Set(["schemaVersion", "agentReport"]);
-var AGENT_REPORT_INPUT_KEYS = /* @__PURE__ */ new Set([
-  "humanActions",
-  "tradeoffsMade",
-  "knownRisks",
-  "deferredWork",
-  "assumptions"
-]);
-function reportWarning(warnings, message2) {
-  if (warnings.length < MAX_WARNINGS) warnings.push(message2);
-}
-function salvageArray(value2, schema2, field, warnings) {
-  if (value2 === void 0) return [];
-  if (!Array.isArray(value2)) {
-    reportWarning(warnings, `Ignored deliveryReport.${field}: expected an array.`);
-    return [];
-  }
-  if (value2.length > MAX_ITEMS) {
-    reportWarning(
-      warnings,
-      `Ignored ${value2.length - MAX_ITEMS} excess deliveryReport.${field} item(s).`
-    );
-  }
-  return value2.slice(0, MAX_ITEMS).flatMap((item, index) => {
-    const parsed = schema2.safeParse(item);
-    if (parsed.success) return [parsed.data];
-    reportWarning(warnings, `Ignored deliveryReport.${field}[${index}]: invalid advisory item.`);
-    return [];
-  });
-}
-function salvageWireAgentReport(deliveryReport) {
-  const warnings = [];
-  if (deliveryReport === void 0 || deliveryReport === null) return { input: {}, warnings };
-  if (typeof deliveryReport !== "object" || Array.isArray(deliveryReport)) {
-    reportWarning(warnings, "Ignored deliveryReport: expected an object.");
-    return { input: {}, warnings };
-  }
-  const root5 = deliveryReport;
-  if (root5.schemaVersion !== 1) {
-    reportWarning(warnings, "Ignored deliveryReport: schemaVersion must be 1.");
-    return { input: {}, warnings };
-  }
-  if (Object.keys(root5).some((key) => !DELIVERY_REPORT_ROOT_KEYS.has(key))) {
-    reportWarning(warnings, "Ignored unsupported deliveryReport fields.");
-  }
-  const candidate = root5.agentReport;
-  if (candidate === void 0) return { input: {}, warnings };
-  if (typeof candidate !== "object" || candidate === null || Array.isArray(candidate)) {
-    reportWarning(warnings, "Ignored deliveryReport.agentReport: expected an object.");
-    return { input: {}, warnings };
-  }
-  const report2 = candidate;
-  if (Object.keys(report2).some((key) => !AGENT_REPORT_INPUT_KEYS.has(key))) {
-    reportWarning(warnings, "Ignored unsupported deliveryReport.agentReport fields.");
-  }
-  return {
-    input: {
-      humanActions: salvageArray(
-        report2.humanActions,
-        humanActionSchema,
-        "agentReport.humanActions",
-        warnings
-      ),
-      tradeoffsMade: salvageArray(
-        report2.tradeoffsMade,
-        tradeoffSchema,
-        "agentReport.tradeoffsMade",
-        warnings
-      ),
-      knownRisks: salvageArray(
-        report2.knownRisks,
-        conciseTextSchema,
-        "agentReport.knownRisks",
-        warnings
-      ),
-      deferredWork: salvageArray(
-        report2.deferredWork,
-        deferredWorkInputSchema,
-        "agentReport.deferredWork",
-        warnings
-      ),
-      assumptions: salvageArray(
-        report2.assumptions,
-        conciseTextSchema,
-        "agentReport.assumptions",
-        warnings
-      )
-    },
-    warnings
-  };
-}
-function buildDeliveryReport({
-  summary,
-  deliveryReport
-}) {
-  const { input: input2, warnings } = salvageWireAgentReport(deliveryReport);
-  const agentReport = normalizeAgentReport(input2);
-  return {
-    schemaVersion: 1,
-    agentReport,
-    ...warnings.length > 0 ? { warnings } : {},
-    presentation: {
-      status: "deterministic",
-      markdown: summary,
-      humanActions: agentReport.humanActions,
-      tradeoffsMade: agentReport.tradeoffsMade,
-      knownRisks: agentReport.knownRisks,
-      deferredWork: agentReport.deferredWork,
-      assumptions: agentReport.assumptions,
-      generatedBy: "deterministic"
-    }
-  };
-}
-function readDeliveryReport2({
-  summary,
-  deliveryReport
-}) {
-  return readDeliveryReport({ summary, deliveryReport });
-}
-function markDeliveryPresentationPending(report2) {
-  return {
-    ...report2,
-    presentation: {
-      ...report2.presentation,
-      status: "pending"
-    }
-  };
-}
-var DELIVERY_REPORT_LIMITS = {
-  maxItems: MAX_ITEMS,
-  maxAlternatives: MAX_ALTERNATIVES,
-  maxActionLength: MAX_ACTION_LENGTH,
-  maxDetailLength: MAX_DETAIL_LENGTH,
-  maxCommandLength: MAX_COMMAND_LENGTH,
-  maxLinkLength: MAX_LINK_LENGTH
-};
-
-// ../packages/core/service/webhook-events.ts
-var WEBHOOK_EVENT_TYPES = vocabulary()([
-  "mission.delivered",
-  "mission.status_changed",
-  "objective.completed",
-  "mission.blocked",
-  "mission.unblocked"
-]);
-function isWebhookEventType(value2) {
-  return WEBHOOK_EVENT_TYPES.includes(value2);
-}
-var WEBHOOK_OUTBOX_TOPIC = "webhook.deliver.v1";
-var WEBHOOK_API_VERSION = "2026-07-01";
-async function enqueueWebhookEvent(ctx, {
-  type,
-  projectId,
-  entity
-}) {
-  const enabledParam = bindBool(ctx.db.dialect, true);
-  const subscriptions = await ctx.db.all(
-    `SELECT id, event_types_json, created_by_workspace_user_id
-       FROM webhook_subscriptions
-       WHERE workspace_id = ? AND enabled = ? AND deleted_at IS NULL
-         AND (project_id IS NULL OR project_id = ?)`,
-    [ctx.workspace.id, enabledParam, projectId]
-  );
-  if (subscriptions.length === 0) return;
-  const now2 = nowIso();
-  for (const subscription of subscriptions) {
-    let eventTypes;
-    try {
-      eventTypes = JSON.parse(subscription.event_types_json);
-    } catch {
-      continue;
-    }
-    if (!eventTypes.includes(type)) continue;
-    const owner = await ctx.db.get(
-      `SELECT id FROM workspace_users
-         WHERE id = ? AND workspace_id = ? AND status = 'active' AND deleted_at IS NULL`,
-      [subscription.created_by_workspace_user_id, ctx.workspace.id]
-    );
-    if (!owner) continue;
-    const payload = {
-      subscriptionId: subscription.id,
-      eventType: type,
-      entity,
-      occurredAt: now2
-    };
-    await ctx.db.run(
-      `INSERT INTO outbox_messages
-           (id, workspace_id, topic, payload_json, status, available_at, attempt_count, created_at, updated_at)
-         VALUES (?, ?, ?, ?, 'pending', ?, 0, ?, ?)`,
-      [newId(), ctx.workspace.id, WEBHOOK_OUTBOX_TOPIC, JSON.stringify(payload), now2, now2, now2]
-    );
-  }
-}
-var FULL_ENVELOPE_ARRAY_LIMIT = 50;
-async function buildWebhookEnvelope(ctx, {
-  outboxMessageId,
-  type,
-  entity,
-  occurredAt,
-  mode
-}) {
-  const mission = await ctx.db.get(
-    `SELECT m.id, m.display_id, m.project_id, m.title, m.priority, m.created_at,
-            s.id AS status_id, s.type AS status_type, s.name AS status_name
-       FROM missions m
-       JOIN project_statuses s ON s.id = m.status_id AND s.project_id = m.project_id
-       WHERE m.id = ? AND m.workspace_id = ?`,
-    [entity.missionId, ctx.workspace.id]
-  );
-  if (!mission) {
-    throw new Error(`Mission not found for webhook envelope: ${entity.missionId}`);
-  }
-  const project = mode === "full" ? await ctx.db.get(`SELECT id, name FROM projects WHERE id = ?`, [mission.project_id]) : null;
-  const links = {
-    mission: `/api/missions/${mission.id}`,
-    events: `/api/missions/${mission.id}/events`,
-    fileChanges: `/api/missions/${mission.id}/file-changes`,
-    artifacts: `/api/missions/${mission.id}/artifacts`
-  };
-  const envelope2 = {
-    id: outboxMessageId,
-    apiVersion: WEBHOOK_API_VERSION,
-    type,
-    occurredAt,
-    workspace: { id: ctx.workspace.id },
-    project: mission.project_id ? { id: mission.project_id } : null,
-    mission: { id: mission.id, displayId: mission.display_id },
-    links
-  };
-  if (entity.objectiveId) envelope2.objective = { id: entity.objectiveId };
-  if (entity.sessionId) envelope2.session = { id: entity.sessionId };
-  if (entity.deliveryId) envelope2.delivery = { id: entity.deliveryId };
-  if (mode === "thin") {
-    return envelope2;
-  }
-  envelope2.workspace.name = ctx.workspace.name;
-  if (project) envelope2.project = { id: project.id, name: project.name };
-  envelope2.mission = {
-    ...envelope2.mission,
-    title: mission.title,
-    status: { id: mission.status_id, type: mission.status_type, label: mission.status_name },
-    priority: mission.priority,
-    createdAt: mission.created_at
-  };
-  if (entity.objectiveId) {
-    const objective = await ctx.db.get(
-      `SELECT id, position, title, state, display_key FROM objectives WHERE id = ? AND workspace_id = ?`,
-      [entity.objectiveId, ctx.workspace.id]
-    );
-    if (objective) {
-      envelope2.objective = {
-        id: objective.id,
-        // Consumers should key off `displayId` rather than `position`: position
-        // changes when objectives are reordered, the display id never does.
-        displayId: formatObjectiveDisplayId({
-          missionDisplayId: mission.display_id,
-          displayKey: objective.display_key
-        }),
-        position: objective.position,
-        title: objective.title,
-        state: objective.state
-      };
-    }
-  }
-  if (entity.sessionId) {
-    const session = await ctx.db.get(
-      `SELECT id, agent_identifier, model_identifier FROM agent_sessions WHERE id = ? AND workspace_id = ?`,
-      [entity.sessionId, ctx.workspace.id]
-    );
-    if (session) {
-      envelope2.session = {
-        id: session.id,
-        agentIdentifier: session.agent_identifier,
-        modelIdentifier: session.model_identifier
-      };
-    }
-  }
-  if (entity.deliveryId) {
-    const delivery = await ctx.db.get(
-      `SELECT id, summary, verification_summary, follow_up_notes, payload_json
-         FROM deliveries WHERE id = ? AND workspace_id = ?`,
-      [entity.deliveryId, ctx.workspace.id]
-    );
-    if (delivery) {
-      const artifactRows = await ctx.db.all(
-        `SELECT type, label, content_text, external_url FROM artifacts WHERE delivery_id = ? ORDER BY created_at ASC`,
-        [delivery.id]
-      );
-      let payload = null;
-      try {
-        payload = delivery.payload_json ? JSON.parse(delivery.payload_json) : null;
-      } catch {
-      }
-      envelope2.delivery = {
-        id: delivery.id,
-        summary: delivery.summary,
-        verificationSummary: delivery.verification_summary,
-        followUpNotes: delivery.follow_up_notes,
-        report: readDeliveryReport2({
-          summary: delivery.summary,
-          deliveryReport: payload?.deliveryReport
-        }),
-        artifacts: artifactRows.map((row) => ({
-          type: row.type,
-          label: row.label,
-          content: row.content_text,
-          url: row.external_url
-        }))
-      };
-      const changedFileRows = await ctx.db.all(
-        `SELECT cf.file_path, cf.source, COALESCE(pr.resource_key, o.resource_key) AS resource_key
-           FROM changed_files cf
-           LEFT JOIN objectives o ON o.id = cf.objective_id AND o.deleted_at IS NULL
-           LEFT JOIN project_resources pr ON pr.id = cf.resource_id AND pr.deleted_at IS NULL
-          WHERE cf.objective_id = ? AND cf.deleted_at IS NULL
-          ORDER BY cf.last_observed_at DESC, cf.id DESC LIMIT ?`,
-        [entity.objectiveId, FULL_ENVELOPE_ARRAY_LIMIT + 1]
-      );
-      envelope2.changedFiles = truncateArray(
-        changedFileRows.map((row) => ({
-          filePath: row.file_path,
-          resourceKey: row.resource_key?.trim() || null,
-          source: row.source === "declared_edit" || row.source === "agent_declared" ? row.source : null
-        }))
-      );
-    }
-  }
-  const eventRows = await ctx.db.all(
-    `SELECT id, type, summary, created_at FROM mission_events
-       WHERE mission_id = ? AND workspace_id = ?
-       ORDER BY created_at DESC LIMIT ?`,
-    [mission.id, ctx.workspace.id, FULL_ENVELOPE_ARRAY_LIMIT + 1]
-  );
-  envelope2.missionEvents = truncateArray(
-    eventRows.map((row) => ({
-      id: row.id,
-      type: row.type,
-      summary: row.summary,
-      createdAt: row.created_at
-    }))
-  );
-  return envelope2;
-}
-function truncateArray(rows) {
-  if (rows.length <= FULL_ENVELOPE_ARRAY_LIMIT) return rows;
-  const truncated = rows.slice(0, FULL_ENVELOPE_ARRAY_LIMIT);
-  truncated.truncated = true;
-  return truncated;
-}
-
 // ../packages/core/service/agent-session/pure/window.ts
 var AWAY_DECISION_WINDOW_SECONDS = 30 * 60;
 
 // ../packages/core/service/agent-session/credential.ts
-var import_node_crypto12 = require("node:crypto");
+var import_node_crypto13 = require("node:crypto");
+var SESSION_CHANNEL_TOKEN_PREFIX = "osc_";
 var SESSION_CHANNEL_TOKEN_HASH_ALGORITHM = "sha256";
 var SESSION_CHANNEL_LEASE_SECONDS = 180;
 var SESSION_CHANNEL_ABSOLUTE_LIFETIME_SECONDS = 60 * 60 * 24;
 function hashSessionChannelToken(rawToken) {
-  return (0, import_node_crypto12.createHash)(SESSION_CHANNEL_TOKEN_HASH_ALGORITHM).update(rawToken).digest("hex");
+  return (0, import_node_crypto13.createHash)(SESSION_CHANNEL_TOKEN_HASH_ALGORITHM).update(rawToken).digest("hex");
+}
+function generateSessionChannelToken() {
+  const prefix = `${SESSION_CHANNEL_TOKEN_PREFIX}${(0, import_node_crypto13.randomBytes)(4).toString("hex")}`;
+  const secret = `${prefix}${(0, import_node_crypto13.randomBytes)(32).toString("base64url")}`;
+  return { secret, prefix, hash: hashSessionChannelToken(secret) };
 }
 function addSeconds(iso4, seconds2) {
   return new Date(new Date(iso4).getTime() + seconds2 * 1e3).toISOString();
@@ -151648,10 +152138,10 @@ function mapObservationToResourceStatus(lifecycleStatus, observation) {
 var import_node_os9 = require("node:os");
 
 // ../packages/core/service/devices.ts
-var import_node_crypto13 = require("node:crypto");
+var import_node_crypto14 = require("node:crypto");
 var import_node_os8 = require("node:os");
 function deviceFingerprint() {
-  return (0, import_node_crypto13.createHash)("sha256").update(`${(0, import_node_os8.hostname)()}:${(0, import_node_os8.platform)()}`).digest("hex").slice(0, 32);
+  return (0, import_node_crypto14.createHash)("sha256").update(`${(0, import_node_os8.hostname)()}:${(0, import_node_os8.platform)()}`).digest("hex").slice(0, 32);
 }
 function callerDeviceFingerprint() {
   return deviceFingerprint();
@@ -152364,7 +152854,7 @@ async function updateActorLaunchSessionDefaults({
 }
 
 // ../packages/core/service/project-resource-key.ts
-var import_node_path16 = __toESM(require("node:path"), 1);
+var import_node_path17 = __toESM(require("node:path"), 1);
 function deriveProjectResourceKey2({
   resourceKey,
   label,
@@ -152374,7 +152864,7 @@ function deriveProjectResourceKey2({
   if (explicit) return slugify3(explicit);
   const labelKey = label?.trim();
   if (labelKey) return slugify3(labelKey);
-  return slugify3(import_node_path16.default.basename(import_node_path16.default.resolve(directoryPath)));
+  return slugify3(import_node_path17.default.basename(import_node_path17.default.resolve(directoryPath)));
 }
 
 // ../packages/core/service/projects.ts
@@ -152634,7 +153124,7 @@ async function assertPrimaryResourceConnected({
   }
   return {
     resource: primary,
-    workingDirectory: import_node_path17.default.resolve(primary.path)
+    workingDirectory: import_node_path18.default.resolve(primary.path)
   };
 }
 function normalizeAccessMode(value2) {
@@ -152744,7 +153234,7 @@ async function assertObjectiveResourceConnected({
   }
   return {
     resource,
-    workingDirectory: import_node_path17.default.resolve(resource.path)
+    workingDirectory: import_node_path18.default.resolve(resource.path)
   };
 }
 async function resolveCwdProjectResource({
@@ -152755,9 +153245,9 @@ async function resolveCwdProjectResource({
 }) {
   const resolvedProjectId = await resolveProjectId(ctx, projectId);
   const preferredExecutionTargetId = executionTargetId ?? await preferredExecutionTargetIdForDiscovery({ ctx });
-  let current = import_node_path17.default.resolve(workingDirectory);
+  let current = import_node_path18.default.resolve(workingDirectory);
   while (true) {
-    const projectJsonPath = import_node_path17.default.join(current, ".overlord", "project.json");
+    const projectJsonPath = import_node_path18.default.join(current, ".overlord", "project.json");
     try {
       const links = readProjectJsonLinks(projectJsonPath, { preferredExecutionTargetId });
       const raw = links.find((link) => link.projectId === resolvedProjectId);
@@ -152778,12 +153268,12 @@ async function resolveCwdProjectResource({
         if (resource.status === "missing") return null;
         return {
           resource,
-          workingDirectory: import_node_path17.default.resolve(resource.path)
+          workingDirectory: import_node_path18.default.resolve(resource.path)
         };
       }
     } catch {
     }
-    const parent = import_node_path17.default.dirname(current);
+    const parent = import_node_path18.default.dirname(current);
     if (parent === current) break;
     current = parent;
   }
@@ -152797,7 +153287,7 @@ async function resolveObjectiveWorkingDirectory({
   executionTargetId = null
 }) {
   if (explicitWorkingDirectory?.trim()) {
-    const resolved = import_node_path17.default.resolve(explicitWorkingDirectory);
+    const resolved = import_node_path18.default.resolve(explicitWorkingDirectory);
     if (ctx.db.dialect === "sqlite" && !(0, import_node_fs15.existsSync)(resolved)) {
       throw new ServiceError(
         `Working directory does not exist: ${resolved}`,
@@ -152887,11 +153377,11 @@ async function discoverProject({
       ]
     };
   }
-  const cwd = import_node_path17.default.resolve(workingDirectory ?? process.cwd());
+  const cwd = import_node_path18.default.resolve(workingDirectory ?? process.cwd());
   let current = cwd;
   const preferredExecutionTargetId = await preferredExecutionTargetIdForDiscovery({ ctx });
   while (true) {
-    const projectJsonPath = import_node_path17.default.join(current, ".overlord", "project.json");
+    const projectJsonPath = import_node_path18.default.join(current, ".overlord", "project.json");
     try {
       const links = readProjectJsonLinks(projectJsonPath, { preferredExecutionTargetId });
       if (links.length > 0) {
@@ -152944,7 +153434,7 @@ async function discoverProject({
       }
     } catch {
     }
-    const parent = import_node_path17.default.dirname(current);
+    const parent = import_node_path18.default.dirname(current);
     if (parent === current) break;
     current = parent;
   }
@@ -152959,6 +153449,9 @@ async function discoverProject({
 var SECRET_PATTERNS = [
   { name: "overlord-user-token", pattern: /out_[A-Za-z0-9_-]{8,}/g },
   { name: "overlord-channel-token", pattern: /osc_[A-Za-z0-9_-]{8,}/g },
+  // Protocol session keys authorize a session, and every `ovld protocol … --session-key` command
+  // an agent runs carries one (`--session-key value` has no `=`, so `assigned-secret` misses it).
+  { name: "overlord-session-key", pattern: /sess_[A-Za-z0-9_-]{16,}/g },
   { name: "anthropic-key", pattern: /sk-ant-[A-Za-z0-9_-]{16,}/g },
   { name: "openai-key", pattern: /sk-[A-Za-z0-9]{20,}/g },
   { name: "github-token", pattern: /gh[pousr]_[A-Za-z0-9]{16,}/g },
@@ -152996,10 +153489,10 @@ function sanitizeDispatchFailure(error64, limit2 = 400) {
   return redactSecrets2(message2).text.slice(0, limit2).trim() || null;
 }
 function runQueueDiagnosticCode(input2) {
-  const terminal = /* @__PURE__ */ new Set(["failed", "cleared", "cancelled", "expired"]);
-  if (input2.entryState === "dispatched" && input2.requestStatus && terminal.has(input2.requestStatus))
+  const terminal2 = /* @__PURE__ */ new Set(["failed", "cleared", "cancelled", "expired"]);
+  if (input2.entryState === "dispatched" && input2.requestStatus && terminal2.has(input2.requestStatus))
     return "terminal_request_dispatched";
-  if (input2.entryState === "running" && (!input2.requestStatus || terminal.has(input2.requestStatus) && !input2.launchedSessionId))
+  if (input2.entryState === "running" && (!input2.requestStatus || terminal2.has(input2.requestStatus) && !input2.launchedSessionId))
     return "running_without_live_request";
   return null;
 }
@@ -153651,10 +154144,10 @@ async function markRunQueueEntryRunning(db, entryId, now2) {
     [now2, entryId]
   );
 }
-async function markRunQueueEntryDispatched(db, entryId, now2, dispatch2) {
+async function markRunQueueEntryDispatched(db, entryId, now2, dispatch) {
   await db.run(
     "UPDATE run_queue_entries SET state = 'dispatched', blocked_reason = NULL, waiting_reason = NULL, waiting_on_objective_id = NULL, dispatched_at = ?, execution_request_id = ?, attempt_count = attempt_count + 1, updated_at = ?, revision = revision + 1 WHERE id = ? AND state IN ('waiting','blocked')",
-    [now2, dispatch2.executionRequestId, now2, entryId]
+    [now2, dispatch.executionRequestId, now2, entryId]
   );
 }
 var DISPATCH_FAILURE_DETAIL_LIMIT = 400;
@@ -154784,7 +155277,7 @@ async function moveMissionToExecute({
 }
 
 // ../packages/core/service/protocol.ts
-var import_node_crypto17 = require("node:crypto");
+var import_node_crypto18 = require("node:crypto");
 
 // ../packages/core/service/agent-session/channels.ts
 var CHANNEL_COLUMNS = `
@@ -154864,6 +155357,78 @@ async function ensureProtocolChannelForSession({
   });
   return await getChannel({ ctx, channelId });
 }
+async function createSessionChannel({
+  ctx,
+  missionId,
+  objectiveId = null,
+  projectId = null,
+  sessionId = null,
+  executionRequestId = null,
+  executionTargetId = null,
+  runnerRegistrationId = null,
+  agentIdentifier = null,
+  adapterKey = null,
+  adapterVersion = null,
+  launchKind = "unknown",
+  launchPromptId = null,
+  capabilities: capabilities2 = {}
+}) {
+  const now2 = nowIso();
+  const channelId = newId();
+  const { secret, prefix, hash: hash2 } = generateSessionChannelToken();
+  const expiresAt = renewedExpiry({ now: now2, createdAt: now2 });
+  await ctx.db.transaction(async (tx) => {
+    const txCtx = { ...ctx, db: tx };
+    await tx.run(
+      `INSERT INTO agent_session_channels (
+           id, workspace_id, project_id, mission_id, objective_id, session_id,
+           execution_request_id, execution_target_id, runner_registration_id,
+           launch_kind, launch_prompt_id, agent_identifier, adapter_key, adapter_version,
+           capabilities_json, state,
+           credential_prefix, credential_hash, credential_algorithm, credential_expires_at,
+           lease_expires_at, created_by_workspace_user_id, created_at, updated_at, revision
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'preparing', ?, ?, 'sha256', ?, ?, ?, ?, ?, 1)`,
+      [
+        channelId,
+        ctx.workspace.id,
+        projectId,
+        missionId,
+        objectiveId,
+        sessionId,
+        executionRequestId,
+        executionTargetId,
+        runnerRegistrationId,
+        launchKind,
+        launchPromptId,
+        agentIdentifier,
+        adapterKey,
+        adapterVersion,
+        JSON.stringify(capabilities2),
+        prefix,
+        hash2,
+        expiresAt,
+        expiresAt,
+        ctx.actorWorkspaceUserId,
+        now2,
+        now2
+      ]
+    );
+    await recordChange({
+      ctx: txCtx,
+      entityType: "agent_session_channel",
+      entityId: channelId,
+      operation: "insert",
+      entityRevision: 1,
+      projectId,
+      missionId,
+      objectiveId
+    });
+  });
+  return {
+    channel: await getChannel({ ctx, channelId }),
+    bootstrap: { channelId, token: secret, expiresAt, launchKind, launchPromptId }
+  };
+}
 async function authenticateChannelCredential({
   db,
   rawToken,
@@ -154940,7 +155505,9 @@ async function bindChannelToSession({
         objectiveId,
         projectId,
         nativeSessionId,
-        agentIdentifier,
+        // `unknown` is attach's placeholder when the agent did not say; it must not overwrite the
+        // identifier a launch recorded on the channel (a control-plane launch knows it is Codex).
+        agentIdentifier === "unknown" ? null : agentIdentifier,
         adapterKey,
         adapterVersion,
         now2,
@@ -155140,7 +155707,7 @@ async function findBindableChannelForMission({
 }
 
 // ../packages/core/service/agent-session/pure/evidence-path.ts
-var import_node_path18 = __toESM(require("node:path"), 1);
+var import_node_path19 = __toESM(require("node:path"), 1);
 var MAX_EVIDENCE_PATH_LENGTH = 2e3;
 function hasControlCharacters(value2) {
   for (let index = 0; index < value2.length; index += 1) {
@@ -155160,10 +155727,10 @@ function isExactEvidencePath(value2) {
   if (value2.length === 0 || value2.length > MAX_EVIDENCE_PATH_LENGTH || value2 !== value2.trim() || hasUnsafePathCharacters(value2)) {
     return false;
   }
-  const slashPath = import_node_path18.default.sep === "\\" ? value2.replace(/\\/g, "/") : value2;
-  if (import_node_path18.default.posix.isAbsolute(slashPath) || /^[a-z]:/i.test(slashPath)) return false;
+  const slashPath = import_node_path19.default.sep === "\\" ? value2.replace(/\\/g, "/") : value2;
+  if (import_node_path19.default.posix.isAbsolute(slashPath) || /^[a-z]:/i.test(slashPath)) return false;
   if (slashPath === "." || slashPath === ".." || slashPath.startsWith("../")) return false;
-  return import_node_path18.default.posix.normalize(slashPath) === slashPath;
+  return import_node_path19.default.posix.normalize(slashPath) === slashPath;
 }
 
 // ../packages/core/service/notifications/notifications.ts
@@ -155783,7 +156350,7 @@ function applyDeliveryPresentation({
 }
 
 // ../packages/core/service/delivery-finalization.ts
-var import_node_crypto14 = require("node:crypto");
+var import_node_crypto15 = require("node:crypto");
 var OPERATION_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$/;
 var DELIVERY_OPERATION_CONFLICT = "delivery_operation_conflict";
 var DELIVERY_ALREADY_ACCEPTED = "delivery_already_accepted";
@@ -155818,7 +156385,7 @@ function canonicalize(value2) {
   return value2;
 }
 function finalizationRequestDigest(kind, semantic) {
-  const hash2 = (0, import_node_crypto14.createHash)("sha256").update(canonicalJson({ kind, semantic })).digest("hex");
+  const hash2 = (0, import_node_crypto15.createHash)("sha256").update(canonicalJson({ kind, semantic })).digest("hex");
   return `${DIGEST_VERSION}:${hash2}`;
 }
 var RECEIPT_COLUMNS = `id, workspace_id, project_id, mission_id, objective_id, delivery_id,
@@ -155986,7 +156553,7 @@ async function readDeliveryReceipt({
 }
 
 // ../packages/core/service/delivery-summary-publication.ts
-var import_node_crypto15 = require("node:crypto");
+var import_node_crypto16 = require("node:crypto");
 
 // ../packages/core/service/mission-narrative.ts
 function isSummaryEnabled(value2) {
@@ -157403,7 +157970,7 @@ async function readDeliverySummaryContext({
   };
 }
 function publishDigest(publicationId, semantic) {
-  return `v1:${(0, import_node_crypto15.createHash)("sha256").update(canonicalJson({ kind: "publish_delivery_summary", publicationId, semantic })).digest("hex")}`;
+  return `v1:${(0, import_node_crypto16.createHash)("sha256").update(canonicalJson({ kind: "publish_delivery_summary", publicationId, semantic })).digest("hex")}`;
 }
 async function publishDeliverySummary({
   ctx,
@@ -158233,9 +158800,11 @@ function parseAgentConfigs(json2) {
   for (const [key, value2] of Object.entries(parsed)) {
     if (!value2 || typeof value2 !== "object") continue;
     const config4 = value2;
+    const harnessMode = normalizeAgentHarnessMode(config4.harnessMode);
     configs[key] = {
       preCommand: typeof config4.preCommand === "string" ? config4.preCommand : "",
-      flags: normalizeAgentLaunchFlags(config4.flags)
+      flags: normalizeAgentLaunchFlags(config4.flags),
+      ...harnessMode ? { harnessMode } : {}
     };
   }
   return configs;
@@ -160193,7 +160762,7 @@ function formatProjectResourcesInstructions(projectResources) {
 }
 
 // ../packages/core/service/report-draft.ts
-var import_node_crypto16 = require("node:crypto");
+var import_node_crypto17 = require("node:crypto");
 init_zod();
 var REPORT_DRAFT_CONFLICT = "report_draft_conflict";
 var REPORT_DRAFT_OPERATION_CONFLICT = "report_draft_operation_conflict";
@@ -160325,7 +160894,7 @@ function parseReportDraftInput(value2, mode) {
   return { ...operationId ? { operationId } : {}, expectedRevision: expectedRevision2, operations: operations2 };
 }
 function reportDraftBatchDigest(semantic) {
-  const hash2 = (0, import_node_crypto16.createHash)("sha256").update(canonicalJson({ kind: "report_draft_batch", semantic })).digest("hex");
+  const hash2 = (0, import_node_crypto17.createHash)("sha256").update(canonicalJson({ kind: "report_draft_batch", semantic })).digest("hex");
   return `${DIGEST_VERSION2}:${hash2}`;
 }
 var DRAFT_COLUMNS = `d.id, d.workspace_id, d.project_id, d.mission_id, d.objective_id, d.session_id,
@@ -161560,6 +162129,9 @@ function assembleAgentInstructions({
     `Objective: ${objectiveLabel}`,
     `Project: ${projectName}`,
     "",
+    "## Temporary Files",
+    "When working in a writable project checkout, use `OVERLORD_TMPDIR` for task scratch files if it points to an available directory under that checkout\u2019s `.overlord/tmp/`. Otherwise, create and use `.overlord/tmp/` at the checkout root. Pass that directory explicitly to tools that default to a system temp folder.",
+    "",
     "## Context Location",
     "- The current task body is in the top-level `objective.objective` field.",
     compactContext ? "- Sibling work is in `objectives` in mission order; check each state. Completed instructions may be truncated." : "- Previous and future work are in `previousObjectives` and `futureObjectives`.",
@@ -162107,7 +162679,7 @@ async function connectSession({
   };
 }
 function promptHash(prompt) {
-  return (0, import_node_crypto17.createHash)("sha256").update(prompt).digest("hex");
+  return (0, import_node_crypto18.createHash)("sha256").update(prompt).digest("hex");
 }
 function objectiveFromSession(objectives, session) {
   if (!session) return void 0;
@@ -162137,6 +162709,55 @@ async function resolveFollowUpObjective({
   }
   return { objective: latestCompletedObjective(objectives), session: void 0 };
 }
+var NO_DELIVERY_NEEDED = { needed: false, reason: null };
+async function stopHookDeliveryStatus({
+  ctx,
+  missionId,
+  sessionKey
+}) {
+  const session = sessionKey ? await getSessionByKeyMaybeEnded(ctx, sessionKey) : void 0;
+  if (!session) {
+    return {
+      eventId: null,
+      objectiveId: null,
+      sessionId: null,
+      deliveryStatus: NO_DELIVERY_NEEDED
+    };
+  }
+  const mission = await getMissionSummary({ ctx, missionId });
+  if (session.mission_id !== mission.id) {
+    return {
+      eventId: null,
+      objectiveId: null,
+      sessionId: null,
+      deliveryStatus: NO_DELIVERY_NEEDED
+    };
+  }
+  const objective = (await listObjectives({ ctx, missionId: mission.id })).find(
+    (candidate) => candidate.id === session.objective_id
+  );
+  const latest = await ctx.db.get(
+    `SELECT type FROM mission_events
+       WHERE workspace_id = ? AND session_id = ?
+       ORDER BY created_at DESC LIMIT 1`,
+    [ctx.workspace.id, session.id]
+  );
+  const identity = {
+    eventId: null,
+    objectiveId: objective?.id ?? session.objective_id,
+    sessionId: session.id
+  };
+  if (!objective || objective.state !== "executing" || session.delivery_state === "delivered" || latest?.type === "ask") {
+    return { ...identity, deliveryStatus: NO_DELIVERY_NEEDED };
+  }
+  return {
+    ...identity,
+    deliveryStatus: {
+      needed: true,
+      reason: `Objective ${objective.displayId} is still executing and has not been delivered. If the work is complete, deliver it with \`ovld protocol deliver\`. If you are blocked on a person, ask with \`ovld protocol ask\`. Otherwise continue the work.`
+    }
+  };
+}
 async function recordHookEvent({
   ctx,
   missionId,
@@ -162146,6 +162767,9 @@ async function recordHookEvent({
   externalSessionId: externalSessionId2,
   turnIndex
 }) {
+  if (hookType === "Stop") {
+    return stopHookDeliveryStatus({ ctx, missionId, sessionKey: sessionKey ?? null });
+  }
   if (hookType !== "UserPromptSubmit") {
     throw new ServiceError(`Unsupported hook type: ${hookType}`, "validation_error");
   }
@@ -164857,9 +165481,9 @@ function mergeMissionBranchObservation({
 }
 
 // ../packages/core/service/mission-reference-search.ts
-var import_node_crypto18 = require("node:crypto");
+var import_node_crypto19 = require("node:crypto");
 function referenceDigest(reference) {
-  return (0, import_node_crypto18.createHash)("sha256").update(reference).digest("hex").slice(0, 24);
+  return (0, import_node_crypto19.createHash)("sha256").update(reference).digest("hex").slice(0, 24);
 }
 function encodeCursor(body) {
   return Buffer.from(JSON.stringify(body), "utf8").toString("base64url");
@@ -165258,414 +165882,6 @@ ${diff}`,
     logPrefix: "[webapp] commit-message automation"
   });
   return message2?.trim() || null;
-}
-
-// db.ts
-var import_node_async_hooks2 = require("node:async_hooks");
-var import_node_crypto19 = require("node:crypto");
-var import_node_path19 = __toESM(require("node:path"), 1);
-loadEnvDefaults(REPO_ROOT, ENV_PROFILE);
-function resolveDatabasePath2() {
-  const explicit = process.env.OVERLORD_SQLITE_PATH;
-  if (explicit) {
-    return import_node_path19.default.isAbsolute(explicit) ? explicit : import_node_path19.default.resolve(REPO_ROOT, explicit);
-  }
-  const config4 = loadConfig(import_node_path19.default.join(REPO_ROOT, "overlord.toml"), ENV_PROFILE);
-  applyDatabaseEnv(config4);
-  return resolveDatabasePath(config4, REPO_ROOT);
-}
-var databasePath = resolveDatabasePath2();
-var adapter = resolveAdapter({ databasePath });
-var sqliteDb = null;
-if (adapter.type === "sqlite") {
-  sqliteDb = openDatabase({ databasePath });
-  migrateDatabase(sqliteDb);
-  fixupLocalStoragePaths(sqliteDb, databasePath);
-}
-var DATABASE_DIALECT = adapter.type;
-var databaseClient = sqliteDb === null ? null : createSqliteClient(sqliteDb);
-var databaseInitPromise = null;
-async function initDatabase() {
-  if (databaseClient) {
-    await refreshActiveWorkspaceFromClient(databaseClient);
-    return databaseClient;
-  }
-  if (!databaseInitPromise) {
-    databaseInitPromise = (async () => {
-      const client = await openDatabaseClient(adapter);
-      if (client.dialect === "postgres") {
-        await migratePostgres(client);
-        await applyHostedS3StorageBackend(client);
-      }
-      databaseClient = client;
-      await refreshActiveWorkspaceFromClient(client);
-      return client;
-    })();
-  }
-  return databaseInitPromise;
-}
-var DATABASE_PATH = databasePath;
-function nowIso2() {
-  return (/* @__PURE__ */ new Date()).toISOString();
-}
-function newId2() {
-  return (0, import_node_crypto19.randomUUID)();
-}
-async function oldestWorkspaceRowFromClient(client) {
-  return client.get(
-    `SELECT id, slug, name, kind, created_at FROM workspaces
-       WHERE deleted_at IS NULL ORDER BY created_at ASC LIMIT 1`
-  );
-}
-async function findActiveMembershipId(workspaceId2, profileId, client = requireDatabaseClient()) {
-  const row = await client.get(
-    `SELECT wu.id FROM workspace_users wu
-       JOIN workspaces w ON w.id = wu.workspace_id AND w.deleted_at IS NULL
-      WHERE wu.workspace_id = ? AND wu.profile_id = ?
-        AND wu.status = 'active' AND wu.deleted_at IS NULL
-      ORDER BY wu.created_at ASC LIMIT 1`,
-    [workspaceId2, profileId]
-  );
-  return row?.id ?? null;
-}
-async function resolveActorForWorkspace(workspaceId2, client = requireDatabaseClient()) {
-  const row = await client.get(
-    `SELECT id FROM workspace_users
-       WHERE workspace_id = ? AND status = 'active' AND deleted_at IS NULL
-       ORDER BY created_at ASC LIMIT 1`,
-    [workspaceId2]
-  );
-  return row?.id ?? null;
-}
-async function resolveRequestActorForWorkspace(workspaceId2, client = requireDatabaseClient()) {
-  const context = requestContextStorage.getStore();
-  if (!context) return null;
-  let profileId = context.activeProfileId;
-  if (!profileId && context.actorWorkspaceUserId) {
-    const actorRow = await client.get(
-      `SELECT profile_id FROM workspace_users WHERE id = ?`,
-      [context.actorWorkspaceUserId]
-    );
-    profileId = actorRow?.profile_id ?? null;
-  }
-  if (!profileId) return null;
-  return findActiveMembershipId(workspaceId2, profileId, client);
-}
-var defaultWorkspace = null;
-var ACTOR_WORKSPACE_USER_ID = null;
-function defaultRequestContext() {
-  return {
-    activeProfileId: null,
-    actorWorkspaceUserId: ACTOR_WORKSPACE_USER_ID,
-    activeTokenId: ACTIVE_TOKEN_ID,
-    activeTokenScopes: ACTIVE_TOKEN_SCOPES,
-    activeTokenProjectIds: ACTIVE_TOKEN_PROJECT_IDS,
-    clientDevice: null,
-    authorizedWorkspaces: null,
-    resolvedWorkspaceId: null,
-    activeWorkspace: defaultWorkspace
-  };
-}
-var requestContextStorage = new import_node_async_hooks2.AsyncLocalStorage();
-async function withRequestContextAsync(fn) {
-  return requestContextStorage.run(defaultRequestContext(), fn);
-}
-function requestContext() {
-  const store = requestContextStorage.getStore();
-  if (store) return store;
-  return defaultRequestContext();
-}
-function mutateRequestContext(next) {
-  const store = requestContextStorage.getStore();
-  if (store) {
-    store.actorWorkspaceUserId = next.actorWorkspaceUserId;
-    store.activeProfileId = next.activeProfileId;
-    store.activeTokenId = next.activeTokenId;
-    store.activeTokenScopes = next.activeTokenScopes;
-    store.activeTokenProjectIds = next.activeTokenProjectIds;
-    store.clientDevice = next.clientDevice;
-    store.authorizedWorkspaces = next.authorizedWorkspaces;
-    store.resolvedWorkspaceId = next.resolvedWorkspaceId;
-    store.activeWorkspace = next.activeWorkspace;
-    return;
-  }
-  ACTOR_WORKSPACE_USER_ID = next.actorWorkspaceUserId;
-  ACTIVE_TOKEN_ID = next.activeTokenId;
-  ACTIVE_TOKEN_SCOPES = next.activeTokenScopes;
-  ACTIVE_TOKEN_PROJECT_IDS = next.activeTokenProjectIds;
-}
-function setAuthorizedWorkspacesContext(authorizedWorkspaces) {
-  mutateRequestContext({ ...requestContext(), authorizedWorkspaces });
-}
-function getAuthorizedWorkspacesContext() {
-  return requestContext().authorizedWorkspaces;
-}
-async function getResourceLookupWorkspaceIds(client = requireDatabaseClient()) {
-  const authorized = getAuthorizedWorkspacesContext();
-  if (authorized) {
-    return authorized.workspaces.map((workspace2) => workspace2.workspaceId);
-  }
-  const profileId = await resolveActiveProfileId(client);
-  if (!profileId) return [];
-  const rows = await client.all(
-    `SELECT wu.workspace_id
-       FROM workspace_users wu
-       JOIN workspaces w ON w.id = wu.workspace_id AND w.deleted_at IS NULL
-      WHERE wu.profile_id = ? AND wu.status = 'active' AND wu.deleted_at IS NULL
-      ORDER BY wu.created_at ASC, wu.id ASC`,
-    [profileId]
-  );
-  return rows.map((row) => row.workspace_id);
-}
-function getAuthorizedWorkspace(workspaceId2) {
-  return requestContext().authorizedWorkspaces?.workspaces.find(
-    (workspace2) => workspace2.workspaceId === workspaceId2
-  ) ?? null;
-}
-function setResolvedWorkspaceId(workspaceId2) {
-  if (workspaceId2 && getAuthorizedWorkspacesContext() && !getAuthorizedWorkspace(workspaceId2)) {
-    throw new Error("Resolved workspace is not authorized for this request");
-  }
-  mutateRequestContext({ ...requestContext(), resolvedWorkspaceId: workspaceId2 });
-}
-function getActiveProfileId() {
-  return requestContext().activeProfileId;
-}
-function setActiveProfileId(profileId) {
-  mutateRequestContext({ ...requestContext(), activeProfileId: profileId });
-}
-function getActorWorkspaceUserId() {
-  return requestContext().actorWorkspaceUserId;
-}
-async function resolveActiveProfileId(client = requireDatabaseClient()) {
-  const activeProfileId = getActiveProfileId();
-  if (activeProfileId) return activeProfileId;
-  const actorWorkspaceUserId = getActorWorkspaceUserId();
-  if (actorWorkspaceUserId) {
-    const row = await client.get(
-      `SELECT profile_id FROM workspace_users WHERE id = ?`,
-      [actorWorkspaceUserId]
-    );
-    if (row) return row.profile_id;
-  }
-  return null;
-}
-function getActiveWorkspace() {
-  const workspace2 = requestContext().activeWorkspace;
-  if (workspace2 === null) {
-    throw new Error(
-      "No active workspace for this request: the authenticated user has no active workspace membership."
-    );
-  }
-  return workspace2;
-}
-function getActiveWorkspaceId() {
-  return getActiveWorkspace().id;
-}
-function getActiveWorkspaceIdOrNull() {
-  return requestContext().activeWorkspace?.id ?? null;
-}
-function getBootstrapWorkspaceIdOrNull() {
-  return defaultWorkspace?.id ?? null;
-}
-function getImplicitWorkspaceIdOrNull() {
-  return getActiveWorkspaceIdOrNull() ?? (getAuthorizedWorkspacesContext() ? null : getBootstrapWorkspaceIdOrNull());
-}
-function setActiveWorkspaceContext(workspace2) {
-  mutateRequestContext({ ...requestContext(), activeWorkspace: workspace2 });
-}
-function getActiveTokenId() {
-  return requestContext().activeTokenId;
-}
-function getActiveTokenScopes() {
-  return requestContext().activeTokenScopes;
-}
-var ACTIVE_TOKEN_PROJECT_IDS = null;
-function getActiveTokenProjectIds() {
-  return requestContext().activeTokenProjectIds;
-}
-function projectInTokenScope(projectId) {
-  const ids = getActiveTokenProjectIds();
-  return ids === null || ids.includes(projectId);
-}
-function getClientDeviceIdentity() {
-  return requestContext().clientDevice;
-}
-function setClientDeviceIdentity(clientDevice) {
-  mutateRequestContext({ ...requestContext(), clientDevice });
-}
-function buildWebappServiceContext(client = requireDatabaseClient()) {
-  const workspace2 = getActiveWorkspace();
-  return {
-    db: client,
-    workspace: { id: workspace2.id, slug: workspace2.slug, name: workspace2.name },
-    actorWorkspaceUserId: getActorWorkspaceUserId(),
-    actorTokenId: getActiveTokenId(),
-    allowedProjectIds: getActiveTokenProjectIds(),
-    source: "webapp",
-    clientDevice: getClientDeviceIdentity()
-  };
-}
-async function buildWebappServiceContextForWorkspace(workspaceId2, client = requireDatabaseClient(), actorWorkspaceUserId = getActorWorkspaceUserId()) {
-  const workspace2 = await client.get(
-    `SELECT id, slug, name FROM workspaces WHERE id = ? AND deleted_at IS NULL`,
-    [workspaceId2]
-  );
-  if (!workspace2) {
-    throw new Error(`Workspace ${workspaceId2} not found`);
-  }
-  return {
-    db: client,
-    workspace: workspace2,
-    actorWorkspaceUserId,
-    actorTokenId: getActiveTokenId(),
-    allowedProjectIds: getActiveTokenProjectIds(),
-    source: "webapp",
-    clientDevice: getClientDeviceIdentity()
-  };
-}
-function setProcessDefaultWorkspace(workspace2, actorWorkspaceUserId) {
-  defaultWorkspace = workspace2;
-  ACTOR_WORKSPACE_USER_ID = actorWorkspaceUserId;
-}
-async function setActiveWorkspace(id2) {
-  const row = await loadWorkspaceRowAsync(id2);
-  if (!row) return null;
-  const workspace2 = { id: row.id, slug: row.slug, name: row.name, kind: row.kind };
-  if (!requestContextStorage.getStore()) {
-    const actorWorkspaceUserId2 = await resolveActorForWorkspace(row.id);
-    setProcessDefaultWorkspace(workspace2, actorWorkspaceUserId2);
-    return row;
-  }
-  const actorWorkspaceUserId = await resolveRequestActorForWorkspace(row.id) ?? await resolveActorForWorkspace(row.id);
-  mutateRequestContext({
-    ...requestContext(),
-    activeWorkspace: workspace2,
-    actorWorkspaceUserId
-  });
-  return row;
-}
-async function loadWorkspaceRowAsync(id2, client = requireDatabaseClient()) {
-  return client.get(
-    `SELECT id, slug, name, kind, created_at FROM workspaces
-       WHERE id = ? AND deleted_at IS NULL`,
-    [id2]
-  );
-}
-async function refreshActiveWorkspaceFromClient(client) {
-  const row = await oldestWorkspaceRowFromClient(client);
-  if (!row) {
-    setProcessDefaultWorkspace(null, null);
-    return;
-  }
-  setProcessDefaultWorkspace(
-    { id: row.id, slug: row.slug, name: row.name, kind: row.kind },
-    await resolveActorForWorkspace(row.id, client)
-  );
-}
-var ACTIVE_TOKEN_SCOPES = null;
-var ACTIVE_TOKEN_ID = null;
-function setActiveWorkspaceUser(workspaceUserId) {
-  mutateRequestContext({
-    ...requestContext(),
-    actorWorkspaceUserId: workspaceUserId,
-    activeTokenId: null,
-    activeTokenScopes: null,
-    activeTokenProjectIds: null
-  });
-}
-function setActiveTokenAuth({
-  workspaceUserId,
-  tokenId,
-  scopeGrants,
-  projectIds = null
-}) {
-  mutateRequestContext({
-    ...requestContext(),
-    actorWorkspaceUserId: workspaceUserId,
-    activeTokenId: tokenId,
-    activeTokenScopes: projectIds !== null ? scopeGrants ?? [] : scopeGrants && scopeGrants.length > 0 ? scopeGrants : null,
-    activeTokenProjectIds: projectIds === null ? null : Object.freeze([...projectIds])
-  });
-}
-async function reloadActiveWorkspace() {
-  const id2 = getActiveWorkspaceId();
-  const row = await loadWorkspaceRowAsync(id2);
-  if (!row) return;
-  const refreshed = { id: row.id, slug: row.slug, name: row.name, kind: row.kind };
-  if (id2 === defaultWorkspace?.id) defaultWorkspace = refreshed;
-  if (requestContextStorage.getStore()) setActiveWorkspaceContext(refreshed);
-}
-function requireDatabaseClient() {
-  if (!databaseClient) {
-    throw new Error(
-      "Database has not been initialized. Call initDatabase() during server startup."
-    );
-  }
-  return databaseClient;
-}
-function authDomainDatabase() {
-  return requireDatabaseClient();
-}
-function serviceDatabaseClient() {
-  return requireDatabaseClient();
-}
-async function recordChange2(input2, client = requireDatabaseClient()) {
-  let actorWorkspaceUserId = input2.actorWorkspaceUserId;
-  if (actorWorkspaceUserId === void 0) {
-    const profileId = await resolveActiveProfileId(client);
-    actorWorkspaceUserId = profileId ? await findActiveMembershipId(input2.workspaceId, profileId, client) : null;
-  } else if (actorWorkspaceUserId) {
-    const matchingMembership = await client.get(
-      `SELECT 1 FROM workspace_users
-        WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
-      [actorWorkspaceUserId, input2.workspaceId]
-    );
-    if (!matchingMembership) {
-      throw new Error("recordChange actor membership does not belong to the supplied workspace");
-    }
-  }
-  await insertEntityChange(client, {
-    workspaceId: input2.workspaceId,
-    projectId: input2.projectId,
-    missionId: input2.missionId,
-    objectiveId: input2.objectiveId,
-    entityType: input2.entityType,
-    entityId: input2.entityId,
-    operation: input2.operation,
-    entityRevision: input2.entityRevision,
-    changedFields: input2.changedFields,
-    actorWorkspaceUserId,
-    actorTokenId: getActiveTokenId(),
-    source: "webapp"
-  });
-}
-async function restChangeAttribution(workspaceId2, client = requireDatabaseClient(), actorWorkspaceUserId) {
-  let actor = actorWorkspaceUserId;
-  if (actor === void 0) {
-    const profileId = await resolveActiveProfileId(client);
-    actor = profileId ? await findActiveMembershipId(workspaceId2, profileId, client) : null;
-  }
-  return { actorWorkspaceUserId: actor, actorTokenId: getActiveTokenId(), source: "webapp" };
-}
-async function enqueueWebhookEventRest(input2, client = requireDatabaseClient()) {
-  const ctx = {
-    db: client,
-    workspace: { id: input2.scope.workspaceId, slug: "", name: "" },
-    actorWorkspaceUserId: input2.scope.workspaceUserId,
-    source: "webapp"
-  };
-  await enqueueWebhookEvent(ctx, {
-    type: input2.type,
-    projectId: input2.projectId,
-    entity: input2.entity
-  });
-}
-async function currentMaxSeq(client = requireDatabaseClient()) {
-  const row = await client.get(
-    `SELECT MAX(seq) AS seq FROM entity_changes`
-  );
-  return row?.seq ?? 0;
 }
 
 // poll-loop.ts
@@ -173269,6 +173485,40 @@ async function updateArtifact(missionRef, artifactId, body) {
       tx
     );
     return toArtifactDto(updated);
+  });
+}
+async function deleteArtifact(missionRef, artifactId) {
+  await requireDatabaseClient().transaction(async (tx) => {
+    const mission = await getMissionRow(missionRef, tx, PERMISSIONS.MISSION_UPDATE);
+    const artifact = await tx.get(
+      `SELECT id, objective_id, revision
+         FROM artifacts
+        WHERE id = ? AND mission_id = ? AND workspace_id = ? AND deleted_at IS NULL`,
+      [artifactId, mission.id, mission.workspace_id]
+    );
+    if (!artifact) throw new ApiError(404, "Artifact not found");
+    const now2 = nowIso2();
+    const revision3 = artifact.revision + 1;
+    await tx.run(
+      `UPDATE artifacts
+          SET deleted_at = ?, updated_at = ?, revision = ?
+        WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
+      [now2, now2, revision3, artifact.id, mission.workspace_id]
+    );
+    await recordChange2(
+      {
+        entityType: "artifact",
+        entityId: artifact.id,
+        operation: "delete",
+        entityRevision: revision3,
+        workspaceId: mission.workspace_id,
+        projectId: mission.project_id,
+        missionId: mission.id,
+        objectiveId: artifact.objective_id,
+        changedFields: ["deleted_at"]
+      },
+      tx
+    );
   });
 }
 async function createMissionTx(body, client = requireDatabaseClient(), alreadyInTransaction = false) {
@@ -184653,6 +184903,188 @@ function compactSearchResponse(value2) {
   };
 }
 
+// ../mcp/tasks.ts
+var import_node_crypto28 = require("node:crypto");
+var McpTaskError = class extends Error {
+  code;
+  constructor(code, message2) {
+    super(message2);
+    this.name = "McpTaskError";
+    this.code = code;
+  }
+};
+var MCP_INVALID_PARAMS = -32602;
+var MCP_SERVER_ERROR = -32e3;
+var RELATED_TASK_META_KEY = "io.modelcontextprotocol/related-task";
+var MODEL_IMMEDIATE_RESPONSE_META_KEY = "io.modelcontextprotocol/model-immediate-response";
+var DEFAULT_MCP_TASK_LIMITS = {
+  defaultTtlMs: 15 * 6e4,
+  maxTtlMs: 60 * 6e4,
+  pollIntervalMs: 2e3,
+  maxActivePerOwner: 10,
+  listPageSize: 50,
+  maxStatusMessageLength: 500,
+  resultGraceMs: 6e4
+};
+function terminal(status) {
+  return status === "completed" || status === "failed" || status === "cancelled";
+}
+function firstText(result2) {
+  const text = result2.content.find((item) => item.type === "text")?.text ?? "";
+  return text.split("\n")[0] ?? "";
+}
+function failureResult(error64) {
+  const message2 = error64 instanceof Error ? error64.message : "Overlord could not complete this tool call.";
+  return { content: [{ type: "text", text: message2 }], isError: true };
+}
+var McpTaskStore = class {
+  records = /* @__PURE__ */ new Map();
+  limits;
+  now;
+  newId;
+  onSettled;
+  constructor(options = {}) {
+    this.limits = { ...DEFAULT_MCP_TASK_LIMITS, ...options.limits };
+    this.now = options.now ?? Date.now;
+    this.newId = options.newId ?? import_node_crypto28.randomUUID;
+    this.onSettled = options.onSettled;
+  }
+  /**
+   * Validates `params.task` and returns the ttl to grant. `undefined` means no task was requested.
+   * The requested ttl is honored up to the maximum; the granted value is what every response reports.
+   */
+  grantedTtl(taskParam) {
+    if (taskParam === void 0) return void 0;
+    if (taskParam === null || typeof taskParam !== "object" || Array.isArray(taskParam)) {
+      throw new McpTaskError(MCP_INVALID_PARAMS, "params.task must be an object");
+    }
+    const ttl = taskParam.ttl;
+    if (ttl === void 0) return this.limits.defaultTtlMs;
+    if (typeof ttl !== "number" || !Number.isFinite(ttl) || ttl <= 0) {
+      throw new McpTaskError(
+        MCP_INVALID_PARAMS,
+        "params.task.ttl must be a positive number of milliseconds"
+      );
+    }
+    return Math.min(Math.trunc(ttl), this.limits.maxTtlMs);
+  }
+  /**
+   * Starts `run` in the background as a task owned by `owner` and returns the task in `working`.
+   * `run` must not throw for tool-level failures (it returns an `isError` result); a throw is
+   * still recorded as a failed task rather than escaping.
+   */
+  create(owner, ttl, run) {
+    this.sweep();
+    let active = 0;
+    for (const record3 of this.records.values()) {
+      if (record3.owner === owner && !terminal(record3.task.status)) active += 1;
+    }
+    if (active >= this.limits.maxActivePerOwner) {
+      throw new McpTaskError(
+        MCP_SERVER_ERROR,
+        `Too many unfinished Overlord tasks (limit ${this.limits.maxActivePerOwner}); wait for one to finish or call the tool without a task`
+      );
+    }
+    const nowMs = this.now();
+    const stamp = new Date(nowMs).toISOString();
+    const task = {
+      taskId: this.newId(),
+      status: "working",
+      statusMessage: "Overlord is running the tool call.",
+      createdAt: stamp,
+      lastUpdatedAt: stamp,
+      ttl,
+      pollInterval: this.limits.pollIntervalMs
+    };
+    const record2 = {
+      owner,
+      task,
+      createdAtMs: nowMs,
+      settledAtMs: null,
+      result: null,
+      settled: Promise.resolve().then(run).catch(failureResult).then((result2) => {
+        this.settle(record2, result2);
+        return result2;
+      })
+    };
+    this.records.set(task.taskId, record2);
+    return { ...task };
+  }
+  get(owner, taskId) {
+    return { ...this.lookup(owner, taskId).task };
+  }
+  /** Waits for the task to finish and returns the tool result with related-task metadata. */
+  async result(owner, taskId) {
+    const record2 = this.lookup(owner, taskId);
+    const result2 = record2.result ?? await record2.settled;
+    return {
+      ...result2,
+      _meta: { ...result2._meta, [RELATED_TASK_META_KEY]: { taskId: record2.task.taskId } }
+    };
+  }
+  /** The caller's tasks, newest first, `listPageSize` per page. */
+  list(owner, cursor3) {
+    this.sweep();
+    let offset = 0;
+    if (cursor3 !== void 0) {
+      const parsed = typeof cursor3 === "string" && /^\d+$/.test(cursor3) ? Number(cursor3) : NaN;
+      if (!Number.isSafeInteger(parsed)) {
+        throw new McpTaskError(MCP_INVALID_PARAMS, "Invalid tasks/list cursor");
+      }
+      offset = parsed;
+    }
+    const owned = [...this.records.values()].filter((record2) => record2.owner === owner).sort((a5, b5) => b5.createdAtMs - a5.createdAtMs);
+    const page = owned.slice(offset, offset + this.limits.listPageSize);
+    const next = offset + page.length;
+    return {
+      tasks: page.map((record2) => ({ ...record2.task })),
+      ...next < owned.length ? { nextCursor: String(next) } : {}
+    };
+  }
+  /**
+   * Drops finished tasks whose ttl has passed and whose grace after settling has run out.
+   * Unfinished tasks are kept until they settle.
+   */
+  sweep() {
+    const nowMs = this.now();
+    for (const [taskId, record2] of this.records) {
+      if (record2.settledAtMs === null) continue;
+      const expiresAt = Math.max(
+        record2.createdAtMs + record2.task.ttl,
+        record2.settledAtMs + this.limits.resultGraceMs
+      );
+      if (nowMs >= expiresAt) this.records.delete(taskId);
+    }
+  }
+  lookup(owner, taskId) {
+    if (typeof taskId !== "string" || !taskId) {
+      throw new McpTaskError(MCP_INVALID_PARAMS, "params.taskId is required");
+    }
+    this.sweep();
+    const record2 = this.records.get(taskId);
+    if (!record2 || record2.owner !== owner) {
+      throw new McpTaskError(MCP_INVALID_PARAMS, "Failed to retrieve task: Task not found");
+    }
+    return record2;
+  }
+  settle(record2, result2) {
+    record2.result = result2;
+    record2.settledAtMs = this.now();
+    const status = result2.isError === true ? "failed" : "completed";
+    const statusMessage = status === "failed" ? `Tool execution failed: ${firstText(result2)}`.slice(0, this.limits.maxStatusMessageLength) : "The tool call finished. Read the result with tasks/result.";
+    record2.task = {
+      ...record2.task,
+      status,
+      statusMessage,
+      lastUpdatedAt: new Date(this.now()).toISOString()
+    };
+    try {
+      this.onSettled?.({ ...record2.task });
+    } catch {
+    }
+  }
+};
+
 // ../packages/contract/dist/mcp-tools.js
 function objectSchema(properties, required2 = []) {
   return {
@@ -185392,6 +185824,10 @@ var HOSTED_TOOL_WIDGETS = {
   overlord_deliver_session: "ui://overlord/file-changes.html",
   overlord_record_work: "ui://overlord/file-changes.html"
 };
+var HOSTED_TASK_TOOLS = /* @__PURE__ */ new Set([
+  "overlord_deliver_session",
+  "overlord_record_work"
+]);
 function widget(uri) {
   return {
     "openai/outputTemplate": uri,
@@ -185402,7 +185838,11 @@ var hostedMcpToolDefinitions = overlordMcpToolDefinitions({
   defaultAgent: HOSTED_MCP_DEFAULT_AGENT
 }).map((tool) => {
   const uri = HOSTED_TOOL_WIDGETS[tool.name];
-  return uri ? { ...tool, _meta: widget(uri) } : tool;
+  return {
+    ...tool,
+    ...uri ? { _meta: widget(uri) } : {},
+    ...HOSTED_TASK_TOOLS.has(tool.name) ? { execution: { taskSupport: "optional" } } : {}
+  };
 });
 
 // ../mcp/widgets.ts
@@ -186110,6 +186550,29 @@ function success2(id2, result2) {
 function failure2(id2, error64) {
   return { jsonrpc: "2.0", id: id2 ?? null, error: error64 };
 }
+async function runTool(tool, args) {
+  try {
+    return jsonText(await tool.handler(args));
+  } catch (error64) {
+    return toolErrorText(error64);
+  }
+}
+var taskSettledListener = null;
+var taskStore = new McpTaskStore({ onSettled: () => taskSettledListener?.() });
+function onHostedMcpTaskSettled(listener) {
+  taskSettledListener = listener;
+}
+function taskOwner() {
+  const profileId = getActiveProfileId();
+  return JSON.stringify([
+    profileId,
+    getActiveTokenId(),
+    profileId === null ? getActorWorkspaceUserId() : null
+  ]);
+}
+function immediateTaskResponse(toolName, taskId) {
+  return `Overlord started ${toolName} in the background as task ${taskId}. Its result arrives when the task finishes. If the task is lost, read the outcome with overlord_delivery_receipt using the operationId you sent.`;
+}
 async function callTool(params) {
   if (!isRecord(params) || !isRecord(params.arguments)) {
     throw new Error("tools/call requires params.name and params.arguments");
@@ -186117,11 +186580,26 @@ async function callTool(params) {
   const name2 = typeof params.name === "string" ? params.name : "";
   const tool = tools.find((candidate) => candidate.name === name2);
   if (!tool) throw new Error(`Unknown MCP tool: ${name2}`);
-  try {
-    return jsonText(await tool.handler(params.arguments));
-  } catch (error64) {
-    return toolErrorText(error64);
+  const args = params.arguments;
+  const taskSupport = tool.execution?.taskSupport ?? "forbidden";
+  if (params.task === void 0) {
+    if (taskSupport === "required") {
+      throw new McpTaskError(-32601, `Tool ${name2} must be called as a task`);
+    }
+    return runTool(tool, args);
   }
+  if (taskSupport === "forbidden") {
+    throw new McpTaskError(-32601, `Tool ${name2} does not support task-augmented execution`);
+  }
+  const ttl = taskStore.grantedTtl(params.task);
+  const task = taskStore.create(taskOwner(), ttl, () => runTool(tool, args));
+  return {
+    task,
+    _meta: { [MODEL_IMMEDIATE_RESPONSE_META_KEY]: immediateTaskResponse(name2, task.taskId) }
+  };
+}
+function taskIdParam(params) {
+  return isRecord(params) ? params.taskId : void 0;
 }
 function readResource(params) {
   if (!isRecord(params) || typeof params.uri !== "string") {
@@ -186141,7 +186619,7 @@ function readResource(params) {
     ]
   };
 }
-async function dispatch(request) {
+async function dispatchMcpRequest(request) {
   if (request.jsonrpc !== "2.0" || typeof request.method !== "string") {
     return failure2(request.id, { code: -32600, message: "Invalid JSON-RPC request" });
   }
@@ -186152,7 +186630,13 @@ async function dispatch(request) {
           protocolVersion: MCP_PROTOCOL_VERSION,
           serverInfo: { name: "overlord", version: "0.1.0" },
           instructions: "Overlord manages explicit user-authorized work. Resolve project identity before creating work, use read tools before writes, and call session lifecycle tools only when the user explicitly asks to begin, update, or deliver mission work.",
-          capabilities: { tools: {}, resources: {} }
+          capabilities: {
+            tools: {},
+            resources: {},
+            // Task-augmented tools/call (MCP 2025-11-25). No `cancel`: a delivery cannot be
+            // withdrawn once its handler runs, so the server never claims to stop one.
+            tasks: { list: {}, requests: { tools: { call: {} } } }
+          }
         });
       case "notifications/initialized":
         return null;
@@ -186162,6 +186646,18 @@ async function dispatch(request) {
         return success2(request.id, { tools: toolDefinitions() });
       case "tools/call":
         return success2(request.id, await callTool(request.params));
+      case "tasks/get":
+        return success2(request.id, taskStore.get(taskOwner(), taskIdParam(request.params)));
+      case "tasks/result":
+        return success2(
+          request.id,
+          await taskStore.result(taskOwner(), taskIdParam(request.params))
+        );
+      case "tasks/list":
+        return success2(
+          request.id,
+          taskStore.list(taskOwner(), isRecord(request.params) ? request.params.cursor : void 0)
+        );
       case "resources/list":
         return success2(request.id, { resources: hostedMcpWidgetResources });
       case "resources/read":
@@ -186173,6 +186669,9 @@ async function dispatch(request) {
         });
     }
   } catch (err) {
+    if (err instanceof McpTaskError) {
+      return failure2(request.id, { code: err.code, message: err.message });
+    }
     return failure2(request.id, {
       code: -32e3,
       message: err instanceof Error ? err.message : "MCP tool failed"
@@ -186198,7 +186697,7 @@ async function handleMcpPost(req, res, next) {
     const requests = Array.isArray(body) ? body : [body];
     const responses = [];
     for (const item of requests) {
-      const response = await dispatch(isRecord(item) ? item : {});
+      const response = await dispatchMcpRequest(isRecord(item) ? item : {});
       if (response) responses.push(response);
     }
     if (Array.isArray(body)) {
@@ -186212,7 +186711,7 @@ async function handleMcpPost(req, res, next) {
 }
 
 // ../packages/core/service/chat/conversations.ts
-var import_node_crypto31 = require("node:crypto");
+var import_node_crypto32 = require("node:crypto");
 
 // ../packages/core/service/chat/performance.ts
 var import_node_async_hooks3 = require("node:async_hooks");
@@ -186357,7 +186856,7 @@ var UNCERTAIN_WRITE_RESULT = {
 };
 
 // ../packages/core/service/chat/proposals.ts
-var import_node_crypto30 = require("node:crypto");
+var import_node_crypto31 = require("node:crypto");
 
 // ../packages/core/service/chat/access.ts
 var ChatAccess = class {
@@ -186478,11 +186977,11 @@ function assignmentCatalogProjection(value2) {
 }
 
 // ../packages/core/service/chat/runs.ts
-var import_node_crypto29 = require("node:crypto");
+var import_node_crypto30 = require("node:crypto");
 var import_node_util2 = require("node:util");
 
 // ../packages/core/service/chat/store.ts
-var import_node_crypto28 = require("node:crypto");
+var import_node_crypto29 = require("node:crypto");
 var import_node_util = require("node:util");
 var ChatError = class extends ServiceError {
   /**
@@ -186676,7 +187175,7 @@ var ChatStore = class _ChatStore {
     await this.db.run(
       `INSERT INTO chat_events (id, thread_id, seq, kind, run_id, attempt_id, fence, payload_json, dependency_set_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
-        (0, import_node_crypto28.randomUUID)(),
+        (0, import_node_crypto29.randomUUID)(),
         threadId,
         t.last_event_seq,
         payload.kind,
@@ -186753,7 +187252,7 @@ var ChatStore = class _ChatStore {
       await this.db.run(
         `INSERT INTO chat_source_refs (id, thread_id, source_kind, scope_key, connection_id, locator_json, access_state, access_checked_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, 'unknown', ?, ?, ?) ON CONFLICT (thread_id, scope_key) DO NOTHING`,
         [
-          (0, import_node_crypto28.randomUUID)(),
+          (0, import_node_crypto29.randomUUID)(),
           threadId,
           source.locator.kind,
           source.scopeKey,
@@ -186925,14 +187424,14 @@ var ChatStore = class _ChatStore {
         throw new ChatError("source_access_lost");
     }
     const authorizationRevision = (await this.thread(threadId)).authorization_revision;
-    const digest6 = (0, import_node_crypto28.createHash)("sha256").update(JSON.stringify({ ids, authorizationRevision })).digest("hex");
+    const digest6 = (0, import_node_crypto29.createHash)("sha256").update(JSON.stringify({ ids, authorizationRevision })).digest("hex");
     const old = await this.db.get(
       "SELECT id, invalidated_at FROM chat_dependency_sets WHERE thread_id = ? AND digest = ?",
       [threadId, digest6]
     );
     if (old?.invalidated_at) throw new ChatError("source_access_lost");
     if (old) return old.id;
-    const id2 = (0, import_node_crypto28.randomUUID)();
+    const id2 = (0, import_node_crypto29.randomUUID)();
     await this.db.run(
       "INSERT INTO chat_dependency_sets (id, thread_id, digest, created_at) VALUES (?, ?, ?, ?)",
       [id2, threadId, digest6, this.timestamp()]
@@ -187020,7 +187519,7 @@ var ChatStore = class _ChatStore {
     await this.db.run(
       `INSERT INTO chat_notifications (id, owner_profile_id, organization_id, thread_id, run_id, question_id, type, transition_key, event_seq, state, due_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?) ON CONFLICT (owner_profile_id, thread_id, run_id, type, transition_key) DO NOTHING`,
       [
-        (0, import_node_crypto28.randomUUID)(),
+        (0, import_node_crypto29.randomUUID)(),
         t.owner_profile_id,
         t.organization_id,
         t.id,
@@ -187173,7 +187672,7 @@ var ChatRuns = class _ChatRuns extends ChatStore {
             );
           }
         }
-        const id2 = (0, import_node_crypto29.randomUUID)(), fence = r5.current_fence + 1, now2 = s.timestamp();
+        const id2 = (0, import_node_crypto30.randomUUID)(), fence = r5.current_fence + 1, now2 = s.timestamp();
         await tx.run(
           "UPDATE chat_runs SET state = 'running', current_fence = ?, active_attempt_id = ?, updated_at = ?, revision = revision + 1 WHERE id = ?",
           [fence, id2, now2, r5.id]
@@ -187431,7 +187930,7 @@ var ChatRuns = class _ChatRuns extends ChatStore {
         requiredText(req.providerCallId, 200);
         const args = JSON.stringify(req.arguments);
         if (Buffer.byteLength(args) > 64 * 1024) throw new ChatError("limit_exceeded");
-        const callId = (0, import_node_crypto29.randomUUID)();
+        const callId = (0, import_node_crypto30.randomUUID)();
         await s.db.run(
           `INSERT INTO chat_tool_calls (id, run_id, attempt_id, operation_id, turn_index, call_order, provider_call_id, tool_id, policy_version, arguments_json, state, requested_fence, writer_fence, dependency_set_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, 'requested', ?, ?, ?, ?, ?)`,
           [
@@ -187601,8 +188100,8 @@ var ChatRuns = class _ChatRuns extends ChatStore {
         [messageId, a5.runId]
       );
       if (messageId && !old) throw new ChatError("invalid_request");
-      const id2 = old ? old.id : (0, import_node_crypto29.randomUUID)();
-      const blocks = old ? JSON.parse(old.blocks_json) : [{ id: (0, import_node_crypto29.randomUUID)(), kind: "text", text: "", evidenceIds: [], fallbackText: "" }];
+      const id2 = old ? old.id : (0, import_node_crypto30.randomUUID)();
+      const blocks = old ? JSON.parse(old.blocks_json) : [{ id: (0, import_node_crypto30.randomUUID)(), kind: "text", text: "", evidenceIds: [], fallbackText: "" }];
       const block = blocks[0];
       if (!block || block.kind !== "text") throw new ChatError("invalid_request");
       if (block.text.length + text.length > s.limits.messageMaxChars)
@@ -187653,7 +188152,7 @@ var ChatRuns = class _ChatRuns extends ChatStore {
         "SELECT COUNT(*) AS n FROM chat_questions WHERE run_id = ?",
         [a5.runId]
       );
-      const id2 = (0, import_node_crypto29.randomUUID)(), now2 = s.timestamp();
+      const id2 = (0, import_node_crypto30.randomUUID)(), now2 = s.timestamp();
       await s.db.run(
         `INSERT INTO chat_questions (id, thread_id, run_id, ordinal, state, prompt, options_json, allow_free_text, dependency_set_id, created_at, updated_at) VALUES (?, ?, ?, ?, 'open', ?, ?, ?, ?, ?, ?)`,
         [
@@ -187736,7 +188235,7 @@ var ChatRuns = class _ChatRuns extends ChatStore {
       );
       const evidence = [];
       for (const [i5, source] of sources.entries()) {
-        const evidenceId = (0, import_node_crypto29.randomUUID)();
+        const evidenceId = (0, import_node_crypto30.randomUUID)();
         await s.db.run(
           `INSERT INTO chat_evidence (id, thread_id, run_id, tool_call_id, source_ref_id, label, excerpt, excerpt_truncated, source_revision, observed_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
@@ -187794,7 +188293,7 @@ var ChatRuns = class _ChatRuns extends ChatStore {
       }));
       const others = blocks.filter((b5) => b5.kind !== "evidence");
       others.push({
-        id: (0, import_node_crypto29.randomUUID)(),
+        id: (0, import_node_crypto30.randomUUID)(),
         kind: "evidence",
         evidence,
         fallbackText: `Sources: ${evidence.map((e5) => e5.label).join("; ")}`.slice(0, 4e3)
@@ -187837,7 +188336,7 @@ var ChatRuns = class _ChatRuns extends ChatStore {
       if (regressed) throw new ChatError("invalid_request");
       await s.db.run(
         "INSERT INTO chat_thread_summaries (id, thread_id, summary_revision, summary_json, covers_through_message_id, dependency_set_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-        [(0, import_node_crypto29.randomUUID)(), a5.threadId, Number(last?.n ?? 0) + 1, json2, latest.id, deps, s.timestamp()]
+        [(0, import_node_crypto30.randomUUID)(), a5.threadId, Number(last?.n ?? 0) + 1, json2, latest.id, deps, s.timestamp()]
       );
     });
   }
@@ -188146,7 +188645,7 @@ var ChatProposals = class _ChatProposals extends ChatStore {
       await runs.assertLease(a5);
       const destinationSet = await s.dependencySet(a5.threadId, sourceIds);
       const dependencySetId = await s.generationDependencies(a5.threadId, destinationSet);
-      const id2 = body.proposalId ?? (0, import_node_crypto30.randomUUID)();
+      const id2 = body.proposalId ?? (0, import_node_crypto31.randomUUID)();
       let next = 1;
       if (body.proposalId) {
         const old = await tx.get(
@@ -188189,10 +188688,10 @@ var ChatProposals = class _ChatProposals extends ChatStore {
         id: a5.id,
         fence: a5.fence
       });
-      const messageId = (0, import_node_crypto30.randomUUID)();
+      const messageId = (0, import_node_crypto31.randomUUID)();
       const blocks = [
         {
-          id: (0, import_node_crypto30.randomUUID)(),
+          id: (0, import_node_crypto31.randomUUID)(),
           kind: "proposal",
           proposalId: id2,
           revision: next,
@@ -188304,7 +188803,7 @@ var ChatProposals = class _ChatProposals extends ChatStore {
           [scope2.project.id]
         );
       }
-      const receiptId = (0, import_node_crypto30.randomUUID)();
+      const receiptId = (0, import_node_crypto31.randomUUID)();
       for (const [i5, m3] of missions.entries()) {
         const scope2 = scopes[i5];
         await s.destination(owner, m3.projectId);
@@ -188368,7 +188867,7 @@ var ChatProposals = class _ChatProposals extends ChatStore {
               expected,
               owner.profileId,
               key,
-              (0, import_node_crypto30.createHash)("sha256").update(JSON.stringify({ id: id2, expected })).digest("hex"),
+              (0, import_node_crypto31.createHash)("sha256").update(JSON.stringify({ id: id2, expected })).digest("hex"),
               thread.authorization_revision,
               s.timestamp()
             ]
@@ -188448,7 +188947,7 @@ var Conversations = class _Conversations extends ChatStore {
     if (message2 !== void 0 && (!message2 || typeof message2 !== "object" || Array.isArray(message2)))
       throw new ChatError("invalid_request");
     return this.db.transaction(async (tx) => {
-      const s = new _Conversations(tx, this.options), id2 = (0, import_node_crypto31.randomUUID)(), now2 = s.timestamp();
+      const s = new _Conversations(tx, this.options), id2 = (0, import_node_crypto32.randomUUID)(), now2 = s.timestamp();
       await s.access(owner);
       await tx.run(
         "INSERT INTO chat_threads (id, owner_profile_id, organization_id, last_activity_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
@@ -188564,10 +189063,10 @@ var Conversations = class _Conversations extends ChatStore {
       if (Number(count?.n) >= this.limits.concurrentRunsPerOwner)
         throw new ChatError("limit_exceeded");
     }
-    const messageId = (0, import_node_crypto31.randomUUID)(), runId = active?.id ?? (0, import_node_crypto31.randomUUID)(), now2 = this.timestamp();
+    const messageId = (0, import_node_crypto32.randomUUID)(), runId = active?.id ?? (0, import_node_crypto32.randomUUID)(), now2 = this.timestamp();
     const messageCreatedAt = await this.createdAt("chat_messages", id2);
     const blocks = [
-      { id: (0, import_node_crypto31.randomUUID)(), kind: "text", text: body.text, fallbackText: body.text, evidenceIds: [] }
+      { id: (0, import_node_crypto32.randomUUID)(), kind: "text", text: body.text, fallbackText: body.text, evidenceIds: [] }
     ];
     await this.db.run(
       `INSERT INTO chat_messages (id, thread_id, role, state, blocks_json, answers_question_id, client_request_id, created_at, updated_at) VALUES (?, ?, 'user', 'complete', ?, ?, ?, ?, ?)`,
@@ -188692,7 +189191,7 @@ var Conversations = class _Conversations extends ChatStore {
       );
       if (Number(count?.n) >= s.limits.concurrentRunsPerOwner)
         throw new ChatError("limit_exceeded");
-      const newId3 = (0, import_node_crypto31.randomUUID)();
+      const newId3 = (0, import_node_crypto32.randomUUID)();
       const inheritedGrant = storedKnowledgebaseWrite(r5.knowledgebase_write_json);
       await s.db.run(
         `INSERT INTO chat_runs (id, thread_id, trigger_message_id, continued_from_run_id, state, limits_json, knowledgebase_write_json, created_at, updated_at) VALUES (?, ?, ?, ?, 'queued', ?, ?, ?, ?)`,
@@ -188861,7 +189360,7 @@ async function postExecutionTargetObservations({
 }
 
 // ../packages/core/service/repository-reads.ts
-var import_node_crypto32 = require("node:crypto");
+var import_node_crypto33 = require("node:crypto");
 function invalid3(message2) {
   throw new ServiceError(message2, "invalid_request", 400);
 }
@@ -189047,7 +189546,7 @@ var defaultProviderFactory = ({ target, queue }) => new RunnerQueueProvider(
   queue
 );
 function repositoryReadIdempotencyKey(actorWorkspaceUserId, operationId) {
-  const digest6 = (0, import_node_crypto32.createHash)("sha256").update(`${actorWorkspaceUserId}
+  const digest6 = (0, import_node_crypto33.createHash)("sha256").update(`${actorWorkspaceUserId}
 ${operationId}`).digest("hex").slice(0, 48);
   return `repository-read:${digest6}`;
 }
@@ -190324,7 +190823,13 @@ function toCatalogDto(stored) {
     })),
     defaultModel: agent.defaultModel ?? null,
     defaultReasoningEffort: agent.defaultReasoningEffort ?? null,
-    reasoningLabel: agent.reasoningLabel ?? "Thinking"
+    reasoningLabel: agent.reasoningLabel ?? "Thinking",
+    ...agent.liveSource ? {
+      liveSource: {
+        harnessVersion: agent.liveSource.harnessVersion ?? null,
+        reportedAt: agent.liveSource.reportedAt
+      }
+    } : {}
   }));
   return {
     agents,
@@ -190361,6 +190866,7 @@ async function refreshAgentCatalog(workspaceId2) {
         stored.agents[key] = structuredClone(bundled);
         continue;
       }
+      if (existing.liveSource) continue;
       const knownIds = new Set((existing.models ?? []).map((m3) => m3.id));
       for (const model of bundled.models) {
         if (!knownIds.has(model.id)) existing.models.push(structuredClone(model));
@@ -190439,7 +190945,109 @@ async function updateAgentCatalog(body, workspaceId2) {
       if (previous?.launchDefaults) {
         agent.launchDefaults = previous.launchDefaults;
       }
+      if (previous?.liveSource) {
+        agent.liveSource = previous.liveSource;
+      }
     }
+    await persistCatalog(stored, tx, targetWorkspaceId);
+    return toCatalogDto(stored);
+  });
+}
+var MAX_LIVE_MODELS = 200;
+var MAX_LIVE_TEXT = 200;
+function liveText(value2, field) {
+  if (value2 === void 0 || value2 === null) return null;
+  if (typeof value2 !== "string") throw new ApiError(400, `${field} must be a string`);
+  const trimmed9 = value2.trim();
+  if (trimmed9.length > MAX_LIVE_TEXT) {
+    throw new ApiError(400, `${field} must be at most ${MAX_LIVE_TEXT} characters`);
+  }
+  return trimmed9 || null;
+}
+function liveModelsFromBody(body) {
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    throw new ApiError(400, "A live model report body is required");
+  }
+  const agent = liveText(body.agent, "agent");
+  if (!agent) throw new ApiError(400, "agent is required");
+  if (!Array.isArray(body.models) || body.models.length === 0) {
+    throw new ApiError(400, "models must be a non-empty array");
+  }
+  if (body.models.length > MAX_LIVE_MODELS) {
+    throw new ApiError(400, `models must have at most ${MAX_LIVE_MODELS} entries`);
+  }
+  const ids = /* @__PURE__ */ new Set();
+  const models = body.models.map((model) => {
+    if (!model || typeof model !== "object" || Array.isArray(model)) {
+      throw new ApiError(400, "Each model must be an object");
+    }
+    const id2 = liveText(model.id, "Model id");
+    if (!id2) throw new ApiError(400, "Model id is required");
+    if (ids.has(id2)) throw new ApiError(400, `Duplicate model id ${id2}`);
+    ids.add(id2);
+    const reasoningOptions = Array.isArray(model.reasoningOptions) ? Array.from(
+      new Set(
+        model.reasoningOptions.map((option) => typeof option === "string" ? option.trim() : "").filter((option) => option.length > 0 && option.length <= MAX_LIVE_TEXT)
+      )
+    ) : [];
+    const defaultReasoningEffort = liveText(
+      model.defaultReasoningEffort,
+      "Model defaultReasoningEffort"
+    );
+    return {
+      id: id2,
+      displayName: liveText(model.displayName, "Model displayName") ?? id2,
+      reasoningOptions,
+      isDefault: model.isDefault === true,
+      defaultReasoningEffort: defaultReasoningEffort && (reasoningOptions.length === 0 || reasoningOptions.includes(defaultReasoningEffort)) ? defaultReasoningEffort : null
+    };
+  });
+  return { agent, harnessVersion: liveText(body.harnessVersion, "harnessVersion"), models };
+}
+function mergeLiveModels({
+  existing,
+  live,
+  harnessVersion,
+  reportedAt
+}) {
+  const previous = new Map((existing.models ?? []).map((model) => [model.id, model]));
+  const models = live.map((model) => ({
+    id: model.id,
+    displayName: model.displayName,
+    reasoningOptions: [...model.reasoningOptions],
+    enabled: previous.get(model.id)?.enabled !== false
+  }));
+  const keptDefault = live.find((model) => model.id === existing.defaultModel);
+  const defaultLive = keptDefault ?? live.find((model) => model.isDefault) ?? live[0];
+  const effort = existing.defaultReasoningEffort;
+  const keepEffort = keptDefault !== void 0 && effort !== null && effort !== void 0 && (keptDefault.reasoningOptions.length === 0 || keptDefault.reasoningOptions.includes(effort));
+  return {
+    ...existing,
+    models,
+    defaultModel: defaultLive?.id ?? null,
+    defaultReasoningEffort: keepEffort ? effort : defaultLive?.defaultReasoningEffort ?? null,
+    liveSource: { harnessVersion, reportedAt }
+  };
+}
+async function reportAgentLiveModels(body, workspaceId2) {
+  const report2 = liveModelsFromBody(body);
+  return requireDatabaseClient().transaction(async (tx) => {
+    const targetWorkspaceId = await resolveCatalogWorkspaceId(
+      workspaceId2,
+      PERMISSIONS.LAUNCH_CONFIGURE,
+      tx
+    );
+    const stored = await resolveWorkspaceAgentCatalog(tx, targetWorkspaceId);
+    const existing = stored.agents[report2.agent] ?? instanceAgentCatalog()[report2.agent];
+    if (!existing) {
+      throw new ApiError(400, `Unknown agent ${report2.agent}`);
+    }
+    stored.agents[report2.agent] = mergeLiveModels({
+      existing: structuredClone(existing),
+      live: report2.models,
+      harnessVersion: report2.harnessVersion,
+      reportedAt: nowIso2()
+    });
     await persistCatalog(stored, tx, targetWorkspaceId);
     return toCatalogDto(stored);
   });
@@ -190470,10 +191078,10 @@ function classifyGeminiError(error64) {
 }
 
 // chat/gemini-runtime.ts
-var import_node_crypto36 = require("node:crypto");
+var import_node_crypto37 = require("node:crypto");
 
 // chat-worker.ts
-var import_node_crypto33 = require("node:crypto");
+var import_node_crypto34 = require("node:crypto");
 var ChatRuntimeFailure = class extends Error {
   constructor(failureCode) {
     super(failureCode);
@@ -190504,7 +191112,7 @@ var ChatWorker = class extends PollLoop {
   concurrency;
   lastRetentionAt = 0;
   active = /* @__PURE__ */ new Map();
-  id = (0, import_node_crypto33.randomUUID)();
+  id = (0, import_node_crypto34.randomUUID)();
   async stop() {
     const pass2 = super.stop();
     for (const job of this.active.values()) job.controller.abort();
@@ -190579,7 +191187,7 @@ var ChatWorker = class extends PollLoop {
 };
 
 // chat/gemini-diagnostics.ts
-var import_node_crypto34 = require("node:crypto");
+var import_node_crypto35 = require("node:crypto");
 var RunMetrics = class extends ChatPerformance {
   providerRounds = 0;
   providerRequests = 0;
@@ -190668,7 +191276,7 @@ function instrumentGeminiClient(client, hooks) {
   const { record: record2, metrics } = hooks;
   return {
     async stream(request) {
-      const exchangeId = (0, import_node_crypto34.randomUUID)();
+      const exchangeId = (0, import_node_crypto35.randomUUID)();
       if (metrics) metrics.providerRequests++;
       const started = metrics ? performance.now() : 0;
       const contentBytes = hooks.contentBytes(request);
@@ -190731,7 +191339,7 @@ function instrumentGeminiClient(client, hooks) {
       }
     },
     async generate(request) {
-      const exchangeId = (0, import_node_crypto34.randomUUID)();
+      const exchangeId = (0, import_node_crypto35.randomUUID)();
       if (metrics) metrics.summaryRounds++;
       const cached3 = hooks.staticUseFor(request);
       await record2("provider.request", {
@@ -190894,7 +191502,7 @@ ${text}`;
 }
 
 // chat/tool-manifest.ts
-var import_node_crypto35 = require("node:crypto");
+var import_node_crypto36 = require("node:crypto");
 var RELEVANCE_POLICY_VERSION = "expandable-families-v1";
 var TOOL_FAMILIES = ["status", "repository", "knowledgebase", "feature"];
 var EXPAND_CAPABILITIES_TOOL = "expand_capabilities";
@@ -190953,7 +191561,7 @@ function digest4(value2) {
       );
     return v;
   };
-  return (0, import_node_crypto35.createHash)("sha256").update(JSON.stringify(canonical(value2))).digest("hex");
+  return (0, import_node_crypto36.createHash)("sha256").update(JSON.stringify(canonical(value2))).digest("hex");
 }
 function createToolManifest(catalog, families) {
   const value2 = {
@@ -191021,7 +191629,7 @@ var GeminiChatRuntime = class {
       provider: "gemini",
       model,
       checkpointVersion: GEMINI_CHECKPOINT_VERSION,
-      configDigest: (0, import_node_crypto36.createHash)("sha256").update(
+      configDigest: (0, import_node_crypto37.createHash)("sha256").update(
         JSON.stringify({
           model,
           SYSTEM_PROMPT_VERSION,
@@ -191900,10 +192508,10 @@ function chatLimitsFromEnv(env3) {
 }
 
 // connections/keyring.ts
-var import_node_crypto38 = require("node:crypto");
+var import_node_crypto39 = require("node:crypto");
 
 // connections/crypto.ts
-var import_node_crypto37 = require("node:crypto");
+var import_node_crypto38 = require("node:crypto");
 var SecretEnvelopeError = class extends Error {
   constructor() {
     super("The stored secret cannot be decrypted.");
@@ -191920,8 +192528,8 @@ function sealSecret({
   key,
   aad
 }) {
-  const nonce = (0, import_node_crypto37.randomBytes)(12);
-  const cipher = (0, import_node_crypto37.createCipheriv)("aes-256-gcm", key, nonce);
+  const nonce = (0, import_node_crypto38.randomBytes)(12);
+  const cipher = (0, import_node_crypto38.createCipheriv)("aes-256-gcm", key, nonce);
   cipher.setAAD(Buffer.from(aad, "utf8"));
   const ciphertext = Buffer.concat([cipher.update(plaintext, "utf8"), cipher.final()]);
   const tag2 = cipher.getAuthTag();
@@ -191937,7 +192545,7 @@ function openSecret({
     throw new SecretEnvelopeError();
   }
   try {
-    const decipher = (0, import_node_crypto37.createDecipheriv)("aes-256-gcm", key, Buffer.from(nonceText, "base64url"));
+    const decipher = (0, import_node_crypto38.createDecipheriv)("aes-256-gcm", key, Buffer.from(nonceText, "base64url"));
     decipher.setAAD(Buffer.from(aad, "utf8"));
     decipher.setAuthTag(Buffer.from(tagText, "base64url"));
     return Buffer.concat([
@@ -191949,7 +192557,7 @@ function openSecret({
   }
 }
 function hashSecret(value2) {
-  return (0, import_node_crypto37.createHash)("sha256").update(value2).digest("hex");
+  return (0, import_node_crypto38.createHash)("sha256").update(value2).digest("hex");
 }
 
 // connections/keyring.ts
@@ -191968,7 +192576,7 @@ function platformKeyFromSecret(secret) {
   const trimmed9 = secret?.trim();
   if (!trimmed9 || trimmed9.length < MIN_PLATFORM_SECRET_LENGTH) return null;
   const key = Buffer.from(
-    (0, import_node_crypto38.hkdfSync)(
+    (0, import_node_crypto39.hkdfSync)(
       "sha256",
       Buffer.from(trimmed9, "utf8"),
       Buffer.from("overlord:account-connections", "utf8"),
@@ -191976,7 +192584,7 @@ function platformKeyFromSecret(secret) {
       32
     )
   );
-  const fingerprint = (0, import_node_crypto38.createHash)("sha256").update("overlord:account-connections:platform-key-id:v1:").update(key).digest("hex").slice(0, 16);
+  const fingerprint = (0, import_node_crypto39.createHash)("sha256").update("overlord:account-connections:platform-key-id:v1:").update(key).digest("hex").slice(0, 16);
   return { id: `${PLATFORM_KEY_ID_PREFIX}${fingerprint}`, key };
 }
 function keyRingFromEnv(env3) {
@@ -192568,7 +193176,7 @@ function validateJson(value2, at, depth, budget) {
 }
 
 // connections/service.ts
-var import_node_crypto41 = require("node:crypto");
+var import_node_crypto42 = require("node:crypto");
 
 // connections/credential-rows.ts
 var REFRESH_LEASE_MS = 15e3;
@@ -192701,7 +193309,7 @@ async function refreshLeased(db, row, lockOwner, options) {
 }
 
 // connections/oauth.ts
-var import_node_crypto39 = require("node:crypto");
+var import_node_crypto40 = require("node:crypto");
 var OAuthError = class extends Error {
   constructor(code) {
     super(code);
@@ -192715,8 +193323,8 @@ var METADATA_BYTES = 64 * 1024;
 var TOKEN_BYTES = 64 * 1024;
 var TIMEOUT_MS = 1e4;
 function pkcePair() {
-  const verifier = (0, import_node_crypto39.randomBytes)(32).toString("base64url");
-  return { verifier, challenge: (0, import_node_crypto39.createHash)("sha256").update(verifier).digest("base64url") };
+  const verifier = (0, import_node_crypto40.randomBytes)(32).toString("base64url");
+  return { verifier, challenge: (0, import_node_crypto40.createHash)("sha256").update(verifier).digest("base64url") };
 }
 function sameResource(a5, b5) {
   return a5.replace(/\/+$/, "") === b5.replace(/\/+$/, "");
@@ -192871,7 +193479,7 @@ var KnowledgebaseOAuth = class {
 };
 
 // connections/oauth-flow.ts
-var import_node_crypto40 = require("node:crypto");
+var import_node_crypto41 = require("node:crypto");
 
 // connections/authorizations.ts
 var AUTHORIZATION_TTL_MS = 10 * 60 * 1e3;
@@ -192926,16 +193534,16 @@ async function consumeAuthorization(tx, options) {
 
 // connections/oauth-flow.ts
 async function beginConnectionOAuth(db, options) {
-  const state2 = (0, import_node_crypto40.randomBytes)(32).toString("base64url");
+  const state2 = (0, import_node_crypto41.randomBytes)(32).toString("base64url");
   const { verifier, challenge } = pkcePair();
   const authorizeUrl = await options.authorizeUrl(state2, challenge);
-  const authorizationId = (0, import_node_crypto40.randomUUID)();
+  const authorizationId = (0, import_node_crypto41.randomUUID)();
   const expiresAt = options.timestamp(AUTHORIZATION_TTL_MS);
   const connectionId = await db.transaction(async (tx) => {
     const now2 = options.timestamp();
     let row = await options.findLiveRow(tx);
     if (!row) {
-      const id2 = (0, import_node_crypto40.randomUUID)();
+      const id2 = (0, import_node_crypto41.randomUUID)();
       await options.insertPendingRow(tx, id2, now2);
       row = await tx.get("SELECT * FROM account_connections WHERE id = ?", [id2]);
     }
@@ -193053,7 +193661,7 @@ var AccountConnections = class {
   }
   db;
   options;
-  lockOwner = (0, import_node_crypto41.randomUUID)();
+  lockOwner = (0, import_node_crypto42.randomUUID)();
   now() {
     return this.options.now?.() ?? Date.now();
   }
@@ -193865,7 +194473,7 @@ function provenance(text, connectionId, workspace2, maxSources) {
 }
 
 // connections/profile.ts
-var import_node_crypto42 = require("node:crypto");
+var import_node_crypto43 = require("node:crypto");
 var ProviderOAuthError = class extends Error {
   constructor(code) {
     super(code);
@@ -193899,7 +194507,7 @@ var ProfileConnections = class {
   db;
   ring;
   options;
-  lockOwner = (0, import_node_crypto42.randomUUID)();
+  lockOwner = (0, import_node_crypto43.randomUUID)();
   adapters;
   provider(provider) {
     return this.adapters.get(provider) ?? null;
@@ -194033,7 +194641,7 @@ var ProfileConnections = class {
       );
       return connectionDto(await this.row(profileId, existing.id));
     }
-    const id2 = (0, import_node_crypto42.randomUUID)();
+    const id2 = (0, import_node_crypto43.randomUUID)();
     const draft = { id: id2, owner_profile_id: profileId, organization_id: null, provider };
     await this.db.run(
       `INSERT INTO account_connections (id, owner_profile_id, organization_id, provider, server_url, state, credential_kind, credential_format, credential_ciphertext, credential_key_id, credential_revision, external_account_id, external_account_label, external_account_avatar_url, last_validated_at, connected_at, created_at, updated_at, revision) VALUES (?, ?, NULL, ?, ?, 'connected', 'api_key', 'connection-v1', ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, 1)`,
@@ -194722,7 +195330,7 @@ function createProfileConnectionCallbackHandler(options) {
 }
 
 // ../packages/core/service/end-latch-session.ts
-var import_node_crypto43 = require("node:crypto");
+var import_node_crypto44 = require("node:crypto");
 async function endLatchSession({
   ctx,
   missionId,
@@ -194740,7 +195348,7 @@ async function endLatchSession({
   if (!row || !mapping) throw new ServiceError("Terminal session not found", "not_found", 404);
   const now2 = nowIso();
   const scope2 = "api.mission.terminal-session.end";
-  const requestHash = (0, import_node_crypto43.createHash)("sha256").update(JSON.stringify({ missionId, executionRequestId })).digest("hex");
+  const requestHash = (0, import_node_crypto44.createHash)("sha256").update(JSON.stringify({ missionId, executionRequestId })).digest("hex");
   await db.run(
     `INSERT INTO idempotency_keys
       (id, workspace_id, scope, key, request_hash, status, actor_workspace_user_id,
@@ -194997,6 +195605,404 @@ async function getExecutionTargetMigrationDiagnostics(workspaceId2) {
   });
 }
 
+// ../packages/core/service/agent-session/events.ts
+var MAX_EVENT_SUMMARY_LENGTH = 2e3;
+var MAX_EVENT_PAYLOAD_BYTES = 8 * 1024;
+var MAX_EVENT_IDENTIFIER_LENGTH = 200;
+function boundedText(value2, max) {
+  if (typeof value2 !== "string") return null;
+  const trimmed9 = value2.trim();
+  if (trimmed9 === "") return null;
+  return trimmed9.length <= max ? trimmed9 : `${trimmed9.slice(0, max - 1)}\u2026`;
+}
+function requiredIdentifier(value2, field) {
+  const bounded2 = boundedText(value2, MAX_EVENT_IDENTIFIER_LENGTH);
+  if (!bounded2) {
+    throw new ServiceError(`${field} is required`, "invalid_event", 400);
+  }
+  return bounded2;
+}
+function boundedPayload(payload) {
+  if (!payload) return "{}";
+  const serialized = JSON.stringify(payload);
+  if (Buffer.byteLength(serialized, "utf8") > MAX_EVENT_PAYLOAD_BYTES) {
+    throw new ServiceError(
+      `Event payload exceeds ${MAX_EVENT_PAYLOAD_BYTES} bytes`,
+      "event_payload_too_large",
+      413
+    );
+  }
+  return serialized;
+}
+function normalizeTimestamp2(value2, fallback2) {
+  if (typeof value2 !== "string") return fallback2;
+  const parsed = new Date(value2);
+  if (Number.isNaN(parsed.getTime())) return fallback2;
+  return parsed > new Date(fallback2) ? fallback2 : parsed.toISOString();
+}
+async function appendSessionEvent({
+  ctx,
+  channel,
+  event
+}) {
+  const adapterKey = channel.adapter_key ?? channel.agent_identifier ?? "unknown";
+  const producerEventId = requiredIdentifier(event.producerEventId, "producerEventId");
+  const kind = requiredIdentifier(event.kind, "kind");
+  const existing = await ctx.db.get(
+    `SELECT id, channel_sequence FROM agent_session_events
+       WHERE channel_id = ? AND adapter_key = ? AND producer_event_id = ?`,
+    [channel.id, adapterKey, producerEventId]
+  );
+  if (existing) {
+    return { id: existing.id, channelSequence: existing.channel_sequence, duplicate: true };
+  }
+  const now2 = nowIso();
+  const id2 = newId();
+  const payloadJson = boundedPayload(event.payload);
+  const summary = boundedText(event.summary, MAX_EVENT_SUMMARY_LENGTH);
+  const inserted = await ctx.db.transaction(async (tx) => {
+    const txCtx = { ...ctx, db: tx };
+    const head = await tx.get(
+      `SELECT MAX(channel_sequence) AS next_sequence FROM agent_session_events
+         WHERE channel_id = ?`,
+      [channel.id]
+    );
+    const channelSequence = (head?.next_sequence ?? 0) + 1;
+    await tx.run(
+      `INSERT INTO agent_session_events (
+           id, workspace_id, project_id, mission_id, objective_id, channel_id, session_id,
+           adapter_key, producer_event_id, producer_sequence, channel_sequence,
+           occurred_at, received_at, kind, severity, actionability,
+           native_event, native_turn_id, native_call_id, subagent_id, correlation_id, origin,
+           summary, payload_json, formatter_version, created_at, updated_at, revision
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+      [
+        id2,
+        channel.workspace_id,
+        channel.project_id,
+        channel.mission_id,
+        channel.objective_id,
+        channel.id,
+        channel.session_id,
+        adapterKey,
+        producerEventId,
+        typeof event.producerSequence === "number" ? event.producerSequence : null,
+        channelSequence,
+        normalizeTimestamp2(event.occurredAt, now2),
+        now2,
+        kind,
+        boundedText(event.severity, 32) ?? "notice",
+        boundedText(event.actionability, 32),
+        boundedText(event.nativeEvent, MAX_EVENT_IDENTIFIER_LENGTH),
+        boundedText(event.nativeTurnId, MAX_EVENT_IDENTIFIER_LENGTH),
+        boundedText(event.nativeCallId, MAX_EVENT_IDENTIFIER_LENGTH),
+        boundedText(event.subagentId, MAX_EVENT_IDENTIFIER_LENGTH),
+        boundedText(event.correlationId, MAX_EVENT_IDENTIFIER_LENGTH),
+        boundedText(event.origin, 32),
+        summary,
+        payloadJson,
+        event.formatterVersion ?? 1,
+        now2,
+        now2
+      ]
+    );
+    await recordChange({
+      ctx: txCtx,
+      entityType: "agent_session_event",
+      entityId: id2,
+      operation: "insert",
+      entityRevision: 1,
+      projectId: channel.project_id,
+      missionId: channel.mission_id,
+      objectiveId: channel.objective_id
+    });
+    return channelSequence;
+  });
+  return { id: id2, channelSequence: inserted, duplicate: false };
+}
+
+// ../packages/core/service/agent-session/pure/inject.ts
+var DELIVERY_OUTCOMES = [
+  "delivered",
+  "queued_turn_boundary",
+  "queued_next_turn",
+  "unsupported"
+];
+function describeDeliveryOutcome({
+  status,
+  deliveryOutcome
+}) {
+  if (status === "acknowledged" || deliveryOutcome === "delivered") return "Delivered";
+  if (deliveryOutcome === "queued_turn_boundary") return "Queued (turn boundary)";
+  if (deliveryOutcome === "queued_next_turn") return "Queued (next turn)";
+  if (deliveryOutcome === "unsupported" || status === "failed") return "Unsupported";
+  if (status === "emitted") return "Sent to harness";
+  if (status === "queued" || status === "leased") return "Pending";
+  if (status === "cancelled") return "Cancelled";
+  if (status === "expired") return "Expired";
+  return status;
+}
+
+// ../packages/core/service/agent-session/inputs.ts
+var INPUT_LEASE_SECONDS = 60;
+var INPUT_COLUMNS = `
+  id, workspace_id, project_id, mission_id, objective_id, channel_id, session_id,
+  kind, body, idempotency_key, created_by_workspace_user_id, status,
+  lease_id, lease_expires_at, emitted_at, acknowledged_at, attempt_count, last_error_code,
+  delivery_outcome, created_at, updated_at, revision
+`;
+function normalizeDeliveryOutcome(value2) {
+  if (!value2) return null;
+  return DELIVERY_OUTCOMES.includes(value2) ? value2 : null;
+}
+async function getInput({
+  ctx,
+  inputId
+}) {
+  const row = await ctx.db.get(
+    `SELECT ${INPUT_COLUMNS} FROM agent_session_inputs
+       WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
+    [inputId, ctx.workspace.id]
+  );
+  if (!row) throw new ServiceError("Session input not found", "input_not_found", 404);
+  return { ...row, delivery_outcome: normalizeDeliveryOutcome(row.delivery_outcome) };
+}
+async function listSessionInputs({
+  ctx,
+  missionId,
+  objectiveId = null,
+  limit: limit2 = 50
+}) {
+  const rows = await ctx.db.all(
+    `SELECT ${INPUT_COLUMNS} FROM agent_session_inputs
+       WHERE mission_id = ? AND workspace_id = ? AND deleted_at IS NULL
+         ${objectiveId ? "AND objective_id = ?" : ""}
+       ORDER BY created_at DESC
+       LIMIT ?`,
+    [
+      missionId,
+      ctx.workspace.id,
+      ...objectiveId ? [objectiveId] : [],
+      Math.min(200, Math.max(1, limit2))
+    ]
+  );
+  return rows.map((row) => ({
+    ...row,
+    delivery_outcome: normalizeDeliveryOutcome(row.delivery_outcome)
+  }));
+}
+async function leaseNextInput({
+  ctx,
+  channelId,
+  leaseSeconds = INPUT_LEASE_SECONDS
+}) {
+  const now2 = nowIso();
+  const candidate = await ctx.db.get(
+    `SELECT ${INPUT_COLUMNS} FROM agent_session_inputs
+       WHERE channel_id = ? AND workspace_id = ? AND deleted_at IS NULL
+         AND (
+           status = 'queued'
+           OR (status = 'leased' AND lease_expires_at IS NOT NULL AND lease_expires_at <= ?)
+         )
+       ORDER BY created_at ASC
+       LIMIT 1`,
+    [channelId, ctx.workspace.id, now2]
+  );
+  if (!candidate) return null;
+  const leaseId = newId();
+  const leaseExpiresAt = addSeconds(now2, leaseSeconds);
+  const updated = await ctx.db.run(
+    `UPDATE agent_session_inputs
+        SET status = 'leased', lease_id = ?, lease_expires_at = ?,
+            attempt_count = attempt_count + 1, updated_at = ?, revision = ?
+      WHERE id = ? AND revision = ? AND status IN ('queued', 'leased')`,
+    [leaseId, leaseExpiresAt, now2, candidate.revision + 1, candidate.id, candidate.revision]
+  );
+  if (updated.changes === 0) return null;
+  await recordChange({
+    ctx,
+    entityType: "agent_session_input",
+    entityId: candidate.id,
+    operation: "update",
+    entityRevision: candidate.revision + 1,
+    projectId: candidate.project_id,
+    missionId: candidate.mission_id,
+    objectiveId: candidate.objective_id,
+    changedFields: ["status", "lease_id", "lease_expires_at", "attempt_count"]
+  });
+  return { input: await getInput({ ctx, inputId: candidate.id }), leaseId };
+}
+async function markInputEmitted({
+  ctx,
+  inputId,
+  leaseId,
+  deliveryOutcome = null
+}) {
+  const now2 = nowIso();
+  const outcome = normalizeDeliveryOutcome(deliveryOutcome);
+  const updated = await ctx.db.run(
+    `UPDATE agent_session_inputs
+        SET status = 'emitted', emitted_at = ?, lease_expires_at = NULL,
+            delivery_outcome = ?, updated_at = ?, revision = revision + 1
+      WHERE id = ? AND workspace_id = ? AND status = 'leased' AND lease_id = ?`,
+    [now2, outcome, now2, inputId, ctx.workspace.id, leaseId]
+  );
+  return { emitted: updated.changes > 0 };
+}
+async function markInputAcknowledged({
+  ctx,
+  inputId
+}) {
+  const now2 = nowIso();
+  const updated = await ctx.db.run(
+    `UPDATE agent_session_inputs
+        SET status = 'acknowledged', acknowledged_at = ?, delivery_outcome = 'delivered',
+            updated_at = ?, revision = revision + 1
+      WHERE id = ? AND workspace_id = ? AND status = 'emitted'`,
+    [now2, now2, inputId, ctx.workspace.id]
+  );
+  return { acknowledged: updated.changes > 0 };
+}
+async function markInputFailed({
+  ctx,
+  inputId,
+  errorCode
+}) {
+  const now2 = nowIso();
+  const updated = await ctx.db.run(
+    `UPDATE agent_session_inputs
+        SET status = 'failed', last_error_code = ?, lease_id = NULL, lease_expires_at = NULL,
+            updated_at = ?, revision = revision + 1
+      WHERE id = ? AND workspace_id = ? AND status IN ('queued', 'leased')`,
+    [errorCode.slice(0, 64), now2, inputId, ctx.workspace.id]
+  );
+  return { failed: updated.changes > 0 };
+}
+
+// ../packages/core/service/agent-session/launch-channels.ts
+var CONTROL_PLANE_LAUNCH_KIND = "control_plane";
+var CONTROL_PLANE_LAUNCH_ADAPTERS = Object.freeze({
+  "codex-app-server": "codex"
+});
+var MINTABLE_OBJECTIVE_STATES = /* @__PURE__ */ new Set([
+  "draft",
+  "submitted",
+  "launching",
+  "executing",
+  "pending_delivery"
+]);
+async function mintControlPlaneLaunchChannel({
+  ctx,
+  objectiveId,
+  adapterKey,
+  adapterVersion = null,
+  executionRequestId = null,
+  executionTargetId = null
+}) {
+  const key = adapterKey.trim();
+  const agentIdentifier = CONTROL_PLANE_LAUNCH_ADAPTERS[key];
+  if (!agentIdentifier) {
+    throw new ServiceError(
+      `Adapter "${key}" does not take a launch channel`,
+      "adapter_not_control_plane",
+      400
+    );
+  }
+  const objective = await ctx.db.get(
+    `SELECT id, mission_id, project_id, state FROM objectives
+      WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
+    [objectiveId, ctx.workspace.id]
+  );
+  if (!objective) throw new ServiceError("Objective not found", "objective_not_found", 404);
+  if (!MINTABLE_OBJECTIVE_STATES.has(objective.state)) {
+    throw new ServiceError(
+      `Objective is not launchable from state "${objective.state}"`,
+      "objective_not_launchable",
+      409
+    );
+  }
+  let requestId = null;
+  if (executionRequestId?.trim()) {
+    const request = await ctx.db.get(
+      `SELECT id FROM execution_requests
+        WHERE id = ? AND workspace_id = ? AND objective_id = ?`,
+      [executionRequestId.trim(), ctx.workspace.id, objective.id]
+    );
+    if (!request) {
+      throw new ServiceError("Execution request not found", "execution_request_not_found", 404);
+    }
+    requestId = request.id;
+  }
+  let targetId = null;
+  if (executionTargetId?.trim()) {
+    const target = await ctx.db.get(
+      `SELECT id FROM execution_targets WHERE id = ? AND workspace_id = ?`,
+      [executionTargetId.trim(), ctx.workspace.id]
+    );
+    targetId = target?.id ?? null;
+  }
+  const { bootstrap } = await createSessionChannel({
+    ctx,
+    missionId: objective.mission_id,
+    objectiveId: objective.id,
+    projectId: objective.project_id,
+    executionRequestId: requestId,
+    executionTargetId: targetId,
+    agentIdentifier,
+    adapterKey: key,
+    adapterVersion: adapterVersion?.trim() || null,
+    launchKind: CONTROL_PLANE_LAUNCH_KIND
+  });
+  return { ...bootstrap, adapterKey: key, agentIdentifier };
+}
+async function readChannelLifecycle({
+  ctx,
+  channel
+}) {
+  let objectiveState = null;
+  if (channel.objective_id) {
+    const objective = await ctx.db.get(
+      `SELECT state, deleted_at FROM objectives WHERE id = ? AND workspace_id = ?`,
+      [channel.objective_id, ctx.workspace.id]
+    );
+    objectiveState = !objective || objective.deleted_at !== null ? "deleted" : objective.state;
+  }
+  let deliveryState = null;
+  if (channel.session_id) {
+    const session = await ctx.db.get(
+      `SELECT delivery_state FROM agent_sessions WHERE id = ? AND workspace_id = ?`,
+      [channel.session_id, ctx.workspace.id]
+    );
+    deliveryState = session?.delivery_state ?? null;
+  }
+  return { objectiveState, deliveryState };
+}
+
+// execution/launch-channels.ts
+async function mintObjectiveSessionChannel(objectiveRef, rawBody) {
+  const body = asRecord(rawBody);
+  const adapterKey = typeof body.adapterKey === "string" ? body.adapterKey.trim() : "";
+  if (!adapterKey) throw new ApiError(400, "adapterKey is required");
+  const optional2 = (value2) => typeof value2 === "string" && value2.trim() ? value2.trim() : null;
+  const db = requireDatabaseClient();
+  return db.transaction(async (tx) => {
+    const { workspaceId: workspaceId2, workspaceUserId, objectiveId } = await requireObjectivePermission({
+      objectiveId: objectiveRef,
+      permission: PERMISSIONS.SESSION_ATTACH,
+      db: tx
+    });
+    const ctx = await buildWebappServiceContextForWorkspace(workspaceId2, tx, workspaceUserId);
+    return mintControlPlaneLaunchChannel({
+      ctx,
+      objectiveId,
+      adapterKey,
+      adapterVersion: optional2(body.adapterVersion),
+      executionRequestId: optional2(body.executionRequestId),
+      executionTargetId: optional2(body.executionTargetId)
+    });
+  });
+}
+
 // execution/launch-settings.ts
 async function launchSettingsDto({
   target,
@@ -195128,6 +196134,8 @@ async function updateAgentLaunchConfig(agentKey, body, workspaceId2) {
       preCommand: body.preCommand !== void 0 ? body.preCommand.trim() : target.agentConfigs[key]?.preCommand ?? "",
       flags: body.flags !== void 0 ? normalizeAgentLaunchFlags(body.flags) : target.agentConfigs[key]?.flags ?? []
     };
+    const harnessMode = body.harnessMode === void 0 ? target.agentConfigs[key]?.harnessMode : normalizeAgentHarnessMode(body.harnessMode);
+    if (harnessMode) next.harnessMode = harnessMode;
     const configs = { ...target.agentConfigs, [key]: next };
     await tx.run(
       `UPDATE user_execution_target_preferences
@@ -198196,7 +199204,7 @@ function summaryPreview(summary) {
   return text ? truncate2(text, INSTRUCTION_PREVIEW_CHARS) : null;
 }
 var EVENT_SUMMARY_CHARS = 240;
-var DELIVERED_WINDOW_MS = 14 * 24 * 60 * 60 * 1e3;
+var DELIVERED_WINDOW_MS = 3 * 24 * 60 * 60 * 1e3;
 var ISO_UTC = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
 var RUNNING_STATES = ["launching", "executing", "pending_delivery"];
 function truncate2(value2, max) {
@@ -198273,19 +199281,18 @@ async function loadRuns(workspaceIds) {
             o.title AS objective_title, o.instruction_text, o.summary, o.state, o.position,
             o.branch, o.resource_key, o.assigned_agent, o.model,
             o.updated_at AS objective_updated_at, o.launched_at, o.started_at,
-            (SELECT s.agent_identifier FROM agent_sessions s
-              WHERE s.objective_id = o.id AND s.deleted_at IS NULL
-              ORDER BY s.started_at DESC, s.id DESC LIMIT 1) AS session_agent_identifier,
-            (SELECT s.model_identifier FROM agent_sessions s
-              WHERE s.objective_id = o.id AND s.deleted_at IS NULL
-              ORDER BY s.started_at DESC, s.id DESC LIMIT 1) AS session_model_identifier,
-            (SELECT s.started_at FROM agent_sessions s
-              WHERE s.objective_id = o.id AND s.deleted_at IS NULL
-              ORDER BY s.started_at DESC, s.id DESC LIMIT 1) AS session_started_at,
+            s.agent_identifier AS session_agent_identifier,
+            s.model_identifier AS session_model_identifier,
+            s.started_at AS session_started_at,
             (SELECT r.created_at FROM execution_requests r
               WHERE r.objective_id = o.id AND r.deleted_at IS NULL
               ORDER BY r.created_at DESC, r.id DESC LIMIT 1) AS request_created_at
        FROM objectives o${CONTEXT_JOIN}
+       -- The objective's newest session, resolved once rather than once per column.
+       LEFT JOIN agent_sessions s ON s.id = (
+         SELECT x.id FROM agent_sessions x
+          WHERE x.objective_id = o.id AND x.deleted_at IS NULL
+          ORDER BY x.started_at DESC, x.id DESC LIMIT 1)
       WHERE o.deleted_at IS NULL
         AND o.state IN (${sqlPlaceholders(RUNNING_STATES.length)})
         AND o.workspace_id IN (${sqlPlaceholders(workspaceIds.length)})
@@ -198386,7 +199393,7 @@ async function loadQuestions(workspaceIds) {
     [...workspaceIds, askedAfter, QUESTION_LIMIT]
   );
 }
-function twoWeeksBefore(iso4) {
+function deliveredWindowStart(iso4) {
   return new Date(Date.parse(iso4) - DELIVERED_WINDOW_MS).toISOString();
 }
 function parseFeedBefore(value2) {
@@ -198440,7 +199447,7 @@ async function latestDeliveredAtOnOrBefore({
   onOrBefore
 }) {
   const row = await requireDatabaseClient().get(
-    `SELECT MAX(d.delivered_at) AS latest
+    `SELECT d.delivered_at AS latest
        FROM deliveries d
       WHERE d.deleted_at IS NULL
         AND d.workspace_id IN (${sqlPlaceholders(workspaceIds.length)})
@@ -198457,7 +199464,9 @@ async function latestDeliveredAtOnOrBefore({
            WHERE live.mission_id = d.mission_id
              AND live.deleted_at IS NULL
              AND live.state IN (${sqlPlaceholders(RUNNING_STATES.length)})
-        )`,
+        )
+      ORDER BY d.delivered_at DESC
+      LIMIT 1`,
     [...workspaceIds, onOrBefore, ...RUNNING_STATES]
   );
   return row?.latest ?? null;
@@ -198474,13 +199483,13 @@ async function loadDeliveredPage({
   skipEmpty
 }) {
   let end = windowEnd;
-  let start2 = twoWeeksBefore(end);
+  let start2 = deliveredWindowStart(end);
   let rows = await loadDelivered({ workspaceIds, windowStart: start2, windowEnd: end });
   if (rows.length === 0 && skipEmpty) {
     const olderAt = await latestDeliveredAtOnOrBefore({ workspaceIds, onOrBefore: start2 });
     if (!olderAt) return { rows: [], nextBefore: null };
     end = olderAt;
-    start2 = twoWeeksBefore(end);
+    start2 = deliveredWindowStart(end);
     rows = await loadDelivered({ workspaceIds, windowStart: start2, windowEnd: end });
   }
   const older = await hasOlderDelivered({ workspaceIds, onOrBefore: start2 });
@@ -198696,7 +199705,7 @@ async function listActivityFeed({
   const questionItems = questions.map(toQuestionItem).sort(newestFirst2);
   return {
     items: [
-      ...[...launching, ...executing, ...questionItems].slice(0, FEED_LIMIT),
+      ...[...questionItems, ...launching, ...executing].slice(0, FEED_LIMIT),
       ...deliveredItems
     ],
     generatedAt,
@@ -198713,282 +199722,6 @@ async function listActivityFeed({
 
 // agent-session-routes.ts
 var import_express5 = __toESM(require_express2(), 1);
-
-// ../packages/core/service/agent-session/events.ts
-var MAX_EVENT_SUMMARY_LENGTH = 2e3;
-var MAX_EVENT_PAYLOAD_BYTES = 8 * 1024;
-var MAX_EVENT_IDENTIFIER_LENGTH = 200;
-function boundedText(value2, max) {
-  if (typeof value2 !== "string") return null;
-  const trimmed9 = value2.trim();
-  if (trimmed9 === "") return null;
-  return trimmed9.length <= max ? trimmed9 : `${trimmed9.slice(0, max - 1)}\u2026`;
-}
-function requiredIdentifier(value2, field) {
-  const bounded2 = boundedText(value2, MAX_EVENT_IDENTIFIER_LENGTH);
-  if (!bounded2) {
-    throw new ServiceError(`${field} is required`, "invalid_event", 400);
-  }
-  return bounded2;
-}
-function boundedPayload(payload) {
-  if (!payload) return "{}";
-  const serialized = JSON.stringify(payload);
-  if (Buffer.byteLength(serialized, "utf8") > MAX_EVENT_PAYLOAD_BYTES) {
-    throw new ServiceError(
-      `Event payload exceeds ${MAX_EVENT_PAYLOAD_BYTES} bytes`,
-      "event_payload_too_large",
-      413
-    );
-  }
-  return serialized;
-}
-function normalizeTimestamp2(value2, fallback2) {
-  if (typeof value2 !== "string") return fallback2;
-  const parsed = new Date(value2);
-  if (Number.isNaN(parsed.getTime())) return fallback2;
-  return parsed > new Date(fallback2) ? fallback2 : parsed.toISOString();
-}
-async function appendSessionEvent({
-  ctx,
-  channel,
-  event
-}) {
-  const adapterKey = channel.adapter_key ?? channel.agent_identifier ?? "unknown";
-  const producerEventId = requiredIdentifier(event.producerEventId, "producerEventId");
-  const kind = requiredIdentifier(event.kind, "kind");
-  const existing = await ctx.db.get(
-    `SELECT id, channel_sequence FROM agent_session_events
-       WHERE channel_id = ? AND adapter_key = ? AND producer_event_id = ?`,
-    [channel.id, adapterKey, producerEventId]
-  );
-  if (existing) {
-    return { id: existing.id, channelSequence: existing.channel_sequence, duplicate: true };
-  }
-  const now2 = nowIso();
-  const id2 = newId();
-  const payloadJson = boundedPayload(event.payload);
-  const summary = boundedText(event.summary, MAX_EVENT_SUMMARY_LENGTH);
-  const inserted = await ctx.db.transaction(async (tx) => {
-    const txCtx = { ...ctx, db: tx };
-    const head = await tx.get(
-      `SELECT MAX(channel_sequence) AS next_sequence FROM agent_session_events
-         WHERE channel_id = ?`,
-      [channel.id]
-    );
-    const channelSequence = (head?.next_sequence ?? 0) + 1;
-    await tx.run(
-      `INSERT INTO agent_session_events (
-           id, workspace_id, project_id, mission_id, objective_id, channel_id, session_id,
-           adapter_key, producer_event_id, producer_sequence, channel_sequence,
-           occurred_at, received_at, kind, severity, actionability,
-           native_event, native_turn_id, native_call_id, subagent_id, correlation_id, origin,
-           summary, payload_json, formatter_version, created_at, updated_at, revision
-         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
-      [
-        id2,
-        channel.workspace_id,
-        channel.project_id,
-        channel.mission_id,
-        channel.objective_id,
-        channel.id,
-        channel.session_id,
-        adapterKey,
-        producerEventId,
-        typeof event.producerSequence === "number" ? event.producerSequence : null,
-        channelSequence,
-        normalizeTimestamp2(event.occurredAt, now2),
-        now2,
-        kind,
-        boundedText(event.severity, 32) ?? "notice",
-        boundedText(event.actionability, 32),
-        boundedText(event.nativeEvent, MAX_EVENT_IDENTIFIER_LENGTH),
-        boundedText(event.nativeTurnId, MAX_EVENT_IDENTIFIER_LENGTH),
-        boundedText(event.nativeCallId, MAX_EVENT_IDENTIFIER_LENGTH),
-        boundedText(event.subagentId, MAX_EVENT_IDENTIFIER_LENGTH),
-        boundedText(event.correlationId, MAX_EVENT_IDENTIFIER_LENGTH),
-        boundedText(event.origin, 32),
-        summary,
-        payloadJson,
-        event.formatterVersion ?? 1,
-        now2,
-        now2
-      ]
-    );
-    await recordChange({
-      ctx: txCtx,
-      entityType: "agent_session_event",
-      entityId: id2,
-      operation: "insert",
-      entityRevision: 1,
-      projectId: channel.project_id,
-      missionId: channel.mission_id,
-      objectiveId: channel.objective_id
-    });
-    return channelSequence;
-  });
-  return { id: id2, channelSequence: inserted, duplicate: false };
-}
-
-// ../packages/core/service/agent-session/pure/inject.ts
-var DELIVERY_OUTCOMES = [
-  "delivered",
-  "queued_turn_boundary",
-  "queued_next_turn",
-  "unsupported"
-];
-function describeDeliveryOutcome({
-  status,
-  deliveryOutcome
-}) {
-  if (status === "acknowledged" || deliveryOutcome === "delivered") return "Delivered";
-  if (deliveryOutcome === "queued_turn_boundary") return "Queued (turn boundary)";
-  if (deliveryOutcome === "queued_next_turn") return "Queued (next turn)";
-  if (deliveryOutcome === "unsupported" || status === "failed") return "Unsupported";
-  if (status === "emitted") return "Sent to harness";
-  if (status === "queued" || status === "leased") return "Pending";
-  if (status === "cancelled") return "Cancelled";
-  if (status === "expired") return "Expired";
-  return status;
-}
-
-// ../packages/core/service/agent-session/inputs.ts
-var INPUT_LEASE_SECONDS = 60;
-var INPUT_COLUMNS = `
-  id, workspace_id, project_id, mission_id, objective_id, channel_id, session_id,
-  kind, body, idempotency_key, created_by_workspace_user_id, status,
-  lease_id, lease_expires_at, emitted_at, acknowledged_at, attempt_count, last_error_code,
-  delivery_outcome, created_at, updated_at, revision
-`;
-function normalizeDeliveryOutcome(value2) {
-  if (!value2) return null;
-  return DELIVERY_OUTCOMES.includes(value2) ? value2 : null;
-}
-async function getInput({
-  ctx,
-  inputId
-}) {
-  const row = await ctx.db.get(
-    `SELECT ${INPUT_COLUMNS} FROM agent_session_inputs
-       WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
-    [inputId, ctx.workspace.id]
-  );
-  if (!row) throw new ServiceError("Session input not found", "input_not_found", 404);
-  return { ...row, delivery_outcome: normalizeDeliveryOutcome(row.delivery_outcome) };
-}
-async function listSessionInputs({
-  ctx,
-  missionId,
-  objectiveId = null,
-  limit: limit2 = 50
-}) {
-  const rows = await ctx.db.all(
-    `SELECT ${INPUT_COLUMNS} FROM agent_session_inputs
-       WHERE mission_id = ? AND workspace_id = ? AND deleted_at IS NULL
-         ${objectiveId ? "AND objective_id = ?" : ""}
-       ORDER BY created_at DESC
-       LIMIT ?`,
-    [
-      missionId,
-      ctx.workspace.id,
-      ...objectiveId ? [objectiveId] : [],
-      Math.min(200, Math.max(1, limit2))
-    ]
-  );
-  return rows.map((row) => ({
-    ...row,
-    delivery_outcome: normalizeDeliveryOutcome(row.delivery_outcome)
-  }));
-}
-async function leaseNextInput({
-  ctx,
-  channelId,
-  leaseSeconds = INPUT_LEASE_SECONDS
-}) {
-  const now2 = nowIso();
-  const candidate = await ctx.db.get(
-    `SELECT ${INPUT_COLUMNS} FROM agent_session_inputs
-       WHERE channel_id = ? AND workspace_id = ? AND deleted_at IS NULL
-         AND (
-           status = 'queued'
-           OR (status = 'leased' AND lease_expires_at IS NOT NULL AND lease_expires_at <= ?)
-         )
-       ORDER BY created_at ASC
-       LIMIT 1`,
-    [channelId, ctx.workspace.id, now2]
-  );
-  if (!candidate) return null;
-  const leaseId = newId();
-  const leaseExpiresAt = addSeconds(now2, leaseSeconds);
-  const updated = await ctx.db.run(
-    `UPDATE agent_session_inputs
-        SET status = 'leased', lease_id = ?, lease_expires_at = ?,
-            attempt_count = attempt_count + 1, updated_at = ?, revision = ?
-      WHERE id = ? AND revision = ? AND status IN ('queued', 'leased')`,
-    [leaseId, leaseExpiresAt, now2, candidate.revision + 1, candidate.id, candidate.revision]
-  );
-  if (updated.changes === 0) return null;
-  await recordChange({
-    ctx,
-    entityType: "agent_session_input",
-    entityId: candidate.id,
-    operation: "update",
-    entityRevision: candidate.revision + 1,
-    projectId: candidate.project_id,
-    missionId: candidate.mission_id,
-    objectiveId: candidate.objective_id,
-    changedFields: ["status", "lease_id", "lease_expires_at", "attempt_count"]
-  });
-  return { input: await getInput({ ctx, inputId: candidate.id }), leaseId };
-}
-async function markInputEmitted({
-  ctx,
-  inputId,
-  leaseId,
-  deliveryOutcome = null
-}) {
-  const now2 = nowIso();
-  const outcome = normalizeDeliveryOutcome(deliveryOutcome);
-  const updated = await ctx.db.run(
-    `UPDATE agent_session_inputs
-        SET status = 'emitted', emitted_at = ?, lease_expires_at = NULL,
-            delivery_outcome = ?, updated_at = ?, revision = revision + 1
-      WHERE id = ? AND workspace_id = ? AND status = 'leased' AND lease_id = ?`,
-    [now2, outcome, now2, inputId, ctx.workspace.id, leaseId]
-  );
-  return { emitted: updated.changes > 0 };
-}
-async function markInputAcknowledged({
-  ctx,
-  inputId
-}) {
-  const now2 = nowIso();
-  const updated = await ctx.db.run(
-    `UPDATE agent_session_inputs
-        SET status = 'acknowledged', acknowledged_at = ?, delivery_outcome = 'delivered',
-            updated_at = ?, revision = revision + 1
-      WHERE id = ? AND workspace_id = ? AND status = 'emitted'`,
-    [now2, now2, inputId, ctx.workspace.id]
-  );
-  return { acknowledged: updated.changes > 0 };
-}
-async function markInputFailed({
-  ctx,
-  inputId,
-  errorCode
-}) {
-  const now2 = nowIso();
-  const updated = await ctx.db.run(
-    `UPDATE agent_session_inputs
-        SET status = 'failed', last_error_code = ?, lease_id = NULL, lease_expires_at = NULL,
-            updated_at = ?, revision = revision + 1
-      WHERE id = ? AND workspace_id = ? AND status IN ('queued', 'leased')`,
-    [errorCode.slice(0, 64), now2, inputId, ctx.workspace.id]
-  );
-  return { failed: updated.changes > 0 };
-}
-
-// agent-session-routes.ts
 var MAX_ADAPTER_BODY_BYTES = 64 * 1024;
 function extractChannelCredential(req) {
   const header = req.headers.authorization;
@@ -199085,7 +199818,9 @@ function createAgentSessionChannelRouter() {
         nativeSessionId: optionalString2(body.nativeSessionId),
         adapterVersion: optionalString2(body.adapterVersion)
       });
-      return { ok: true, ...lease };
+      const bound = await getChannel({ ctx, channelId: channel.id });
+      const lifecycle = await readChannelLifecycle({ ctx, channel: bound });
+      return { ok: true, ...lease, ...lifecycle };
     })
   );
   router2.post(
@@ -199415,8 +200150,66 @@ async function answerDeliveryStage(ctx, request, attempt) {
       return null;
   }
 }
+var LIVE_CHANNEL_STATES = /* @__PURE__ */ new Set(["preparing", "online", "degraded"]);
+async function controlPlaneChannelFor(ctx, request) {
+  if (!request.channel_id) return null;
+  const channel = await ctx.db.get(
+    `SELECT id, state, launch_kind, created_by_workspace_user_id
+       FROM agent_session_channels
+      WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
+    [request.channel_id, ctx.workspace.id]
+  );
+  if (!channel || channel.launch_kind !== CONTROL_PLANE_LAUNCH_KIND) return null;
+  return {
+    id: channel.id,
+    state: channel.state,
+    createdByWorkspaceUserId: channel.created_by_workspace_user_id
+  };
+}
+function mayAnswerControlPlaneRequest(ctx, request, channel) {
+  if (request.kind !== "permission") return true;
+  return channel.createdByWorkspaceUserId !== null && channel.createdByWorkspaceUserId === ctx.actorWorkspaceUserId;
+}
+function controlPlaneDelivery(ctx, request, channel, state2) {
+  const base = {
+    state: state2,
+    observedAt: request.application_observed_at,
+    stage: controlPlaneStage(request),
+    attempt: null,
+    failureCode: null,
+    failureMessage: null,
+    canRedeliver: false,
+    confirmationRequired: false,
+    sessionState: channel.state
+  };
+  if (request.status !== "open") return { mode: "read_only", reason: "request_closed", ...base };
+  if (!LIVE_CHANNEL_STATES.has(channel.state)) {
+    return { mode: "read_only", reason: "channel_ended", ...base };
+  }
+  if (!mayAnswerControlPlaneRequest(ctx, request, channel)) {
+    return { mode: "read_only", reason: "not_session_owner", ...base };
+  }
+  return { mode: "control_plane", reason: null, ...base };
+}
+function controlPlaneStage(request) {
+  if (request.status !== "resolved") return null;
+  if (!request.application_observed_at) return "recorded";
+  switch (request.application_state) {
+    case "emitted":
+    case "applied":
+      return "confirmed";
+    case "not_applied":
+      return "failed";
+    case "unknown":
+      return "unconfirmed";
+    default:
+      return "recorded";
+  }
+}
 async function requestDelivery(ctx, request) {
   const state2 = APPLICATION_STATES.includes(request.application_state) ? request.application_state : null;
+  const controlPlane = await controlPlaneChannelFor(ctx, request);
+  if (controlPlane) return controlPlaneDelivery(ctx, request, controlPlane, state2);
   const record2 = readAnswerDelivery(request);
   const stage = await answerDeliveryStage(ctx, request, record2.attempt);
   const base = {
@@ -199510,6 +200303,61 @@ function validateQuestionResolution({
     throw new ServiceError("An answer text or optionId is required", "invalid_resolution", 400);
   }
   return { text, optionId: optionId || null };
+}
+function permissionOptionId(request, resolution) {
+  const keys = Object.keys(resolution);
+  const value2 = keys.length === 1 ? resolution[keys[0]] : void 0;
+  const optionId = (keys[0] === "optionId" || keys[0] === "decision") && typeof value2 === "string" ? value2.trim() : "";
+  if (!optionId || !requestOptions(request).some((option) => option.optionId === optionId)) {
+    throw new ServiceError(
+      "An approval is answered with one of its options only",
+      "invalid_resolution",
+      400
+    );
+  }
+  return optionId;
+}
+async function resolveControlPlaneRequest({
+  ctx,
+  request,
+  channel,
+  body
+}) {
+  if (!["question", "choice", "permission"].includes(request.kind)) sessionControlsGone();
+  if (!mayAnswerControlPlaneRequest(ctx, request, channel)) {
+    throw new ServiceError(
+      "Only the member who launched this session can answer its approvals",
+      "not_session_owner",
+      403
+    );
+  }
+  if (request.status === "open" && !LIVE_CHANNEL_STATES.has(channel.state)) {
+    throw new ServiceError(
+      "This session has ended, so it cannot receive an answer",
+      "request_not_deliverable",
+      409
+    );
+  }
+  const record2 = asRecord(body);
+  if (typeof record2.expectedRevision !== "number") {
+    throw new ServiceError("expectedRevision is required", "agent_request_conflict", 409);
+  }
+  let resolution = record2.resolution ? asRecord(record2.resolution) : {};
+  if (request.kind === "permission") {
+    resolution = { optionId: permissionOptionId(request, resolution) };
+  } else {
+    validateQuestionResolution({ request, resolution });
+  }
+  const result2 = await resolveRequest({
+    ctx,
+    requestId: request.id,
+    resolution,
+    expectedRevision: record2.expectedRevision
+  });
+  return {
+    resolved: result2.resolved,
+    request: await humanRequestDto(ctx, await getRequest2({ ctx, requestId: request.id }))
+  };
 }
 async function deliverQuestionAnswer({
   ctx,
@@ -199824,6 +200672,15 @@ function createAgentRequestHumanRouter() {
         workspaceUserId
       );
       const request = await getRequest2({ ctx, requestId: req.params.id });
+      const controlPlane = await controlPlaneChannelFor(ctx, request);
+      if (controlPlane) {
+        return await resolveControlPlaneRequest({
+          ctx,
+          request,
+          channel: controlPlane,
+          body: req.body
+        });
+      }
       if (request.kind !== "question" && request.kind !== "choice") sessionControlsGone();
       const delivery = await requestDelivery(ctx, request);
       if (delivery.mode !== "latch") {
@@ -199883,6 +200740,13 @@ function createAgentRequestHumanRouter() {
         );
       }
       const request = await getRequest2({ ctx, requestId: req.params.id });
+      if (await controlPlaneChannelFor(ctx, request)) {
+        throw new ServiceError(
+          "This answer is applied by the session supervisor and cannot be sent again",
+          "request_not_deliverable",
+          409
+        );
+      }
       if (request.kind !== "question" && request.kind !== "choice") sessionControlsGone();
       const wasUnconfirmed = request.application_state === "unknown";
       const route = await answerRoute(ctx, request);
@@ -201037,7 +201901,7 @@ function createChatRouter(options) {
 }
 
 // chat-notification-dispatcher.ts
-var import_node_crypto45 = require("node:crypto");
+var import_node_crypto46 = require("node:crypto");
 
 // ../packages/core/service/push-notification-jobs.ts
 var PUSH_NOTIFICATION_DISPATCH_JOB_TYPE = "overlord.push_notification.dispatch.v1";
@@ -201052,7 +201916,7 @@ function isPushNotificationMode(value2) {
 }
 
 // apns-client.ts
-var import_node_crypto44 = require("node:crypto");
+var import_node_crypto45 = require("node:crypto");
 var import_node_http2 = __toESM(require("node:http2"), 1);
 var SANDBOX_HOST = "https://api.sandbox.push.apple.com";
 var PRODUCTION_HOST = "https://api.push.apple.com";
@@ -201081,7 +201945,7 @@ function apnsJwt(config4) {
   const signingInput = `${b64url(JSON.stringify({ alg: "ES256", kid: config4.keyId }))}.${b64url(
     JSON.stringify({ iss: config4.teamId, iat: now2 })
   )}`;
-  const signer = (0, import_node_crypto44.createSign)("SHA256");
+  const signer = (0, import_node_crypto45.createSign)("SHA256");
   signer.update(signingInput);
   signer.end();
   const signature = signer.sign({ key: config4.privateKey, dsaEncoding: "ieee-p1363" });
@@ -201669,7 +202533,7 @@ var ChatNotificationDispatcher = class extends PollLoop {
   db;
   options;
   send;
-  workerId = `chat-notifications:${(0, import_node_crypto45.randomUUID)()}`;
+  workerId = `chat-notifications:${(0, import_node_crypto46.randomUUID)()}`;
   /** One claim/deliver pass. Returns how many candidates it processed. */
   async tick() {
     return await this.poll() ?? 0;
@@ -202305,7 +203169,7 @@ function boundComposeText(value2, maxChars) {
 var deliveryComposeWorker = new DeliveryComposeWorker();
 
 // desktop-oauth-handoff.ts
-var import_node_crypto46 = require("node:crypto");
+var import_node_crypto47 = require("node:crypto");
 var HANDOFF_TTL_MS = 6e4;
 var TICKET_PATTERN = /^[A-Za-z0-9_-]{32,128}$/;
 var handoffs = /* @__PURE__ */ new Map();
@@ -202316,7 +203180,7 @@ function discardExpiredHandoffs(now2 = Date.now()) {
 }
 function createOAuthHandoff(sessionToken, audience) {
   discardExpiredHandoffs();
-  const ticket = (0, import_node_crypto46.randomBytes)(32).toString("base64url");
+  const ticket = (0, import_node_crypto47.randomBytes)(32).toString("base64url");
   handoffs.set(ticket, { audience, sessionToken, expiresAt: Date.now() + HANDOFF_TTL_MS });
   return ticket;
 }
@@ -202362,7 +203226,7 @@ function beginDesktopGitHubOAuth(auth2, authBaseUrl2) {
 }
 
 // live-activities.ts
-var import_node_crypto47 = require("node:crypto");
+var import_node_crypto48 = require("node:crypto");
 var MAX_RUNNING = 2;
 var COMPLETION_HOLD_MS = 30 * 60 * 1e3;
 var START_TOKEN_MAX_LENGTH = 512;
@@ -202678,7 +203542,7 @@ async function buildLiveActivityContentState(db, profileId, now2 = /* @__PURE__ 
   };
 }
 function liveActivityContentHash(state2) {
-  return (0, import_node_crypto47.createHash)("sha256").update(
+  return (0, import_node_crypto48.createHash)("sha256").update(
     JSON.stringify(
       state2 && {
         running: state2.running,
@@ -203204,11 +204068,11 @@ async function markMissionSummarySeen(missionRef, body) {
 }
 
 // native-github-oauth.ts
-var import_node_crypto48 = require("node:crypto");
+var import_node_crypto49 = require("node:crypto");
 var FLOW_TTL_MS = 10 * 6e4;
 var RECOVERY_TTL_MS = 6e4;
 var MAX_FLOWS = 256;
-var digest5 = (value2) => (0, import_node_crypto48.createHash)("sha256").update(value2).digest("hex");
+var digest5 = (value2) => (0, import_node_crypto49.createHash)("sha256").update(value2).digest("hex");
 function cookieValue(request, name2) {
   const values = (request.headers.get("cookie") ?? "").split(";").map((value2) => value2.trim()).filter((value2) => value2.startsWith(`${name2}=`));
   return values.length === 1 ? values[0].slice(name2.length + 1) : void 0;
@@ -203277,7 +204141,7 @@ function createNativeGitHubOAuth(auth2, baseUrl, options = {}) {
         if (typeof payload.url !== "string") throw new Error("Missing GitHub authorization URL");
         const state2 = new URL(payload.url).searchParams.get("state");
         if (!state2) throw new Error("Missing GitHub OAuth state");
-        const marker = (0, import_node_crypto48.randomBytes)(32).toString("base64url");
+        const marker = (0, import_node_crypto49.randomBytes)(32).toString("base64url");
         const stateCookie = response.headers.getSetCookie().map((value2) => /^((?:__Secure-)?better-auth\.state)=([^;]+)/.exec(value2)).find(Boolean);
         const flow = {
           expiresAt: now2() + FLOW_TTL_MS,
@@ -203577,7 +204441,7 @@ var NotificationDispatcher = class extends WorkerJobPoller {
 var notificationDispatcher = new NotificationDispatcher();
 
 // oauth.ts
-var import_node_crypto49 = require("node:crypto");
+var import_node_crypto50 = require("node:crypto");
 var CLIENT_ID_PREFIX = "ovlc_";
 var AUTH_CODE_PREFIX = "ovla_";
 var AUTH_CODE_TTL_MS = 5 * 60 * 1e3;
@@ -203611,12 +204475,12 @@ function oauthSigningSecret() {
   return process.env.OVERLORD_OAUTH_SIGNING_SECRET?.trim() || process.env.BETTER_AUTH_SECRET?.trim() || "overlord-local-oauth-development-secret";
 }
 function signPayload(payload) {
-  return (0, import_node_crypto49.createHmac)("sha256", oauthSigningSecret()).update(payload).digest("base64url");
+  return (0, import_node_crypto50.createHmac)("sha256", oauthSigningSecret()).update(payload).digest("base64url");
 }
 function fixedTimeEqual(a5, b5) {
   const left = Buffer.from(a5);
   const right = Buffer.from(b5);
-  return left.length === right.length && (0, import_node_crypto49.timingSafeEqual)(left, right);
+  return left.length === right.length && (0, import_node_crypto50.timingSafeEqual)(left, right);
 }
 function jsonError(res, status, error64, description) {
   res.status(status).json({ error: error64, error_description: description });
@@ -203937,7 +204801,7 @@ async function handleOAuthApprove(req, res) {
       issuanceWorkspaceUserId: consent.issuanceWorkspace.workspaceUserId
     }
   );
-  const code = `${AUTH_CODE_PREFIX}${(0, import_node_crypto49.randomBytes)(32).toString("base64url")}`;
+  const code = `${AUTH_CODE_PREFIX}${(0, import_node_crypto50.randomBytes)(32).toString("base64url")}`;
   authorizationCodes.set(code, {
     clientId: parsed.clientId,
     redirectUri: parsed.redirectUri,
@@ -203981,7 +204845,7 @@ async function handleOAuthToken(req, res) {
     jsonError(res, 400, "invalid_target", "OAuth resource does not match the authorization code.");
     return;
   }
-  const challenge = (0, import_node_crypto49.createHash)("sha256").update(codeVerifier).digest("base64url");
+  const challenge = (0, import_node_crypto50.createHash)("sha256").update(codeVerifier).digest("base64url");
   if (!codeVerifier || challenge !== entry.codeChallenge) {
     await revokeOrphanedAccessToken(entry.accessToken);
     jsonError(res, 400, "invalid_grant", "PKCE verification failed.");
@@ -204902,12 +205766,12 @@ var TerminalSessionObserver = class extends PollLoop {
 var terminalSessionObserver = new TerminalSessionObserver();
 
 // webhook-security.ts
-var import_node_crypto50 = require("node:crypto");
+var import_node_crypto51 = require("node:crypto");
 var import_promises6 = __toESM(require("node:dns/promises"), 1);
 var import_node_net = require("node:net");
 function signWebhookPayload(secret, rawBody) {
   const timestamp2 = Math.floor(Date.now() / 1e3);
-  const signature = (0, import_node_crypto50.createHmac)("sha256", secret).update(`${timestamp2}.${rawBody}`).digest("hex");
+  const signature = (0, import_node_crypto51.createHmac)("sha256", secret).update(`${timestamp2}.${rawBody}`).digest("hex");
   return { header: `t=${timestamp2},v1=${signature}`, timestamp: timestamp2 };
 }
 function internalHostPatterns() {
@@ -205244,7 +206108,7 @@ async function recordSubscriptionFailure(client, subscriptionId, currentConsecut
 var webhookDispatcher = new WebhookDispatcher();
 
 // webhooks.ts
-var import_node_crypto51 = require("node:crypto");
+var import_node_crypto52 = require("node:crypto");
 var WEBHOOK_SECRET_SCHEME = "whsec";
 var SUBSCRIPTION_COLUMNS = "id, workspace_id, project_id, name, endpoint_url, secret, event_types_json, payload_mode, created_by_workspace_user_id, enabled, disabled_reason, consecutive_failures, last_success_at, last_failure_at, created_at, updated_at, revision";
 function parseEventTypes(json2) {
@@ -205277,7 +206141,7 @@ function toSubscriptionDto(row) {
   };
 }
 function generateWebhookSecret() {
-  return { secret: `${WEBHOOK_SECRET_SCHEME}_${(0, import_node_crypto51.randomBytes)(24).toString("hex")}` };
+  return { secret: `${WEBHOOK_SECRET_SCHEME}_${(0, import_node_crypto52.randomBytes)(24).toString("hex")}` };
 }
 function normalizeEventTypes(input2) {
   if (!Array.isArray(input2) || input2.length === 0) {
@@ -205910,6 +206774,7 @@ app.post(
   )
 );
 if (mcpEnabled) {
+  onHostedMcpTaskSettled(pollAfterMutation);
   app.get("/mcp", requireAuthenticatedSession, projectAutomationRouteGuard, (req, res) => {
     res.json(mcpServerInfo(req));
   });
@@ -206200,6 +207065,10 @@ app.put(
 app.post(
   "/api/workspaces/:id/agent-catalog/refresh",
   handle3((req) => refreshAgentCatalog(req.params.id), { mutates: true })
+);
+app.post(
+  "/api/workspaces/:id/agent-catalog/live-models",
+  handle3((req) => reportAgentLiveModels(req.body, req.params.id), { mutates: true })
 );
 app.get(
   "/api/profile",
@@ -206937,6 +207806,13 @@ app.patch(
     requires: PERMISSIONS.MISSION_UPDATE
   })
 );
+app.delete(
+  "/api/missions/:id/artifacts/:artifactId",
+  handle3((req) => deleteArtifact(req.params.id, req.params.artifactId), {
+    mutates: true,
+    requires: PERMISSIONS.MISSION_UPDATE
+  })
+);
 app.get(
   "/api/missions/:id/file-changes",
   handle3((req) => {
@@ -206983,6 +207859,10 @@ app.post(
 app.post(
   "/api/objectives/:id/launch",
   handle3((req) => launchObjective(req.params.id, req.body), { mutates: true })
+);
+app.post(
+  "/api/objectives/:id/session-channels",
+  handle3((req) => mintObjectiveSessionChannel(req.params.id, req.body), { mutates: true })
 );
 app.get(
   "/api/objectives/:id/prompt",
