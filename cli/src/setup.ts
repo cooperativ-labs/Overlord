@@ -50,7 +50,7 @@ import {
 } from './terminal-profile.js';
 
 const DESKTOP_DOWNLOAD_URL =
-  'https://github.com/cooperativ-labs/OpenOverlord/releases/latest/download/';
+  'https://github.com/cooperativ-labs/Overlord/releases/latest/download/';
 
 const TERMINAL_OPTIONS = [
   { label: 'Terminal', launcher: 'Terminal' },

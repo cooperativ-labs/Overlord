@@ -47,12 +47,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/cooperativ-labs/OpenOverlord.git",
+    "url": "git+https://github.com/cooperativ-labs/Overlord.git",
     "directory": "cli"
   },
-  "homepage": "https://github.com/cooperativ-labs/OpenOverlord/tree/main/cli#readme",
+  "homepage": "https://github.com/cooperativ-labs/Overlord/tree/main/cli#readme",
   "bugs": {
-    "url": "https://github.com/cooperativ-labs/OpenOverlord/issues"
+    "url": "https://github.com/cooperativ-labs/Overlord/issues"
   },
   "publishConfig": {
     "registry": "https://registry.npmjs.org/"

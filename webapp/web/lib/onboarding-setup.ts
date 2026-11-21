@@ -22,7 +22,7 @@ function writeOnboardingSetupPending({ pending }: { pending: boolean }): void {
 }
 
 export const DESKTOP_RELEASES_URL =
-  'https://github.com/cooperativ-labs/OpenOverlord/releases/latest';
+  'https://github.com/cooperativ-labs/Overlord/releases/latest';
 
 export const CLI_INSTALL_COMMAND = 'npm install -g overlord-cli';
 

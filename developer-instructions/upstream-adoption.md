@@ -30,7 +30,7 @@ points at the private distribution repository and `upstream` points at public
 OpenOverlord:
 
 ```bash
-git remote add upstream https://github.com/cooperativ-labs/OpenOverlord
+git remote add upstream https://github.com/cooperativ-labs/Overlord
 git fetch upstream
 git branch --track upstream-main upstream/main
 git checkout -b distribution upstream/main

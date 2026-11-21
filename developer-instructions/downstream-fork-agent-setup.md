@@ -88,7 +88,7 @@ Important current gaps:
 Use a downstream distribution fork with upstream as a remote:
 
 ```bash
-git remote add upstream https://github.com/cooperativ-labs/OpenOverlord
+git remote add upstream https://github.com/cooperativ-labs/Overlord
 git fetch upstream
 git branch --track upstream-main upstream/main
 git checkout -b distribution upstream/main
