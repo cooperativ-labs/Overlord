@@ -8,6 +8,7 @@ import type {
   UpdateEverhourTimeBody
 } from '@overlord/contract/ext/everhour';
 import type { DatabaseClient } from '@overlord/database';
+import { ERASED_EVERHOUR_ACTOR } from '../../../packages/core/service/change-feed-retention.ts';
 
 import {
   type ExternalAccount,
@@ -270,16 +271,21 @@ export function createEverhourService(connections: () => ProfileConnections) {
     profileId: string;
   }): Promise<boolean> {
     const actors = await client.all<{ actor_workspace_user_id: string }>(
-      `SELECT DISTINCT actor_workspace_user_id
+      `SELECT actor_workspace_user_id
+       FROM ext_everhour_connection_attribution
+      WHERE connection_id = ?
+      UNION
+      SELECT DISTINCT actor_workspace_user_id
        FROM entity_changes
       WHERE entity_type = 'everhour:workspace_connection'
         AND entity_id = ?
         AND operation IN ('insert', 'update')
         AND actor_workspace_user_id IS NOT NULL`,
-      [connectionId]
+      [connectionId, connectionId]
     );
     if (actors.length === 0) return false;
     for (const actor of actors) {
+      if (actor.actor_workspace_user_id === ERASED_EVERHOUR_ACTOR) return false;
       const membership = await client.get<{ profile_id: string }>(
         `SELECT profile_id FROM workspace_users WHERE id = ?`,
         [actor.actor_workspace_user_id]

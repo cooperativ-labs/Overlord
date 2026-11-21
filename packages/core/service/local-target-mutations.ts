@@ -191,6 +191,7 @@ export async function createLocalTargetMutationRequest({
   input,
   operationId = null,
   resourceKey = null,
+  backgroundProbeKey = null,
   eventSummary
 }: {
   ctx: ServiceContext;
@@ -212,8 +213,10 @@ export async function createLocalTargetMutationRequest({
   operationId?: string | null;
   /** Project resource to resolve at claim (mission-less calls); null means primary. */
   resourceKey?: string | null;
+  /** Internal marker supplied only by the scoped terminal observer. */
+  backgroundProbeKey?: string | null;
   eventSummary?: string;
-}): Promise<{ id: string; reused: boolean }> {
+}): Promise<{ id: string; reused: boolean; createdAt: string }> {
   const mission = missionId === null ? null : await resolveMissionId(ctx, missionId);
   const resolvedProjectId = await resolveProjectId(ctx, projectId);
   const objectiveId =
@@ -221,11 +224,11 @@ export async function createLocalTargetMutationRequest({
   const idempotencyKey = operationId?.trim() || null;
   if (idempotencyKey !== null) {
     const existing = (await ctx.db.get(
-      `SELECT id FROM execution_requests
+      `SELECT id, created_at FROM execution_requests
         WHERE workspace_id = ? AND idempotency_key = ? AND deleted_at IS NULL`,
       [ctx.workspace.id, idempotencyKey]
-    )) as { id: string } | undefined;
-    if (existing) return { id: existing.id, reused: true };
+    )) as { id: string; created_at: string } | undefined;
+    if (existing) return { id: existing.id, reused: true, createdAt: existing.created_at };
   }
   const now = nowIso();
   const id = newId();
@@ -239,8 +242,8 @@ export async function createLocalTargetMutationRequest({
             requested_agent, requested_model, requested_reasoning_effort, launch_mode,
             launch_flags_json, requested_source, idempotency_key, status,
             requested_by_workspace_user_id, resolved_resource_id, resolved_working_directory,
-            metadata_json, created_at, updated_at, revision)
-         VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, NULL, 'run', '{}', ?, ?, 'queued', ?, NULL, NULL, ?, ?, ?, 1)`,
+            metadata_json, created_at, updated_at, revision, background_probe_key)
+         VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, NULL, 'run', '{}', ?, ?, 'queued', ?, NULL, NULL, ?, ?, ?, 1, ?)`,
       [
         id,
         ctx.workspace.id,
@@ -253,20 +256,22 @@ export async function createLocalTargetMutationRequest({
         ctx.actorWorkspaceUserId,
         JSON.stringify(metadata),
         now,
-        now
+        now,
+        backgroundProbeKey
       ]
     );
-    await recordChange({
-      ctx: txCtx,
-      entityType: 'execution_request',
-      entityId: id,
-      operation: 'insert',
-      entityRevision: 1,
-      projectId: resolvedProjectId,
-      missionId: mission?.id ?? null,
-      objectiveId,
-      changedFields: ['status', 'requested_source', 'metadata_json']
-    });
+    if (backgroundProbeKey === null)
+      await recordChange({
+        ctx: txCtx,
+        entityType: 'execution_request',
+        entityId: id,
+        operation: 'insert',
+        entityRevision: 1,
+        projectId: resolvedProjectId,
+        missionId: mission?.id ?? null,
+        objectiveId,
+        changedFields: ['status', 'requested_source', 'metadata_json']
+      });
     // A mission event needs a mission. A capability call queued without one
     // (settings probe, repository read) is recorded by `entity_changes` only.
     if (mission !== null && objectiveId !== null) {
@@ -290,7 +295,7 @@ export async function createLocalTargetMutationRequest({
     }
   });
 
-  return { id, reused: false };
+  return { id, reused: false, createdAt: now };
 }
 
 /**
@@ -438,6 +443,7 @@ export async function completeLocalTargetMutationRequest({
 }): Promise<LocalTargetMutationPayload | null> {
   const row = (await ctx.db.get(
     `SELECT id, workspace_id, project_id, mission_id, objective_id, status, revision, metadata_json,
+            background_probe_key,
             requested_source, COALESCE(claimed_by_execution_target_id, execution_target_id) AS target_id
        FROM execution_requests
       WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
@@ -452,6 +458,7 @@ export async function completeLocalTargetMutationRequest({
         status: string;
         revision: number;
         metadata_json: string;
+        background_probe_key: string | null;
         requested_source: string;
         target_id: string | null;
       }
@@ -467,6 +474,9 @@ export async function completeLocalTargetMutationRequest({
       409
     );
   }
+  const mutation = parseLocalTargetMutation(row.metadata_json);
+  // A runner retry after a lost completion response keeps the first result.
+  if (row.background_probe_key && mutation?.result) return mutation;
   if (row.status !== 'launching' && row.status !== 'claimed') {
     throw new ServiceError(
       `Cannot complete local-target mutation from status ${row.status}.`,
@@ -475,7 +485,6 @@ export async function completeLocalTargetMutationRequest({
     );
   }
 
-  const mutation = parseLocalTargetMutation(row.metadata_json);
   if (!mutation) {
     throw new ServiceError(
       'Execution request is missing local-target mutation metadata.',
@@ -504,7 +513,7 @@ export async function completeLocalTargetMutationRequest({
   const nextStatus = result.ok ? 'launched' : 'failed';
   const lastError = result.ok ? null : result.message;
 
-  await ctx.db.transaction(async tx => {
+  return ctx.db.transaction(async tx => {
     const txCtx = { ...ctx, db: tx };
     const updated = await txCtx.db.run(
       `UPDATE execution_requests
@@ -528,23 +537,32 @@ export async function completeLocalTargetMutationRequest({
       ]
     );
     if (updated.changes === 0) {
+      if (row.background_probe_key) {
+        const current = await tx.get<{ metadata_json: string }>(
+          'SELECT metadata_json FROM execution_requests WHERE id = ? AND workspace_id = ?',
+          [row.id, ctx.workspace.id]
+        );
+        const completed = current && parseLocalTargetMutation(current.metadata_json);
+        if (completed?.result) return completed;
+      }
       throw new ServiceError(
         'Execution request changed while completing local-target mutation.',
         'execution_request_conflict',
         409
       );
     }
-    await recordChange({
-      ctx: txCtx,
-      entityType: 'execution_request',
-      entityId: row.id,
-      operation: 'update',
-      entityRevision: revision,
-      projectId: row.project_id,
-      missionId: row.mission_id,
-      objectiveId: row.objective_id,
-      changedFields: ['status', 'metadata_json', 'last_error', 'launch_completed_at']
-    });
+    if (row.background_probe_key === null)
+      await recordChange({
+        ctx: txCtx,
+        entityType: 'execution_request',
+        entityId: row.id,
+        operation: 'update',
+        entityRevision: revision,
+        projectId: row.project_id,
+        missionId: row.mission_id,
+        objectiveId: row.objective_id,
+        changedFields: ['status', 'metadata_json', 'last_error', 'launch_completed_at']
+      });
     if (row.mission_id !== null && row.objective_id !== null) {
       await txCtx.db.run(
         `INSERT INTO mission_events
@@ -566,6 +584,7 @@ export async function completeLocalTargetMutationRequest({
       );
     }
     if (
+      row.background_probe_key === null &&
       mutation.capability === 'inspectLatchSession' &&
       !result.ok &&
       result.code === 'LATCH_SESSION_ABSENT' &&
@@ -580,9 +599,8 @@ export async function completeLocalTargetMutationRequest({
       });
     }
     await recordAnswerDeliveryOutcome({ ctx: txCtx, mutation, result });
+    return { ...mutation, result: storedResult };
   });
-
-  return parseLocalTargetMutation(JSON.stringify(metadata));
 }
 
 /**
@@ -665,7 +683,7 @@ export async function cancelQueuedLocalTargetMutation({
   return await ctx.db.transaction(async tx => {
     const txCtx = { ...ctx, db: tx };
     const row = (await tx.get(
-      `SELECT id, project_id, mission_id, objective_id, revision, metadata_json
+      `SELECT id, project_id, mission_id, objective_id, revision, metadata_json, background_probe_key
          FROM execution_requests
         WHERE id = ? AND workspace_id = ? AND requested_source = ?
           AND status = 'queued' AND deleted_at IS NULL`,
@@ -678,6 +696,7 @@ export async function cancelQueuedLocalTargetMutation({
           objective_id: string | null;
           revision: number;
           metadata_json: string;
+          background_probe_key: string | null;
         }
       | undefined;
     if (!row) return { cancelled: false };
@@ -688,17 +707,18 @@ export async function cancelQueuedLocalTargetMutation({
       ['Withdrawn before any runner claimed it.', now, row.revision + 1, row.id, row.revision]
     );
     if (updated.changes === 0) return { cancelled: false };
-    await recordChange({
-      ctx: txCtx,
-      entityType: 'execution_request',
-      entityId: row.id,
-      operation: 'update',
-      entityRevision: row.revision + 1,
-      projectId: row.project_id,
-      missionId: row.mission_id,
-      objectiveId: row.objective_id,
-      changedFields: ['status', 'last_error']
-    });
+    if (row.background_probe_key === null)
+      await recordChange({
+        ctx: txCtx,
+        entityType: 'execution_request',
+        entityId: row.id,
+        operation: 'update',
+        entityRevision: row.revision + 1,
+        projectId: row.project_id,
+        missionId: row.mission_id,
+        objectiveId: row.objective_id,
+        changedFields: ['status', 'last_error']
+      });
     await recordAnswerDeliveryForTerminalRequest({
       ctx: txCtx,
       metadataJson: row.metadata_json,

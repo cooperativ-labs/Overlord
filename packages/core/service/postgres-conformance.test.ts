@@ -8,15 +8,22 @@ import {
 } from '@overlord/database';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { after, describe, it } from 'node:test';
 
 import { seedMissionItemsFixture } from '../../../database/src/mission-items.test-fixture.ts';
 
 import { listObjectiveFileChanges } from './changes.js';
+import {
+  ERASED_EVERHOUR_ACTOR,
+  eraseEverhourActorEvidence,
+  pruneChangeFeedBatch
+} from './change-feed-retention.js';
 import { createServiceContext } from './context.js';
 import { buildDeliveryReport } from './delivery-report.js';
 import { ServiceError } from './errors.js';
 import { claimNextExecutionRequest, expireStaleExecutionRequests } from './execution-requests.js';
+import { recordRunnerHeartbeat } from './execution-target-runners.js';
 import { backendHostFingerprint, ensureCallerDeviceTarget } from './execution-targets.js';
 import {
   applyMissionItemSupersedeRules,
@@ -365,6 +372,137 @@ describe('toPostgresPlaceholders', () => {
 
 for (const adapter of adapters) {
   describe(`backend runtime conformance [${adapter.label}]`, () => {
+    it('anonymizes preserved and unpruned Everhour actors while retaining ambiguity', async () => {
+      const { client, teardown } = await adapter.create();
+      try {
+        const actor = await client.get<{ id: string }>(
+          `SELECT id FROM workspace_users WHERE workspace_id = ? LIMIT 1`,
+          [WORKSPACE_ID]
+        );
+        assert.ok(actor);
+        await client.run(
+          `INSERT INTO ext_everhour_connection_attribution (connection_id, actor_workspace_user_id) VALUES (?, ?)`,
+          ['preserved', actor.id]
+        );
+        await client.run(
+          `INSERT INTO entity_changes (id, workspace_id, entity_type, entity_id, operation, actor_workspace_user_id, source, occurred_at)
+          VALUES (?, ?, 'everhour:workspace_connection', 'unpruned', 'insert', ?, 'test', ?)`,
+          [randomUUID(), WORKSPACE_ID, actor.id, ISO()]
+        );
+        await client.transaction(tx => eraseEverhourActorEvidence(tx, actor.id));
+        const rows = await client.all<{ connection_id: string; actor_workspace_user_id: string }>(
+          `SELECT connection_id, actor_workspace_user_id FROM ext_everhour_connection_attribution ORDER BY connection_id`
+        );
+        assert.deepEqual(rows, [
+          { connection_id: 'preserved', actor_workspace_user_id: ERASED_EVERHOUR_ACTOR },
+          { connection_id: 'unpruned', actor_workspace_user_id: ERASED_EVERHOUR_ACTOR }
+        ]);
+        await client.transaction(tx => eraseEverhourActorEvidence(tx, ERASED_EVERHOUR_ACTOR));
+        const markerCount = await client.get<{ n: number }>(
+          `SELECT COUNT(*) AS n FROM ext_everhour_connection_attribution WHERE actor_workspace_user_id = ?`,
+          [ERASED_EVERHOUR_ACTOR]
+        );
+        assert.equal(Number(markerCount?.n), 2);
+      } finally {
+        await teardown();
+      }
+    });
+    it('prunes bounded old prefixes and atomically preserves attribution', async () => {
+      const { client, teardown } = await adapter.create();
+      try {
+        const actor = await client.get<{ id: string }>(
+          `SELECT id FROM workspace_users WHERE workspace_id = ? LIMIT 1`,
+          [WORKSPACE_ID]
+        );
+        assert.ok(actor);
+        const insert = async (id: string, at: string) => {
+          await client.run(
+            `INSERT INTO entity_changes (id, workspace_id, entity_type, entity_id, operation, actor_workspace_user_id, source, occurred_at)
+            VALUES (?, ?, 'everhour:workspace_connection', ?, 'insert', ?, 'test', ?)`,
+            [randomUUID(), WORKSPACE_ID, id, actor.id, at]
+          );
+        };
+        await insert('legacy-a', ISO(-30 * 24 * 60 * 60 * 1000));
+        await insert('legacy-b', ISO(-30 * 24 * 60 * 60 * 1000));
+        await insert('recent', ISO());
+        await assert.rejects(
+          () =>
+            client.transaction(async tx => {
+              await pruneChangeFeedBatch(tx, { limit: 1 });
+              throw new Error('simulate rollback');
+            }),
+          /simulate rollback/
+        );
+        const rolledBack = await client.get<{ n: number }>(
+          `SELECT COUNT(*) AS n FROM entity_changes WHERE entity_id = 'legacy-a'`
+        );
+        assert.equal(Number(rolledBack?.n), 1);
+        const rolledBackBoundary = await client.get<{ retained_through: number }>(
+          `SELECT retained_through FROM entity_change_retention WHERE id = 1`
+        );
+        assert.equal(Number(rolledBackBoundary?.retained_through), 0);
+        const rolledBackEvidence = await client.get<{ n: number }>(
+          `SELECT COUNT(*) AS n FROM ext_everhour_connection_attribution`
+        );
+        assert.equal(Number(rolledBackEvidence?.n), 0);
+        const first = await pruneChangeFeedBatch(client, { limit: 1 });
+        assert.equal(first.deleted, 1);
+        assert.ok(first.retainedThrough > 0);
+        const second = await pruneChangeFeedBatch(client, { limit: 10 });
+        assert.equal(second.deleted, 1);
+        assert.ok(second.retainedThrough > first.retainedThrough);
+        const retry = await pruneChangeFeedBatch(client, { limit: 10 });
+        assert.deepEqual(retry, { deleted: 0, retainedThrough: second.retainedThrough });
+        const evidence = await client.all<{ connection_id: string }>(
+          `SELECT connection_id FROM ext_everhour_connection_attribution ORDER BY connection_id`
+        );
+        assert.deepEqual(
+          evidence.map(row => row.connection_id),
+          ['legacy-a', 'legacy-b']
+        );
+        const recent = await client.get<{ n: number }>(
+          `SELECT COUNT(*) AS n FROM entity_changes WHERE entity_id = 'recent'`
+        );
+        assert.equal(Number(recent?.n), 1);
+      } finally {
+        await teardown();
+      }
+    });
+    it('preserves legacy Everhour actor evidence on migration replay', async () => {
+      const { client, teardown } = await adapter.create();
+      try {
+        const actor = await client.get<{ id: string }>(
+          `SELECT id FROM workspace_users WHERE workspace_id = ? LIMIT 1`,
+          [WORKSPACE_ID]
+        );
+        assert.ok(actor);
+        await client.run(
+          `INSERT INTO entity_changes (id, workspace_id, entity_type, entity_id, operation, actor_workspace_user_id, source, occurred_at)
+           VALUES (?, ?, 'everhour:workspace_connection', 'legacy-key', 'insert', ?, 'webapp', ?)`,
+          [randomUUID(), WORKSPACE_ID, actor.id, ISO()]
+        );
+        const dialect = client.dialect;
+        const sql = readFileSync(
+          new URL(
+            `../../../database/${dialect}/migrations/20261121120000_ext_everhour_attribution_evidence.sql`,
+            import.meta.url
+          ),
+          'utf8'
+        );
+        await client.exec(sql);
+        await client.exec(sql);
+        const rows = await client.all<{ actor_workspace_user_id: string }>(
+          `SELECT actor_workspace_user_id FROM ext_everhour_connection_attribution WHERE connection_id = ?`,
+          ['legacy-key']
+        );
+        assert.deepEqual(
+          rows.map(row => row.actor_workspace_user_id),
+          [actor.id]
+        );
+      } finally {
+        await teardown();
+      }
+    });
     it('appends entity_changes and reads them back in seq order (realtime/sync)', async () => {
       const { client, teardown } = await adapter.create();
       try {
@@ -577,6 +715,32 @@ for (const adapter of adapters) {
         assert.equal(registration.relation, 'native');
         assert.equal(registration.health, 'healthy');
         assert.ok(registration.last_heartbeat_at);
+
+        const registrationEvents = async () =>
+          Number(
+            (await client.get<{ n: number }>(
+              `SELECT COUNT(*) AS n FROM entity_changes WHERE entity_type = 'execution_target_runner_registration' AND entity_id = ?`,
+              [registration.id]
+            ))!.n
+          );
+        assert.equal(await registrationEvents(), 1);
+        await recordRunnerHeartbeat({
+          ctx,
+          executionTargetId: graph.executionTargetId,
+          runnerInstanceId: 'conformance-runner',
+          relation: 'native',
+          runnerVersion: '0.0.0-test'
+        });
+        assert.equal(await registrationEvents(), 1, 'a fresh heartbeat creates no feed event');
+        await recordRunnerHeartbeat({
+          ctx,
+          executionTargetId: graph.executionTargetId,
+          runnerInstanceId: 'conformance-runner',
+          relation: 'native',
+          runnerVersion: '0.0.0-test',
+          health: 'degraded'
+        });
+        assert.equal(await registrationEvents(), 2, 'a health change creates a feed event');
 
         const attribution = (await client.get(
           `SELECT claimed_by_runner_registration_id AS reg FROM execution_requests WHERE id = ?`,

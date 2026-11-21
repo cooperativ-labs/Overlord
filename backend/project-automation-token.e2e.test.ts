@@ -54,6 +54,7 @@ interface ApiResponse {
   status: number;
   text: string;
   json: any;
+  headers: Headers;
 }
 
 let tempDir = '';
@@ -107,7 +108,7 @@ async function request(
   } catch {
     json = null;
   }
-  return { status: response.status, text, json };
+  return { status: response.status, text, json, headers: response.headers };
 }
 
 const full = (method: string, route: string, body?: unknown, headers?: Record<string, string>) =>
@@ -676,6 +677,11 @@ describe('reads inside the selected project', () => {
     const retired = await protocol(automationSecret, 'search-missions', { '--query': 'feedback' });
     assert.equal(retired.status, 404, 'search-missions alias is retired');
 
+    const baselineResponse = await auto('GET', '/sync/baseline');
+    assert.equal(baselineResponse.status, 200, baselineResponse.text);
+    assert.equal(baselineResponse.headers.get('cache-control'), 'private, no-store');
+    const baseline = baselineResponse.json;
+    assert.ok(Number.isSafeInteger(baseline.cursor) && baseline.cursor >= 0);
     const sync = await expectOk(auto('GET', '/sync/changes?after=0'), 'sync changes');
     assert.ok(sync.changes.length > 0, 'P changes are visible');
     for (const change of sync.changes) {
@@ -688,6 +694,26 @@ describe('reads inside the selected project', () => {
       fullSync.changes.some((change: Json) => change.projectId === Q.projectId),
       'control: the full token sees Q rows in the same feed'
     );
+    assert.ok(baseline.cursor > 0);
+    const control = new Database(dbPath);
+    try {
+      control
+        .prepare(`UPDATE entity_change_retention SET retained_through = ? WHERE id = 1`)
+        .run(baseline.cursor);
+      const expired = await auto('GET', '/sync/changes?after=0');
+      assert.equal(expired.status, 409, expired.text);
+      assert.equal(expired.headers.get('cache-control'), 'private, no-store');
+      assert.equal(expired.json.code, 'snapshot_required');
+      assert.ok(expired.json.cursor >= baseline.cursor);
+      const resumed = await expectOk(
+        auto('GET', `/sync/changes?after=${expired.json.cursor}`),
+        'resumed sync'
+      );
+      assert.ok(resumed.cursor >= expired.json.cursor);
+    } finally {
+      control.prepare(`UPDATE entity_change_retention SET retained_through = 0 WHERE id = 1`).run();
+      control.close();
+    }
   });
 
   it('returns 404 for Q and R by UUID, display id, storage key and agent request id', async () => {

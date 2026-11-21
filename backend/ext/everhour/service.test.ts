@@ -243,6 +243,51 @@ test('the service does not adopt a workspace key without unique actor attributio
   );
 });
 
+test('legacy key adoption retains attribution when the source feed row was pruned', async () => {
+  await clearEverhourApiKey();
+  const connectionId = newId();
+  const now = nowIso();
+  const actorId = getActorWorkspaceUserId();
+  assert.ok(actorId);
+  db.prepare(
+    `INSERT INTO ext_everhour_workspace_connections
+       (id, workspace_id, api_key_secret, account_id, account_name, created_at, updated_at, revision)
+     VALUES (?, ?, ?, ?, ?, ?, ?, 1)`
+  ).run(connectionId, WORKSPACE.id, 'preserved-workspace-key', '7', 'Legacy Owner', now, now);
+  db.prepare(
+    `INSERT INTO ext_everhour_connection_attribution (connection_id, actor_workspace_user_id)
+     VALUES (?, ?)`
+  ).run(connectionId, actorId);
+  assert.equal(await everhourConnected(), true);
+  const scrubbed = db
+    .prepare(`SELECT api_key_secret FROM ext_everhour_workspace_connections WHERE id = ?`)
+    .get(connectionId) as { api_key_secret: string };
+  assert.equal(scrubbed.api_key_secret, 'revoked:v1');
+});
+
+test('preserved unresolved attribution prevents legacy key adoption', async () => {
+  await clearEverhourApiKey();
+  const connectionId = newId();
+  const now = nowIso();
+  const actorId = getActorWorkspaceUserId();
+  assert.ok(actorId);
+  db.prepare(
+    `INSERT INTO ext_everhour_workspace_connections
+       (id, workspace_id, api_key_secret, account_id, account_name, created_at, updated_at, revision)
+     VALUES (?, ?, ?, ?, ?, ?, ?, 1)`
+  ).run(connectionId, WORKSPACE.id, 'ambiguous-key', '8', 'Unknown', now, now);
+  const insert = db.prepare(
+    `INSERT INTO ext_everhour_connection_attribution (connection_id, actor_workspace_user_id) VALUES (?, ?)`
+  );
+  insert.run(connectionId, actorId);
+  insert.run(connectionId, '!overlord:erased-actor');
+  assert.equal(await everhourConnected(), false);
+  db.prepare(`UPDATE ext_everhour_workspace_connections SET deleted_at = ? WHERE id = ?`).run(
+    now,
+    connectionId
+  );
+});
+
 test('getProjectEverhourLink reads extension-owned project link rows', async () => {
   const project = await createProject({ name: 'Everhour Link Project' });
   assert.deepEqual(await getProjectEverhourLink(project.id), {

@@ -120,11 +120,13 @@ import {
 } from './agent-session-routes.ts';
 import { auth, getAllowedBrowserOrigins, requireAuthenticatedSession } from './auth.ts';
 import { createChatRouter } from './chat.ts';
+import { ChangeFeedRetentionWorker } from './change-feed-retention-worker.ts';
 import { ChatNotificationDispatcher } from './chat-notification-dispatcher.ts';
 import { ChatWorker } from './chat-worker.ts';
 import {
   DATABASE_DIALECT,
   DATABASE_PATH,
+  currentMaxSeq,
   getActiveProfileId,
   getActiveTokenProjectIds,
   getActorWorkspaceUserId,
@@ -193,7 +195,12 @@ import {
   updateNotificationPreferences
 } from './push-notifications.ts';
 import { requireAnyWorkspacePermission, requireWorkspacePermission } from './rbac.ts';
-import { readableChangeFeedWorkspaceIds, readChangesAfter, realtime } from './realtime.ts';
+import {
+  ExpiredChangeCursor,
+  readableChangeFeedWorkspaceIds,
+  readChangesAfter,
+  realtime
+} from './realtime.ts';
 import { listObjectiveReportDraftsForOperator } from './report-drafts.ts';
 import {
   ApiError,
@@ -1252,6 +1259,20 @@ const streamRealtime = asyncRoute(async (req, res) => {
 app.get('/api/stream', streamRealtime);
 app.get('/realtime', requireAuthenticatedSession, projectAutomationRouteGuard, streamRealtime);
 app.get(
+  '/sync/baseline',
+  requireAuthenticatedSession,
+  projectAutomationRouteGuard,
+  asyncRoute(async (_req, res) => {
+    const workspaceIds = await readableChangeFeedWorkspaceIds();
+    if (workspaceIds.length === 0) {
+      res.status(403).json({ error: 'Permission denied: realtime catch-up' });
+      return;
+    }
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.json({ cursor: await currentMaxSeq() });
+  })
+);
+app.get(
   '/sync/changes',
   requireAuthenticatedSession,
   projectAutomationRouteGuard,
@@ -1266,7 +1287,15 @@ app.get(
       res.status(400).json({ error: 'Query parameter "after" must be a non-negative integer' });
       return;
     }
-    res.json(await readChangesAfter(afterSeq, workspaceIds));
+    try {
+      res.json(await readChangesAfter(afterSeq, workspaceIds));
+    } catch (error) {
+      if (!(error instanceof ExpiredChangeCursor)) throw error;
+      res.setHeader('Cache-Control', 'private, no-store');
+      res
+        .status(409)
+        .json({ error: error.message, code: 'snapshot_required', cursor: error.cursor });
+    }
   })
 );
 
@@ -2356,7 +2385,8 @@ export async function start(): Promise<void> {
   const backgroundLoops: PollLoop<unknown>[] = [
     ...mutationPollLoops,
     runQueueDispatchWorker,
-    terminalSessionObserver
+    terminalSessionObserver,
+    new ChangeFeedRetentionWorker()
   ];
   if (chatCloud()) {
     const chatWorker = new ChatWorker(

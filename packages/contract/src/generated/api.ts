@@ -5,10 +5,10 @@
 import { z } from 'zod';
 
 /** The contract version (contract/VERSION) this API description belongs to. */
-export const contractVersion = "179.12.0";
+export const contractVersion = "181.0.0";
 
 /** The API description's own version (OpenAPI `info.version`). */
-export const apiVersion = "6.5.1";
+export const apiVersion = "7.0.0";
 
 /** A non-JSON request or response body: raw bytes (G3). */
 export type BinaryBody = Uint8Array | ArrayBuffer | Blob;
@@ -3572,8 +3572,11 @@ export type RealtimeStreamEvent = {
   cursor: number;
 } | RealtimeChangeEventDto | {
   type: "refresh";
+} | {
+  type: "snapshot_required";
+  cursor: number;
 };
-export const realtimeStreamEventSchema: z.ZodType<RealtimeStreamEvent> = z.union([z.object({ "type": z.literal("hello"), "cursor": z.int().min(0) }), realtimeChangeEventDtoSchema, z.object({ "type": z.literal("refresh") })]);
+export const realtimeStreamEventSchema: z.ZodType<RealtimeStreamEvent> = z.union([z.object({ "type": z.literal("hello"), "cursor": z.int().min(0) }), realtimeChangeEventDtoSchema, z.object({ "type": z.literal("refresh") }), z.object({ "type": z.literal("snapshot_required"), "cursor": z.int().min(0) })]);
 
 export type OAuthScope = "overlord.workspace.read" | "overlord.mission.read" | "overlord.mission.write" | "overlord.session.write";
 export const oAuthScopeSchema: z.ZodType<OAuthScope> = z.enum(["overlord.workspace.read", "overlord.mission.read", "overlord.mission.write", "overlord.session.write"]);
@@ -7073,6 +7076,11 @@ export interface GetRealtimeHeaderParams {
 }
 export const getRealtimeHeaderParamsSchema: z.ZodType<GetRealtimeHeaderParams> = z.object({ "last-event-id": z.exactOptional(z.string()) });
 
+export interface GetSyncBaselineResponse200 {
+  cursor: number;
+}
+export const getSyncBaselineResponse200Schema: z.ZodType<GetSyncBaselineResponse200> = z.object({ "cursor": z.int().min(0) });
+
 export interface GetSyncChangesQueryParams {
   /**
    * The cursor to read after (`0` for the beginning). Must be a non-negative number (floored); absent, blank, negative or non-numeric answers 400 `{ error }`.
@@ -7080,6 +7088,13 @@ export interface GetSyncChangesQueryParams {
   after: string;
 }
 export const getSyncChangesQueryParamsSchema: z.ZodType<GetSyncChangesQueryParams> = z.object({ "after": z.string() });
+
+export interface GetSyncChangesResponse409 {
+  error: string;
+  code: "snapshot_required";
+  cursor: number;
+}
+export const getSyncChangesResponse409Schema: z.ZodType<GetSyncChangesResponse409> = z.object({ "error": z.string(), "code": z.literal("snapshot_required"), "cursor": z.int().min(0) });
 
 export interface GetProjectsQueryParams {
   /**
@@ -10790,6 +10805,25 @@ export const apiOperations = {
     responses: { "200": { headers: [], content: { "text/event-stream": { kind: "event-stream", event: realtimeStreamEventSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
   },
   /**
+   * GET /sync/baseline: Acquire a commit-safe state refresh cursor
+   */
+  getSyncBaseline: {
+    operationId: "getSyncBaseline",
+    method: "GET",
+    path: "/sync/baseline",
+    tags: ["realtime"],
+    deprecated: false,
+    permission: "project:read",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["mobile","webapp"],
+    extension: null,
+    security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
+    parameters: { path: null, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: ["Cache-Control"], content: { "application/json": { kind: "json", schema: getSyncBaselineResponse200Schema } } }, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "500": apiResponses.InternalError }
+  },
+  /**
    * GET /sync/changes: Change feed catch-up
    */
   getSyncChanges: {
@@ -10806,7 +10840,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: null, query: getSyncChangesQueryParamsSchema, header: null },
     requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: syncChangesDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: syncChangesDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": { headers: ["Cache-Control"], content: { "application/json": { kind: "json", schema: getSyncChangesResponse409Schema } } }, "500": apiResponses.InternalError }
   },
   /**
    * GET /api/projects: List readable projects across the caller's workspaces

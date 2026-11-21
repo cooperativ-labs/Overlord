@@ -32,6 +32,7 @@ test('automation route guard closes legacy search and writes before handlers', (
     assert.equal(allowed('GET', '/api/missions/mission-id'), true);
     assert.equal(allowed('POST', '/api/protocol/create'), true);
     assert.equal(allowed('GET', '/sync/changes?after=0'), true);
+    assert.equal(allowed('GET', '/sync/baseline'), true);
   } finally {
     setActiveWorkspaceUser(null);
   }

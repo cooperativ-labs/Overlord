@@ -30,6 +30,7 @@ import {
 import { resolveLaunchSessionForExecutionTarget } from './project-execution-target.js';
 import { resolveObjectiveWorkingDirectory } from './projects.js';
 import { enqueueRunQueueDispatch } from './run-queue.js';
+import { TERMINAL_PROBE_TIMEOUT_MS } from './terminal-probe-policy.ts';
 import {
   LAUNCH_SESSION_METADATA_KEY,
   type LaunchSessionSnapshot,
@@ -303,6 +304,7 @@ type ExecutionRequestStateRow = {
   revision: number;
   launch_flags_json: string;
   launched_session_id: string | null;
+  background_probe_key: string | null;
 };
 
 async function getExecutionRequestStateRow({
@@ -314,7 +316,7 @@ async function getExecutionRequestStateRow({
 }): Promise<ExecutionRequestStateRow> {
   const row = (await ctx.db.get(
     `SELECT id, workspace_id, project_id, mission_id, objective_id, execution_target_id,
-              status, revision, launch_flags_json, launched_session_id
+              status, revision, launch_flags_json, launched_session_id, background_probe_key
          FROM execution_requests
         WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
     [requestId, ctx.workspace.id]
@@ -411,10 +413,14 @@ async function recordExecutionRequestUpdate({
   changedFields
 }: {
   ctx: ServiceContext;
-  row: Pick<ExecutionRequestStateRow, 'id' | 'project_id' | 'mission_id' | 'objective_id'>;
+  row: Pick<
+    ExecutionRequestStateRow,
+    'id' | 'project_id' | 'mission_id' | 'objective_id' | 'background_probe_key'
+  >;
   revision: number;
   changedFields: string[];
 }): Promise<void> {
+  if (row.background_probe_key !== null) return;
   await recordChange({
     ctx,
     entityType: 'execution_request',
@@ -691,7 +697,11 @@ export async function listExecutionRequests({
   includeInactive?: boolean;
   limit?: number;
 }): Promise<ExecutionRequestSummary[]> {
-  const conditions = ['er.workspace_id = ?', 'er.deleted_at IS NULL'];
+  const conditions = [
+    'er.workspace_id = ?',
+    'er.deleted_at IS NULL',
+    'er.background_probe_key IS NULL'
+  ];
   const params: Array<string | number> = [ctx.workspace.id];
   if (!includeInactive) {
     conditions.push(
@@ -755,13 +765,15 @@ export async function claimNextExecutionRequest({
     'er.deleted_at IS NULL',
     'o.deleted_at IS NULL',
     `(er.requested_source = ? OR o.state IN (${LAUNCHABLE_OBJECTIVE_STATES.map(() => '?').join(', ')}))`,
-    '(er.execution_target_id IS NULL OR er.execution_target_id = ?)'
+    '(er.execution_target_id IS NULL OR er.execution_target_id = ?)',
+    '(er.background_probe_key IS NULL OR er.created_at >= ?)'
   ];
   const params: string[] = [
     ctx.workspace.id,
     LOCAL_TARGET_MUTATION_REQUESTED_SOURCE,
     ...LAUNCHABLE_OBJECTIVE_STATES,
-    target.executionTargetId
+    target.executionTargetId,
+    new Date(Date.now() - TERMINAL_PROBE_TIMEOUT_MS).toISOString()
   ];
   if (projectId) {
     conditions.push('er.project_id = ?');
@@ -774,6 +786,7 @@ export async function claimNextExecutionRequest({
       `SELECT er.id, er.workspace_id, er.project_id, er.mission_id, er.objective_id,
                 er.execution_target_id, er.status, er.revision, er.launch_flags_json,
                 er.launched_session_id, er.resolved_working_directory, er.metadata_json,
+                er.background_probe_key,
                 o.resource_key
            FROM execution_requests er
            LEFT JOIN objectives o ON o.id = er.objective_id
@@ -828,17 +841,19 @@ export async function claimNextExecutionRequest({
     // an unreadable preference must never fail a claim, it just leaves the
     // snapshot absent, which callers treat as "resolve normally" (direct).
     let metadataJson = candidate.metadata_json;
-    try {
-      const session = await resolveLaunchSessionForExecutionTarget({
-        ctx: txCtx,
-        executionTargetId: candidate.execution_target_id ?? target.executionTargetId
-      });
-      metadataJson = JSON.stringify({
-        ...parseJsonObject(candidate.metadata_json),
-        [LAUNCH_SESSION_METADATA_KEY]: toLaunchSessionSnapshot(session, now)
-      });
-    } catch {
-      // Keep the request's existing metadata; the launch resolves direct.
+    if (candidate.background_probe_key === null) {
+      try {
+        const session = await resolveLaunchSessionForExecutionTarget({
+          ctx: txCtx,
+          executionTargetId: candidate.execution_target_id ?? target.executionTargetId
+        });
+        metadataJson = JSON.stringify({
+          ...parseJsonObject(candidate.metadata_json),
+          [LAUNCH_SESSION_METADATA_KEY]: toLaunchSessionSnapshot(session, now)
+        });
+      } catch {
+        // Keep the request's existing metadata; the launch resolves direct.
+      }
     }
 
     const updated = await txCtx.db.run(
@@ -1177,7 +1192,7 @@ export async function clearExecutionRequests({
     }
     const rows = (await txCtx.db.all(
       `SELECT id, workspace_id, project_id, mission_id, objective_id, execution_target_id,
-                status, revision, launch_flags_json, launched_session_id
+                status, revision, launch_flags_json, launched_session_id, background_probe_key
            FROM execution_requests
           WHERE ${conditions.join(' AND ')}`,
       params
@@ -1241,7 +1256,7 @@ export async function expireStaleExecutionRequests({
     const rows = (await txCtx.db.all(
       `SELECT er.id, er.workspace_id, er.project_id, er.mission_id, er.objective_id,
                 er.execution_target_id, er.status, er.revision, er.launch_flags_json,
-                er.launched_session_id
+                er.launched_session_id, er.background_probe_key
            FROM execution_requests er
            LEFT JOIN objectives o ON o.id = er.objective_id
           WHERE er.workspace_id = ?
@@ -1344,7 +1359,7 @@ export async function linkExecutionRequestToSession({
     const row = executionRequestId
       ? ((await txCtx.db.get(
           `SELECT id, workspace_id, project_id, mission_id, objective_id, execution_target_id,
-                    status, revision, launch_flags_json, launched_session_id
+                    status, revision, launch_flags_json, launched_session_id, background_probe_key
                FROM execution_requests
               WHERE id = ?
                 AND workspace_id = ?
@@ -1355,7 +1370,7 @@ export async function linkExecutionRequestToSession({
         )) as ExecutionRequestStateRow | undefined)
       : ((await txCtx.db.get(
           `SELECT id, workspace_id, project_id, mission_id, objective_id, execution_target_id,
-                    status, revision, launch_flags_json, launched_session_id
+                    status, revision, launch_flags_json, launched_session_id, background_probe_key
                FROM execution_requests
               WHERE workspace_id = ?
                 AND mission_id = ?

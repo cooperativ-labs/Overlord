@@ -736,6 +736,11 @@ export interface Devices {
   workspace_id: string;
 }
 
+export interface EntityChangeRetention {
+  id: Generated<number | null>;
+  retained_through: Generated<number>;
+}
+
 export interface EntityChanges {
   actor_token_id: string | null;
   actor_workspace_user_id: string | null;
@@ -781,6 +786,7 @@ export interface ExecutionRequestObservations {
 
 export interface ExecutionRequests {
   attempt_count: Generated<number>;
+  background_probe_key: string | null;
   claim_expires_at: string | null;
   claimed_at: string | null;
   claimed_by_device_id: string | null;
@@ -880,6 +886,11 @@ export interface ExecutionTargets {
   type: string;
   updated_at: string;
   workspace_id: string;
+}
+
+export interface ExtEverhourConnectionAttribution {
+  actor_workspace_user_id: string;
+  connection_id: string;
 }
 
 export interface ExtEverhourMissionLinks {
@@ -1308,18 +1319,6 @@ export interface Objectives {
   created_by_session_id: string | null;
   created_by_workspace_user_id: string | null;
   deleted_at: string | null;
-  summary: string | null;
-  summary_author_agent: string | null;
-  summary_author_workspace_user_id: string | null;
-  summary_failure_code: string | null;
-  summary_generation: Generated<number>;
-  summary_instruction_hash: string | null;
-  summary_request_kind: string | null;
-  summary_revision: Generated<number>;
-  summary_source: string | null;
-  summary_status: string | null;
-  summary_suppressed: Generated<number>;
-  summary_updated_at: string | null;
   display_key: Generated<string>;
   execution_metadata_json: Generated<string>;
   id: string | null;
@@ -1337,6 +1336,18 @@ export interface Objectives {
   revision: Generated<number>;
   started_at: string | null;
   state: string;
+  summary: string | null;
+  summary_author_agent: string | null;
+  summary_author_workspace_user_id: string | null;
+  summary_failure_code: string | null;
+  summary_generation: Generated<number>;
+  summary_instruction_hash: string | null;
+  summary_request_kind: string | null;
+  summary_revision: Generated<number>;
+  summary_source: string | null;
+  summary_status: string | null;
+  summary_suppressed: Generated<number>;
+  summary_updated_at: string | null;
   title: string | null;
   title_generation: Generated<number>;
   title_source: string | null;
@@ -1948,6 +1959,7 @@ export interface DB {
   delivery_summary_publications: DeliverySummaryPublications;
   device_push_tokens: DevicePushTokens;
   devices: Devices;
+  entity_change_retention: EntityChangeRetention;
   entity_changes: EntityChanges;
   execution_request_grants: ExecutionRequestGrants;
   execution_request_observations: ExecutionRequestObservations;
@@ -1956,6 +1968,7 @@ export interface DB {
   execution_target_registrations: ExecutionTargetRegistrations;
   execution_target_runner_registrations: ExecutionTargetRunnerRegistrations;
   execution_targets: ExecutionTargets;
+  ext_everhour_connection_attribution: ExtEverhourConnectionAttribution;
   ext_everhour_mission_links: ExtEverhourMissionLinks;
   ext_everhour_project_links: ExtEverhourProjectLinks;
   ext_everhour_user_connections: ExtEverhourUserConnections;

@@ -2,9 +2,12 @@
 import { parseMetadataJson } from '../packages/core/service/execution-requests.ts';
 import { providerSessionFromMetadata } from '../packages/core/service/latch-launch.ts';
 import { forgetLatchProviderSession } from '../packages/core/service/latch-provider-session.ts';
-import { resolveDefaultLocalTargetProvider } from '../packages/core/service/local-target/default-registry.ts';
 import { listEligibleProjectExecutionTargets } from '../packages/core/service/project-execution-target.ts';
-import { launchSessionSnapshotFromMetadata } from '../packages/core/service/terminal-profile-types.ts';
+import { inspectTerminalInBackground } from '../packages/core/service/terminal-observation-probes.ts';
+import {
+  pruneLegacyTerminalProbes,
+  pruneTerminalProbes
+} from '../packages/core/service/terminal-probe-policy.ts';
 import {
   recordTerminalObservation,
   terminalMetadataSql
@@ -14,6 +17,9 @@ import { buildWebappServiceContextForWorkspace, requireDatabaseClient } from './
 import { PollLoop } from './poll-loop.ts';
 
 export class TerminalSessionObserver extends PollLoop {
+  private nextReportAt = Date.now() + 60 * 60_000;
+  private metrics = { enqueued: 0, reused: 0, timeouts: 0, maxResultAgeMs: 0, pruned: 0 };
+
   constructor() {
     super({ intervalMs: 30_000, logPrefix: 'terminal-sessions', runOnStart: true });
   }
@@ -49,6 +55,7 @@ export class TerminalSessionObserver extends PollLoop {
       ORDER BY COALESCE(${field('lastObservedAt')}, CAST(er.created_at AS TEXT)), er.id LIMIT 20`);
     const results = await Promise.allSettled(
       rows.map(async row => {
+        let startedAt = new Date().toISOString();
         const mapping = providerSessionFromMetadata(parseMetadataJson(row.metadata_json));
         if (!mapping) return;
         const ctx = {
@@ -65,49 +72,60 @@ export class TerminalSessionObserver extends PollLoop {
         const eligibilityMember =
           row.requested_by_workspace_user_id ??
           (targetId === row.claimed_by_execution_target_id ? row.claiming_target_owner_id : null);
-        const eligibleTargets = eligibilityMember
-          ? await listEligibleProjectExecutionTargets({
-              ctx: { ...ctx, actorWorkspaceUserId: eligibilityMember },
-              projectId: row.project_id
-            })
-          : [];
-        const target = eligibleTargets.find(t => t.executionTargetId === targetId);
+        const findEligibleTarget = async () => {
+          if (!eligibilityMember) return undefined;
+          const active = await db.get(
+            `SELECT id FROM workspace_users WHERE id = ? AND workspace_id = ?
+               AND status = 'active' AND deleted_at IS NULL`,
+            [eligibilityMember, row.workspace_id]
+          );
+          if (!active) return undefined;
+          const targets = await listEligibleProjectExecutionTargets({
+            ctx: { ...ctx, actorWorkspaceUserId: eligibilityMember },
+            projectId: row.project_id
+          });
+          return targets.find(target => target.executionTargetId === targetId);
+        };
+        const target = await findEligibleTarget();
         let state: 'running' | 'stopping' | 'lost' | 'exited' = 'lost';
         let endedAt: string | null = null;
-        if (target?.reachable) {
-          const provider = resolveDefaultLocalTargetProvider({
-            target: {
-              executionTargetId: target.executionTargetId,
-              type: target.type,
-              reachable: true
-            },
-            options: {
-              callerExecutionTargetId: null,
-              runnerQueue: {
-                ctx,
-                projectId: row.project_id,
-                missionId: row.mission_id,
-                readTimeoutMs: 10_000,
-                // Replicas in the same sweep share the read-only inspection job.
-                operationId: `terminal-observe:${row.id}:${Math.floor(Date.now() / 30_000)}`
-              }
-            }
-          });
-          const snapshot = launchSessionSnapshotFromMetadata(parseMetadataJson(row.metadata_json));
-          const result = await provider.inspectLatchSession({
+        if (target?.reachable && target.type === 'local' && eligibilityMember) {
+          const inspection = await inspectTerminalInBackground({
+            ctx,
+            projectId: row.project_id,
+            missionId: row.mission_id,
+            mappingId: row.id,
             providerSessionId: mapping.providerSessionId,
-            executable: snapshot?.executionProvider.executable ?? 'latch'
+            executionTargetId: target.executionTargetId,
+            eligibilityMember
           });
-          if (!result.ok && result.code === 'LATCH_SESSION_ABSENT') {
+          if (!inspection) return;
+          const { result } = inspection;
+          startedAt = inspection.startedAt;
+          this.metrics[inspection.reused ? 'reused' : 'enqueued']++;
+          if (!result.ok && result.code === 'LOCAL_TARGET_TIMEOUT') this.metrics.timeouts++;
+          else
+            this.metrics.maxResultAgeMs = Math.max(
+              this.metrics.maxResultAgeMs,
+              Date.now() - Date.parse(startedAt)
+            );
+          // Eligibility can be revoked while the runner is processing the job.
+          const stillEligible = await findEligibleTarget();
+          if (stillEligible && !result.ok && result.code === 'LATCH_SESSION_ABSENT') {
             await forgetLatchProviderSession({
               ctx,
               missionId: row.mission_id,
               executionRequestId: row.id,
-              providerSessionId: mapping.providerSessionId
+              providerSessionId: mapping.providerSessionId,
+              backgroundObservation: { executionTargetId: target.executionTargetId, startedAt }
             });
             return;
           }
-          if (result.ok) {
+          if (
+            stillEligible &&
+            result.ok &&
+            result.value?.providerSessionId === mapping.providerSessionId
+          ) {
             state = result.value.state;
             endedAt = result.value.endedAt ?? null;
           }
@@ -117,7 +135,8 @@ export class TerminalSessionObserver extends PollLoop {
           executionRequestId: row.id,
           providerSessionId: mapping.providerSessionId,
           state,
-          endedAt
+          endedAt,
+          backgroundObservation: { executionTargetId: targetId, startedAt }
         });
       })
     );
@@ -126,6 +145,16 @@ export class TerminalSessionObserver extends PollLoop {
         // A concurrent end/forget may change the mapping; retry it on a later sweep.
         console.warn('[terminal-sessions] observation failed', result.reason);
       }
+    this.metrics.pruned += await pruneTerminalProbes(db);
+    if (db.dialect === 'postgres' && process.env.OVERLORD_CHANGE_FEED_PRUNING_ENABLED === 'true') {
+      this.metrics.pruned += await pruneLegacyTerminalProbes(db);
+    }
+    if (Date.now() >= this.nextReportAt) {
+      // eslint-disable-next-line no-console -- Periodic operational probe counters.
+      console.info('[terminal-sessions] background probes', this.metrics);
+      this.metrics = { enqueued: 0, reused: 0, timeouts: 0, maxResultAgeMs: 0, pruned: 0 };
+      this.nextReportAt = Date.now() + 60 * 60_000;
+    }
   }
 }
 export const terminalSessionObserver = new TerminalSessionObserver();

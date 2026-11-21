@@ -33,11 +33,18 @@
  */
 
 import { recordChange, requireDatabaseClient } from './db.ts';
+import { eraseEverhourActorEvidence } from '../packages/core/service/change-feed-retention.ts';
 import { tombstoneInboxItemAttachmentsTx } from './inbox-attachments.ts';
 import { removeStoredObjects, type StoredObjectRef } from './storage.ts';
 
 export async function cascadeDeleteAccount(profileId: string): Promise<void> {
   const cleanupImages = await requireDatabaseClient().transaction(async tx => {
+    // Serialize evidence redaction with retention before taking domain locks.
+    // Otherwise pruning could copy a membership ID after it was redacted.
+    if (tx.dialect === 'postgres') {
+      await tx.exec("SET LOCAL lock_timeout = '2s'");
+      await tx.exec('LOCK TABLE entity_changes IN SHARE ROW EXCLUSIVE MODE');
+    }
     const profile = await tx.get<{ id: string }>(`SELECT id FROM profiles WHERE id = ?`, [
       profileId
     ]);
@@ -131,6 +138,7 @@ export async function cascadeDeleteAccount(profileId: string): Promise<void> {
     cleanup.push(...(await tombstoneInboxItemAttachmentsTx(tx, { profileId })));
 
     for (const membership of memberships) {
+      await eraseEverhourActorEvidence(tx, membership.id);
       await tx.run(`DELETE FROM workspace_users WHERE id = ?`, [membership.id]);
       await recordChange(
         {

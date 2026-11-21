@@ -108,12 +108,14 @@ export async function forgetLatchProviderSession({
   ctx,
   missionId,
   executionRequestId,
-  providerSessionId
+  providerSessionId,
+  backgroundObservation
 }: {
   ctx: ServiceContext;
   missionId: string;
   executionRequestId?: string | null;
   providerSessionId: string;
+  backgroundObservation?: { executionTargetId: string; startedAt: string };
 }): Promise<ForgetLatchProviderSessionResult> {
   const sessionId = providerSessionId.trim();
   if (!sessionId) {
@@ -129,12 +131,15 @@ export async function forgetLatchProviderSession({
       metadata_json: string | null;
       updated_at: string;
       revision: number;
+      target_id: string | null;
     }>(
       executionRequestId
-        ? `SELECT id, project_id, mission_id, objective_id, metadata_json, updated_at, revision
+        ? `SELECT id, project_id, mission_id, objective_id, metadata_json, updated_at, revision,
+                  COALESCE(claimed_by_execution_target_id, execution_target_id) AS target_id
              FROM execution_requests
             WHERE id = ? AND mission_id = ? AND workspace_id = ? AND deleted_at IS NULL`
-        : `SELECT id, project_id, mission_id, objective_id, metadata_json, updated_at, revision
+        : `SELECT id, project_id, mission_id, objective_id, metadata_json, updated_at, revision,
+                  COALESCE(claimed_by_execution_target_id, execution_target_id) AS target_id
              FROM execution_requests
             WHERE mission_id = ? AND workspace_id = ? AND deleted_at IS NULL
             ORDER BY updated_at DESC, created_at DESC`,
@@ -150,6 +155,15 @@ export async function forgetLatchProviderSession({
 
     const previous = parseMetadata(row.metadata_json);
     const mapped = providerSessionFromMetadata(previous);
+    if (
+      backgroundObservation &&
+      (!mapped ||
+        (mapped.executionTargetId ?? row.target_id) !== backgroundObservation.executionTargetId ||
+        mapped.lastObservedState === 'exited' ||
+        (mapped.lastObservedAt && mapped.lastObservedAt > backgroundObservation.startedAt) ||
+        (mapped.endRequestedAt && mapped.endRequestedAt > backgroundObservation.startedAt))
+    )
+      return { forgotten: false, executionRequestId: row.id };
     const stripped = parseMetadata(
       stripProviderSessionFromMetadata({ metadataJson: row.metadata_json })
     );

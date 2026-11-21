@@ -94,6 +94,49 @@ async function seedQueuedRequest(ctx: ServiceContext, name: string): Promise<str
 }
 
 describe('local runner instances and adoption (contract v40)', () => {
+  it('emits registration changes only for meaningful updates and reconnections', async () => {
+    const { db, ctx } = await createSeededServiceContext({ source: 'cli' });
+    await ensureCallerDeviceTarget({ ctx });
+    const host = await resolveRunnerTarget({ ctx, input: {} });
+    const input = {
+      ctx,
+      executionTargetId: host.executionTargetId,
+      runnerInstanceId: 'events-runner',
+      relation: 'native' as const,
+      capabilities: { b: 2, a: 1 }
+    };
+    const registration = await recordRunnerHeartbeat(input);
+    const count = async () =>
+      Number(
+        (
+          (await db.get(
+            `SELECT COUNT(*) AS c FROM entity_changes WHERE entity_type = 'execution_target_runner_registration' AND entity_id = ?`,
+            [registration.id]
+          )) as { c: number }
+        ).c
+      );
+    assert.equal(await count(), 1);
+    await recordRunnerHeartbeat({ ...input, capabilities: { a: 1, b: 2 } });
+    assert.equal(await count(), 1, 'fresh timestamp-only heartbeat emits no event');
+    await recordRunnerHeartbeat({ ...input, health: 'degraded' });
+    assert.equal(await count(), 2, 'health change emits an event');
+    await recordRunnerHeartbeat(input);
+    assert.equal(await count(), 3, 'recovery emits an event');
+    await db.run(
+      `UPDATE execution_target_runner_registrations SET last_heartbeat_at = ? WHERE id = ?`,
+      [new Date(Date.now() - RUNNER_HEARTBEAT_STALE_MS - 1000).toISOString(), registration.id]
+    );
+    await recordRunnerHeartbeat(input);
+    assert.equal(await count(), 4, 'stale runner reconnection emits an event');
+    await recordRunnerHeartbeat({ ...input, supportedAgents: ['codex'] });
+    assert.equal(await count(), 5, 'capability changes emit an event');
+    const row = (await db.get(
+      `SELECT last_heartbeat_at FROM execution_target_runner_registrations WHERE id = ?`,
+      [registration.id]
+    )) as { last_heartbeat_at: string };
+    assert.ok(Date.now() - Date.parse(row.last_heartbeat_at) < RUNNER_HEARTBEAT_STALE_MS);
+    await db.close();
+  });
   it('refuses an explicit target that does not exist, and creates nothing', async () => {
     const { db, ctx } = await createSeededServiceContext({ source: 'cli' });
     const before = await countTargets(db);

@@ -22,6 +22,7 @@ export async function recordTerminalObservation({
   state,
   endedAt,
   endReason,
+  backgroundObservation,
   requestEnd = false
 }: {
   ctx: ServiceContext;
@@ -30,6 +31,7 @@ export async function recordTerminalObservation({
   state: LatchSessionState;
   endedAt?: string | null;
   endReason?: string | null;
+  backgroundObservation?: { executionTargetId: string | null; startedAt: string };
   requestEnd?: boolean;
 }): Promise<LatchSessionState> {
   return ctx.db.transaction(async tx => {
@@ -39,8 +41,10 @@ export async function recordTerminalObservation({
       objective_id: string;
       metadata_json: string;
       revision: number;
+      target_id: string | null;
     }>(
-      `SELECT project_id, mission_id, objective_id, metadata_json, revision
+      `SELECT project_id, mission_id, objective_id, metadata_json, revision,
+              COALESCE(claimed_by_execution_target_id, execution_target_id) AS target_id
       FROM execution_requests WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
       [executionRequestId, ctx.workspace.id]
     );
@@ -49,11 +53,29 @@ export async function recordTerminalObservation({
     if (!row || !metadata || !mapping || mapping.providerSessionId !== providerSessionId)
       throw new ServiceError('Terminal session changed', 'terminal_session_conflict', 409);
     if (mapping.lastObservedState === 'exited') return 'exited';
+    if (backgroundObservation) {
+      const currentState =
+        mapping.lastObservedState === 'running' || mapping.lastObservedState === 'stopping'
+          ? mapping.lastObservedState
+          : 'lost';
+      if ((mapping.executionTargetId ?? row.target_id) !== backgroundObservation.executionTargetId)
+        return currentState;
+      const { startedAt } = backgroundObservation;
+      if (
+        state !== 'exited' &&
+        ((mapping.endRequestedAt && mapping.endRequestedAt > startedAt) ||
+          (mapping.lastObservedAt &&
+            (mapping.lastObservedAt > startedAt ||
+              (mapping.lastObservedAt === startedAt &&
+                (mapping.lastObservedState !== 'lost' || state === 'lost')))))
+      )
+        return currentState;
+    }
     const now = nowIso();
     const next = {
       ...mapping,
       lastObservedState: state,
-      lastObservedAt: now,
+      lastObservedAt: backgroundObservation?.startedAt ?? now,
       ...(requestEnd ? { endRequestedAt: mapping.endRequestedAt ?? now } : {}),
       ...(state === 'exited'
         ? {

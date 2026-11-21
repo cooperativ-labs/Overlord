@@ -249,8 +249,8 @@ test('observer recovers an automated launch with no requester on its claiming ta
   assert.equal(event.actor_workspace_user_id, null);
   const probe = await client.get<{ requested_by_workspace_user_id: string | null }>(
     `SELECT requested_by_workspace_user_id FROM execution_requests
-      WHERE mission_id = ? AND requested_source = 'local_target_mutation'`,
-    [f.mission.id]
+      WHERE project_id = ? AND execution_target_id = ? AND background_probe_key IS NOT NULL`,
+    [f.project.id, f.target.executionTargetId]
   );
   assert.ok(probe);
   assert.equal(probe.requested_by_workspace_user_id, null);

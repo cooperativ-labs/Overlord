@@ -151,6 +151,20 @@ When `missions.status_id` references `project_statuses`, `missions.status_type` 
 
 `entity_changes.seq` is a durable cursor only after the transaction containing the row has committed and the adapter's visibility rule says it is safe to advance past that sequence.
 
+The extension-owned `ext_everhour_connection_attribution` table preserves the
+distinct non-null `(connection_id, actor_workspace_user_id)` evidence needed
+for legacy Everhour workspace-key adoption when feed rows are pruned. Its pair
+is the primary key and both values are text, with no cascading foreign key:
+missing membership must fail closed. Adoption checks the union of this evidence
+and remaining feed rows. A pruning process must first preserve any additional
+matching insert/update actors atomically with deletion; this migration alone is
+not authorization to prune. See ADR 0097.
+Before account erasure removes a membership, the account-deletion transaction
+replaces its preserved and still-in-feed Everhour actor evidence with the
+non-identifying `!overlord:erased-actor` marker. Adoption must fail closed when
+that marker is present. PostgreSQL serializes the redaction and feed pruning
+with the same table lock so pruning cannot restore the erased identifier.
+
 SQLite's single-writer mode can serve `WHERE seq > cursor ORDER BY seq` directly when writes are serialized. Multi-writer adapters such as Postgres must not expose a raw sequence as the only cursor because sequence allocation order can differ from commit visibility. A Postgres adapter must provide one of:
 
 - a transactional outbox/change-feed writer that serializes visible feed rows,
@@ -158,6 +172,32 @@ SQLite's single-writer mode can serve `WHERE seq > cursor ORDER BY seq` directly
 - logical-replication or snapshot-horizon semantics that preserve commit-safe consumption.
 
 Sync clients should advance cursors only to the adapter-provided safe high-water mark. If a requested cursor is older than the retained feed window, the API must return a clear full-resync-required response.
+
+For backend feed reads, PostgreSQL obtains a `SHARE` table lock on
+`entity_changes` inside the read transaction before taking the high-water mark
+and selecting rows. It waits for transactions holding the insert lock and
+prevents new inserts until the read completes, so identity allocation and commit
+visibility cannot leave an unseen lower sequence behind the returned cursor.
+The read transaction must remain short and must not perform domain writes. The
+PostgreSQL read and pruning locks use a two-second lock timeout so contention
+fails a pass rather than waiting indefinitely.
+
+`entity_change_retention` stores one row with `id = 1` and non-negative
+`retained_through` (`ChangeSeq`, default 0): every cursor below it requires a
+full authorized refresh. Pruning removes only a contiguous prefix older than
+21 days, in bounded transactions. It advances that boundary and preserves
+Everhour actor evidence atomically with deletion. PostgreSQL pruning takes a
+`SHARE ROW EXCLUSIVE` feed table lock, excluding writers and synchronized feed
+readers for the batch. A reader uses the safe cursor returned with the expired
+response before refreshing and replays from that cursor afterward; pruning is
+disabled until web, desktop and mobile recovery has been verified.
+The Cloud worker is disabled by default and runs only when
+`OVERLORD_CHANGE_FEED_PRUNING_ENABLED=true`; it deletes at most 1,000 rows per
+pass, waiting five seconds between full batches and one hour after a partial or
+empty batch. Local SQLite does not start deletion through that worker.
+`GET /sync/baseline` returns a commit-safe cursor after the caller passes the
+same workspace permission gate as catch-up. A client may obtain it before
+refreshing state and replay from it afterward.
 
 ### Idempotency Layering
 
@@ -670,6 +710,13 @@ never had a runner registration, so a pre-upgrade install stays selectable until
 its upgraded runner publishes its first heartbeat. Claim competition is
 target-level: any healthy runner registered to the selected target may claim its
 work, and a runner instance is never individually addressable.
+
+Runner heartbeats continue to update `last_heartbeat_at` and the row revision at
+the existing cadence. A heartbeat that changes only timestamps emits no
+`entity_changes` row. Inserts, reconnections after the heartbeat TTL or recovery
+to healthy, and changes to target, relation, label, version, capabilities,
+supported agents, health, or error code emit a registration change in the same
+transaction. Clients must not use feed events as a heartbeat clock. See ADR 0097.
 
 ### `workspace_user_execution_targets`
 
@@ -1988,6 +2035,14 @@ Durable queue for manual run, auto-advance, and — under
 `requested_source = 'local_target_mutation'` — local-target **capability calls**
 carried to another device (`metadata_json.overlord.localTargetMutation`).
 
+The observer's internal Latch inspection jobs are marked by a nullable
+`background_probe_key` (a server-generated scope digest) and carry no
+mission or objective foreign key. They are visible to the runner claim and
+completion path. They are excluded from execution-request lists, and their
+transport lifecycle generates no change-feed or timeline entries. Durable
+provider mappings and meaningful terminal transitions use their existing
+history contract. See ADR 0098 for reuse, retry and retention rules.
+
 | Column                              | Type         | Required | Notes                                                                                                                                                                                                                                                                                                                                                                                                  |
 | ----------------------------------- | ------------ | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `id`                                | Id           | yes      |                                                                                                                                                                                                                                                                                                                                                                                                        |
@@ -2033,6 +2088,9 @@ Indexes:
 - `(project_id, status, created_at)`.
 - `(objective_id, status)`.
 - Unique `(workspace_id, idempotency_key)` where present.
+- Partial `(background_probe_key, created_at)` and `(updated_at, id)` indexes
+  bound observer job reuse and cleanup. PostgreSQL also indexes legacy
+  observer jobs for cleanup after their replay entries are pruned.
 
 When an objective carries a non-null `resource_key`, execution-request creation
 or claim resolves that logical key to the concrete `project_resources.id` for the
@@ -3722,7 +3780,9 @@ Data rules of individual routes:
 - `getSyncChanges` returns changes in ascending `entity_changes.seq` order. The server scans the
   global sequence in bounded windows, filters to the caller's current readable workspace
   memberships before projection, and advances `cursor` to the last scanned sequence even if no
-  rows were visible.
+  rows were visible. An expired cursor returns 409 with `snapshot_required` and a safe cursor.
+- `getSyncBaseline` checks the same authorization gate and returns a safe cursor without state;
+  it is captured before a full authorized refresh and replay.
 - `getRealtime` (compatibility alias `getStream`) is a Server-Sent Events stream backed by
   `entity_changes`; compact change DTOs carry `changedFields` parsed from
   `entity_changes.changed_fields_json` and `workspaceId`. Connection admission requires at

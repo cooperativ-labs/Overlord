@@ -9,6 +9,7 @@ import {
 } from './execution-targets.js';
 import { enqueueRunQueueDispatchForWorkspace } from './run-queue.js';
 import { newId, nowIso } from './util.js';
+import { isDeepStrictEqual } from 'node:util';
 
 /**
  * A local execution target is reachable while one of its runner instances has
@@ -250,38 +251,125 @@ export async function recordRunnerHeartbeat({
   health?: string;
   lastErrorCode?: string | null;
 }): Promise<RunnerRegistration> {
-  const now = nowIso();
-  const capabilitiesJson = JSON.stringify(capabilities ?? {});
-  const supportedAgentsJson = JSON.stringify(supportedAgents ?? []);
+  return ctx.db.transaction(async db => {
+    ctx = { ...ctx, db };
+    const capabilitiesJson = JSON.stringify(capabilities ?? {});
+    const supportedAgentsJson = JSON.stringify(supportedAgents ?? []);
 
-  const existing = (await ctx.db.get(
-    `SELECT id, revision, health, last_heartbeat_at FROM execution_target_runner_registrations
-        WHERE workspace_id = ? AND runner_instance_id = ? AND deleted_at IS NULL`,
-    [ctx.workspace.id, runnerInstanceId]
-  )) as
-    | { id: string; revision: number; health: string; last_heartbeat_at: string | null }
-    | undefined;
+    const existing = (await ctx.db.get(
+      `SELECT id, revision, health, last_heartbeat_at, execution_target_id, relation, label,
+            runner_version, capabilities_json, supported_agents_json, last_error_code
+       FROM execution_target_runner_registrations
+        WHERE workspace_id = ? AND runner_instance_id = ? AND deleted_at IS NULL${db.dialect === 'postgres' ? ' FOR UPDATE' : ''}`,
+      [ctx.workspace.id, runnerInstanceId]
+    )) as
+      | {
+          id: string;
+          revision: number;
+          health: string;
+          last_heartbeat_at: string | null;
+          execution_target_id: string;
+          relation: string;
+          label: string | null;
+          runner_version: string | null;
+          capabilities_json: string;
+          supported_agents_json: string;
+          last_error_code: string | null;
+        }
+      | undefined;
 
-  // A *reconnect*, not every heartbeat: a first registration, a return from an
-  // unhealthy state, or a gap longer than the liveness TTL. Queue entries held
-  // on `resource_disconnected` should clear as soon as the runner is back
-  // rather than on the next 60 s sweep, but a healthy runner beating every few
-  // seconds must not enqueue a dispatch job each time.
-  const reconnected =
-    !existing ||
-    (existing.health !== health && health === 'healthy') ||
-    isStaleHeartbeat(existing.last_heartbeat_at, now);
+    // Capture the time after acquiring the row lock so a waiting poll cannot
+    // overwrite a newer heartbeat with its earlier request time.
+    const now = nowIso();
 
-  if (existing) {
-    await ctx.db.run(
-      `UPDATE execution_target_runner_registrations
+    // A *reconnect*, not every heartbeat: a first registration, a return from an
+    // unhealthy state, or a gap longer than the liveness TTL. Queue entries held
+    // on `resource_disconnected` should clear as soon as the runner is back
+    // rather than on the next 60 s sweep, but a healthy runner beating every few
+    // seconds must not enqueue a dispatch job each time.
+    const reconnected =
+      !existing ||
+      (existing.health !== health && health === 'healthy') ||
+      isStaleHeartbeat(existing.last_heartbeat_at, now);
+
+    if (existing) {
+      const changedFields: string[] = [];
+      if (existing.execution_target_id !== executionTargetId)
+        changedFields.push('execution_target_id');
+      if (existing.relation !== relation) changedFields.push('relation');
+      if (existing.label !== trimmed(label)) changedFields.push('label');
+      if (existing.runner_version !== trimmed(runnerVersion)) changedFields.push('runner_version');
+      // JSONB may reorder object keys on PostgreSQL; compare values, not serialization.
+      const jsonChanged = (stored: string, value: unknown) => {
+        try {
+          return !isDeepStrictEqual(JSON.parse(stored), value);
+        } catch {
+          return true;
+        }
+      };
+      if (jsonChanged(existing.capabilities_json, capabilities ?? {}))
+        changedFields.push('capabilities');
+      if (jsonChanged(existing.supported_agents_json, supportedAgents ?? []))
+        changedFields.push('supported_agents');
+      if (existing.health !== health) changedFields.push('health');
+      if (existing.last_error_code !== lastErrorCode) changedFields.push('last_error_code');
+      await ctx.db.run(
+        `UPDATE execution_target_runner_registrations
           SET execution_target_id = ?, relation = ?, label = ?, runner_version = ?,
               capabilities_json = ?, supported_agents_json = ?, health = ?,
               last_heartbeat_at = ?, last_error_code = ?, updated_at = ?,
               revision = revision + 1
         WHERE id = ?`,
-      [
+        [
+          executionTargetId,
+          relation,
+          trimmed(label),
+          trimmed(runnerVersion),
+          capabilitiesJson,
+          supportedAgentsJson,
+          health,
+          now,
+          lastErrorCode,
+          now,
+          existing.id
+        ]
+      );
+      if (changedFields.length || reconnected)
+        await recordChange({
+          ctx,
+          entityType: 'execution_target_runner_registration',
+          entityId: existing.id,
+          operation: 'update',
+          entityRevision: existing.revision + 1,
+          changedFields: [...changedFields, 'last_heartbeat_at']
+        });
+      if (reconnected) await enqueueRunQueueDispatchForWorkspace(ctx.db, ctx.workspace.id);
+      return {
+        id: existing.id,
         executionTargetId,
+        runnerInstanceId,
+        relation,
+        label: trimmed(label),
+        runnerVersion: trimmed(runnerVersion),
+        supportedAgents: supportedAgents ?? [],
+        health,
+        lastHeartbeatAt: now,
+        lastErrorCode
+      };
+    }
+
+    const id = newId();
+    await ctx.db.run(
+      `INSERT INTO execution_target_runner_registrations
+        (id, workspace_id, execution_target_id, runner_instance_id, relation, label,
+         runner_version, capabilities_json, supported_agents_json, health,
+         last_heartbeat_at, last_error_code, created_at, updated_at, revision)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+      [
+        id,
+        ctx.workspace.id,
+        executionTargetId,
+        runnerInstanceId,
         relation,
         trimmed(label),
         trimmed(runnerVersion),
@@ -291,20 +379,19 @@ export async function recordRunnerHeartbeat({
         now,
         lastErrorCode,
         now,
-        existing.id
+        now
       ]
     );
     await recordChange({
       ctx,
       entityType: 'execution_target_runner_registration',
-      entityId: existing.id,
-      operation: 'update',
-      entityRevision: existing.revision + 1,
-      changedFields: ['health', 'last_heartbeat_at', 'relation', 'execution_target_id']
+      entityId: id,
+      operation: 'insert',
+      entityRevision: 1
     });
     if (reconnected) await enqueueRunQueueDispatchForWorkspace(ctx.db, ctx.workspace.id);
     return {
-      id: existing.id,
+      id,
       executionTargetId,
       runnerInstanceId,
       relation,
@@ -315,52 +402,7 @@ export async function recordRunnerHeartbeat({
       lastHeartbeatAt: now,
       lastErrorCode
     };
-  }
-
-  const id = newId();
-  await ctx.db.run(
-    `INSERT INTO execution_target_runner_registrations
-        (id, workspace_id, execution_target_id, runner_instance_id, relation, label,
-         runner_version, capabilities_json, supported_agents_json, health,
-         last_heartbeat_at, last_error_code, created_at, updated_at, revision)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
-    [
-      id,
-      ctx.workspace.id,
-      executionTargetId,
-      runnerInstanceId,
-      relation,
-      trimmed(label),
-      trimmed(runnerVersion),
-      capabilitiesJson,
-      supportedAgentsJson,
-      health,
-      now,
-      lastErrorCode,
-      now,
-      now
-    ]
-  );
-  await recordChange({
-    ctx,
-    entityType: 'execution_target_runner_registration',
-    entityId: id,
-    operation: 'insert',
-    entityRevision: 1
   });
-  if (reconnected) await enqueueRunQueueDispatchForWorkspace(ctx.db, ctx.workspace.id);
-  return {
-    id,
-    executionTargetId,
-    runnerInstanceId,
-    relation,
-    label: trimmed(label),
-    runnerVersion: trimmed(runnerVersion),
-    supportedAgents: supportedAgents ?? [],
-    health,
-    lastHeartbeatAt: now,
-    lastErrorCode
-  };
 }
 
 export type TargetRunnerLiveness = {

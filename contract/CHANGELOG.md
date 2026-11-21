@@ -5,6 +5,39 @@ is the current version and must equal [VERSION](VERSION); `yarn version:contract
 writes its skeleton. Dates use ISO 8601 and describe the contract change, not
 merely the files edited.
 
+## [181.0.0] - 2026-11-21
+
+Contract impact: major. Routine backend Latch inspection uses scoped, short-lived
+runner jobs. The queue and both adapters retain the result for retries without
+publishing probe lifecycle events. Scope, expiry and legacy cleanup are defined
+in ADR 0098. The 30-second observer interval and durable session history remain.
+
+### Version
+
+- Major contract version 181.0.0, from 180.0.0.
+
+## [180.0.0] - 2026-11-21
+
+Contract impact: major. Routine timestamp-only runner heartbeats no longer emit
+durable change-feed events; registration, reconnection and meaningful changes
+remain observable (data/README.md, ADR 0097). Feed consumers must not use events
+as a heartbeat clock. Heartbeat storage and reachability retain their cadence.
+Both database adapters preserve legacy Everhour connection actor evidence for
+future feed pruning; adoption consults that evidence and surviving feed rows.
+Account erasure replaces the deleted actor identifier with a fail-closed marker
+under the pruning lock so attribution cannot be silently narrowed.
+PostgreSQL backend feed reads wait for outstanding writers and block new inserts
+for their short read transaction to obtain a commit-safe cursor.
+The retention boundary and bounded prefix-pruning primitive preserve historical
+actors atomically; expired REST and SSE cursors require a full state refresh and
+resume from the provided safe cursor. Pruning is gated on client verification.
+The REST surface adds authenticated `GET /sync/baseline` for obtaining that
+cursor before a refresh (OpenAPI 7.0.0).
+
+### Version
+
+- Major contract version 180.0.0, from 179.12.0.
+
 ## [179.12.0] - 2026-11-21
 
 Contract impact: minor. The activity feed's delivered window shrinks from two weeks to three days,

@@ -3,6 +3,7 @@ type SseHandlers = {
   onHello?: (cursor: number) => void;
   onChange?: (payload: { cursor?: number; changes?: unknown[] }) => void;
   onRefresh?: () => void;
+  onSnapshotRequired?: (cursor: number) => void;
   onError?: () => void;
 };
 
@@ -82,6 +83,14 @@ export function connectEventStream({
             }
           } else if (eventName === 'refresh') {
             handlers.onRefresh?.();
+          } else if (eventName === 'snapshot_required') {
+            try {
+              const cursor = JSON.parse(data).cursor;
+              if (Number.isSafeInteger(cursor) && cursor >= 0)
+                handlers.onSnapshotRequired?.(cursor);
+            } catch {
+              handlers.onError?.();
+            }
           }
           eventName = 'message';
         };
