@@ -5,6 +5,14 @@ is the current version and must equal [VERSION](VERSION); `yarn version:contract
 writes its skeleton. Dates use ISO 8601 and describe the contract change, not
 merely the files edited.
 
+## [182.0.0] - 2026-11-21
+
+Contract impact: major. Desktop packages contain no provider API key. Local desktop users may save or remove their own OpenRouter key in encrypted OS-backed storage; it is supplied only to the local backend on restart and never returned to the renderer. Without a key, provider features use existing unavailable/fallback behavior. Cloud backend credentials remain server-managed. See ADR 0099.
+
+### Version
+
+- Major contract version 182.0.0, from 181.0.0.
+
 ## [181.0.0] - 2026-11-21
 
 Contract impact: major. Routine backend Latch inspection uses scoped, short-lived

@@ -29,12 +29,12 @@ published `ovld` CLI talks to the same backend URL (by default
 do not need to run a separate server when Desktop is running.
 
 Download packaged releases from
-[GitHub Releases](https://github.com/cooperativ-labs/OpenOverlord/releases/latest).
+[GitHub Releases](https://github.com/cooperativ-labs/Overlord/releases/latest).
 
 ### Updates
 
 Release builds embed a generic electron-updater feed pointing at
-[GitHub Releases](https://github.com/cooperativ-labs/OpenOverlord/releases/latest/download/)
+[GitHub Releases](https://github.com/cooperativ-labs/Overlord/releases/latest/download/)
 (`latest-mac.yml` plus `.zip` / `.blockmap` assets). Installed apps check that
 feed on startup and every four hours.
 

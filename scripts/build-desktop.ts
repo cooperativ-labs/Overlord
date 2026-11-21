@@ -51,7 +51,6 @@ type Args = {
 };
 
 const PACKAGED_RUNTIME_ENV_KEYS = [
-  'OPENROUTER_API_KEY',
   'OPENROUTER_MODEL',
   'OVERLORD_WEB_HOST',
   'OVERLORD_WEB_PORT',
@@ -196,6 +195,9 @@ function resetReleaseDir(): void {
 
 function main(): void {
   loadRepoEnvForProfile({ repoRoot, profile: 'production' });
+  // A desktop package never needs a hosted provider credential, including in child builds.
+  delete process.env.OPENROUTER_API_KEY;
+  delete process.env.CHAT_OPENROUTER_API_KEY;
   const args = parseArgs(process.argv.slice(2));
   configureNodeGypPython();
 
@@ -292,17 +294,6 @@ function stageProductionEnv(): void {
     const exampleValue = exampleValues.get(key)?.trim();
     const value = runtimeValue || fileValue || exampleValue || '';
     stagedLines.push(`${key}=${value}`);
-  }
-
-  if (
-    !stagedLines
-      .find(line => line.startsWith('OPENROUTER_API_KEY='))
-      ?.slice('OPENROUTER_API_KEY='.length)
-      .trim()
-  ) {
-    fail(
-      'desktop:package:prod requires OPENROUTER_API_KEY in the environment or repo .env.prod so the packaged app ships with a default Gemini key.'
-    );
   }
 
   const target = path.join(desktopDir, 'staging', '.env.prod');

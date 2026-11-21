@@ -46,7 +46,7 @@ The result is a Kanban-style workflow where humans plan and agents execute, with
 ### Using the production-ready app
 
 You can use Overlord locally on MacOS for free by following these steps:
-1. [Download the Desktop App](https://github.com/cooperativ-labs/OpenOverlord/releases)
+1. [Download the Desktop App](https://github.com/cooperativ-labs/Overlord/releases)
 2. Download the CLI: `npm install -g overlord-cli`.
 3. Open the desktop app and create an account with an email and password
 4. Create a project and link a repository

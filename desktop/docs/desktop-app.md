@@ -242,7 +242,7 @@ native **Check for Updates...** / **Install Update and Relaunch** menu items.
 
 Release builds can embed a generic update feed by setting
 `OVERLORD_UPDATE_FEED_URL` when running `yarn desktop:package:prod`. The default feed
-is [GitHub Releases](https://github.com/cooperativ-labs/OpenOverlord/releases/latest/download/)
+is [GitHub Releases](https://github.com/cooperativ-labs/Overlord/releases/latest/download/)
 (see `desktop/update-feed.ts`). Each release must publish the `.zip`, `.blockmap`,
 and `latest-mac.yml` files emitted by electron-builder — `yarn desktop:publish`
 uploads them automatically. In unsigned/dev builds without a feed, update checks

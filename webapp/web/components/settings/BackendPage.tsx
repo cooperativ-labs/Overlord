@@ -58,6 +58,60 @@ type BackendProfileRow = {
   backendUrl: string;
 };
 
+function LocalOpenRouterSetting() {
+  const bridge = getDesktopBridge()?.localOpenRouter;
+  const [configured, setConfigured] = useState(false);
+  const [key, setKey] = useState('');
+  const [message, setMessage] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!bridge) return;
+    void bridge.status().then(result => setConfigured(result.configured)).catch(() => setMessage('Could not read key status.'));
+  }, [bridge]);
+
+  if (!bridge) return null;
+  async function save() {
+    setBusy(true);
+    setMessage(null);
+    try {
+      await bridge!.set(key);
+      setKey('');
+      setConfigured(true);
+      setMessage('Key saved. Restart Overlord to apply it.');
+    } catch {
+      setMessage('Could not save the key. Check that secure storage is available.');
+    } finally { setBusy(false); }
+  }
+  async function remove() {
+    setBusy(true);
+    setMessage(null);
+    try {
+      await bridge!.clear();
+      setKey('');
+      setConfigured(false);
+      setMessage('Key removed. Restart Overlord to apply the change.');
+    } catch { setMessage('Could not remove the key.'); }
+    finally { setBusy(false); }
+  }
+  return (
+    <section className="space-y-3 rounded-lg border bg-card p-4">
+      <div>
+        <h3 className="font-medium">Local OpenRouter key</h3>
+        <p className="text-sm text-muted-foreground">Optional. Your local backend uses your key for AI features. Usage is billed to your OpenRouter account. The key is stored securely on this device.</p>
+      </div>
+      <p className="text-xs text-muted-foreground">{configured ? 'A key is saved.' : 'No key saved.'} Restart the app after changes.</p>
+      <Label htmlFor="local-openrouter-key">OpenRouter API key</Label>
+      <Input id="local-openrouter-key" type="password" autoComplete="off" value={key} onChange={event => setKey(event.target.value)} />
+      <div className="flex gap-2">
+        <Button type="button" disabled={busy || !key.trim()} onClick={() => void save()}>Save key</Button>
+        {configured ? <Button type="button" variant="outline" disabled={busy} onClick={() => void remove()}>Remove key</Button> : null}
+      </div>
+      {message ? <p role="status" className="text-sm">{message}</p> : null}
+    </section>
+  );
+}
+
 export function BackendPage() {
   const bridge = getDesktopBridge();
   const [profiles, setProfiles] = useState<BackendProfileRow[]>([]);
@@ -152,6 +206,8 @@ export function BackendPage() {
           backends.
         </p>
       </div>
+
+      {activeId === 'local' ? <LocalOpenRouterSetting /> : null}
 
       <div className="space-y-3">
         {profiles.map(profile => {

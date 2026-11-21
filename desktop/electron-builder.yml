@@ -11,10 +11,10 @@ copyright: Copyright © Cooperativ Labs
 artifactName: "${productName}-${version}-${os}-${arch}.${ext}"
 
 # Generic updater feed (also set by scripts/build-desktop.ts). Serves latest-mac.yml
-# and release assets from https://github.com/cooperativ-labs/OpenOverlord/releases
+# and release assets from https://github.com/cooperativ-labs/Overlord/releases
 publish:
   provider: generic
-  url: https://github.com/cooperativ-labs/OpenOverlord/releases/latest/download/
+  url: https://github.com/cooperativ-labs/Overlord/releases/latest/download/
 
 directories:
   output: release

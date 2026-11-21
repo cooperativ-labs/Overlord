@@ -134,3 +134,4 @@ record and the index disagree.
 - [0096 — Activity feed pages delivered missions by three-day windows](0096-activity-feed-three-day-window.md)
 - [0097 — Suppress timestamp-only runner change events](0097-runner-heartbeat-events.md)
 - [0098 — Ephemeral Latch observer probes](0098-ephemeral-latch-observer-probes.md)
+- [0099 — User-supplied OpenRouter key for the local desktop backend](0099-desktop-local-openrouter-key.md)

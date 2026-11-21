@@ -12,6 +12,7 @@ import {
   switchActiveBackend,
   writeSessionTokenForProfile
 } from './backend-runtime.js';
+import { clearLocalOpenRouterKey, getLocalOpenRouterKey, setLocalOpenRouterKey } from './backend-token-store.js';
 import { syncSessionTokenToCliAuth } from './cli-auth-sync.js';
 import type { CliUpdater } from './cli-updater.js';
 import { readDesktopDeviceIdentity } from './device-identity.js';
@@ -249,6 +250,30 @@ export function registerIpc({
   ipcMain.handle('overlord:cli-updates:get-status', () => cliUpdater.getStatus());
   ipcMain.handle('overlord:cli-updates:check', () => cliUpdater.checkForUpdates());
   ipcMain.handle('overlord:cli-updates:update', () => cliUpdater.runUpdate());
+
+  const requireLocalShell = (event: Electron.IpcMainInvokeEvent) => {
+    requireShell(event);
+    if (getPublicActiveBackend({ shellOrigin: getShellOrigin() }).mode !== 'local') {
+      throw new Error('Local backend settings are available only in Local mode.');
+    }
+  };
+  // The renderer can write or remove the local key, but never read it back.
+  // Only the trusted main document may access these handlers.
+  ipcMain.handle('overlord:local-openrouter:status', event => {
+    requireLocalShell(event);
+    return { configured: getLocalOpenRouterKey() !== null };
+  });
+  ipcMain.handle('overlord:local-openrouter:set', (event, value: unknown) => {
+    requireLocalShell(event);
+    if (typeof value !== 'string' || value.length > 4096) throw new Error('Invalid OpenRouter key.');
+    setLocalOpenRouterKey(value);
+    return true;
+  });
+  ipcMain.handle('overlord:local-openrouter:clear', event => {
+    requireLocalShell(event);
+    clearLocalOpenRouterKey();
+    return true;
+  });
 
   ipcMain.handle('overlord:backend:get-active', () =>
     getPublicActiveBackend({ shellOrigin: getShellOrigin() })

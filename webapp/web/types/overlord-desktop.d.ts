@@ -135,6 +135,11 @@ declare global {
       update: () => Promise<CliUpdateStatus>;
       onStatus: (callback: (status: CliUpdateStatus) => void) => () => void;
     };
+    localOpenRouter?: {
+      status: () => Promise<{ configured: boolean }>;
+      set: (key: string) => Promise<boolean>;
+      clear: () => Promise<boolean>;
+    };
     getActiveBackend?: () => Promise<DesktopBackendInfo>;
     listBackends?: () => Promise<DesktopBackendProfile[]>;
     addBackend?: (payload: { label: string; backendUrl: string }) => Promise<DesktopBackendProfile>;
