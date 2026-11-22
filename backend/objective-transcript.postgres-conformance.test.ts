@@ -1,3 +1,5 @@
+import { objectiveTranscriptPageDtoSchema } from '@overlord/contract/api';
+import type { DatabaseClient } from '@overlord/database';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { mkdtempSync } from 'node:fs';
@@ -25,6 +27,40 @@ const { createProject, createMission, createObjective, createInboxItem, updateMi
   await import('./repository.ts');
 const { listObjectiveTranscript } = await import('./objective-transcript.ts');
 process.env.OPENROUTER_API_KEY = '';
+
+async function insertAttempt(
+  db: DatabaseClient,
+  objectiveId: string,
+  {
+    id = randomUUID(),
+    at,
+    source = 'manual_run',
+    metadata = {},
+    deleted = false
+  }: {
+    id?: string;
+    at: string;
+    source?: string;
+    metadata?: Record<string, unknown>;
+    deleted?: boolean;
+  }
+) {
+  await db.run(
+    `INSERT INTO execution_requests
+      (id, workspace_id, project_id, mission_id, objective_id, requested_source, status,
+       launch_mode, metadata_json, created_at, updated_at, deleted_at)
+      SELECT ?, workspace_id, project_id, mission_id, id, ?, 'launched', 'run', ?, ?, ?, ?
+      FROM objectives WHERE id = ?`,
+    [id, source, JSON.stringify(metadata), at, at, deleted ? at : null, objectiveId]
+  );
+  return id;
+}
+
+const latchMapping = (providerSessionId: string, lastObservedState = 'running') => ({
+  provider: 'latch',
+  providerSessionId,
+  lastObservedState
+});
 
 for (const adapter of conformanceAdapters())
   describe(`objective transcript (${adapter})`, () => {
@@ -133,6 +169,12 @@ for (const adapter of conformanceAdapters())
     });
 
     it('requires both permissions and scopes selection before paging or ID revalidation', async () => {
+      const objectiveId = objectiveIds[0]!;
+      const requestId = await insertAttempt(handle.db, objectiveId, {
+        at,
+        metadata: { providerSession: latchMapping('authorized-session') }
+      });
+      await handle.db.run("UPDATE objectives SET state = 'executing' WHERE id = ?", [objectiveId]);
       await dbModule.withRequestContextAsync(async () => {
         dbModule.setActiveTokenAuth({
           workspaceUserId: 'operator-workspace-user',
@@ -141,6 +183,7 @@ for (const adapter of conformanceAdapters())
           projectIds: [projectId]
         });
         assert.deepEqual((await listObjectiveTranscript()).items, []);
+        assert.deepEqual((await listObjectiveTranscript({ ids: objectiveId })).items, []);
         dbModule.setActiveTokenAuth({
           workspaceUserId: 'operator-workspace-user',
           tokenId: 'test',
@@ -156,12 +199,81 @@ for (const adapter of conformanceAdapters())
           projectIds: [projectId]
         });
         assert.equal((await listObjectiveTranscript({ limit: '1' })).items.length, 1);
+        assert.equal(
+          (await listObjectiveTranscript({ ids: objectiveId })).items[0]?.currentTerminalSession
+            ?.executionRequestId,
+          requestId
+        );
         dbModule.setAuthorizedWorkspacesContext({
           organizationId: 'test-organization',
           workspaces: []
         });
         assert.deepEqual((await listObjectiveTranscript()).items, []);
       });
+    });
+
+    it('selects the current attempt before looking for Latch and ignores history', async () => {
+      const id = objectiveIds[1]!;
+      const [oldId, directId] = [randomUUID(), randomUUID()].sort();
+      const later = '2026-10-02T00:00:00.000Z';
+      const read = async () => {
+        const page = await listObjectiveTranscript({ ids: id });
+        assert.ok(objectiveTranscriptPageDtoSchema.safeParse(page).success);
+        return page.items[0]!.currentTerminalSession;
+      };
+      await handle.db.run("UPDATE objectives SET state = 'launching' WHERE id = ?", [id]);
+      assert.equal(await read(), null);
+      await insertAttempt(handle.db, id, {
+        id: oldId,
+        at,
+        metadata: { providerSession: latchMapping('old-session'), launchEnv: ['private'] }
+      });
+      assert.deepEqual(await read(), {
+        executionRequestId: oldId,
+        objectiveId: id,
+        provider: 'latch',
+        providerSessionId: 'old-session',
+        sessionName: 'old-session',
+        executionTargetId: null,
+        deviceLabel: null,
+        agentSessionId: null,
+        executable: 'latch',
+        viewerKind: 'iterm',
+        viewerOpenAs: 'window',
+        createdAt: at,
+        lastObservedState: 'running',
+        endedAt: null,
+        endReason: null
+      });
+      // A same-time direct relaunch wins by ID and never falls back to old-session.
+      await insertAttempt(handle.db, id, { id: directId, at });
+      assert.equal(await read(), null);
+      await insertAttempt(handle.db, id, {
+        at: later,
+        source: 'local_target_mutation',
+        metadata: { providerSession: latchMapping('ignored-mutation') }
+      });
+      await insertAttempt(handle.db, id, {
+        at: later,
+        deleted: true,
+        metadata: { providerSession: latchMapping('ignored-deleted') }
+      });
+      assert.equal(await read(), null);
+      const setMapping = (metadata: Record<string, unknown>) =>
+        handle.db.run('UPDATE execution_requests SET metadata_json = ? WHERE id = ?', [
+          JSON.stringify(metadata),
+          directId
+        ]);
+      await setMapping({ endedTerminalSession: latchMapping('archived-session', 'exited') });
+      assert.equal(await read(), null);
+      await setMapping({ providerSession: latchMapping('exited-session', 'exited') });
+      assert.equal(await read(), null);
+      await setMapping({ providerSession: latchMapping('new-session', 'lost') });
+      await handle.db.run("UPDATE objectives SET state = 'pending_delivery' WHERE id = ?", [id]);
+      assert.equal((await read())?.executionRequestId, directId);
+      assert.equal((await read())?.lastObservedState, 'lost');
+      await handle.db.run("UPDATE objectives SET state = 'complete' WHERE id = ?", [id]);
+      assert.equal(await read(), null);
     });
 
     it('reads a second accessible workspace and drops it as soon as membership is revoked', async () => {
@@ -267,7 +379,30 @@ for (const adapter of conformanceAdapters())
       }
     });
 
-    it('uses one bounded data query with a one-row lookahead, regardless of project count', async () => {
+    it('projects a full 100-row page and its mappings in one bounded query across workspaces', async () => {
+      const workspaceIds = ['local-workspace', 'second-workspace'];
+      const expected = new Map<string, string>();
+      for (const workspaceId of workspaceIds) {
+        const project = await createProject({ workspaceId, name: `Full page ${workspaceId}` });
+        const mission = await createMission({
+          projectId: project.id,
+          objectives: Array.from({ length: 51 }, (_, index) => ({ instructions: `Row ${index}` }))
+        });
+        await handle.db.transaction(async tx => {
+          await tx.run("UPDATE objectives SET state = 'executing' WHERE mission_id = ?", [
+            mission.id
+          ]);
+          for (const { id } of mission.objectives) {
+            expected.set(
+              id,
+              await insertAttempt(tx, id, {
+                at,
+                metadata: { providerSession: latchMapping(`session-${id}`) }
+              })
+            );
+          }
+        });
+      }
       const statements: { sql: string; params: readonly unknown[] }[] = [];
       const client = {
         ...handle.db,
@@ -278,14 +413,27 @@ for (const adapter of conformanceAdapters())
       };
       const page = await readObjectiveTranscript({
         db: client,
-        workspaceIds: ['local-workspace'],
+        workspaceIds,
         allowedProjectIds: null,
-        read: parseTranscriptRead({ limit: '3' })
+        read: parseTranscriptRead({ limit: '100' })
       });
-      assert.equal(page.items.length, 3);
+      assert.equal(page.items.length, 100);
+      assert.equal(page.hasMore, true);
+      assert.deepEqual(new Set(page.items.map(item => item.workspaceId)), new Set(workspaceIds));
+      for (const item of page.items) {
+        assert.ok(expected.has(item.id));
+        assert.equal(item.currentTerminalSession?.executionRequestId, expected.get(item.id));
+      }
+      const revalidated = await listObjectiveTranscript({
+        ids: page.items.map(item => item.id).join(',')
+      });
+      assert.deepEqual(
+        revalidated.items.map(item => item.currentTerminalSession?.executionRequestId),
+        page.items.map(item => item.currentTerminalSession?.executionRequestId)
+      );
       assert.equal(statements.length, 1);
       assert.match(statements[0]!.sql, /LIMIT \?/);
-      assert.equal(statements[0]!.params.at(-1), 4);
+      assert.equal(statements[0]!.params.at(-1), 101);
       if (adapter === 'sqlite') {
         const plan = await handle.db.all<{ detail: string }>(
           `EXPLAIN QUERY PLAN ${statements[0]!.sql}`,

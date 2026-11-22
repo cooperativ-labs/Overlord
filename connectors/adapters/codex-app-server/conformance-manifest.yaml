@@ -1,4 +1,4 @@
-contractVersion: "182.0.4"
+contractVersion: "182.1.0"
 componentType: connector
 componentKey: codex-app-server
 label: "Codex app-server Connector"

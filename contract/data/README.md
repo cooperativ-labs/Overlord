@@ -3771,7 +3771,10 @@ Data rules of individual routes:
   memberships with both `mission:read` and `objective:read`, restricted by token project scope
   before paging. It pages over immutable `(created_at, id)` cursors, or revalidates named
   objective UUIDs. One statement limits each workspace's indexed walk before merging the
-  candidates; there is no count or per-objective hydration. The cursor and refresh rules, the
+  candidates, then projects at most one execution request per active objective. The
+  latest-attempt selection excludes deleted and local mutation requests and precedes provider
+  interpretation. The page and mappings use the same statement snapshot on both adapters.
+  There is no count or per-objective hydration. The cursor and refresh rules, the
   owner-only Inbox boundary and compatibility guidance are in
   [../architecture.md](../architecture.md) "Mobile → REST (Objective Transcript Surface)". It
   changes no mutation, instruction text or ownership.

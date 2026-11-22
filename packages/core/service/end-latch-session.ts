@@ -4,6 +4,10 @@ import { createHash } from 'node:crypto';
 import { resolveDefaultLocalTargetProvider } from './local-target/default-registry.ts';
 import { recordChange } from './change-feed.ts';
 import type { ServiceContext } from './context.ts';
+import {
+  activeObjectiveAttemptSql,
+  latestObjectiveAttemptIdSql
+} from './current-objective-attempt.ts';
 import { ServiceError } from './errors.ts';
 import { parseMetadataJson } from './execution-requests.ts';
 import { providerSessionFromMetadata } from './latch-launch.ts';
@@ -106,18 +110,12 @@ export async function endLatchSession({
   // Fence off automatic scheduling before sending a stop. Historical terminals
   // must never disconnect a newer attempt of the same objective.
   await db.transaction(async tx => {
-    const objective = await tx.get<{ state: string; revision: number }>(
-      `SELECT state, revision FROM objectives WHERE id = ? AND deleted_at IS NULL
-        AND NOT EXISTS (SELECT 1 FROM execution_requests newer
-          JOIN execution_requests original ON original.id = ?
-          WHERE newer.objective_id = objectives.id AND newer.deleted_at IS NULL
-            AND newer.requested_source <> 'local_target_mutation'
-            AND (newer.created_at > original.created_at
-              OR (newer.created_at = original.created_at AND newer.id > original.id)))`,
+    const objective = await tx.get<{ revision: number }>(
+      `SELECT o.revision FROM objectives o WHERE o.id = ? AND o.deleted_at IS NULL
+        AND ${activeObjectiveAttemptSql} AND ? = (${latestObjectiveAttemptIdSql})`,
       [row.objective_id, row.id]
     );
-    if (!objective || !['launching', 'executing', 'pending_delivery'].includes(objective.state))
-      return;
+    if (!objective) return;
     const now = nowIso();
     const updated = await tx.run(
       `UPDATE objectives SET state = 'submitted', updated_at = ?, revision = revision + 1

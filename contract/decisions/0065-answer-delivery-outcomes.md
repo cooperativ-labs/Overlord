@@ -4,6 +4,7 @@
 - Status: accepted
 - Contract version: 173.6.0
 - Supersedes: none (extends ADR 0025)
+- Amended by: 0104
 
 ## Context
 

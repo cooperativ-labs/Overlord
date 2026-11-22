@@ -1105,6 +1105,18 @@ Specified in [protocol.md](protocol.md).
   after local mutations/reconnect; promotion removes its capture ID and
   introduces the created objective ID. Reconcile optimistic mission creates
   against returned objective IDs, never text.
+- **Current attempt (ADR 0104)**: `currentTerminalSession` is optional and
+  nullable. For a `launching`, `executing` or `pending_delivery` objective,
+  select its newest non-deleted execution request excluding
+  `local_target_mutation`, ordered by `created_at DESC, id DESC`. Interpret
+  only that request's `providerSession`. Return its `TerminalSessionDto` if it
+  is a Latch mapping whose last observed state is other than `exited`. Return
+  null in every other case, including a newer direct attempt or an archived
+  mapping. A single statement projects the whole bounded authorized page on
+  SQLite and PostgreSQL. The end-session transaction uses the same active
+  states and attempt order and keeps its objective revision guard.
+  Mapping changes can occur without an objective revision increment. Revalidate
+  affected IDs on `execution_request` changes.
 - **Compatibility**: Use the supported backend contract/capability to select
   compatibility behavior; do not fall back to all-project objective fan-out on
   ordinary HTTP, decoding, authentication or cancellation errors. If pre-162
@@ -1113,6 +1125,26 @@ Specified in [protocol.md](protocol.md).
 - **Consumer**: Mobile may adopt this additive surface; current consumers of
   project mission lists are unchanged. The project-automation route allowlist
   remains closed to this new route.
+
+### Mobile → Latch (Objective Conversation Surface)
+
+- **Transport**: The optional Mobile integration connects to a host through its own
+  authenticated Latch Remote Link and uses Latch's v2 session discovery and
+  server-first Conversation Hub WebSocket. Overlord's REST projection carries
+  correlation metadata only. Latch owns pairing, host identity, revocation,
+  grants, conversation state and operation receipts.
+- **Binding**: Require a single authenticated host match on provider session ID,
+  a running session with a connector, source kind `overlord`, external run ID
+  equal to the projected execution request ID, and at least an observe grant.
+  Revalidate Overlord access, the attempt, and the Latch match on open and before
+  a Hub mutation. Latch enforces its grant for each operation. When the mapping
+  or Hub capability is missing, the card opens the mission panel.
+- **Privacy and authority**: Keep conversation content in memory and clear it
+  when access is lost. The mapping contains no gateway credential, attachment
+  grant, launch environment, terminal output, or conversation content. Overlord
+  never brokers a Mobile Latch credential. Overlord-owned lifecycle operations
+  and mission-question answers continue through their existing authorization
+  and runner or control-plane delivery paths.
 
 ### Mobile → REST (Live Activity Push Surface)
 
@@ -1860,7 +1892,9 @@ only exited is ended. State transitions emit the existing status_change mission 
 entity change feed. The mission detail retains all live mappings plus at most five recent
 ended mappings; the mission-authorized terminal-sessions/history read supplies bounded pages.
 Metadata retention, human stop reason precedence and observation fallback are defined in
-ADR 0064 and data/README.md. No direct client-to-Latch or backend-host execution is added.
+ADR 0064 and data/README.md. Overlord observation and lifecycle stay on the runner
+transport. The optional native Mobile conversation surface uses independent Latch
+authorization as specified in ADR 0104.
 For a launch without a requesting member, the observer checks eligibility and
 reachability of the recorded claiming local target using its active workspace
 owner's current target access (ADR 0082). The mapping must resolve to that same

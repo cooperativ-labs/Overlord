@@ -3,10 +3,10 @@ info:
   title: Overlord API
   # info.version is the API description's own Semantic Version; it changes when
   # this document changes and is never compared with the contract version.
-  version: 7.0.0
+  version: 7.1.0
   # The contract version (contract/VERSION) this document belongs to. Written
   # only by `yarn version:contract`.
-  x-overlord-contract-version: 182.0.4
+  x-overlord-contract-version: 182.1.0
   description: >-
     Normative description of Overlord's REST surface (ADR 0006): one operation for every
     method and path the backend registers, at the path it is served (ADR 0007), excluding
@@ -5164,7 +5164,8 @@ paths:
         narrowed to a project_automation token's projects. Reads newest first with `before`,
         oldest-new-first with `after`, or revalidates named ids with `ids`; at most one of the three. Any
         other query parameter, or a malformed value, answers 400 `invalid_request`. Responses carry
-        `Cache-Control: no-store`.
+        `Cache-Control: no-store`. Active objectives can include a mapping for their current Latch
+        attempt. The mapping conveys correlation only and grants no Latch access.
       security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
       parameters:
         - name: limit
@@ -15440,6 +15441,15 @@ components:
         createdAt: { $ref: '#/components/schemas/DateTime' }
         updatedAt: { $ref: '#/components/schemas/DateTime' }
         revision: { type: integer, minimum: 1 }
+        currentTerminalSession:
+          description: >-
+            Latch mapping for the latest non-deleted, non-local_target_mutation execution request
+            (created_at then id descending) of a launching, executing or pending_delivery objective.
+            Null when that request is absent, has no live Latch mapping or is confirmed exited.
+            Its identifiers confer no authority. Older backends may omit the field.
+          anyOf:
+            - $ref: '#/components/schemas/TerminalSessionDto'
+            - type: 'null'
     ObjectiveTranscriptPageDto:
       type: object
       required: [ items, nextBefore, nextAfter, newestCursor, hasMore ]

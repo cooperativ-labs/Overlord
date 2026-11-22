@@ -5,10 +5,10 @@
 import { z } from 'zod';
 
 /** The contract version (contract/VERSION) this API description belongs to. */
-export const contractVersion = "182.0.4";
+export const contractVersion = "182.1.0";
 
 /** The API description's own version (OpenAPI `info.version`). */
-export const apiVersion = "7.0.0";
+export const apiVersion = "7.1.0";
 
 /** A non-JSON request or response body: raw bytes (G3). */
 export type BinaryBody = Uint8Array | ArrayBuffer | Blob;
@@ -2505,8 +2505,12 @@ export interface ObjectiveTranscriptItemDto {
   createdAt: DateTime;
   updatedAt: DateTime;
   revision: number;
+  /**
+   * Latch mapping for the latest non-deleted, non-local_target_mutation execution request (created_at then id descending) of a launching, executing or pending_delivery objective. Null when that request is absent, has no live Latch mapping or is confirmed exited. Its identifiers confer no authority. Older backends may omit the field.
+   */
+  currentTerminalSession?: TerminalSessionDto | null;
 }
-export const objectiveTranscriptItemDtoSchema: z.ZodType<ObjectiveTranscriptItemDto> = z.object({ "id": z.string(), "workspaceId": z.string(), "projectId": z.string(), "missionId": z.string(), "missionDisplayId": z.string(), "missionTitle": z.string(), "missionRevision": z.int().min(1), "statusType": statusTypeSchema, "projectName": z.string(), "projectColor": z.string().nullable(), "projectRevision": z.int().min(1), "title": z.string().nullable(), "instructionText": z.string(), "state": objectiveStateSchema, "assignedAgent": z.string().nullable(), "resourceKey": z.string().nullable(), "createdByKind": createdByKindSchema, "createdByAgent": z.string().nullable(), "createdByWorkspaceUserId": z.string().nullable(), "createdAt": dateTimeSchema, "updatedAt": dateTimeSchema, "revision": z.int().min(1) });
+export const objectiveTranscriptItemDtoSchema: z.ZodType<ObjectiveTranscriptItemDto> = z.object({ "id": z.string(), "workspaceId": z.string(), "projectId": z.string(), "missionId": z.string(), "missionDisplayId": z.string(), "missionTitle": z.string(), "missionRevision": z.int().min(1), "statusType": statusTypeSchema, "projectName": z.string(), "projectColor": z.string().nullable(), "projectRevision": z.int().min(1), "title": z.string().nullable(), "instructionText": z.string(), "state": objectiveStateSchema, "assignedAgent": z.string().nullable(), "resourceKey": z.string().nullable(), "createdByKind": createdByKindSchema, "createdByAgent": z.string().nullable(), "createdByWorkspaceUserId": z.string().nullable(), "createdAt": dateTimeSchema, "updatedAt": dateTimeSchema, "revision": z.int().min(1), "currentTerminalSession": z.exactOptional(z.union([terminalSessionDtoSchema, z.null()])) });
 
 export interface ObjectiveTranscriptPageDto {
   items: ObjectiveTranscriptItemDto[];

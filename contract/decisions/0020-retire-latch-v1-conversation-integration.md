@@ -4,6 +4,7 @@
 - Status: accepted
 - Contract version: 108
 - Supersedes: none
+- Amended by: 0104
 - Origin: contract v108 (coo:815), backfilled 2026-11
 
 ## Context

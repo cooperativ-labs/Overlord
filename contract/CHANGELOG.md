@@ -5,6 +5,26 @@ is the current version and must equal [VERSION](VERSION); `yarn version:contract
 writes its skeleton. Dates use ISO 8601 and describe the contract change, not
 merely the files edited.
 
+## [182.1.0] - 2026-11-22
+
+Contract impact: minor. Objective transcripts add optional nullable
+`currentTerminalSession` for the latest eligible Latch attempt of an active
+objective. Both editions select the attempt before inspecting its mapping.
+The optional Mobile-to-Latch path uses independent host pairing and grants.
+See ADR 0104.
+
+### Impact on modules
+
+- REST and core project the mapping in the authorized page query. Terminal end
+  shares the current-attempt selection and retains its transaction and revision guard.
+- Mobile can adopt the optional field, revalidate on execution-request changes
+  and fall back to the mission panel when the mapping or host cannot be verified.
+- Runner and Overlord mission-answer authorization continue through existing routes.
+
+### Version
+
+- Minor contract version 182.1.0, from 182.0.4.
+
 ## [182.0.4] - 2026-11-21
 
 Contract impact: patch. PostgreSQL change-feed readers, pruning and account

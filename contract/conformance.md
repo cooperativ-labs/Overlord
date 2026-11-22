@@ -46,6 +46,15 @@ In addition to the requirements above, a connector must:
 6. **Make no network call from adapter code.** Adapters translate and hand off to the CLI, which
    owns transport, auth, retry, and redaction.
 
+### Mobile objective conversation conformance
+
+A Mobile consumer that adopts the optional Latch surface declares its use of
+the current-attempt transcript field and independent Remote Link integration
+in its manifest. It must tolerate missing and null mappings and gateways
+without matching provenance. Verify the active state and latest-request rules
+on both supported databases and preserve the mission-panel fallback when the
+mapping, host, or grant cannot be verified. See [ADR 0104](decisions/0104-current-latch-attempt.md).
+
 ### Virtual Target Gateway conformance
 
 A **Virtual Target Gateway** is a `rest-consumer` (e.g. Racecar) that realizes virtual execution requests. In addition to the requirements above, it must:

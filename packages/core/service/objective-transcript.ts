@@ -1,9 +1,23 @@
 import type { ObjectiveTranscriptItemDto, ObjectiveTranscriptPageDto } from '@overlord/contract';
 import type { DatabaseClient } from '@overlord/database';
 
+import {
+  activeObjectiveAttemptSql,
+  latestObjectiveAttemptIdSql
+} from './current-objective-attempt.ts';
 import { ServiceError } from './errors.js';
+import { projectTerminalSession } from './terminal-session-projection.ts';
 
 type Key = { at: string; id: string };
+type TranscriptRow = Omit<ObjectiveTranscriptItemDto, 'projectColor' | 'currentTerminalSession'> & {
+  projectSettings: string;
+  requestId: string | null;
+  requestMetadata: string | null;
+  requestCreatedAt: string | null;
+  requestUpdatedAt: string | null;
+  targetLabel: string | null;
+  deviceLabel: string | null;
+};
 export type TranscriptRead = {
   limit: number;
   before: Key | null;
@@ -121,34 +135,80 @@ export async function readObjectiveTranscript({
       ORDER BY o.created_at ${direction}, o.id ${direction} LIMIT ?) scope_${index}`;
   });
   params.push(lookahead);
-  // One bounded projection; no mission aggregates, sessions, queue hydration or N+1.
-  const rows = await db.all<ObjectiveTranscriptItemDto & { projectSettings: string }>(
+  // Select the authorized page before joining at most one attempt per objective.
+  // Keep paging and the attempt projection in the same database snapshot.
+  const rows = await db.all<TranscriptRow>(
     `
-    WITH candidates AS (${scopes.join(' UNION ALL ')})
-    SELECT o.id, o.workspace_id AS "workspaceId", o.project_id AS "projectId",
-      o.mission_id AS "missionId", m.display_id AS "missionDisplayId",
-      m.title AS "missionTitle", m.revision AS "missionRevision", m.status_type AS "statusType",
-      p.name AS "projectName", p.settings_json AS "projectSettings", p.revision AS "projectRevision",
-      o.title, o.instruction_text AS "instructionText", o.state,
-      o.assigned_agent AS "assignedAgent", o.resource_key AS "resourceKey",
-      o.created_by_kind AS "createdByKind", o.created_by_agent AS "createdByAgent",
-      o.created_by_workspace_user_id AS "createdByWorkspaceUserId",
-      o.created_at AS "createdAt", o.updated_at AS "updatedAt", o.revision
-    FROM candidates c JOIN objectives o ON o.id = c.id ${joins}
-    ORDER BY o.created_at ${direction}, o.id ${direction} LIMIT ?`,
+    WITH candidates AS (${scopes.join(' UNION ALL ')}),
+    page AS (
+      SELECT o.id, o.workspace_id AS "workspaceId", o.project_id AS "projectId",
+        o.mission_id AS "missionId", m.display_id AS "missionDisplayId",
+        m.title AS "missionTitle", m.revision AS "missionRevision", m.status_type AS "statusType",
+        p.name AS "projectName", p.settings_json AS "projectSettings", p.revision AS "projectRevision",
+        o.title, o.instruction_text AS "instructionText", o.state,
+        o.assigned_agent AS "assignedAgent", o.resource_key AS "resourceKey",
+        o.created_by_kind AS "createdByKind", o.created_by_agent AS "createdByAgent",
+        o.created_by_workspace_user_id AS "createdByWorkspaceUserId",
+        o.created_at AS "createdAt", o.updated_at AS "updatedAt", o.revision
+      FROM candidates c JOIN objectives o ON o.id = c.id ${joins}
+      ORDER BY o.created_at ${direction}, o.id ${direction} LIMIT ?
+    )
+    SELECT o.*, er.id AS "requestId", er.metadata_json AS "requestMetadata",
+      er.created_at AS "requestCreatedAt", er.updated_at AS "requestUpdatedAt",
+      et.label AS "targetLabel", d.label AS "deviceLabel"
+    FROM page o
+    LEFT JOIN execution_requests er
+      ON er.id = CASE WHEN ${activeObjectiveAttemptSql} THEN (${latestObjectiveAttemptIdSql}) END
+      AND er.workspace_id = o."workspaceId" AND er.mission_id = o."missionId"
+      AND er.project_id = o."projectId"
+    LEFT JOIN execution_targets et
+      ON et.id = COALESCE(er.claimed_by_execution_target_id, er.execution_target_id)
+      AND et.workspace_id = er.workspace_id
+    LEFT JOIN devices d ON d.id = et.device_id AND d.workspace_id = et.workspace_id
+    ORDER BY o."createdAt" ${direction}, o.id ${direction}`,
     params
   );
   const hasMore = !read.ids && rows.length > limit;
-  const items = rows.slice(0, limit).map(({ projectSettings, ...row }) => {
-    let projectColor: string | null = null;
-    try {
-      const settings = JSON.parse(projectSettings) as Record<string, unknown>;
-      if (typeof settings['overlord.color'] === 'string') projectColor = settings['overlord.color'];
-    } catch {
-      /* Invalid settings do not hide a readable objective. */
-    }
-    return { ...row, projectColor };
-  });
+  const items = rows
+    .slice(0, limit)
+    .map(
+      ({
+        projectSettings,
+        requestId,
+        requestMetadata,
+        requestCreatedAt,
+        requestUpdatedAt,
+        targetLabel,
+        deviceLabel,
+        ...row
+      }) => {
+        let projectColor: string | null = null;
+        try {
+          const settings = JSON.parse(projectSettings) as Record<string, unknown>;
+          if (typeof settings['overlord.color'] === 'string')
+            projectColor = settings['overlord.color'];
+        } catch {
+          /* Invalid settings do not hide a readable objective. */
+        }
+        const terminal =
+          requestId && requestCreatedAt && requestUpdatedAt
+            ? projectTerminalSession({
+                execution_request_id: requestId,
+                objective_id: row.id,
+                metadata_json: requestMetadata,
+                created_at: requestCreatedAt,
+                updated_at: requestUpdatedAt,
+                target_label: targetLabel,
+                device_label: deviceLabel
+              })
+            : null;
+        return {
+          ...row,
+          projectColor,
+          currentTerminalSession: terminal?.lastObservedState === 'exited' ? null : terminal
+        };
+      }
+    );
   const asKey = (item: ObjectiveTranscriptItemDto) => ({ at: item.createdAt, id: item.id });
   const last = items.at(-1);
   const newest = read.after ? last : items[0];
