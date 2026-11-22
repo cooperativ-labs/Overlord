@@ -138,3 +138,4 @@ record and the index disagree.
 - [0100 — Index populated project and mission references in the change feed](0100-partial-change-feed-indexes.md)
 - [0101 — Wake PostgreSQL realtime readers on feed commits](0101-postgres-realtime-wakeups.md)
 - [0102 — Reuse unchanged search projections](0102-reuse-search-projections.md)
+- [0103 — Coordinate the PostgreSQL change feed with an advisory gate](0103-postgres-feed-gate.md)

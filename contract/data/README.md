@@ -163,7 +163,9 @@ Before account erasure removes a membership, the account-deletion transaction
 replaces its preserved and still-in-feed Everhour actor evidence with the
 non-identifying `!overlord:erased-actor` marker. Adoption must fail closed when
 that marker is present. PostgreSQL serializes the redaction and feed pruning
-with the same table lock so pruning cannot restore the erased identifier.
+through the feed gate: account erasure holds it in shared mode, before taking
+domain locks, and pruning holds it exclusively, so pruning cannot restore the
+erased identifier.
 
 SQLite's single-writer mode can serve `WHERE seq > cursor ORDER BY seq` directly when writes are serialized. Multi-writer adapters such as Postgres must not expose a raw sequence as the only cursor because sequence allocation order can differ from commit visibility. A Postgres adapter must provide one of:
 
@@ -173,22 +175,38 @@ SQLite's single-writer mode can serve `WHERE seq > cursor ORDER BY seq` directly
 
 Sync clients should advance cursors only to the adapter-provided safe high-water mark. If a requested cursor is older than the retained feed window, the API must return a clear full-resync-required response.
 
-For backend feed reads, PostgreSQL obtains a `SHARE` table lock on
-`entity_changes` inside the read transaction before taking the high-water mark
-and selecting rows. It waits for transactions holding the insert lock and
-prevents new inserts until the read completes, so identity allocation and commit
-visibility cannot leave an unseen lower sequence behind the returned cursor.
+PostgreSQL coordinates the feed through one transaction-scoped advisory lock
+per `entity_changes` relation, the feed gate (ADR 0103). A `BEFORE INSERT`
+statement trigger takes it in shared mode before identity allocation, so every
+writer holds it until commit or rollback, whatever its code path or release.
+An `AFTER INSERT` statement check rejects any row whose `seq` was not allocated
+after its statement took the gate, including explicit values and values from an
+earlier `nextval()`. Backend feed reads take the gate in exclusive mode inside
+the read transaction before reading the retention boundary and high-water mark
+and selecting rows. They wait for in-flight writers and hold off new identity
+allocation until the read completes, so commit visibility cannot leave an unseen
+lower sequence behind the returned cursor. A transaction that has inserted feed
+rows must not read or prune through the gate; PostgreSQL rejects the attempt.
 The read transaction must remain short and must not perform domain writes. The
-PostgreSQL read and pruning locks use a two-second lock timeout so contention
-fails a pass rather than waiting indefinitely.
+PostgreSQL read, pruning and erasure gate waits use a two-second lock timeout so
+contention fails a pass rather than waiting indefinitely. Recurring feed paths
+must not take `entity_changes` table locks that conflict with ordinary
+autovacuum (`SHARE UPDATE EXCLUSIVE`): readers hold only `ACCESS SHARE`, and
+writers and pruning only the `ROW EXCLUSIVE` their statements take.
+The gate migration is applied before any backend reads through the gate, so it
+covers all writers first. Backends that read with the former `SHARE` table lock
+remain correct beside gated readers because every writer then holds both, but
+pruning on either release must stay disabled until every backend reads through
+the gate: a reader with the former lock is not excluded by gated pruning, and a
+gated reader is not excluded by the former pruning lock.
 
 `entity_change_retention` stores one row with `id = 1` and non-negative
 `retained_through` (`ChangeSeq`, default 0): every cursor below it requires a
 full authorized refresh. Pruning removes only a contiguous prefix older than
 21 days, in bounded transactions. It advances that boundary and preserves
-Everhour actor evidence atomically with deletion. PostgreSQL pruning takes a
-`SHARE ROW EXCLUSIVE` feed table lock, excluding writers and synchronized feed
-readers for the batch. A reader uses the safe cursor returned with the expired
+Everhour actor evidence atomically with deletion. PostgreSQL pruning holds the
+feed gate exclusively, excluding writers and synchronized feed readers for the
+batch. A reader uses the safe cursor returned with the expired
 response before refreshing and replays from that cursor afterward; pruning is
 disabled until web, desktop and mobile recovery has been verified.
 The Cloud worker is disabled by default and runs only when

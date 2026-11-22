@@ -5,6 +5,19 @@ is the current version and must equal [VERSION](VERSION); `yarn version:contract
 writes its skeleton. Dates use ISO 8601 and describe the contract change, not
 merely the files edited.
 
+## [182.0.4] - 2026-11-21
+
+Contract impact: patch. PostgreSQL change-feed readers, pruning and account
+erasure coordinate through a transaction-scoped advisory feed gate that every
+feed insert takes before identity allocation. The gate replaces the `SHARE` and
+`SHARE ROW EXCLUSIVE` table locks, which cancelled ordinary autovacuum. Feed
+inserts with a `seq` not allocated under the gate are rejected. Cursor,
+retention, erasure and SQLite behavior are unchanged. See ADR 0103.
+
+### Version
+
+- Patch contract version 182.0.4, from 182.0.3.
+
 ## [182.0.3] - 2026-11-21
 
 Contract impact: patch. Search indexing skips identical projections and reuses

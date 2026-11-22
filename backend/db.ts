@@ -910,9 +910,13 @@ export async function enqueueWebhookEventRest(
 }
 
 /** Hold PostgreSQL feed writers until the reader has observed all earlier
- * inserts. An identity sequence alone is not ordered by commit. PostgreSQL's
- * INSERT takes ROW EXCLUSIVE before allocating its identity; SHARE waits for
- * those transactions and prevents new inserts until the read completes. */
+ * inserts. An identity sequence alone is not ordered by commit. Every feed
+ * insert takes the feed gate in shared mode before allocating its identity and
+ * holds it until commit or rollback (migration
+ * `20261121180000_entity_change_feed_gate`, ADR 0103). The reader takes it in
+ * exclusive mode, so it waits for in-flight writers and holds new ones off until
+ * the read completes. The gate is an advisory lock and does not conflict with
+ * autovacuum. A feed-writing transaction cannot read through this helper. */
 export async function withCommittedFeed<T>(
   client: DatabaseClient,
   read: (client: DatabaseClient) => Promise<T>
@@ -920,7 +924,7 @@ export async function withCommittedFeed<T>(
   return client.transaction(async tx => {
     if (tx.dialect === 'postgres') {
       await tx.exec("SET LOCAL lock_timeout = '2s'");
-      await tx.exec('LOCK TABLE entity_changes IN SHARE MODE');
+      await tx.get('SELECT entity_changes_feed_read_gate()');
     }
     return read(tx);
   });

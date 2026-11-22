@@ -3,10 +3,12 @@ import { randomUUID } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
+
 import { pruneChangeFeedBatch } from '../packages/core/service/change-feed-retention.ts';
 import { createServiceContext } from '../packages/core/service/context.ts';
 import { recordRunnerHeartbeat } from '../packages/core/service/execution-target-runners.ts';
 import { seedServiceOperator } from '../packages/core/service/test-helpers.ts';
+
 import { createConformanceDatabase } from './test-helpers.ts';
 
 test(
@@ -234,7 +236,7 @@ test(
         releaseErasure = resolve;
       });
       const erasure = db.transaction(async tx => {
-        await tx.exec('LOCK TABLE entity_changes IN SHARE ROW EXCLUSIVE MODE');
+        await tx.get('SELECT entity_changes_feed_write_gate()');
         erasureReady();
         await erasureGate;
         await cascadeDeleteAccount(member.profile_id);

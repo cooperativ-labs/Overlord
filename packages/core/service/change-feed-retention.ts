@@ -42,7 +42,10 @@ export async function pruneChangeFeedBatch(
   return db.transaction(async tx => {
     if (tx.dialect === 'postgres') {
       await tx.exec("SET LOCAL lock_timeout = '2s'");
-      await tx.exec('LOCK TABLE entity_changes IN SHARE ROW EXCLUSIVE MODE');
+      // Exclusive feed gate (ADR 0103): no writer is between identity
+      // allocation and commit, and no reader is mid-pass, while the prefix and
+      // retention boundary move together.
+      await tx.get('SELECT entity_changes_feed_read_gate()');
     }
     const state = await tx.get<{ retained_through: number }>(
       `SELECT retained_through FROM entity_change_retention WHERE id = 1`

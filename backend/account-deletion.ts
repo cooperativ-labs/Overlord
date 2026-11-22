@@ -32,8 +32,9 @@
  * `entity_changes`' FK the instant that row is purged below.
  */
 
-import { recordChange, requireDatabaseClient } from './db.ts';
 import { eraseEverhourActorEvidence } from '../packages/core/service/change-feed-retention.ts';
+
+import { recordChange, requireDatabaseClient } from './db.ts';
 import { tombstoneInboxItemAttachmentsTx } from './inbox-attachments.ts';
 import { removeStoredObjects, type StoredObjectRef } from './storage.ts';
 
@@ -41,9 +42,11 @@ export async function cascadeDeleteAccount(profileId: string): Promise<void> {
   const cleanupImages = await requireDatabaseClient().transaction(async tx => {
     // Serialize evidence redaction with retention before taking domain locks.
     // Otherwise pruning could copy a membership ID after it was redacted.
+    // Shared feed gate (ADR 0103): pruning needs it exclusively, while other
+    // writers, which take it in shared mode, are not blocked.
     if (tx.dialect === 'postgres') {
       await tx.exec("SET LOCAL lock_timeout = '2s'");
-      await tx.exec('LOCK TABLE entity_changes IN SHARE ROW EXCLUSIVE MODE');
+      await tx.get('SELECT entity_changes_feed_write_gate()');
     }
     const profile = await tx.get<{ id: string }>(`SELECT id FROM profiles WHERE id = ?`, [
       profileId
