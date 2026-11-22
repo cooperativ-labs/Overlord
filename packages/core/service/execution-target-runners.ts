@@ -1,3 +1,5 @@
+import { isDeepStrictEqual } from 'node:util';
+
 import { recordChange } from './change-feed.js';
 import type { ServiceContext } from './context.js';
 import { ServiceError } from './errors.js';
@@ -9,7 +11,6 @@ import {
 } from './execution-targets.js';
 import { enqueueRunQueueDispatchForWorkspace } from './run-queue.js';
 import { newId, nowIso } from './util.js';
-import { isDeepStrictEqual } from 'node:util';
 
 /**
  * A local execution target is reachable while one of its runner instances has

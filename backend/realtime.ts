@@ -2,6 +2,7 @@ import { PERMISSIONS } from '@overlord/auth';
 import type { EntityChangeDto, SyncChangesDto } from '@overlord/contract';
 import type { Response } from 'express';
 
+import { subscribePostgres } from './execution/pg-listen.ts';
 import {
   currentMaxSeq,
   getActiveTokenProjectIds,
@@ -9,7 +10,6 @@ import {
   requireDatabaseClient,
   withCommittedFeed
 } from './db.ts';
-import { subscribePostgres } from './execution/pg-listen.ts';
 import { PollLoop } from './poll-loop.ts';
 import { actorCan } from './rbac.ts';
 

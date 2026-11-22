@@ -1,7 +1,7 @@
+import Database from 'better-sqlite3';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
-import Database from 'better-sqlite3';
 
 test('Everhour attribution migration retains distinct actors from historical inserts and updates', () => {
   const db = new Database(':memory:');

@@ -2,8 +2,9 @@ import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-quer
 import { act, cleanup, render, waitFor } from '@testing-library/react';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { RealtimeProvider, useRealtime } from './realtime.tsx';
+
 import { ApiRequestError } from './api/request.ts';
+import { RealtimeProvider, useRealtime } from './realtime.tsx';
 
 test('expired stream refreshes stale data and replays writes made during refresh', async () => {
   const originalFetch = globalThis.fetch;

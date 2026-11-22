@@ -13,12 +13,12 @@ import { after, describe, it } from 'node:test';
 
 import { seedMissionItemsFixture } from '../../../database/src/mission-items.test-fixture.ts';
 
-import { listObjectiveFileChanges } from './changes.js';
 import {
   ERASED_EVERHOUR_ACTOR,
   eraseEverhourActorEvidence,
   pruneChangeFeedBatch
 } from './change-feed-retention.js';
+import { listObjectiveFileChanges } from './changes.js';
 import { createServiceContext } from './context.js';
 import { buildDeliveryReport } from './delivery-report.js';
 import { ServiceError } from './errors.js';

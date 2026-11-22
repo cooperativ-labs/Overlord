@@ -12,7 +12,11 @@ import {
   switchActiveBackend,
   writeSessionTokenForProfile
 } from './backend-runtime.js';
-import { clearLocalOpenRouterKey, getLocalOpenRouterKey, setLocalOpenRouterKey } from './backend-token-store.js';
+import {
+  clearLocalOpenRouterKey,
+  getLocalOpenRouterKey,
+  setLocalOpenRouterKey
+} from './backend-token-store.js';
 import { syncSessionTokenToCliAuth } from './cli-auth-sync.js';
 import type { CliUpdater } from './cli-updater.js';
 import { readDesktopDeviceIdentity } from './device-identity.js';
@@ -265,7 +269,8 @@ export function registerIpc({
   });
   ipcMain.handle('overlord:local-openrouter:set', (event, value: unknown) => {
     requireLocalShell(event);
-    if (typeof value !== 'string' || value.length > 4096) throw new Error('Invalid OpenRouter key.');
+    if (typeof value !== 'string' || value.length > 4096)
+      throw new Error('Invalid OpenRouter key.');
     setLocalOpenRouterKey(value);
     return true;
   });

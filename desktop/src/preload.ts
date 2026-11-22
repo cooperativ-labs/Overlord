@@ -205,8 +205,10 @@ const api = {
     }
   },
   localOpenRouter: {
-    status: (): Promise<{ configured: boolean }> => ipcRenderer.invoke('overlord:local-openrouter:status'),
-    set: (key: string): Promise<boolean> => ipcRenderer.invoke('overlord:local-openrouter:set', key),
+    status: (): Promise<{ configured: boolean }> =>
+      ipcRenderer.invoke('overlord:local-openrouter:status'),
+    set: (key: string): Promise<boolean> =>
+      ipcRenderer.invoke('overlord:local-openrouter:set', key),
     clear: (): Promise<boolean> => ipcRenderer.invoke('overlord:local-openrouter:clear')
   },
   getActiveBackend: (): Promise<DesktopBackendInfo> =>

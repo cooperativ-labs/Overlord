@@ -119,14 +119,14 @@ import {
   prepareMissionSessionChannel
 } from './agent-session-routes.ts';
 import { auth, getAllowedBrowserOrigins, requireAuthenticatedSession } from './auth.ts';
-import { createChatRouter } from './chat.ts';
 import { ChangeFeedRetentionWorker } from './change-feed-retention-worker.ts';
+import { createChatRouter } from './chat.ts';
 import { ChatNotificationDispatcher } from './chat-notification-dispatcher.ts';
 import { ChatWorker } from './chat-worker.ts';
 import {
+  currentMaxSeq,
   DATABASE_DIALECT,
   DATABASE_PATH,
-  currentMaxSeq,
   getActiveProfileId,
   getActiveTokenProjectIds,
   getActorWorkspaceUserId,

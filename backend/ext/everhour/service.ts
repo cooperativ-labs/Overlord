@@ -8,8 +8,8 @@ import type {
   UpdateEverhourTimeBody
 } from '@overlord/contract/ext/everhour';
 import type { DatabaseClient } from '@overlord/database';
-import { ERASED_EVERHOUR_ACTOR } from '../../../packages/core/service/change-feed-retention.ts';
 
+import { ERASED_EVERHOUR_ACTOR } from '../../../packages/core/service/change-feed-retention.ts';
 import {
   type ExternalAccount,
   type ProfileConnections,

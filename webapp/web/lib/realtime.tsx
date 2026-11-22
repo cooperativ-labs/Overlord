@@ -2,8 +2,8 @@ import type { EntityChangeDto, SyncChangesDto } from '@overlord/contract';
 import { useQueryClient } from '@tanstack/react-query';
 import { createContext, type ReactNode, useContext, useEffect, useRef, useState } from 'react';
 
-import { getAuthorizationHeader } from './api-base.ts';
 import { ApiRequestError } from './api/request.ts';
+import { getAuthorizationHeader } from './api-base.ts';
 import { fetchApi, resolveEventSourceUrl } from './api-transport.ts';
 import { connectEventStream } from './fetch-sse.ts';
 import { invalidateNonEverhourQueries } from './query-invalidation.ts';
