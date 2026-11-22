@@ -135507,7 +135507,7 @@ var activityFeedMissionObjectiveDtoSchema = external_exports.object({ "objective
 var activityFeedMissionItemDtoSchema = external_exports.object({ "id": external_exports.string(), "kind": external_exports.enum(["mission_run", "mission_delivered"]), "occurredAt": dateTimeSchema, "workspaceId": external_exports.string(), "workspaceName": external_exports.string(), "projectId": external_exports.string(), "projectName": external_exports.string(), "projectColor": external_exports.string().nullable(), "missionId": external_exports.string(), "missionDisplayId": external_exports.string(), "missionTitle": external_exports.string(), "objectiveId": external_exports.string().nullable(), "objectiveDisplayId": external_exports.string().nullable(), "createdByKind": createdByKindSchema, "createdByAgent": external_exports.string().nullable(), "runState": external_exports.enum(["launching", "executing", "delivered"]), "objectives": external_exports.array(activityFeedMissionObjectiveDtoSchema), "activeObjectiveIds": external_exports.array(external_exports.string()), "objectiveTitle": external_exports.string().nullable(), "instructionPreview": external_exports.string(), "summaryPreview": external_exports.string().nullable(), "agentIdentifier": external_exports.string().nullable(), "modelIdentifier": external_exports.string().nullable(), "branch": external_exports.string().nullable(), "resourceKey": external_exports.string().nullable(), "startedAt": dateTimeSchema.nullable(), "latestEventSummary": external_exports.string().nullable(), "latestEventAt": dateTimeSchema.nullable() });
 var activityFeedQuestionItemDtoSchema = external_exports.object({ "id": external_exports.string(), "kind": external_exports.literal("blocking_question"), "occurredAt": dateTimeSchema, "workspaceId": external_exports.string(), "workspaceName": external_exports.string(), "projectId": external_exports.string(), "projectName": external_exports.string(), "projectColor": external_exports.string().nullable(), "missionId": external_exports.string(), "missionDisplayId": external_exports.string(), "missionTitle": external_exports.string(), "objectiveId": external_exports.string().nullable(), "objectiveDisplayId": external_exports.string().nullable(), "createdByKind": createdByKindSchema, "createdByAgent": external_exports.string().nullable(), "eventId": external_exports.string(), "agentRequestId": external_exports.string().nullable(), "delivery": external_exports.object({ "mode": external_exports.enum(["latch", "read_only"]) }), "question": external_exports.string(), "agentIdentifier": external_exports.string().nullable(), "askedAt": dateTimeSchema });
 var activityFeedDtoSchema = external_exports.object({ "items": external_exports.array(external_exports.union([activityFeedMissionItemDtoSchema, activityFeedQuestionItemDtoSchema])), "generatedAt": dateTimeSchema, "counts": external_exports.object({ "mission_run": external_exports.int().min(0), "blocking_question": external_exports.int().min(0), "mission_delivered": external_exports.int().min(0) }), "nextBefore": dateTimeSchema.nullable() });
-var objectiveTranscriptItemDtoSchema = external_exports.object({ "id": external_exports.string(), "workspaceId": external_exports.string(), "projectId": external_exports.string(), "missionId": external_exports.string(), "missionDisplayId": external_exports.string(), "missionTitle": external_exports.string(), "missionRevision": external_exports.int().min(1), "statusType": statusTypeSchema, "projectName": external_exports.string(), "projectColor": external_exports.string().nullable(), "projectRevision": external_exports.int().min(1), "title": external_exports.string().nullable(), "instructionText": external_exports.string(), "state": objectiveStateSchema, "assignedAgent": external_exports.string().nullable(), "resourceKey": external_exports.string().nullable(), "createdByKind": createdByKindSchema, "createdByAgent": external_exports.string().nullable(), "createdByWorkspaceUserId": external_exports.string().nullable(), "createdAt": dateTimeSchema, "updatedAt": dateTimeSchema, "revision": external_exports.int().min(1) });
+var objectiveTranscriptItemDtoSchema = external_exports.object({ "id": external_exports.string(), "workspaceId": external_exports.string(), "projectId": external_exports.string(), "missionId": external_exports.string(), "missionDisplayId": external_exports.string(), "missionTitle": external_exports.string(), "missionRevision": external_exports.int().min(1), "statusType": statusTypeSchema, "projectName": external_exports.string(), "projectColor": external_exports.string().nullable(), "projectRevision": external_exports.int().min(1), "title": external_exports.string().nullable(), "instructionText": external_exports.string(), "state": objectiveStateSchema, "assignedAgent": external_exports.string().nullable(), "resourceKey": external_exports.string().nullable(), "createdByKind": createdByKindSchema, "createdByAgent": external_exports.string().nullable(), "createdByWorkspaceUserId": external_exports.string().nullable(), "createdAt": dateTimeSchema, "updatedAt": dateTimeSchema, "revision": external_exports.int().min(1), "currentTerminalSession": external_exports.exactOptional(external_exports.union([terminalSessionDtoSchema, external_exports.null()])) });
 var objectiveTranscriptPageDtoSchema = external_exports.object({ "items": external_exports.array(objectiveTranscriptItemDtoSchema).max(100), "nextBefore": external_exports.string().nullable(), "nextAfter": external_exports.string().nullable(), "newestCursor": external_exports.string().nullable(), "hasMore": external_exports.boolean() });
 var inboxItemDtoSchema = external_exports.object({ "id": external_exports.string(), "title": external_exports.string(), "objectives": external_exports.array(external_exports.string()).min(1).max(1), "dueDatetime": external_exports.string().nullable(), "priority": missionPrioritySchema.nullable(), "attachmentCount": external_exports.int().min(0), "createdAt": dateTimeSchema, "updatedAt": dateTimeSchema });
 var inboxItemListSchema = external_exports.array(inboxItemDtoSchema);
@@ -143845,7 +143845,7 @@ async function withCommittedFeed(client, read) {
   return client.transaction(async (tx) => {
     if (tx.dialect === "postgres") {
       await tx.exec("SET LOCAL lock_timeout = '2s'");
-      await tx.exec("LOCK TABLE entity_changes IN SHARE MODE");
+      await tx.get("SELECT entity_changes_feed_read_gate()");
     }
     return read(tx);
   });
@@ -167056,112 +167056,6 @@ async function generateMissionTitleNow(params) {
   return title;
 }
 
-// ../packages/core/dist/service/terminal-profile-types.js
-var DEFAULT_VIEWER_OPEN_AS2 = "window";
-function viewerOpenAsForPlacement2(placement) {
-  return typeof placement === "string" && placement.trim().toLowerCase() === "tab" ? "tab" : DEFAULT_VIEWER_OPEN_AS2;
-}
-function viewerBackgroundForProfile2(profile) {
-  return profile?.background === true && profile.placement !== "chord";
-}
-function parseViewerOpenAs2(value2) {
-  return typeof value2 === "string" && value2.trim().toLowerCase() === "tab" ? "tab" : DEFAULT_VIEWER_OPEN_AS2;
-}
-var TERMINAL_PROFILE_VERSION2 = 1;
-var DEFAULT_LATCH_EXECUTABLE2 = "latch";
-var DEFAULT_EXECUTION_PROVIDER2 = {
-  kind: "direct",
-  executable: DEFAULT_LATCH_EXECUTABLE2
-};
-var DEFAULT_OPEN_VIEWER_ON_LAUNCH2 = true;
-var DEFAULT_TERMINAL_PROFILE2 = {
-  launcher: "Terminal",
-  placement: "window",
-  chord: null,
-  background: false
-};
-var DEFAULT_LAUNCH_SESSION_DEFAULTS2 = {
-  executionProvider: { ...DEFAULT_EXECUTION_PROVIDER2 },
-  openViewerOnLaunch: DEFAULT_OPEN_VIEWER_ON_LAUNCH2,
-  worktreeBranchAutomationEnabled: false
-};
-var LAUNCH_SESSION_METADATA_KEY2 = "launchSession";
-function trimmed8(value2) {
-  return typeof value2 === "string" && value2.trim() ? value2.trim() : null;
-}
-function viewerKindForLauncher2(launcher) {
-  const value2 = trimmed8(launcher);
-  if (!value2)
-    return "inline";
-  const lowered = value2.toLowerCase();
-  if (lowered === "iterm2" || lowered === "iterm")
-    return "iterm";
-  if (lowered === "terminal")
-    return "terminal";
-  return "custom";
-}
-function normalizeExecutionProvider2(value2) {
-  if (!value2 || typeof value2 !== "object" || Array.isArray(value2))
-    return null;
-  const cast = value2;
-  const kind = trimmed8(cast.kind)?.toLowerCase() === "latch" ? "latch" : "direct";
-  return {
-    kind,
-    executable: trimmed8(cast.executable) ?? DEFAULT_LATCH_EXECUTABLE2
-  };
-}
-function resolveLaunchSession2({ profile, defaults: defaults2 = DEFAULT_LAUNCH_SESSION_DEFAULTS2 }) {
-  const launcher = profile ? profile.launcher : DEFAULT_TERMINAL_PROFILE2.launcher;
-  const provider = profile?.executionProvider ? normalizeExecutionProvider2(profile.executionProvider) : null;
-  const openOnLaunch = typeof profile?.openViewerOnLaunch === "boolean" ? profile.openViewerOnLaunch : null;
-  return {
-    version: TERMINAL_PROFILE_VERSION2,
-    executionProvider: provider ?? {
-      ...normalizeExecutionProvider2(defaults2.executionProvider) ?? DEFAULT_EXECUTION_PROVIDER2
-    },
-    viewer: {
-      kind: viewerKindForLauncher2(launcher),
-      launcher: launcher ?? null,
-      openOnLaunch: openOnLaunch ?? defaults2.openViewerOnLaunch !== false,
-      openAs: viewerOpenAsForPlacement2(profile?.placement ?? DEFAULT_TERMINAL_PROFILE2.placement),
-      background: viewerBackgroundForProfile2(profile)
-    },
-    executionProviderSource: provider ? "target" : "user_default",
-    viewerOpenSource: openOnLaunch === null ? "user_default" : "target"
-  };
-}
-function launchSessionSnapshotFromMetadata2(metadata) {
-  const raw = metadata?.[LAUNCH_SESSION_METADATA_KEY2];
-  if (!raw || typeof raw !== "object" || Array.isArray(raw))
-    return null;
-  const cast = raw;
-  if (cast.version !== TERMINAL_PROFILE_VERSION2)
-    return null;
-  const viewer = cast.viewer && typeof cast.viewer === "object" && !Array.isArray(cast.viewer) ? cast.viewer : null;
-  const launcher = trimmed8(viewer?.launcher);
-  const source = (value2) => trimmed8(value2) === "target" ? "target" : "user_default";
-  return {
-    version: TERMINAL_PROFILE_VERSION2,
-    executionProvider: normalizeExecutionProvider2(cast.executionProvider) ?? {
-      ...DEFAULT_EXECUTION_PROVIDER2
-    },
-    viewer: {
-      kind: trimmed8(viewer?.kind) ? trimmed8(viewer?.kind) : viewerKindForLauncher2(launcher),
-      launcher,
-      openOnLaunch: viewer?.openOnLaunch !== false,
-      // A snapshot frozen before `openAs` existed carries none; `window` is what
-      // those runs actually did, so the absent case must not become `tab`.
-      openAs: parseViewerOpenAs2(viewer?.openAs),
-      // A snapshot frozen before `background` existed carries none; those runs
-      // opened in the foreground, so absent must not become background.
-      background: viewer?.background === true
-    },
-    executionProviderSource: source(cast.executionProviderSource),
-    viewerOpenSource: source(cast.viewerOpenSource),
-    resolvedAt: trimmed8(cast.resolvedAt) ?? ""
-  };
-}
-
 // ../packages/core/service/terminal-session-lifecycle.ts
 function terminalMetadataSql(dialect, field, archived = false) {
   const key = archived ? "endedTerminalSession" : "providerSession";
@@ -167265,51 +167159,43 @@ async function recordTerminalObservation({
   });
 }
 
-// execution/latch-sessions.ts
-function terminalSessionState(value2) {
-  switch (value2) {
-    case "exited":
-      return "exited";
-    case "stopping":
-      return "stopping";
-    case "lost":
-      return "lost";
-    default:
-      return "running";
-  }
+// ../packages/core/service/terminal-session-projection.ts
+function projectTerminalSession(row, archived = false) {
+  const metadata = parseMetadataJson(row.metadata_json ?? "");
+  const providerSession = providerSessionFromMetadata(metadata) ?? (archived ? providerSessionFromMetadata({ providerSession: metadata.endedTerminalSession }) : null);
+  if (!providerSession) return null;
+  const snapshot = launchSessionSnapshotFromMetadata(metadata);
+  const state2 = providerSession.lastObservedState;
+  const lastObservedState = state2 === "exited" || state2 === "stopping" || state2 === "lost" ? state2 : "running";
+  const ended = lastObservedState === "exited";
+  const createdAt = Date.parse(providerSession.createdAt);
+  return {
+    executionRequestId: row.execution_request_id,
+    objectiveId: row.objective_id,
+    provider: "latch",
+    providerSessionId: providerSession.providerSessionId,
+    sessionName: providerSession.sessionName ?? providerSession.providerSessionId,
+    executionTargetId: providerSession.executionTargetId,
+    deviceLabel: row.device_label ?? row.target_label,
+    agentSessionId: providerSession.agentSessionId,
+    executable: snapshot?.executionProvider.executable ?? "latch",
+    viewerKind: snapshot?.viewer.kind ?? "iterm",
+    viewerOpenAs: snapshot?.viewer.openAs ?? "window",
+    // Older runner reports could omit the provider timestamp.
+    createdAt: Number.isFinite(createdAt) ? new Date(createdAt).toISOString() : row.created_at,
+    lastObservedState,
+    endedAt: ended ? providerSession.endedAt ?? row.updated_at : null,
+    endReason: ended ? providerSession.endReason ?? "unknown" : null
+  };
 }
+
+// execution/latch-sessions.ts
 var endedSql = () => `(COALESCE(${terminalMetadataSql(requireDatabaseClient().dialect, "lastObservedState")}, '') = 'exited' OR COALESCE(${terminalMetadataSql(requireDatabaseClient().dialect, "lastObservedState", true)}, '') = 'exited')`;
 var columns = `er.id AS execution_request_id, er.objective_id, er.metadata_json,
   er.created_at, er.updated_at, et.label AS target_label, d.label AS device_label`;
 var joins = `FROM execution_requests er
   LEFT JOIN execution_targets et ON et.id = COALESCE(er.claimed_by_execution_target_id, er.execution_target_id)
   LEFT JOIN devices d ON d.id = et.device_id`;
-function projectSession(row, archived = false) {
-  const metadata = parseMetadataJson(row.metadata_json);
-  const providerSession = providerSessionFromMetadata(metadata) ?? (archived ? providerSessionFromMetadata({ providerSession: metadata.endedTerminalSession }) : null);
-  if (!providerSession) return [];
-  const snapshot = launchSessionSnapshotFromMetadata2(metadata);
-  const ended = providerSession.lastObservedState === "exited";
-  return [
-    {
-      executionRequestId: row.execution_request_id,
-      objectiveId: row.objective_id,
-      provider: "latch",
-      providerSessionId: providerSession.providerSessionId,
-      sessionName: providerSession.sessionName ?? providerSession.providerSessionId,
-      executionTargetId: providerSession.executionTargetId,
-      deviceLabel: row.device_label ?? row.target_label,
-      agentSessionId: providerSession.agentSessionId,
-      executable: snapshot?.executionProvider.executable ?? "latch",
-      viewerKind: snapshot?.viewer.kind ?? "iterm",
-      viewerOpenAs: snapshot?.viewer.openAs ?? "window",
-      createdAt: providerSession.createdAt,
-      lastObservedState: terminalSessionState(providerSession.lastObservedState),
-      endedAt: ended ? providerSession.endedAt ?? row.updated_at : null,
-      endReason: ended ? providerSession.endReason ?? "unknown" : null
-    }
-  ];
-}
 async function listMissionTerminalSessions(missionId) {
   const db = requireDatabaseClient();
   const [live, ended] = await Promise.all([
@@ -167327,7 +167213,7 @@ async function listMissionTerminalSessions(missionId) {
       [missionId]
     )
   ]);
-  return [...live, ...ended].flatMap((row) => projectSession(row));
+  return [...live, ...ended].map((row) => projectTerminalSession(row)).filter((row) => row !== null);
 }
 async function readMissionTerminalHistory(missionRef, query) {
   const scope2 = await requireMissionPermission({
@@ -167361,7 +167247,7 @@ async function readMissionTerminalHistory(missionRef, query) {
     ]
   );
   return {
-    sessions: rows.slice(0, limit2).flatMap((row) => projectSession(row, true)),
+    sessions: rows.slice(0, limit2).map((row) => projectTerminalSession(row, true)).filter((row) => row !== null),
     nextCursor: rows.length > limit2 ? rows[limit2 - 1].execution_request_id : null
   };
 }
@@ -195711,6 +195597,15 @@ function createProfileConnectionCallbackHandler(options) {
 
 // ../packages/core/service/end-latch-session.ts
 var import_node_crypto44 = require("node:crypto");
+
+// ../packages/core/service/current-objective-attempt.ts
+var activeObjectiveAttemptSql = "o.state IN ('launching', 'executing', 'pending_delivery')";
+var latestObjectiveAttemptIdSql = `SELECT attempt.id FROM execution_requests attempt
+  WHERE attempt.objective_id = o.id AND attempt.deleted_at IS NULL
+    AND attempt.requested_source <> 'local_target_mutation'
+  ORDER BY attempt.created_at DESC, attempt.id DESC LIMIT 1`;
+
+// ../packages/core/service/end-latch-session.ts
 async function endLatchSession({
   ctx,
   missionId,
@@ -195775,17 +195670,11 @@ async function endLatchSession({
   if (mapping.lastObservedState === "exited") return response("exited");
   await db.transaction(async (tx) => {
     const objective = await tx.get(
-      `SELECT state, revision FROM objectives WHERE id = ? AND deleted_at IS NULL
-        AND NOT EXISTS (SELECT 1 FROM execution_requests newer
-          JOIN execution_requests original ON original.id = ?
-          WHERE newer.objective_id = objectives.id AND newer.deleted_at IS NULL
-            AND newer.requested_source <> 'local_target_mutation'
-            AND (newer.created_at > original.created_at
-              OR (newer.created_at = original.created_at AND newer.id > original.id)))`,
+      `SELECT o.revision FROM objectives o WHERE o.id = ? AND o.deleted_at IS NULL
+        AND ${activeObjectiveAttemptSql} AND ? = (${latestObjectiveAttemptIdSql})`,
       [row.objective_id, row.id]
     );
-    if (!objective || !["launching", "executing", "pending_delivery"].includes(objective.state))
-      return;
+    if (!objective) return;
     const now3 = nowIso();
     const updated = await tx.run(
       `UPDATE objectives SET state = 'submitted', updated_at = ?, revision = revision + 1
@@ -196381,6 +196270,77 @@ async function mintObjectiveSessionChannel(objectiveRef, rawBody) {
       executionTargetId: optional2(body.executionTargetId)
     });
   });
+}
+
+// ../packages/core/dist/service/terminal-profile-types.js
+var DEFAULT_VIEWER_OPEN_AS2 = "window";
+function viewerOpenAsForPlacement2(placement) {
+  return typeof placement === "string" && placement.trim().toLowerCase() === "tab" ? "tab" : DEFAULT_VIEWER_OPEN_AS2;
+}
+function viewerBackgroundForProfile2(profile) {
+  return profile?.background === true && profile.placement !== "chord";
+}
+var TERMINAL_PROFILE_VERSION2 = 1;
+var DEFAULT_LATCH_EXECUTABLE2 = "latch";
+var DEFAULT_EXECUTION_PROVIDER2 = {
+  kind: "direct",
+  executable: DEFAULT_LATCH_EXECUTABLE2
+};
+var DEFAULT_OPEN_VIEWER_ON_LAUNCH2 = true;
+var DEFAULT_TERMINAL_PROFILE2 = {
+  launcher: "Terminal",
+  placement: "window",
+  chord: null,
+  background: false
+};
+var DEFAULT_LAUNCH_SESSION_DEFAULTS2 = {
+  executionProvider: { ...DEFAULT_EXECUTION_PROVIDER2 },
+  openViewerOnLaunch: DEFAULT_OPEN_VIEWER_ON_LAUNCH2,
+  worktreeBranchAutomationEnabled: false
+};
+function trimmed8(value2) {
+  return typeof value2 === "string" && value2.trim() ? value2.trim() : null;
+}
+function viewerKindForLauncher2(launcher) {
+  const value2 = trimmed8(launcher);
+  if (!value2)
+    return "inline";
+  const lowered = value2.toLowerCase();
+  if (lowered === "iterm2" || lowered === "iterm")
+    return "iterm";
+  if (lowered === "terminal")
+    return "terminal";
+  return "custom";
+}
+function normalizeExecutionProvider2(value2) {
+  if (!value2 || typeof value2 !== "object" || Array.isArray(value2))
+    return null;
+  const cast = value2;
+  const kind = trimmed8(cast.kind)?.toLowerCase() === "latch" ? "latch" : "direct";
+  return {
+    kind,
+    executable: trimmed8(cast.executable) ?? DEFAULT_LATCH_EXECUTABLE2
+  };
+}
+function resolveLaunchSession2({ profile, defaults: defaults2 = DEFAULT_LAUNCH_SESSION_DEFAULTS2 }) {
+  const launcher = profile ? profile.launcher : DEFAULT_TERMINAL_PROFILE2.launcher;
+  const provider = profile?.executionProvider ? normalizeExecutionProvider2(profile.executionProvider) : null;
+  const openOnLaunch = typeof profile?.openViewerOnLaunch === "boolean" ? profile.openViewerOnLaunch : null;
+  return {
+    version: TERMINAL_PROFILE_VERSION2,
+    executionProvider: provider ?? {
+      ...normalizeExecutionProvider2(defaults2.executionProvider) ?? DEFAULT_EXECUTION_PROVIDER2
+    },
+    viewer: {
+      kind: viewerKindForLauncher2(launcher),
+      launcher: launcher ?? null,
+      openOnLaunch: openOnLaunch ?? defaults2.openViewerOnLaunch !== false,
+      openAs: viewerOpenAsForPlacement2(profile?.placement ?? DEFAULT_TERMINAL_PROFILE2.placement),
+      background: viewerBackgroundForProfile2(profile)
+    },
+    executionProviderSource: provider ? "target" : "user_default",
+    viewerOpenSource: openOnLaunch === null ? "user_default" : "target"
+  };
 }
 
 // execution/launch-settings.ts
@@ -197472,7 +197432,7 @@ async function pruneChangeFeedBatch(db, options = {}) {
   return db.transaction(async (tx) => {
     if (tx.dialect === "postgres") {
       await tx.exec("SET LOCAL lock_timeout = '2s'");
-      await tx.exec("LOCK TABLE entity_changes IN SHARE ROW EXCLUSIVE MODE");
+      await tx.get("SELECT entity_changes_feed_read_gate()");
     }
     const state2 = await tx.get(
       `SELECT retained_through FROM entity_change_retention WHERE id = 1`
@@ -201566,7 +201526,7 @@ async function cascadeDeleteAccount(profileId) {
   const cleanupImages = await requireDatabaseClient().transaction(async (tx) => {
     if (tx.dialect === "postgres") {
       await tx.exec("SET LOCAL lock_timeout = '2s'");
-      await tx.exec("LOCK TABLE entity_changes IN SHARE ROW EXCLUSIVE MODE");
+      await tx.get("SELECT entity_changes_feed_write_gate()");
     }
     const profile = await tx.get(`SELECT id FROM profiles WHERE id = ?`, [
       profileId
@@ -201939,6 +201899,23 @@ async function requireAuthenticatedSession(req, res, next) {
     }
   });
 }
+
+// change-feed-retention-worker.ts
+var ChangeFeedRetentionWorker = class extends PollLoop {
+  nextScanAt = 0;
+  constructor() {
+    super({ intervalMs: 5e3, logPrefix: "change-feed-retention", unref: true });
+  }
+  async runOnce() {
+    if (process.env.OVERLORD_CHANGE_FEED_PRUNING_ENABLED !== "true") return;
+    if (Date.now() < this.nextScanAt) return;
+    const db = requireDatabaseClient();
+    if (db.dialect !== "postgres") return;
+    const result2 = await pruneChangeFeedBatch(db);
+    if (result2.deleted < 1e3) this.nextScanAt = Date.now() + 60 * 60 * 1e3;
+    if (result2.deleted) console.info("[change-feed-retention]", result2);
+  }
+};
 
 // chat.ts
 var import_express6 = __toESM(require_express2(), 1);
@@ -202355,23 +202332,6 @@ function createChatRouter(options) {
   });
   return router2;
 }
-
-// change-feed-retention-worker.ts
-var ChangeFeedRetentionWorker = class extends PollLoop {
-  nextScanAt = 0;
-  constructor() {
-    super({ intervalMs: 5e3, logPrefix: "change-feed-retention", unref: true });
-  }
-  async runOnce() {
-    if (process.env.OVERLORD_CHANGE_FEED_PRUNING_ENABLED !== "true") return;
-    if (Date.now() < this.nextScanAt) return;
-    const db = requireDatabaseClient();
-    if (db.dialect !== "postgres") return;
-    const result2 = await pruneChangeFeedBatch(db);
-    if (result2.deleted < 1e3) this.nextScanAt = Date.now() + 60 * 60 * 1e3;
-    if (result2.deleted) console.info("[change-feed-retention]", result2);
-  }
-};
 
 // chat-notification-dispatcher.ts
 var import_node_crypto46 = require("node:crypto");
@@ -205697,30 +205657,70 @@ async function readObjectiveTranscript({
   params.push(lookahead);
   const rows = await db.all(
     `
-    WITH candidates AS (${scopes.join(" UNION ALL ")})
-    SELECT o.id, o.workspace_id AS "workspaceId", o.project_id AS "projectId",
-      o.mission_id AS "missionId", m.display_id AS "missionDisplayId",
-      m.title AS "missionTitle", m.revision AS "missionRevision", m.status_type AS "statusType",
-      p.name AS "projectName", p.settings_json AS "projectSettings", p.revision AS "projectRevision",
-      o.title, o.instruction_text AS "instructionText", o.state,
-      o.assigned_agent AS "assignedAgent", o.resource_key AS "resourceKey",
-      o.created_by_kind AS "createdByKind", o.created_by_agent AS "createdByAgent",
-      o.created_by_workspace_user_id AS "createdByWorkspaceUserId",
-      o.created_at AS "createdAt", o.updated_at AS "updatedAt", o.revision
-    FROM candidates c JOIN objectives o ON o.id = c.id ${joins2}
-    ORDER BY o.created_at ${direction}, o.id ${direction} LIMIT ?`,
+    WITH candidates AS (${scopes.join(" UNION ALL ")}),
+    page AS (
+      SELECT o.id, o.workspace_id AS "workspaceId", o.project_id AS "projectId",
+        o.mission_id AS "missionId", m.display_id AS "missionDisplayId",
+        m.title AS "missionTitle", m.revision AS "missionRevision", m.status_type AS "statusType",
+        p.name AS "projectName", p.settings_json AS "projectSettings", p.revision AS "projectRevision",
+        o.title, o.instruction_text AS "instructionText", o.state,
+        o.assigned_agent AS "assignedAgent", o.resource_key AS "resourceKey",
+        o.created_by_kind AS "createdByKind", o.created_by_agent AS "createdByAgent",
+        o.created_by_workspace_user_id AS "createdByWorkspaceUserId",
+        o.created_at AS "createdAt", o.updated_at AS "updatedAt", o.revision
+      FROM candidates c JOIN objectives o ON o.id = c.id ${joins2}
+      ORDER BY o.created_at ${direction}, o.id ${direction} LIMIT ?
+    )
+    SELECT o.*, er.id AS "requestId", er.metadata_json AS "requestMetadata",
+      er.created_at AS "requestCreatedAt", er.updated_at AS "requestUpdatedAt",
+      et.label AS "targetLabel", d.label AS "deviceLabel"
+    FROM page o
+    LEFT JOIN execution_requests er
+      ON er.id = CASE WHEN ${activeObjectiveAttemptSql} THEN (${latestObjectiveAttemptIdSql}) END
+      AND er.workspace_id = o."workspaceId" AND er.mission_id = o."missionId"
+      AND er.project_id = o."projectId"
+    LEFT JOIN execution_targets et
+      ON et.id = COALESCE(er.claimed_by_execution_target_id, er.execution_target_id)
+      AND et.workspace_id = er.workspace_id
+    LEFT JOIN devices d ON d.id = et.device_id AND d.workspace_id = et.workspace_id
+    ORDER BY o."createdAt" ${direction}, o.id ${direction}`,
     params
   );
   const hasMore = !read.ids && rows.length > limit2;
-  const items = rows.slice(0, limit2).map(({ projectSettings, ...row }) => {
-    let projectColor2 = null;
-    try {
-      const settings = JSON.parse(projectSettings);
-      if (typeof settings["overlord.color"] === "string") projectColor2 = settings["overlord.color"];
-    } catch {
+  const items = rows.slice(0, limit2).map(
+    ({
+      projectSettings,
+      requestId,
+      requestMetadata,
+      requestCreatedAt,
+      requestUpdatedAt,
+      targetLabel,
+      deviceLabel,
+      ...row
+    }) => {
+      let projectColor2 = null;
+      try {
+        const settings = JSON.parse(projectSettings);
+        if (typeof settings["overlord.color"] === "string")
+          projectColor2 = settings["overlord.color"];
+      } catch {
+      }
+      const terminal2 = requestId && requestCreatedAt && requestUpdatedAt ? projectTerminalSession({
+        execution_request_id: requestId,
+        objective_id: row.id,
+        metadata_json: requestMetadata,
+        created_at: requestCreatedAt,
+        updated_at: requestUpdatedAt,
+        target_label: targetLabel,
+        device_label: deviceLabel
+      }) : null;
+      return {
+        ...row,
+        projectColor: projectColor2,
+        currentTerminalSession: terminal2?.lastObservedState === "exited" ? null : terminal2
+      };
     }
-    return { ...row, projectColor: projectColor2 };
-  });
+  );
   const asKey = (item) => ({ at: item.createdAt, id: item.id });
   const last = items.at(-1);
   const newest = read.after ? last : items[0];
