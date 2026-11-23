@@ -6,9 +6,9 @@
 // does not document fails. Event streams and binary bodies are checked for status
 // and media type only, and are never buffered. Unset (production), the middleware
 // does nothing.
-import { brotliDecompressSync, gunzipSync } from 'node:zlib';
 import { apiOperations } from '@overlord/contract/api';
 import type { NextFunction, Request, RequestHandler, Response } from 'express';
+import { brotliDecompressSync, gunzipSync } from 'node:zlib';
 import { z } from 'zod';
 
 import { type ApiOperation, matchOperation } from './api-operations.ts';

@@ -379,9 +379,7 @@ async function retryRunQueueEntryFromProtocol(
   const entries = queueEntries(projection.queues);
   const objective = objectiveRef ? await resolveObjectiveRef({ ctx, ref: objectiveRef }) : null;
   const entry = entries.find(candidate =>
-    entryRef
-      ? entryMatchesRef(candidate, entryRef)
-      : candidate.objectiveId === objective!.id
+    entryRef ? entryMatchesRef(candidate, entryRef) : candidate.objectiveId === objective!.id
   );
   if (!entry) {
     throw new ApiError(404, `Run Queue entry not found: ${entryRef ?? objectiveRef!}`);

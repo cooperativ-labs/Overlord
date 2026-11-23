@@ -1,6 +1,6 @@
+import type { Response } from 'express';
 import { promisify } from 'node:util';
 import { brotliCompress, constants, gzip } from 'node:zlib';
-import type { Response } from 'express';
 
 const compressBrotli = promisify(brotliCompress);
 const compressGzip = promisify(gzip);
