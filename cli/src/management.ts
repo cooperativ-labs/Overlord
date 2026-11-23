@@ -9,7 +9,7 @@ type BackendConfigResult = {
   url: string;
 };
 
-function isHttpUrl(value: string): boolean {
+export function isHttpUrl(value: string): boolean {
   return /^https?:\/\//i.test(value.trim());
 }
 

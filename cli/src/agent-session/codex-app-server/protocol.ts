@@ -14,6 +14,11 @@
  *  - Approvals reach a client only when the thread's `approvalsReviewer` is `user`.
  */
 
+import { compareSemver, parseSemver } from '../../semver.js';
+
+/** Parse `codex-cli 0.170.0` (the `codex --version` line). */
+export { parseSemver as parseCliVersion };
+
 /** Lowest Codex version whose app-server behavior the adapter was verified against. */
 export const CODEX_APP_SERVER_MIN_VERSION = '0.170.0';
 /** The version the recorded fixtures come from. */
@@ -194,24 +199,8 @@ export function parseServerVersion(userAgent: unknown): string | null {
   return match?.[1] ?? null;
 }
 
-/** Parse `codex-cli 0.170.0` (the `codex --version` line). */
-export function parseCliVersion(output: string): string | null {
-  const match = /(\d+\.\d+\.\d+)/.exec(output);
-  return match?.[1] ?? null;
-}
-
-export function compareVersions(a: string, b: string): number {
-  const left = a.split('.').map(Number);
-  const right = b.split('.').map(Number);
-  for (let index = 0; index < 3; index += 1) {
-    const diff = (left[index] ?? 0) - (right[index] ?? 0);
-    if (diff !== 0) return diff < 0 ? -1 : 1;
-  }
-  return 0;
-}
-
 export function isSupportedVersion(version: string | null): boolean {
-  return version !== null && compareVersions(version, CODEX_APP_SERVER_MIN_VERSION) >= 0;
+  return version !== null && compareSemver(version, CODEX_APP_SERVER_MIN_VERSION) >= 0;
 }
 
 /**

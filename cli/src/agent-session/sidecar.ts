@@ -4,6 +4,7 @@ import {
 } from '@overlord/core/service/agent-session/pure/codec';
 import type { NormalizedEvent } from '@overlord/core/service/agent-session/pure/envelope';
 import { randomBytes } from 'node:crypto';
+import { setTimeout as delay } from 'node:timers/promises';
 
 import { resolveAgentSessionScope } from './bind.js';
 import { type ChannelClient, createChannelClient } from './client.js';
@@ -519,8 +520,4 @@ async function waitForRemoteOpenCodeResolution({
     }
     return;
   }
-}
-
-function delay(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms));
 }

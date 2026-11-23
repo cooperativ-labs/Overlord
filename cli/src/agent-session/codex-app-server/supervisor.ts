@@ -1,4 +1,5 @@
 import type { CodecSpec } from '@overlord/core/service/agent-session/pure/codec';
+import { setTimeout as defaultSleep } from 'node:timers/promises';
 
 import type { ChannelClient } from '../client.js';
 
@@ -655,5 +656,3 @@ async function drainInputs({
   }
   return delivered;
 }
-
-const defaultSleep = (ms: number): Promise<void> => new Promise(resolve => setTimeout(resolve, ms));

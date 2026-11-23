@@ -3,6 +3,7 @@ import { FORMATTER_VERSION } from '@overlord/core/service/agent-session/pure/des
 import { summarizeDescription } from '@overlord/core/service/agent-session/pure/envelope';
 import { reduceEvidencePath } from '@overlord/core/service/agent-session/pure/evidence-path';
 import { safeText } from '@overlord/core/service/agent-session/pure/text';
+import { setTimeout as defaultSleep } from 'node:timers/promises';
 
 import type { ChannelClient } from '../client.js';
 
@@ -569,5 +570,3 @@ export class DecisionRouter {
     }
   }
 }
-
-const defaultSleep = (ms: number): Promise<void> => new Promise(resolve => setTimeout(resolve, ms));

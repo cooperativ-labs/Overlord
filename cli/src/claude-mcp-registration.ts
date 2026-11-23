@@ -1,4 +1,8 @@
 import { findSecretInArgv, looksLikeUserToken } from './argv-secrets.js';
+import { compareSemver, parseSemver as parseClaudeVersion } from './semver.js';
+
+/** `2.1.327 (Claude Code)` → `2.1.327`; null for anything else. */
+export { parseClaudeVersion };
 
 /**
  * Token-safe MCP server registration for Claude Code.
@@ -51,22 +55,6 @@ export type ClaudeMcpRegistrationResult = {
   claudeVersion: string | null;
   warnings: string[];
 };
-
-/** `2.1.327 (Claude Code)` → `2.1.327`; null for anything else. */
-export function parseClaudeVersion(output: string): string | null {
-  const match = /(\d+\.\d+\.\d+)/.exec(output);
-  return match ? (match[1] as string) : null;
-}
-
-function compareSemver(left: string, right: string): number {
-  const a = left.split('.').map(part => Number.parseInt(part, 10) || 0);
-  const b = right.split('.').map(part => Number.parseInt(part, 10) || 0);
-  for (let index = 0; index < 3; index += 1) {
-    const diff = (a[index] ?? 0) - (b[index] ?? 0);
-    if (diff !== 0) return diff;
-  }
-  return 0;
-}
 
 export function supportsMcpAddJsonStdin(version: string | null): boolean {
   return version !== null && compareSemver(version, CLAUDE_MCP_ADD_JSON_STDIN_MIN_VERSION) >= 0;

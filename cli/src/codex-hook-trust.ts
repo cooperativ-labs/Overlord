@@ -4,6 +4,8 @@ import { existsSync, lstatSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { parse } from 'smol-toml';
 
+import { compareSemver, parseSemver } from './semver.js';
+
 /**
  * Codex hook trust for the Overlord plugin.
  *
@@ -161,22 +163,11 @@ function readHookStates(configFile: string): Map<string, HookState> {
   return states;
 }
 
-function compareSemver(left: string, right: string): number {
-  const a = left.split('.').map(part => Number.parseInt(part, 10) || 0);
-  const b = right.split('.').map(part => Number.parseInt(part, 10) || 0);
-  for (let index = 0; index < 3; index += 1) {
-    const diff = (a[index] ?? 0) - (b[index] ?? 0);
-    if (diff !== 0) return diff;
-  }
-  return 0;
-}
-
 /** `codex-cli 0.170.0` → `0.170.0`; null when Codex is missing or prints something else. */
 export function detectCodexVersion(binary = 'codex'): string | null {
   const result = spawnSync(binary, ['--version'], { encoding: 'utf8', timeout: 10_000 });
   if (result.error || result.status !== 0) return null;
-  const match = /(\d+\.\d+\.\d+)/.exec(`${result.stdout ?? ''}`);
-  return match ? (match[1] as string) : null;
+  return parseSemver(`${result.stdout ?? ''}`);
 }
 
 /**

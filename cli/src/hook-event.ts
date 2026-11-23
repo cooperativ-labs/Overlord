@@ -22,6 +22,7 @@ import {
   recordHookPrompt,
   resolveHookBinding
 } from './hook-binding.js';
+import { asRecord } from './records.js';
 
 /**
  * `ovld protocol hook-event --agent <key> --payload-file -` — the native hook entry point.
@@ -63,12 +64,6 @@ export type NativeHookEventResult = {
   deliveryStatus?: { needed: boolean; reason: string | null };
   hookOutput: Record<string, unknown>;
 };
-
-function asRecord(value: unknown): Record<string, unknown> {
-  return value && typeof value === 'object' && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : {};
-}
 
 function isNativeHookType(value: string | null): value is NativeHookType {
   return value !== null && (NATIVE_HOOK_TYPES as readonly string[]).includes(value);
