@@ -19,12 +19,12 @@ import {
   protocolPrompt,
   recordWork
 } from '../../packages/core/service/protocol.ts';
-import { hashSessionKey } from '../../packages/core/service/util.ts';
 import { getActiveTokenProjectIds, requireDatabaseClient, serviceDatabaseClient } from '../db.ts';
 import { ApiError } from '../errors.ts';
 import { launchObjective } from '../execution/launch.ts';
 import { resolveObjectiveIdForRest } from '../objective-ref.ts';
 import { requireProjectPermission } from '../rbac.ts';
+import { readProtocolAddress, resolveSessionId } from './addressing.ts';
 import {
   callerMembershipsInActiveOrganization,
   createInboxItem,
@@ -127,21 +127,6 @@ function withDefaultAgentSelection(
   );
 }
 
-/**
- * Resolve `agent_sessions.id` from `--session-key` when present. Soft lookup —
- * a missing or unknown key yields null rather than failing the create path.
- */
-async function resolveSessionId(body: ProtocolRequestBody): Promise<string | null> {
-  const sessionKey = strFlag(body, '--session-key');
-  if (!sessionKey) return null;
-  const session = await serviceDatabaseClient().get<{ id: string }>(
-    `SELECT id FROM agent_sessions
-      WHERE session_key_hash = ? AND deleted_at IS NULL`,
-    [hashSessionKey(sessionKey)]
-  );
-  return session?.id ?? null;
-}
-
 /** Stamp agent authorship provenance onto a protocol create-ish context. */
 async function withAgentOrigin({
   ctx,
@@ -155,7 +140,7 @@ async function withAgentOrigin({
     origin: {
       kind: 'agent',
       agent: strFlag(body, '--agent') ?? null,
-      sessionId: await resolveSessionId(body)
+      sessionId: await resolveSessionId(readProtocolAddress(body).sessionKey)
     }
   };
 }

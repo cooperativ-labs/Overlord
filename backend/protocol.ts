@@ -1,21 +1,16 @@
 import { type Permission, PERMISSIONS } from '@overlord/auth';
-import { missionDisplayIdFromObjectiveRef } from '@overlord/contract';
 
 import { resolveObjectiveRef, type ServiceContext } from '../packages/core/service/context.ts';
-import { hashSessionKey } from '../packages/core/service/util.ts';
 
+import { deriveProtocolWorkspaceId, readProtocolAddress } from './protocol/addressing.ts';
 import { artifactSubcommands } from './protocol/artifacts.ts';
 import {
-  objectiveRefFlag,
   type ProtocolRequestBody,
   strFlag,
   type SubcommandTable
 } from './protocol/flags.ts';
 import { missionSubcommands } from './protocol/missions.ts';
-import {
-  ProjectSelectionRequiredError,
-  resolveProjectRefChoices
-} from './protocol/project-refs.ts';
+import { ProjectSelectionRequiredError } from './protocol/project-refs.ts';
 import { projectSubcommands } from './protocol/projects.ts';
 import { runQueueSubcommands } from './protocol/run-queue.ts';
 import { sessionSubcommands } from './protocol/session.ts';
@@ -24,7 +19,6 @@ import {
   buildWebappServiceContextForWorkspace,
   getActiveTokenProjectIds,
   getAuthorizedWorkspacesContext,
-  projectInTokenScope,
   serviceDatabaseClient
 } from './db.ts';
 import { ApiError } from './errors.ts';
@@ -50,88 +44,15 @@ export type { ProtocolRequestBody } from './protocol/flags.ts';
 // Shared flag helpers live in ./protocol/flags.ts, which imports nothing from
 // this file.
 
-async function protocolWorkspaceId(body: ProtocolRequestBody): Promise<string | null> {
-  const scopes = await callerWorkspaceMemberships();
-  if (scopes.length === 0) return null;
-  const workspaceIds = scopes.map(scope => scope.workspaceId);
-  const placeholders = workspaceIds.map(() => '?').join(', ');
-  const db = serviceDatabaseClient();
-
-  const executionRequestId = strFlag(body, '--execution-request-id');
-  if (executionRequestId) {
-    const request = await db.get<{ workspace_id: string }>(
-      `SELECT workspace_id FROM execution_requests
-        WHERE id = ? AND deleted_at IS NULL AND workspace_id IN (${placeholders})`,
-      [executionRequestId, ...workspaceIds]
-    );
-    if (request) return request.workspace_id;
-  }
-
-  const sessionKey = strFlag(body, '--session-key');
-  if (sessionKey) {
-    const session = await db.get<{ workspace_id: string }>(
-      `SELECT workspace_id FROM agent_sessions
-        WHERE session_key_hash = ? AND deleted_at IS NULL AND workspace_id IN (${placeholders})`,
-      [hashSessionKey(sessionKey), ...workspaceIds]
-    );
-    if (session) return session.workspace_id;
-  }
-
-  // `--objective-id` alone is a complete address, so it has to resolve a
-  // workspace on its own: a UUID identifies the objective row directly, and a
-  // display id falls through to the mission lookup below via `missionRefFlag`.
-  const objectiveRef = strFlag(body, '--objective-id');
-  if (objectiveRef) {
-    const objective = await db.get<{ workspace_id: string }>(
-      `SELECT workspace_id FROM objectives
-        WHERE id = ? AND deleted_at IS NULL AND workspace_id IN (${placeholders})`,
-      [objectiveRef, ...workspaceIds]
-    );
-    if (objective) return objective.workspace_id;
-  }
-
-  const missionRef =
-    strFlag(body, '--mission-id') ?? missionDisplayIdFromObjectiveRef(objectiveRef) ?? undefined;
-  if (missionRef) {
-    const byId = await db.get<{ workspace_id: string }>(
-      `SELECT workspace_id FROM missions
-        WHERE id = ? AND deleted_at IS NULL AND workspace_id IN (${placeholders})`,
-      [missionRef, ...workspaceIds]
-    );
-    if (byId) return byId.workspace_id;
-
-    const byDisplay = await db.all<{ workspace_id: string; project_id: string }>(
-      `SELECT workspace_id, project_id FROM missions
-        WHERE display_id = ? AND deleted_at IS NULL AND workspace_id IN (${placeholders})`,
-      [missionRef, ...workspaceIds]
-    );
-    const visible = byDisplay.filter(row => projectInTokenScope(row.project_id));
-    if (visible.length > 1) {
-      throw new ApiError(409, `Mission reference is ambiguous across workspaces: ${missionRef}`);
-    }
-    if (visible[0]) return visible[0].workspace_id;
-  }
-
-  // Human project references (slug/name) are unique per workspace only, so this
-  // is the one derivation step that can legitimately be ambiguous. Ambiguity is
-  // reported as a selection result rather than an error so an agent can ask the
-  // user and retry with `--workspace-id`.
-  const projectRef = strFlag(body, '--project-id');
-  if (!projectRef) return null;
-  const choices = await resolveProjectRefChoices({
-    projectRef,
-    workspaceHint: strFlag(body, '--workspace-id'),
-    workspaceIds
-  });
-  if (choices.length > 1) throw new ProjectSelectionRequiredError(projectRef, choices);
-  return choices[0]?.workspaceId ?? null;
-}
-
 async function buildProtocolContext(
   body: ProtocolRequestBody,
   permission: Permission | null
 ): Promise<ServiceContext> {
-  const workspaceId = await protocolWorkspaceId(body);
+  const scopes = await callerWorkspaceMemberships();
+  const workspaceId = await deriveProtocolWorkspaceId(
+    readProtocolAddress(body, { legacyDerivation: true }),
+    scopes.map(scope => scope.workspaceId)
+  );
   if (!workspaceId) {
     const authorized = getAuthorizedWorkspacesContext();
     if (authorized) {
@@ -186,11 +107,9 @@ async function validateObjectiveAddressing({
   // update-objective is addressed by an objective alone and deliberately has
   // no mission scope to validate against.
   if (subcommand === 'update-objective') return;
-  const objectiveRef = objectiveRefFlag(body);
-  if (!objectiveRef) return;
-  const missionRef =
-    strFlag(body, '--mission-id') ?? missionDisplayIdFromObjectiveRef(objectiveRef);
-  if (!missionRef) return;
+  const { objectiveRef } = readProtocolAddress(body);
+  const { missionRef } = readProtocolAddress(body, { legacyDerivation: true });
+  if (!objectiveRef || !missionRef) return;
   await resolveObjectiveRef({ ctx, ref: objectiveRef, missionId: missionRef });
 }
 

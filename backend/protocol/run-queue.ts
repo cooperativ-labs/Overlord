@@ -21,6 +21,7 @@ import {
 } from '../../packages/core/service/run-queue.ts';
 import { ApiError } from '../errors.ts';
 
+import { readProtocolAddress } from './addressing.ts';
 import {
   boolFlag,
   objectiveRefFlag,
@@ -83,13 +84,13 @@ async function runQueueProjectIdFromProtocol(
   ctx: ServiceContext,
   body: ProtocolRequestBody
 ): Promise<string> {
-  const objectiveRef = objectiveRefFlag(body);
-  const missionRef = strFlag(body, '--mission-id');
+  const { objectiveRef, missionRef, projectRef } = readProtocolAddress(body, {
+    legacyExplicitMission: true
+  });
   const objective = objectiveRef
-    ? await resolveObjectiveRef({ ctx, ref: objectiveRef, missionId: missionRef })
+    ? await resolveObjectiveRef({ ctx, ref: objectiveRef, missionId: missionRef ?? undefined })
     : null;
   const mission = missionRef ? await resolveMissionId(ctx, missionRef) : null;
-  const projectRef = strFlag(body, '--project-id');
 
   if (projectRef) {
     const projectId = await resolveProjectId(ctx, projectRef);

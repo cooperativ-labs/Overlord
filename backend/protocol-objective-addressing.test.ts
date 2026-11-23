@@ -1,16 +1,57 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import path from 'node:path';
 import test from 'node:test';
 
-const tempDir = mkdtempSync(path.join(tmpdir(), 'overlord-objective-addressing-'));
-const { bootstrapIntegrationTestDb } = await import('./test-helpers.ts');
-await bootstrapIntegrationTestDb({ sqlitePath: path.join(tempDir, 'webapp.sqlite') });
+import { setupSecondaryWorkspaceFixture } from './secondary-workspace-fixture.ts';
+
+const secondary = await setupSecondaryWorkspaceFixture({ namePrefix: 'Protocol Addressing' });
 
 const { createMission, createProject } = await import('./repository.ts');
 const { runProtocolSubcommand } = await import('./protocol.ts');
 const { ApiError } = await import('./errors.ts');
+const { ServiceError } = await import('../packages/core/service/errors.ts');
+
+test('a blank explicit mission masks the objective display id for workspace derivation', async () => {
+  const objective = secondary.mission.objectives[0]! as ObjectiveRow;
+  await runProtocolSubcommand('load-context', { flags: { '--objective-id': objective.displayId } });
+
+  for (const missionRef of ['', '  ']) {
+    await assert.rejects(
+      runProtocolSubcommand('load-context', {
+        flags: { '--mission-id': missionRef, '--objective-id': objective.displayId }
+      }),
+      (error: unknown) => error instanceof ServiceError && error.status === 404
+    );
+  }
+});
+
+test('a padded objective UUID falls back to the active workspace', async () => {
+  const objectiveId = secondary.objectiveId;
+  for (const [ref, workspaceId] of [
+    [objectiveId, secondary.secondary.id],
+    [` ${objectiveId} `, secondary.workspaceAId]
+  ]) {
+    const result = (await runProtocolSubcommand('auth-status', {
+      flags: { '--objective-id': ref! }
+    })) as { workspaceId: string };
+    assert.equal(result.workspaceId, workspaceId);
+  }
+});
+
+test('a padded session key falls back to the active workspace', async () => {
+  const { sessionKey } = (await runProtocolSubcommand('attach', {
+    flags: { '--mission-id': secondary.mission.id, '--agent': 'codex' }
+  })) as { sessionKey: string };
+
+  for (const [key, workspaceId] of [
+    [sessionKey, secondary.secondary.id],
+    [` ${sessionKey} `, secondary.workspaceAId]
+  ]) {
+    const result = (await runProtocolSubcommand('auth-status', {
+      flags: { '--session-key': key! }
+    })) as { workspaceId: string };
+    assert.equal(result.workspaceId, workspaceId);
+  }
+});
 
 type ObjectiveRow = { id: string; displayId: string };
 

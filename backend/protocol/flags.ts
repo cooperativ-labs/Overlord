@@ -1,8 +1,10 @@
 import { type Permission } from '@overlord/auth';
-import { missionDisplayIdFromObjectiveRef, type ProtocolRequestBody } from '@overlord/contract';
+import { type ProtocolRequestBody } from '@overlord/contract';
 
 import { type ServiceContext } from '../../packages/core/service/context.ts';
 import { ApiError } from '../errors.ts';
+
+import { readProtocolAddress } from './addressing.ts';
 
 // ---- Protocol request envelope and flag helpers --------------------------
 //
@@ -121,11 +123,8 @@ export function requireFlag(body: ProtocolRequestBody, name: string): string {
  * stand in for one.
  */
 export function missionRefFlag(body: ProtocolRequestBody): string {
-  const explicit = strFlag(body, '--mission-id');
-  if (explicit !== undefined && explicit.trim() !== '') return explicit;
-
-  const derived = missionDisplayIdFromObjectiveRef(strFlag(body, '--objective-id'));
-  if (derived) return derived;
+  const { missionRef } = readProtocolAddress(body);
+  if (missionRef) return missionRef;
 
   throw new ApiError(
     400,
@@ -135,8 +134,7 @@ export function missionRefFlag(body: ProtocolRequestBody): string {
 
 /** Optional objective reference (UUID or `{mission.display_id}.{display_key}`). */
 export function objectiveRefFlag(body: ProtocolRequestBody): string | null {
-  const value = strFlag(body, '--objective-id');
-  return value !== undefined && value.trim() !== '' ? value.trim() : null;
+  return readProtocolAddress(body).objectiveRef;
 }
 
 /** Parse a JSON flag supplied inline (`--x-json`) or through its per-flag file payload. */
