@@ -1,7 +1,7 @@
 import type { DatabaseClient } from '@overlord/database';
 
 import type { MissionItemChangeAttribution } from './mission-items.js';
-import { newId, nowIso } from './util.js';
+import { newId, nowIso, toIsoOrNull } from './util.js';
 import { lockMissionSummaryRow, recordMissionSummaryChange } from './worker-jobs.js';
 
 /**
@@ -59,11 +59,6 @@ type MissionScope = { id: string; workspaceId: string; projectId: string };
 
 export function isSummaryEnabled(value: unknown): boolean {
   return value === true || Number(value) === 1;
-}
-
-function iso(value: unknown): string | null {
-  if (value === null || value === undefined) return null;
-  return new Date(value instanceof Date ? value : String(value)).toISOString();
 }
 
 /**
@@ -409,8 +404,8 @@ export async function readMissionNarrative(
     publishedEvidenceRevision: hasProse ? published : null,
     deliveryId: hasProse ? row.narrative_delivery_id : null,
     objectiveId: hasProse ? row.narrative_objective_id : null,
-    publishedAt: hasProse && published !== null ? iso(row.narrative_published_at) : null,
-    changedAt: iso(row.narrative_changed_at),
+    publishedAt: hasProse && published !== null ? toIsoOrNull(row.narrative_published_at) : null,
+    changedAt: toIsoOrNull(row.narrative_changed_at),
     outstandingDeliveryId: outstanding?.delivery_id ?? null
   };
 }

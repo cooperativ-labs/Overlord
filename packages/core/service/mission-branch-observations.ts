@@ -2,7 +2,10 @@ import { bindBool, type DatabaseClient } from '@overlord/database';
 
 import type { ServiceContext } from './context.js';
 import { ServiceError } from './errors.js';
-import { findActingDeviceExecutionTargetId } from './execution-targets.js';
+import {
+  executionTargetInWorkspace,
+  findActingDeviceExecutionTargetId
+} from './execution-targets.js';
 import { newId, nowIso } from './util.js';
 
 export type ObservedMissionBranchStatus = 'created' | 'published' | 'merged_unpushed' | 'merged';
@@ -98,23 +101,6 @@ function parseObservationInput(value: unknown): MissionBranchObservationInput {
     worktreePath: typeof row.worktreePath === 'string' ? row.worktreePath : null,
     observedAt
   };
-}
-
-async function executionTargetInWorkspace({
-  ctx,
-  executionTargetId
-}: {
-  ctx: ServiceContext;
-  executionTargetId: string;
-}): Promise<void> {
-  const row = await ctx.db.get<{ id: string }>(
-    `SELECT id FROM execution_targets
-        WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
-    [executionTargetId, ctx.workspace.id]
-  );
-  if (!row) {
-    throw new ServiceError('Execution target not found', 'execution_target_not_found', 404);
-  }
 }
 
 async function assertMissionsBelongToWorkspace({

@@ -17,6 +17,12 @@ export function newId(): string {
   return randomUUID();
 }
 
+/** A driver timestamp (SQLite text or Postgres `Date`) as ISO-8601, or null when absent. */
+export function toIsoOrNull(value: unknown): string | null {
+  if (value === null || value === undefined) return null;
+  return new Date(value instanceof Date ? value : String(value)).toISOString();
+}
+
 export function slugify(input: string): string {
   const base = input
     .toLowerCase()

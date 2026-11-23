@@ -17,6 +17,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { latchChildEnvironment } from './latch-environment.ts';
+import { trimmedOrNull } from './strings.ts';
 import { DEFAULT_LATCH_EXECUTABLE } from './terminal-profile-types.ts';
 
 /** Protocol version Overlord's Latch provider speaks today. */
@@ -136,10 +137,6 @@ export type LatchCommandRunner = (args: { executable: string; argv: string[] }) 
 /** Injectable path resolver for tests. */
 export type LatchPathResolver = (executable: string) => string | null;
 
-function trimmed(value: unknown): string | null {
-  return typeof value === 'string' && value.trim() ? value.trim() : null;
-}
-
 function asBoolean(value: unknown): boolean {
   return value === true;
 }
@@ -172,7 +169,7 @@ export function parseLatchCapabilitiesReport(raw: string): LatchCapabilitiesRepo
     typeof cast.protocolVersion === 'number' && Number.isFinite(cast.protocolVersion)
       ? Math.trunc(cast.protocolVersion)
       : null;
-  const productVersion = trimmed(cast.productVersion);
+  const productVersion = trimmedOrNull(cast.productVersion);
   if (protocolVersion === null || !productVersion) return null;
   if (
     !cast.capabilities ||
@@ -287,7 +284,7 @@ export function resolveLatchExecutablePathFromEnvironment({
   resolveOnPath?: (executable: string) => string | null;
   fileExists?: (filePath: string) => boolean;
 }): string | null {
-  const name = trimmed(executable) ?? DEFAULT_LATCH_EXECUTABLE;
+  const name = trimmedOrNull(executable) ?? DEFAULT_LATCH_EXECUTABLE;
   if (path.isAbsolute(name) || name.includes('/') || name.includes('\\')) {
     return fileExists(name) ? path.resolve(name) : null;
   }
@@ -369,7 +366,7 @@ export function probeLatchCapabilities({
   runCommand?: LatchCommandRunner;
   now?: () => string;
 } = {}): LatchDiscoveryResult {
-  const exe = trimmed(executable) ?? DEFAULT_LATCH_EXECUTABLE;
+  const exe = trimmedOrNull(executable) ?? DEFAULT_LATCH_EXECUTABLE;
   const checkedAt = now();
   const resolvedPath = resolvePath(exe);
   if (!resolvedPath) {
@@ -410,7 +407,7 @@ export function latchDiscoveryCacheKey({
   executionTargetId: string;
   executable: string;
 }): string {
-  const exe = trimmed(executable) ?? DEFAULT_LATCH_EXECUTABLE;
+  const exe = trimmedOrNull(executable) ?? DEFAULT_LATCH_EXECUTABLE;
   return `${executionTargetId}::${exe}`;
 }
 
@@ -493,7 +490,7 @@ export function discoverLatchForExecutionTarget({
   runCommand?: LatchCommandRunner;
   now?: () => string;
 }): LatchDiscoveryResult {
-  const exe = trimmed(executable) ?? DEFAULT_LATCH_EXECUTABLE;
+  const exe = trimmedOrNull(executable) ?? DEFAULT_LATCH_EXECUTABLE;
   const key = latchDiscoveryCacheKey({ executionTargetId, executable: exe });
   const cache = readLatchDiscoveryCacheFile(cacheFilePath);
   const existing = cache.entries[key];

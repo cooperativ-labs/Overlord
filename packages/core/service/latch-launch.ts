@@ -8,6 +8,7 @@
 
 import path from 'node:path';
 
+import { trimmedOrNull } from './strings.ts';
 import type { TerminalViewerKind, ViewerOpenAs } from './terminal-profile-types.ts';
 import { parseViewerOpenAs } from './terminal-profile-types.ts';
 
@@ -117,10 +118,6 @@ export type ExecutionProviderSession = {
   lastObservedAt?: string | null;
 };
 
-function trimmed(value: unknown): string | null {
-  return typeof value === 'string' && value.trim() ? value.trim() : null;
-}
-
 /** Latch display identity for an objective-scoped session. */
 export function formatObjectiveLatchDisplay({
   objectiveDisplayId,
@@ -165,7 +162,7 @@ export function buildLatchCreateManifest({
   commandLabel?: string | null;
   externalRunId?: string | null;
 }): LatchLaunchManifest {
-  const shellPath = trimmed(shell) ?? '/bin/bash';
+  const shellPath = trimmedOrNull(shell) ?? '/bin/bash';
   if (agentLaunch && path.basename(agentLaunch.argv[0] ?? '') !== agentLaunch.agent) {
     throw new Error('Latch agent launch argv must start with the declared agent executable');
   }
@@ -177,12 +174,12 @@ export function buildLatchCreateManifest({
   const display: LatchLaunchManifest['display'] = {
     source: {
       kind: 'overlord',
-      ...(trimmed(externalRunId) ? { external_run_id: trimmed(externalRunId)! } : {})
+      ...(trimmedOrNull(externalRunId) ? { external_run_id: trimmedOrNull(externalRunId)! } : {})
     }
   };
-  if (trimmed(title)) display.title = trimmed(title)!;
-  if (trimmed(name)) display.name = trimmed(name)!;
-  if (trimmed(commandLabel)) display.command_label = trimmed(commandLabel)!;
+  if (trimmedOrNull(title)) display.title = trimmedOrNull(title)!;
+  if (trimmedOrNull(name)) display.name = trimmedOrNull(name)!;
+  if (trimmedOrNull(commandLabel)) display.command_label = trimmedOrNull(commandLabel)!;
 
   return {
     format_version: LATCH_MANIFEST_FORMAT_VERSION,
@@ -221,7 +218,7 @@ export function parseLatchCreateReport(raw: string): LatchCreateReport | null {
         createdAt?: unknown;
       };
     };
-    const id = trimmed(parsed.session?.id);
+    const id = trimmedOrNull(parsed.session?.id);
     if (!id) return null;
     const protocolVersion =
       typeof parsed.protocolVersion === 'number' && Number.isFinite(parsed.protocolVersion)
@@ -231,9 +228,9 @@ export function parseLatchCreateReport(raw: string): LatchCreateReport | null {
       protocolVersion,
       session: {
         id,
-        name: trimmed(parsed.session?.name) ?? id,
-        state: trimmed(parsed.session?.state) ?? 'running',
-        createdAt: trimmed(parsed.session?.createdAt) ?? new Date().toISOString()
+        name: trimmedOrNull(parsed.session?.name) ?? id,
+        state: trimmedOrNull(parsed.session?.state) ?? 'running',
+        createdAt: trimmedOrNull(parsed.session?.createdAt) ?? new Date().toISOString()
       }
     };
   } catch {
@@ -254,7 +251,7 @@ export function toExecutionProviderSession({
     provider: 'latch',
     providerSessionId: createReport.session.id,
     sessionName: createReport.session.name,
-    executionTargetId: trimmed(executionTargetId),
+    executionTargetId: trimmedOrNull(executionTargetId),
     agentSessionId: null,
     createdAt: createdAt ?? createReport.session.createdAt,
     lastObservedState: createReport.session.state
@@ -275,13 +272,13 @@ export function existingLatchProviderSession({
   executionTargetId?: string | null;
   createdAt?: string;
 }): ExecutionProviderSession | null {
-  const providerSessionId = trimmed(latchSessionId);
+  const providerSessionId = trimmedOrNull(latchSessionId);
   if (!providerSessionId) return null;
   return {
     provider: 'latch',
     providerSessionId,
     sessionName: null,
-    executionTargetId: trimmed(executionTargetId),
+    executionTargetId: trimmedOrNull(executionTargetId),
     agentSessionId: null,
     createdAt,
     lastObservedState: 'running'
@@ -313,21 +310,25 @@ export function providerSessionFromMetadata(
     endRequestedAt?: unknown;
     lastObservedAt?: unknown;
   };
-  if (trimmed(cast.provider)?.toLowerCase() !== 'latch') return null;
-  const providerSessionId = trimmed(cast.providerSessionId);
+  if (trimmedOrNull(cast.provider)?.toLowerCase() !== 'latch') return null;
+  const providerSessionId = trimmedOrNull(cast.providerSessionId);
   if (!providerSessionId) return null;
   return {
     provider: 'latch',
     providerSessionId,
-    sessionName: trimmed(cast.sessionName),
-    executionTargetId: trimmed(cast.executionTargetId),
-    agentSessionId: trimmed(cast.agentSessionId),
-    createdAt: trimmed(cast.createdAt) ?? '',
-    lastObservedState: trimmed(cast.lastObservedState) ?? 'running',
-    ...(cast.endedAt !== undefined ? { endedAt: trimmed(cast.endedAt) } : {}),
-    ...(cast.endReason !== undefined ? { endReason: trimmed(cast.endReason) } : {}),
-    ...(cast.endRequestedAt !== undefined ? { endRequestedAt: trimmed(cast.endRequestedAt) } : {}),
-    ...(cast.lastObservedAt !== undefined ? { lastObservedAt: trimmed(cast.lastObservedAt) } : {})
+    sessionName: trimmedOrNull(cast.sessionName),
+    executionTargetId: trimmedOrNull(cast.executionTargetId),
+    agentSessionId: trimmedOrNull(cast.agentSessionId),
+    createdAt: trimmedOrNull(cast.createdAt) ?? '',
+    lastObservedState: trimmedOrNull(cast.lastObservedState) ?? 'running',
+    ...(cast.endedAt !== undefined ? { endedAt: trimmedOrNull(cast.endedAt) } : {}),
+    ...(cast.endReason !== undefined ? { endReason: trimmedOrNull(cast.endReason) } : {}),
+    ...(cast.endRequestedAt !== undefined
+      ? { endRequestedAt: trimmedOrNull(cast.endRequestedAt) }
+      : {}),
+    ...(cast.lastObservedAt !== undefined
+      ? { lastObservedAt: trimmedOrNull(cast.lastObservedAt) }
+      : {})
   };
 }
 
@@ -389,7 +390,7 @@ export function stripProviderSessionFromMetadata({
 export function latchViewerFlagForKind(
   kind: TerminalViewerKind | string | null | undefined
 ): string | null {
-  switch (trimmed(kind)?.toLowerCase()) {
+  switch (trimmedOrNull(kind)?.toLowerCase()) {
     case 'iterm':
     case 'iterm2':
       return 'iterm';
@@ -438,7 +439,7 @@ export function compareLatchProductVersions(a: string, b: string): number {
  * thing an older Latch would have done anyway.
  */
 export function latchSupportsOpenAs(productVersion: string | null | undefined): boolean {
-  const version = trimmed(productVersion);
+  const version = trimmedOrNull(productVersion);
   if (!version) return false;
   return compareLatchProductVersions(version, LATCH_OPEN_AS_MIN_PRODUCT_VERSION) >= 0;
 }
@@ -452,7 +453,7 @@ export const LATCH_OPEN_BACKGROUND_MIN_PRODUCT_VERSION = '0.2609181007.0';
  * that opens in the foreground is better than one that fails to open.
  */
 export function latchSupportsOpenBackground(productVersion: string | null | undefined): boolean {
-  const version = trimmed(productVersion);
+  const version = trimmedOrNull(productVersion);
   if (!version) return false;
   return compareLatchProductVersions(version, LATCH_OPEN_BACKGROUND_MIN_PRODUCT_VERSION) >= 0;
 }
@@ -502,7 +503,7 @@ export function latchAttachCommand({
   executable?: string;
   providerSessionId: string;
 }): string {
-  return `${trimmed(executable) ?? 'latch'} attach ${providerSessionId}`;
+  return `${trimmedOrNull(executable) ?? 'latch'} attach ${providerSessionId}`;
 }
 
 /**
@@ -516,5 +517,5 @@ export function shouldUseLatchProvider({
   providerKind: string | null | undefined;
   latchSelectable: boolean;
 }): boolean {
-  return trimmed(providerKind)?.toLowerCase() === 'latch' && latchSelectable === true;
+  return trimmedOrNull(providerKind)?.toLowerCase() === 'latch' && latchSelectable === true;
 }

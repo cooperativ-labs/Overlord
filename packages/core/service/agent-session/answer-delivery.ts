@@ -2,6 +2,7 @@ import { recordChange } from '../change-feed.js';
 import type { ServiceContext } from '../context.js';
 import { ServiceError } from '../errors.js';
 import type { CapabilityResult, SendLatchMessageResult } from '../local-target/types.js';
+import { parseMetadataJson } from '../records.js';
 import { nowIso } from '../util.js';
 
 import { type AgentRequestRow, type ApplicationState, getRequest } from './requests.js';
@@ -79,17 +80,6 @@ export type AnswerDeliveryOutcome = {
   failureMessage: string | null;
 };
 
-function parseDetails(value: string): Record<string, unknown> {
-  try {
-    const parsed = JSON.parse(value) as unknown;
-    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
-      ? (parsed as Record<string, unknown>)
-      : {};
-  } catch {
-    return {};
-  }
-}
-
 function boundedMessage(value: unknown): string | null {
   if (typeof value !== 'string') return null;
   const trimmed = value.trim();
@@ -101,7 +91,7 @@ function boundedMessage(value: unknown): string | null {
 
 /** The delivery record of a request. A row written before ADR 0065 reads as attempt 1. */
 export function readAnswerDelivery(request: { details_json: string }): AnswerDeliveryRecord {
-  const raw = parseDetails(request.details_json).delivery;
+  const raw = parseMetadataJson(request.details_json).delivery;
   const record =
     raw && typeof raw === 'object' && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {};
   const attempt =
@@ -116,7 +106,7 @@ export function readAnswerDelivery(request: { details_json: string }): AnswerDel
 }
 
 function detailsWithDelivery(request: { details_json: string }, record: AnswerDeliveryRecord) {
-  return JSON.stringify({ ...parseDetails(request.details_json), delivery: record });
+  return JSON.stringify({ ...parseMetadataJson(request.details_json), delivery: record });
 }
 
 const OPERATION_ATTEMPT_SEPARATOR = '.';
@@ -404,7 +394,7 @@ export function answerTextFromResolution(request: {
   resolution_json: string | null;
   options_json: string;
 }): string {
-  const resolution = request.resolution_json ? parseDetails(request.resolution_json) : {};
+  const resolution = request.resolution_json ? parseMetadataJson(request.resolution_json) : {};
   const text = typeof resolution.text === 'string' ? resolution.text.trim() : '';
   if (text) return text;
   const optionId = typeof resolution.optionId === 'string' ? resolution.optionId.trim() : '';

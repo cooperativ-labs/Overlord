@@ -3,7 +3,7 @@ import { formatObjectiveDisplayId } from '@overlord/database';
 import { createHash } from 'node:crypto';
 
 import { enqueueLiveActivityDispatchJob } from '../packages/core/service/live-activity-jobs.ts';
-import { jsonTextFieldSql, newId, nowIso } from '../packages/core/service/util.ts';
+import { isTruthyFlag, jsonTextFieldSql, newId, nowIso } from '../packages/core/service/util.ts';
 
 import { requireDatabaseClient, resolveActiveProfileId } from './db.ts';
 import { ApiError, requiredString } from './errors.ts';
@@ -125,10 +125,6 @@ function projectColor(settingsJson: string): string {
   } catch {
     return '#2563eb';
   }
-}
-
-function asBool(value: number | boolean): boolean {
-  return value === true || value === 1;
 }
 
 function toSnapshot(row: SnapshotRow): LiveActivityMissionSnapshot {
@@ -481,8 +477,8 @@ export async function buildLiveActivityContentState(
   );
   const running = runningRows.slice(0, MAX_RUNNING);
   const completion = rows.find(row => {
-    if (asBool(row.has_executing_objective)) return false;
-    if (!asBool(row.has_completed_objective) && row.status_type !== 'complete') return false;
+    if (isTruthyFlag(row.has_executing_objective)) return false;
+    if (!isTruthyFlag(row.has_completed_objective) && row.status_type !== 'complete') return false;
     const updated = Date.parse(row.updated_at);
     return Number.isFinite(updated) && now.getTime() - updated <= COMPLETION_HOLD_MS;
   });

@@ -3,6 +3,7 @@ import type { ProjectResourceAccessMode } from '@overlord/contract';
 import type { ServiceContext } from './context.js';
 import { resolveProjectId } from './context.js';
 import { loadTargetResourceObservations } from './target-resource-observations.js';
+import { isTruthyFlag } from './util.js';
 
 // REST DTOs generated from contract/api/openapi.yaml (ADR 0006).
 export type { ProjectResourceAccessMode } from '@overlord/contract';
@@ -27,10 +28,6 @@ type ResourceLike = {
   accessMode: ProjectResourceAccessMode;
   executionTargetId: string | null;
 };
-
-function isTruthyPrimary(value: boolean | number): boolean {
-  return value === true || value === 1;
-}
 
 function pickResourceForTarget<T extends ResourceLike>(
   resources: T[],
@@ -149,7 +146,7 @@ export async function buildProjectResourceManifest({
         return '';
       }
     })(),
-    isPrimary: isTruthyPrimary(row.is_primary),
+    isPrimary: isTruthyFlag(row.is_primary),
     accessMode: row.access_mode === 'read' ? 'read' : 'read_write',
     executionTargetId: row.execution_target_id
   }));

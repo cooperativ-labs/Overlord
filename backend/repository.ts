@@ -191,6 +191,7 @@ import {
 import { resolveProjectExecutionTargetForLaunch } from '../packages/core/service/project-execution-target.ts';
 import { deriveProjectResourceKey } from '../packages/core/service/project-resource-key.ts';
 import { seedDefaultProjectStatuses } from '../packages/core/service/projects.ts';
+import { parseMetadataJson } from '../packages/core/service/records.ts';
 import {
   enqueueObjectiveAfterLastQueuedSibling,
   enqueueRunQueueDispatch,
@@ -7747,17 +7748,6 @@ type ProjectPreferenceRow = {
   revision: number;
 };
 
-function parseProjectPreferenceJson(value: string): Record<string, unknown> {
-  try {
-    const parsed = JSON.parse(value) as unknown;
-    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
-      ? (parsed as Record<string, unknown>)
-      : {};
-  } catch {
-    return {};
-  }
-}
-
 function hasDefaultProjectMarker(preferences: Record<string, unknown>): boolean {
   const namespace = preferences[DEFAULT_PROJECT_PREFERENCE_NAMESPACE];
   return (
@@ -7817,7 +7807,7 @@ export async function getDefaultProjectPreference(): Promise<DefaultProjectPrefe
   if (!profileId) return { projectId: null };
   const rows = await listProjectPreferenceRowsForProfile(profileId, db);
   for (const row of rows) {
-    if (!hasDefaultProjectMarker(parseProjectPreferenceJson(row.preferences_json))) continue;
+    if (!hasDefaultProjectMarker(parseMetadataJson(row.preferences_json))) continue;
     const project = await db.get<{ id: string }>(
       `SELECT p.id
          FROM projects p
@@ -7871,7 +7861,7 @@ async function updateDefaultProjectPreference(
         projectId !== null &&
         row.project_id === projectId &&
         row.workspace_user_id === selectedScope?.workspaceUserId;
-      const preferences = parseProjectPreferenceJson(row.preferences_json);
+      const preferences = parseMetadataJson(row.preferences_json);
       if (hasDefaultProjectMarker(preferences) === shouldBeDefault) continue;
       await tx.run(
         `UPDATE project_user_preferences

@@ -29,6 +29,7 @@ import {
 } from './objective-parallelism.js';
 import { resolveLaunchSessionForExecutionTarget } from './project-execution-target.js';
 import { resolveObjectiveWorkingDirectory } from './projects.js';
+import { asRecord, parseMetadataJson } from './records.js';
 import { enqueueRunQueueDispatch } from './run-queue.js';
 import { TERMINAL_PROBE_TIMEOUT_MS } from './terminal-probe-policy.ts';
 import {
@@ -38,6 +39,8 @@ import {
   toLaunchSessionSnapshot
 } from './terminal-profile-types.js';
 import { newId, nowIso } from './util.js';
+
+export { asRecord, parseMetadataJson };
 
 export const ACTIVE_EXECUTION_REQUEST_STATUSES = ['queued', 'claimed', 'launching'] as const;
 // Objective states from which a run may still proceed (create a request, claim a
@@ -182,20 +185,6 @@ export type ExecutionRequestSummary = {
 export type ClaimedExecutionRequest = ExecutionRequestSummary & {
   workingDirectory: string;
 };
-
-export function asRecord(value: unknown): Record<string, unknown> {
-  return value && typeof value === 'object' && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : {};
-}
-
-export function parseMetadataJson(json: string): Record<string, unknown> {
-  try {
-    return asRecord(JSON.parse(json) as unknown);
-  } catch {
-    return {};
-  }
-}
 
 function parseJsonObject(raw: string): Record<string, unknown> {
   return asRecord(JSON.parse(raw) as unknown);

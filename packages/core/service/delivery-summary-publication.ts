@@ -19,7 +19,7 @@ import {
   readMissionSummaryBaseline
 } from './mission-summary-agent.js';
 import { lockMissionObjectiveQueue } from './objective-queue.js';
-import { hashSessionKey, nowIso } from './util.js';
+import { hashSessionKey, nowIso, toIsoOrNull } from './util.js';
 import { lockMissionSummaryRow } from './worker-jobs.js';
 
 /**
@@ -104,11 +104,6 @@ const PUBLICATION_COLUMNS = `id, workspace_id, project_id, mission_id, objective
   actor_workspace_user_id, session_id, evidence_revision, published_at,
   published_content_revision, publish_operation_id, publish_request_digest, superseded_at,
   superseded_reason`;
-
-function iso(value: unknown): string | null {
-  if (value === null || value === undefined) return null;
-  return new Date(value instanceof Date ? value : String(value)).toISOString();
-}
 
 function notFound(): ServiceError {
   return new ServiceError(
@@ -276,7 +271,7 @@ function toPublication(
     available: state.state === 'outstanding',
     state: state.state,
     supersededReason: state.supersededReason,
-    publishedAt: published?.at ?? iso(row.published_at),
+    publishedAt: published?.at ?? toIsoOrNull(row.published_at),
     publishedContentRevision:
       published?.contentRevision ??
       (row.published_content_revision === null ? null : Number(row.published_content_revision))

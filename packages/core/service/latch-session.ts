@@ -10,6 +10,7 @@ import {
 } from './latch-gateway.ts';
 import { buildLatchOpenArgs, latchViewerFlagForKind } from './latch-launch.ts';
 import { isLatchSessionAbsentMessage } from './latch-session-absent.ts';
+import { trimmedOrNull } from './strings.ts';
 import type { ViewerOpenAs } from './terminal-profile-types.ts';
 import { parseViewerOpenAs } from './terminal-profile-types.ts';
 
@@ -69,12 +70,8 @@ export function latchSessionCommandError(detail: string): LatchSessionCommandErr
     : new LatchSessionCommandError(message);
 }
 
-function trimmed(value: unknown): string | null {
-  return typeof value === 'string' && value.trim() ? value.trim() : null;
-}
-
 function parseState(value: unknown): LatchSessionState | null {
-  switch (trimmed(value)) {
+  switch (trimmedOrNull(value)) {
     case 'running':
       return 'running';
     case 'exited':
@@ -135,10 +132,10 @@ export async function inspectLatchSession({
   executable?: string | null;
   providerSessionId: string;
 }): Promise<LatchSessionInspection> {
-  const sessionId = trimmed(providerSessionId);
+  const sessionId = trimmedOrNull(providerSessionId);
   if (!sessionId) throw new LatchSessionCommandError('A Latch session id is required.');
   const report = await runLatchJson({
-    executable: trimmed(executable) ?? 'latch',
+    executable: trimmedOrNull(executable) ?? 'latch',
     args: ['inspect', sessionId, '--json']
   });
   const state = parseState(report.state);
@@ -148,8 +145,8 @@ export async function inspectLatchSession({
       ? (report.exit as Record<string, unknown>)
       : null;
   return {
-    providerSessionId: trimmed(report.id) ?? sessionId,
-    name: trimmed(report.name) ?? sessionId,
+    providerSessionId: trimmedOrNull(report.id) ?? sessionId,
+    name: trimmedOrNull(report.name) ?? sessionId,
     state,
     exitCode: typeof exit?.code === 'number' && Number.isFinite(exit.code) ? exit.code : null,
     endedAt:
@@ -169,7 +166,7 @@ export async function inspectLatchSession({
  */
 async function readLatchProductVersion(executable: string): Promise<string | null> {
   try {
-    return trimmed(
+    return trimmedOrNull(
       (await runLatchJson({ executable, args: ['capabilities', '--json'] })).productVersion
     );
   } catch {
@@ -193,13 +190,13 @@ export async function openLatchSession({
    */
   openAs?: ViewerOpenAs | string | null;
 }): Promise<LatchSessionOpenResult> {
-  const sessionId = trimmed(providerSessionId);
+  const sessionId = trimmedOrNull(providerSessionId);
   if (!sessionId) throw new LatchSessionCommandError('A Latch session id is required.');
   const viewer = latchViewerFlagForKind(viewerKind);
   if (!viewer) {
     throw new LatchSessionCommandError(`Latch cannot open the configured viewer "${viewerKind}".`);
   }
-  const exe = trimmed(executable) ?? 'latch';
+  const exe = trimmedOrNull(executable) ?? 'latch';
   const report = await runLatchJson({
     executable: exe,
     args: buildLatchOpenArgs({
@@ -213,10 +210,10 @@ export async function openLatchSession({
     throw new LatchSessionCommandError(`Latch did not open the ${viewer} viewer.`);
   }
   return {
-    providerSessionId: trimmed(report.id) ?? sessionId,
-    viewer: trimmed(report.viewer) ?? viewer,
+    providerSessionId: trimmedOrNull(report.id) ?? sessionId,
+    viewer: trimmedOrNull(report.viewer) ?? viewer,
     opened: true,
-    behavior: trimmed(report.behavior) ? parseViewerOpenAs(report.behavior) : null
+    behavior: trimmedOrNull(report.behavior) ? parseViewerOpenAs(report.behavior) : null
   };
 }
 
@@ -227,16 +224,16 @@ export async function stopLatchSession({
   executable?: string | null;
   providerSessionId: string;
 }): Promise<LatchSessionStopResult> {
-  const sessionId = trimmed(providerSessionId);
+  const sessionId = trimmedOrNull(providerSessionId);
   if (!sessionId) throw new LatchSessionCommandError('A Latch session id is required.');
   const report = await runLatchJson({
-    executable: trimmed(executable) ?? 'latch',
+    executable: trimmedOrNull(executable) ?? 'latch',
     args: ['stop', sessionId, '--json']
   });
   const state = parseState(report.state);
   if (!state) throw new LatchSessionCommandError('Latch returned an unsupported session state.');
   return {
-    providerSessionId: trimmed(report.id) ?? sessionId,
+    providerSessionId: trimmedOrNull(report.id) ?? sessionId,
     state
   };
 }
@@ -333,7 +330,7 @@ const CONVERSATION_PHASES: readonly LatchConversationPhase[] = [
 function parseConversationState(value: unknown): ConversationState | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const cast = value as Record<string, unknown>;
-  const phaseText = trimmed(cast.phase);
+  const phaseText = trimmedOrNull(cast.phase);
   const phase = CONVERSATION_PHASES.find(candidate => candidate === phaseText) ?? null;
   const availability =
     cast.sendMessage && typeof cast.sendMessage === 'object' && !Array.isArray(cast.sendMessage)
@@ -344,7 +341,7 @@ function parseConversationState(value: unknown): ConversationState | null {
     phase,
     sendMessage: {
       enabled: availability.enabled === true,
-      reason: trimmed(availability.reason)
+      reason: trimmedOrNull(availability.reason)
     }
   };
 }
@@ -410,9 +407,9 @@ export async function sendLatchMessage({
   connect?: LatchConversationConnect;
   now?: () => Date;
 }): Promise<LatchSendMessageOutcome> {
-  const sessionId = trimmed(providerSessionId);
+  const sessionId = trimmedOrNull(providerSessionId);
   if (!sessionId) throw new LatchSessionCommandError('A Latch session id is required.');
-  const opId = trimmed(operationId);
+  const opId = trimmedOrNull(operationId);
   if (!opId) throw new LatchSessionCommandError('An operation id is required.');
   const body = typeof text === 'string' ? text : '';
   if (!body.trim()) throw new LatchSessionCommandError('An answer message is required.');
@@ -426,8 +423,8 @@ export async function sendLatchMessage({
       ? Math.trunc(waitForIdleMs)
       : DEFAULT_LATCH_SEND_WAIT_MS;
 
-  const previousOpId = trimmed(previousOperationId);
-  const deadlineMs = trimmed(notAfter) ? Date.parse(trimmed(notAfter)!) : Number.NaN;
+  const previousOpId = trimmedOrNull(previousOperationId);
+  const deadlineMs = trimmedOrNull(notAfter) ? Date.parse(trimmedOrNull(notAfter)!) : Number.NaN;
   if (!Number.isNaN(deadlineMs) && now().getTime() > deadlineMs) {
     return {
       providerSessionId: sessionId,
@@ -598,7 +595,7 @@ function runConversationOperation({
       switch (message.type) {
         case 'snapshot': {
           clearTimeout(snapshotTimer);
-          epoch = trimmed(message.operationEpoch);
+          epoch = trimmedOrNull(message.operationEpoch);
           const state = parseConversationState(message.state);
           if (!state) {
             abort('Latch returned an unsupported conversation state.');
@@ -628,9 +625,9 @@ function runConversationOperation({
           return;
         }
         case 'operation_result': {
-          if (awaitingReceipt && trimmed(message.operationId) === previousOperationId) {
+          if (awaitingReceipt && trimmedOrNull(message.operationId) === previousOperationId) {
             if (receiptTimer) clearTimeout(receiptTimer);
-            const receipt = trimmed(message.status);
+            const receipt = trimmedOrNull(message.status);
             if (receipt === 'accepted' || receipt === 'queued') {
               finish({ status: 'accepted', reason: null, reconciled: true });
               return;
@@ -648,8 +645,8 @@ function runConversationOperation({
             if (lastState) applyState(lastState);
             return;
           }
-          if (trimmed(message.operationId) !== operationId) return;
-          const status = trimmed(message.status);
+          if (trimmedOrNull(message.operationId) !== operationId) return;
+          const status = trimmedOrNull(message.status);
           if (status === 'queued') {
             // Latch took the message and holds it behind the agent's current
             // turn. It is delivered: Latch owns it from here.
@@ -663,12 +660,14 @@ function runConversationOperation({
             finish({ status: 'ambiguous', reason: 'Latch reported an unknown operation status.' });
             return;
           }
-          finish({ status, reason: trimmed(message.reason) });
+          finish({ status, reason: trimmedOrNull(message.reason) });
           return;
         }
         case 'error': {
           const detail =
-            trimmed(message.message) ?? trimmed(message.code) ?? 'Latch reported an error.';
+            trimmedOrNull(message.message) ??
+            trimmedOrNull(message.code) ??
+            'Latch reported an error.';
           if (sent) {
             finish({ status: 'ambiguous', reason: detail });
             return;

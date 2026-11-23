@@ -17,14 +17,11 @@
 import { existsSync } from 'node:fs';
 
 import { resolveLatchExecutablePath } from './latch-discovery.ts';
+import { trimmedOrNull } from './strings.ts';
 import { DEFAULT_LATCH_EXECUTABLE } from './terminal-profile-types.ts';
 
 /** Resolved absolute paths keyed by the requested executable name. */
 const cache = new Map<string, string>();
-
-function trimmed(value: unknown): string | null {
-  return typeof value === 'string' && value.trim() ? value.trim() : null;
-}
 
 /**
  * Absolute path to the Latch binary, or null when this machine has none.
@@ -37,7 +34,7 @@ export function resolveLatchBinaryPath(
   executable?: string | null,
   resolve: (name: string) => string | null = resolveLatchExecutablePath
 ): string | null {
-  const name = trimmed(executable) ?? DEFAULT_LATCH_EXECUTABLE;
+  const name = trimmedOrNull(executable) ?? DEFAULT_LATCH_EXECUTABLE;
   const cached = cache.get(name);
   if (cached) {
     if (existsSync(cached)) return cached;
@@ -54,7 +51,7 @@ export function resolveLatchBinaryPath(
  * `executable` setting is distinguishable from a genuinely absent install.
  */
 export function latchBinaryMissingMessage(executable?: string | null): string {
-  const name = trimmed(executable) ?? DEFAULT_LATCH_EXECUTABLE;
+  const name = trimmedOrNull(executable) ?? DEFAULT_LATCH_EXECUTABLE;
   return `Latch executable "${name}" was not found on this device (checked PATH, ~/.local/bin, and the Homebrew prefixes).`;
 }
 

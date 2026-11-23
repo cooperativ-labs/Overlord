@@ -5,6 +5,7 @@ import { recordChange } from '../change-feed.js';
 import type { ServiceContext } from '../context.js';
 import { ServiceError } from '../errors.js';
 import { enqueueLiveActivityRefreshForMission } from '../live-activity-jobs.js';
+import { parseMetadataJson } from '../records.js';
 import { newId, nowIso } from '../util.js';
 import { enqueueWebhookEvent } from '../webhook-events.js';
 
@@ -464,7 +465,7 @@ export async function resolveRequest({
     });
 
     if (isQuestion && existing.mission_id && existing.project_id && existing.session_id) {
-      const details = parseObject(existing.details_json);
+      const details = parseMetadataJson(existing.details_json);
       const optionId = typeof resolution.optionId === 'string' ? resolution.optionId : null;
       const options = parseOptions(existing.options_json);
       const option = optionId ? options.find(candidate => candidate.optionId === optionId) : null;
@@ -533,17 +534,6 @@ export async function resolveRequest({
     }
     return { resolved: true, request: await getRequest({ ctx: txCtx, requestId }) };
   });
-}
-
-function parseObject(value: string): Record<string, unknown> {
-  try {
-    const parsed = JSON.parse(value) as unknown;
-    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
-      ? (parsed as Record<string, unknown>)
-      : {};
-  } catch {
-    return {};
-  }
 }
 
 function parseOptions(value: string): AgentRequestOption[] {

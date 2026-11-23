@@ -33,6 +33,7 @@ import type { CapabilityResult } from '../../packages/core/service/local-target/
 import { completeLocalTargetMutationRequest } from '../../packages/core/service/local-target-mutations.ts';
 import { upsertMissionBranchObservationTx } from '../../packages/core/service/mission-branch-observations.ts';
 import { resolveClaimLaunchConfig } from '../../packages/core/service/project-execution-target.ts';
+import { parseMetadataJson } from '../../packages/core/service/records.ts';
 import type { BranchAutomationAction } from '../branch-planning.ts';
 import { recordRunnerBranchEvent } from '../branching/branch-activity.ts';
 import {
@@ -181,17 +182,6 @@ const EXECUTION_REQUEST_COLUMNS = `
   launch_flags_json, status, requested_source, resolved_resource_id,
   resolved_working_directory, last_error, created_at, updated_at, revision
 `;
-
-function parseLaunchFlagsObject(json: string): Record<string, unknown> {
-  try {
-    const parsed = JSON.parse(json) as unknown;
-    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
-      ? (parsed as Record<string, unknown>)
-      : {};
-  } catch {
-    return {};
-  }
-}
 
 function serviceSummaryToDto(row: ExecutionRequestSummary): RunnerExecutionRequestDto {
   return {
@@ -495,7 +485,7 @@ async function stampRequestBranchTx(
     [requestId, workspaceId]
   );
   if (!requestRow) throw new ApiError(404, 'Execution request not found');
-  const flags = parseLaunchFlagsObject(requestRow.launch_flags_json);
+  const flags = parseMetadataJson(requestRow.launch_flags_json);
   flags.branchAutomation = branch;
   const revision = requestRow.revision + 1;
   await tx.run(
