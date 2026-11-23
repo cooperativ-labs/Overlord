@@ -2,11 +2,14 @@ import { type Permission, PERMISSIONS } from '@overlord/auth';
 
 import { resolveObjectiveRef, type ServiceContext } from '../packages/core/service/context.ts';
 
-import { deriveProtocolWorkspaceId, readProtocolAddress } from './protocol/addressing.ts';
+import {
+  deriveProtocolWorkspaceId,
+  type ProtocolAddress,
+  readProtocolAddress
+} from './protocol/addressing.ts';
 import { artifactSubcommands } from './protocol/artifacts.ts';
 import {
   type ProtocolRequestBody,
-  strFlag,
   type SubcommandTable
 } from './protocol/flags.ts';
 import { missionSubcommands } from './protocol/missions.ts';
@@ -45,12 +48,12 @@ export type { ProtocolRequestBody } from './protocol/flags.ts';
 // this file.
 
 async function buildProtocolContext(
-  body: ProtocolRequestBody,
+  address: ProtocolAddress,
   permission: Permission | null
 ): Promise<ServiceContext> {
   const scopes = await callerWorkspaceMemberships();
   const workspaceId = await deriveProtocolWorkspaceId(
-    readProtocolAddress(body, { legacyDerivation: true }),
+    address,
     scopes.map(scope => scope.workspaceId)
   );
   if (!workspaceId) {
@@ -97,18 +100,17 @@ async function buildProtocolContext(
 /** Validate the mission/objective pair even when a command uses the objective only as scope. */
 async function validateObjectiveAddressing({
   ctx,
-  body,
+  address,
   subcommand
 }: {
   ctx: ServiceContext;
-  body: ProtocolRequestBody;
+  address: ProtocolAddress;
   subcommand: string;
 }): Promise<void> {
   // update-objective is addressed by an objective alone and deliberately has
   // no mission scope to validate against.
   if (subcommand === 'update-objective') return;
-  const { objectiveRef } = readProtocolAddress(body);
-  const { missionRef } = readProtocolAddress(body, { legacyDerivation: true });
+  const { objectiveRef, missionRef } = address;
   if (!objectiveRef || !missionRef) return;
   await resolveObjectiveRef({ ctx, ref: objectiveRef, missionId: missionRef });
 }
@@ -155,6 +157,7 @@ export async function runProtocolSubcommand(
   subcommand: string,
   body: ProtocolRequestBody
 ): Promise<unknown> {
+  const address = readProtocolAddress(body);
   if (
     getActiveTokenProjectIds() !== null &&
     !new Set([
@@ -175,7 +178,7 @@ export async function runProtocolSubcommand(
   if (
     getActiveTokenProjectIds() !== null &&
     subcommand === 'discover-project' &&
-    !strFlag(body, '--project-id')
+    !address.projectRef
   ) {
     throw new ApiError(404, 'Not found');
   }
@@ -193,8 +196,8 @@ export async function runProtocolSubcommand(
   // valid secondary workspaces and reintroduce the pre-v95 scoping bug.
   const requiredPermission = subcommand === 'search' ? null : entry.permission;
   try {
-    const ctx = await buildProtocolContext(body, requiredPermission);
-    await validateObjectiveAddressing({ ctx, body, subcommand });
+    const ctx = await buildProtocolContext(address, requiredPermission);
+    await validateObjectiveAddressing({ ctx, address, subcommand });
     ctx.canUpdateMissionItems = () =>
       actorCan(PERMISSIONS.MISSION_UPDATE, {
         workspaceId: ctx.workspace.id,

@@ -8,52 +8,47 @@ const secondary = await setupSecondaryWorkspaceFixture({ namePrefix: 'Protocol A
 const { createMission, createProject } = await import('./repository.ts');
 const { runProtocolSubcommand } = await import('./protocol.ts');
 const { ApiError } = await import('./errors.ts');
-const { ServiceError } = await import('../packages/core/service/errors.ts');
+type ObjectiveRow = { id: string; displayId: string };
 
-test('a blank explicit mission masks the objective display id for workspace derivation', async () => {
+test('a blank explicit mission derives the workspace from the objective display id', async () => {
   const objective = secondary.mission.objectives[0]! as ObjectiveRow;
-  await runProtocolSubcommand('load-context', { flags: { '--objective-id': objective.displayId } });
-
-  for (const missionRef of ['', '  ']) {
-    await assert.rejects(
-      runProtocolSubcommand('load-context', {
-        flags: { '--mission-id': missionRef, '--objective-id': objective.displayId }
-      }),
-      (error: unknown) => error instanceof ServiceError && error.status === 404
-    );
+  for (const missionRef of [undefined, '', '  ']) {
+    const result = (await runProtocolSubcommand('load-context', {
+      flags: {
+        ...(missionRef === undefined ? {} : { '--mission-id': missionRef }),
+        '--objective-id': objective.displayId
+      }
+    })) as { objective: ObjectiveRow };
+    assert.equal(result.objective.id, objective.id);
   }
 });
 
-test('a padded objective UUID falls back to the active workspace', async () => {
+test('a padded objective UUID derives the same workspace as an unpadded one', async () => {
   const objectiveId = secondary.objectiveId;
-  for (const [ref, workspaceId] of [
-    [objectiveId, secondary.secondary.id],
-    [` ${objectiveId} `, secondary.workspaceAId]
-  ]) {
+  for (const ref of [objectiveId, ` ${objectiveId} `]) {
     const result = (await runProtocolSubcommand('auth-status', {
-      flags: { '--objective-id': ref! }
+      flags: { '--objective-id': ref }
     })) as { workspaceId: string };
-    assert.equal(result.workspaceId, workspaceId);
+    assert.equal(result.workspaceId, secondary.secondary.id);
   }
 });
 
-test('a padded session key falls back to the active workspace', async () => {
+test('a padded session key routes to the session workspace and reaches the handler', async () => {
   const { sessionKey } = (await runProtocolSubcommand('attach', {
     flags: { '--mission-id': secondary.mission.id, '--agent': 'codex' }
   })) as { sessionKey: string };
 
-  for (const [key, workspaceId] of [
-    [sessionKey, secondary.secondary.id],
-    [` ${sessionKey} `, secondary.workspaceAId]
-  ]) {
+  for (const key of [sessionKey, ` ${sessionKey} `]) {
     const result = (await runProtocolSubcommand('auth-status', {
-      flags: { '--session-key': key! }
+      flags: { '--session-key': key }
     })) as { workspaceId: string };
-    assert.equal(result.workspaceId, workspaceId);
+    assert.equal(result.workspaceId, secondary.secondary.id);
   }
-});
 
-type ObjectiveRow = { id: string; displayId: string };
+  await runProtocolSubcommand('heartbeat', {
+    flags: { '--mission-id': secondary.mission.id, '--session-key': ` ${sessionKey} ` }
+  });
+});
 
 async function missionFixture(label: string): Promise<{
   missionDisplayId: string;

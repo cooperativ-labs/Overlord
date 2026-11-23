@@ -104,8 +104,11 @@ export function externalSessionId(body: ProtocolRequestBody): string | null | un
 }
 
 export function requireFlag(body: ProtocolRequestBody, name: string): string {
-  const value = strFlag(body, name);
-  if (value === undefined || value.trim() === '') {
+  return requireFlagValue(strFlag(body, name), name);
+}
+
+export function requireFlagValue(value: string | null | undefined, name: string): string {
+  if (!value?.trim()) {
     throw new ApiError(400, `Missing required flag: ${name}`);
   }
   return value;
@@ -130,6 +133,11 @@ export function missionRefFlag(body: ProtocolRequestBody): string {
     400,
     'Missing required flag: --mission-id (pass it, or an objective display id such as coo:756.k7xm as --objective-id)'
   );
+}
+
+/** Session key required by lifecycle and session-scoped commands. */
+export function sessionKeyFlag(body: ProtocolRequestBody): string {
+  return requireFlagValue(readProtocolAddress(body).sessionKey, '--session-key');
 }
 
 /** Optional objective reference (UUID or `{mission.display_id}.{display_key}`). */

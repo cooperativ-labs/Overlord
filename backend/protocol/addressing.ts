@@ -15,33 +15,36 @@ export type ProtocolAddress = {
   workspaceHint: string | null;
 };
 
-export function readProtocolAddress(
-  body: ProtocolRequestBody,
-  { legacyDerivation = false, legacyExplicitMission = false } = {}
-): ProtocolAddress {
+/** Read the address consistently for workspace routing and handlers. */
+export function readProtocolAddress(body: ProtocolRequestBody): ProtocolAddress {
   const read = (flag: string): string | null => {
     const value = body.flags?.[flag];
-    return typeof value === 'string' ? value : null;
+    return typeof value === 'string' ? value.trim() || null : null;
   };
 
-  const rawObjective = read('--objective-id');
-  const rawMission = read('--mission-id');
-  const objectiveRef = legacyDerivation ? rawObjective : rawObjective?.trim() || null;
-  const explicitMission = legacyDerivation || legacyExplicitMission || rawMission?.trim()
-    ? rawMission
-    : null;
-  const missionRef = legacyExplicitMission
-    ? explicitMission
-    : explicitMission ?? missionDisplayIdFromObjectiveRef(objectiveRef);
-
+  const objectiveRef = read('--objective-id');
   return {
     executionRequestId: read('--execution-request-id'),
     sessionKey: read('--session-key'),
     objectiveRef,
-    missionRef,
+    missionRef: read('--mission-id') ?? missionDisplayIdFromObjectiveRef(objectiveRef),
     projectRef: read('--project-id'),
     workspaceHint: read('--workspace-id')
   };
+}
+
+/**
+ * Resolve `agent_sessions.id` from `--session-key` when present. Soft lookup —
+ * a missing or unknown key yields null rather than failing the create path.
+ */
+export async function resolveSessionId(sessionKey: string | null): Promise<string | null> {
+  if (!sessionKey) return null;
+  const session = await serviceDatabaseClient().get<{ id: string }>(
+    `SELECT id FROM agent_sessions
+      WHERE session_key_hash = ? AND deleted_at IS NULL`,
+    [hashSessionKey(sessionKey)]
+  );
+  return session?.id ?? null;
 }
 
 export async function deriveProtocolWorkspaceId(
@@ -74,7 +77,7 @@ export async function deriveProtocolWorkspaceId(
 
   // `--objective-id` alone is a complete address, so it has to resolve a
   // workspace on its own: a UUID identifies the objective row directly, and a
-  // display id falls through to the mission lookup below via `missionRefFlag`.
+  // display id falls through to the mission lookup below.
   if (objectiveRef) {
     const objective = await db.get<{ workspace_id: string }>(
       `SELECT workspace_id FROM objectives
@@ -116,18 +119,4 @@ export async function deriveProtocolWorkspaceId(
   });
   if (choices.length > 1) throw new ProjectSelectionRequiredError(projectRef, choices);
   return choices[0]?.workspaceId ?? null;
-}
-
-/**
- * Resolve `agent_sessions.id` from `--session-key` when present. Soft lookup —
- * a missing or unknown key yields null rather than failing the create path.
- */
-export async function resolveSessionId(sessionKey: string | null): Promise<string | null> {
-  if (!sessionKey) return null;
-  const session = await serviceDatabaseClient().get<{ id: string }>(
-    `SELECT id FROM agent_sessions
-      WHERE session_key_hash = ? AND deleted_at IS NULL`,
-    [hashSessionKey(sessionKey)]
-  );
-  return session?.id ?? null;
 }

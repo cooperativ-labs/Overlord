@@ -14,7 +14,8 @@ import { requireWorkspacePermission } from '../rbac.ts';
 import { callerWorkspaceMemberships } from '../repository.ts';
 import { listWorkspaces } from '../workspaces.ts';
 
-import { type ProtocolRequestBody, requireFlag, strFlag, type SubcommandTable } from './flags.ts';
+import { readProtocolAddress } from './addressing.ts';
+import { type ProtocolRequestBody, requireFlag, requireFlagValue, strFlag, type SubcommandTable } from './flags.ts';
 
 // ---- Auth, project, and workspace protocol subcommands --------------------
 //
@@ -54,7 +55,7 @@ async function resolveParentlessWorkspace(
     .filter(w => memberWorkspaceIds.has(w.id))
     .map(w => ({ id: w.id, name: w.name, slug: w.slug }));
 
-  const requested = strFlag(body, '--workspace-id')?.trim();
+  const requested = readProtocolAddress(body).workspaceHint;
   if (requested) {
     const needle = requested.toLowerCase();
     const target = workspaces.find(
@@ -165,7 +166,7 @@ export const projectSubcommands: SubcommandTable = {
     handler: (ctx, body) =>
       discoverProject({
         ctx,
-        projectId: strFlag(body, '--project-id') ?? null,
+        projectId: readProtocolAddress(body).projectRef,
         workingDirectory: strFlag(body, '--directory') ?? null
       })
   },
@@ -178,7 +179,7 @@ export const projectSubcommands: SubcommandTable = {
     handler: (ctx, body) =>
       listProjectStatuses({
         ctx,
-        projectId: requireFlag(body, '--project-id')
+        projectId: requireFlagValue(readProtocolAddress(body).projectRef, '--project-id')
       })
   },
 

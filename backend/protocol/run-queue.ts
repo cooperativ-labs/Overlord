@@ -24,10 +24,10 @@ import { ApiError } from '../errors.ts';
 import { readProtocolAddress } from './addressing.ts';
 import {
   boolFlag,
-  objectiveRefFlag,
   parseJsonInput,
   type ProtocolRequestBody,
   requireFlag,
+  requireFlagValue,
   strFlag,
   type SubcommandTable
 } from './flags.ts';
@@ -84,13 +84,11 @@ async function runQueueProjectIdFromProtocol(
   ctx: ServiceContext,
   body: ProtocolRequestBody
 ): Promise<string> {
-  const { objectiveRef, missionRef, projectRef } = readProtocolAddress(body, {
-    legacyExplicitMission: true
-  });
+  const { objectiveRef, missionRef, projectRef } = readProtocolAddress(body);
   const objective = objectiveRef
     ? await resolveObjectiveRef({ ctx, ref: objectiveRef, missionId: missionRef ?? undefined })
     : null;
-  const mission = missionRef ? await resolveMissionId(ctx, missionRef) : null;
+  const mission = !objective && missionRef ? await resolveMissionId(ctx, missionRef) : null;
 
   if (projectRef) {
     const projectId = await resolveProjectId(ctx, projectRef);
@@ -244,11 +242,11 @@ async function queueObjectiveFromProtocol(
   ctx: ServiceContext,
   body: ProtocolRequestBody
 ): Promise<unknown> {
+  const { objectiveRef, projectRef } = readProtocolAddress(body);
   const objective = await resolveObjectiveRef({
     ctx,
-    ref: requireFlag(body, '--objective-id')
+    ref: requireFlagValue(objectiveRef, '--objective-id')
   });
-  const projectRef = strFlag(body, '--project-id');
   if (projectRef) {
     const projectId = await resolveProjectId(ctx, projectRef);
     if (projectId !== objective.projectId) {
@@ -347,11 +345,11 @@ async function dequeueObjectiveFromProtocol(
   ctx: ServiceContext,
   body: ProtocolRequestBody
 ): Promise<{ removed: boolean; objectiveId: string }> {
+  const { objectiveRef, projectRef } = readProtocolAddress(body);
   const objective = await resolveObjectiveRef({
     ctx,
-    ref: requireFlag(body, '--objective-id')
+    ref: requireFlagValue(objectiveRef, '--objective-id')
   });
-  const projectRef = strFlag(body, '--project-id');
   if (projectRef && (await resolveProjectId(ctx, projectRef)) !== objective.projectId) {
     throw new ApiError(400, '--project-id does not own the addressed objective');
   }
@@ -374,7 +372,7 @@ async function retryRunQueueEntryFromProtocol(
   body: ProtocolRequestBody
 ): Promise<unknown> {
   const entryRef = strFlag(body, '--entry');
-  const objectiveRef = objectiveRefFlag(body);
+  const { objectiveRef, projectRef, missionRef } = readProtocolAddress(body);
   if (!entryRef && !objectiveRef) {
     throw new ApiError(400, 'Missing required flag: --objective-id or --entry');
   }
@@ -383,9 +381,7 @@ async function retryRunQueueEntryFromProtocol(
   // recovery action they reached from a queue listing would be busywork. An
   // objective *display* id still needs a scope flag, since resolving it is
   // workspace-and-mission work rather than a lookup.
-  const explicitScope =
-    Boolean(objectiveRef) ||
-    Boolean(strFlag(body, '--project-id') ?? strFlag(body, '--mission-id'));
+  const explicitScope = objectiveRef || projectRef || missionRef;
   let projectId: string;
   if (explicitScope) {
     projectId = await runQueueProjectIdFromProtocol(ctx, body);

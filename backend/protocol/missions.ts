@@ -24,7 +24,6 @@ import { ApiError } from '../errors.ts';
 import { launchObjective } from '../execution/launch.ts';
 import { resolveObjectiveIdForRest } from '../objective-ref.ts';
 import { requireProjectPermission } from '../rbac.ts';
-import { readProtocolAddress, resolveSessionId } from './addressing.ts';
 import {
   callerMembershipsInActiveOrganization,
   createInboxItem,
@@ -39,6 +38,7 @@ import {
   updateObjectiveWithWarnings
 } from '../repository.ts';
 
+import { readProtocolAddress, resolveSessionId } from './addressing.ts';
 import {
   type ArtifactInput,
   parseDeliveryPayloadEnvelope,
@@ -59,6 +59,7 @@ import {
   parseJsonInput,
   type ProtocolRequestBody,
   requireFlag,
+  requireFlagValue,
   resolveInput,
   strFlag,
   type SubcommandTable
@@ -270,7 +271,7 @@ async function searchExactReference(body: ProtocolRequestBody, reference: string
   if (conflicting.length) {
     throw new ApiError(400, `--reference cannot be combined with ${conflicting.join(', ')}`);
   }
-  const projectRef = strFlag(body, '--project-id') ?? null;
+  const { projectRef, workspaceHint } = readProtocolAddress(body);
   if (!projectRef) throw new ApiError(400, '--reference requires --project-id');
   const limitText = strFlag(body, '--limit');
   const limit = limitText === undefined ? null : Number(limitText);
@@ -278,7 +279,7 @@ async function searchExactReference(body: ProtocolRequestBody, reference: string
     throw new ApiError(400, '--limit must be an integer');
   }
   return searchMissionReferences({
-    projectIds: await resolveV2SearchProjectId(projectRef, strFlag(body, '--workspace-id')),
+    projectIds: await resolveV2SearchProjectId(projectRef, workspaceHint),
     reference,
     cursor: strFlag(body, '--cursor') ?? null,
     limit
@@ -559,7 +560,7 @@ export const missionSubcommands: SubcommandTable = {
     permission: null,
     handler: async (ctx, body) => {
       const objectives = objectiveInputs(body);
-      const projectId = strFlag(body, '--project-id');
+      const projectId = readProtocolAddress(body).projectRef;
       // `--inbox` was the retired compatibility alias (ADR 0054).
       rejectRemovedProtocolFlags(body, ['--inbox']);
       const unassignedToProject = boolFlag(body, '--unassigned-to-project');
@@ -611,7 +612,7 @@ export const missionSubcommands: SubcommandTable = {
   prompt: {
     permission: PERMISSIONS.MISSION_CREATE,
     handler: async (ctx, body) => {
-      const projectId = strFlag(body, '--project-id');
+      const projectId = readProtocolAddress(body).projectRef;
       if (!projectId) {
         throw new ApiError(
           400,
@@ -678,7 +679,7 @@ export const missionSubcommands: SubcommandTable = {
   'launch-objective': {
     permission: PERMISSIONS.EXECUTION_REQUEST_CREATE,
     handler: (_ctx, body) =>
-      launchObjective(requireFlag(body, '--objective-id'), {
+      launchObjective(requireFlagValue(readProtocolAddress(body).objectiveRef, '--objective-id'), {
         agent: requireFlag(body, '--agent'),
         ...(strFlag(body, '--model') !== undefined ? { model: strFlag(body, '--model') } : {}),
         ...(strFlag(body, '--reasoning-effort') !== undefined
@@ -748,14 +749,14 @@ export const missionSubcommands: SubcommandTable = {
         },
         { version }
       );
-      const projectRef = strFlag(body, '--project-id') ?? null;
+      const { projectRef, workspaceHint } = readProtocolAddress(body);
       const limit = options.limit ?? 25;
 
       // V2/V3 are organization-bounded aggregate reads. They must not inherit the
       // one workspace selected for ordinary protocol entity operations.
       const search = {
         ...options,
-        projectIds: await resolveV2SearchProjectId(projectRef, strFlag(body, '--workspace-id')),
+        projectIds: await resolveV2SearchProjectId(projectRef, workspaceHint),
         limit
       };
       return version === 3
@@ -793,7 +794,7 @@ export const missionSubcommands: SubcommandTable = {
   'update-objective': {
     permission: PERMISSIONS.OBJECTIVE_UPDATE,
     handler: async (ctx, body) => {
-      const objectiveId = requireFlag(body, '--objective-id');
+      const objectiveId = requireFlagValue(readProtocolAddress(body).objectiveRef, '--objective-id');
       rejectRenamedObjectiveFlags(body, RETIRED_UPDATE_OBJECTIVE_FLAGS);
       const update: UpdateObjectiveBody = {};
       const autoAdvance = optionalAutoAdvanceFlag(body);
@@ -968,7 +969,7 @@ export const missionSubcommands: SubcommandTable = {
           'Missing objective text (use --objective, a positional argument, or an "objective" field in --payload-json)'
         );
       }
-      const projectId = strFlag(body, '--project-id');
+      const projectId = readProtocolAddress(body).projectRef;
       if (!projectId) {
         throw new ApiError(
           400,

@@ -24,6 +24,7 @@ import {
 import { readReportDraft } from '../../packages/core/service/report-draft.ts';
 import { ApiError } from '../errors.ts';
 
+import { readProtocolAddress } from './addressing.ts';
 import {
   type ArtifactInput,
   parseDeliveryPayloadEnvelope,
@@ -40,6 +41,7 @@ import {
   parseJsonObjectInput,
   requireFlag,
   resolveInput,
+  sessionKeyFlag,
   strFlag,
   type SubcommandTable
 } from './flags.ts';
@@ -132,7 +134,7 @@ export const sessionSubcommands: SubcommandTable = {
         ctx,
         missionId: missionRefFlag(body),
         objectiveId: objectiveRefFlag(body) ?? undefined,
-        sessionKey: requireFlag(body, '--session-key'),
+        sessionKey: sessionKeyFlag(body),
         kinds: strFlag(body, '--kind')
           ?.split(',')
           .map(s => s.trim()),
@@ -151,7 +153,7 @@ export const sessionSubcommands: SubcommandTable = {
       readAgentMissionItems({
         ctx,
         missionId: missionRefFlag(body),
-        sessionKey: requireFlag(body, '--session-key'),
+        sessionKey: sessionKeyFlag(body),
         limit: Number(strFlag(body, '--limit') ?? 60),
         offset: Number(strFlag(body, '--offset') ?? 0)
       })
@@ -162,7 +164,7 @@ export const sessionSubcommands: SubcommandTable = {
       closeAgentMissionItems({
         ctx,
         missionId: missionRefFlag(body),
-        sessionKey: requireFlag(body, '--session-key'),
+        sessionKey: sessionKeyFlag(body),
         closeItems: parseJsonArrayInput(
           body,
           '--close-items-json',
@@ -181,9 +183,9 @@ export const sessionSubcommands: SubcommandTable = {
         agentIdentifier: strFlag(body, '--agent') ?? 'unknown',
         modelIdentifier: strFlag(body, '--model') ?? null,
         connectionMethod: connectionMethodFlag(body),
-        existingSessionKey: strFlag(body, '--session-key') ?? null,
+        existingSessionKey: readProtocolAddress(body).sessionKey,
         externalSessionId: externalSessionId(body),
-        executionRequestId: strFlag(body, '--execution-request-id') ?? null,
+        executionRequestId: readProtocolAddress(body).executionRequestId,
         executionTargetId: strFlag(body, '--execution-target-id') ?? null,
         // The channel id only. Its credential never travels in a protocol flag — it reaches the
         // backend solely as an Authorization header on the adapter route family.
@@ -219,7 +221,7 @@ export const sessionSubcommands: SubcommandTable = {
       return updateSession({
         ctx,
         missionId: missionRefFlag(body),
-        sessionKey: requireFlag(body, '--session-key'),
+        sessionKey: sessionKeyFlag(body),
         summary: resolveInput(body, '--summary', '--summary-file') ?? '',
         phase: strFlag(body, '--phase') ?? null,
         eventType: strFlag(body, '--event-type') ?? 'update',
@@ -253,7 +255,7 @@ export const sessionSubcommands: SubcommandTable = {
       return syncChanges({
         ctx,
         missionId: missionRefFlag(body),
-        sessionKey: requireFlag(body, '--session-key'),
+        sessionKey: sessionKeyFlag(body),
         changes,
         ...(capture !== undefined ? { capture } : {})
       });
@@ -266,7 +268,7 @@ export const sessionSubcommands: SubcommandTable = {
       heartbeatSession({
         ctx,
         missionId: missionRefFlag(body),
-        sessionKey: requireFlag(body, '--session-key'),
+        sessionKey: sessionKeyFlag(body),
         phase: strFlag(body, '--phase') ?? null,
         note: strFlag(body, '--note') ?? null
       })
@@ -278,7 +280,7 @@ export const sessionSubcommands: SubcommandTable = {
       askQuestion({
         ctx,
         missionId: missionRefFlag(body),
-        sessionKey: requireFlag(body, '--session-key'),
+        sessionKey: sessionKeyFlag(body),
         question: resolveInput(body, '--question', '--question-file') ?? '',
         options:
           parseJsonArrayInput<{
@@ -305,7 +307,7 @@ export const sessionSubcommands: SubcommandTable = {
       return deliverSession({
         ctx,
         missionId: missionRefFlag(body),
-        sessionKey: requireFlag(body, '--session-key'),
+        sessionKey: sessionKeyFlag(body),
         summary: resolveInput(body, '--summary', '--summary-file') ?? envelope.summary ?? '',
         artifacts: artifacts ?? envelope.artifacts ?? [],
         declaredPaths: declaredPathsInput(body) ?? envelope.declaredPaths,
@@ -328,7 +330,7 @@ export const sessionSubcommands: SubcommandTable = {
       readReportDraft({
         ctx,
         missionId: missionRefFlag(body),
-        sessionKey: requireFlag(body, '--session-key'),
+        sessionKey: sessionKeyFlag(body),
         draftId: strFlag(body, '--draft-id') ?? null,
         includeWithdrawn: boolFlag(body, '--include-withdrawn')
       })
@@ -341,7 +343,7 @@ export const sessionSubcommands: SubcommandTable = {
     handler: (ctx, body) =>
       readDeliveryReceipt({
         ctx,
-        missionId: strFlag(body, '--mission-id') ?? null,
+        missionId: readProtocolAddress(body).missionRef,
         deliveryId: strFlag(body, '--delivery-id') ?? null,
         operationId: strFlag(body, '--operation-id') ?? null,
         operationKind: strFlag(body, '--operation-kind') ?? null
@@ -360,7 +362,7 @@ export const sessionSubcommands: SubcommandTable = {
         missionId: missionRefFlag(body),
         deliveryId: strFlag(body, '--delivery-id') ?? null,
         publicationId: strFlag(body, '--publication-id') ?? null,
-        sessionKey: strFlag(body, '--session-key') ?? null,
+        sessionKey: readProtocolAddress(body).sessionKey,
         style: publicationStyleFlag(body)
       })
   },
@@ -381,7 +383,7 @@ export const sessionSubcommands: SubcommandTable = {
         missionId: missionRefFlag(body),
         deliveryId: strFlag(body, '--delivery-id') ?? null,
         publicationId: strFlag(body, '--publication-id') ?? null,
-        sessionKey: strFlag(body, '--session-key') ?? null,
+        sessionKey: readProtocolAddress(body).sessionKey,
         operationId: strFlag(body, '--operation-id') ?? payloadOperationId,
         narrative,
         style: publicationStyleFlag(body)
@@ -397,7 +399,7 @@ export const sessionSubcommands: SubcommandTable = {
         missionId: missionRefFlag(body),
         hookType: requireFlag(body, '--hook-type'),
         prompt: resolveInput(body, '--prompt', '--prompt-file') ?? '',
-        sessionKey: strFlag(body, '--session-key') ?? null,
+        sessionKey: readProtocolAddress(body).sessionKey,
         externalSessionId: externalSessionId(body) ?? null,
         turnIndex: strFlag(body, '--turn-index') ?? null
       })

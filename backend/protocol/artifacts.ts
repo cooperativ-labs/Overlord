@@ -6,6 +6,7 @@ import { listSharedContext, writeSharedContext } from '../../packages/core/servi
 import { ApiError } from '../errors.ts';
 import { createArtifact, updateArtifact } from '../repository.ts';
 
+import { readProtocolAddress } from './addressing.ts';
 import {
   hasFlag,
   intFlag,
@@ -66,7 +67,7 @@ export const artifactSubcommands: SubcommandTable = {
         const url = strFlag(body, '--external-url');
         create.externalUrl = url !== undefined && url.trim() ? url : null;
       }
-      const sessionKey = strFlag(body, '--session-key');
+      const sessionKey = readProtocolAddress(body).sessionKey;
       if (sessionKey) {
         create.sessionKey = sessionKey;
       }
