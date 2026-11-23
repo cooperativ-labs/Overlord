@@ -1,3 +1,5 @@
+import { asRecordOrNull } from '../../records.js';
+
 import type { ThreadTree } from './threads.js';
 
 /**
@@ -69,12 +71,6 @@ type Turn = {
   items?: unknown;
 };
 
-function asRecord(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === 'object' && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : null;
-}
-
 function replayable(item: Record<string, unknown>): boolean {
   if (typeof item.type !== 'string' || !REPLAYED_ITEM_TYPES.has(item.type)) return false;
   if (item.type === 'userMessage' || item.type === 'subAgentActivity') return true;
@@ -121,7 +117,7 @@ export async function importThreadTurns({
     );
     result.pages += 1;
     for (const raw of Array.isArray(response?.data) ? response.data : []) {
-      const turn = (asRecord(raw) ?? {}) as Turn;
+      const turn = (asRecordOrNull(raw) ?? {}) as Turn;
       if (typeof turn.id !== 'string') continue;
       if (seenTurns.has(turn.id)) {
         result.skippedInheritedTurns += 1;
@@ -131,7 +127,7 @@ export async function importThreadTurns({
       if (turn.status === 'inProgress') continue;
       result.turns += 1;
       for (const entry of Array.isArray(turn.items) ? turn.items : []) {
-        const item = asRecord(entry);
+        const item = asRecordOrNull(entry);
         if (!item || !replayable(item)) continue;
         result.items += 1;
         await replay('item/completed', { threadId, turnId: turn.id, item }, itemTime(item, turn));

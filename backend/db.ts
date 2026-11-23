@@ -14,7 +14,6 @@ import {
 } from '@overlord/database';
 import type Database from 'better-sqlite3';
 import { AsyncLocalStorage } from 'node:async_hooks';
-import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 
 import {
@@ -109,15 +108,9 @@ export async function initDatabase(): Promise<DatabaseClient> {
 
 export const DATABASE_PATH = databasePath;
 
-export function nowIso(): string {
-  // toISOString() always yields `YYYY-MM-DDTHH:MM:SS.mmmZ`, matching the
-  // schema's timestamp CHECK constraint exactly.
-  return new Date().toISOString();
-}
-
-export function newId(): string {
-  return randomUUID();
-}
+// One implementation for backend and core: toISOString() always yields
+// `YYYY-MM-DDTHH:MM:SS.mmmZ`, matching the schema's timestamp CHECK constraint.
+export { newId, nowIso } from '../packages/core/service/util.ts';
 
 // ---- Workspace / actor resolution ---------------------------------------
 //

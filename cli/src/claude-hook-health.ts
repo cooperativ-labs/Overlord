@@ -3,6 +3,9 @@ import path from 'node:path';
 
 import { findHarnessDescriptor } from './agent-session/catalog.generated.js';
 import { spawnSyncWithoutSecrets } from './argv-secrets.js';
+import { compareSemver, parseSemver as parseClaudeVersion } from './semver.js';
+
+export { compareSemver, parseClaudeVersion };
 
 /**
  * Health of the Overlord Claude Code hooks (`ovld agent-setup claude` and `ovld doctor`).
@@ -55,22 +58,6 @@ function descriptorVersions(): { minimum: string | null; verified: string | null
 /** Minimum Claude Code version, from the adapter descriptor's `versionRange` floor. */
 export function claudeMinimumVersion(): string | null {
   return descriptorVersions().minimum;
-}
-
-/** Compare two `MAJOR.MINOR.PATCH` strings. */
-export function compareSemver(left: string, right: string): number {
-  const a = left.split('.').map(Number);
-  const b = right.split('.').map(Number);
-  for (let index = 0; index < 3; index += 1) {
-    const diff = (a[index] ?? 0) - (b[index] ?? 0);
-    if (diff !== 0) return diff < 0 ? -1 : 1;
-  }
-  return 0;
-}
-
-export function parseClaudeVersion(output: string): string | null {
-  const match = /(\d+\.\d+\.\d+)/.exec(output);
-  return match ? (match[1] as string) : null;
 }
 
 export function defaultClaudeRunner({

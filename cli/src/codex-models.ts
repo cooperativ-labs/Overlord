@@ -12,6 +12,7 @@ import { createLineTransport } from './agent-session/codex-app-server/transport.
 import { BUNDLED_AGENT_CATALOG } from './agent-catalog-defaults.js';
 import type { BackendClient } from './backend-client.js';
 import { resolveGlobalDataDir } from './config.js';
+import { asRecord } from './records.js';
 
 /**
  * Live Codex models, providers and reasoning efforts, read from the user's own Codex
@@ -59,12 +60,6 @@ export type CodexLiveModels = {
 /** Never more pages than this: a misbehaving server must not keep the query alive. */
 const MAX_MODEL_PAGES = 10;
 const QUERY_TIMEOUT_MS = 15_000;
-
-function asRecord(value: unknown): Record<string, unknown> {
-  return value && typeof value === 'object' && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : {};
-}
 
 function stringOrNull(value: unknown): string | null {
   return typeof value === 'string' && value.trim() ? value.trim() : null;

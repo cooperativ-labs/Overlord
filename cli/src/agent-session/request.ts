@@ -2,6 +2,9 @@ import {
   decodeDecisionRequest,
   encodeDecisionResponse
 } from '@overlord/core/service/agent-session/pure/decision';
+import { setTimeout as sleep } from 'node:timers/promises';
+
+import { asRecordOrNull } from '../records.js';
 
 import { resolveAgentSessionScope } from './bind.js';
 import { createChannelClient } from './client.js';
@@ -17,12 +20,6 @@ type NativeRequest = {
   harnessTimeoutSeconds: number | null;
 };
 
-function asRecord(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === 'object' && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : null;
-}
-
 /** Connector-owned native request decoding stays deliberately small and allowlisted. */
 export function decodeNativeRequest(agent: string, value: unknown): NativeRequest | null {
   const codec = findAgentSessionDecisionCodec(agent);
@@ -30,12 +27,10 @@ export function decodeNativeRequest(agent: string, value: unknown): NativeReques
 }
 
 export function encodeNativeDecision(agent: string, resolution: unknown): string | null {
-  const record = asRecord(resolution);
+  const record = asRecordOrNull(resolution);
   const codec = findAgentSessionDecisionCodec(agent);
   return codec ? encodeDecisionResponse(codec, record?.decision) : null;
 }
-
-const sleep = (ms: number): Promise<void> => new Promise(resolve => setTimeout(resolve, ms));
 
 /**
  * Blocking call path. Every non-resolution outcome is deliberately silent: the harness then

@@ -4,6 +4,8 @@ import {
 } from '@overlord/core/service/agent-session/pure/codec';
 import type { NormalizedEvent } from '@overlord/core/service/agent-session/pure/envelope';
 
+import { asRecordOrNull } from '../../records.js';
+
 import type { ThreadFrameContext } from './threads.js';
 
 /**
@@ -34,15 +36,9 @@ export type ProjectedFrame = Record<string, unknown> & {
   context: { cwd: string | null } & Partial<ThreadFrameContext>;
 };
 
-function asRecord(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === 'object' && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : null;
-}
-
 export function nativeEventName(method: string, params: unknown): string {
   if (method === 'item/started' || method === 'item/completed') {
-    const item = asRecord(asRecord(params)?.item);
+    const item = asRecordOrNull(asRecordOrNull(params)?.item);
     const type = item?.type;
     if (typeof type === 'string' && type) {
       if (type === 'subAgentActivity' && typeof item?.kind === 'string' && item.kind) {
@@ -66,10 +62,10 @@ export function projectNotification({
   /** The frame's place in the session thread tree; `null` before the root is bound. */
   thread?: ThreadFrameContext | null;
 }): ProjectedFrame[] {
-  const record = asRecord(params) ?? {};
+  const record = asRecordOrNull(params) ?? {};
   const event = nativeEventName(method, params);
   const base: ProjectedFrame = { ...record, event, context: { cwd, ...(thread ?? {}) } };
-  const item = asRecord(record.item);
+  const item = asRecordOrNull(record.item);
   if (item?.type === 'fileChange' && Array.isArray(item.changes)) {
     return item.changes.map((change, changeIndex) => ({ ...base, change, changeIndex }));
   }
@@ -121,7 +117,7 @@ export function createThreadTracker(threadId: string | null = null): ThreadTrack
  * child's `item/started` by item id.
  */
 export function trackNotification(tracker: ThreadTracker, method: string, params: unknown): void {
-  const record = asRecord(params);
+  const record = asRecordOrNull(params);
   if (!record) return;
   const otherThread =
     Boolean(tracker.threadId) &&
@@ -129,7 +125,7 @@ export function trackNotification(tracker: ThreadTracker, method: string, params
     record.threadId !== tracker.threadId;
   if (otherThread && method !== 'item/started' && method !== 'item/completed') return;
   if (method === 'turn/started') {
-    const id = asRecord(record.turn)?.id;
+    const id = asRecordOrNull(record.turn)?.id;
     if (typeof id === 'string') tracker.activeTurnId = id;
     return;
   }
@@ -140,7 +136,7 @@ export function trackNotification(tracker: ThreadTracker, method: string, params
     return;
   }
   if (method === 'thread/status/changed') {
-    const status = asRecord(record.status);
+    const status = asRecordOrNull(record.status);
     if (status?.type === 'active' && Array.isArray(status.activeFlags)) {
       tracker.activeFlags = status.activeFlags.filter(
         (flag): flag is string => typeof flag === 'string'
@@ -152,7 +148,7 @@ export function trackNotification(tracker: ThreadTracker, method: string, params
     return;
   }
   if (method === 'item/started' || method === 'item/completed') {
-    const item = asRecord(record.item);
+    const item = asRecordOrNull(record.item);
     if (item?.type !== 'fileChange' || typeof item.id !== 'string') return;
     if (method === 'item/completed') {
       tracker.fileChanges.delete(item.id);
@@ -162,13 +158,13 @@ export function trackNotification(tracker: ThreadTracker, method: string, params
     tracker.fileChanges.set(
       item.id,
       changes
-        .map(change => asRecord(change))
+        .map(change => asRecordOrNull(change))
         .filter((change): change is Record<string, unknown> => change !== null)
         .map(change => ({
           path: typeof change.path === 'string' ? change.path : '',
           kind:
-            typeof asRecord(change.kind)?.type === 'string'
-              ? (asRecord(change.kind)!.type as string)
+            typeof asRecordOrNull(change.kind)?.type === 'string'
+              ? (asRecordOrNull(change.kind)!.type as string)
               : 'update'
         }))
         .filter(change => change.path !== '')

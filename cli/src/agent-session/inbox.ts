@@ -1,3 +1,7 @@
+import { setTimeout as sleep } from 'node:timers/promises';
+
+import { asRecordOrNull } from '../records.js';
+
 import { codexAppServerInjectPath, type CodexInjectPath } from './codex-app-server/inject.js';
 import { resolveAgentSessionScope } from './bind.js';
 import { type ChannelClient, createChannelClient } from './client.js';
@@ -57,14 +61,8 @@ type InjectPath =
   | CodexInjectPath
   | 'unsupported';
 
-function asRecord(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === 'object' && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : null;
-}
-
 function hookEventName(payload: unknown): string | null {
-  const record = asRecord(payload);
+  const record = asRecordOrNull(payload);
   if (!record) return null;
   // `hookEventName` is Antigravity's camelCase spelling (agy 1.5.4).
   const name = record.hook_event_name ?? record.hookEventName ?? record.event ?? record.type;
@@ -190,7 +188,7 @@ export function isHeadlessHarnessSession({
  * `mcp_tool` hook input; both are accepted.
  */
 export function hasRunningBackgroundTasks(payload: unknown): boolean {
-  let tasks = asRecord(payload)?.background_tasks;
+  let tasks = asRecordOrNull(payload)?.background_tasks;
   if (typeof tasks === 'string') {
     try {
       tasks = JSON.parse(tasks) as unknown;
@@ -199,7 +197,7 @@ export function hasRunningBackgroundTasks(payload: unknown): boolean {
     }
   }
   if (!Array.isArray(tasks)) return false;
-  return tasks.some(task => asRecord(task)?.status === 'running');
+  return tasks.some(task => asRecordOrNull(task)?.status === 'running');
 }
 
 function clampWaitMs(value: number): number {
@@ -520,5 +518,3 @@ export async function injectViaPromptAsync({
     inputId: input.id
   };
 }
-
-const sleep = (ms: number): Promise<void> => new Promise(resolve => setTimeout(resolve, ms));

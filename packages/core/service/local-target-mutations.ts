@@ -29,6 +29,7 @@ import type { ServiceContext } from './context.ts';
 import { resolveMissionId, resolveProjectId } from './context.ts';
 import { ServiceError } from './errors.ts';
 import { forgetAbsentLatchProviderSessions } from './latch-provider-session.ts';
+import { parseMetadataJson } from './records.ts';
 import { newId, nowIso } from './util.ts';
 
 export const LOCAL_TARGET_MUTATION_METADATA_KEY = 'overlord.localTargetMutation';
@@ -72,17 +73,6 @@ const DEFAULT_RESULT_POLL_INTERVAL_MS = 250;
 /** Execution-request statuses that can never produce a result any more. */
 const TERMINAL_WITHOUT_RESULT = ['failed', 'cleared', 'cancelled', 'expired'] as const;
 
-function parseMetadataObject(raw: string): Record<string, unknown> {
-  try {
-    const parsed = JSON.parse(raw) as unknown;
-    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
-      ? (parsed as Record<string, unknown>)
-      : {};
-  } catch {
-    return {};
-  }
-}
-
 export function buildLocalTargetMutationMetadata({
   kind,
   capability,
@@ -109,7 +99,7 @@ export function parseLocalTargetMutation(
   metadataJson: string | Record<string, unknown>
 ): LocalTargetMutationPayload | null {
   const metadata =
-    typeof metadataJson === 'string' ? parseMetadataObject(metadataJson) : metadataJson;
+    typeof metadataJson === 'string' ? parseMetadataJson(metadataJson) : metadataJson;
   const raw = metadata[LOCAL_TARGET_MUTATION_METADATA_KEY];
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
   const payload = raw as Record<string, unknown>;
@@ -502,7 +492,7 @@ export async function completeLocalTargetMutationRequest({
         ...(result.details !== undefined ? { details: result.details } : {})
       };
 
-  const metadata = parseMetadataObject(row.metadata_json);
+  const metadata = parseMetadataJson(row.metadata_json);
   metadata[LOCAL_TARGET_MUTATION_METADATA_KEY] = {
     ...mutation,
     result: storedResult

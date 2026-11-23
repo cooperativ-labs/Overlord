@@ -9,6 +9,7 @@ import {
   readSync,
   realpathSync,
   renameSync,
+  rmSync,
   statSync,
   unlinkSync,
   writeFileSync
@@ -96,6 +97,22 @@ export function writeOwnerOnlyFileAtomically(target: string, contents: string): 
     } catch {
       // A failed cleanup is harmless; the uniquely named temporary is never read.
     }
+  }
+}
+
+/**
+ * Replace a user-owned config file (Claude `settings.json`, Codex `config.toml`) atomically,
+ * keeping its current permission bits; a new file is created owner-only.
+ */
+export function writeFileAtomicallyPreservingMode(target: string, contents: string): void {
+  const mode = existsSync(target) ? statSync(target).mode & 0o777 : 0o600;
+  mkdirSync(path.dirname(target), { recursive: true });
+  const temporary = `${target}.${randomUUID()}.tmp`;
+  try {
+    writeFileSync(temporary, contents, { mode });
+    renameSync(temporary, target);
+  } finally {
+    rmSync(temporary, { force: true });
   }
 }
 

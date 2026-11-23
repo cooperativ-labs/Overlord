@@ -832,3 +832,21 @@ export async function updateActorLaunchSessionDefaults({
 
   return next;
 }
+
+/** Throws 404 unless the execution target exists, is live, and belongs to the context's workspace. */
+export async function executionTargetInWorkspace({
+  ctx,
+  executionTargetId
+}: {
+  ctx: ServiceContext;
+  executionTargetId: string;
+}): Promise<void> {
+  const row = await ctx.db.get<{ id: string }>(
+    `SELECT id FROM execution_targets
+        WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
+    [executionTargetId, ctx.workspace.id]
+  );
+  if (!row) {
+    throw new ServiceError('Execution target not found', 'execution_target_not_found', 404);
+  }
+}

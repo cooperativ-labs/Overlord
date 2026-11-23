@@ -1,6 +1,4 @@
 import type { SqlDialect } from '@overlord/database';
-import os from 'node:os';
-import path from 'node:path';
 
 import {
   invokeLocalTargetCapability,
@@ -10,21 +8,15 @@ import { InProcessProvider } from '../../packages/core/service/local-target/in-p
 import { isCoLocatedBackend } from '../../packages/core/service/local-target/resource-status.ts';
 import { fail } from '../../packages/core/service/local-target/result.ts';
 import type { CapabilityResult } from '../../packages/core/service/local-target/types.ts';
+import { resolveManagedWorktreeRoot } from '../../packages/core/service/local-target/worktree-git.ts';
 
 import { isDevInProcessLocalTargetEnabled } from './local-target-capability.ts';
-
-function resolveServerWorktreeRoot(): string {
-  const override = process.env.OVERLORD_WORKTREE_ROOT?.trim();
-  if (override) return path.resolve(override);
-  const home = process.env.OVLD_HOME?.trim() || process.env.OVERLORD_HOME?.trim();
-  return path.join(home ? path.resolve(home) : path.join(os.homedir(), '.ovld'), 'worktrees');
-}
 
 function withServerDefaults(call: LocalTargetBridgeCall): LocalTargetBridgeCall {
   if (call.capability !== 'listWorktrees') return call;
   const worktreeRoot = call.input.worktreeRoot?.trim()
     ? call.input.worktreeRoot
-    : resolveServerWorktreeRoot();
+    : resolveManagedWorktreeRoot();
   return { ...call, input: { ...call.input, worktreeRoot } };
 }
 

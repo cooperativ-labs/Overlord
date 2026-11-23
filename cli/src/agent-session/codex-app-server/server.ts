@@ -11,6 +11,7 @@ import {
 } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { setTimeout as sleep } from 'node:timers/promises';
 
 import {
   CODEX_APP_SERVER_ADAPTER_KEY,
@@ -229,5 +230,3 @@ export async function spawnPrivateAppServer({
   await stop();
   throw new Error('codex app-server did not open its socket in time');
 }
-
-const sleep = (ms: number): Promise<void> => new Promise(resolve => setTimeout(resolve, ms));

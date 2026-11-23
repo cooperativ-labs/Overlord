@@ -9,6 +9,7 @@ import type { BackendClient } from './backend-client.js';
 import { resolveGlobalDataDir } from './config.js';
 import { readNativeSessionIndex } from './hook-binding.js';
 import { readBoundedUtf8File, writeOwnerOnlyFileAtomically } from './local-file-storage.js';
+import { asRecord } from './records.js';
 
 /**
  * `ovld status-line --agent <key> [--payload-file -]` — a terminal status surface for the session
@@ -81,12 +82,6 @@ export type StatusLineView = {
 
 function nonEmpty(value: unknown): string | null {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
-}
-
-function asRecord(value: unknown): Record<string, unknown> {
-  return value && typeof value === 'object' && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : {};
 }
 
 function boundedTitle(value: unknown): string | null {

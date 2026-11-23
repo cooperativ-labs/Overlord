@@ -10,6 +10,7 @@ import {
   resolveClaimingDeviceTarget
 } from './execution-targets.js';
 import { enqueueRunQueueDispatchForWorkspace } from './run-queue.js';
+import { trimmedOrNull } from './strings.js';
 import { newId, nowIso } from './util.js';
 
 /**
@@ -80,11 +81,6 @@ type TargetRow = {
   label: string;
   fingerprint: string | null;
 };
-
-function trimmed(value: string | null | undefined): string | null {
-  const text = value?.trim();
-  return text && text.length > 0 ? text : null;
-}
 
 function notRegistered(message: string): ServiceError {
   return new ServiceError(message, NO_EXECUTION_TARGET_REGISTERED, 409);
@@ -198,7 +194,7 @@ export async function resolveRunnerTarget({
   input: RunnerRegistrationInput;
   actingTarget?: LocalExecutionTarget | null;
 }): Promise<{ executionTargetId: string; deviceId: string | null; relation: RunnerRelation }> {
-  const explicitId = trimmed(input.executionTargetId);
+  const explicitId = trimmedOrNull(input.executionTargetId);
   if (!explicitId) {
     // No explicit target: the acting machine must already be declared. This is
     // the path that fails with the actionable `ovld add-et` remedy.
@@ -298,8 +294,9 @@ export async function recordRunnerHeartbeat({
       if (existing.execution_target_id !== executionTargetId)
         changedFields.push('execution_target_id');
       if (existing.relation !== relation) changedFields.push('relation');
-      if (existing.label !== trimmed(label)) changedFields.push('label');
-      if (existing.runner_version !== trimmed(runnerVersion)) changedFields.push('runner_version');
+      if (existing.label !== trimmedOrNull(label)) changedFields.push('label');
+      if (existing.runner_version !== trimmedOrNull(runnerVersion))
+        changedFields.push('runner_version');
       // JSONB may reorder object keys on PostgreSQL; compare values, not serialization.
       const jsonChanged = (stored: string, value: unknown) => {
         try {
@@ -324,8 +321,8 @@ export async function recordRunnerHeartbeat({
         [
           executionTargetId,
           relation,
-          trimmed(label),
-          trimmed(runnerVersion),
+          trimmedOrNull(label),
+          trimmedOrNull(runnerVersion),
           capabilitiesJson,
           supportedAgentsJson,
           health,
@@ -350,8 +347,8 @@ export async function recordRunnerHeartbeat({
         executionTargetId,
         runnerInstanceId,
         relation,
-        label: trimmed(label),
-        runnerVersion: trimmed(runnerVersion),
+        label: trimmedOrNull(label),
+        runnerVersion: trimmedOrNull(runnerVersion),
         supportedAgents: supportedAgents ?? [],
         health,
         lastHeartbeatAt: now,
@@ -372,8 +369,8 @@ export async function recordRunnerHeartbeat({
         executionTargetId,
         runnerInstanceId,
         relation,
-        trimmed(label),
-        trimmed(runnerVersion),
+        trimmedOrNull(label),
+        trimmedOrNull(runnerVersion),
         capabilitiesJson,
         supportedAgentsJson,
         health,
@@ -396,8 +393,8 @@ export async function recordRunnerHeartbeat({
       executionTargetId,
       runnerInstanceId,
       relation,
-      label: trimmed(label),
-      runnerVersion: trimmed(runnerVersion),
+      label: trimmedOrNull(label),
+      runnerVersion: trimmedOrNull(runnerVersion),
       supportedAgents: supportedAgents ?? [],
       health,
       lastHeartbeatAt: now,

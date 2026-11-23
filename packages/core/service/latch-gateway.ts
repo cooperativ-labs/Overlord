@@ -21,6 +21,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { SUPPORTED_LATCH_PROTOCOL_VERSION } from './latch-discovery.ts';
+import { trimmedOrNull } from './strings.ts';
 
 /** Where `latch serve` binds unless the operator moved it. */
 export const DEFAULT_LATCH_GATEWAY_URL = 'http://127.0.0.1:4610';
@@ -68,10 +69,6 @@ export type LatchGatewayCapabilities = {
   operationRetentionSeconds: number;
 };
 
-function trimmed(value: unknown): string | null {
-  return typeof value === 'string' && value.trim() ? value.trim() : null;
-}
-
 /**
  * Loopback allow-list. Written as an allow-list rather than a wildcard denial
  * so no bind-everything literal can ever appear in this file — the source guard
@@ -85,7 +82,7 @@ function isLoopbackHostname(hostname: string): boolean {
 
 /** Latch's state root: `LATCH_HOME`, else `~/.latch`. */
 export function latchHomeDirectory(env: NodeJS.ProcessEnv = process.env): string {
-  return trimmed(env.LATCH_HOME) ?? path.join(os.homedir(), '.latch');
+  return trimmedOrNull(env.LATCH_HOME) ?? path.join(os.homedir(), '.latch');
 }
 
 /** Latch's Remote Link runtime directory, relative to its state root. */
@@ -126,7 +123,7 @@ function readGatewayToken(tokenFile: string, files: GatewayFileAccess): string {
   }
   let token: string | null = null;
   try {
-    token = trimmed(files.readFile(tokenFile));
+    token = trimmedOrNull(files.readFile(tokenFile));
   } catch {
     throw new LatchGatewayError(`Latch's gateway token could not be read (${tokenFile}).`);
   }
@@ -156,7 +153,7 @@ function remoteLinkGatewayConfig(
   try {
     const ready = JSON.parse(files.readFile(readyFile)) as unknown;
     if (!ready || typeof ready !== 'object' || Array.isArray(ready)) return null;
-    const url = trimmed((ready as Record<string, unknown>).url);
+    const url = trimmedOrNull((ready as Record<string, unknown>).url);
     if (!url) return null;
     return {
       baseUrl: loopbackOrigin(url, "Latch's Remote Link gateway address"),
@@ -184,13 +181,13 @@ export function resolveLatchGatewayCandidates({
   fileExists?: (filePath: string) => boolean;
 } = {}): LatchGatewayConfig[] {
   const files = { readFile, fileExists };
-  const explicitUrl = trimmed(env.LATCH_GATEWAY_URL);
+  const explicitUrl = trimmedOrNull(env.LATCH_GATEWAY_URL);
   const baseUrl = loopbackOrigin(explicitUrl ?? DEFAULT_LATCH_GATEWAY_URL, 'LATCH_GATEWAY_URL');
 
-  const inlineToken = trimmed(env.LATCH_GATEWAY_TOKEN);
+  const inlineToken = trimmedOrNull(env.LATCH_GATEWAY_TOKEN);
   if (inlineToken) return [{ baseUrl, token: inlineToken }];
 
-  const explicitTokenFile = trimmed(env.LATCH_SERVE_TOKEN_FILE);
+  const explicitTokenFile = trimmedOrNull(env.LATCH_SERVE_TOKEN_FILE);
   const tokenFile =
     explicitTokenFile ?? path.join(latchHomeDirectory(env), LATCH_SERVE_TOKEN_FILENAME);
   if (explicitUrl || explicitTokenFile) {
@@ -252,9 +249,9 @@ export function parseLatchGatewayCapabilities(raw: unknown): LatchGatewayCapabil
     typeof cast.protocolVersion === 'number' && Number.isFinite(cast.protocolVersion)
       ? Math.trunc(cast.protocolVersion)
       : null;
-  const productVersion = trimmed(cast.productVersion);
+  const productVersion = trimmedOrNull(cast.productVersion);
   const endpoints = parseEndpoints(cast.endpoints);
-  const gatewayInstanceId = trimmed(cast.gatewayInstanceId);
+  const gatewayInstanceId = trimmedOrNull(cast.gatewayInstanceId);
   if (protocolVersion === null || !productVersion || !endpoints || !gatewayInstanceId) return null;
   const features =
     cast.features && typeof cast.features === 'object' && !Array.isArray(cast.features)

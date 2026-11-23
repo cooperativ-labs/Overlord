@@ -44,6 +44,7 @@ import {
   missionSearchMissionIdColumnV3,
   missionSearchWorkspaceParams
 } from './mission-search-sql.js';
+import { sqlPlaceholders } from './util.js';
 
 const CORROBORATION_WEIGHT = 0.1;
 const RANK_FUSION_OFFSET = 60;
@@ -1106,10 +1107,6 @@ function addEntityCount({
   ) {
     counts[entityType] += amount;
   }
-}
-
-function sqlPlaceholders(count: number): string {
-  return Array.from({ length: count }, () => '?').join(', ');
 }
 
 function firstLine(text: string | null | undefined): string {

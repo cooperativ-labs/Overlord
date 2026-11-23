@@ -1,5 +1,7 @@
 import type { LaunchSessionSource } from '@overlord/contract';
 
+import { trimmedOrNull } from './strings.ts';
+
 // REST DTOs generated from contract/api/openapi.yaml (ADR 0006).
 export type { LaunchSessionSource } from '@overlord/contract';
 export type TerminalLaunchPlacement = 'window' | 'tab' | 'chord';
@@ -182,13 +184,9 @@ export type LaunchSessionSnapshot = ResolvedLaunchSession & {
 /** Key under `execution_requests.metadata_json` holding {@link LaunchSessionSnapshot}. */
 export const LAUNCH_SESSION_METADATA_KEY = 'launchSession';
 
-function trimmed(value: unknown): string | null {
-  return typeof value === 'string' && value.trim() ? value.trim() : null;
-}
-
 /** Derive the viewer identifier for a stored launcher. Never stored on its own. */
 export function viewerKindForLauncher(launcher: string | null | undefined): TerminalViewerKind {
-  const value = trimmed(launcher);
+  const value = trimmedOrNull(launcher);
   if (!value) return 'inline';
   const lowered = value.toLowerCase();
   if (lowered === 'iterm2' || lowered === 'iterm') return 'iterm';
@@ -203,7 +201,7 @@ export function viewerKindForLauncher(launcher: string | null | undefined): Term
  * `custom` yields `undefined` because the launcher string is unrecoverable.
  */
 export function launcherForViewerKind(kind: unknown): string | null | undefined {
-  switch (trimmed(kind)?.toLowerCase()) {
+  switch (trimmedOrNull(kind)?.toLowerCase()) {
     case 'iterm':
     case 'iterm2':
       return 'iTerm2';
@@ -223,10 +221,10 @@ export function normalizeExecutionProvider(value: unknown): ExecutionProvider | 
   // An unrecognized provider degrades to direct rather than failing the launch:
   // direct execution must stay available in every state.
   const kind: ExecutionProviderKind =
-    trimmed(cast.kind)?.toLowerCase() === 'latch' ? 'latch' : 'direct';
+    trimmedOrNull(cast.kind)?.toLowerCase() === 'latch' ? 'latch' : 'direct';
   return {
     kind,
-    executable: trimmed(cast.executable) ?? DEFAULT_LATCH_EXECUTABLE
+    executable: trimmedOrNull(cast.executable) ?? DEFAULT_LATCH_EXECUTABLE
   };
 }
 
@@ -438,9 +436,9 @@ export function launchSessionSnapshotFromMetadata(
           background?: unknown;
         })
       : null;
-  const launcher = trimmed(viewer?.launcher);
+  const launcher = trimmedOrNull(viewer?.launcher);
   const source = (value: unknown): LaunchSessionSource =>
-    trimmed(value) === 'target' ? 'target' : 'user_default';
+    trimmedOrNull(value) === 'target' ? 'target' : 'user_default';
 
   return {
     version: TERMINAL_PROFILE_VERSION,
@@ -448,8 +446,8 @@ export function launchSessionSnapshotFromMetadata(
       ...DEFAULT_EXECUTION_PROVIDER
     },
     viewer: {
-      kind: trimmed(viewer?.kind)
-        ? (trimmed(viewer?.kind) as TerminalViewerKind)
+      kind: trimmedOrNull(viewer?.kind)
+        ? (trimmedOrNull(viewer?.kind) as TerminalViewerKind)
         : viewerKindForLauncher(launcher),
       launcher,
       openOnLaunch: viewer?.openOnLaunch !== false,
@@ -462,6 +460,6 @@ export function launchSessionSnapshotFromMetadata(
     },
     executionProviderSource: source(cast.executionProviderSource),
     viewerOpenSource: source(cast.viewerOpenSource),
-    resolvedAt: trimmed(cast.resolvedAt) ?? ''
+    resolvedAt: trimmedOrNull(cast.resolvedAt) ?? ''
   };
 }

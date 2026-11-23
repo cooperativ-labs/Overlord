@@ -1,18 +1,11 @@
-import { randomUUID } from 'node:crypto';
-import {
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  renameSync,
-  rmSync,
-  statSync,
-  writeFileSync
-} from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { parse } from 'smol-toml';
 
-import { compareSemver } from './claude-hook-health.js';
 import { setTomlScalar } from './connectors.js';
+import { writeFileAtomicallyPreservingMode } from './local-file-storage.js';
+import { asRecordOrNull } from './records.js';
+import { compareSemver } from './semver.js';
 
 /**
  * Opt-in Codex status line (`ovld agent-setup codex --status-line`), `terminal.statusSurface`.
@@ -58,14 +51,8 @@ export type CodexStatusLineInspection = {
   provider: unknown;
 };
 
-function asRecord(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === 'object' && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : null;
-}
-
 export function isOverlordCodexStatusLineProvider(provider: unknown): boolean {
-  const record = asRecord(provider);
+  const record = asRecordOrNull(provider);
   return record?.server === CODEX_STATUS_LINE_SERVER && record?.tool === CODEX_STATUS_LINE_TOOL;
 }
 
@@ -80,9 +67,9 @@ export function inspectCodexStatusLine(configPath: string): CodexStatusLineInspe
   } catch {
     return { state: 'unreadable', feature: null, provider: null };
   }
-  const featureValue = asRecord(config.features)?.[CODEX_STATUS_LINE_FEATURE];
+  const featureValue = asRecordOrNull(config.features)?.[CODEX_STATUS_LINE_FEATURE];
   const feature = typeof featureValue === 'boolean' ? featureValue : null;
-  const provider = asRecord(config.tui)?.status_line_provider;
+  const provider = asRecordOrNull(config.tui)?.status_line_provider;
   if (provider === undefined) return { state: 'none', feature, provider: null };
   return {
     state: isOverlordCodexStatusLineProvider(provider) ? 'overlord' : 'other',
@@ -197,7 +184,7 @@ export function configureCodexStatusLine({
         `"${CODEX_STATUS_LINE_TOOL}" }\` under [tui].`
     };
   }
-  writeConfigAtomically(configPath, merged);
+  writeFileAtomicallyPreservingMode(configPath, merged);
   return {
     ...base,
     status: 'installed',
@@ -214,8 +201,8 @@ function selectsOverlord(content: string): boolean {
   try {
     const config = parse(content) as Record<string, unknown>;
     return (
-      asRecord(config.features)?.[CODEX_STATUS_LINE_FEATURE] === true &&
-      isOverlordCodexStatusLineProvider(asRecord(config.tui)?.status_line_provider)
+      asRecordOrNull(config.features)?.[CODEX_STATUS_LINE_FEATURE] === true &&
+      isOverlordCodexStatusLineProvider(asRecordOrNull(config.tui)?.status_line_provider)
     );
   } catch {
     return false;
@@ -223,14 +210,3 @@ function selectsOverlord(content: string): boolean {
 }
 
 /** Replace config.toml atomically, keeping its permissions. Codex owns the file and directory. */
-function writeConfigAtomically(configPath: string, contents: string): void {
-  const mode = existsSync(configPath) ? statSync(configPath).mode & 0o777 : 0o600;
-  mkdirSync(path.dirname(configPath), { recursive: true });
-  const temporary = `${configPath}.${randomUUID()}.tmp`;
-  try {
-    writeFileSync(temporary, contents, { mode });
-    renameSync(temporary, configPath);
-  } finally {
-    rmSync(temporary, { force: true });
-  }
-}

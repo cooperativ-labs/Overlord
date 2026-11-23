@@ -10,7 +10,6 @@ import {
   runInteractiveAuthLogin
 } from './auth-login.js';
 import { resolveAuthStatus } from './auth-status.js';
-import { compareSemver } from './claude-hook-health.js';
 import {
   type ClaudeStatusLineSetup,
   configureClaudeStatusLine,
@@ -37,11 +36,14 @@ import {
   type SetupResult
 } from './connectors.js';
 import { CliError } from './errors.js';
+import { isHttpUrl } from './management.js';
 import { printJson, printLine, printStepTitle } from './output.js';
 import { promptLine as promptLineShared } from './prompt.js';
 import type { CliRuntime } from './runtime.js';
 import { openCliRuntime } from './runtime.js';
+import { compareSemver } from './semver.js';
 import { parseTerminalLaunchChord, type TerminalLaunchPlacement } from './terminal-launch-chord.js';
+import { shellQuote } from './terminal-launcher.js';
 import {
   fetchTerminalProfile,
   readLegacyTerminalProfileFromToml,
@@ -82,16 +84,8 @@ function printHumanResult(result: SetupResult): void {
   }
 }
 
-function isHttpUrl(value: string): boolean {
-  return /^https?:\/\//i.test(value.trim());
-}
-
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
-}
-
-function shellQuote(value: string): string {
-  return `'${value.replace(/'/g, `'\\''`)}'`;
 }
 
 function launcherForApplicationName(appName: string): string {

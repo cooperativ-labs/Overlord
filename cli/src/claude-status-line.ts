@@ -1,14 +1,7 @@
-import { randomUUID } from 'node:crypto';
-import {
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  renameSync,
-  rmSync,
-  statSync,
-  writeFileSync
-} from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
+
+import { writeFileAtomicallyPreservingMode } from './local-file-storage.js';
 
 /**
  * Opt-in Claude Code status line (`ovld agent-setup claude --status-line`).
@@ -130,7 +123,7 @@ export function configureClaudeStatusLine({
   }
 
   const next = { ...settings, statusLine: claudeStatusLineSetting() };
-  writeSettingsAtomically(settingsPath, `${JSON.stringify(next, null, 2)}\n`);
+  writeFileAtomicallyPreservingMode(settingsPath, `${JSON.stringify(next, null, 2)}\n`);
   return {
     status: 'installed',
     settingsPath,
@@ -145,14 +138,3 @@ export function configureClaudeStatusLine({
  * Replace `settings.json` atomically, keeping its permissions. Claude Code owns this file and its
  * directory, so unlike Overlord's own state files neither is re-permissioned here.
  */
-function writeSettingsAtomically(settingsPath: string, contents: string): void {
-  const mode = existsSync(settingsPath) ? statSync(settingsPath).mode & 0o777 : 0o600;
-  mkdirSync(path.dirname(settingsPath), { recursive: true });
-  const temporary = `${settingsPath}.${randomUUID()}.tmp`;
-  try {
-    writeFileSync(temporary, contents, { mode });
-    renameSync(temporary, settingsPath);
-  } finally {
-    rmSync(temporary, { force: true });
-  }
-}

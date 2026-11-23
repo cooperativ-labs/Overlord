@@ -1,5 +1,4 @@
-import { homedir, hostname } from 'node:os';
-import path from 'node:path';
+import { hostname } from 'node:os';
 
 import {
   invokeLocalTargetCapability,
@@ -8,21 +7,15 @@ import {
 import { InProcessProvider } from '../../packages/core/service/local-target/in-process-provider.ts';
 import { fail } from '../../packages/core/service/local-target/result.ts';
 import type { CapabilityResult } from '../../packages/core/service/local-target/types.ts';
+import { resolveManagedWorktreeRoot } from '../../packages/core/service/local-target/worktree-git.ts';
 
 import { PathAllowlistError, validateLocalTargetCallPaths } from './local-target-path-allowlist.ts';
-
-function resolveDesktopWorktreeRoot(): string {
-  const override = process.env.OVERLORD_WORKTREE_ROOT?.trim();
-  if (override) return path.resolve(override);
-  const home = process.env.OVLD_HOME?.trim() || process.env.OVERLORD_HOME?.trim();
-  return path.join(home ? path.resolve(home) : path.join(homedir(), '.ovld'), 'worktrees');
-}
 
 function withDesktopDefaults(call: LocalTargetBridgeCall): LocalTargetBridgeCall {
   if (call.capability !== 'listWorktrees') return call;
   const worktreeRoot = call.input.worktreeRoot?.trim()
     ? call.input.worktreeRoot
-    : resolveDesktopWorktreeRoot();
+    : resolveManagedWorktreeRoot();
   return { ...call, input: { ...call.input, worktreeRoot } };
 }
 

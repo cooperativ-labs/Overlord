@@ -1,5 +1,7 @@
 import { safeText } from '@overlord/core/service/agent-session/pure/text';
 
+import { asRecordOrNull } from '../../records.js';
+
 /**
  * The Codex thread tree behind one Overlord session.
  *
@@ -54,25 +56,19 @@ export type ThreadFrameContext = {
   lineage?: string;
 };
 
-function asRecord(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === 'object' && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : null;
-}
-
 function str(value: unknown): string | null {
   return typeof value === 'string' && value.trim() !== '' ? value : null;
 }
 
 /** The thread a notification or server request belongs to, if it names one. */
 export function threadIdOf(params: unknown): string | null {
-  const record = asRecord(params);
-  return str(record?.threadId) ?? str(asRecord(record?.thread)?.id);
+  const record = asRecordOrNull(params);
+  return str(record?.threadId) ?? str(asRecordOrNull(record?.thread)?.id);
 }
 
 function threadSpawnSource(thread: Record<string, unknown>): Record<string, unknown> | null {
-  const subAgent = asRecord(asRecord(thread.source)?.subAgent);
-  return asRecord(subAgent?.thread_spawn);
+  const subAgent = asRecordOrNull(asRecordOrNull(thread.source)?.subAgent);
+  return asRecordOrNull(subAgent?.thread_spawn);
 }
 
 export class ThreadTree {
@@ -142,7 +138,7 @@ export class ThreadTree {
    */
   admitFromItem(emitterThreadId: string | null, item: unknown): ThreadNode[] {
     const parent = this.get(emitterThreadId);
-    const record = asRecord(item);
+    const record = asRecordOrNull(item);
     if (!parent || !record) return [];
     const childIds: { id: string; agentPath: string | null }[] = [];
     if (record.type === 'subAgentActivity') {
@@ -174,7 +170,7 @@ export class ThreadTree {
    * and role), or `null` when the thread does not belong to this session.
    */
   admitThread(thread: unknown): ThreadNode | null {
-    const record = asRecord(thread);
+    const record = asRecordOrNull(thread);
     const id = str(record?.id);
     if (!record || !id) return null;
     const known = this.nodes.get(id);

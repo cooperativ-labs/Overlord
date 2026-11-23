@@ -1,6 +1,7 @@
 import { type FormEvent, useEffect, useState } from 'react';
 
 import { BackendLoginPanel } from '@/components/auth/BackendLoginPanel';
+import { GitHubIcon } from '@/components/GitHubIcon';
 import { Button } from '@/components/ui/button';
 import { Field, FieldDescription, FieldGroup, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
@@ -28,15 +29,6 @@ type AuthScreenProps = {
 };
 
 const AUTH_MODE_SEARCH_PARAM = 'mode';
-
-/** GitHub wordmark glyph — lucide dropped brand icons, so inline the SVG. */
-function GitHubIcon({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" className={className}>
-      <path d="M12 .5C5.73.5.5 5.73.5 12.01c0 5.02 3.26 9.28 7.78 10.79.57.1.78-.25.78-.55 0-.27-.01-.98-.02-1.92-3.17.69-3.84-1.53-3.84-1.53-.52-1.32-1.27-1.67-1.27-1.67-1.04-.71.08-.7.08-.7 1.15.08 1.75 1.18 1.75 1.18 1.02 1.75 2.68 1.24 3.33.95.1-.74.4-1.24.72-1.53-2.53-.29-5.19-1.27-5.19-5.64 0-1.25.44-2.27 1.18-3.07-.12-.29-.51-1.45.11-3.02 0 0 .96-.31 3.15 1.17.91-.25 1.89-.38 2.86-.38.97 0 1.95.13 2.86.38 2.19-1.48 3.15-1.17 3.15-1.17.62 1.57.23 2.73.11 3.02.74.8 1.18 1.82 1.18 3.07 0 4.38-2.67 5.35-5.21 5.63.41.35.78 1.05.78 2.12 0 1.53-.01 2.76-.01 3.14 0 .31.2.66.79.55A11.51 11.51 0 0 0 23.5 12C23.5 5.73 18.27.5 12 .5z" />
-    </svg>
-  );
-}
 
 function authErrorMessage(error: unknown): string {
   if (error && typeof error === 'object' && 'message' in error) {

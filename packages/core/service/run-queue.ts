@@ -10,7 +10,7 @@ import { insertEntityChange } from './change-feed.js';
 import { runQueueDiagnosticCode } from './dispatch-diagnostics.js';
 import { ServiceError } from './errors.js';
 import { lockMissionObjectiveQueue } from './objective-queue.js';
-import { newId, nowIso } from './util.js';
+import { isTruthyFlag, newId, nowIso } from './util.js';
 import { enqueueWorkerJob } from './worker-jobs.js';
 
 export const RUN_QUEUE_DISPATCH_JOB_TYPE = 'overlord.run-queue.dispatch.v1';
@@ -60,8 +60,6 @@ type EntryRow = {
   request_updated_at: string | null;
   request_launched_session_id: string | null;
 };
-
-const truthy = (value: number | boolean) => value === true || value === 1;
 
 const MISSION_QUEUE_NAME_LIMIT = 80;
 
@@ -354,12 +352,12 @@ export async function listProjectRunQueues(
         id: queue.id,
         projectId,
         name: queue.name,
-        isDefault: truthy(queue.is_default),
+        isDefault: isTruthyFlag(queue.is_default),
         missionId: queue.mission_id,
         missionDisplayId: queue.mission_id
           ? (missionDisplayIds.get(queue.mission_id) ?? null)
           : null,
-        paused: truthy(queue.paused),
+        paused: isTruthyFlag(queue.paused),
         position: queue.position,
         entries,
         running: entries.find(e => e.state === 'running' || e.state === 'dispatched') ?? null
@@ -384,7 +382,7 @@ export async function retireRunQueueIfEmpty(
     'SELECT id, is_default FROM run_queues WHERE id = ? AND deleted_at IS NULL',
     [queueId]
   );
-  if (!queue || truthy(queue.is_default)) return null;
+  if (!queue || isTruthyFlag(queue.is_default)) return null;
   const remaining = await db.get<{ id: string }>(
     'SELECT id FROM run_queue_entries WHERE queue_id = ? AND deleted_at IS NULL LIMIT 1',
     [queueId]
@@ -661,7 +659,7 @@ export async function resumeRunQueueForObjective(
     [objectiveId]
   );
   if (!queue) return null;
-  if (!truthy(queue.paused)) return queue.id;
+  if (!isTruthyFlag(queue.paused)) return queue.id;
 
   await db.run(
     'UPDATE run_queues SET paused = ?, updated_at = ?, revision = revision + 1 WHERE id = ? AND paused = ?',
@@ -688,7 +686,7 @@ export async function updateRunQueue(
   if (!queue) throw new ServiceError('Run Queue not found', 'run_queue_not_found', 404);
   const name = patch.name === undefined ? queue.name : patch.name.trim();
   if (!name) throw new ServiceError('Queue name is required', 'invalid_queue_name', 400);
-  const paused = patch.paused === undefined ? truthy(queue.paused) : patch.paused;
+  const paused = patch.paused === undefined ? isTruthyFlag(queue.paused) : patch.paused;
   await db.run(
     'UPDATE run_queues SET name = ?, paused = ?, updated_at = ?, revision = revision + 1 WHERE id = ?',
     [name, db.dialect === 'postgres' ? paused : paused ? 1 : 0, nowIso(), queueId]
@@ -719,7 +717,7 @@ export async function reorderProjectRunQueues(
         400
       );
     }
-    const defaultQueue = queues.find(queue => truthy(queue.is_default));
+    const defaultQueue = queues.find(queue => isTruthyFlag(queue.is_default));
     if (defaultQueue && orderedQueueIds[0] !== defaultQueue.id) {
       throw new ServiceError(
         'The default Run Queue must remain first',
@@ -1189,7 +1187,11 @@ export async function removeRunQueueEntry(
     // start the next entry. A force removal and an active-objective disconnect
     // are intentional intervention points, so pause the containing queue in
     // this same transaction before scheduling that tick.
-    if (queue && (options.force === true || options.pauseQueue === true) && !truthy(queue.paused)) {
+    if (
+      queue &&
+      (options.force === true || options.pauseQueue === true) &&
+      !isTruthyFlag(queue.paused)
+    ) {
       await tx.run(
         'UPDATE run_queues SET paused = ?, updated_at = ?, revision = revision + 1 WHERE id = ? AND paused = ?',
         [tx.dialect === 'postgres' ? true : 1, now, queue.id, tx.dialect === 'postgres' ? false : 0]
@@ -1472,7 +1474,7 @@ export async function deleteRunQueue(
       [queueId]
     );
     if (!queue) throw new ServiceError('Run Queue not found', 'run_queue_not_found', 404);
-    if (truthy(queue.is_default))
+    if (isTruthyFlag(queue.is_default))
       throw new ServiceError('The default Run Queue cannot be deleted', 'default_run_queue', 409);
     const entries = await tx.all<{ id: string; mission_id: string }>(
       'SELECT id, mission_id FROM run_queue_entries WHERE queue_id = ? AND deleted_at IS NULL',

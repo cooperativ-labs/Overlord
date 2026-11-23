@@ -1,6 +1,7 @@
 import { Check, FolderOpen, Plus, Tag } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import { isWithinOwnedOverlay } from '@/components/MentionableTextarea.tsx';
 import {
   PendingAttachmentList,
   usePendingAttachments
@@ -254,13 +255,7 @@ export function BlankMissionCard({
     const onPointerDown = (event: PointerEvent) => {
       const target = event.target;
       if (!(target instanceof Node)) return;
-
-      const targetElement = target instanceof Element ? target : target.parentElement;
-      const withinOwnedOverlay = targetElement?.closest(
-        `[data-blank-mission-card-owner="${overlayOwnerId}"]`
-      );
-
-      if (cardRef.current?.contains(target) || withinOwnedOverlay) return;
+      if (isWithinOwnedOverlay(target, cardRef.current, overlayOwnerId)) return;
 
       const active = document.activeElement;
       const input = document.getElementById(inputId);

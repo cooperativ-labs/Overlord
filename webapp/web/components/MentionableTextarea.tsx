@@ -12,6 +12,24 @@ import { cn } from '@/lib/utils';
 
 const MAX_MENTION_RESULTS = 20;
 
+/** The owner attribute stamped on this textarea's portal menus (`menuOwnerId`). */
+const OVERLAY_OWNER_ATTRIBUTE = 'data-blank-mission-card-owner';
+
+/**
+ * Whether an event target is inside `root` or inside a portal menu stamped with `ownerId`.
+ * Cards use this so clicks in their own mention menus are not treated as leaving the card.
+ */
+export function isWithinOwnedOverlay(
+  target: EventTarget | null,
+  root: Element | null | undefined,
+  ownerId: string
+): boolean {
+  if (!(target instanceof Node)) return false;
+  if (root?.contains(target)) return true;
+  const element = target instanceof Element ? target : target.parentElement;
+  return Boolean(element?.closest(`[${OVERLAY_OWNER_ATTRIBUTE}="${ownerId}"]`));
+}
+
 export type ProjectMentionOption = {
   id: string;
   name: string;

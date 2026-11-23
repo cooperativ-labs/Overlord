@@ -1,3 +1,5 @@
+import { setTimeout as defaultSleep } from 'node:timers/promises';
+
 import { JSON_RPC_ERRORS } from './protocol.js';
 import type { MessageTransport } from './transport.js';
 
@@ -202,5 +204,3 @@ export class JsonRpcPeer {
 export class NoResponse {
   static readonly instance = new NoResponse();
 }
-
-const defaultSleep = (ms: number): Promise<void> => new Promise(resolve => setTimeout(resolve, ms));

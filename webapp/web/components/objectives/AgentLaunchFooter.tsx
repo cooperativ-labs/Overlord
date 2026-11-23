@@ -2,7 +2,8 @@ import {
   type AgentLaunchConfigDto,
   type AgentLaunchFlagDto,
   agentLaunchFlagKey,
-  formatAgentLaunchFlagText
+  formatAgentLaunchFlagText,
+  normalizeAgentLaunchFlags
 } from '@overlord/contract';
 import { Plus, X } from 'lucide-react';
 import {
@@ -41,15 +42,6 @@ type AgentLaunchFooterProps = {
   /** Delete the explicit override and re-resolve the inherited configuration. */
   onUseInheritedDefault?: () => void;
 };
-
-function cleanFlags(raw: AgentLaunchFlagDto[]): AgentLaunchFlagDto[] {
-  return raw
-    .map(flag => ({
-      name: flag.name.trim(),
-      value: flag.value?.trim() ? flag.value.trim() : null
-    }))
-    .filter(flag => flag.name.length > 0);
-}
 
 /**
  * Footer for the AgentModelSelector showing the selected agent's launch
@@ -110,14 +102,14 @@ export function AgentLaunchFooter({
     (value: string) => {
       const trimmed = value.trim();
       setPreCommand(trimmed);
-      onCommit({ preCommand: trimmed, flags: cleanFlags(flags) });
+      onCommit({ preCommand: trimmed, flags: normalizeAgentLaunchFlags(flags) });
     },
     [flags, onCommit]
   );
 
   const commitFlags = useCallback(
     (raw: AgentLaunchFlagDto[]) => {
-      const cleaned = cleanFlags(raw);
+      const cleaned = normalizeAgentLaunchFlags(raw);
       setFlags(cleaned);
       onCommit({ preCommand: preCommand.trim(), flags: cleaned });
     },
