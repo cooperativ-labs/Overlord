@@ -48,8 +48,8 @@ var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: tru
 var require_main = __commonJS({
   "../node_modules/dotenv/lib/main.js"(exports2, module2) {
     var fs2 = require("fs");
-    var path29 = require("path");
-    var os8 = require("os");
+    var path28 = require("path");
+    var os7 = require("os");
     var crypto2 = require("crypto");
     var TIPS = [
       "\u25C8 encrypted .env [www.dotenvx.com]",
@@ -187,7 +187,7 @@ var require_main = __commonJS({
           possibleVaultPath = options.path.endsWith(".vault") ? options.path : `${options.path}.vault`;
         }
       } else {
-        possibleVaultPath = path29.resolve(process.cwd(), ".env.vault");
+        possibleVaultPath = path28.resolve(process.cwd(), ".env.vault");
       }
       if (fs2.existsSync(possibleVaultPath)) {
         return possibleVaultPath;
@@ -195,7 +195,7 @@ var require_main = __commonJS({
       return null;
     }
     function _resolveHome(envPath) {
-      return envPath[0] === "~" ? path29.join(os8.homedir(), envPath.slice(1)) : envPath;
+      return envPath[0] === "~" ? path28.join(os7.homedir(), envPath.slice(1)) : envPath;
     }
     function _configVault(options) {
       const debug = parseBoolean2(process.env.DOTENV_CONFIG_DEBUG || options && options.debug);
@@ -212,7 +212,7 @@ var require_main = __commonJS({
       return { parsed };
     }
     function configDotenv(options) {
-      const dotenvPath = path29.resolve(process.cwd(), ".env");
+      const dotenvPath = path28.resolve(process.cwd(), ".env");
       let encoding = "utf8";
       let processEnv = process.env;
       if (options && options.processEnv != null) {
@@ -240,13 +240,13 @@ var require_main = __commonJS({
       }
       let lastError;
       const parsedAll = {};
-      for (const path30 of optionPaths) {
+      for (const path29 of optionPaths) {
         try {
-          const parsed = DotenvModule.parse(fs2.readFileSync(path30, { encoding }));
+          const parsed = DotenvModule.parse(fs2.readFileSync(path29, { encoding }));
           DotenvModule.populate(parsedAll, parsed, options);
         } catch (e5) {
           if (debug) {
-            _debug(`failed to load ${path30} ${e5.message}`);
+            _debug(`failed to load ${path29} ${e5.message}`);
           }
           lastError = e5;
         }
@@ -259,7 +259,7 @@ var require_main = __commonJS({
         const shortPaths = [];
         for (const filePath of optionPaths) {
           try {
-            const relative = path29.relative(process.cwd(), filePath);
+            const relative = path28.relative(process.cwd(), filePath);
             shortPaths.push(relative);
           } catch (e5) {
             if (debug) {
@@ -585,10 +585,10 @@ function mergeDefs(...defs) {
 function cloneDef(schema2) {
   return mergeDefs(schema2._zod.def);
 }
-function getElementAtPath(obj2, path29) {
-  if (!path29)
+function getElementAtPath(obj2, path28) {
+  if (!path28)
     return obj2;
-  return path29.reduce((acc, key) => acc?.[key], obj2);
+  return path28.reduce((acc, key) => acc?.[key], obj2);
 }
 function promiseAllObject(promisesObj) {
   const keys = Object.keys(promisesObj);
@@ -847,11 +847,11 @@ function explicitlyAborted(x, startIndex = 0) {
   }
   return false;
 }
-function prefixIssues(path29, issues) {
+function prefixIssues(path28, issues) {
   return issues.map((iss) => {
     var _a8;
     (_a8 = iss).path ?? (_a8.path = []);
-    iss.path.unshift(path29);
+    iss.path.unshift(path28);
     return iss;
   });
 }
@@ -1384,16 +1384,16 @@ function flattenError(error64, mapper = (issue2) => issue2.message) {
 }
 function formatError(error64, mapper = (issue2) => issue2.message) {
   const fieldErrors = { _errors: [] };
-  const processError = (error65, path29 = []) => {
+  const processError = (error65, path28 = []) => {
     for (const issue2 of error65.issues) {
       if (issue2.code === "invalid_union" && issue2.errors.length) {
-        issue2.errors.map((issues) => processError({ issues }, [...path29, ...issue2.path]));
+        issue2.errors.map((issues) => processError({ issues }, [...path28, ...issue2.path]));
       } else if (issue2.code === "invalid_key") {
-        processError({ issues: issue2.issues }, [...path29, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path28, ...issue2.path]);
       } else if (issue2.code === "invalid_element") {
-        processError({ issues: issue2.issues }, [...path29, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path28, ...issue2.path]);
       } else {
-        const fullpath = [...path29, ...issue2.path];
+        const fullpath = [...path28, ...issue2.path];
         if (fullpath.length === 0) {
           fieldErrors._errors.push(mapper(issue2));
         } else {
@@ -1432,17 +1432,17 @@ function formatError(error64, mapper = (issue2) => issue2.message) {
 }
 function treeifyError(error64, mapper = (issue2) => issue2.message) {
   const result2 = { errors: [] };
-  const processError = (error65, path29 = []) => {
+  const processError = (error65, path28 = []) => {
     var _a8;
     for (const issue2 of error65.issues) {
       if (issue2.code === "invalid_union" && issue2.errors.length) {
-        issue2.errors.map((issues) => processError({ issues }, [...path29, ...issue2.path]));
+        issue2.errors.map((issues) => processError({ issues }, [...path28, ...issue2.path]));
       } else if (issue2.code === "invalid_key") {
-        processError({ issues: issue2.issues }, [...path29, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path28, ...issue2.path]);
       } else if (issue2.code === "invalid_element") {
-        processError({ issues: issue2.issues }, [...path29, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path28, ...issue2.path]);
       } else {
-        const fullpath = [...path29, ...issue2.path];
+        const fullpath = [...path28, ...issue2.path];
         if (fullpath.length === 0) {
           result2.errors.push(mapper(issue2));
           continue;
@@ -1481,8 +1481,8 @@ function treeifyError(error64, mapper = (issue2) => issue2.message) {
 }
 function toDotPath(_path) {
   const segs = [];
-  const path29 = _path.map((seg) => typeof seg === "object" ? seg.key : seg);
-  for (const seg of path29) {
+  const path28 = _path.map((seg) => typeof seg === "object" ? seg.key : seg);
+  for (const seg of path28) {
     if (typeof seg === "number")
       segs.push(`[${seg}]`);
     else if (typeof seg === "symbol")
@@ -2469,23 +2469,23 @@ function canParseURL(input2) {
     return false;
   }
 }
-function validateURL(trimmed9, def) {
+function validateURL(trimmed, def) {
   if (!("normalize" in def) && !("hostname" in def) && !("protocol" in def)) {
-    return canParseURL(trimmed9) || URL_UNPARSEABLE;
+    return canParseURL(trimmed) || URL_UNPARSEABLE;
   }
-  return parseURLObject(trimmed9, def);
+  return parseURLObject(trimmed, def);
 }
-function parseURLObject(trimmed9, def) {
-  if (!def.normalize && def.protocol?.source === httpProtocol.source && !/^https?:\/\//i.test(trimmed9)) {
+function parseURLObject(trimmed, def) {
+  if (!def.normalize && def.protocol?.source === httpProtocol.source && !/^https?:\/\//i.test(trimmed)) {
     return URL_BAD_FORMAT;
   }
   try {
     if (typeof URL !== "undefined") {
       const URLStatic = URL;
       if (typeof URLStatic.parse === "function")
-        return URLStatic.parse(trimmed9) ?? URL_UNPARSEABLE;
+        return URLStatic.parse(trimmed) ?? URL_UNPARSEABLE;
     }
-    return new URL(trimmed9);
+    return new URL(trimmed);
   } catch {
     return URL_UNPARSEABLE;
   }
@@ -3297,8 +3297,8 @@ var init_schemas = __esm({
       $ZodStringFormat.init(inst, def);
       inst._zod.check = (payload) => {
         try {
-          const trimmed9 = payload.value.trim();
-          const url2 = validateURL(trimmed9, def);
+          const trimmed = payload.value.trim();
+          const url2 = validateURL(trimmed, def);
           if (url2 === URL_BAD_FORMAT) {
             payload.issues.push({
               code: "invalid_format",
@@ -3321,7 +3321,7 @@ var init_schemas = __esm({
             return;
           }
           if (url2 === true) {
-            payload.value = stripTabAndNewline(trimmed9);
+            payload.value = stripTabAndNewline(trimmed);
             return;
           }
           if (def.hostname && !urlHostnameOk(url2, def.hostname)) {
@@ -3346,7 +3346,7 @@ var init_schemas = __esm({
               continue: !def.abort
             });
           }
-          payload.value = def.normalize ? url2.href : stripTabAndNewline(trimmed9);
+          payload.value = def.normalize ? url2.href : stripTabAndNewline(trimmed);
           return;
         } catch (_) {
           payload.issues.push({
@@ -19514,13 +19514,13 @@ function resolveRef(ref, ctx) {
   if (!ref.startsWith("#")) {
     throw new Error("External $ref is not supported, only local refs (#/...) are allowed");
   }
-  const path29 = ref.slice(1).split("/").filter(Boolean);
-  if (path29.length === 0) {
+  const path28 = ref.slice(1).split("/").filter(Boolean);
+  if (path28.length === 0) {
     return ctx.rootSchema;
   }
   const defsKey = ctx.version === "draft-2020-12" ? "$defs" : "definitions";
-  if (path29[0] === defsKey) {
-    const key = path29[1] === void 0 ? void 0 : decodeJSONPointerSegment(path29[1]);
+  if (path28[0] === defsKey) {
+    const key = path28[1] === void 0 ? void 0 : decodeJSONPointerSegment(path28[1]);
     if (!key || !ctx.defs[key]) {
       throw new Error(`Reference not found: ${ref}`);
     }
@@ -24132,7 +24132,7 @@ var require_split2 = __commonJS({
 var require_helper = __commonJS({
   "../node_modules/pgpass/lib/helper.js"(exports2, module2) {
     "use strict";
-    var path29 = require("path");
+    var path28 = require("path");
     var Stream = require("stream").Stream;
     var split2 = require_split2();
     var util = require("util");
@@ -24171,7 +24171,7 @@ var require_helper = __commonJS({
     };
     module2.exports.getFileName = function(rawEnv) {
       var env3 = rawEnv || process.env;
-      var file2 = env3.PGPASSFILE || (isWin ? path29.join(env3.APPDATA || "./", "postgresql", "pgpass.conf") : path29.join(env3.HOME || "./", ".pgpass"));
+      var file2 = env3.PGPASSFILE || (isWin ? path28.join(env3.APPDATA || "./", "postgresql", "pgpass.conf") : path28.join(env3.HOME || "./", ".pgpass"));
       return file2;
     };
     module2.exports.usePgPass = function(stats, fname) {
@@ -24303,7 +24303,7 @@ var require_helper = __commonJS({
 var require_lib = __commonJS({
   "../node_modules/pgpass/lib/index.js"(exports2, module2) {
     "use strict";
-    var path29 = require("path");
+    var path28 = require("path");
     var fs2 = require("fs");
     var helper = require_helper();
     module2.exports = function(connInfo, cb) {
@@ -24984,7 +24984,7 @@ var require_pg_pool = __commonJS({
     function throwOnDoubleRelease() {
       throw new Error("Release called on client which has already been released to the pool.");
     }
-    function promisify(Promise2, callback) {
+    function promisify2(Promise2, callback) {
       if (callback) {
         return { callback, result: void 0 };
       }
@@ -25122,7 +25122,7 @@ var require_pg_pool = __commonJS({
           const err = new Error("Cannot use a pool after calling end on the pool");
           return cb ? cb(err) : this.Promise.reject(err);
         }
-        const response = promisify(this.Promise, cb);
+        const response = promisify2(this.Promise, cb);
         const result2 = response.result;
         if (this._isFull() || this._idle.length) {
           if (this._idle.length) {
@@ -25307,7 +25307,7 @@ var require_pg_pool = __commonJS({
       }
       query(text, values, cb) {
         if (typeof text === "function") {
-          const response2 = promisify(this.Promise, text);
+          const response2 = promisify2(this.Promise, text);
           setImmediate(function() {
             return response2.callback(new Error("Passing a function as the first parameter to pool.query is not supported"));
           });
@@ -25317,7 +25317,7 @@ var require_pg_pool = __commonJS({
           cb = values;
           values = void 0;
         }
-        const response = promisify(this.Promise, cb);
+        const response = promisify2(this.Promise, cb);
         cb = response.callback;
         this.connect((err, client) => {
           if (err) {
@@ -25362,7 +25362,7 @@ var require_pg_pool = __commonJS({
           return cb ? cb(err) : this.Promise.reject(err);
         }
         this.ending = true;
-        const promised = promisify(this.Promise, cb);
+        const promised = promisify2(this.Promise, cb);
         this._endCallback = promised.callback;
         this._pulseQueue();
         return promised.result;
@@ -63890,11 +63890,11 @@ var require_mime_types = __commonJS({
       }
       return exts[0];
     }
-    function lookup(path29) {
-      if (!path29 || typeof path29 !== "string") {
+    function lookup(path28) {
+      if (!path28 || typeof path28 !== "string") {
         return false;
       }
-      var extension2 = extname("x." + path29).toLowerCase().substr(1);
+      var extension2 = extname("x." + path28).toLowerCase().substr(1);
       if (!extension2) {
         return false;
       }
@@ -66652,7 +66652,7 @@ var require_parse = __commonJS({
       }
       return obj2;
     };
-    var parseObject2 = function(chain2, val, options, valuesParsed) {
+    var parseObject = function(chain2, val, options, valuesParsed) {
       var currentArrayLength = 0;
       if (chain2.length > 0 && chain2[chain2.length - 1] === "[]") {
         var parentKey = chain2.slice(0, -1).join("");
@@ -66766,7 +66766,7 @@ var require_parse = __commonJS({
       if (!keys) {
         return;
       }
-      return parseObject2(keys, val, options, valuesParsed);
+      return parseObject(keys, val, options, valuesParsed);
     };
     var normalizeParseOptions = function normalizeParseOptions2(opts) {
       if (!opts) {
@@ -68317,7 +68317,7 @@ var require_path_to_regexp = __commonJS({
   "../node_modules/path-to-regexp/index.js"(exports2, module2) {
     module2.exports = pathToRegexp;
     var MATCHING_GROUP_REGEXP = /\\.|\((?:\?<(.*?)>)?(?!\?)/g;
-    function pathToRegexp(path29, keys, options) {
+    function pathToRegexp(path28, keys, options) {
       options = options || {};
       keys = keys || [];
       var strict = options.strict;
@@ -68331,8 +68331,8 @@ var require_path_to_regexp = __commonJS({
       var pos = 0;
       var backtrack = "";
       var m3;
-      if (path29 instanceof RegExp) {
-        while (m3 = MATCHING_GROUP_REGEXP.exec(path29.source)) {
+      if (path28 instanceof RegExp) {
+        while (m3 = MATCHING_GROUP_REGEXP.exec(path28.source)) {
           if (m3[0][0] === "\\") continue;
           keys.push({
             name: m3[1] || name2++,
@@ -68340,18 +68340,18 @@ var require_path_to_regexp = __commonJS({
             offset: m3.index
           });
         }
-        return path29;
+        return path28;
       }
-      if (Array.isArray(path29)) {
-        path29 = path29.map(function(value2) {
+      if (Array.isArray(path28)) {
+        path28 = path28.map(function(value2) {
           return pathToRegexp(value2, keys, options).source;
         });
-        return new RegExp(path29.join("|"), flags);
+        return new RegExp(path28.join("|"), flags);
       }
-      if (typeof path29 !== "string") {
+      if (typeof path28 !== "string") {
         throw new TypeError("path must be a string, array of strings, or regular expression");
       }
-      path29 = path29.replace(
+      path28 = path28.replace(
         /\\.|(\/)?(\.)?:(\w+)(\(.*?\))?(\*)?(\?)?|[.*]|\/\(/g,
         function(match, slash, format2, key, capture, star, optional2, offset) {
           if (match[0] === "\\") {
@@ -68368,7 +68368,7 @@ var require_path_to_regexp = __commonJS({
           if (slash || format2) {
             backtrack = "";
           } else {
-            backtrack += path29.slice(pos, offset);
+            backtrack += path28.slice(pos, offset);
           }
           pos = offset + match.length;
           if (match === "*") {
@@ -68398,7 +68398,7 @@ var require_path_to_regexp = __commonJS({
           return result2;
         }
       );
-      while (m3 = MATCHING_GROUP_REGEXP.exec(path29)) {
+      while (m3 = MATCHING_GROUP_REGEXP.exec(path28)) {
         if (m3[0][0] === "\\") continue;
         if (keysOffset + i5 === keys.length || keys[keysOffset + i5].offset > m3.index) {
           keys.splice(keysOffset + i5, 0, {
@@ -68410,13 +68410,13 @@ var require_path_to_regexp = __commonJS({
         }
         i5++;
       }
-      path29 += strict ? "" : path29[path29.length - 1] === "/" ? "?" : "/?";
+      path28 += strict ? "" : path28[path28.length - 1] === "/" ? "?" : "/?";
       if (end) {
-        path29 += "$";
-      } else if (path29[path29.length - 1] !== "/") {
-        path29 += lookahead ? "(?=/|$)" : "(?:/|$)";
+        path28 += "$";
+      } else if (path28[path28.length - 1] !== "/") {
+        path28 += lookahead ? "(?=/|$)" : "(?:/|$)";
       }
-      return new RegExp("^" + path29, flags);
+      return new RegExp("^" + path28, flags);
     }
   }
 });
@@ -68429,19 +68429,19 @@ var require_layer = __commonJS({
     var debug = require_src3()("express:router:layer");
     var hasOwnProperty = Object.prototype.hasOwnProperty;
     module2.exports = Layer;
-    function Layer(path29, options, fn) {
+    function Layer(path28, options, fn) {
       if (!(this instanceof Layer)) {
-        return new Layer(path29, options, fn);
+        return new Layer(path28, options, fn);
       }
-      debug("new %o", path29);
+      debug("new %o", path28);
       var opts = options || {};
       this.handle = fn;
       this.name = fn.name || "<anonymous>";
       this.params = void 0;
       this.path = void 0;
-      this.regexp = pathRegexp(path29, this.keys = [], opts);
-      this.regexp.fast_star = path29 === "*";
-      this.regexp.fast_slash = path29 === "/" && opts.end === false;
+      this.regexp = pathRegexp(path28, this.keys = [], opts);
+      this.regexp.fast_star = path28 === "*";
+      this.regexp.fast_slash = path28 === "/" && opts.end === false;
     }
     Layer.prototype.handle_error = function handle_error(error64, req, res, next) {
       var fn = this.handle;
@@ -68465,20 +68465,20 @@ var require_layer = __commonJS({
         next(err);
       }
     };
-    Layer.prototype.match = function match(path29) {
+    Layer.prototype.match = function match(path28) {
       var match2;
-      if (path29 != null) {
+      if (path28 != null) {
         if (this.regexp.fast_slash) {
           this.params = {};
           this.path = "";
           return true;
         }
         if (this.regexp.fast_star) {
-          this.params = { "0": decode_param(path29) };
-          this.path = path29;
+          this.params = { "0": decode_param(path28) };
+          this.path = path28;
           return true;
         }
-        match2 = this.regexp.exec(path29);
+        match2 = this.regexp.exec(path28);
       }
       if (!match2) {
         this.params = void 0;
@@ -68571,10 +68571,10 @@ var require_route = __commonJS({
     var slice = Array.prototype.slice;
     var toString = Object.prototype.toString;
     module2.exports = Route;
-    function Route(path29) {
-      this.path = path29;
+    function Route(path28) {
+      this.path = path28;
       this.stack = [];
-      debug("new %o", path29);
+      debug("new %o", path28);
       this.methods = {};
     }
     Route.prototype._handles_method = function _handles_method(method) {
@@ -68786,8 +68786,8 @@ var require_router = __commonJS({
         if (++sync > 100) {
           return setImmediate(next, err);
         }
-        var path29 = getPathname(req);
-        if (path29 == null) {
+        var path28 = getPathname(req);
+        if (path28 == null) {
           return done(layerError);
         }
         var layer;
@@ -68795,7 +68795,7 @@ var require_router = __commonJS({
         var route;
         while (match !== true && idx < stack.length) {
           layer = stack[idx++];
-          match = matchLayer(layer, path29);
+          match = matchLayer(layer, path28);
           route = layer.route;
           if (typeof match !== "boolean") {
             layerError = layerError || match;
@@ -68833,18 +68833,18 @@ var require_router = __commonJS({
           } else if (route) {
             layer.handle_request(req, res, next);
           } else {
-            trim_prefix(layer, layerError, layerPath, path29);
+            trim_prefix(layer, layerError, layerPath, path28);
           }
           sync = 0;
         });
       }
-      function trim_prefix(layer, layerError, layerPath, path29) {
+      function trim_prefix(layer, layerError, layerPath, path28) {
         if (layerPath.length !== 0) {
-          if (layerPath !== path29.slice(0, layerPath.length)) {
+          if (layerPath !== path28.slice(0, layerPath.length)) {
             next(layerError);
             return;
           }
-          var c5 = path29[layerPath.length];
+          var c5 = path28[layerPath.length];
           if (c5 && c5 !== "/" && c5 !== ".") return next(layerError);
           debug("trim prefix (%s) from url %s", layerPath, req.url);
           removed = layerPath;
@@ -68922,7 +68922,7 @@ var require_router = __commonJS({
     };
     proto.use = function use(fn) {
       var offset = 0;
-      var path29 = "/";
+      var path28 = "/";
       if (typeof fn !== "function") {
         var arg = fn;
         while (Array.isArray(arg) && arg.length !== 0) {
@@ -68930,7 +68930,7 @@ var require_router = __commonJS({
         }
         if (typeof arg !== "function") {
           offset = 1;
-          path29 = fn;
+          path28 = fn;
         }
       }
       var callbacks = flatten(slice.call(arguments, offset));
@@ -68942,8 +68942,8 @@ var require_router = __commonJS({
         if (typeof fn !== "function") {
           throw new TypeError("Router.use() requires a middleware function but got a " + gettype(fn));
         }
-        debug("use %o %s", path29, fn.name || "<anonymous>");
-        var layer = new Layer(path29, {
+        debug("use %o %s", path28, fn.name || "<anonymous>");
+        var layer = new Layer(path28, {
           sensitive: this.caseSensitive,
           strict: false,
           end: false
@@ -68953,9 +68953,9 @@ var require_router = __commonJS({
       }
       return this;
     };
-    proto.route = function route(path29) {
-      var route2 = new Route(path29);
-      var layer = new Layer(path29, {
+    proto.route = function route(path28) {
+      var route2 = new Route(path28);
+      var layer = new Layer(path28, {
         sensitive: this.caseSensitive,
         strict: this.strict,
         end: true
@@ -68965,8 +68965,8 @@ var require_router = __commonJS({
       return route2;
     };
     methods2.concat("all").forEach(function(method) {
-      proto[method] = function(path29) {
-        var route = this.route(path29);
+      proto[method] = function(path28) {
+        var route = this.route(path28);
         route[method].apply(route, slice.call(arguments, 1));
         return this;
       };
@@ -69002,9 +69002,9 @@ var require_router = __commonJS({
       }
       return toString.call(obj2).replace(objectRegExp, "$1");
     }
-    function matchLayer(layer, path29) {
+    function matchLayer(layer, path28) {
       try {
-        return layer.match(path29);
+        return layer.match(path28);
       } catch (err) {
         return err;
       }
@@ -69122,13 +69122,13 @@ var require_view = __commonJS({
   "../node_modules/express/lib/view.js"(exports2, module2) {
     "use strict";
     var debug = require_src3()("express:view");
-    var path29 = require("path");
+    var path28 = require("path");
     var fs2 = require("fs");
-    var dirname = path29.dirname;
-    var basename = path29.basename;
-    var extname = path29.extname;
-    var join6 = path29.join;
-    var resolve = path29.resolve;
+    var dirname = path28.dirname;
+    var basename = path28.basename;
+    var extname = path28.extname;
+    var join6 = path28.join;
+    var resolve = path28.resolve;
     module2.exports = View;
     function View(name2, options) {
       var opts = options || {};
@@ -69157,17 +69157,17 @@ var require_view = __commonJS({
       this.path = this.lookup(fileName);
     }
     View.prototype.lookup = function lookup(name2) {
-      var path30;
+      var path29;
       var roots = [].concat(this.root);
       debug('lookup "%s"', name2);
-      for (var i5 = 0; i5 < roots.length && !path30; i5++) {
+      for (var i5 = 0; i5 < roots.length && !path29; i5++) {
         var root5 = roots[i5];
         var loc = resolve(root5, name2);
         var dir = dirname(loc);
         var file2 = basename(loc);
-        path30 = this.resolve(dir, file2);
+        path29 = this.resolve(dir, file2);
       }
-      return path30;
+      return path29;
     };
     View.prototype.render = function render2(options, callback) {
       debug('render "%s"', this.path);
@@ -69175,21 +69175,21 @@ var require_view = __commonJS({
     };
     View.prototype.resolve = function resolve2(dir, file2) {
       var ext = this.ext;
-      var path30 = join6(dir, file2);
-      var stat = tryStat(path30);
+      var path29 = join6(dir, file2);
+      var stat = tryStat(path29);
       if (stat && stat.isFile()) {
-        return path30;
+        return path29;
       }
-      path30 = join6(dir, basename(file2, ext), "index" + ext);
-      stat = tryStat(path30);
+      path29 = join6(dir, basename(file2, ext), "index" + ext);
+      stat = tryStat(path29);
       if (stat && stat.isFile()) {
-        return path30;
+        return path29;
       }
     };
-    function tryStat(path30) {
-      debug('stat "%s"', path30);
+    function tryStat(path29) {
+      debug('stat "%s"', path29);
       try {
-        return fs2.statSync(path30);
+        return fs2.statSync(path29);
       } catch (e5) {
         return void 0;
       }
@@ -69967,7 +69967,7 @@ var require_types = __commonJS({
 // ../node_modules/mime/mime.js
 var require_mime = __commonJS({
   "../node_modules/mime/mime.js"(exports2, module2) {
-    var path29 = require("path");
+    var path28 = require("path");
     var fs2 = require("fs");
     function Mime() {
       this.types = /* @__PURE__ */ Object.create(null);
@@ -69997,8 +69997,8 @@ var require_mime = __commonJS({
       this.define(map6);
       this._loading = null;
     };
-    Mime.prototype.lookup = function(path30, fallback2) {
-      var ext = path30.replace(/^.*[\.\/\\]/, "").toLowerCase();
+    Mime.prototype.lookup = function(path29, fallback2) {
+      var ext = path29.replace(/^.*[\.\/\\]/, "").toLowerCase();
       return this.types[ext] || fallback2 || this.default_type;
     };
     Mime.prototype.extension = function(mimeType) {
@@ -70232,28 +70232,28 @@ var require_send = __commonJS({
     var ms = require_ms5();
     var onFinished = require_on_finished();
     var parseRange = require_range_parser();
-    var path29 = require("path");
+    var path28 = require("path");
     var statuses = require_statuses();
     var Stream = require("stream");
     var util = require("util");
-    var extname = path29.extname;
-    var join6 = path29.join;
-    var normalize2 = path29.normalize;
-    var resolve = path29.resolve;
-    var sep3 = path29.sep;
+    var extname = path28.extname;
+    var join6 = path28.join;
+    var normalize2 = path28.normalize;
+    var resolve = path28.resolve;
+    var sep3 = path28.sep;
     var BYTES_RANGE_REGEXP = /^ *bytes=/;
     var MAX_MAXAGE = 60 * 60 * 24 * 365 * 1e3;
     var UP_PATH_REGEXP = /(?:^|[\\/])\.\.(?:[\\/]|$)/;
     module2.exports = send;
     module2.exports.mime = mime;
-    function send(req, path30, options) {
-      return new SendStream(req, path30, options);
+    function send(req, path29, options) {
+      return new SendStream(req, path29, options);
     }
-    function SendStream(req, path30, options) {
+    function SendStream(req, path29, options) {
       Stream.call(this);
       var opts = options || {};
       this.options = opts;
-      this.path = path30;
+      this.path = path29;
       this.req = req;
       this._acceptRanges = opts.acceptRanges !== void 0 ? Boolean(opts.acceptRanges) : true;
       this._cacheControl = opts.cacheControl !== void 0 ? Boolean(opts.cacheControl) : true;
@@ -70299,8 +70299,8 @@ var require_send = __commonJS({
       this._index = index2;
       return this;
     }, "send.index: pass index as option");
-    SendStream.prototype.root = function root5(path30) {
-      this._root = resolve(String(path30));
+    SendStream.prototype.root = function root5(path29) {
+      this._root = resolve(String(path29));
       debug("root %s", this._root);
       return this;
     };
@@ -70413,10 +70413,10 @@ var require_send = __commonJS({
       var lastModified = this.res.getHeader("Last-Modified");
       return parseHttpDate(lastModified) <= parseHttpDate(ifRange);
     };
-    SendStream.prototype.redirect = function redirect(path30) {
+    SendStream.prototype.redirect = function redirect(path29) {
       var res = this.res;
       if (hasListeners(this, "directory")) {
-        this.emit("directory", res, path30);
+        this.emit("directory", res, path29);
         return;
       }
       if (this.hasTrailingSlash()) {
@@ -70436,42 +70436,42 @@ var require_send = __commonJS({
     SendStream.prototype.pipe = function pipe2(res) {
       var root5 = this._root;
       this.res = res;
-      var path30 = decode5(this.path);
-      if (path30 === -1) {
+      var path29 = decode5(this.path);
+      if (path29 === -1) {
         this.error(400);
         return res;
       }
-      if (~path30.indexOf("\0")) {
+      if (~path29.indexOf("\0")) {
         this.error(400);
         return res;
       }
       var parts;
       if (root5 !== null) {
-        if (path30) {
-          path30 = normalize2("." + sep3 + path30);
+        if (path29) {
+          path29 = normalize2("." + sep3 + path29);
         }
-        if (UP_PATH_REGEXP.test(path30)) {
-          debug('malicious path "%s"', path30);
+        if (UP_PATH_REGEXP.test(path29)) {
+          debug('malicious path "%s"', path29);
           this.error(403);
           return res;
         }
-        parts = path30.split(sep3);
-        path30 = normalize2(join6(root5, path30));
+        parts = path29.split(sep3);
+        path29 = normalize2(join6(root5, path29));
       } else {
-        if (UP_PATH_REGEXP.test(path30)) {
-          debug('malicious path "%s"', path30);
+        if (UP_PATH_REGEXP.test(path29)) {
+          debug('malicious path "%s"', path29);
           this.error(403);
           return res;
         }
-        parts = normalize2(path30).split(sep3);
-        path30 = resolve(path30);
+        parts = normalize2(path29).split(sep3);
+        path29 = resolve(path29);
       }
       if (containsDotFile(parts)) {
         var access = this._dotfiles;
         if (access === void 0) {
           access = parts[parts.length - 1][0] === "." ? this._hidden ? "allow" : "ignore" : "allow";
         }
-        debug('%s dotfile "%s"', access, path30);
+        debug('%s dotfile "%s"', access, path29);
         switch (access) {
           case "allow":
             break;
@@ -70485,13 +70485,13 @@ var require_send = __commonJS({
         }
       }
       if (this._index.length && this.hasTrailingSlash()) {
-        this.sendIndex(path30);
+        this.sendIndex(path29);
         return res;
       }
-      this.sendFile(path30);
+      this.sendFile(path29);
       return res;
     };
-    SendStream.prototype.send = function send2(path30, stat) {
+    SendStream.prototype.send = function send2(path29, stat) {
       var len = stat.size;
       var options = this.options;
       var opts = {};
@@ -70503,9 +70503,9 @@ var require_send = __commonJS({
         this.headersAlreadySent();
         return;
       }
-      debug('pipe "%s"', path30);
-      this.setHeader(path30, stat);
-      this.type(path30);
+      debug('pipe "%s"', path29);
+      this.setHeader(path29, stat);
+      this.type(path29);
       if (this.isConditionalGET()) {
         if (this.isPreconditionFailure()) {
           this.error(412);
@@ -70554,26 +70554,26 @@ var require_send = __commonJS({
         res.end();
         return;
       }
-      this.stream(path30, opts);
+      this.stream(path29, opts);
     };
-    SendStream.prototype.sendFile = function sendFile(path30) {
+    SendStream.prototype.sendFile = function sendFile(path29) {
       var i5 = 0;
       var self = this;
-      debug('stat "%s"', path30);
-      fs2.stat(path30, function onstat(err, stat) {
-        if (err && err.code === "ENOENT" && !extname(path30) && path30[path30.length - 1] !== sep3) {
+      debug('stat "%s"', path29);
+      fs2.stat(path29, function onstat(err, stat) {
+        if (err && err.code === "ENOENT" && !extname(path29) && path29[path29.length - 1] !== sep3) {
           return next(err);
         }
         if (err) return self.onStatError(err);
-        if (stat.isDirectory()) return self.redirect(path30);
-        self.emit("file", path30, stat);
-        self.send(path30, stat);
+        if (stat.isDirectory()) return self.redirect(path29);
+        self.emit("file", path29, stat);
+        self.send(path29, stat);
       });
       function next(err) {
         if (self._extensions.length <= i5) {
           return err ? self.onStatError(err) : self.error(404);
         }
-        var p3 = path30 + "." + self._extensions[i5++];
+        var p3 = path29 + "." + self._extensions[i5++];
         debug('stat "%s"', p3);
         fs2.stat(p3, function(err2, stat) {
           if (err2) return next(err2);
@@ -70583,7 +70583,7 @@ var require_send = __commonJS({
         });
       }
     };
-    SendStream.prototype.sendIndex = function sendIndex(path30) {
+    SendStream.prototype.sendIndex = function sendIndex(path29) {
       var i5 = -1;
       var self = this;
       function next(err) {
@@ -70591,7 +70591,7 @@ var require_send = __commonJS({
           if (err) return self.onStatError(err);
           return self.error(404);
         }
-        var p3 = join6(path30, self._index[i5]);
+        var p3 = join6(path29, self._index[i5]);
         debug('stat "%s"', p3);
         fs2.stat(p3, function(err2, stat) {
           if (err2) return next(err2);
@@ -70602,10 +70602,10 @@ var require_send = __commonJS({
       }
       next();
     };
-    SendStream.prototype.stream = function stream(path30, options) {
+    SendStream.prototype.stream = function stream(path29, options) {
       var self = this;
       var res = this.res;
-      var stream2 = fs2.createReadStream(path30, options);
+      var stream2 = fs2.createReadStream(path29, options);
       this.emit("stream", stream2);
       stream2.pipe(res);
       function cleanup() {
@@ -70620,10 +70620,10 @@ var require_send = __commonJS({
         self.emit("end");
       });
     };
-    SendStream.prototype.type = function type(path30) {
+    SendStream.prototype.type = function type(path29) {
       var res = this.res;
       if (res.getHeader("Content-Type")) return;
-      var type2 = mime.lookup(path30);
+      var type2 = mime.lookup(path29);
       if (!type2) {
         debug("no content-type");
         return;
@@ -70632,9 +70632,9 @@ var require_send = __commonJS({
       debug("content-type %s", type2);
       res.setHeader("Content-Type", type2 + (charset ? "; charset=" + charset : ""));
     };
-    SendStream.prototype.setHeader = function setHeader(path30, stat) {
+    SendStream.prototype.setHeader = function setHeader(path29, stat) {
       var res = this.res;
-      this.emit("headers", res, path30, stat);
+      this.emit("headers", res, path29, stat);
       if (this._acceptRanges && !res.getHeader("Accept-Ranges")) {
         debug("accept ranges");
         res.setHeader("Accept-Ranges", "bytes");
@@ -70693,9 +70693,9 @@ var require_send = __commonJS({
       }
       return err instanceof Error ? createError(status, err, { expose: false }) : createError(status, err);
     }
-    function decode5(path30) {
+    function decode5(path29) {
       try {
-        return decodeURIComponent(path30);
+        return decodeURIComponent(path29);
       } catch (err) {
         return -1;
       }
@@ -71604,10 +71604,10 @@ var require_utils4 = __commonJS({
     var querystring = require("querystring");
     exports2.etag = createETagGenerator({ weak: false });
     exports2.wetag = createETagGenerator({ weak: true });
-    exports2.isAbsolute = function(path29) {
-      if ("/" === path29[0]) return true;
-      if (":" === path29[1] && ("\\" === path29[2] || "/" === path29[2])) return true;
-      if ("\\\\" === path29.substring(0, 2)) return true;
+    exports2.isAbsolute = function(path28) {
+      if ("/" === path28[0]) return true;
+      if (":" === path28[1] && ("\\" === path28[2] || "/" === path28[2])) return true;
+      if ("\\\\" === path28.substring(0, 2)) return true;
     };
     exports2.flatten = deprecate2.function(
       flatten,
@@ -71819,7 +71819,7 @@ var require_application = __commonJS({
     };
     app2.use = function use(fn) {
       var offset = 0;
-      var path29 = "/";
+      var path28 = "/";
       if (typeof fn !== "function") {
         var arg = fn;
         while (Array.isArray(arg) && arg.length !== 0) {
@@ -71827,7 +71827,7 @@ var require_application = __commonJS({
         }
         if (typeof arg !== "function") {
           offset = 1;
-          path29 = fn;
+          path28 = fn;
         }
       }
       var fns = flatten(slice.call(arguments, offset));
@@ -71838,12 +71838,12 @@ var require_application = __commonJS({
       var router2 = this._router;
       fns.forEach(function(fn2) {
         if (!fn2 || !fn2.handle || !fn2.set) {
-          return router2.use(path29, fn2);
+          return router2.use(path28, fn2);
         }
-        debug(".use app under %s", path29);
-        fn2.mountpath = path29;
+        debug(".use app under %s", path28);
+        fn2.mountpath = path28;
         fn2.parent = this;
-        router2.use(path29, function mounted_app(req, res, next) {
+        router2.use(path28, function mounted_app(req, res, next) {
           var orig = req.app;
           fn2.handle(req, res, function(err) {
             setPrototypeOf(req, orig.request);
@@ -71855,9 +71855,9 @@ var require_application = __commonJS({
       }, this);
       return this;
     };
-    app2.route = function route(path29) {
+    app2.route = function route(path28) {
       this.lazyrouter();
-      return this._router.route(path29);
+      return this._router.route(path28);
     };
     app2.engine = function engine(ext, fn) {
       if (typeof fn !== "function") {
@@ -71908,7 +71908,7 @@ var require_application = __commonJS({
       }
       return this;
     };
-    app2.path = function path29() {
+    app2.path = function path28() {
       return this.parent ? this.parent.path() + this.mountpath : "";
     };
     app2.enabled = function enabled(setting) {
@@ -71924,19 +71924,19 @@ var require_application = __commonJS({
       return this.set(setting, false);
     };
     methods2.forEach(function(method) {
-      app2[method] = function(path29) {
+      app2[method] = function(path28) {
         if (method === "get" && arguments.length === 1) {
-          return this.set(path29);
+          return this.set(path28);
         }
         this.lazyrouter();
-        var route = this._router.route(path29);
+        var route = this._router.route(path28);
         route[method].apply(route, slice.call(arguments, 1));
         return this;
       };
     });
-    app2.all = function all(path29) {
+    app2.all = function all(path28) {
       this.lazyrouter();
-      var route = this._router.route(path29);
+      var route = this._router.route(path28);
       var args = slice.call(arguments, 1);
       for (var i5 = 0; i5 < methods2.length; i5++) {
         route[methods2[i5]].apply(route, args);
@@ -72554,11 +72554,11 @@ var require_mime_types2 = __commonJS({
       }
       return exts[0];
     }
-    function lookup(path29) {
-      if (!path29 || typeof path29 !== "string") {
+    function lookup(path28) {
+      if (!path28 || typeof path28 !== "string") {
         return false;
       }
-      var extension2 = extname("x." + path29).toLowerCase().substr(1);
+      var extension2 = extname("x." + path28).toLowerCase().substr(1);
       if (!extension2) {
         return false;
       }
@@ -72785,7 +72785,7 @@ var require_request = __commonJS({
       var subdomains2 = !isIP2(hostname5) ? hostname5.split(".").reverse() : [hostname5];
       return subdomains2.slice(offset);
     });
-    defineGetter(req, "path", function path29() {
+    defineGetter(req, "path", function path28() {
       return parse6(this).pathname;
     });
     defineGetter(req, "hostname", function hostname5() {
@@ -73034,7 +73034,7 @@ var require_response = __commonJS({
     var http = require("http");
     var isAbsolute = require_utils4().isAbsolute;
     var onFinished = require_on_finished();
-    var path29 = require("path");
+    var path28 = require("path");
     var statuses = require_statuses();
     var merge3 = require_utils_merge();
     var sign2 = require_cookie_signature().sign;
@@ -73043,9 +73043,9 @@ var require_response = __commonJS({
     var setCharset = require_utils4().setCharset;
     var cookie = require_cookie();
     var send = require_send();
-    var extname = path29.extname;
+    var extname = path28.extname;
     var mime = send.mime;
-    var resolve = path29.resolve;
+    var resolve = path28.resolve;
     var vary = require_vary();
     var res = Object.create(http.ServerResponse.prototype);
     module2.exports = res;
@@ -73222,26 +73222,26 @@ var require_response = __commonJS({
       this.type("txt");
       return this.send(body);
     };
-    res.sendFile = function sendFile(path30, options, callback) {
+    res.sendFile = function sendFile(path29, options, callback) {
       var done = callback;
       var req = this.req;
       var res2 = this;
       var next = req.next;
       var opts = options || {};
-      if (!path30) {
+      if (!path29) {
         throw new TypeError("path argument is required to res.sendFile");
       }
-      if (typeof path30 !== "string") {
+      if (typeof path29 !== "string") {
         throw new TypeError("path must be a string to res.sendFile");
       }
       if (typeof options === "function") {
         done = options;
         opts = {};
       }
-      if (!opts.root && !isAbsolute(path30)) {
+      if (!opts.root && !isAbsolute(path29)) {
         throw new TypeError("path must be absolute or specify root to res.sendFile");
       }
-      var pathname = encodeURI(path30);
+      var pathname = encodeURI(path29);
       var file2 = send(req, pathname, opts);
       sendfile(res2, file2, opts, function(err) {
         if (done) return done(err);
@@ -73251,7 +73251,7 @@ var require_response = __commonJS({
         }
       });
     };
-    res.sendfile = function(path30, options, callback) {
+    res.sendfile = function(path29, options, callback) {
       var done = callback;
       var req = this.req;
       var res2 = this;
@@ -73261,7 +73261,7 @@ var require_response = __commonJS({
         done = options;
         opts = {};
       }
-      var file2 = send(req, path30, opts);
+      var file2 = send(req, path29, opts);
       sendfile(res2, file2, opts, function(err) {
         if (done) return done(err);
         if (err && err.code === "EISDIR") return next();
@@ -73274,7 +73274,7 @@ var require_response = __commonJS({
       res.sendfile,
       "res.sendfile: Use res.sendFile instead"
     );
-    res.download = function download(path30, filename, options, callback) {
+    res.download = function download(path29, filename, options, callback) {
       var done = callback;
       var name2 = filename;
       var opts = options || null;
@@ -73291,7 +73291,7 @@ var require_response = __commonJS({
         opts = filename;
       }
       var headers = {
-        "Content-Disposition": contentDisposition(name2 || path30)
+        "Content-Disposition": contentDisposition(name2 || path29)
       };
       if (opts && opts.headers) {
         var keys = Object.keys(opts.headers);
@@ -73304,7 +73304,7 @@ var require_response = __commonJS({
       }
       opts = Object.create(opts);
       opts.headers = headers;
-      var fullPath = !opts.root ? resolve(path30) : path30;
+      var fullPath = !opts.root ? resolve(path29) : path29;
       return this.sendFile(fullPath, opts, done);
     };
     res.contentType = res.type = function contentType(type) {
@@ -73605,11 +73605,11 @@ var require_serve_static = __commonJS({
         }
         var forwardError = !fallthrough;
         var originalUrl = parseUrl2.original(req);
-        var path29 = parseUrl2(req).pathname;
-        if (path29 === "/" && originalUrl.pathname.substr(-1) !== "/") {
-          path29 = "";
+        var path28 = parseUrl2(req).pathname;
+        if (path28 === "/" && originalUrl.pathname.substr(-1) !== "/") {
+          path28 = "";
         }
-        var stream = send(req, path29, opts);
+        var stream = send(req, path28, opts);
         stream.on("directory", onDirectory);
         if (setHeaders) {
           stream.on("headers", setHeaders);
@@ -77494,14 +77494,14 @@ var init_getProfileName = __esm({
 });
 
 // ../node_modules/@smithy/core/dist-es/submodules/config/shared-ini-file-loader/getSSOTokenFilepath.js
-var import_node_crypto21, import_node_path22, getSSOTokenFilepath;
+var import_node_crypto20, import_node_path22, getSSOTokenFilepath;
 var init_getSSOTokenFilepath = __esm({
   "../node_modules/@smithy/core/dist-es/submodules/config/shared-ini-file-loader/getSSOTokenFilepath.js"() {
-    import_node_crypto21 = require("node:crypto");
+    import_node_crypto20 = require("node:crypto");
     import_node_path22 = require("node:path");
     init_getHomeDir();
     getSSOTokenFilepath = (id2) => {
-      const hasher = (0, import_node_crypto21.createHash)("sha1");
+      const hasher = (0, import_node_crypto20.createHash)("sha1");
       const cacheName = hasher.update(id2).digest("hex");
       return (0, import_node_path22.join)(getHomeDir(), ".aws", "sso", "cache", `${cacheName}.json`);
     };
@@ -77642,14 +77642,14 @@ var init_readFile = __esm({
     import_promises3 = require("node:fs/promises");
     filePromises = {};
     fileIntercept = {};
-    readFile2 = (path29, options) => {
-      if (fileIntercept[path29] !== void 0) {
-        return fileIntercept[path29];
+    readFile2 = (path28, options) => {
+      if (fileIntercept[path28] !== void 0) {
+        return fileIntercept[path28];
       }
-      if (!filePromises[path29] || options?.ignoreCache) {
-        filePromises[path29] = (0, import_promises3.readFile)(path29, "utf8");
+      if (!filePromises[path28] || options?.ignoreCache) {
+        filePromises[path28] = (0, import_promises3.readFile)(path28, "utf8");
       }
-      return filePromises[path29];
+      return filePromises[path28];
     };
   }
 });
@@ -77761,8 +77761,8 @@ var init_externalDataInterceptor = __esm({
       getFileRecord() {
         return fileIntercept;
       },
-      interceptFile(path29, contents) {
-        fileIntercept[path29] = Promise.resolve(contents);
+      interceptFile(path28, contents) {
+        fileIntercept[path28] = Promise.resolve(contents);
       },
       getTokenRecord() {
         return tokenIntercept;
@@ -77777,11 +77777,11 @@ var init_externalDataInterceptor = __esm({
 // ../node_modules/@smithy/core/dist-es/submodules/config/node-config-provider/getSelectorName.js
 function getSelectorName(functionString) {
   try {
-    const constants = new Set(Array.from(functionString.match(/([A-Z_]){3,}/g) ?? []));
-    constants.delete("CONFIG");
-    constants.delete("CONFIG_PREFIX_SEPARATOR");
-    constants.delete("ENV");
-    return [...constants].join(", ");
+    const constants2 = new Set(Array.from(functionString.match(/([A-Z_]){3,}/g) ?? []));
+    constants2.delete("CONFIG");
+    constants2.delete("CONFIG_PREFIX_SEPARATOR");
+    constants2.delete("ENV");
+    return [...constants2].join(", ");
   } catch (e5) {
     return functionString;
   }
@@ -78229,13 +78229,13 @@ var init_resolveDefaultsModeConfig = __esm({
       }
       return { hostname: "169.254.169.254", path: "/" };
     };
-    imdsHttpGet = async ({ hostname: hostname5, path: path29 }) => {
+    imdsHttpGet = async ({ hostname: hostname5, path: path28 }) => {
       const { request } = await import("node:http");
       return new Promise((resolve, reject) => {
         const req = request({
           method: "GET",
           hostname: hostname5.replace(/^\[(.+)]$/, "$1"),
-          path: path29,
+          path: path28,
           timeout: 1e3,
           signal: AbortSignal.timeout(1e3)
         });
@@ -78484,8 +78484,8 @@ var init_createConfigValueProvider = __esm({
               return endpoint.url.href;
             }
             if ("hostname" in endpoint) {
-              const { protocol, hostname: hostname5, port, path: path29 } = endpoint;
-              return `${protocol}//${hostname5}${port ? ":" + port : ""}${path29}`;
+              const { protocol, hostname: hostname5, port, path: path28 } = endpoint;
+              return `${protocol}//${hostname5}${port ? ":" + port : ""}${path28}`;
             }
           }
           return endpoint;
@@ -78900,18 +78900,18 @@ var getAttrPathList;
 var init_getAttrPathList = __esm({
   "../node_modules/@smithy/core/dist-es/submodules/endpoints/util-endpoints/lib/getAttrPathList.js"() {
     init_types2();
-    getAttrPathList = (path29) => {
-      const parts = path29.split(".");
+    getAttrPathList = (path28) => {
+      const parts = path28.split(".");
       const pathList = [];
       for (const part of parts) {
         const squareBracketIndex = part.indexOf("[");
         if (squareBracketIndex !== -1) {
           if (part.indexOf("]") !== part.length - 1) {
-            throw new EndpointError(`Path: '${path29}' does not end with ']'`);
+            throw new EndpointError(`Path: '${path28}' does not end with ']'`);
           }
           const arrayIndex = part.slice(squareBracketIndex + 1, -1);
           if (Number.isNaN(parseInt(arrayIndex))) {
-            throw new EndpointError(`Invalid array index: '${arrayIndex}' in path: '${path29}'`);
+            throw new EndpointError(`Invalid array index: '${arrayIndex}' in path: '${path28}'`);
           }
           if (squareBracketIndex !== 0) {
             pathList.push(part.slice(0, squareBracketIndex));
@@ -78932,9 +78932,9 @@ var init_getAttr = __esm({
   "../node_modules/@smithy/core/dist-es/submodules/endpoints/util-endpoints/lib/getAttr.js"() {
     init_types2();
     init_getAttrPathList();
-    getAttr = (value2, path29) => getAttrPathList(path29).reduce((acc, index) => {
+    getAttr = (value2, path28) => getAttrPathList(path28).reduce((acc, index) => {
       if (typeof acc !== "object") {
-        throw new EndpointError(`Index '${index}' in '${path29}' not found in '${JSON.stringify(value2)}'`);
+        throw new EndpointError(`Index '${index}' in '${path28}' not found in '${JSON.stringify(value2)}'`);
       } else if (Array.isArray(acc)) {
         const i5 = parseInt(index);
         return acc[i5 < 0 ? acc.length + i5 : i5];
@@ -78995,8 +78995,8 @@ var init_parseURL = __esm({
             return value2;
           }
           if (typeof value2 === "object" && "hostname" in value2) {
-            const { hostname: hostname6, port, protocol: protocol2 = "", path: path29 = "", query = {} } = value2;
-            const url2 = new URL(`${protocol2}//${hostname6}${port ? `:${port}` : ""}${path29}`);
+            const { hostname: hostname6, port, protocol: protocol2 = "", path: path28 = "", query = {} } = value2;
+            const url2 = new URL(`${protocol2}//${hostname6}${port ? `:${port}` : ""}${path28}`);
             url2.search = Object.entries(query).map(([k5, v]) => `${k5}=${v}`).join("&");
             return url2;
           }
@@ -79672,10 +79672,10 @@ function castSourceData(toCast, encoding) {
   }
   return fromArrayBuffer(toCast);
 }
-var import_node_crypto22, Hash;
+var import_node_crypto21, Hash;
 var init_hash_node = __esm({
   "../node_modules/@smithy/core/dist-es/submodules/serde/hash-node/hash-node.js"() {
-    import_node_crypto22 = require("node:crypto");
+    import_node_crypto21 = require("node:crypto");
     init_buffer_from();
     init_toUint8Array();
     Hash = class {
@@ -79694,7 +79694,7 @@ var init_hash_node = __esm({
         return Promise.resolve(this.hash.digest());
       }
       reset() {
-        this.hash = this.secret ? (0, import_node_crypto22.createHmac)(this.algorithmIdentifier, castSourceData(this.secret)) : (0, import_node_crypto22.createHash)(this.algorithmIdentifier);
+        this.hash = this.secret ? (0, import_node_crypto21.createHmac)(this.algorithmIdentifier, castSourceData(this.secret)) : (0, import_node_crypto21.createHash)(this.algorithmIdentifier);
       }
     };
   }
@@ -80588,10 +80588,10 @@ __export(serde_exports, {
   toUtf8: () => toUtf8,
   v4: () => v4
 });
-var import_node_crypto23, Uint8ArrayBlobAdapter, _getRandomValues, v4, generateIdempotencyToken;
+var import_node_crypto22, Uint8ArrayBlobAdapter, _getRandomValues, v4, generateIdempotencyToken;
 var init_serde = __esm({
   "../node_modules/@smithy/core/dist-es/submodules/serde/index.js"() {
-    import_node_crypto23 = require("node:crypto");
+    import_node_crypto22 = require("node:crypto");
     init_fromBase64();
     init_toBase64();
     init_Uint8ArrayBlobAdapter();
@@ -80628,7 +80628,7 @@ var init_serde = __esm({
     init_stream_collector();
     Uint8ArrayBlobAdapter = class extends bindUint8ArrayBlobAdapter(toUtf8, fromUtf8, toBase64, fromBase64) {
     };
-    _getRandomValues = import_node_crypto23.getRandomValues;
+    _getRandomValues = import_node_crypto22.getRandomValues;
     v4 = bindV4(_getRandomValues);
     generateIdempotencyToken = v4;
   }
@@ -81105,13 +81105,13 @@ function __disposeResources(env3) {
   }
   return next();
 }
-function __rewriteRelativeImportExtension(path29, preserveJsx) {
-  if (typeof path29 === "string" && /^\.\.?\//.test(path29)) {
-    return path29.replace(/\.(tsx)$|((?:\.d)?)((?:\.[^./]+?)?)\.([cm]?)ts$/i, function(m3, tsx, d5, ext, cm) {
+function __rewriteRelativeImportExtension(path28, preserveJsx) {
+  if (typeof path28 === "string" && /^\.\.?\//.test(path28)) {
+    return path28.replace(/\.(tsx)$|((?:\.d)?)((?:\.[^./]+?)?)\.([cm]?)ts$/i, function(m3, tsx, d5, ext, cm) {
       return tsx ? preserveJsx ? ".jsx" : ".js" : d5 && (!ext || !cm) ? m3 : d5 + ext + "." + cm.toLowerCase() + "js";
     });
   }
-  return path29;
+  return path28;
 }
 var extendStatics, __assign, __createBinding, __setModuleDefault, ownKeys2, _SuppressedError, tslib_es6_default;
 var init_tslib_es6 = __esm({
@@ -82965,11 +82965,11 @@ var init_HttpBindingProtocol = __esm({
           const opTraits = translateTraits(operationSchema.traits);
           if (opTraits.http) {
             request.method = opTraits.http[0];
-            const [path29, search] = opTraits.http[1].split("?");
+            const [path28, search] = opTraits.http[1].split("?");
             if (request.path == "/") {
-              request.path = path29;
+              request.path = path28;
             } else {
-              request.path += path29;
+              request.path += path28;
             }
             const traitSearchParams = new URLSearchParams(search ?? "");
             for (const [key, value2] of traitSearchParams) {
@@ -83370,8 +83370,8 @@ var init_requestBuilder = __esm({
         return this;
       }
       p(memberName, labelValueProvider, uriLabel, isGreedyLabel) {
-        this.resolvePathStack.push((path29) => {
-          this.path = resolvedPath(path29, this.input, memberName, labelValueProvider, uriLabel, isGreedyLabel);
+        this.resolvePathStack.push((path28) => {
+          this.path = resolvedPath(path28, this.input, memberName, labelValueProvider, uriLabel, isGreedyLabel);
         });
         return this;
       }
@@ -85438,9 +85438,9 @@ var init_createPaginator = __esm({
       command = withCommand(command) ?? command;
       return await client.send(command, ...args);
     };
-    get = (fromObject, path29) => {
+    get = (fromObject, path28) => {
       let cursor3 = fromObject;
-      const pathComponents = path29.split(".");
+      const pathComponents = path28.split(".");
       for (const step of pathComponents) {
         if (!cursor3 || typeof cursor3 !== "object") {
           return void 0;
@@ -89040,10 +89040,10 @@ ${longDate}
 ${credentialScope}
 ${toHex2(hashedRequest)}`;
       }
-      getCanonicalPath({ path: path29 }) {
+      getCanonicalPath({ path: path28 }) {
         if (this.uriEscapePath) {
           const normalizedPathSegments = [];
-          for (const pathSegment of path29.split("/")) {
+          for (const pathSegment of path28.split("/")) {
             if (pathSegment?.length === 0)
               continue;
             if (pathSegment === ".")
@@ -89054,11 +89054,11 @@ ${toHex2(hashedRequest)}`;
               normalizedPathSegments.push(pathSegment);
             }
           }
-          const normalizedPath = `${path29?.startsWith("/") ? "/" : ""}${normalizedPathSegments.join("/")}${normalizedPathSegments.length > 0 && path29?.endsWith("/") ? "/" : ""}`;
+          const normalizedPath = `${path28?.startsWith("/") ? "/" : ""}${normalizedPathSegments.join("/")}${normalizedPathSegments.length > 0 && path28?.endsWith("/") ? "/" : ""}`;
           const doubleEncoded = escapeUri2(normalizedPath);
           return doubleEncoded.replace(/%2F/g, "/");
         }
-        return path29;
+        return path28;
       }
       validateResolvedCredentials(credentials) {
         if (typeof credentials !== "object" || typeof credentials.accessKeyId !== "string" || typeof credentials.secretAccessKey !== "string") {
@@ -89706,15 +89706,15 @@ var init_arn = __esm({
 // ../node_modules/@aws-sdk/core/dist-es/submodules/util/util-format-url/format-url.js
 function formatUrl(request) {
   const { port, query } = request;
-  let { protocol, path: path29, hostname: hostname5 } = request;
+  let { protocol, path: path28, hostname: hostname5 } = request;
   if (protocol && protocol.slice(-1) !== ":") {
     protocol += ":";
   }
   if (port) {
     hostname5 += `:${port}`;
   }
-  if (path29 && path29.charAt(0) !== "/") {
-    path29 = `/${path29}`;
+  if (path28 && path28.charAt(0) !== "/") {
+    path28 = `/${path28}`;
   }
   let queryString3 = query ? buildQueryString(query) : "";
   if (queryString3 && queryString3[0] !== "?") {
@@ -89730,7 +89730,7 @@ function formatUrl(request) {
   if (request.fragment) {
     fragment = `#${request.fragment}`;
   }
-  return `${protocol}//${auth2}${hostname5}${path29}${queryString3}${fragment}`;
+  return `${protocol}//${auth2}${hostname5}${path28}${queryString3}${fragment}`;
 }
 var init_format_url = __esm({
   "../node_modules/@aws-sdk/core/dist-es/submodules/util/util-format-url/format-url.js"() {
@@ -101976,12 +101976,12 @@ or increase socketAcquisitionWarningTimeout=(millis) in the NodeHttpHandler conf
             const password = request.password ?? "";
             auth2 = `${username}:${password}`;
           }
-          let path29 = request.path;
+          let path28 = request.path;
           if (queryString3) {
-            path29 += `?${queryString3}`;
+            path28 += `?${queryString3}`;
           }
           if (request.fragment) {
-            path29 += `#${request.fragment}`;
+            path28 += `#${request.fragment}`;
           }
           let hostname5 = request.hostname ?? "";
           if (hostname5[0] === "[" && hostname5.endsWith("]")) {
@@ -101993,7 +101993,7 @@ or increase socketAcquisitionWarningTimeout=(millis) in the NodeHttpHandler conf
             headers: request.headers,
             host: hostname5,
             method: request.method,
-            path: path29,
+            path: path28,
             port: request.port,
             agent,
             auth: auth2
@@ -102315,7 +102315,7 @@ or increase socketAcquisitionWarningTimeout=(millis) in the NodeHttpHandler conf
         return this.connectOptions === void 0 ? http22.connect(url2) : http22.connect(url2, this.connectOptions);
       }
     };
-    var { constants } = http22;
+    var { constants: constants2 } = http22;
     var NodeHttp2Handler = class _NodeHttp2Handler {
       config;
       configProvider;
@@ -102396,17 +102396,17 @@ or increase socketAcquisitionWarningTimeout=(millis) in the NodeHttpHandler conf
             reject(err);
           };
           const queryString3 = query ? buildQueryString2(query) : "";
-          let path29 = request.path;
+          let path28 = request.path;
           if (queryString3) {
-            path29 += `?${queryString3}`;
+            path28 += `?${queryString3}`;
           }
           if (request.fragment) {
-            path29 += `#${request.fragment}`;
+            path28 += `#${request.fragment}`;
           }
           const clientHttp2Stream = session.request({
             ...request.headers,
-            [constants.HTTP2_HEADER_PATH]: path29,
-            [constants.HTTP2_HEADER_METHOD]: method
+            [constants2.HTTP2_HEADER_PATH]: path28,
+            [constants2.HTTP2_HEADER_METHOD]: method
           });
           if (effectiveRequestTimeout) {
             clientHttp2Stream.setTimeout(effectiveRequestTimeout, () => {
@@ -107007,7 +107007,7 @@ var require_dist_cjs17 = __commonJS({
   "../node_modules/@aws-sdk/credential-provider-process/dist-cjs/index.js"(exports2) {
     var { externalDataInterceptor: externalDataInterceptor2, CredentialsProviderError: CredentialsProviderError2, parseKnownFiles: parseKnownFiles2, getProfileName: getProfileName2 } = (init_config2(), __toCommonJS(config_exports));
     var { exec } = require("node:child_process");
-    var { promisify } = require("node:util");
+    var { promisify: promisify2 } = require("node:util");
     var { setCredentialFeature: setCredentialFeature2 } = (init_client3(), __toCommonJS(client_exports2));
     var getValidatedProcessCredentials = (profileName, data, profiles) => {
       if (data.Version !== 1) {
@@ -107043,7 +107043,7 @@ var require_dist_cjs17 = __commonJS({
       if (profiles[profileName]) {
         const credentialProcess = profile["credential_process"];
         if (credentialProcess !== void 0) {
-          const execPromise = promisify(externalDataInterceptor2?.getTokenRecord?.().exec ?? exec);
+          const execPromise = promisify2(externalDataInterceptor2?.getTokenRecord?.().exec ?? exec);
           try {
             const { stdout } = await execPromise(credentialProcess);
             let data;
@@ -107715,7 +107715,7 @@ var init_Md5Js = __esm({
 function buildNativeClass() {
   return class Md5Node {
     digestLength = 16;
-    hash = (0, import_node_crypto24.createHash)("md5");
+    hash = (0, import_node_crypto23.createHash)("md5");
     update(data) {
       this.hash.update(toUint8Array2(data));
     }
@@ -107724,19 +107724,19 @@ function buildNativeClass() {
       return new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength);
     }
     reset() {
-      this.hash = (0, import_node_crypto24.createHash)("md5");
+      this.hash = (0, import_node_crypto23.createHash)("md5");
     }
   };
 }
-var import_node_crypto24, hasNativeCrypto, Md5Node;
+var import_node_crypto23, hasNativeCrypto, Md5Node;
 var init_Md5Node = __esm({
   "../node_modules/@smithy/core/dist-es/submodules/checksum/md5/Md5Node.js"() {
-    import_node_crypto24 = require("node:crypto");
+    import_node_crypto23 = require("node:crypto");
     init_serde();
     init_Md5Js();
     hasNativeCrypto = (() => {
       try {
-        (0, import_node_crypto24.createHash)("md5");
+        (0, import_node_crypto23.createHash)("md5");
         return true;
       } catch {
         return false;
@@ -108080,7 +108080,7 @@ function buildNativeClass3() {
       this.finished = false;
     }
     createHash() {
-      return this.secret ? (0, import_node_crypto25.createHmac)("sha256", toBuffer(this.secret)) : (0, import_node_crypto25.createHash)("sha256");
+      return this.secret ? (0, import_node_crypto24.createHmac)("sha256", toBuffer(this.secret)) : (0, import_node_crypto24.createHash)("sha256");
     }
   };
 }
@@ -108093,14 +108093,14 @@ function toBuffer(data) {
   }
   return Buffer.from(data);
 }
-var import_node_crypto25, hasNativeCrypto2, Sha256Node;
+var import_node_crypto24, hasNativeCrypto2, Sha256Node;
 var init_Sha256Node = __esm({
   "../node_modules/@smithy/core/dist-es/submodules/checksum/sha256/Sha256Node.js"() {
-    import_node_crypto25 = require("node:crypto");
+    import_node_crypto24 = require("node:crypto");
     init_Sha256Js();
     hasNativeCrypto2 = (() => {
       try {
-        (0, import_node_crypto25.createHash)("sha256");
+        (0, import_node_crypto24.createHash)("sha256");
         return true;
       } catch {
         return false;
@@ -111878,22 +111878,22 @@ init_zod();
 
 // ../packages/contract/dist/agent-launch-flags.js
 function parseAgentLaunchFlagText(text) {
-  const trimmed9 = text.trim();
-  if (!trimmed9)
+  const trimmed = text.trim();
+  if (!trimmed)
     return null;
-  const eqIndex = trimmed9.indexOf("=");
-  if (eqIndex > 0 && trimmed9.startsWith("--")) {
-    const name2 = trimmed9.slice(0, eqIndex).trim();
-    const value2 = trimmed9.slice(eqIndex + 1).trim();
+  const eqIndex = trimmed.indexOf("=");
+  if (eqIndex > 0 && trimmed.startsWith("--")) {
+    const name2 = trimmed.slice(0, eqIndex).trim();
+    const value2 = trimmed.slice(eqIndex + 1).trim();
     return name2 ? { name: name2, value: value2.length > 0 ? value2 : null } : null;
   }
-  const spaceIndex = trimmed9.indexOf(" ");
-  if (spaceIndex > 0 && trimmed9.startsWith("--")) {
-    const name2 = trimmed9.slice(0, spaceIndex).trim();
-    const value2 = trimmed9.slice(spaceIndex + 1).trim();
+  const spaceIndex = trimmed.indexOf(" ");
+  if (spaceIndex > 0 && trimmed.startsWith("--")) {
+    const name2 = trimmed.slice(0, spaceIndex).trim();
+    const value2 = trimmed.slice(spaceIndex + 1).trim();
     return name2 ? { name: name2, value: value2.length > 0 ? value2 : null } : null;
   }
-  return { name: trimmed9 };
+  return { name: trimmed };
 }
 function normalizeAgentLaunchFlags(input2) {
   if (!Array.isArray(input2))
@@ -112352,12 +112352,12 @@ function formatObjectiveDisplayId({ missionDisplayId, displayKey }) {
   return `${missionDisplayId}${OBJECTIVE_DISPLAY_ID_SEPARATOR}${displayKey}`;
 }
 function parseObjectiveRef(ref) {
-  const trimmed9 = ref.trim();
-  if (trimmed9.length === 0)
-    return { kind: "unknown", ref: trimmed9 };
-  if (UUID_RE.test(trimmed9))
-    return { kind: "uuid", id: trimmed9.toLowerCase() };
-  const display = DISPLAY_ID_RE.exec(trimmed9);
+  const trimmed = ref.trim();
+  if (trimmed.length === 0)
+    return { kind: "unknown", ref: trimmed };
+  if (UUID_RE.test(trimmed))
+    return { kind: "uuid", id: trimmed.toLowerCase() };
+  const display = DISPLAY_ID_RE.exec(trimmed);
   if (display) {
     return {
       kind: "display_id",
@@ -112365,22 +112365,22 @@ function parseObjectiveRef(ref) {
       displayKey: display[3].toLowerCase()
     };
   }
-  if (WRONG_SEPARATOR_COLON_RE.test(trimmed9)) {
-    return { kind: "wrong_separator", separator: ":", ref: trimmed9 };
+  if (WRONG_SEPARATOR_COLON_RE.test(trimmed)) {
+    return { kind: "wrong_separator", separator: ":", ref: trimmed };
   }
-  if (WRONG_SEPARATOR_PIPE_RE.test(trimmed9)) {
-    return { kind: "wrong_separator", separator: "|", ref: trimmed9 };
+  if (WRONG_SEPARATOR_PIPE_RE.test(trimmed)) {
+    return { kind: "wrong_separator", separator: "|", ref: trimmed };
   }
-  if (WRONG_SEPARATOR_HYPHEN_RE.test(trimmed9)) {
-    return { kind: "wrong_separator", separator: "-", ref: trimmed9 };
+  if (WRONG_SEPARATOR_HYPHEN_RE.test(trimmed)) {
+    return { kind: "wrong_separator", separator: "-", ref: trimmed };
   }
-  if (MISSION_DISPLAY_ID_RE.test(trimmed9)) {
-    return { kind: "mission_id", missionDisplayId: trimmed9 };
+  if (MISSION_DISPLAY_ID_RE.test(trimmed)) {
+    return { kind: "mission_id", missionDisplayId: trimmed };
   }
-  if (BARE_KEY_RE.test(trimmed9)) {
-    return { kind: "display_key", displayKey: trimmed9.toLowerCase() };
+  if (BARE_KEY_RE.test(trimmed)) {
+    return { kind: "display_key", displayKey: trimmed.toLowerCase() };
   }
-  return { kind: "unknown", ref: trimmed9 };
+  return { kind: "unknown", ref: trimmed };
 }
 function missionDisplayIdFromObjectiveRef(ref) {
   if (typeof ref !== "string" || ref.trim() === "")
@@ -114197,13 +114197,13 @@ function assertHasProtocol(url2) {
     throw new BetterAuthError(`Invalid base URL: ${url2}. Please provide a valid base URL.`, { cause: error64 });
   }
 }
-function withPath(url2, path29 = "/api/auth") {
+function withPath(url2, path28 = "/api/auth") {
   assertHasProtocol(url2);
   if (checkHasPath(url2)) return url2;
   const trimmedUrl = trimTrailingSlashes(url2);
-  if (!path29 || path29 === "/") return trimmedUrl;
-  path29 = path29.startsWith("/") ? path29 : `/${path29}`;
-  return `${trimmedUrl}${path29}`;
+  if (!path28 || path28 === "/") return trimmedUrl;
+  path28 = path28.startsWith("/") ? path28 : `/${path28}`;
+  return `${trimmedUrl}${path28}`;
 }
 function validateProxyHeader(header, type) {
   if (!header || header.trim() === "") return false;
@@ -114223,26 +114223,26 @@ function validateProxyHeader(header, type) {
   }
   return false;
 }
-function getBaseURL(url2, path29, request, loadEnv2, trustedProxyHeaders) {
-  if (url2) return withPath(url2, path29);
+function getBaseURL(url2, path28, request, loadEnv2, trustedProxyHeaders) {
+  if (url2) return withPath(url2, path28);
   if (loadEnv2 !== false) {
     const fromEnv2 = env.BETTER_AUTH_URL || env.NEXT_PUBLIC_BETTER_AUTH_URL || env.PUBLIC_BETTER_AUTH_URL || env.NUXT_PUBLIC_BETTER_AUTH_URL || env.NUXT_PUBLIC_AUTH_URL || (env.BASE_URL !== "/" ? env.BASE_URL : void 0);
-    if (fromEnv2) return withPath(fromEnv2, path29);
+    if (fromEnv2) return withPath(fromEnv2, path28);
   }
   const fromRequest = request?.headers.get("x-forwarded-host");
   const fromRequestProto = request?.headers.get("x-forwarded-proto");
   if (fromRequest && fromRequestProto && trustedProxyHeaders) {
     if (validateProxyHeader(fromRequestProto, "proto") && validateProxyHeader(fromRequest, "host")) try {
-      return withPath(`${fromRequestProto}://${fromRequest}`, path29);
+      return withPath(`${fromRequestProto}://${fromRequest}`, path28);
     } catch (_error) {
     }
   }
   if (request) {
     const url3 = getOrigin(request.url);
     if (!url3) throw new BetterAuthError("Could not get origin from request. Please provide a valid base URL.");
-    return withPath(url3, path29);
+    return withPath(url3, path28);
   }
-  if (typeof window !== "undefined" && window.location) return withPath(window.location.origin, path29);
+  if (typeof window !== "undefined" && window.location) return withPath(window.location.origin, path28);
 }
 function getOrigin(url2) {
   try {
@@ -117805,9 +117805,9 @@ function parseCookieCachePayload(value2) {
   if (parsed === null) return null;
   const result2 = cookieCachePayloadSchema.safeParse(parsed);
   if (result2.success) return result2.data;
-  logger.warn("Cookie cache payload failed schema validation", { issues: result2.error.issues.map(({ code, path: path29 }) => ({
+  logger.warn("Cookie cache payload failed schema validation", { issues: result2.error.issues.map(({ code, path: path28 }) => ({
     code,
-    path: path29
+    path: path28
   })) });
   return null;
 }
@@ -118184,7 +118184,7 @@ function fromError(error64, validating) {
 }
 
 // ../node_modules/better-call/dist/context.mjs
-var createInternalContext = async (context, { options, path: path29 }) => {
+var createInternalContext = async (context, { options, path: path28 }) => {
   const headers = new Headers();
   let responseStatus = void 0;
   const { data, error: error64 } = await runValidation(options, context);
@@ -118196,7 +118196,7 @@ var createInternalContext = async (context, { options, path: path29 }) => {
     ...context,
     body: data.body,
     query: data.query,
-    path: context.path || path29 || "virtual:",
+    path: context.path || path28 || "virtual:",
     context: "context" in context && context.context ? context.context : {},
     returned: void 0,
     headers: context?.headers,
@@ -118418,16 +118418,16 @@ function toResponse(data, init2) {
 // ../node_modules/better-call/dist/endpoint.mjs
 init_error();
 function createEndpoint(pathOrOptions, handlerOrOptions, handlerOrNever) {
-  const path29 = typeof pathOrOptions === "string" ? pathOrOptions : void 0;
+  const path28 = typeof pathOrOptions === "string" ? pathOrOptions : void 0;
   const options = typeof handlerOrOptions === "object" ? handlerOrOptions : pathOrOptions;
   const handler = typeof handlerOrOptions === "function" ? handlerOrOptions : handlerOrNever;
   if ((options.method === "GET" || options.method === "HEAD") && options.body) throw new BetterCallError("Body is not allowed with GET or HEAD methods");
-  if (path29 && /\/{2,}/.test(path29)) throw new BetterCallError("Path cannot contain consecutive slashes");
+  if (path28 && /\/{2,}/.test(path28)) throw new BetterCallError("Path cannot contain consecutive slashes");
   const internalHandler = async (...inputCtx) => {
     const context = inputCtx[0] || {};
     const { data: internalContext, error: validationError } = await tryCatch(createInternalContext(context, {
       options,
-      path: path29
+      path: path28
     }));
     if (validationError) {
       if (!(validationError instanceof ValidationError)) throw validationError;
@@ -118466,7 +118466,7 @@ function createEndpoint(pathOrOptions, handlerOrOptions, handlerOrNever) {
     } : response;
   };
   internalHandler.options = options;
-  internalHandler.path = path29;
+  internalHandler.path = path28;
   return internalHandler;
 }
 function combineMiddleware(local, configured) {
@@ -118475,8 +118475,8 @@ function combineMiddleware(local, configured) {
 createEndpoint.create = (opts) => {
   function createConfiguredEndpoint(...args) {
     if (args.length === 3) {
-      const [path29, options2, handler2] = args;
-      return createEndpoint(path29, {
+      const [path28, options2, handler2] = args;
+      return createEndpoint(path28, {
         ...options2,
         use: combineMiddleware(options2.use, opts?.use)
       }, handler2);
@@ -118738,39 +118738,39 @@ function createRouter() {
     static: new NullProtoObj()
   };
 }
-function scanFirstGroup(path29) {
+function scanFirstGroup(path28) {
   let i5 = 0;
   let depth = 0;
-  for (; i5 < path29.length; i5++) {
-    const c5 = path29.charCodeAt(i5);
+  for (; i5 < path28.length; i5++) {
+    const c5 = path28.charCodeAt(i5);
     if (c5 === 92) i5++;
     else if (c5 === 40) depth++;
     else if (c5 === 41 && depth > 0) depth--;
     else if (c5 === 123 && depth === 0) break;
   }
-  if (i5 >= path29.length) return;
+  if (i5 >= path28.length) return;
   let j5 = i5 + 1;
   depth = 0;
-  for (; j5 < path29.length; j5++) {
-    const c5 = path29.charCodeAt(j5);
+  for (; j5 < path28.length; j5++) {
+    const c5 = path28.charCodeAt(j5);
     if (c5 === 92) j5++;
     else if (c5 === 40) depth++;
     else if (c5 === 41 && depth > 0) depth--;
     else if (c5 === 125 && depth === 0) break;
   }
-  if (j5 >= path29.length) return;
-  const mod = path29[j5 + 1];
+  if (j5 >= path28.length) return;
+  const mod = path28[j5 + 1];
   const hasMod = mod === "?" || mod === "+" || mod === "*";
   return [
-    path29.slice(0, i5),
-    path29.slice(i5 + 1, j5),
-    path29.slice(j5 + (hasMod ? 2 : 1)),
+    path28.slice(0, i5),
+    path28.slice(i5 + 1, j5),
+    path28.slice(j5 + (hasMod ? 2 : 1)),
     hasMod ? mod : void 0
   ];
 }
-function expandGroupDelimiters(path29) {
-  if (!path29.includes("{")) return;
-  const group4 = scanFirstGroup(path29);
+function expandGroupDelimiters(path28) {
+  if (!path28.includes("{")) return;
+  const group4 = scanFirstGroup(path28);
   if (!group4) return;
   const [pre, body, suf, mod] = group4;
   if (!mod) return [pre + body + suf];
@@ -118840,9 +118840,9 @@ function replaceSegmentWildcards(segment, unnamedStart, toGroupKey = toUnnamedGr
   }
   return [replaced, nextIndex];
 }
-function encodeEscapes(path29) {
-  if (!path29.includes("\\")) return path29;
-  return path29.replace(/\\([:(){}])/g, (_, c5) => "\uFFFD" + "ABCDE"[":(){}".indexOf(c5)]);
+function encodeEscapes(path28) {
+  if (!path28.includes("\\")) return path28;
+  return path28.replace(/\\([:(){}])/g, (_, c5) => "\uFFFD" + "ABCDE"[":(){}".indexOf(c5)]);
 }
 function segmentKey(segment) {
   if (segment.startsWith("**")) return 2;
@@ -118871,22 +118871,22 @@ function expandModifiers(segments) {
     return m3[2] === "+" ? [wc] : [wc, without];
   }
 }
-function normalizePath(path29) {
-  if (!path29.includes("/.")) return path29;
+function normalizePath(path28) {
+  if (!path28.includes("/.")) return path28;
   const r5 = [];
-  for (const s of path29.split("/")) if (s === ".") continue;
+  for (const s of path28.split("/")) if (s === ".") continue;
   else if (s === ".." && r5.length > 1) r5.pop();
   else r5.push(s);
   return r5.join("/") || "/";
 }
-function splitPath(path29) {
-  const s = path29.split("/");
+function splitPath(path28) {
+  const s = path28.split("/");
   s.shift();
   if (s[s.length - 1] === "") s.pop();
   return s;
 }
-function splitRoute(path29) {
-  const s = splitPath(path29);
+function splitRoute(path28) {
+  const s = splitPath(path28);
   while (s[s.length - 1] === "") s.pop();
   return s;
 }
@@ -118902,16 +118902,16 @@ function getMatchParams(segments, paramsMap) {
   }
   return params;
 }
-function addRoute(ctx, method = "", path29, data) {
+function addRoute(ctx, method = "", path28, data) {
   method = method.toUpperCase();
-  if (path29.charCodeAt(0) !== 47) path29 = `/${path29}`;
-  const groupExpanded = expandGroupDelimiters(path29);
+  if (path28.charCodeAt(0) !== 47) path28 = `/${path28}`;
+  const groupExpanded = expandGroupDelimiters(path28);
   if (groupExpanded) {
     for (const expandedPath of groupExpanded) addRoute(ctx, method, expandedPath, data);
     return;
   }
-  path29 = encodeEscapes(path29);
-  const segments = splitRoute(path29);
+  path28 = encodeEscapes(path28);
+  const segments = splitRoute(path28);
   const expanded = expandModifiers(segments);
   if (expanded) {
     for (const p3 of expanded) addRoute(ctx, method, p3, data);
@@ -119002,15 +119002,15 @@ function getParamRegexp(segment, unnamedStart = 0) {
   const regex = _s5.replace(/:([\w-]+)(?:\(([^)]*)\))?/g, (_, id2, p3) => `(?<${toGroupName(id2)}>${p3 || "[^/]+"})`).replace(/\((?![?<])/g, () => `(?<${toUnnamedGroupKey(_i++)}>`).replace(/\uFFFE(.)/g, (_, c5) => /[.*+?^${}()|[\]\\]/.test(c5) ? `\\${c5}` : c5);
   return [new RegExp(`^${regex}$`), _i];
 }
-function findRoute(ctx, method = "", path29, opts) {
-  if (opts?.normalize) path29 = normalizePath(path29);
-  if (path29.charCodeAt(path29.length - 1) === 47) path29 = path29.slice(0, -1);
-  const staticNode = ctx.static[path29];
+function findRoute(ctx, method = "", path28, opts) {
+  if (opts?.normalize) path28 = normalizePath(path28);
+  if (path28.charCodeAt(path28.length - 1) === 47) path28 = path28.slice(0, -1);
+  const staticNode = ctx.static[path28];
   if (staticNode && staticNode.methods) {
     const staticMatch = staticNode.methods[method] || staticNode.methods[""];
     if (staticMatch !== void 0) return staticMatch[0];
   }
-  const segments = splitPath(path29);
+  const segments = splitPath(path28);
   const match = _lookupTree(ctx.root, method, segments, 0);
   if (match === void 0) return;
   if (opts?.params === false) return match;
@@ -119072,10 +119072,10 @@ function _selectMatcher(methods2, method, segments, dynamicTerminal, optionalOnl
   }
   return best;
 }
-function findAllRoutes(ctx, method = "", path29, opts) {
-  if (opts?.normalize) path29 = normalizePath(path29);
-  if (path29.charCodeAt(path29.length - 1) === 47) path29 = path29.slice(0, -1);
-  const segments = splitPath(path29);
+function findAllRoutes(ctx, method = "", path28, opts) {
+  if (opts?.normalize) path28 = normalizePath(path28);
+  if (path28.charCodeAt(path28.length - 1) === 47) path28 = path28.slice(0, -1);
+  const segments = splitPath(path28);
   const matches = _findAll(ctx.root, method, segments, 0);
   if (opts?.params === false) return matches;
   return matches.map((m3) => {
@@ -119159,25 +119159,25 @@ var createRouter$1 = (endpoints, config4) => {
     const methods2 = Array.isArray(endpoint.options?.method) ? endpoint.options.method : [endpoint.options?.method];
     for (const method of methods2) addRoute(router2, method, endpoint.path, endpoint);
   }
-  if (config4?.routerMiddleware?.length) for (const { path: path29, middleware } of config4.routerMiddleware) addRoute(middlewareRouter, "*", path29, middleware);
+  if (config4?.routerMiddleware?.length) for (const { path: path28, middleware } of config4.routerMiddleware) addRoute(middlewareRouter, "*", path28, middleware);
   const basePath = config4?.basePath && config4.basePath !== "/" ? config4.basePath.replace(/\/+$/, "") : "";
   const processRequest = async (request) => {
     const url2 = new URL(request.url);
     const pathname = url2.pathname;
-    let path29;
+    let path28;
     if (basePath) {
       if (!pathname.startsWith(`${basePath}/`)) return new Response(null, {
         status: 404,
         statusText: "Not Found"
       });
-      path29 = pathname.slice(basePath.length);
-    } else path29 = pathname;
-    if (path29.length === 0 || /\/{2,}/.test(path29)) return new Response(null, {
+      path28 = pathname.slice(basePath.length);
+    } else path28 = pathname;
+    if (path28.length === 0 || /\/{2,}/.test(path28)) return new Response(null, {
       status: 404,
       statusText: "Not Found"
     });
-    const route = findRoute(router2, request.method, path29);
-    if (path29.endsWith("/") !== route?.data?.path?.endsWith("/") && !config4?.skipTrailingSlashes) return new Response(null, {
+    const route = findRoute(router2, request.method, path28);
+    if (path28.endsWith("/") !== route?.data?.path?.endsWith("/") && !config4?.skipTrailingSlashes) return new Response(null, {
       status: 404,
       statusText: "Not Found"
     });
@@ -119195,7 +119195,7 @@ var createRouter$1 = (endpoints, config4) => {
     try {
       const allowedMediaTypes = handler.options.metadata?.allowedMediaTypes || config4?.allowedMediaTypes;
       const context = {
-        path: path29,
+        path: path28,
         method: request.method,
         headers: request.headers,
         params: route.params ? { ...route.params } : {},
@@ -119206,7 +119206,7 @@ var createRouter$1 = (endpoints, config4) => {
         asResponse: true,
         context: config4?.routerContext
       };
-      const middlewareRoutes = findAllRoutes(middlewareRouter, "*", path29);
+      const middlewareRoutes = findAllRoutes(middlewareRouter, "*", path28);
       if (middlewareRoutes?.length) for (const { data: middleware, params } of middlewareRoutes) {
         const res = await middleware({
           ...context,
@@ -120200,8 +120200,8 @@ function wrapEndpointHandler(handler, options) {
 }
 function createAuthEndpoint(...args) {
   if (args.length === 3) {
-    const [path29, options2, handler2] = args;
-    return createEndpointWithAuthContext(path29, options2, wrapEndpointHandler(handler2, options2));
+    const [path28, options2, handler2] = args;
+    return createEndpointWithAuthContext(path28, options2, wrapEndpointHandler(handler2, options2));
   }
   const [options, handler] = args;
   return createEndpointWithAuthContext(options, wrapEndpointHandler(handler, options));
@@ -120221,10 +120221,10 @@ createAuthEndpoint.serverOnly = (options, handler) => createAuthEndpoint(withSer
 var CONTROL_CHARACTER_PATTERN = /[\u0000-\u001f\u007f-\u009f]/;
 var RELATIVE_URL_PARSER_ORIGIN = "https://better-auth.invalid";
 var ENCODED_PATH_SEPARATOR_PATTERN = /%2[fF]|%5[cC]/;
-var normalizePath2 = (path29) => {
-  let decoded = path29;
+var normalizePath2 = (path28) => {
+  let decoded = path28;
   try {
-    decoded = decodeURIComponent(path29);
+    decoded = decodeURIComponent(path28);
   } catch {
   }
   const segments = [];
@@ -120251,18 +120251,18 @@ var parseCustomSchemeOrigin = (value2) => {
     }
   }
   const pathEnd = rest.search(/[?#]/);
-  const path29 = normalizePath2(pathEnd === -1 ? rest : rest.slice(0, pathEnd));
+  const path28 = normalizePath2(pathEnd === -1 ? rest : rest.slice(0, pathEnd));
   return {
     scheme,
     authority: authority.toLowerCase(),
-    path: path29
+    path: path28
   };
 };
 var isSafeRelativeURL = (value2) => {
   if (!value2.startsWith("/") || value2.startsWith("//") || value2.includes("\\") || CONTROL_CHARACTER_PATTERN.test(value2)) return false;
   const pathEnd = value2.search(/[?#]/);
-  const path29 = pathEnd === -1 ? value2 : value2.slice(0, pathEnd);
-  if (ENCODED_PATH_SEPARATOR_PATTERN.test(path29)) return false;
+  const path28 = pathEnd === -1 ? value2 : value2.slice(0, pathEnd);
+  if (ENCODED_PATH_SEPARATOR_PATTERN.test(path28)) return false;
   try {
     return new URL(value2, RELATIVE_URL_PARSER_ORIGIN).origin === RELATIVE_URL_PARSER_ORIGIN;
   } catch {
@@ -120585,8 +120585,8 @@ function getIP(req, options) {
   if (isTest() || isDevelopment()) return LOCALHOST_IP;
   return null;
 }
-function createRateLimitKey(ip, path29) {
-  return `${ip}|${path29}`;
+function createRateLimitKey(ip, path28) {
+  return `${ip}|${path28}`;
 }
 
 // ../node_modules/better-auth/dist/api/rate-limiter/index.mjs
@@ -120817,7 +120817,7 @@ var ipWarningLogged = false;
 var NO_TRUSTED_IP_KEY = "no-trusted-ip";
 async function resolveRateLimitConfig(req, ctx) {
   const basePath = new URL(ctx.baseURL).pathname;
-  const path29 = normalizePathname(req.url, basePath);
+  const path28 = normalizePathname(req.url, basePath);
   let currentWindow = ctx.rateLimit.window;
   let currentMax = ctx.rateLimit.max;
   const ip = getIP(req, ctx.options);
@@ -120826,14 +120826,14 @@ async function resolveRateLimitConfig(req, ctx) {
     ctx.logger.warn("Rate limiting could not determine a client IP and is falling back to a single shared per-path bucket. Ensure your runtime forwards a trusted client IP header, then set `advanced.ipAddress.ipAddressHeaders` or `advanced.ipAddress.trustedProxies` so the address can be resolved.");
     ipWarningLogged = true;
   }
-  const key = createRateLimitKey(ip ?? NO_TRUSTED_IP_KEY, path29);
-  const specialRule = getDefaultSpecialRules().find((rule) => rule.pathMatcher(path29));
+  const key = createRateLimitKey(ip ?? NO_TRUSTED_IP_KEY, path28);
+  const specialRule = getDefaultSpecialRules().find((rule) => rule.pathMatcher(path28));
   if (specialRule) {
     currentWindow = specialRule.window;
     currentMax = specialRule.max;
   }
   for (const plugin of ctx.options.plugins || []) if (plugin.rateLimit) {
-    const matchedRule = plugin.rateLimit.find((rule) => rule.pathMatcher(path29));
+    const matchedRule = plugin.rateLimit.find((rule) => rule.pathMatcher(path28));
     if (matchedRule) {
       currentWindow = matchedRule.window;
       currentMax = matchedRule.max;
@@ -120842,8 +120842,8 @@ async function resolveRateLimitConfig(req, ctx) {
   }
   if (ctx.rateLimit.customRules) {
     const _path = Object.keys(ctx.rateLimit.customRules).find((p3) => {
-      if (p3.includes("*")) return wildcardMatch(p3)(path29);
-      return p3 === path29;
+      if (p3.includes("*")) return wildcardMatch(p3)(path28);
+      return p3 === path28;
     });
     if (_path) {
       const customRule = ctx.rateLimit.customRules[_path];
@@ -120879,14 +120879,14 @@ async function onRequestRateLimit(req, ctx) {
 }
 function getDefaultSpecialRules() {
   return [{
-    pathMatcher(path29) {
-      return path29.startsWith("/sign-in") || path29.startsWith("/sign-up") || path29.startsWith("/change-password") || path29.startsWith("/change-email");
+    pathMatcher(path28) {
+      return path28.startsWith("/sign-in") || path28.startsWith("/sign-up") || path28.startsWith("/change-password") || path28.startsWith("/change-email");
     },
     window: 10,
     max: 3
   }, {
-    pathMatcher(path29) {
-      return path29 === "/request-password-reset" || path29 === "/send-verification-email" || path29.startsWith("/forget-password") || path29 === "/email-otp/send-verification-otp" || path29 === "/email-otp/request-password-reset";
+    pathMatcher(path28) {
+      return path28 === "/request-password-reset" || path28 === "/send-verification-email" || path28.startsWith("/forget-password") || path28 === "/email-otp/send-verification-otp" || path28 === "/email-otp/request-password-reset";
     },
     window: 60,
     max: 3
@@ -123498,20 +123498,20 @@ var methods = [
   "patch",
   "delete"
 ];
-function parseMethodModifier(path29) {
-  if (!path29.startsWith("@")) return {
+function parseMethodModifier(path28) {
+  if (!path28.startsWith("@")) return {
     method: void 0,
-    path: path29
+    path: path28
   };
-  const separator = path29.indexOf("/");
-  const method = path29.slice(1, separator === -1 ? void 0 : separator);
+  const separator = path28.indexOf("/");
+  const method = path28.slice(1, separator === -1 ? void 0 : separator);
   if (!methods.includes(method)) return {
     method: void 0,
-    path: path29
+    path: path28
   };
   return {
     method,
-    path: separator === -1 ? path29 : path29.slice(separator + 1)
+    path: separator === -1 ? path28 : path28.slice(separator + 1)
   };
 }
 var isReservedPathSegment = (value2) => value2 === "." || value2 === "..";
@@ -123532,7 +123532,7 @@ function getURL$1(url2, option) {
   const { path: requestPath } = parseMethodModifier(url2);
   if (requestPath !== url2) url2 = `/${requestPath}`;
   if (!basePath.endsWith("/")) basePath += "/";
-  let [path29, urlQuery] = url2.replace(basePath, "").split("?");
+  let [path28, urlQuery] = url2.replace(basePath, "").split("?");
   const queryParams = new URLSearchParams(urlQuery);
   for (const [key, value2] of Object.entries(query || {})) {
     if (value2 == null) continue;
@@ -123546,18 +123546,18 @@ function getURL$1(url2, option) {
   }
   const pathParams = /* @__PURE__ */ new Map();
   if (params) if (Array.isArray(params)) {
-    const paramPaths = path29.split("/").filter((p3) => p3.startsWith(":"));
+    const paramPaths = path28.split("/").filter((p3) => p3.startsWith(":"));
     for (const [index, key] of paramPaths.entries()) {
       const value2 = params[index];
       pathParams.set(key, String(value2));
     }
   } else for (const [key, value2] of Object.entries(params)) pathParams.set(`:${key}`, String(value2));
-  path29 = path29.split("/").map((segment) => resolvePathSegment(segment, pathParams)).join("/");
-  path29 = path29.replace(/^\/+/, "");
+  path28 = path28.split("/").map((segment) => resolvePathSegment(segment, pathParams)).join("/");
+  path28 = path28.replace(/^\/+/, "");
   let queryParamString = queryParams.toString();
   queryParamString = queryParamString.length > 0 ? `?${queryParamString}`.replace(/\+/g, "%20") : "";
-  if (!basePath.startsWith("http")) return `${basePath}${path29}${queryParamString}`;
-  return new URL(`${path29}${queryParamString}`, basePath);
+  if (!basePath.startsWith("http")) return `${basePath}${path28}${queryParamString}`;
+  return new URL(`${path28}${queryParamString}`, basePath);
 }
 var getAuthHeader = async (options) => {
   const headers = {};
@@ -130457,15 +130457,15 @@ function checkEndpointConflicts(options, logger3) {
   options.plugins?.forEach((plugin) => {
     if (plugin.endpoints) {
       for (const [key, endpoint] of Object.entries(plugin.endpoints)) if (endpoint && "path" in endpoint && typeof endpoint.path === "string") {
-        const path29 = endpoint.path;
+        const path28 = endpoint.path;
         let methods2 = [];
         if (endpoint.options && "method" in endpoint.options) {
           if (Array.isArray(endpoint.options.method)) methods2 = endpoint.options.method;
           else if (typeof endpoint.options.method === "string") methods2 = [endpoint.options.method];
         }
         if (methods2.length === 0) methods2 = ["*"];
-        if (!endpointRegistry.has(path29)) endpointRegistry.set(path29, []);
-        endpointRegistry.get(path29).push({
+        if (!endpointRegistry.has(path28)) endpointRegistry.set(path28, []);
+        endpointRegistry.get(path28).push({
           pluginId: plugin.id,
           endpointKey: key,
           methods: methods2
@@ -130474,7 +130474,7 @@ function checkEndpointConflicts(options, logger3) {
     }
   });
   const conflicts = [];
-  for (const [path29, entries] of endpointRegistry.entries()) if (entries.length > 1) {
+  for (const [path28, entries] of endpointRegistry.entries()) if (entries.length > 1) {
     const methodMap = /* @__PURE__ */ new Map();
     let hasConflict = false;
     for (const entry of entries) for (const method of entry.methods) {
@@ -130489,7 +130489,7 @@ function checkEndpointConflicts(options, logger3) {
       const conflictingMethods = [];
       for (const [method, plugins] of methodMap.entries()) if (plugins.length > 1 || method === "*" && entries.length > 1 || method !== "*" && methodMap.has("*")) conflictingMethods.push(method);
       conflicts.push({
-        path: path29,
+        path: path28,
         plugins: uniquePlugins,
         conflictingMethods
       });
@@ -133069,64 +133069,64 @@ var emailOTP = (options) => {
     }] },
     rateLimit: [
       {
-        pathMatcher(path29) {
-          return path29 === "/email-otp/send-verification-otp";
+        pathMatcher(path28) {
+          return path28 === "/email-otp/send-verification-otp";
         },
         window: opts.rateLimit?.window || 60,
         max: opts.rateLimit?.max || 3
       },
       {
-        pathMatcher(path29) {
-          return path29 === "/email-otp/check-verification-otp";
+        pathMatcher(path28) {
+          return path28 === "/email-otp/check-verification-otp";
         },
         window: opts.rateLimit?.window || 60,
         max: opts.rateLimit?.max || 3
       },
       {
-        pathMatcher(path29) {
-          return path29 === "/email-otp/verify-email";
+        pathMatcher(path28) {
+          return path28 === "/email-otp/verify-email";
         },
         window: opts.rateLimit?.window || 60,
         max: opts.rateLimit?.max || 3
       },
       {
-        pathMatcher(path29) {
-          return path29 === "/sign-in/email-otp";
+        pathMatcher(path28) {
+          return path28 === "/sign-in/email-otp";
         },
         window: opts.rateLimit?.window || 60,
         max: opts.rateLimit?.max || 3
       },
       {
-        pathMatcher(path29) {
-          return path29 === "/email-otp/request-password-reset";
+        pathMatcher(path28) {
+          return path28 === "/email-otp/request-password-reset";
         },
         window: opts.rateLimit?.window || 60,
         max: opts.rateLimit?.max || 3
       },
       {
-        pathMatcher(path29) {
-          return path29 === "/email-otp/reset-password";
+        pathMatcher(path28) {
+          return path28 === "/email-otp/reset-password";
         },
         window: opts.rateLimit?.window || 60,
         max: opts.rateLimit?.max || 3
       },
       {
-        pathMatcher(path29) {
-          return path29 === "/forget-password/email-otp";
+        pathMatcher(path28) {
+          return path28 === "/forget-password/email-otp";
         },
         window: opts.rateLimit?.window || 60,
         max: opts.rateLimit?.max || 3
       },
       {
-        pathMatcher(path29) {
-          return path29 === "/email-otp/request-email-change";
+        pathMatcher(path28) {
+          return path28 === "/email-otp/request-email-change";
         },
         window: opts.rateLimit?.window || 60,
         max: opts.rateLimit?.max || 3
       },
       {
-        pathMatcher(path29) {
-          return path29 === "/email-otp/change-email";
+        pathMatcher(path28) {
+          return path28 === "/email-otp/change-email";
         },
         window: opts.rateLimit?.window || 60,
         max: opts.rateLimit?.max || 3
@@ -134216,9 +134216,9 @@ function trimTrailingPunctuation(value2) {
 function extractBriefIdentifiers(text) {
   const found = /* @__PURE__ */ new Set();
   const add = (value2) => {
-    const trimmed9 = trimTrailingPunctuation((value2 ?? "").trim());
-    if (trimmed9)
-      found.add(trimmed9);
+    const trimmed = trimTrailingPunctuation((value2 ?? "").trim());
+    if (trimmed)
+      found.add(trimmed);
   };
   const withoutCode = text.replace(/`([^`\n]+)`/g, (_match, code) => {
     add(code);
@@ -134841,11 +134841,11 @@ function normalizeInstructionText(value2) {
   return (value2 ?? "").trim();
 }
 function deriveTitleFromInstructionText(instructionText) {
-  const trimmed9 = normalizeInstructionText(instructionText);
-  if (trimmed9.length <= 100) {
-    return trimmed9;
+  const trimmed = normalizeInstructionText(instructionText);
+  if (trimmed.length <= 100) {
+    return trimmed;
   }
-  return `${trimmed9.slice(0, 100)}\u2026`;
+  return `${trimmed.slice(0, 100)}\u2026`;
 }
 
 // ../automations/dist/title-summarizer/tools/summarize-text.js
@@ -135941,6 +135941,7 @@ var getProjectsByIdRepositoryPathParamsSchema = external_exports.object({ "id": 
 var getProjectsByIdRepositoryQueryParamsSchema = external_exports.object({ "executionTargetId": external_exports.exactOptional(external_exports.string()), "resourceKey": external_exports.exactOptional(external_exports.string()) });
 var getProjectsByIdMissionsPathParamsSchema = external_exports.object({ "id": external_exports.string() });
 var getProjectsByIdMissionsQueryParamsSchema = external_exports.object({ "includeObjectives": external_exports.exactOptional(external_exports.string()), "includeAllCompleted": external_exports.exactOptional(external_exports.string()) });
+var getProjectsByIdMissionsHeaderParamsSchema = external_exports.object({ "if-none-match": external_exports.exactOptional(external_exports.string()) });
 var getExtEverhourProjectsByProjectIdLinkPathParamsSchema = external_exports.object({ "projectId": external_exports.string() });
 var putExtEverhourProjectsByProjectIdLinkPathParamsSchema = external_exports.object({ "projectId": external_exports.string() });
 var getExtEverhourProjectsByProjectIdPathParamsSchema = external_exports.object({ "projectId": external_exports.string() });
@@ -138611,7 +138612,7 @@ var apiOperations = {
     security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
     parameters: { path: null, query: getActivityFeedQueryParamsSchema, header: null },
     requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: activityFeedDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: activityFeedDtoSchema } } }, "304": { headers: [], content: {} }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
   },
   /**
    * GET /api/objective-transcript: Full-text objective history across workspaces
@@ -139198,9 +139199,9 @@ var apiOperations = {
     consumers: ["mobile", "webapp"],
     extension: null,
     security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
-    parameters: { path: getProjectsByIdMissionsPathParamsSchema, query: getProjectsByIdMissionsQueryParamsSchema, header: null },
+    parameters: { path: getProjectsByIdMissionsPathParamsSchema, query: getProjectsByIdMissionsQueryParamsSchema, header: getProjectsByIdMissionsHeaderParamsSchema },
     requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: missionListSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+    responses: { "200": { headers: ["ETag"], content: { "application/json": { kind: "json", schema: missionListSchema } } }, "304": { headers: ["ETag"], content: {} }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
   },
   /**
    * GET /ext/everhour/projects/{projectId}/link: Read a project's Everhour link
@@ -141853,7 +141854,7 @@ function fromNodeHeaders(nodeHeaders) {
 var import_cors = __toESM(require_lib3(), 1);
 var import_express7 = __toESM(require_express2(), 1);
 var import_node_fs22 = require("node:fs");
-var import_node_path34 = __toESM(require("node:path"), 1);
+var import_node_path33 = __toESM(require("node:path"), 1);
 var import_node_url6 = require("node:url");
 
 // ../cli/src/config.ts
@@ -141915,15 +141916,15 @@ var TomlDate = class _TomlDate extends Date {
     return this.#hasDate || this.#hasTime;
   }
   toISOString() {
-    let iso4 = super.toISOString();
+    let iso2 = super.toISOString();
     if (this.isDate())
-      return iso4.slice(0, 10);
+      return iso2.slice(0, 10);
     if (this.isTime())
-      return iso4.slice(11, 23);
+      return iso2.slice(11, 23);
     if (this.#offset === null)
-      return iso4.slice(0, -1);
+      return iso2.slice(0, -1);
     if (this.#offset === "Z")
-      return iso4;
+      return iso2;
     let offset = +this.#offset.slice(1, 3) * 60 + +this.#offset.slice(4, 6);
     offset = this.#offset[0] === "-" ? offset : -offset;
     let offsetDate = new Date(this.getTime() - offset * 6e4);
@@ -142887,7 +142888,6 @@ function applyDatabaseEnv(config4) {
 
 // db.ts
 var import_node_async_hooks2 = require("node:async_hooks");
-var import_node_crypto11 = require("node:crypto");
 var import_node_path10 = __toESM(require("node:path"), 1);
 
 // ../packages/core/service/util.ts
@@ -142901,6 +142901,10 @@ function nowIso() {
 }
 function newId() {
   return (0, import_node_crypto9.randomUUID)();
+}
+function toIsoOrNull(value2) {
+  if (value2 === null || value2 === void 0) return null;
+  return new Date(value2 instanceof Date ? value2 : String(value2)).toISOString();
 }
 function slugify3(input2) {
   const base = input2.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 48);
@@ -143485,12 +143489,6 @@ async function initDatabase() {
   return databaseInitPromise;
 }
 var DATABASE_PATH = databasePath;
-function nowIso2() {
-  return (/* @__PURE__ */ new Date()).toISOString();
-}
-function newId2() {
-  return (0, import_node_crypto11.randomUUID)();
-}
 async function oldestWorkspaceRowFromClient(client) {
   return client.get(
     `SELECT id, slug, name, kind, created_at FROM workspaces
@@ -144093,6 +144091,234 @@ async function loadObjectiveByKey({
   };
 }
 
+// errors.ts
+var ApiError = class extends Error {
+  constructor(status, message2, detail, code) {
+    super(message2);
+    this.status = status;
+    this.detail = detail;
+    this.code = code;
+  }
+  status;
+  detail;
+  code;
+};
+function rethrowNotFoundAs(error64, message2) {
+  if (error64 instanceof ServiceError && error64.status === 404) {
+    throw new ApiError(404, message2, void 0, error64.code);
+  }
+  throw error64;
+}
+function requiredString(value2, field, max) {
+  const normalized = typeof value2 === "string" ? value2.trim() : "";
+  if (!normalized) throw new ApiError(400, `${field} is required`);
+  if (normalized.length > max) throw new ApiError(400, `${field} is too long`);
+  return normalized;
+}
+function invalidJsonError() {
+  return new ApiError(400, "Request body is not valid JSON.", void 0, "invalid_json");
+}
+function isBodyParserError(error64, type) {
+  return typeof error64 === "object" && error64 !== null && error64.type === type;
+}
+function apiErrorFromBodyParser(error64) {
+  if (isBodyParserError(error64, "entity.too.large")) {
+    return new ApiError(413, "Request body is too large.", void 0, "body_too_large");
+  }
+  if (isBodyParserError(error64, "entity.parse.failed")) return invalidJsonError();
+  return null;
+}
+function apiErrorFromDatabaseError(error64) {
+  if (!error64 || typeof error64 !== "object") return null;
+  const { code, message: message2 = "" } = error64;
+  if (!code?.startsWith("SQLITE_CONSTRAINT")) return null;
+  if (code === "SQLITE_CONSTRAINT_UNIQUE" && message2.includes("project_resources")) {
+    if (message2.includes("resource_key") || message2.includes("target_key")) {
+      return new ApiError(
+        409,
+        "This resource key is already linked to the project on this execution target.",
+        message2
+      );
+    }
+    return new ApiError(
+      409,
+      "This directory is already linked to the project on this device.",
+      message2
+    );
+  }
+  if (code === "SQLITE_CONSTRAINT_FOREIGNKEY") {
+    return new ApiError(400, "A related record is missing or invalid.", message2);
+  }
+  return new ApiError(409, "Database constraint violation.", message2);
+}
+function apiErrorHandler(err, _req, res, _next) {
+  if (err instanceof ApiError) {
+    res.status(err.status).json({ error: err.message, detail: err.detail, code: err.code });
+    return;
+  }
+  if (err instanceof ServiceError) {
+    res.status(err.status).json({
+      error: err.message,
+      code: err.code,
+      ...err.details !== void 0 ? { details: err.details } : {}
+    });
+    return;
+  }
+  const bodyParserError = apiErrorFromBodyParser(err);
+  if (bodyParserError) {
+    res.status(bodyParserError.status).json({
+      error: bodyParserError.message,
+      code: bodyParserError.code
+    });
+    return;
+  }
+  const databaseError = apiErrorFromDatabaseError(err);
+  if (databaseError) {
+    res.status(databaseError.status).json({
+      error: databaseError.message,
+      detail: databaseError.detail
+    });
+    return;
+  }
+  const message2 = err instanceof Error ? err.message : "Internal error";
+  console.error("[webapp] request failed:", message2);
+  res.status(500).json({ error: message2, detail: message2 });
+}
+
+// protocol/project-refs.ts
+var ProjectSelectionRequiredError = class extends Error {
+  projectRef;
+  projects;
+  constructor(projectRef, projects) {
+    super(`Project reference matches more than one workspace: ${projectRef}`);
+    this.name = "ProjectSelectionRequiredError";
+    this.projectRef = projectRef;
+    this.projects = projects;
+  }
+};
+async function resolveProjectRefChoices({
+  projectRef,
+  workspaceHint,
+  workspaceIds
+}) {
+  if (workspaceIds.length === 0) return [];
+  const allowedProjectIds = getActiveTokenProjectIds();
+  if (allowedProjectIds?.length === 0) return [];
+  const db = serviceDatabaseClient();
+  const placeholders = workspaceIds.map(() => "?").join(", ");
+  const selectChoice = `SELECT p.id, p.name, p.slug, p.workspace_id, w.name AS workspace_name,
+            w.slug AS workspace_slug
+       FROM projects p
+       JOIN workspaces w ON w.id = p.workspace_id
+      WHERE p.deleted_at IS NULL AND p.workspace_id IN (${placeholders})${allowedProjectIds === null ? "" : ` AND p.id IN (${allowedProjectIds.map(() => "?").join(", ")})`}`;
+  const choiceParams = [...workspaceIds, ...allowedProjectIds ?? []];
+  const toChoice = (row) => ({
+    id: row.id,
+    name: row.name,
+    slug: row.slug,
+    workspaceId: row.workspace_id,
+    workspaceName: row.workspace_name,
+    workspaceSlug: row.workspace_slug
+  });
+  const byId = await db.get(`${selectChoice} AND p.id = ?`, [
+    ...choiceParams,
+    projectRef
+  ]);
+  if (byId) return [toChoice(byId)];
+  const matches = (await db.all(
+    `${selectChoice} AND (lower(p.slug) = lower(?) OR lower(p.name) = lower(?))`,
+    [...choiceParams, projectRef, projectRef]
+  )).map(toChoice);
+  const hint = workspaceHint?.trim().toLowerCase();
+  if (!hint || matches.length <= 1) return matches;
+  const narrowed = matches.filter(
+    (choice) => choice.workspaceId.toLowerCase() === hint || choice.workspaceSlug.toLowerCase() === hint || choice.workspaceName.toLowerCase() === hint
+  );
+  return narrowed.length > 0 ? narrowed : matches;
+}
+
+// protocol/addressing.ts
+function readProtocolAddress(body) {
+  const read = (flag) => {
+    const value2 = body.flags?.[flag];
+    return typeof value2 === "string" ? value2.trim() || null : null;
+  };
+  const objectiveRef = read("--objective-id");
+  return {
+    executionRequestId: read("--execution-request-id"),
+    sessionKey: read("--session-key"),
+    objectiveRef,
+    missionRef: read("--mission-id") ?? missionDisplayIdFromObjectiveRef(objectiveRef),
+    projectRef: read("--project-id"),
+    workspaceHint: read("--workspace-id")
+  };
+}
+async function resolveSessionId(sessionKey) {
+  if (!sessionKey) return null;
+  const session = await serviceDatabaseClient().get(
+    `SELECT id FROM agent_sessions
+      WHERE session_key_hash = ? AND deleted_at IS NULL`,
+    [hashSessionKey(sessionKey)]
+  );
+  return session?.id ?? null;
+}
+async function deriveProtocolWorkspaceId(address, workspaceIds) {
+  if (workspaceIds.length === 0) return null;
+  const { executionRequestId, sessionKey, objectiveRef, missionRef, projectRef, workspaceHint } = address;
+  const placeholders = workspaceIds.map(() => "?").join(", ");
+  const db = serviceDatabaseClient();
+  if (executionRequestId) {
+    const request = await db.get(
+      `SELECT workspace_id FROM execution_requests
+        WHERE id = ? AND deleted_at IS NULL AND workspace_id IN (${placeholders})`,
+      [executionRequestId, ...workspaceIds]
+    );
+    if (request) return request.workspace_id;
+  }
+  if (sessionKey) {
+    const session = await db.get(
+      `SELECT workspace_id FROM agent_sessions
+        WHERE session_key_hash = ? AND deleted_at IS NULL AND workspace_id IN (${placeholders})`,
+      [hashSessionKey(sessionKey), ...workspaceIds]
+    );
+    if (session) return session.workspace_id;
+  }
+  if (objectiveRef) {
+    const objective = await db.get(
+      `SELECT workspace_id FROM objectives
+        WHERE id = ? AND deleted_at IS NULL AND workspace_id IN (${placeholders})`,
+      [objectiveRef, ...workspaceIds]
+    );
+    if (objective) return objective.workspace_id;
+  }
+  if (missionRef) {
+    const byId = await db.get(
+      `SELECT workspace_id FROM missions
+        WHERE id = ? AND deleted_at IS NULL AND workspace_id IN (${placeholders})`,
+      [missionRef, ...workspaceIds]
+    );
+    if (byId) return byId.workspace_id;
+    const byDisplay = await db.all(
+      `SELECT workspace_id, project_id FROM missions
+        WHERE display_id = ? AND deleted_at IS NULL AND workspace_id IN (${placeholders})`,
+      [missionRef, ...workspaceIds]
+    );
+    const visible = byDisplay.filter((row) => projectInTokenScope(row.project_id));
+    if (visible.length > 1) {
+      throw new ApiError(409, `Mission reference is ambiguous across workspaces: ${missionRef}`);
+    }
+    if (visible[0]) return visible[0].workspace_id;
+  }
+  if (!projectRef) return null;
+  const choices = await resolveProjectRefChoices({
+    projectRef,
+    workspaceHint,
+    workspaceIds
+  });
+  if (choices.length > 1) throw new ProjectSelectionRequiredError(projectRef, choices);
+  return choices[0]?.workspaceId ?? null;
+}
+
 // ../packages/core/service/manual-agent.ts
 var MANUAL_AGENT_KEY = "manual";
 var MANUAL_AGENT_ALIASES = /* @__PURE__ */ new Set([MANUAL_AGENT_KEY, "human"]);
@@ -144100,9 +144326,9 @@ function isManualAgentKey(agent) {
   return MANUAL_AGENT_ALIASES.has((agent ?? "").trim().toLowerCase());
 }
 function normalizeAgentKey(agent) {
-  const trimmed9 = agent?.trim();
-  if (!trimmed9) return null;
-  return isManualAgentKey(trimmed9) ? MANUAL_AGENT_KEY : trimmed9;
+  const trimmed = agent?.trim();
+  if (!trimmed) return null;
+  return isManualAgentKey(trimmed) ? MANUAL_AGENT_KEY : trimmed;
 }
 
 // ../packages/core/service/mission-search-query.ts
@@ -144406,9 +144632,9 @@ function matchedTermsInText({ terms, text }) {
   return terms.filter((term) => termMatchesHaystack({ term, haystack: text }));
 }
 function snippetAroundTerms({ text, terms }) {
-  const trimmed9 = text.trim();
-  if (!trimmed9) return null;
-  const lower = trimmed9.toLowerCase();
+  const trimmed = text.trim();
+  if (!trimmed) return null;
+  const lower = trimmed.toLowerCase();
   let idx = -1;
   let matchedLen = 0;
   for (const term of terms) {
@@ -144420,16 +144646,16 @@ function snippetAroundTerms({ text, terms }) {
     }
   }
   if (idx === -1) {
-    if (trimmed9.length <= SNIPPET_MAX_LENGTH) return trimmed9;
-    return `${trimmed9.slice(0, SNIPPET_MAX_LENGTH).trimEnd()}\u2026`;
+    if (trimmed.length <= SNIPPET_MAX_LENGTH) return trimmed;
+    return `${trimmed.slice(0, SNIPPET_MAX_LENGTH).trimEnd()}\u2026`;
   }
   const padding = Math.max(0, Math.floor((SNIPPET_MAX_LENGTH - matchedLen) / 2));
   let start2 = Math.max(0, idx - padding);
-  let end = Math.min(trimmed9.length, start2 + SNIPPET_MAX_LENGTH);
+  let end = Math.min(trimmed.length, start2 + SNIPPET_MAX_LENGTH);
   if (end - start2 < SNIPPET_MAX_LENGTH) start2 = Math.max(0, end - SNIPPET_MAX_LENGTH);
-  let snippet = trimmed9.slice(start2, end).trim();
+  let snippet = trimmed.slice(start2, end).trim();
   if (start2 > 0) snippet = `\u2026${snippet}`;
-  if (end < trimmed9.length) snippet = `${snippet}\u2026`;
+  if (end < trimmed.length) snippet = `${snippet}\u2026`;
   return snippet;
 }
 function aggregateDocumentScore(scores) {
@@ -145026,9 +145252,6 @@ function addEntityCount({
     counts[entityType] += amount;
   }
 }
-function sqlPlaceholders2(count) {
-  return Array.from({ length: count }, () => "?").join(", ");
-}
 function firstLine(text) {
   const line2 = (text ?? "").trim().split(/\r?\n/, 1)[0] ?? "";
   return line2.trim();
@@ -145173,7 +145396,7 @@ async function loadMatchMetadata({
     const rows = await db.all(
       `SELECT id, display_key, title, instruction_text, state, created_at, updated_at
          FROM objectives
-        WHERE id IN (${sqlPlaceholders2(uniqueObjectives.length)}) AND deleted_at IS NULL`,
+        WHERE id IN (${sqlPlaceholders(uniqueObjectives.length)}) AND deleted_at IS NULL`,
       uniqueObjectives
     );
     for (const row of rows) {
@@ -145192,7 +145415,7 @@ async function loadMatchMetadata({
     const rows = await db.all(
       `SELECT id, objective_id, summary, created_at, updated_at
          FROM deliveries
-        WHERE id IN (${sqlPlaceholders2(uniqueDeliveries.length)}) AND deleted_at IS NULL`,
+        WHERE id IN (${sqlPlaceholders(uniqueDeliveries.length)}) AND deleted_at IS NULL`,
       uniqueDeliveries
     );
     for (const row of rows) {
@@ -145592,7 +145815,7 @@ async function searchFullTextV3({
       JOIN projects p ON p.id = t.project_id
       JOIN workspaces w ON w.id = t.workspace_id
       WHERE ${missionSearchMatchPredicate(dialect)}
-        AND ${missionSearchEntityTypeColumnV3()} IN (${sqlPlaceholders2(docTypes.length)})${filters.sql}
+        AND ${missionSearchEntityTypeColumnV3()} IN (${sqlPlaceholders(docTypes.length)})${filters.sql}
       ORDER BY doc_score DESC
       LIMIT ?`,
     [
@@ -145873,7 +146096,7 @@ function mergeWorkspaceSearchV3({
 }
 
 // ../packages/core/service/objective-brief.ts
-var import_node_crypto12 = require("node:crypto");
+var import_node_crypto11 = require("node:crypto");
 
 // ../packages/core/service/objective-summary-placement.ts
 var OBJECTIVE_SWAP_WARN_RATIO = 1.5;
@@ -146111,8 +146334,8 @@ async function missionOwnerProfileId({
   );
   return owner?.profile_id ?? null;
 }
-function addMs(iso4, ms) {
-  return new Date(Date.parse(iso4) + ms).toISOString();
+function addMs(iso2, ms) {
+  return new Date(Date.parse(iso2) + ms).toISOString();
 }
 async function enqueueObjectiveBriefComposeJob({
   db,
@@ -146264,9 +146487,9 @@ var EMPTY_OBJECTIVE_BRIEF_STATE = {
   instruction_author_kind: null
 };
 function hashObjectiveInstruction(instructionText) {
-  const trimmed9 = (instructionText ?? "").trim();
-  if (!trimmed9) return null;
-  return (0, import_node_crypto12.createHash)("sha256").update(trimmed9, "utf8").digest("hex");
+  const trimmed = (instructionText ?? "").trim();
+  if (!trimmed) return null;
+  return (0, import_node_crypto11.createHash)("sha256").update(trimmed, "utf8").digest("hex");
 }
 function isSummaryEligibleInstruction(instructionText) {
   return (instructionText ?? "").trim().length >= OBJECTIVE_SUMMARY_MIN_INSTRUCTION_CHARS;
@@ -147425,12 +147648,12 @@ function purgeManagedWorktrees({
 
 // ../packages/core/service/local-target/branch-actions-git.ts
 function resolveActionCheckout(input2) {
-  const path29 = resolveBranchCheckoutPath({
+  const path28 = resolveBranchCheckoutPath({
     repoPath: input2.primaryRepoPath,
     branchName: input2.branchName,
     worktreePathHint: input2.worktreePath
   });
-  if (path29) return { ok: true, path: path29 };
+  if (path28) return { ok: true, path: path28 };
   return {
     ok: false,
     code: "BRANCH_NO_WORKTREE",
@@ -147504,8 +147727,8 @@ function integrateBranch(input2) {
 }
 function commitBranch(input2) {
   const { branchName } = input2;
-  const trimmed9 = (input2.message ?? "").trim();
-  if (!trimmed9) {
+  const trimmed = (input2.message ?? "").trim();
+  if (!trimmed) {
     return {
       ok: false,
       code: "BRANCH_COMMIT_MESSAGE_REQUIRED",
@@ -147532,7 +147755,7 @@ function commitBranch(input2) {
       detail: staged.stderr || staged.stdout
     };
   }
-  const commit = runGitResult(worktreePath, ["commit", "-m", trimmed9]);
+  const commit = runGitResult(worktreePath, ["commit", "-m", trimmed]);
   if (!commit.ok) {
     return {
       ok: false,
@@ -148487,6 +148710,11 @@ function latchChildEnvironment({
   return env3;
 }
 
+// ../packages/core/service/strings.ts
+function trimmedOrNull(value2) {
+  return typeof value2 === "string" && value2.trim() ? value2.trim() : null;
+}
+
 // ../packages/core/service/terminal-profile-types.ts
 var DEFAULT_VIEWER_OPEN_AS = "window";
 function viewerOpenAsForPlacement(placement) {
@@ -148517,11 +148745,8 @@ var DEFAULT_LAUNCH_SESSION_DEFAULTS = {
   worktreeBranchAutomationEnabled: false
 };
 var LAUNCH_SESSION_METADATA_KEY = "launchSession";
-function trimmed(value2) {
-  return typeof value2 === "string" && value2.trim() ? value2.trim() : null;
-}
 function viewerKindForLauncher(launcher) {
-  const value2 = trimmed(launcher);
+  const value2 = trimmedOrNull(launcher);
   if (!value2) return "inline";
   const lowered = value2.toLowerCase();
   if (lowered === "iterm2" || lowered === "iterm") return "iterm";
@@ -148529,7 +148754,7 @@ function viewerKindForLauncher(launcher) {
   return "custom";
 }
 function launcherForViewerKind(kind) {
-  switch (trimmed(kind)?.toLowerCase()) {
+  switch (trimmedOrNull(kind)?.toLowerCase()) {
     case "iterm":
     case "iterm2":
       return "iTerm2";
@@ -148545,10 +148770,10 @@ function launcherForViewerKind(kind) {
 function normalizeExecutionProvider(value2) {
   if (!value2 || typeof value2 !== "object" || Array.isArray(value2)) return null;
   const cast = value2;
-  const kind = trimmed(cast.kind)?.toLowerCase() === "latch" ? "latch" : "direct";
+  const kind = trimmedOrNull(cast.kind)?.toLowerCase() === "latch" ? "latch" : "direct";
   return {
     kind,
-    executable: trimmed(cast.executable) ?? DEFAULT_LATCH_EXECUTABLE
+    executable: trimmedOrNull(cast.executable) ?? DEFAULT_LATCH_EXECUTABLE
   };
 }
 function parseTerminalProfileJson(json2) {
@@ -148650,15 +148875,15 @@ function launchSessionSnapshotFromMetadata(metadata) {
   const cast = raw;
   if (cast.version !== TERMINAL_PROFILE_VERSION) return null;
   const viewer = cast.viewer && typeof cast.viewer === "object" && !Array.isArray(cast.viewer) ? cast.viewer : null;
-  const launcher = trimmed(viewer?.launcher);
-  const source = (value2) => trimmed(value2) === "target" ? "target" : "user_default";
+  const launcher = trimmedOrNull(viewer?.launcher);
+  const source = (value2) => trimmedOrNull(value2) === "target" ? "target" : "user_default";
   return {
     version: TERMINAL_PROFILE_VERSION,
     executionProvider: normalizeExecutionProvider(cast.executionProvider) ?? {
       ...DEFAULT_EXECUTION_PROVIDER
     },
     viewer: {
-      kind: trimmed(viewer?.kind) ? trimmed(viewer?.kind) : viewerKindForLauncher(launcher),
+      kind: trimmedOrNull(viewer?.kind) ? trimmedOrNull(viewer?.kind) : viewerKindForLauncher(launcher),
       launcher,
       openOnLaunch: viewer?.openOnLaunch !== false,
       // A snapshot frozen before `openAs` existed carries none; `window` is what
@@ -148670,7 +148895,7 @@ function launchSessionSnapshotFromMetadata(metadata) {
     },
     executionProviderSource: source(cast.executionProviderSource),
     viewerOpenSource: source(cast.viewerOpenSource),
-    resolvedAt: trimmed(cast.resolvedAt) ?? ""
+    resolvedAt: trimmedOrNull(cast.resolvedAt) ?? ""
   };
 }
 
@@ -148682,9 +148907,6 @@ var LATCH_DISCOVERY_CACHE_FILENAME = "latch-discovery.json";
 function defaultLatchDiscoveryCachePath() {
   const home = process.env.OVLD_HOME?.trim() || import_node_path14.default.join(import_node_os6.default.homedir(), ".ovld");
   return import_node_path14.default.join(home, LATCH_DISCOVERY_CACHE_FILENAME);
-}
-function trimmed2(value2) {
-  return typeof value2 === "string" && value2.trim() ? value2.trim() : null;
 }
 function asBoolean(value2) {
   return value2 === true;
@@ -148705,7 +148927,7 @@ function parseLatchCapabilitiesReport(raw) {
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
   const cast = parsed;
   const protocolVersion = typeof cast.protocolVersion === "number" && Number.isFinite(cast.protocolVersion) ? Math.trunc(cast.protocolVersion) : null;
-  const productVersion = trimmed2(cast.productVersion);
+  const productVersion = trimmedOrNull(cast.productVersion);
   if (protocolVersion === null || !productVersion) return null;
   if (!cast.capabilities || typeof cast.capabilities !== "object" || Array.isArray(cast.capabilities)) {
     return null;
@@ -148790,7 +149012,7 @@ function resolveLatchExecutablePathFromEnvironment({
   resolveOnPath = resolveLatchExecutableOnPath,
   fileExists = import_node_fs10.existsSync
 }) {
-  const name2 = trimmed2(executable) ?? DEFAULT_LATCH_EXECUTABLE;
+  const name2 = trimmedOrNull(executable) ?? DEFAULT_LATCH_EXECUTABLE;
   if (import_node_path14.default.isAbsolute(name2) || name2.includes("/") || name2.includes("\\")) {
     return fileExists(name2) ? import_node_path14.default.resolve(name2) : null;
   }
@@ -148846,7 +149068,7 @@ function probeLatchCapabilities({
   runCommand = defaultCommandRunner,
   now: now2 = () => (/* @__PURE__ */ new Date()).toISOString()
 } = {}) {
-  const exe = trimmed2(executable) ?? DEFAULT_LATCH_EXECUTABLE;
+  const exe = trimmedOrNull(executable) ?? DEFAULT_LATCH_EXECUTABLE;
   const checkedAt = now2();
   const resolvedPath2 = resolvePath(exe);
   if (!resolvedPath2) {
@@ -148877,7 +149099,7 @@ function latchDiscoveryCacheKey({
   executionTargetId,
   executable
 }) {
-  const exe = trimmed2(executable) ?? DEFAULT_LATCH_EXECUTABLE;
+  const exe = trimmedOrNull(executable) ?? DEFAULT_LATCH_EXECUTABLE;
   return `${executionTargetId}::${exe}`;
 }
 function readBinaryMtimeMs(resolvedPath2) {
@@ -148932,7 +149154,7 @@ function discoverLatchForExecutionTarget({
   runCommand = defaultCommandRunner,
   now: now2 = () => (/* @__PURE__ */ new Date()).toISOString()
 }) {
-  const exe = trimmed2(executable) ?? DEFAULT_LATCH_EXECUTABLE;
+  const exe = trimmedOrNull(executable) ?? DEFAULT_LATCH_EXECUTABLE;
   const key = latchDiscoveryCacheKey({ executionTargetId, executable: exe });
   const cache8 = readLatchDiscoveryCacheFile(cacheFilePath);
   const existing = cache8.entries[key];
@@ -148957,11 +149179,8 @@ var import_node_child_process4 = require("node:child_process");
 // ../packages/core/service/latch-binary.ts
 var import_node_fs11 = require("node:fs");
 var cache3 = /* @__PURE__ */ new Map();
-function trimmed3(value2) {
-  return typeof value2 === "string" && value2.trim() ? value2.trim() : null;
-}
 function resolveLatchBinaryPath(executable, resolve = resolveLatchExecutablePath) {
-  const name2 = trimmed3(executable) ?? DEFAULT_LATCH_EXECUTABLE;
+  const name2 = trimmedOrNull(executable) ?? DEFAULT_LATCH_EXECUTABLE;
   const cached3 = cache3.get(name2);
   if (cached3) {
     if ((0, import_node_fs11.existsSync)(cached3)) return cached3;
@@ -148972,7 +149191,7 @@ function resolveLatchBinaryPath(executable, resolve = resolveLatchExecutablePath
   return resolved;
 }
 function latchBinaryMissingMessage(executable) {
-  const name2 = trimmed3(executable) ?? DEFAULT_LATCH_EXECUTABLE;
+  const name2 = trimmedOrNull(executable) ?? DEFAULT_LATCH_EXECUTABLE;
   return `Latch executable "${name2}" was not found on this device (checked PATH, ~/.local/bin, and the Homebrew prefixes).`;
 }
 
@@ -148990,16 +149209,13 @@ var LatchGatewayError = class extends Error {
     this.name = "LatchGatewayError";
   }
 };
-function trimmed4(value2) {
-  return typeof value2 === "string" && value2.trim() ? value2.trim() : null;
-}
 function isLoopbackHostname(hostname5) {
   const host = hostname5.toLowerCase();
   if (host === "localhost" || host === "::1" || host === "[::1]") return true;
   return /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(host);
 }
 function latchHomeDirectory(env3 = process.env) {
-  return trimmed4(env3.LATCH_HOME) ?? import_node_path15.default.join(import_node_os7.default.homedir(), ".latch");
+  return trimmedOrNull(env3.LATCH_HOME) ?? import_node_path15.default.join(import_node_os7.default.homedir(), ".latch");
 }
 var LATCH_REMOTE_LINK_RUNTIME_PATH = ["remote-access", "runtime"];
 var LATCH_REMOTE_LINK_READY_FILENAME = "remote-link-gateway-ready.json";
@@ -149029,7 +149245,7 @@ function readGatewayToken(tokenFile, files) {
   }
   let token = null;
   try {
-    token = trimmed4(files.readFile(tokenFile));
+    token = trimmedOrNull(files.readFile(tokenFile));
   } catch {
     throw new LatchGatewayError(`Latch's gateway token could not be read (${tokenFile}).`);
   }
@@ -149044,7 +149260,7 @@ function remoteLinkGatewayConfig(env3, files) {
   try {
     const ready = JSON.parse(files.readFile(readyFile));
     if (!ready || typeof ready !== "object" || Array.isArray(ready)) return null;
-    const url2 = trimmed4(ready.url);
+    const url2 = trimmedOrNull(ready.url);
     if (!url2) return null;
     return {
       baseUrl: loopbackOrigin(url2, "Latch's Remote Link gateway address"),
@@ -149060,11 +149276,11 @@ function resolveLatchGatewayCandidates({
   fileExists = import_node_fs12.existsSync
 } = {}) {
   const files = { readFile: readFile4, fileExists };
-  const explicitUrl = trimmed4(env3.LATCH_GATEWAY_URL);
+  const explicitUrl = trimmedOrNull(env3.LATCH_GATEWAY_URL);
   const baseUrl = loopbackOrigin(explicitUrl ?? DEFAULT_LATCH_GATEWAY_URL, "LATCH_GATEWAY_URL");
-  const inlineToken = trimmed4(env3.LATCH_GATEWAY_TOKEN);
+  const inlineToken = trimmedOrNull(env3.LATCH_GATEWAY_TOKEN);
   if (inlineToken) return [{ baseUrl, token: inlineToken }];
-  const explicitTokenFile = trimmed4(env3.LATCH_SERVE_TOKEN_FILE);
+  const explicitTokenFile = trimmedOrNull(env3.LATCH_SERVE_TOKEN_FILE);
   const tokenFile = explicitTokenFile ?? import_node_path15.default.join(latchHomeDirectory(env3), LATCH_SERVE_TOKEN_FILENAME);
   if (explicitUrl || explicitTokenFile) {
     return [{ baseUrl, token: readGatewayToken(tokenFile, files) }];
@@ -149099,9 +149315,9 @@ function parseLatchGatewayCapabilities(raw) {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
   const cast = raw;
   const protocolVersion = typeof cast.protocolVersion === "number" && Number.isFinite(cast.protocolVersion) ? Math.trunc(cast.protocolVersion) : null;
-  const productVersion = trimmed4(cast.productVersion);
+  const productVersion = trimmedOrNull(cast.productVersion);
   const endpoints = parseEndpoints(cast.endpoints);
-  const gatewayInstanceId = trimmed4(cast.gatewayInstanceId);
+  const gatewayInstanceId = trimmedOrNull(cast.gatewayInstanceId);
   if (protocolVersion === null || !productVersion || !endpoints || !gatewayInstanceId) return null;
   const features = cast.features && typeof cast.features === "object" && !Array.isArray(cast.features) ? cast.features : {};
   return {
@@ -149192,9 +149408,6 @@ function latchConversationSubprotocol(gateway) {
 
 // ../packages/core/service/latch-launch.ts
 var PROVIDER_SESSION_METADATA_KEY = "providerSession";
-function trimmed5(value2) {
-  return typeof value2 === "string" && value2.trim() ? value2.trim() : null;
-}
 function parseExecutionProviderSession(value2) {
   if (!value2 || typeof value2 !== "object" || Array.isArray(value2)) return null;
   return providerSessionFromMetadata({ [PROVIDER_SESSION_METADATA_KEY]: value2 });
@@ -149203,21 +149416,21 @@ function providerSessionFromMetadata(metadata) {
   const raw = metadata?.[PROVIDER_SESSION_METADATA_KEY];
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
   const cast = raw;
-  if (trimmed5(cast.provider)?.toLowerCase() !== "latch") return null;
-  const providerSessionId = trimmed5(cast.providerSessionId);
+  if (trimmedOrNull(cast.provider)?.toLowerCase() !== "latch") return null;
+  const providerSessionId = trimmedOrNull(cast.providerSessionId);
   if (!providerSessionId) return null;
   return {
     provider: "latch",
     providerSessionId,
-    sessionName: trimmed5(cast.sessionName),
-    executionTargetId: trimmed5(cast.executionTargetId),
-    agentSessionId: trimmed5(cast.agentSessionId),
-    createdAt: trimmed5(cast.createdAt) ?? "",
-    lastObservedState: trimmed5(cast.lastObservedState) ?? "running",
-    ...cast.endedAt !== void 0 ? { endedAt: trimmed5(cast.endedAt) } : {},
-    ...cast.endReason !== void 0 ? { endReason: trimmed5(cast.endReason) } : {},
-    ...cast.endRequestedAt !== void 0 ? { endRequestedAt: trimmed5(cast.endRequestedAt) } : {},
-    ...cast.lastObservedAt !== void 0 ? { lastObservedAt: trimmed5(cast.lastObservedAt) } : {}
+    sessionName: trimmedOrNull(cast.sessionName),
+    executionTargetId: trimmedOrNull(cast.executionTargetId),
+    agentSessionId: trimmedOrNull(cast.agentSessionId),
+    createdAt: trimmedOrNull(cast.createdAt) ?? "",
+    lastObservedState: trimmedOrNull(cast.lastObservedState) ?? "running",
+    ...cast.endedAt !== void 0 ? { endedAt: trimmedOrNull(cast.endedAt) } : {},
+    ...cast.endReason !== void 0 ? { endReason: trimmedOrNull(cast.endReason) } : {},
+    ...cast.endRequestedAt !== void 0 ? { endRequestedAt: trimmedOrNull(cast.endRequestedAt) } : {},
+    ...cast.lastObservedAt !== void 0 ? { lastObservedAt: trimmedOrNull(cast.lastObservedAt) } : {}
   };
 }
 function mergeProviderSessionIntoMetadata({
@@ -149258,7 +149471,7 @@ function stripProviderSessionFromMetadata({
   return JSON.stringify(parsed);
 }
 function latchViewerFlagForKind(kind) {
-  switch (trimmed5(kind)?.toLowerCase()) {
+  switch (trimmedOrNull(kind)?.toLowerCase()) {
     case "iterm":
     case "iterm2":
       return "iterm";
@@ -149282,13 +149495,13 @@ function compareLatchProductVersions(a5, b5) {
   return 0;
 }
 function latchSupportsOpenAs(productVersion) {
-  const version4 = trimmed5(productVersion);
+  const version4 = trimmedOrNull(productVersion);
   if (!version4) return false;
   return compareLatchProductVersions(version4, LATCH_OPEN_AS_MIN_PRODUCT_VERSION) >= 0;
 }
 var LATCH_OPEN_BACKGROUND_MIN_PRODUCT_VERSION = "0.2609181007.0";
 function latchSupportsOpenBackground(productVersion) {
-  const version4 = trimmed5(productVersion);
+  const version4 = trimmedOrNull(productVersion);
   if (!version4) return false;
   return compareLatchProductVersions(version4, LATCH_OPEN_BACKGROUND_MIN_PRODUCT_VERSION) >= 0;
 }
@@ -149333,11 +149546,8 @@ function latchSessionCommandError(detail) {
   const message2 = detail || "Latch command failed.";
   return isLatchSessionAbsentMessage(message2) ? new LatchSessionAbsentError(message2) : new LatchSessionCommandError(message2);
 }
-function trimmed6(value2) {
-  return typeof value2 === "string" && value2.trim() ? value2.trim() : null;
-}
 function parseState2(value2) {
-  switch (trimmed6(value2)) {
+  switch (trimmedOrNull(value2)) {
     case "running":
       return "running";
     case "exited":
@@ -149390,18 +149600,18 @@ async function inspectLatchSession({
   executable = "latch",
   providerSessionId
 }) {
-  const sessionId = trimmed6(providerSessionId);
+  const sessionId = trimmedOrNull(providerSessionId);
   if (!sessionId) throw new LatchSessionCommandError("A Latch session id is required.");
   const report2 = await runLatchJson({
-    executable: trimmed6(executable) ?? "latch",
+    executable: trimmedOrNull(executable) ?? "latch",
     args: ["inspect", sessionId, "--json"]
   });
   const state2 = parseState2(report2.state);
   if (!state2) throw new LatchSessionCommandError("Latch returned an unsupported session state.");
   const exit = report2.exit && typeof report2.exit === "object" && !Array.isArray(report2.exit) ? report2.exit : null;
   return {
-    providerSessionId: trimmed6(report2.id) ?? sessionId,
-    name: trimmed6(report2.name) ?? sessionId,
+    providerSessionId: trimmedOrNull(report2.id) ?? sessionId,
+    name: trimmedOrNull(report2.name) ?? sessionId,
     state: state2,
     exitCode: typeof exit?.code === "number" && Number.isFinite(exit.code) ? exit.code : null,
     endedAt: typeof exit?.exitedAt === "string" ? exit.exitedAt : typeof exit?.exited_at === "string" ? exit.exited_at : null,
@@ -149410,7 +149620,7 @@ async function inspectLatchSession({
 }
 async function readLatchProductVersion(executable) {
   try {
-    return trimmed6(
+    return trimmedOrNull(
       (await runLatchJson({ executable, args: ["capabilities", "--json"] })).productVersion
     );
   } catch {
@@ -149423,13 +149633,13 @@ async function openLatchSession({
   viewerKind,
   openAs
 }) {
-  const sessionId = trimmed6(providerSessionId);
+  const sessionId = trimmedOrNull(providerSessionId);
   if (!sessionId) throw new LatchSessionCommandError("A Latch session id is required.");
   const viewer = latchViewerFlagForKind(viewerKind);
   if (!viewer) {
     throw new LatchSessionCommandError(`Latch cannot open the configured viewer "${viewerKind}".`);
   }
-  const exe = trimmed6(executable) ?? "latch";
+  const exe = trimmedOrNull(executable) ?? "latch";
   const report2 = await runLatchJson({
     executable: exe,
     args: buildLatchOpenArgs({
@@ -149443,26 +149653,26 @@ async function openLatchSession({
     throw new LatchSessionCommandError(`Latch did not open the ${viewer} viewer.`);
   }
   return {
-    providerSessionId: trimmed6(report2.id) ?? sessionId,
-    viewer: trimmed6(report2.viewer) ?? viewer,
+    providerSessionId: trimmedOrNull(report2.id) ?? sessionId,
+    viewer: trimmedOrNull(report2.viewer) ?? viewer,
     opened: true,
-    behavior: trimmed6(report2.behavior) ? parseViewerOpenAs(report2.behavior) : null
+    behavior: trimmedOrNull(report2.behavior) ? parseViewerOpenAs(report2.behavior) : null
   };
 }
 async function stopLatchSession({
   executable = "latch",
   providerSessionId
 }) {
-  const sessionId = trimmed6(providerSessionId);
+  const sessionId = trimmedOrNull(providerSessionId);
   if (!sessionId) throw new LatchSessionCommandError("A Latch session id is required.");
   const report2 = await runLatchJson({
-    executable: trimmed6(executable) ?? "latch",
+    executable: trimmedOrNull(executable) ?? "latch",
     args: ["stop", sessionId, "--json"]
   });
   const state2 = parseState2(report2.state);
   if (!state2) throw new LatchSessionCommandError("Latch returned an unsupported session state.");
   return {
-    providerSessionId: trimmed6(report2.id) ?? sessionId,
+    providerSessionId: trimmedOrNull(report2.id) ?? sessionId,
     state: state2
   };
 }
@@ -149488,7 +149698,7 @@ var CONVERSATION_PHASES = [
 function parseConversationState(value2) {
   if (!value2 || typeof value2 !== "object" || Array.isArray(value2)) return null;
   const cast = value2;
-  const phaseText = trimmed6(cast.phase);
+  const phaseText = trimmedOrNull(cast.phase);
   const phase = CONVERSATION_PHASES.find((candidate) => candidate === phaseText) ?? null;
   const availability = cast.sendMessage && typeof cast.sendMessage === "object" && !Array.isArray(cast.sendMessage) ? cast.sendMessage : null;
   if (!availability) return null;
@@ -149496,7 +149706,7 @@ function parseConversationState(value2) {
     phase,
     sendMessage: {
       enabled: availability.enabled === true,
-      reason: trimmed6(availability.reason)
+      reason: trimmedOrNull(availability.reason)
     }
   };
 }
@@ -149522,9 +149732,9 @@ async function sendLatchMessage({
   connect = defaultLatchConversationConnect,
   now: now2 = () => /* @__PURE__ */ new Date()
 }) {
-  const sessionId = trimmed6(providerSessionId);
+  const sessionId = trimmedOrNull(providerSessionId);
   if (!sessionId) throw new LatchSessionCommandError("A Latch session id is required.");
-  const opId = trimmed6(operationId);
+  const opId = trimmedOrNull(operationId);
   if (!opId) throw new LatchSessionCommandError("An operation id is required.");
   const body = typeof text === "string" ? text : "";
   if (!body.trim()) throw new LatchSessionCommandError("An answer message is required.");
@@ -149534,8 +149744,8 @@ async function sendLatchMessage({
     );
   }
   const idleBudgetMs = typeof waitForIdleMs === "number" && Number.isFinite(waitForIdleMs) && waitForIdleMs >= 0 ? Math.trunc(waitForIdleMs) : DEFAULT_LATCH_SEND_WAIT_MS;
-  const previousOpId = trimmed6(previousOperationId);
-  const deadlineMs = trimmed6(notAfter) ? Date.parse(trimmed6(notAfter)) : Number.NaN;
+  const previousOpId = trimmedOrNull(previousOperationId);
+  const deadlineMs = trimmedOrNull(notAfter) ? Date.parse(trimmedOrNull(notAfter)) : Number.NaN;
   if (!Number.isNaN(deadlineMs) && now2().getTime() > deadlineMs) {
     return {
       providerSessionId: sessionId,
@@ -149674,7 +149884,7 @@ function runConversationOperation({
       switch (message2.type) {
         case "snapshot": {
           clearTimeout(snapshotTimer);
-          epoch2 = trimmed6(message2.operationEpoch);
+          epoch2 = trimmedOrNull(message2.operationEpoch);
           const state2 = parseConversationState(message2.state);
           if (!state2) {
             abort("Latch returned an unsupported conversation state.");
@@ -149704,9 +149914,9 @@ function runConversationOperation({
           return;
         }
         case "operation_result": {
-          if (awaitingReceipt && trimmed6(message2.operationId) === previousOperationId) {
+          if (awaitingReceipt && trimmedOrNull(message2.operationId) === previousOperationId) {
             if (receiptTimer) clearTimeout(receiptTimer);
-            const receipt = trimmed6(message2.status);
+            const receipt = trimmedOrNull(message2.status);
             if (receipt === "accepted" || receipt === "queued") {
               finish({ status: "accepted", reason: null, reconciled: true });
               return;
@@ -149722,8 +149932,8 @@ function runConversationOperation({
             if (lastState) applyState(lastState);
             return;
           }
-          if (trimmed6(message2.operationId) !== operationId) return;
-          const status = trimmed6(message2.status);
+          if (trimmedOrNull(message2.operationId) !== operationId) return;
+          const status = trimmedOrNull(message2.status);
           if (status === "queued") {
             finish({
               status: "accepted",
@@ -149735,11 +149945,11 @@ function runConversationOperation({
             finish({ status: "ambiguous", reason: "Latch reported an unknown operation status." });
             return;
           }
-          finish({ status, reason: trimmed6(message2.reason) });
+          finish({ status, reason: trimmedOrNull(message2.reason) });
           return;
         }
         case "error": {
-          const detail = trimmed6(message2.message) ?? trimmed6(message2.code) ?? "Latch reported an error.";
+          const detail = trimmedOrNull(message2.message) ?? trimmedOrNull(message2.code) ?? "Latch reported an error.";
           if (sent) {
             finish({ status: "ambiguous", reason: detail });
             return;
@@ -150465,6 +150675,18 @@ var UnavailableProvider = class {
   }
 };
 
+// ../packages/core/service/records.ts
+function asRecord(value2) {
+  return value2 && typeof value2 === "object" && !Array.isArray(value2) ? value2 : {};
+}
+function parseMetadataJson(json2) {
+  try {
+    return asRecord(JSON.parse(json2));
+  } catch {
+    return {};
+  }
+}
+
 // ../packages/core/service/live-activity-jobs.ts
 var LIVE_ACTIVITY_DISPATCH_JOB_TYPE = "overlord.live_activity.dispatch.v1";
 var LIVE_ACTIVITY_START_JOB_TYPE = "overlord.live_activity.start.v1";
@@ -150530,21 +150752,21 @@ async function enqueueLiveActivityStartForMission({
 var AWAY_DECISION_WINDOW_SECONDS = 30 * 60;
 
 // ../packages/core/service/agent-session/credential.ts
-var import_node_crypto13 = require("node:crypto");
+var import_node_crypto12 = require("node:crypto");
 var SESSION_CHANNEL_TOKEN_PREFIX = "osc_";
 var SESSION_CHANNEL_TOKEN_HASH_ALGORITHM = "sha256";
 var SESSION_CHANNEL_LEASE_SECONDS = 180;
 var SESSION_CHANNEL_ABSOLUTE_LIFETIME_SECONDS = 60 * 60 * 24;
 function hashSessionChannelToken(rawToken) {
-  return (0, import_node_crypto13.createHash)(SESSION_CHANNEL_TOKEN_HASH_ALGORITHM).update(rawToken).digest("hex");
+  return (0, import_node_crypto12.createHash)(SESSION_CHANNEL_TOKEN_HASH_ALGORITHM).update(rawToken).digest("hex");
 }
 function generateSessionChannelToken() {
-  const prefix = `${SESSION_CHANNEL_TOKEN_PREFIX}${(0, import_node_crypto13.randomBytes)(4).toString("hex")}`;
-  const secret = `${prefix}${(0, import_node_crypto13.randomBytes)(32).toString("base64url")}`;
+  const prefix = `${SESSION_CHANNEL_TOKEN_PREFIX}${(0, import_node_crypto12.randomBytes)(4).toString("hex")}`;
+  const secret = `${prefix}${(0, import_node_crypto12.randomBytes)(32).toString("base64url")}`;
   return { secret, prefix, hash: hashSessionChannelToken(secret) };
 }
-function addSeconds(iso4, seconds2) {
-  return new Date(new Date(iso4).getTime() + seconds2 * 1e3).toISOString();
+function addSeconds(iso2, seconds2) {
+  return new Date(new Date(iso2).getTime() + seconds2 * 1e3).toISOString();
 }
 function renewedExpiry({
   now: now2,
@@ -150585,9 +150807,9 @@ var REQUEST_COLUMNS = `
   created_at, updated_at, revision
 `;
 function boundedSummary(value2) {
-  const trimmed9 = value2.trim();
-  if (!trimmed9) throw new ServiceError("Request summary is required", "invalid_request", 400);
-  return trimmed9.length <= MAX_REQUEST_SUMMARY_LENGTH ? trimmed9 : `${trimmed9.slice(0, MAX_REQUEST_SUMMARY_LENGTH - 1)}\u2026`;
+  const trimmed = value2.trim();
+  if (!trimmed) throw new ServiceError("Request summary is required", "invalid_request", 400);
+  return trimmed.length <= MAX_REQUEST_SUMMARY_LENGTH ? trimmed : `${trimmed.slice(0, MAX_REQUEST_SUMMARY_LENGTH - 1)}\u2026`;
 }
 function boundedOptions(options) {
   if (!options || options.length === 0) return "[]";
@@ -150827,7 +151049,7 @@ async function resolveRequest({
       ]
     });
     if (isQuestion && existing.mission_id && existing.project_id && existing.session_id) {
-      const details = parseObject(existing.details_json);
+      const details = parseMetadataJson(existing.details_json);
       const optionId = typeof resolution.optionId === "string" ? resolution.optionId : null;
       const options = parseOptions(existing.options_json);
       const option = optionId ? options.find((candidate) => candidate.optionId === optionId) : null;
@@ -150893,14 +151115,6 @@ async function resolveRequest({
     }
     return { resolved: true, request: await getRequest2({ ctx: txCtx, requestId }) };
   });
-}
-function parseObject(value2) {
-  try {
-    const parsed = JSON.parse(value2);
-    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
-  } catch {
-    return {};
-  }
 }
 function parseOptions(value2) {
   try {
@@ -151029,22 +151243,14 @@ async function setRequestDismissal({
 // ../packages/core/service/agent-session/answer-delivery.ts
 var MAX_DELIVERY_FAILURE_MESSAGE_LENGTH = 300;
 var ANSWER_DELIVERY_DEADLINE_MS = 5 * 6e4;
-function parseDetails(value2) {
-  try {
-    const parsed = JSON.parse(value2);
-    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
-  } catch {
-    return {};
-  }
-}
 function boundedMessage(value2) {
   if (typeof value2 !== "string") return null;
-  const trimmed9 = value2.trim();
-  if (!trimmed9) return null;
-  return trimmed9.length <= MAX_DELIVERY_FAILURE_MESSAGE_LENGTH ? trimmed9 : `${trimmed9.slice(0, MAX_DELIVERY_FAILURE_MESSAGE_LENGTH - 1)}\u2026`;
+  const trimmed = value2.trim();
+  if (!trimmed) return null;
+  return trimmed.length <= MAX_DELIVERY_FAILURE_MESSAGE_LENGTH ? trimmed : `${trimmed.slice(0, MAX_DELIVERY_FAILURE_MESSAGE_LENGTH - 1)}\u2026`;
 }
 function readAnswerDelivery(request) {
-  const raw = parseDetails(request.details_json).delivery;
+  const raw = parseMetadataJson(request.details_json).delivery;
   const record2 = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
   const attempt = typeof record2.attempt === "number" && Number.isInteger(record2.attempt) && record2.attempt >= 1 ? record2.attempt : 1;
   return {
@@ -151054,7 +151260,7 @@ function readAnswerDelivery(request) {
   };
 }
 function detailsWithDelivery(request, record2) {
-  return JSON.stringify({ ...parseDetails(request.details_json), delivery: record2 });
+  return JSON.stringify({ ...parseMetadataJson(request.details_json), delivery: record2 });
 }
 var OPERATION_ATTEMPT_SEPARATOR = ".";
 function answerOperationId(requestId, attempt) {
@@ -151264,7 +151470,7 @@ async function beginAnswerRedelivery({
   };
 }
 function answerTextFromResolution(request) {
-  const resolution = request.resolution_json ? parseDetails(request.resolution_json) : {};
+  const resolution = request.resolution_json ? parseMetadataJson(request.resolution_json) : {};
   const text = typeof resolution.text === "string" ? resolution.text.trim() : "";
   if (text) return text;
   const optionId = typeof resolution.optionId === "string" ? resolution.optionId.trim() : "";
@@ -151487,14 +151693,6 @@ var LOCAL_TARGET_MUTATION_READ_TIMEOUT_MS = 3e4;
 var LOCAL_TARGET_MUTATION_WRITE_TIMEOUT_MS = 12e4;
 var DEFAULT_RESULT_POLL_INTERVAL_MS = 250;
 var TERMINAL_WITHOUT_RESULT = ["failed", "cleared", "cancelled", "expired"];
-function parseMetadataObject(raw) {
-  try {
-    const parsed = JSON.parse(raw);
-    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
-  } catch {
-    return {};
-  }
-}
 function buildLocalTargetMutationMetadata({
   kind,
   capability,
@@ -151512,7 +151710,7 @@ function buildLocalTargetMutationMetadata({
   };
 }
 function parseLocalTargetMutation(metadataJson) {
-  const metadata = typeof metadataJson === "string" ? parseMetadataObject(metadataJson) : metadataJson;
+  const metadata = typeof metadataJson === "string" ? parseMetadataJson(metadataJson) : metadataJson;
   const raw = metadata[LOCAL_TARGET_MUTATION_METADATA_KEY];
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
   const payload = raw;
@@ -151778,7 +151976,7 @@ async function completeLocalTargetMutationRequest({
     message: result2.message,
     ...result2.details !== void 0 ? { details: result2.details } : {}
   };
-  const metadata = parseMetadataObject(row.metadata_json);
+  const metadata = parseMetadataJson(row.metadata_json);
   metadata[LOCAL_TARGET_MUTATION_METADATA_KEY] = {
     ...mutation,
     result: storedResult
@@ -152228,10 +152426,10 @@ function mapObservationToResourceStatus(lifecycleStatus, observation) {
 var import_node_os9 = require("node:os");
 
 // ../packages/core/service/devices.ts
-var import_node_crypto14 = require("node:crypto");
+var import_node_crypto13 = require("node:crypto");
 var import_node_os8 = require("node:os");
 function deviceFingerprint() {
-  return (0, import_node_crypto14.createHash)("sha256").update(`${(0, import_node_os8.hostname)()}:${(0, import_node_os8.platform)()}`).digest("hex").slice(0, 32);
+  return (0, import_node_crypto13.createHash)("sha256").update(`${(0, import_node_os8.hostname)()}:${(0, import_node_os8.platform)()}`).digest("hex").slice(0, 32);
 }
 function callerDeviceFingerprint() {
   return deviceFingerprint();
@@ -152353,13 +152551,13 @@ function mergeProfileMetadataJson({
     else delete parsed.avatarUrl;
   }
   if (agentInstructions !== void 0) {
-    const trimmed9 = agentInstructions?.trim() ?? "";
-    if (trimmed9) parsed.agentInstructions = trimmed9;
+    const trimmed = agentInstructions?.trim() ?? "";
+    if (trimmed) parsed.agentInstructions = trimmed;
     else delete parsed.agentInstructions;
   }
   if (editorScheme !== void 0) {
-    const trimmed9 = editorScheme?.trim() ?? "";
-    if (trimmed9) parsed.editorScheme = trimmed9;
+    const trimmed = editorScheme?.trim() ?? "";
+    if (trimmed) parsed.editorScheme = trimmed;
     else delete parsed.editorScheme;
   }
   return JSON.stringify(parsed);
@@ -152941,6 +153139,19 @@ async function updateActorLaunchSessionDefaults({
     changedFields: ["metadata_json"]
   });
   return next;
+}
+async function executionTargetInWorkspace({
+  ctx,
+  executionTargetId
+}) {
+  const row = await ctx.db.get(
+    `SELECT id FROM execution_targets
+        WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
+    [executionTargetId, ctx.workspace.id]
+  );
+  if (!row) {
+    throw new ServiceError("Execution target not found", "execution_target_not_found", 404);
+  }
 }
 
 // ../packages/core/service/project-resource-key.ts
@@ -153590,7 +153801,6 @@ function runQueueDiagnosticCode(input2) {
 // ../packages/core/service/run-queue.ts
 var RUN_QUEUE_DISPATCH_JOB_TYPE = "overlord.run-queue.dispatch.v1";
 var STEP = 1e3;
-var truthy = (value2) => value2 === true || value2 === 1;
 var MISSION_QUEUE_NAME_LIMIT = 80;
 function missionQueueName(missionDisplayId, missionTitle) {
   const title = (missionTitle ?? "").trim();
@@ -153805,10 +154015,10 @@ async function listProjectRunQueues(db, projectId) {
         id: queue.id,
         projectId,
         name: queue.name,
-        isDefault: truthy(queue.is_default),
+        isDefault: isTruthyFlag(queue.is_default),
         missionId: queue.mission_id,
         missionDisplayId: queue.mission_id ? missionDisplayIds.get(queue.mission_id) ?? null : null,
-        paused: truthy(queue.paused),
+        paused: isTruthyFlag(queue.paused),
         position: queue.position,
         entries,
         running: entries.find((e5) => e5.state === "running" || e5.state === "dispatched") ?? null
@@ -153821,7 +154031,7 @@ async function retireRunQueueIfEmpty(db, queueId) {
     "SELECT id, is_default FROM run_queues WHERE id = ? AND deleted_at IS NULL",
     [queueId]
   );
-  if (!queue || truthy(queue.is_default)) return null;
+  if (!queue || isTruthyFlag(queue.is_default)) return null;
   const remaining = await db.get(
     "SELECT id FROM run_queue_entries WHERE queue_id = ? AND deleted_at IS NULL LIMIT 1",
     [queueId]
@@ -153997,7 +154207,7 @@ async function resumeRunQueueForObjective(db, objectiveId) {
     [objectiveId]
   );
   if (!queue) return null;
-  if (!truthy(queue.paused)) return queue.id;
+  if (!isTruthyFlag(queue.paused)) return queue.id;
   await db.run(
     "UPDATE run_queues SET paused = ?, updated_at = ?, revision = revision + 1 WHERE id = ? AND paused = ?",
     [
@@ -154018,7 +154228,7 @@ async function updateRunQueue(db, queueId, patch) {
   if (!queue) throw new ServiceError("Run Queue not found", "run_queue_not_found", 404);
   const name2 = patch.name === void 0 ? queue.name : patch.name.trim();
   if (!name2) throw new ServiceError("Queue name is required", "invalid_queue_name", 400);
-  const paused = patch.paused === void 0 ? truthy(queue.paused) : patch.paused;
+  const paused = patch.paused === void 0 ? isTruthyFlag(queue.paused) : patch.paused;
   await db.run(
     "UPDATE run_queues SET name = ?, paused = ?, updated_at = ?, revision = revision + 1 WHERE id = ?",
     [name2, db.dialect === "postgres" ? paused : paused ? 1 : 0, nowIso(), queueId]
@@ -154039,7 +154249,7 @@ async function reorderProjectRunQueues(db, projectId, orderedQueueIds) {
         400
       );
     }
-    const defaultQueue = queues.find((queue) => truthy(queue.is_default));
+    const defaultQueue = queues.find((queue) => isTruthyFlag(queue.is_default));
     if (defaultQueue && orderedQueueIds[0] !== defaultQueue.id) {
       throw new ServiceError(
         "The default Run Queue must remain first",
@@ -154296,7 +154506,7 @@ async function removeRunQueueEntry(db, entryId, options = {}) {
       "SELECT id, project_id, workspace_id, name, position, paused, is_default, mission_id FROM run_queues WHERE id = ? AND deleted_at IS NULL",
       [row.queue_id]
     );
-    if (queue && (options.force === true || options.pauseQueue === true) && !truthy(queue.paused)) {
+    if (queue && (options.force === true || options.pauseQueue === true) && !isTruthyFlag(queue.paused)) {
       await tx.run(
         "UPDATE run_queues SET paused = ?, updated_at = ?, revision = revision + 1 WHERE id = ? AND paused = ?",
         [tx.dialect === "postgres" ? true : 1, now2, queue.id, tx.dialect === "postgres" ? false : 0]
@@ -154481,7 +154691,7 @@ async function deleteRunQueue(db, queueId, moveEntriesTo) {
       [queueId]
     );
     if (!queue) throw new ServiceError("Run Queue not found", "run_queue_not_found", 404);
-    if (truthy(queue.is_default))
+    if (isTruthyFlag(queue.is_default))
       throw new ServiceError("The default Run Queue cannot be deleted", "default_run_queue", 409);
     const entries = await tx.all(
       "SELECT id, mission_id FROM run_queue_entries WHERE queue_id = ? AND deleted_at IS NULL",
@@ -155367,7 +155577,7 @@ async function moveMissionToExecute({
 }
 
 // ../packages/core/service/protocol.ts
-var import_node_crypto18 = require("node:crypto");
+var import_node_crypto17 = require("node:crypto");
 
 // ../packages/core/service/agent-session/channels.ts
 var CHANNEL_COLUMNS = `
@@ -155524,12 +155734,12 @@ async function authenticateChannelCredential({
   rawToken,
   now: now2 = nowIso()
 }) {
-  const trimmed9 = rawToken.trim();
-  if (!trimmed9) return null;
+  const trimmed = rawToken.trim();
+  if (!trimmed) return null;
   const row = await db.get(
     `SELECT ${CHANNEL_COLUMNS} FROM agent_session_channels
        WHERE credential_hash = ? AND deleted_at IS NULL`,
-    [hashSessionChannelToken(trimmed9)]
+    [hashSessionChannelToken(trimmed)]
   );
   if (!row) return null;
   if (row.credential_revoked_at !== null) return null;
@@ -156090,9 +156300,9 @@ function mergeDeterministicActionCandidates({
 }
 function clampText(value2, maxLength) {
   if (typeof value2 !== "string") return null;
-  const trimmed9 = value2.trim();
-  if (!trimmed9) return null;
-  return trimmed9.length > maxLength ? trimmed9.slice(0, maxLength) : trimmed9;
+  const trimmed = value2.trim();
+  if (!trimmed) return null;
+  return trimmed.length > maxLength ? trimmed.slice(0, maxLength) : trimmed;
 }
 function clampStringList(value2, maxItems = DELIVERY_REPORT_LIMITS.maxItems) {
   if (!Array.isArray(value2)) return [];
@@ -156440,7 +156650,7 @@ function applyDeliveryPresentation({
 }
 
 // ../packages/core/service/delivery-finalization.ts
-var import_node_crypto15 = require("node:crypto");
+var import_node_crypto14 = require("node:crypto");
 var OPERATION_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$/;
 var DELIVERY_OPERATION_CONFLICT = "delivery_operation_conflict";
 var DELIVERY_ALREADY_ACCEPTED = "delivery_already_accepted";
@@ -156475,7 +156685,7 @@ function canonicalize(value2) {
   return value2;
 }
 function finalizationRequestDigest(kind, semantic) {
-  const hash2 = (0, import_node_crypto15.createHash)("sha256").update(canonicalJson({ kind, semantic })).digest("hex");
+  const hash2 = (0, import_node_crypto14.createHash)("sha256").update(canonicalJson({ kind, semantic })).digest("hex");
   return `${DIGEST_VERSION}:${hash2}`;
 }
 var RECEIPT_COLUMNS = `id, workspace_id, project_id, mission_id, objective_id, delivery_id,
@@ -156643,15 +156853,11 @@ async function readDeliveryReceipt({
 }
 
 // ../packages/core/service/delivery-summary-publication.ts
-var import_node_crypto16 = require("node:crypto");
+var import_node_crypto15 = require("node:crypto");
 
 // ../packages/core/service/mission-narrative.ts
 function isSummaryEnabled(value2) {
   return value2 === true || Number(value2) === 1;
-}
-function iso(value2) {
-  if (value2 === null || value2 === void 0) return null;
-  return new Date(value2 instanceof Date ? value2 : String(value2)).toISOString();
 }
 function nextNarrativeTimestamp(previous, now2 = nowIso()) {
   const at = Date.parse(now2);
@@ -156896,8 +157102,8 @@ async function readMissionNarrative(db, missionId) {
     publishedEvidenceRevision: hasProse ? published : null,
     deliveryId: hasProse ? row.narrative_delivery_id : null,
     objectiveId: hasProse ? row.narrative_objective_id : null,
-    publishedAt: hasProse && published !== null ? iso(row.narrative_published_at) : null,
-    changedAt: iso(row.narrative_changed_at),
+    publishedAt: hasProse && published !== null ? toIsoOrNull(row.narrative_published_at) : null,
+    changedAt: toIsoOrNull(row.narrative_changed_at),
     outstandingDeliveryId: outstanding?.delivery_id ?? null
   };
 }
@@ -157145,17 +157351,17 @@ function invalidInput(message2) {
   return new ServiceError(message2, "invalid_input", 400);
 }
 function normaliseReason(reason, required2) {
-  const trimmed9 = typeof reason === "string" ? reason.trim() : "";
-  if (!trimmed9) {
+  const trimmed = typeof reason === "string" ? reason.trim() : "";
+  if (!trimmed) {
     if (required2) throw invalidInput("A reason is required to close an item.");
     return null;
   }
-  if (trimmed9.length > MISSION_ITEM_STATUS_REASON_MAX_LENGTH) {
+  if (trimmed.length > MISSION_ITEM_STATUS_REASON_MAX_LENGTH) {
     throw invalidInput(
       `A reason must be at most ${MISSION_ITEM_STATUS_REASON_MAX_LENGTH} characters.`
     );
   }
-  return trimmed9;
+  return trimmed;
 }
 async function scopedItem(db, itemId, missionId) {
   const item = await getMissionItem(db, itemId);
@@ -157910,10 +158116,6 @@ var PUBLICATION_COLUMNS = `id, workspace_id, project_id, mission_id, objective_i
   actor_workspace_user_id, session_id, evidence_revision, published_at,
   published_content_revision, publish_operation_id, publish_request_digest, superseded_at,
   superseded_reason`;
-function iso2(value2) {
-  if (value2 === null || value2 === void 0) return null;
-  return new Date(value2 instanceof Date ? value2 : String(value2)).toISOString();
-}
 function notFound() {
   return new ServiceError(
     "Mission summary publication not found",
@@ -158023,7 +158225,7 @@ function toPublication(bound, state2, published) {
     available: state2.state === "outstanding",
     state: state2.state,
     supersededReason: state2.supersededReason,
-    publishedAt: published?.at ?? iso2(row.published_at),
+    publishedAt: published?.at ?? toIsoOrNull(row.published_at),
     publishedContentRevision: published?.contentRevision ?? (row.published_content_revision === null ? null : Number(row.published_content_revision))
   };
 }
@@ -158060,7 +158262,7 @@ async function readDeliverySummaryContext({
   };
 }
 function publishDigest(publicationId, semantic) {
-  return `v1:${(0, import_node_crypto16.createHash)("sha256").update(canonicalJson({ kind: "publish_delivery_summary", publicationId, semantic })).digest("hex")}`;
+  return `v1:${(0, import_node_crypto15.createHash)("sha256").update(canonicalJson({ kind: "publish_delivery_summary", publicationId, semantic })).digest("hex")}`;
 }
 async function publishDeliverySummary({
   ctx,
@@ -158230,10 +158432,6 @@ function isStaleHeartbeat(lastHeartbeatAt, now2) {
 function isRunnerRelation(value2) {
   return value2 === "native" || value2 === "adopted";
 }
-function trimmed7(value2) {
-  const text = value2?.trim();
-  return text && text.length > 0 ? text : null;
-}
 function notRegistered(message2) {
   return new ServiceError(message2, NO_EXECUTION_TARGET_REGISTERED, 409);
 }
@@ -158302,7 +158500,7 @@ async function resolveRunnerTarget({
   input: input2,
   actingTarget
 }) {
-  const explicitId = trimmed7(input2.executionTargetId);
+  const explicitId = trimmedOrNull(input2.executionTargetId);
   if (!explicitId) {
     const target = actingTarget ?? await resolveClaimingDeviceTarget({ ctx });
     await assertTargetEnabled({ ctx, executionTargetId: target.executionTargetId });
@@ -158351,8 +158549,9 @@ async function recordRunnerHeartbeat({
       if (existing.execution_target_id !== executionTargetId)
         changedFields.push("execution_target_id");
       if (existing.relation !== relation) changedFields.push("relation");
-      if (existing.label !== trimmed7(label)) changedFields.push("label");
-      if (existing.runner_version !== trimmed7(runnerVersion)) changedFields.push("runner_version");
+      if (existing.label !== trimmedOrNull(label)) changedFields.push("label");
+      if (existing.runner_version !== trimmedOrNull(runnerVersion))
+        changedFields.push("runner_version");
       const jsonChanged = (stored, value2) => {
         try {
           return !(0, import_node_util.isDeepStrictEqual)(JSON.parse(stored), value2);
@@ -158376,8 +158575,8 @@ async function recordRunnerHeartbeat({
         [
           executionTargetId,
           relation,
-          trimmed7(label),
-          trimmed7(runnerVersion),
+          trimmedOrNull(label),
+          trimmedOrNull(runnerVersion),
           capabilitiesJson,
           supportedAgentsJson,
           health,
@@ -158402,8 +158601,8 @@ async function recordRunnerHeartbeat({
         executionTargetId,
         runnerInstanceId,
         relation,
-        label: trimmed7(label),
-        runnerVersion: trimmed7(runnerVersion),
+        label: trimmedOrNull(label),
+        runnerVersion: trimmedOrNull(runnerVersion),
         supportedAgents: supportedAgents ?? [],
         health,
         lastHeartbeatAt: now2,
@@ -158423,8 +158622,8 @@ async function recordRunnerHeartbeat({
         executionTargetId,
         runnerInstanceId,
         relation,
-        trimmed7(label),
-        trimmed7(runnerVersion),
+        trimmedOrNull(label),
+        trimmedOrNull(runnerVersion),
         capabilitiesJson,
         supportedAgentsJson,
         health,
@@ -158447,8 +158646,8 @@ async function recordRunnerHeartbeat({
       executionTargetId,
       runnerInstanceId,
       relation,
-      label: trimmed7(label),
-      runnerVersion: trimmed7(runnerVersion),
+      label: trimmedOrNull(label),
+      runnerVersion: trimmedOrNull(runnerVersion),
       supportedAgents: supportedAgents ?? [],
       health,
       lastHeartbeatAt: now2,
@@ -158658,8 +158857,8 @@ function readPreferenceRow(ctx, projectId) {
 function readStoredExecutionTargetId(preferences) {
   const stored = preferences[PROJECT_EXECUTION_TARGET_PREFERENCE_KEY];
   if (typeof stored !== "string") return null;
-  const trimmed9 = stored.trim();
-  return trimmed9.length > 0 ? trimmed9 : null;
+  const trimmed = stored.trim();
+  return trimmed.length > 0 ? trimmed : null;
 }
 function isTargetReachable({
   lastSeenAt,
@@ -159436,16 +159635,6 @@ async function reconcileLinkedRunQueueEntry({
     ]
   );
   await enqueueRunQueueDispatch(db, linked.project_id, linked.workspace_id);
-}
-function asRecord(value2) {
-  return value2 && typeof value2 === "object" && !Array.isArray(value2) ? value2 : {};
-}
-function parseMetadataJson(json2) {
-  try {
-    return asRecord(JSON.parse(json2));
-  } catch {
-    return {};
-  }
 }
 function parseJsonObject(raw) {
   return asRecord(JSON.parse(raw));
@@ -160484,8 +160673,8 @@ var GENERIC = /* @__PURE__ */ new Set([
   "index.md"
 ]);
 var compare = (a5, b5) => a5 < b5 ? -1 : a5 > b5 ? 1 : 0;
-function normalizeItemPath(path29) {
-  const value2 = path29.replace(/\\/g, "/").replace(/^(?:\.\/)+/, "").replace(/\/+/g, "/").replace(/\/$/, "");
+function normalizeItemPath(path28) {
+  const value2 = path28.replace(/\\/g, "/").replace(/^(?:\.\/)+/, "").replace(/\/+/g, "/").replace(/\/$/, "");
   return !value2 || value2.startsWith("/") || /^[A-Za-z]:/.test(value2) || value2.split("/").some((p3) => p3 === ".." || p3 === ".") ? null : value2;
 }
 function matchProjectItem(text, paths2) {
@@ -160493,11 +160682,11 @@ function matchProjectItem(text, paths2) {
     text.match(/[A-Za-z0-9_@.~-]+(?:[\\/][A-Za-z0-9_@.~-]+)*/g)?.map((t) => t.replace(/\\/g, "/").replace(/\.+$/, "")) ?? []
   );
   const matches = [];
-  for (const path29 of [
+  for (const path28 of [
     ...new Set(paths2.map(normalizeItemPath).filter((p3) => p3 !== null))
   ].sort(compare)) {
-    const parts = path29.split("/");
-    let score2 = tokens.has(path29) ? 3 : 0;
+    const parts = path28.split("/");
+    let score2 = tokens.has(path28) ? 3 : 0;
     for (let n3 = 2; n3 < parts.length && score2 < 2; n3++) {
       const prefix = parts.slice(0, n3).join("/");
       if ([...tokens].some((t) => t === prefix || t.startsWith(prefix + "/"))) score2 = 2;
@@ -160505,7 +160694,7 @@ function matchProjectItem(text, paths2) {
     const base = parts.at(-1);
     if (!score2 && !GENERIC.has(base.toLowerCase()) && [...tokens].some((t) => t.split("/").at(-1) === base))
       score2 = 1;
-    if (score2) matches.push({ path: path29, score: score2 });
+    if (score2) matches.push({ path: path28, score: score2 });
   }
   matches.sort((a5, b5) => b5.score - a5.score || compare(a5.path, b5.path));
   const score = matches[0]?.score ?? 0;
@@ -160638,19 +160827,6 @@ function parseObservationInput(value2) {
     commit: typeof row.commit === "string" ? row.commit : null,
     observedAt
   };
-}
-async function executionTargetInWorkspace({
-  ctx,
-  executionTargetId
-}) {
-  const row = await ctx.db.get(
-    `SELECT id FROM execution_targets
-        WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
-    [executionTargetId, ctx.workspace.id]
-  );
-  if (!row) {
-    throw new ServiceError("Execution target not found", "execution_target_not_found", 404);
-  }
 }
 async function assertResourcesBelongToTarget({
   ctx,
@@ -160802,9 +160978,6 @@ function mergeResourceStatusWithObservation({
 }
 
 // ../packages/core/service/project-resource-manifest.ts
-function isTruthyPrimary(value2) {
-  return value2 === true || value2 === 1;
-}
 function pickResourceForTarget(resources, executionTargetId) {
   if (resources.length === 0) return null;
   if (!executionTargetId) return resources[0] ?? null;
@@ -160883,7 +161056,7 @@ async function buildProjectResourceManifest({
         return "";
       }
     })(),
-    isPrimary: isTruthyPrimary(row.is_primary),
+    isPrimary: isTruthyFlag(row.is_primary),
     accessMode: row.access_mode === "read" ? "read" : "read_write",
     executionTargetId: row.execution_target_id
   }));
@@ -160930,7 +161103,7 @@ function formatProjectResourcesInstructions(projectResources) {
 }
 
 // ../packages/core/service/report-draft.ts
-var import_node_crypto17 = require("node:crypto");
+var import_node_crypto16 = require("node:crypto");
 init_zod();
 var REPORT_DRAFT_CONFLICT = "report_draft_conflict";
 var REPORT_DRAFT_OPERATION_CONFLICT = "report_draft_operation_conflict";
@@ -160979,8 +161152,8 @@ function parseOperation(value2, index) {
       const parsed = CONTENT_SCHEMAS[kind].safeParse(op2.content);
       if (!parsed.success) {
         const issue2 = parsed.error.issues[0];
-        const path29 = issue2?.path.length ? `.${issue2.path.join(".")}` : "";
-        throw invalid2(`${field}.content${path29}: ${issue2?.message ?? `invalid ${kind} content`}`);
+        const path28 = issue2?.path.length ? `.${issue2.path.join(".")}` : "";
+        throw invalid2(`${field}.content${path28}: ${issue2?.message ?? `invalid ${kind} content`}`);
       }
       return { op: "upsert", entryId, kind, content: parsed.data };
     }
@@ -161062,7 +161235,7 @@ function parseReportDraftInput(value2, mode) {
   return { ...operationId ? { operationId } : {}, expectedRevision: expectedRevision2, operations: operations2 };
 }
 function reportDraftBatchDigest(semantic) {
-  const hash2 = (0, import_node_crypto17.createHash)("sha256").update(canonicalJson({ kind: "report_draft_batch", semantic })).digest("hex");
+  const hash2 = (0, import_node_crypto16.createHash)("sha256").update(canonicalJson({ kind: "report_draft_batch", semantic })).digest("hex");
   return `${DIGEST_VERSION2}:${hash2}`;
 }
 var DRAFT_COLUMNS = `d.id, d.workspace_id, d.project_id, d.mission_id, d.objective_id, d.session_id,
@@ -161071,11 +161244,11 @@ var DRAFT_COLUMNS = `d.id, d.workspace_id, d.project_id, d.mission_id, d.objecti
 var ENTRY_COLUMNS = `id, draft_id, entry_id, kind, content_json, position, withdrawn_at,
   withdrawn_reason, source_event_id, imported_from_draft_id, imported_from_entry_id, sealed_ref,
   revision, created_at, updated_at`;
-function iso3(value2) {
+function iso(value2) {
   return new Date(value2).toISOString();
 }
 function isoOrNull(value2) {
-  return value2 === null ? null : iso3(value2);
+  return value2 === null ? null : iso(value2);
 }
 function entryContent(row) {
   return typeof row.content_json === "string" ? JSON.parse(row.content_json) : row.content_json;
@@ -161115,8 +161288,8 @@ function toEntryDto(row) {
     importedFrom: row.imported_from_draft_id && row.imported_from_entry_id ? { draftId: row.imported_from_draft_id, entryId: row.imported_from_entry_id } : null,
     sealedRef: row.sealed_ref,
     revision: Number(row.revision),
-    createdAt: iso3(row.created_at),
-    updatedAt: iso3(row.updated_at)
+    createdAt: iso(row.created_at),
+    updatedAt: iso(row.updated_at)
   };
 }
 function draftState(draft, session) {
@@ -161148,8 +161321,8 @@ function toDraftDto(draft, entries, state2, { includeWithdrawn }) {
     withdrawnCount: withdrawn.length,
     sealedAt: isoOrNull(draft.sealed_at),
     sealedDeliveryId: draft.sealed_delivery_id,
-    createdAt: iso3(draft.created_at),
-    updatedAt: iso3(draft.updated_at),
+    createdAt: iso(draft.created_at),
+    updatedAt: iso(draft.updated_at),
     entries: active,
     ...includeWithdrawn ? { withdrawn } : {}
   };
@@ -161707,7 +161880,7 @@ async function abandonedDrafts(db, {
     state: "abandoned",
     revision: Number(row.revision),
     activeEntryCount: Number(row.active),
-    updatedAt: iso3(row.updated_at)
+    updatedAt: iso(row.updated_at)
   }));
 }
 async function readReportDraftAttachBaseline(db, {
@@ -161863,33 +162036,33 @@ async function resolveWorkspaceMemberId({
   ctx,
   member: member2
 }) {
-  const trimmed9 = member2.trim();
-  if (!trimmed9) {
+  const trimmed = member2.trim();
+  if (!trimmed) {
     throw new ServiceError(ASSIGNEE_NOT_MEMBER, "validation_error");
   }
   const byWorkspaceUserId = await ctx.db.get(
     `SELECT id FROM workspace_users
         WHERE id = ? AND workspace_id = ? AND status = 'active' AND deleted_at IS NULL`,
-    [trimmed9, ctx.workspace.id]
+    [trimmed, ctx.workspace.id]
   );
   if (byWorkspaceUserId) return byWorkspaceUserId.id;
   const byProfileId = await ctx.db.get(
     `SELECT id FROM workspace_users
         WHERE profile_id = ? AND workspace_id = ? AND status = 'active' AND deleted_at IS NULL`,
-    [trimmed9, ctx.workspace.id]
+    [trimmed, ctx.workspace.id]
   );
   if (byProfileId) return byProfileId.id;
-  const colon = trimmed9.indexOf(":");
+  const colon = trimmed.indexOf(":");
   if (colon > 0) {
     const byMemberKey = await ctx.db.get(
       `SELECT id FROM workspace_users
           WHERE workspace_id = ? AND status = 'active' AND deleted_at IS NULL
             AND lower(member_key) = lower(?)`,
-      [ctx.workspace.id, trimmed9]
+      [ctx.workspace.id, trimmed]
     );
     if (byMemberKey) return byMemberKey.id;
-    const left = trimmed9.slice(0, colon);
-    const username = trimmed9.slice(colon + 1).trim();
+    const left = trimmed.slice(0, colon);
+    const username = trimmed.slice(colon + 1).trim();
     if (username) {
       const byOrgAndHandle = await ctx.db.get(
         `SELECT wu.id
@@ -161911,7 +162084,7 @@ async function resolveWorkspaceMemberId({
        JOIN profiles p ON p.id = wu.profile_id AND p.deleted_at IS NULL
       WHERE wu.workspace_id = ? AND wu.status = 'active' AND wu.deleted_at IS NULL
         AND lower(p.handle) = lower(?)`,
-    [ctx.workspace.id, trimmed9]
+    [ctx.workspace.id, trimmed]
   );
   if (byHandle) return byHandle.id;
   const byEmail = await ctx.db.get(
@@ -161920,7 +162093,7 @@ async function resolveWorkspaceMemberId({
        JOIN profiles p ON p.id = wu.profile_id AND p.deleted_at IS NULL
       WHERE wu.workspace_id = ? AND wu.status = 'active' AND wu.deleted_at IS NULL
         AND lower(p.email) = lower(?)`,
-    [ctx.workspace.id, trimmed9]
+    [ctx.workspace.id, trimmed]
   );
   if (byEmail) return byEmail.id;
   throw new ServiceError(ASSIGNEE_NOT_MEMBER, "validation_error");
@@ -162847,7 +163020,7 @@ async function connectSession({
   };
 }
 function promptHash(prompt) {
-  return (0, import_node_crypto18.createHash)("sha256").update(prompt).digest("hex");
+  return (0, import_node_crypto17.createHash)("sha256").update(prompt).digest("hex");
 }
 function objectiveFromSession(objectives, session) {
   if (!session) return void 0;
@@ -163253,11 +163426,11 @@ function normalizeSyncKey(value2) {
 }
 function normalizeHealthCode(value2) {
   if (typeof value2 !== "string") return null;
-  const trimmed9 = value2.trim();
-  if (!trimmed9 || trimmed9.length > MAX_HOOK_HEALTH_LENGTH || hasControlCharacters(trimmed9) || !HOOK_HEALTH_PATTERN.test(trimmed9)) {
+  const trimmed = value2.trim();
+  if (!trimmed || trimmed.length > MAX_HOOK_HEALTH_LENGTH || hasControlCharacters(trimmed) || !HOOK_HEALTH_PATTERN.test(trimmed)) {
     return null;
   }
-  return trimmed9;
+  return trimmed;
 }
 function normalizeObservedAt(value2) {
   if (typeof value2 !== "string" || value2.length > 64 || !ISO_UTC_PATTERN.test(value2)) return null;
@@ -164090,8 +164263,8 @@ async function askQuestion({
   options = [],
   allowsFreeText = true
 }) {
-  const trimmed9 = question.trim();
-  if (!trimmed9) {
+  const trimmed = question.trim();
+  if (!trimmed) {
     throw new ServiceError("Question is required", "validation_error");
   }
   if (!allowsFreeText && options.length === 0) {
@@ -164121,7 +164294,7 @@ async function askQuestion({
         mission.id,
         session.objective_id,
         session.id,
-        trimmed9,
+        trimmed,
         ctx.source,
         ctx.actorWorkspaceUserId,
         now2
@@ -164146,7 +164319,7 @@ async function askQuestion({
         ctx: txCtx,
         channel,
         kind: !allowsFreeText && options.length > 0 ? "choice" : "question",
-        summary: trimmed9,
+        summary: trimmed,
         options,
         allowsFreeText,
         // `source_event_id` references `agent_session_events`; an ask is a
@@ -165308,100 +165481,6 @@ async function readAgentProjectItems({
   });
 }
 
-// errors.ts
-var ApiError = class extends Error {
-  constructor(status, message2, detail, code) {
-    super(message2);
-    this.status = status;
-    this.detail = detail;
-    this.code = code;
-  }
-  status;
-  detail;
-  code;
-};
-function rethrowNotFoundAs(error64, message2) {
-  if (error64 instanceof ServiceError && error64.status === 404) {
-    throw new ApiError(404, message2, void 0, error64.code);
-  }
-  throw error64;
-}
-function requiredString(value2, field, max) {
-  const normalized = typeof value2 === "string" ? value2.trim() : "";
-  if (!normalized) throw new ApiError(400, `${field} is required`);
-  if (normalized.length > max) throw new ApiError(400, `${field} is too long`);
-  return normalized;
-}
-function invalidJsonError() {
-  return new ApiError(400, "Request body is not valid JSON.", void 0, "invalid_json");
-}
-function isBodyParserError(error64, type) {
-  return typeof error64 === "object" && error64 !== null && error64.type === type;
-}
-function apiErrorFromBodyParser(error64) {
-  if (isBodyParserError(error64, "entity.too.large")) {
-    return new ApiError(413, "Request body is too large.", void 0, "body_too_large");
-  }
-  if (isBodyParserError(error64, "entity.parse.failed")) return invalidJsonError();
-  return null;
-}
-function apiErrorFromDatabaseError(error64) {
-  if (!error64 || typeof error64 !== "object") return null;
-  const { code, message: message2 = "" } = error64;
-  if (!code?.startsWith("SQLITE_CONSTRAINT")) return null;
-  if (code === "SQLITE_CONSTRAINT_UNIQUE" && message2.includes("project_resources")) {
-    if (message2.includes("resource_key") || message2.includes("target_key")) {
-      return new ApiError(
-        409,
-        "This resource key is already linked to the project on this execution target.",
-        message2
-      );
-    }
-    return new ApiError(
-      409,
-      "This directory is already linked to the project on this device.",
-      message2
-    );
-  }
-  if (code === "SQLITE_CONSTRAINT_FOREIGNKEY") {
-    return new ApiError(400, "A related record is missing or invalid.", message2);
-  }
-  return new ApiError(409, "Database constraint violation.", message2);
-}
-function apiErrorHandler(err, _req, res, _next) {
-  if (err instanceof ApiError) {
-    res.status(err.status).json({ error: err.message, detail: err.detail, code: err.code });
-    return;
-  }
-  if (err instanceof ServiceError) {
-    res.status(err.status).json({
-      error: err.message,
-      code: err.code,
-      ...err.details !== void 0 ? { details: err.details } : {}
-    });
-    return;
-  }
-  const bodyParserError = apiErrorFromBodyParser(err);
-  if (bodyParserError) {
-    res.status(bodyParserError.status).json({
-      error: bodyParserError.message,
-      code: bodyParserError.code
-    });
-    return;
-  }
-  const databaseError = apiErrorFromDatabaseError(err);
-  if (databaseError) {
-    res.status(databaseError.status).json({
-      error: databaseError.message,
-      detail: databaseError.detail
-    });
-    return;
-  }
-  const message2 = err instanceof Error ? err.message : "Internal error";
-  console.error("[webapp] request failed:", message2);
-  res.status(500).json({ error: message2, detail: message2 });
-}
-
 // ../packages/core/dist/service/objective-lifecycle-timestamps.js
 var OBJECTIVE_LAUNCHED_AT_ASSIGNMENT2 = "launched_at = COALESCE(launched_at, ?)";
 var OBJECTIVE_STARTED_AT_ASSIGNMENT2 = "started_at = COALESCE(started_at, ?)";
@@ -165478,19 +165557,6 @@ function parseObservationInput2(value2) {
     worktreePath: typeof row.worktreePath === "string" ? row.worktreePath : null,
     observedAt
   };
-}
-async function executionTargetInWorkspace2({
-  ctx,
-  executionTargetId
-}) {
-  const row = await ctx.db.get(
-    `SELECT id FROM execution_targets
-        WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
-    [executionTargetId, ctx.workspace.id]
-  );
-  if (!row) {
-    throw new ServiceError("Execution target not found", "execution_target_not_found", 404);
-  }
 }
 async function assertMissionsBelongToWorkspace({
   ctx,
@@ -165572,7 +165638,7 @@ async function recordMissionBranchObservations({
       403
     );
   }
-  await executionTargetInWorkspace2({ ctx, executionTargetId: targetId });
+  await executionTargetInWorkspace({ ctx, executionTargetId: targetId });
   const observations = rawObservations.map(parseObservationInput2);
   await assertMissionsBelongToWorkspace({ ctx, observations });
   const now2 = nowIso();
@@ -165649,9 +165715,9 @@ function mergeMissionBranchObservation({
 }
 
 // ../packages/core/service/mission-reference-search.ts
-var import_node_crypto19 = require("node:crypto");
+var import_node_crypto18 = require("node:crypto");
 function referenceDigest(reference) {
-  return (0, import_node_crypto19.createHash)("sha256").update(reference).digest("hex").slice(0, 24);
+  return (0, import_node_crypto18.createHash)("sha256").update(reference).digest("hex").slice(0, 24);
 }
 function encodeCursor(body) {
   return Buffer.from(JSON.stringify(body), "utf8").toString("base64url");
@@ -167003,7 +167069,7 @@ async function updateMissionTitle({
   if (!existing || existing.title === title) {
     return;
   }
-  const now2 = nowIso2();
+  const now2 = nowIso();
   const revision3 = existing.revision + 1;
   await requireDatabaseClient().run(
     `UPDATE missions SET title = ?, updated_at = ?, revision = ? WHERE id = ?`,
@@ -167491,7 +167557,7 @@ async function launchObjective(objectiveRef, body) {
       executionTargetId: body.executionTargetId
     });
     const { executionTargetId, agentConfigs } = launchTarget;
-    const now2 = nowIso2();
+    const now2 = nowIso();
     await assertLaunchResourceConnected({
       ctx: serviceCtx,
       projectId: objective.project_id,
@@ -167738,14 +167804,14 @@ async function recordRunnerBranchEvent(tx, {
   objectiveId = null,
   summary,
   payload,
-  now: now2 = nowIso2()
+  now: now2 = nowIso()
 }) {
   await tx.run(
     `INSERT INTO mission_events
        (id, workspace_id, project_id, mission_id, objective_id, type, phase, summary,
         payload_json, source, actor_workspace_user_id, created_at)
      VALUES (?, ?, ?, ?, ?, 'update', 'execute', ?, ?, 'runner', NULL, ?)`,
-    [newId2(), workspaceId2, projectId, missionId, objectiveId, summary, JSON.stringify(payload), now2]
+    [newId(), workspaceId2, projectId, missionId, objectiveId, summary, JSON.stringify(payload), now2]
   );
 }
 
@@ -167841,7 +167907,7 @@ async function recordBranchActionActivityFromMutation({
       `SELECT revision FROM missions WHERE id = ? AND workspace_id = ?`,
       [missionId, workspaceId2]
     );
-    const now2 = nowIso2();
+    const now2 = nowIso();
     if (mission) {
       const revision3 = mission.revision + 1;
       await tx.run(
@@ -167875,7 +167941,7 @@ async function recordBranchActionActivityFromMutation({
 }
 
 // ext/github/service.ts
-var import_node_crypto20 = require("node:crypto");
+var import_node_crypto19 = require("node:crypto");
 var GITHUB_API = "https://api.github.com";
 var STATE_TTL_MS = 10 * 60 * 1e3;
 function githubAppConfig() {
@@ -167904,15 +167970,15 @@ function appJwt(config4) {
     JSON.stringify({ iat: now2 - 60, exp: now2 + 9 * 60, iss: config4.appId })
   );
   const signingInput = `${encodedHeader}.${encodedPayload}`;
-  const signer = (0, import_node_crypto20.createSign)("RSA-SHA256");
+  const signer = (0, import_node_crypto19.createSign)("RSA-SHA256");
   signer.update(signingInput);
   signer.end();
   return `${signingInput}.${signer.sign(config4.privateKey, "base64url")}`;
 }
-async function githubFetch(path29, token, init2 = {}) {
+async function githubFetch(path28, token, init2 = {}) {
   let response;
   try {
-    response = await fetch(`${GITHUB_API}${path29}`, {
+    response = await fetch(`${GITHUB_API}${path28}`, {
       method: init2.method ?? "GET",
       headers: {
         Accept: "application/vnd.github+json",
@@ -167943,16 +168009,16 @@ async function githubFetch(path29, token, init2 = {}) {
 }
 function signedInstallState(workspaceId2, privateKey) {
   const payload = base64url3(JSON.stringify({ workspaceId: workspaceId2, expiresAt: Date.now() + STATE_TTL_MS }));
-  const mac3 = (0, import_node_crypto20.createHmac)("sha256", privateKey).update(payload).digest("base64url");
+  const mac3 = (0, import_node_crypto19.createHmac)("sha256", privateKey).update(payload).digest("base64url");
   return `${payload}.${mac3}`;
 }
 function verifyInstallState(value2, privateKey) {
   const [payload, suppliedMac, ...extra] = value2?.split(".") ?? [];
   if (!payload || !suppliedMac || extra.length)
     throw new ApiError(400, "Invalid GitHub installation state.");
-  const expectedMac = (0, import_node_crypto20.createHmac)("sha256", privateKey).update(payload).digest("base64url");
+  const expectedMac = (0, import_node_crypto19.createHmac)("sha256", privateKey).update(payload).digest("base64url");
   const sameLength = suppliedMac.length === expectedMac.length;
-  if (!sameLength || !(0, import_node_crypto20.timingSafeEqual)(Buffer.from(suppliedMac), Buffer.from(expectedMac))) {
+  if (!sameLength || !(0, import_node_crypto19.timingSafeEqual)(Buffer.from(suppliedMac), Buffer.from(expectedMac))) {
     throw new ApiError(400, "Invalid GitHub installation state.");
   }
   let decoded;
@@ -168057,7 +168123,7 @@ async function completeGitHubInstall(input2) {
   if (!accountLogin) throw new ApiError(502, "GitHub installation has no account login.");
   await requireDatabaseClient().transaction(async (tx) => {
     const existing = await readInstallation(tx, workspaceId2);
-    const now2 = nowIso2();
+    const now2 = nowIso();
     if (existing) {
       const revision3 = existing.revision + 1;
       await tx.run(
@@ -168087,7 +168153,7 @@ async function completeGitHubInstall(input2) {
         tx
       );
     } else {
-      const id2 = newId2();
+      const id2 = newId();
       await tx.run(
         `INSERT INTO ext_github_installations (id, workspace_id, github_installation_id, github_account_login, github_account_type, permissions_json, created_at, updated_at, revision)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)`,
@@ -168126,7 +168192,7 @@ async function disconnectGitHub(workspaceId2) {
   await requireDatabaseClient().transaction(async (tx) => {
     const installation = await readInstallation(tx, workspaceId2);
     if (!installation) return;
-    const now2 = nowIso2();
+    const now2 = nowIso();
     const revision3 = installation.revision + 1;
     await tx.run(
       `UPDATE ext_github_installations SET deleted_at = ?, updated_at = ?, revision = ? WHERE id = ? AND revision = ?`,
@@ -168177,7 +168243,7 @@ async function linkProjectGitHub(projectId, body) {
   if (!fullName) {
     const existing = await readProjectLink(projectId, workspaceId2);
     if (existing) {
-      const now2 = nowIso2();
+      const now2 = nowIso();
       await requireDatabaseClient().run(
         `UPDATE ext_github_project_links SET deleted_at = ?, updated_at = ?, revision = ? WHERE id = ? AND revision = ?`,
         [now2, now2, existing.revision + 1, existing.id, existing.revision]
@@ -168197,7 +168263,7 @@ async function linkProjectGitHub(projectId, body) {
   };
   await requireDatabaseClient().transaction(async (tx) => {
     const existing = await readProjectLink(projectId, workspaceId2, tx);
-    const now2 = nowIso2();
+    const now2 = nowIso();
     if (existing) {
       await tx.run(
         `UPDATE ext_github_project_links SET github_repo_id = ?, full_name = ?, default_branch = ?, metadata_json = ?, deleted_at = NULL, updated_at = ?, revision = ? WHERE id = ? AND revision = ?`,
@@ -168225,7 +168291,7 @@ async function linkProjectGitHub(projectId, body) {
         tx
       );
     } else {
-      const id2 = newId2();
+      const id2 = newId();
       await tx.run(
         `INSERT INTO ext_github_project_links (id, workspace_id, project_id, github_repo_id, full_name, default_branch, metadata_json, created_at, updated_at, revision) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
         [
@@ -168360,7 +168426,7 @@ async function recordPrivateRepositoryLink(tx, input2) {
     [input2.project.id]
   );
   if (existingLink) return;
-  const linkId = newId2();
+  const linkId = newId();
   await tx.run(
     `INSERT INTO ext_github_project_links
           (id, workspace_id, project_id, github_repo_id, full_name, default_branch, metadata_json, created_at, updated_at, revision)
@@ -168418,8 +168484,8 @@ async function createMissionGitHubPullRequest(missionId, body) {
       }
     }
   );
-  const now2 = nowIso2();
-  const id2 = newId2();
+  const now2 = nowIso();
+  const id2 = newId();
   await requireDatabaseClient().transaction(async (tx) => {
     const concurrent = await readPullRequest(missionId, mission.workspace_id, tx);
     if (concurrent) return;
@@ -168680,7 +168746,7 @@ function deferredWorkItemDto(entry, item) {
 var import_node_path30 = __toESM(require("node:path"), 1);
 
 // storage.ts
-var import_node_crypto26 = require("node:crypto");
+var import_node_crypto25 = require("node:crypto");
 var import_node_fs19 = require("node:fs");
 var import_node_path29 = __toESM(require("node:path"), 1);
 var import_node_url5 = require("node:url");
@@ -168793,7 +168859,7 @@ async function setSoleRoleAssignment(tx, {
        (id, workspace_id, workspace_user_id, role_key, resource_type, resource_id,
         assigned_by_workspace_user_id, created_at, updated_at, revision)
      VALUES (?, ?, ?, ?, '', '', ?, ?, ?, 1)`,
-    [newId2(), workspaceId2, workspaceUserId, roleKey, assignedByWorkspaceUserId, now2, now2]
+    [newId(), workspaceId2, workspaceUserId, roleKey, assignedByWorkspaceUserId, now2, now2]
   );
   await recordChange2(
     {
@@ -168837,10 +168903,10 @@ async function updateOrganization(id2, body) {
     const changed = [];
     let name2 = existing.name;
     if (body.name !== void 0) {
-      const trimmed9 = body.name.trim();
-      if (!trimmed9) throw new ApiError(400, "Organization name cannot be empty");
-      if (trimmed9 !== existing.name) changed.push("name");
-      name2 = trimmed9;
+      const trimmed = body.name.trim();
+      if (!trimmed) throw new ApiError(400, "Organization name cannot be empty");
+      if (trimmed !== existing.name) changed.push("name");
+      name2 = trimmed;
     }
     if (body.logoUrl !== void 0) {
       const logoUrl = body.logoUrl?.trim() || null;
@@ -168859,7 +168925,7 @@ async function updateOrganization(id2, body) {
       `UPDATE organizations
           SET name = ?, settings_json = ?, updated_at = ?, revision = ?
         WHERE id = ?`,
-      [name2, JSON.stringify(settings), nowIso2(), revision3, id2]
+      [name2, JSON.stringify(settings), nowIso(), revision3, id2]
     );
     await recordOrganizationChange({
       organizationId: id2,
@@ -168938,7 +169004,7 @@ async function addOrganizationAdmin(organizationId, body) {
     if (!hasAnyMembership) {
       throw new ApiError(400, "User must already belong to a workspace in this organization");
     }
-    const now2 = nowIso2();
+    const now2 = nowIso();
     for (const workspaceId2 of workspaceIds) {
       const membership = await tx.get(
         `SELECT id FROM workspace_users
@@ -168949,7 +169015,7 @@ async function addOrganizationAdmin(organizationId, body) {
       if (membership) {
         workspaceUserId = membership.id;
       } else {
-        workspaceUserId = newId2();
+        workspaceUserId = newId();
         await tx.run(
           `INSERT INTO workspace_users
              (id, workspace_id, profile_id, member_key, status, metadata_json,
@@ -168999,7 +169065,7 @@ async function removeOrganizationAdmin(organizationId, body) {
   }
   await client.transaction(async (tx) => {
     const workspaceIds = await liveOrganizationWorkspaceIds(organizationId, tx);
-    const now2 = nowIso2();
+    const now2 = nowIso();
     for (const workspaceId2 of workspaceIds) {
       const membership = await tx.get(
         `SELECT id FROM workspace_users
@@ -169049,7 +169115,7 @@ async function deleteOrganizationIfEmpty(organizationId, client) {
   ]);
   if (!org || org.deleted_at) return;
   await purgeOrganizationLogoObject(organizationId, org.settings_json, client);
-  const now2 = nowIso2();
+  const now2 = nowIso();
   await client.run(
     `UPDATE organizations SET deleted_at = ?, updated_at = ?, revision = ? WHERE id = ?`,
     [now2, now2, org.revision + 1, organizationId]
@@ -169369,7 +169435,7 @@ async function writeImageObject(bucket, input2, storageKeyFor) {
   }
   const contentType = input2.contentType.split(";")[0].trim().toLowerCase();
   const ext = extensionForImage(contentType);
-  const id2 = newId2();
+  const id2 = newId();
   const storageKey = storageKeyFor(id2, ext);
   const backend = createStorageBackend({ bucket, repoRoot });
   await backend.put({ key: storageKey, bytes: input2.bytes, contentType });
@@ -169379,7 +169445,7 @@ async function writeImageObject(bucket, input2, storageKeyFor) {
     sizeBytes: input2.bytes.length,
     // extensionForImage refused every other content type.
     contentType,
-    checksum: (0, import_node_crypto26.createHash)("sha256").update(input2.bytes).digest("hex"),
+    checksum: (0, import_node_crypto25.createHash)("sha256").update(input2.bytes).digest("hex"),
     publicUrl: publicUrlFor(bucket.bucket_key, storageKey)
   };
 }
@@ -169410,7 +169476,7 @@ async function uploadUserImage(input2, explicitWorkspaceId) {
     input2,
     (id2, ext) => userImageObjectKey(userId, id2, ext)
   );
-  const now2 = nowIso2();
+  const now2 = nowIso();
   const filename = input2.filename.trim() || `image${import_node_path29.default.extname(written.storageKey)}`;
   return requireDatabaseClient().transaction(async (tx) => {
     await tx.run(
@@ -169469,7 +169535,7 @@ async function uploadWorkspaceImage(input2, explicitWorkspaceId) {
     input2,
     (id2, ext) => workspaceImageObjectKey(workspaceId2, id2, ext)
   );
-  const now2 = nowIso2();
+  const now2 = nowIso();
   const filename = input2.filename.trim() || `image${import_node_path29.default.extname(written.storageKey)}`;
   return requireDatabaseClient().transaction(async (tx) => {
     await tx.run(
@@ -169545,7 +169611,7 @@ async function uploadOrganizationImage(input2) {
     contentType: written.contentType,
     sizeBytes: written.sizeBytes,
     url: written.publicUrl,
-    createdAt: nowIso2()
+    createdAt: nowIso()
   };
 }
 var ATTACHMENTS_BUCKET_KEY = "attachments";
@@ -169604,7 +169670,7 @@ function toObjectiveAttachmentDto(row) {
 var ATTACHMENT_COLUMNS = `id, workspace_id, project_id, mission_id, objective_id, inbox_item_id,
   storage_key, filename, content_type, size_bytes, upload_status, created_at`;
 async function writeAttachmentObject(bucket, workspaceId2, input2) {
-  const id2 = newId2();
+  const id2 = newId();
   const storageKey = attachmentObjectKey(workspaceId2, id2, attachmentExtension(input2.filename));
   const contentType = input2.contentType.split(";")[0].trim().toLowerCase() || null;
   await storageBackendFor(bucket).put({
@@ -169620,11 +169686,11 @@ async function writeAttachmentObject(bucket, workspaceId2, input2) {
     contentType,
     filename: input2.filename.trim() || `attachment${import_node_path29.default.extname(storageKey)}`,
     sizeBytes: input2.bytes.length,
-    checksum: (0, import_node_crypto26.createHash)("sha256").update(input2.bytes).digest("hex")
+    checksum: (0, import_node_crypto25.createHash)("sha256").update(input2.bytes).digest("hex")
   };
 }
 async function insertAttachmentRow(tx, written, scope2, createdByWorkspaceUserId) {
-  const now2 = nowIso2();
+  const now2 = nowIso();
   await tx.run(
     `INSERT INTO attachments (
        id, workspace_id, project_id, mission_id, objective_id, inbox_item_id, storage_bucket_id,
@@ -169669,7 +169735,7 @@ async function insertAttachmentRow(tx, written, scope2, createdByWorkspaceUserId
   };
 }
 async function tombstoneAttachmentRows(tx, ids) {
-  const now2 = nowIso2();
+  const now2 = nowIso();
   for (const id2 of ids) {
     await tx.run(
       `UPDATE attachments
@@ -170120,7 +170186,7 @@ async function repointInboxAttachmentsTx(tx, input2) {
     [input2.inboxItemId]
   );
   const copies = new Map(input2.copies.map((copy) => [copy.attachmentId, copy]));
-  const now2 = nowIso2();
+  const now2 = nowIso();
   for (const row of rows) {
     const changedFields = ["project_id", "mission_id", "objective_id", "inbox_item_id"];
     if (row.workspace_id === input2.workspaceId) {
@@ -170513,12 +170579,12 @@ async function resolveResourceExecutionTargetId(db, workspaceId2, executionTarge
     }
   }
   if (executionTargetId === null) return null;
-  const trimmed9 = executionTargetId.trim();
-  if (!trimmed9) return null;
-  if (!await executionTargetBelongsToWorkspace(db, trimmed9, workspaceId2)) {
+  const trimmed = executionTargetId.trim();
+  if (!trimmed) return null;
+  if (!await executionTargetBelongsToWorkspace(db, trimmed, workspaceId2)) {
     throw new ApiError(404, "Execution target not found");
   }
-  return trimmed9;
+  return trimmed;
 }
 async function getProjectResourceRow(db, projectId, resourceId, permission = PERMISSIONS.PROJECT_READ) {
   await getProject2(projectId, db, permission);
@@ -170920,7 +170986,7 @@ async function recordBranchActionActivity(ctx, summary) {
       `SELECT revision FROM missions WHERE id = ? AND workspace_id = ?`,
       [ctx.missionId, ctx.workspaceId]
     );
-    const now2 = nowIso2();
+    const now2 = nowIso();
     const profileId = await resolveActiveProfileId(tx);
     const actorWorkspaceUserId = profileId ? await findActiveMembershipId(ctx.workspaceId, profileId, tx) : null;
     if (mission) {
@@ -170951,7 +171017,7 @@ async function recordBranchActionActivity(ctx, summary) {
         payload_json, source, actor_workspace_user_id, created_at)
      VALUES (?, ?, ?, ?, NULL, 'update', 'execute', ?, ?, 'webapp', ?, ?)`,
       [
-        newId2(),
+        newId(),
         ctx.workspaceId,
         ctx.projectId,
         ctx.missionId,
@@ -171399,7 +171465,7 @@ async function reorderProjects(body) {
     if (updates.length === 0) {
       return listProjectsForWorkspace(workspaceId2, tx);
     }
-    const now2 = nowIso2();
+    const now2 = nowIso();
     const maxPosition = Math.max(...current.map((project) => project.position ?? 0), 0);
     const tempBase = maxPosition + updates.length + 1;
     for (const [index, { id: id2 }] of updates.entries()) {
@@ -171490,8 +171556,8 @@ async function createProjectStatus(projectId, body) {
     if (isDefault && type !== "draft" && type !== "next") {
       throw new ApiError(400, "Only draft- or next-type statuses can be the default");
     }
-    const now2 = nowIso2();
-    const id2 = newId2();
+    const now2 = nowIso();
+    const id2 = newId();
     const key = await uniqueStatusKey(tx, { name: name2, projectId });
     const maxPos = await tx.get(
       `SELECT COALESCE(MAX(position), -1) AS max_pos FROM project_statuses
@@ -171541,7 +171607,7 @@ async function updateProjectStatus(projectId, statusId, body) {
     const scope2 = await resolveStatusProjectScope(tx, projectId);
     const existing = await getProjectStatusRow(tx, statusId, projectId);
     const changed = [];
-    const now2 = nowIso2();
+    const now2 = nowIso();
     const fields = [];
     const setParams = [];
     if (body.name !== void 0) {
@@ -171607,7 +171673,7 @@ async function deleteProjectStatus(projectId, statusId) {
         `Cannot delete a status used by ${missionCount} mission(s). Move them first.`
       );
     }
-    const now2 = nowIso2();
+    const now2 = nowIso();
     const revision3 = existing.revision + 1;
     await tx.run(
       `UPDATE project_statuses
@@ -171646,7 +171712,7 @@ async function reorderProjectStatuses(projectId, body) {
         throw new ApiError(400, "Unknown status in reorder list");
       }
     }
-    const now2 = nowIso2();
+    const now2 = nowIso();
     for (const [position, id2] of orderedIds.entries()) {
       await tx.run(
         `UPDATE project_statuses
@@ -171692,8 +171758,8 @@ async function listProjectTags(projectId) {
 }
 function normalizeTagColor(color) {
   if (color === null || color === void 0) return null;
-  const trimmed9 = color.trim();
-  return trimmed9.length > 0 ? trimmed9 : null;
+  const trimmed = color.trim();
+  return trimmed.length > 0 ? trimmed : null;
 }
 async function createProjectTag(projectId, body) {
   return requireDatabaseClient().transaction(async (tx) => {
@@ -171706,8 +171772,8 @@ async function createProjectTag(projectId, body) {
       [projectId, label]
     );
     if (duplicate) throw new ApiError(409, "A tag with this label already exists");
-    const now2 = nowIso2();
-    const id2 = newId2();
+    const now2 = nowIso();
+    const id2 = newId();
     await tx.run(
       `INSERT INTO project_tags
          (id, workspace_id, project_id, label, color, active, created_at, updated_at, revision)
@@ -171763,7 +171829,7 @@ async function updateProjectTag(projectId, tagId, body) {
       setParams.push(bindBool(DATABASE_DIALECT, body.active));
     }
     if (fields.length === 0) return toProjectTagDto(existing);
-    const now2 = nowIso2();
+    const now2 = nowIso();
     const revision3 = existing.revision + 1;
     await tx.run(
       `UPDATE project_tags SET ${fields.join(", ")}, updated_at = ?, revision = ?
@@ -171787,7 +171853,7 @@ async function updateProjectTag(projectId, tagId, body) {
 async function deleteProjectTag(projectId, tagId) {
   await requireDatabaseClient().transaction(async (tx) => {
     const existing = await getProjectTagRow(tx, projectId, tagId, PERMISSIONS.PROJECT_UPDATE);
-    const now2 = nowIso2();
+    const now2 = nowIso();
     const revision3 = existing.revision + 1;
     await tx.run(`DELETE FROM mission_tags WHERE tag_id = ?`, [tagId]);
     await tx.run(
@@ -171883,13 +171949,13 @@ async function insertProjectResource(db, project, body, pathRequiredMessage, opt
   const executionTargetId = sourceUrl ? body.executionTargetId ?? null : await resolveResourceExecutionTargetId(db, project.workspaceId, body.executionTargetId);
   const willBePrimary = body.isPrimary !== false;
   const resolvedAccessMode = willBePrimary ? "read_write" : body.accessMode === "read_write" ? "read_write" : "read";
-  const now2 = nowIso2();
+  const now2 = nowIso();
   if (willBePrimary) await clearPrimaryResourcesForTarget(db, { projectId: project.id, now: now2 });
   const existing = await db.get(
     `SELECT id FROM project_resources WHERE project_id = ? AND resource_key = ? AND deleted_at IS NULL`,
     [project.id, resourceKey]
   );
-  const resourceId = existing?.id ?? newId2();
+  const resourceId = existing?.id ?? newId();
   if (!existing) {
     await db.run(
       `INSERT INTO project_resources
@@ -171953,7 +172019,7 @@ async function insertProjectResource(db, project, body, pathRequiredMessage, opt
       `INSERT INTO project_resource_sources (id, workspace_id, project_id, resource_id, execution_target_id, source_kind, descriptor_json, created_at, updated_at, revision)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
       [
-        newId2(),
+        newId(),
         project.workspaceId,
         project.id,
         resourceId,
@@ -172013,7 +172079,7 @@ async function updateProjectResource(projectId, resourceId, body) {
       resourceId,
       PERMISSIONS.PROJECT_UPDATE
     );
-    const now2 = nowIso2();
+    const now2 = nowIso();
     const changedFields = [];
     let revision3 = existing.revision;
     if (body.resourceKey !== void 0) {
@@ -172098,7 +172164,7 @@ async function deleteProjectResource(projectId, resourceId) {
       resourceId,
       PERMISSIONS.PROJECT_UPDATE
     );
-    const now2 = nowIso2();
+    const now2 = nowIso();
     const revision3 = existing.revision + 1;
     await tx.run(
       `UPDATE project_resources
@@ -172137,7 +172203,7 @@ async function deleteProjectResourceSource(projectId, resourceId, sourceId) {
       [sourceId, projectId, resourceId]
     );
     if (!source) throw new ApiError(404, "Project resource source not found");
-    const now2 = nowIso2();
+    const now2 = nowIso();
     const revision3 = resource.revision + 1;
     await tx.run(
       `UPDATE project_resource_sources
@@ -172204,7 +172270,7 @@ async function updateProjectResourceSource(projectId, resourceId, sourceId, body
     }
     if (Object.keys(launchDefaults).length > 0) descriptor.launchDefaults = launchDefaults;
     else delete descriptor.launchDefaults;
-    const now2 = nowIso2();
+    const now2 = nowIso();
     const revision3 = resource.revision + 1;
     await tx.run(
       `UPDATE project_resource_sources
@@ -172265,7 +172331,7 @@ async function getProjectRepositoryResource(projectId, executionTargetId, resour
 }
 async function getProjectRepository(projectId, executionTargetId, resourceKey = null) {
   await getProject2(projectId);
-  const scannedAt = nowIso2();
+  const scannedAt = nowIso();
   const resource = await getProjectRepositoryResource(projectId, executionTargetId, resourceKey);
   if (!resource) {
     return {
@@ -172339,8 +172405,8 @@ async function getProjectRepository(projectId, executionTargetId, resourceKey = 
 }
 var hexColorPattern = /^#?[0-9a-fA-F]{6}$/;
 function normalizeHexColor(value2) {
-  const trimmed9 = value2.trim();
-  const withHash = trimmed9.startsWith("#") ? trimmed9 : `#${trimmed9}`;
+  const trimmed = value2.trim();
+  const withHash = trimmed.startsWith("#") ? trimmed : `#${trimmed}`;
   return hexColorPattern.test(withHash) ? withHash.toLowerCase() : null;
 }
 async function createProject2(body) {
@@ -172361,8 +172427,8 @@ async function createProject2(body) {
     if (body.color && !color) {
       throw new ApiError(400, "Use a valid 6-digit hex color, like #d4d4d8.");
     }
-    const now2 = nowIso2();
-    const id2 = newId2();
+    const now2 = nowIso();
+    const id2 = newId();
     const slug = body.slug?.trim() ? slugify3(body.slug) : slugify3(name2);
     const settingsJson = buildProjectSettingsJson({ color: color ?? void 0 });
     const maxPosition = await tx.get(
@@ -172461,8 +172527,8 @@ async function initializeProject(body, deps) {
       db: tx,
       notFoundMessage: "Workspace not found or no active membership"
     });
-    const now2 = nowIso2();
-    const projectId = newId2();
+    const now2 = nowIso();
+    const projectId = newId();
     const maxPosition = await tx.get(
       `SELECT COALESCE(MAX(position), 0) AS max_position FROM projects
         WHERE workspace_id = ? AND deleted_at IS NULL`,
@@ -172502,7 +172568,7 @@ async function initializeProject(body, deps) {
       tx,
       true
     );
-    const id2 = newId2();
+    const id2 = newId();
     const status = wantsRepository ? "pending" : "not_requested";
     return createProjectInitialization(tx, {
       id: id2,
@@ -172525,7 +172591,7 @@ async function initializeProject(body, deps) {
       initialization = await persistInitializedRepository({ db, initialization, repo });
     } catch (error64) {
       const message2 = error64 instanceof ApiError ? error64.message : "GitHub repository provisioning failed.";
-      const now2 = nowIso2();
+      const now2 = nowIso();
       await recordProvisioningFailure(db, {
         id: initialization.id,
         message: message2,
@@ -172555,7 +172621,7 @@ async function persistInitializedRepository({
     const current = await readProjectInitializationById(tx, initialization.id);
     if (current.provisioning_status === "succeeded") return current;
     const project = await getProject2(current.project_id, tx, PERMISSIONS.PROJECT_READ);
-    const now2 = nowIso2();
+    const now2 = nowIso();
     await recordPrivateRepositoryLink(tx, { project, repo, now: now2 });
     await insertProjectResource(
       tx,
@@ -172639,7 +172705,7 @@ async function updateProject(id2, body) {
       changed.push("settings_json");
     }
     if (fields.length === 0) return getProject2(id2, tx);
-    const now2 = nowIso2();
+    const now2 = nowIso();
     const revision3 = existing.revision + 1;
     await tx.run(
       `UPDATE projects SET ${fields.join(", ")}, updated_at = ?, revision = ?
@@ -172674,7 +172740,7 @@ async function deleteProject(id2) {
       [id2, workspaceId2]
     );
     if (!existing) throw new ApiError(404, "Project not found");
-    const now2 = nowIso2();
+    const now2 = nowIso();
     const revision3 = existing.revision + 1;
     const missionIds = (await tx.all(
       `SELECT id FROM missions WHERE project_id = ? AND workspace_id = ? AND deleted_at IS NULL`,
@@ -173199,7 +173265,7 @@ async function markMissionStatusesSeen(missionRef) {
   if (row.has_unseen_blocking_question === 1) toMark.push("blocking_question");
   if (row.has_unseen_returned_to_execute === 1) toMark.push("returned_to_execute");
   if (toMark.length === 0) return;
-  const now2 = nowIso2();
+  const now2 = nowIso();
   await db.transaction(async (tx) => {
     for (const statusId of toMark) {
       await tx.run(
@@ -173601,7 +173667,7 @@ async function createArtifact(missionRef, body) {
       }
       if (!objectiveId) objectiveId = session.objective_id;
     }
-    const now2 = nowIso2();
+    const now2 = nowIso();
     const ctx = await buildWebappServiceContextForWorkspace(
       mission.workspace_id,
       tx,
@@ -173721,7 +173787,7 @@ async function updateArtifact(missionRef, artifactId, body) {
     if (!contentText && !artifact.content_json && !externalUrl) {
       throw new ApiError(400, "An artifact must retain text, structured content, or a URL");
     }
-    const updatedAt = nowIso2();
+    const updatedAt = nowIso();
     const revision3 = artifact.revision + 1;
     await tx.run(
       `UPDATE artifacts
@@ -173763,7 +173829,7 @@ async function deleteArtifact(missionRef, artifactId) {
       [artifactId, mission.id, mission.workspace_id]
     );
     if (!artifact) throw new ApiError(404, "Artifact not found");
-    const now2 = nowIso2();
+    const now2 = nowIso();
     const revision3 = artifact.revision + 1;
     await tx.run(
       `UPDATE artifacts
@@ -173974,9 +174040,9 @@ async function createInboxItem(body) {
   const db = requireDatabaseClient();
   const profileId = await activeInboxProfileId(db);
   const input2 = validateInboxBody(body);
-  const now2 = nowIso2();
+  const now2 = nowIso();
   const row = {
-    id: newId2(),
+    id: newId(),
     title: input2.title,
     objectives_json: JSON.stringify(input2.objectives),
     due_datetime: input2.dueDatetime,
@@ -174002,7 +174068,7 @@ async function updateInboxItem(id2, body) {
     dueDatetime: body.dueDatetime === void 0 ? existing.due_datetime : body.dueDatetime,
     priority: body.priority === void 0 ? existing.priority : body.priority
   });
-  const now2 = nowIso2();
+  const now2 = nowIso();
   await db.run(
     `UPDATE inbox_items SET title = ?, objectives_json = ?, due_datetime = ?, priority = ?, updated_at = ?
       WHERE id = ? AND profile_id = ?`,
@@ -174101,12 +174167,12 @@ async function generateMissionTitle(missionRef) {
 }
 async function resolveAssignedWorkspaceUserId(db, workspaceId2, value2) {
   if (value2 === null || value2 === void 0) return null;
-  const trimmed9 = value2.trim();
-  if (!trimmed9) return null;
+  const trimmed = value2.trim();
+  if (!trimmed) return null;
   const member2 = await db.get(
     `SELECT id FROM workspace_users
         WHERE id = ? AND workspace_id = ? AND status = 'active' AND deleted_at IS NULL`,
-    [trimmed9, workspaceId2]
+    [trimmed, workspaceId2]
   );
   if (!member2) throw new ApiError(400, "Assignee is not a member of this workspace");
   return member2.id;
@@ -174210,7 +174276,7 @@ async function patchMissionFieldsTx(missionRef, body) {
       setParams.push(body.dueDatetime);
       changed.push("due_datetime");
     }
-    const now2 = nowIso2();
+    const now2 = nowIso();
     if (returnedToExecute) {
       fields.push("returned_to_execute_at = ?");
       setParams.push(now2);
@@ -174330,7 +174396,7 @@ async function moveMissionProjectTx({
       setParams.push(body.notes?.trim() || null);
       changed.push("notes_text");
     }
-    const now2 = nowIso2();
+    const now2 = nowIso();
     const returnedToExecute = statusRow.type === "execute" && existing.status_type !== "execute";
     if (returnedToExecute) {
       fields.push("returned_to_execute_at = ?");
@@ -174440,7 +174506,7 @@ async function deleteMissions(missionRefs) {
     if (new Set(missions.map((mission) => mission.id)).size !== missions.length) {
       throw new ApiError(400, "missionIds contains duplicate missions");
     }
-    const now2 = nowIso2();
+    const now2 = nowIso();
     for (const existing of missions) {
       const revision3 = existing.revision + 1;
       await tx.run(
@@ -174500,7 +174566,7 @@ async function deleteObjectives(objectiveRefs) {
     ].sort()) {
       await lockMissionObjectiveQueue(tx, missionId);
     }
-    const now2 = nowIso2();
+    const now2 = nowIso();
     for (const { existing, workspaceId: workspaceId2, workspaceUserId } of objectives) {
       const revision3 = existing.revision + 1;
       await tx.run(
@@ -174556,7 +174622,7 @@ async function reorderBoardColumn(projectId, body) {
     if (new Set(orderedIds).size !== orderedIds.length) {
       throw new ApiError(400, "orderedMissionIds contains duplicates");
     }
-    const now2 = nowIso2();
+    const now2 = nowIso();
     for (const [index, missionId] of orderedIds.entries()) {
       const existing = await tx.get(
         `SELECT * FROM missions
@@ -174726,8 +174792,8 @@ async function createScheduledDuplicateIfNeeded(tx, mission, newStatusType) {
     ...await buildWebappServiceContextForWorkspace(mission.workspace_id, tx, null),
     origin: { kind: "automation" }
   };
-  const now2 = nowIso2();
-  const newMissionId = newId2();
+  const now2 = nowIso();
+  const newMissionId = newId();
   const sequence = await nextMissionSequence(automationCtx);
   const displayId = `${automationCtx.workspace.slug}:${sequence}`;
   const boardPosition = await topBoardPosition(tx, mission.project_id, targetStatus.id);
@@ -175103,7 +175169,7 @@ async function reorderObjectives(missionId, body) {
       projectId: mission.project_id,
       rows,
       positionById,
-      now: nowIso2(),
+      now: nowIso(),
       requireQueuedState: true
     });
     await syncRunQueueOrderFromMissionPositions(tx, mission.id);
@@ -175249,23 +175315,23 @@ async function updateObjectiveTx(idRef, body, options = {}) {
       changed.push("state");
       if (body.state === "launching") {
         fields.push(OBJECTIVE_LAUNCHED_AT_ASSIGNMENT2);
-        setParams.push(nowIso2());
+        setParams.push(nowIso());
         changed.push("launched_at");
       }
       if (body.state === "executing") {
         fields.push(OBJECTIVE_LAUNCHED_AT_ASSIGNMENT2, OBJECTIVE_STARTED_AT_ASSIGNMENT2);
-        const startedAt = nowIso2();
+        const startedAt = nowIso();
         setParams.push(startedAt, startedAt);
         changed.push("launched_at", "started_at");
       }
       if (body.state === "complete") {
         fields.push(OBJECTIVE_COMPLETED_AT_ASSIGNMENT2);
-        setParams.push(nowIso2());
+        setParams.push(nowIso());
         changed.push("completed_at");
       }
       if (body.state === "draft" && OBJECTIVE_REOPENABLE_STATES2.includes(existing.state)) {
         fields.push(OBJECTIVE_REOPENED_AT_ASSIGNMENT);
-        setParams.push(nowIso2());
+        setParams.push(nowIso());
         changed.push("reopened_at");
       }
     }
@@ -175338,7 +175404,7 @@ async function updateObjectiveTx(idRef, body, options = {}) {
         options.origin ?? { kind: "human" },
         workspaceUserId ?? null
       ),
-      now: nowIso2()
+      now: nowIso()
     });
     if (fields.length === 0) {
       const briefOnly = objectiveBriefPatchAssignments(tx, briefPlan.patch);
@@ -175396,7 +175462,7 @@ async function updateObjectiveTx(idRef, body, options = {}) {
         changed.push("title");
       }
     }
-    const now2 = nowIso2();
+    const now2 = nowIso();
     const revision3 = existing.revision + 1;
     const reopening = body.state === "draft" && body.state !== existing.state && OBJECTIVE_REOPENABLE_STATES2.includes(existing.state);
     if (reopening) await lockMissionObjectiveQueue(tx, existing.mission_id);
@@ -175607,14 +175673,6 @@ async function getProfile() {
 }
 var DEFAULT_PROJECT_PREFERENCE_NAMESPACE = "overlord";
 var DEFAULT_PROJECT_PREFERENCE_KEY = "defaultProject";
-function parseProjectPreferenceJson(value2) {
-  try {
-    const parsed = JSON.parse(value2);
-    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
-  } catch {
-    return {};
-  }
-}
 function hasDefaultProjectMarker(preferences) {
   const namespace = preferences[DEFAULT_PROJECT_PREFERENCE_NAMESPACE];
   return namespace !== null && typeof namespace === "object" && !Array.isArray(namespace) && namespace[DEFAULT_PROJECT_PREFERENCE_KEY] === true;
@@ -175650,7 +175708,7 @@ async function getDefaultProjectPreference() {
   if (!profileId) return { projectId: null };
   const rows = await listProjectPreferenceRowsForProfile(profileId, db);
   for (const row of rows) {
-    if (!hasDefaultProjectMarker(parseProjectPreferenceJson(row.preferences_json))) continue;
+    if (!hasDefaultProjectMarker(parseMetadataJson(row.preferences_json))) continue;
     const project = await db.get(
       `SELECT p.id
          FROM projects p
@@ -175685,14 +175743,14 @@ async function updateDefaultProjectPreference(projectId) {
       );
       if (!activeProject) throw new ApiError(404, "Project not found");
     }
-    const now2 = nowIso2();
+    const now2 = nowIso();
     const rows = await listProjectPreferenceRowsForProfile(profileId, tx);
     let selectedRow = projectId ? rows.find(
       (row) => row.project_id === projectId && row.workspace_user_id === selectedScope?.workspaceUserId
     ) : void 0;
     for (const row of rows) {
       const shouldBeDefault = projectId !== null && row.project_id === projectId && row.workspace_user_id === selectedScope?.workspaceUserId;
-      const preferences = parseProjectPreferenceJson(row.preferences_json);
+      const preferences = parseMetadataJson(row.preferences_json);
       if (hasDefaultProjectMarker(preferences) === shouldBeDefault) continue;
       await tx.run(
         `UPDATE project_user_preferences
@@ -175708,7 +175766,7 @@ async function updateDefaultProjectPreference(projectId) {
     }
     if (projectId && selectedScope && !selectedRow) {
       selectedRow = {
-        id: newId2(),
+        id: newId(),
         workspace_id: selectedScope.workspaceId,
         project_id: projectId,
         workspace_user_id: selectedScope.workspaceUserId,
@@ -175794,7 +175852,7 @@ async function updateProfile(body) {
       setParams.push(metadataJson);
     }
     if (fields.length === 0) return;
-    const now2 = nowIso2();
+    const now2 = nowIso();
     const revision3 = existing.revision + 1;
     await tx.run(
       `UPDATE profiles SET ${fields.join(", ")}, updated_at = ?, revision = ?
@@ -175999,8 +176057,8 @@ async function createUserToken(body, consent) {
       }
     }
     if (!generated) throw new ApiError(409, "Could not allocate a unique token prefix; try again");
-    const id2 = newId2();
-    const now2 = nowIso2();
+    const id2 = newId();
+    const now2 = nowIso();
     await tx.run(
       `INSERT INTO user_tokens (
          id, workspace_id, organization_id, all_workspaces, profile_id, workspace_user_id, label, scope,
@@ -176048,7 +176106,7 @@ async function createUserToken(body, consent) {
          id, workspace_id, token_id, permission, resource_type, resource_id,
          created_at, updated_at, revision
        ) VALUES (?, ?, ?, ?, NULL, NULL, ?, ?, 1)`,
-        [newId2(), workspaceId2, id2, permission, now2, now2]
+        [newId(), workspaceId2, id2, permission, now2, now2]
       );
     }
     await recordChange2(
@@ -176074,7 +176132,7 @@ async function renameUserToken(id2, body) {
     if (!existing.workspace_id) throw new ApiError(409, "Token has no issuance workspace");
     const label = body.label?.trim();
     if (!label) throw new ApiError(400, "Token label cannot be empty");
-    const now2 = nowIso2();
+    const now2 = nowIso();
     const revision3 = existing.revision + 1;
     await tx.run(
       `UPDATE user_tokens SET label = ?, updated_at = ?, revision = ?
@@ -176102,7 +176160,7 @@ async function revokeUserToken(id2) {
     if (existing.status === "revoked") return toUserTokenDto(tx, await reloadUserToken(tx, id2));
     const { userId } = await loadOperatorIdentity(tx);
     const workspaceUserId = await findActiveMembershipId(existing.workspace_id, userId, tx);
-    const now2 = nowIso2();
+    const now2 = nowIso();
     const revision3 = existing.revision + 1;
     await tx.run(
       `UPDATE user_tokens
@@ -176135,7 +176193,7 @@ async function deleteRevokedUserToken(id2) {
       throw new ApiError(409, "Only revoked tokens can be deleted");
     }
     const { userId } = await loadOperatorIdentity(tx);
-    const now2 = nowIso2();
+    const now2 = nowIso();
     const revision3 = existing.revision + 1;
     const result2 = await tx.run(
       `UPDATE user_tokens
@@ -176169,7 +176227,7 @@ async function revokeUserTokenSecret(rawToken) {
       [tokenHash]
     );
     if (!existing || existing.status === "revoked") return false;
-    const now2 = nowIso2();
+    const now2 = nowIso();
     const revision3 = existing.revision + 1;
     await tx.run(
       `UPDATE user_tokens
@@ -176202,6 +176260,19 @@ function flagsOf(body) {
 function strFlag(body, name2) {
   const value2 = flagsOf(body)[name2];
   return typeof value2 === "string" ? value2 : void 0;
+}
+function connectionMethodFlag(body) {
+  const value2 = strFlag(body, "--connection-method");
+  if (value2 === void 0) return void 0;
+  if (!ATTACH_CONNECTION_METHODS.includes(value2)) {
+    throw new ApiError(
+      400,
+      `--connection-method must be one of: ${ATTACH_CONNECTION_METHODS.join(", ")}`,
+      void 0,
+      "invalid_input"
+    );
+  }
+  return value2;
 }
 function boolFlag(body, name2) {
   const value2 = flagsOf(body)[name2];
@@ -176240,25 +176311,27 @@ function externalSessionId(body) {
   return body.externalSessionId ?? void 0;
 }
 function requireFlag(body, name2) {
-  const value2 = strFlag(body, name2);
-  if (value2 === void 0 || value2.trim() === "") {
+  return requireFlagValue(strFlag(body, name2), name2);
+}
+function requireFlagValue(value2, name2) {
+  if (!value2?.trim()) {
     throw new ApiError(400, `Missing required flag: ${name2}`);
   }
   return value2;
 }
 function missionRefFlag(body) {
-  const explicit = strFlag(body, "--mission-id");
-  if (explicit !== void 0 && explicit.trim() !== "") return explicit;
-  const derived2 = missionDisplayIdFromObjectiveRef(strFlag(body, "--objective-id"));
-  if (derived2) return derived2;
+  const { missionRef } = readProtocolAddress(body);
+  if (missionRef) return missionRef;
   throw new ApiError(
     400,
     "Missing required flag: --mission-id (pass it, or an objective display id such as coo:756.k7xm as --objective-id)"
   );
 }
+function sessionKeyFlag(body) {
+  return requireFlagValue(readProtocolAddress(body).sessionKey, "--session-key");
+}
 function objectiveRefFlag(body) {
-  const value2 = strFlag(body, "--objective-id");
-  return value2 !== void 0 && value2.trim() !== "" ? value2.trim() : null;
+  return readProtocolAddress(body).objectiveRef;
 }
 function parseJsonInput(body, jsonFlag, fileFlag) {
   const raw = resolveInput(body, jsonFlag, fileFlag);
@@ -176289,11 +176362,14 @@ function parseJsonObjectInput(body, jsonFlag, fileFlag, label) {
   }
   return input2;
 }
-function intFlag(body, name2) {
+function integerFlag(body, name2, options = {}) {
   const value2 = strFlag(body, name2);
-  if (value2 === void 0) return void 0;
-  const parsed = Number.parseInt(value2, 10);
-  return Number.isFinite(parsed) ? parsed : void 0;
+  if (value2 === void 0) return options.fallback;
+  const parsed = Number(value2);
+  if (!/^-?\d+$/.test(value2) || !Number.isSafeInteger(parsed) || options.min !== void 0 && parsed < options.min || options.max !== void 0 && parsed > options.max) {
+    throw new ApiError(400, `${name2} must be a valid integer`, void 0, "invalid_input");
+  }
+  return parsed;
 }
 
 // protocol/artifacts.ts
@@ -176301,15 +176377,17 @@ var artifactSubcommands = {
   // Shared context ---------------------------------------------------------
   "read-context": {
     permission: PERMISSIONS.MISSION_READ,
+    projectAutomation: "denied",
     handler: (ctx, body) => listSharedContext({
       ctx,
       missionId: missionRefFlag(body),
       keySubstring: strFlag(body, "--key") ?? null,
-      limit: intFlag(body, "--limit") ?? 50
+      limit: integerFlag(body, "--limit") ?? 50
     })
   },
   "write-context": {
     permission: PERMISSIONS.MISSION_UPDATE,
+    projectAutomation: "denied",
     handler: (ctx, body) => {
       const valueJson = parseJsonInput(body, "--value-json", "--value-file");
       const value2 = valueJson !== void 0 ? valueJson : strFlag(body, "--value") ?? "";
@@ -176325,6 +176403,7 @@ var artifactSubcommands = {
   // stamps session/objective provenance when the agent is on a live turn.
   "add-artifact": {
     permission: PERMISSIONS.ARTIFACT_CREATE,
+    projectAutomation: "denied",
     handler: (_ctx, body) => {
       const create = {
         type: requireFlag(body, "--type"),
@@ -176338,7 +176417,7 @@ var artifactSubcommands = {
         const url2 = strFlag(body, "--external-url");
         create.externalUrl = url2 !== void 0 && url2.trim() ? url2 : null;
       }
-      const sessionKey = strFlag(body, "--session-key");
+      const sessionKey = readProtocolAddress(body).sessionKey;
       if (sessionKey) {
         create.sessionKey = sessionKey;
       }
@@ -176353,8 +176432,9 @@ var artifactSubcommands = {
   // later objective or follow-up can revise an artifact created earlier.
   "update-artifact": {
     permission: PERMISSIONS.MISSION_UPDATE,
+    projectAutomation: "denied",
     handler: (_ctx, body) => {
-      const expectedRevision2 = intFlag(body, "--expected-revision");
+      const expectedRevision2 = integerFlag(body, "--expected-revision");
       if (expectedRevision2 === void 0) {
         throw new ApiError(400, "Missing required flag: --expected-revision");
       }
@@ -176375,6 +176455,7 @@ var artifactSubcommands = {
   },
   "attachment-list": {
     permission: PERMISSIONS.ARTIFACT_READ,
+    projectAutomation: "admitted",
     handler: async (ctx, body) => {
       const missionId = missionRefFlag(body);
       const attachments = await listAttachments({
@@ -176390,6 +176471,7 @@ var artifactSubcommands = {
   },
   "attachment-download-url": {
     permission: PERMISSIONS.ARTIFACT_READ,
+    projectAutomation: "admitted",
     handler: async (ctx, body) => {
       const missionId = missionRefFlag(body);
       const attachmentId = requireFlag(body, "--attachment-id");
@@ -176538,375 +176620,7 @@ function parseMissionSummaryFlag(body) {
   }
 }
 
-// protocol/project-refs.ts
-var ProjectSelectionRequiredError = class extends Error {
-  projectRef;
-  projects;
-  constructor(projectRef, projects) {
-    super(`Project reference matches more than one workspace: ${projectRef}`);
-    this.name = "ProjectSelectionRequiredError";
-    this.projectRef = projectRef;
-    this.projects = projects;
-  }
-};
-async function resolveProjectRefChoices({
-  projectRef,
-  workspaceHint,
-  workspaceIds
-}) {
-  if (workspaceIds.length === 0) return [];
-  const allowedProjectIds = getActiveTokenProjectIds();
-  if (allowedProjectIds?.length === 0) return [];
-  const db = serviceDatabaseClient();
-  const placeholders = workspaceIds.map(() => "?").join(", ");
-  const selectChoice = `SELECT p.id, p.name, p.slug, p.workspace_id, w.name AS workspace_name,
-            w.slug AS workspace_slug
-       FROM projects p
-       JOIN workspaces w ON w.id = p.workspace_id
-      WHERE p.deleted_at IS NULL AND p.workspace_id IN (${placeholders})${allowedProjectIds === null ? "" : ` AND p.id IN (${allowedProjectIds.map(() => "?").join(", ")})`}`;
-  const choiceParams = [...workspaceIds, ...allowedProjectIds ?? []];
-  const toChoice = (row) => ({
-    id: row.id,
-    name: row.name,
-    slug: row.slug,
-    workspaceId: row.workspace_id,
-    workspaceName: row.workspace_name,
-    workspaceSlug: row.workspace_slug
-  });
-  const byId = await db.get(`${selectChoice} AND p.id = ?`, [
-    ...choiceParams,
-    projectRef
-  ]);
-  if (byId) return [toChoice(byId)];
-  const matches = (await db.all(
-    `${selectChoice} AND (lower(p.slug) = lower(?) OR lower(p.name) = lower(?))`,
-    [...choiceParams, projectRef, projectRef]
-  )).map(toChoice);
-  const hint = workspaceHint?.trim().toLowerCase();
-  if (!hint || matches.length <= 1) return matches;
-  const narrowed = matches.filter(
-    (choice) => choice.workspaceId.toLowerCase() === hint || choice.workspaceSlug.toLowerCase() === hint || choice.workspaceName.toLowerCase() === hint
-  );
-  return narrowed.length > 0 ? narrowed : matches;
-}
-
-// protocol/session.ts
-function publicationStyleFlag(body) {
-  return strFlag(body, "--connection-method") === "mcp" ? "mcp" : "cli";
-}
-function captureBindingFlag(body) {
-  const value2 = strFlag(body, "--capture-binding");
-  return value2 === void 0 ? void 0 : value2;
-}
-function connectionMethodFlag(body) {
-  const value2 = strFlag(body, "--connection-method");
-  if (value2 === void 0) return void 0;
-  if (!ATTACH_CONNECTION_METHODS.includes(value2)) {
-    throw new ApiError(
-      400,
-      `--connection-method must be one of: ${ATTACH_CONNECTION_METHODS.join(", ")}`,
-      void 0,
-      "invalid_input"
-    );
-  }
-  return value2;
-}
-function declaredPathsInput(body) {
-  return parseJsonArrayInput(
-    body,
-    "--declared-paths-json",
-    "--declared-paths-file",
-    "declaredPaths"
-  );
-}
-function reportDraftInput(body, { allowRevisionShorthand }) {
-  const input2 = parseJsonObjectInput(
-    body,
-    "--report-draft-json",
-    "--report-draft-file",
-    "reportDraft"
-  );
-  const revision3 = allowRevisionShorthand ? strFlag(body, "--expected-draft-revision") : void 0;
-  if (revision3 === void 0) return input2;
-  if (input2 !== void 0) {
-    throw new ApiError(
-      400,
-      "Use either --expected-draft-revision or --report-draft-json/--report-draft-file, not both",
-      void 0,
-      "invalid_input"
-    );
-  }
-  if (!/^\d+$/.test(revision3)) {
-    throw new ApiError(
-      400,
-      "--expected-draft-revision must be a non-negative integer",
-      void 0,
-      "invalid_input"
-    );
-  }
-  return { expectedRevision: Number(revision3) };
-}
-var sessionSubcommands = {
-  "project-items": {
-    permission: PERMISSIONS.MISSION_READ,
-    handler: (ctx, body) => readAgentProjectItems({
-      ctx,
-      missionId: missionRefFlag(body),
-      objectiveId: objectiveRefFlag(body) ?? void 0,
-      sessionKey: requireFlag(body, "--session-key"),
-      kinds: strFlag(body, "--kind")?.split(",").map((s) => s.trim()),
-      query: strFlag(body, "--query"),
-      paths: strFlag(body, "--path")?.split(",").map((s) => s.trim()),
-      includeOwnMission: boolFlag(body, "--include-own-mission"),
-      limit: Number(strFlag(body, "--limit") ?? 20),
-      offset: Number(strFlag(body, "--offset") ?? 0)
-    })
-  },
-  "mission-items": {
-    permission: PERMISSIONS.MISSION_READ,
-    handler: (ctx, body) => readAgentMissionItems({
-      ctx,
-      missionId: missionRefFlag(body),
-      sessionKey: requireFlag(body, "--session-key"),
-      limit: Number(strFlag(body, "--limit") ?? 60),
-      offset: Number(strFlag(body, "--offset") ?? 0)
-    })
-  },
-  "close-items": {
-    permission: PERMISSIONS.EVENT_CREATE,
-    handler: (ctx, body) => closeAgentMissionItems({
-      ctx,
-      missionId: missionRefFlag(body),
-      sessionKey: requireFlag(body, "--session-key"),
-      closeItems: parseJsonArrayInput(
-        body,
-        "--close-items-json",
-        "--close-items-file",
-        "closeItems"
-      )
-    })
-  },
-  // Session lifecycle ------------------------------------------------------
-  attach: {
-    permission: PERMISSIONS.SESSION_ATTACH,
-    handler: (ctx, body) => attachSession({
-      ctx,
-      missionId: missionRefFlag(body),
-      agentIdentifier: strFlag(body, "--agent") ?? "unknown",
-      modelIdentifier: strFlag(body, "--model") ?? null,
-      connectionMethod: connectionMethodFlag(body),
-      existingSessionKey: strFlag(body, "--session-key") ?? null,
-      externalSessionId: externalSessionId(body),
-      executionRequestId: strFlag(body, "--execution-request-id") ?? null,
-      executionTargetId: strFlag(body, "--execution-target-id") ?? null,
-      // The channel id only. Its credential never travels in a protocol flag — it reaches the
-      // backend solely as an Authorization header on the adapter route family.
-      sessionChannelId: strFlag(body, "--session-channel-id") ?? null,
-      objectiveId: objectiveRefFlag(body),
-      captureBindingState: captureBindingFlag(body)
-    })
-  },
-  connect: {
-    permission: PERMISSIONS.SESSION_ATTACH,
-    handler: (ctx, body) => connectSession({
-      ctx,
-      missionId: missionRefFlag(body),
-      objectiveId: objectiveRefFlag(body),
-      agentIdentifier: strFlag(body, "--agent") ?? "unknown",
-      externalSessionId: externalSessionId(body)
-    })
-  },
-  update: {
-    permission: PERMISSIONS.EVENT_CREATE,
-    handler: (ctx, body) => {
-      rejectRemovedProtocolFlags(body, RETIRED_CHANGE_TRACKING_FLAGS);
-      const payloadJson = parseJsonObjectInput(
-        body,
-        "--payload-json",
-        "--payload-file",
-        "update payload"
-      );
-      rejectRemovedProtocolPayloadFields(payloadJson, "update");
-      return updateSession2({
-        ctx,
-        missionId: missionRefFlag(body),
-        sessionKey: requireFlag(body, "--session-key"),
-        summary: resolveInput(body, "--summary", "--summary-file") ?? "",
-        phase: strFlag(body, "--phase") ?? null,
-        eventType: strFlag(body, "--event-type") ?? "update",
-        payloadJson,
-        externalUrl: strFlag(body, "--external-url") ?? null,
-        externalSessionId: externalSessionId(body),
-        beginFollowUpWork: boolFlag(body, "--begin-follow-up-work"),
-        followUpIntent: strFlag(body, "--follow-up-intent") ?? null,
-        declaredPaths: declaredPathsInput(body),
-        reportDraft: reportDraftInput(body, { allowRevisionShorthand: false })
-      });
-    }
-  },
-  "sync-changes": {
-    permission: PERMISSIONS.EVENT_CREATE,
-    handler: (ctx, body) => {
-      const changes = parseJsonArrayInput(
-        body,
-        "--changes-json",
-        "--changes-file",
-        "sync-changes input"
-      ) ?? [];
-      const capture = parseJsonObjectInput(
-        body,
-        "--capture-json",
-        "--capture-file",
-        "sync-changes capture"
-      );
-      return syncChanges({
-        ctx,
-        missionId: missionRefFlag(body),
-        sessionKey: requireFlag(body, "--session-key"),
-        changes,
-        ...capture !== void 0 ? { capture } : {}
-      });
-    }
-  },
-  heartbeat: {
-    permission: PERMISSIONS.EVENT_CREATE,
-    handler: (ctx, body) => heartbeatSession({
-      ctx,
-      missionId: missionRefFlag(body),
-      sessionKey: requireFlag(body, "--session-key"),
-      phase: strFlag(body, "--phase") ?? null,
-      note: strFlag(body, "--note") ?? null
-    })
-  },
-  ask: {
-    permission: PERMISSIONS.EVENT_CREATE,
-    handler: (ctx, body) => askQuestion({
-      ctx,
-      missionId: missionRefFlag(body),
-      sessionKey: requireFlag(body, "--session-key"),
-      question: resolveInput(body, "--question", "--question-file") ?? "",
-      options: parseJsonArrayInput(body, "--options-json", "--options-file", "ask options") ?? [],
-      allowsFreeText: !boolFlag(body, "--no-free-text")
-    })
-  },
-  deliver: {
-    permission: PERMISSIONS.EVENT_CREATE,
-    handler: (ctx, body) => {
-      rejectRemovedProtocolFlags(body, RETIRED_CHANGE_TRACKING_FLAGS);
-      const envelope2 = parseDeliveryPayloadEnvelope(body);
-      rejectRemovedProtocolPayloadFields(envelope2.payloadJson, "delivery");
-      const artifacts = parseJsonArrayInput(
-        body,
-        "--artifacts",
-        "--artifacts-file",
-        "artifacts"
-      );
-      return deliverSession({
-        ctx,
-        missionId: missionRefFlag(body),
-        sessionKey: requireFlag(body, "--session-key"),
-        summary: resolveInput(body, "--summary", "--summary-file") ?? envelope2.summary ?? "",
-        artifacts: artifacts ?? envelope2.artifacts ?? [],
-        declaredPaths: declaredPathsInput(body) ?? envelope2.declaredPaths,
-        payloadJson: envelope2.payloadJson,
-        verificationSummary: strFlag(body, "--verification-summary") ?? envelope2.verificationSummary ?? null,
-        followUpNotes: strFlag(body, "--follow-up-notes") ?? envelope2.followUpNotes ?? null,
-        missionSummary: envelope2.missionSummary,
-        operationId: envelope2.operationId,
-        reportDraft: reportDraftInput(body, { allowRevisionShorthand: true })
-      });
-    }
-  },
-  // The caller's own report draft (ADR 0078), with its final inspection while
-  // open; --draft-id reads an abandoned or sealed draft of the same objective.
-  "report-draft": {
-    permission: PERMISSIONS.MISSION_READ,
-    handler: (ctx, body) => readReportDraft({
-      ctx,
-      missionId: missionRefFlag(body),
-      sessionKey: requireFlag(body, "--session-key"),
-      draftId: strFlag(body, "--draft-id") ?? null,
-      includeWithdrawn: boolFlag(body, "--include-withdrawn")
-    })
-  },
-  // Scoped read of the caller's own finalization receipt (ADR 0075), by
-  // delivery id or by operation id; available after the session ended.
-  "delivery-receipt": {
-    permission: PERMISSIONS.MISSION_READ,
-    handler: (ctx, body) => readDeliveryReceipt({
-      ctx,
-      missionId: strFlag(body, "--mission-id") ?? null,
-      deliveryId: strFlag(body, "--delivery-id") ?? null,
-      operationId: strFlag(body, "--operation-id") ?? null,
-      operationKind: strFlag(body, "--operation-kind") ?? null
-    })
-  },
-  // Narrow post-delivery narrative surface (ADR 0076): the originating agent
-  // reads its delivery's publication opportunity and publishes once. The
-  // delivered, ended session is accepted here only; no other ended-session
-  // authority is granted.
-  "delivery-summary-context": {
-    permission: PERMISSIONS.EVENT_CREATE,
-    handler: (ctx, body) => readDeliverySummaryContext({
-      ctx,
-      missionId: missionRefFlag(body),
-      deliveryId: strFlag(body, "--delivery-id") ?? null,
-      publicationId: strFlag(body, "--publication-id") ?? null,
-      sessionKey: strFlag(body, "--session-key") ?? null,
-      style: publicationStyleFlag(body)
-    })
-  },
-  "publish-delivery-summary": {
-    permission: PERMISSIONS.EVENT_CREATE,
-    handler: (ctx, body) => {
-      const payload = parseJsonObjectInput(
-        body,
-        "--payload-json",
-        "--payload-file",
-        "publish-delivery-summary payload"
-      ) ?? {};
-      const { operationId: payloadOperationId, ...narrative } = payload;
-      return publishDeliverySummary({
-        ctx,
-        missionId: missionRefFlag(body),
-        deliveryId: strFlag(body, "--delivery-id") ?? null,
-        publicationId: strFlag(body, "--publication-id") ?? null,
-        sessionKey: strFlag(body, "--session-key") ?? null,
-        operationId: strFlag(body, "--operation-id") ?? payloadOperationId,
-        narrative,
-        style: publicationStyleFlag(body)
-      });
-    }
-  },
-  "hook-event": {
-    permission: PERMISSIONS.EVENT_CREATE,
-    handler: (ctx, body) => recordHookEvent({
-      ctx,
-      missionId: missionRefFlag(body),
-      hookType: requireFlag(body, "--hook-type"),
-      prompt: resolveInput(body, "--prompt", "--prompt-file") ?? "",
-      sessionKey: strFlag(body, "--session-key") ?? null,
-      externalSessionId: externalSessionId(body) ?? null,
-      turnIndex: strFlag(body, "--turn-index") ?? null
-    })
-  },
-  "resume-follow-up": {
-    permission: PERMISSIONS.SESSION_ATTACH,
-    handler: (ctx, body) => resumeFollowUp({
-      ctx,
-      missionId: missionRefFlag(body),
-      objectiveId: objectiveRefFlag(body),
-      agentIdentifier: strFlag(body, "--agent") ?? "unknown",
-      modelIdentifier: strFlag(body, "--model") ?? null,
-      connectionMethod: connectionMethodFlag(body),
-      externalSessionId: externalSessionId(body),
-      summary: resolveInput(body, "--summary", "--summary-file") ?? null,
-      executionTargetId: strFlag(body, "--execution-target-id") ?? null
-    })
-  }
-};
-
-// protocol/missions.ts
+// protocol/objective-input.ts
 function optionalAutoAdvanceFlag(body) {
   return optionalBoolFlag({
     body,
@@ -176941,50 +176655,6 @@ function withDefaultAgentSelection(items, body) {
     } : item
   );
 }
-async function resolveSessionId(body) {
-  const sessionKey = strFlag(body, "--session-key");
-  if (!sessionKey) return null;
-  const session = await serviceDatabaseClient().get(
-    `SELECT id FROM agent_sessions
-      WHERE session_key_hash = ? AND deleted_at IS NULL`,
-    [hashSessionKey(sessionKey)]
-  );
-  return session?.id ?? null;
-}
-async function withAgentOrigin({
-  ctx,
-  body
-}) {
-  return {
-    ...ctx,
-    origin: {
-      kind: "agent",
-      agent: strFlag(body, "--agent") ?? null,
-      sessionId: await resolveSessionId(body)
-    }
-  };
-}
-async function assertDraftOnProtocolSurface(objectiveRef, what) {
-  const db = requireDatabaseClient();
-  const resolved = await resolveObjectiveIdForRest({ ref: objectiveRef, db });
-  const row = await db.get(
-    `SELECT state, instruction_text FROM objectives
-      WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
-    [resolved.id, resolved.workspaceId]
-  );
-  if (!row) {
-    throw new ApiError(404, "Objective not found");
-  }
-  if (row.state !== "draft") {
-    throw new ApiError(
-      400,
-      what === "summary" ? "An agent can change an objective summary or request a summary only in draft state" : "Objective instruction text can only be edited in draft state",
-      void 0,
-      what === "summary" ? "summary_not_editable" : void 0
-    );
-  }
-  return { instructionText: row.instruction_text ?? "" };
-}
 function objectiveAssignmentUpdate(body) {
   const hasAgent = hasFlag(body, "--objective-agent");
   const hasModel = hasFlag(body, "--objective-model");
@@ -177013,49 +176683,6 @@ function objectiveAssignmentUpdate(body) {
     );
   }
   return { assignedAgent: agent, model, reasoningEffort };
-}
-async function resolveV2SearchProjectId(projectRef, workspaceHint) {
-  if (!projectRef) return null;
-  const scopes = await callerMembershipsInActiveOrganization(serviceDatabaseClient());
-  const choices = await resolveProjectRefChoices({
-    projectRef,
-    workspaceHint,
-    workspaceIds: scopes.map((scope2) => scope2.workspaceId)
-  });
-  if (choices.length === 0) throw new ApiError(404, `Project not found: ${projectRef}`);
-  if (choices.length > 1) throw new ProjectSelectionRequiredError(projectRef, choices);
-  return [choices[0].id];
-}
-var RANKED_SEARCH_ONLY_FLAGS = [
-  "--query",
-  "--status",
-  "--resource-key",
-  "--date-field",
-  "--from",
-  "--to",
-  "--response-version",
-  "--entity-types",
-  "--objective-states",
-  "--matches-per-result"
-];
-async function searchExactReference(body, reference) {
-  const conflicting = RANKED_SEARCH_ONLY_FLAGS.filter((flag) => hasFlag(body, flag));
-  if (conflicting.length) {
-    throw new ApiError(400, `--reference cannot be combined with ${conflicting.join(", ")}`);
-  }
-  const projectRef = strFlag(body, "--project-id") ?? null;
-  if (!projectRef) throw new ApiError(400, "--reference requires --project-id");
-  const limitText = strFlag(body, "--limit");
-  const limit2 = limitText === void 0 ? null : Number(limitText);
-  if (limit2 !== null && !Number.isInteger(limit2)) {
-    throw new ApiError(400, "--limit must be an integer");
-  }
-  return searchMissionReferences({
-    projectIds: await resolveV2SearchProjectId(projectRef, strFlag(body, "--workspace-id")),
-    reference,
-    cursor: strFlag(body, "--cursor") ?? null,
-    limit: limit2
-  });
 }
 var RENAMED_OBJECTIVE_FLAGS = {
   "--objective": "--objective-instructions",
@@ -177260,15 +176887,103 @@ function withSummaryWarnings(created, inputs) {
   });
 }
 var SUMMARY_REQUEST_MODES = ["summarize", "regenerate", "retry"];
+async function objectiveUpdateFromFlags(body, assertDraft) {
+  rejectRenamedObjectiveFlags(body, RETIRED_UPDATE_OBJECTIVE_FLAGS);
+  const update = {};
+  const autoAdvance = optionalAutoAdvanceFlag(body);
+  if (autoAdvance !== void 0) {
+    update.autoAdvance = autoAdvance;
+  }
+  if (hasFlag(body, "--title")) {
+    update.title = strFlag(body, "--title") ?? "";
+  }
+  if (hasFlag(body, "--instruction-text") || hasFlag(body, "--instruction-text-file")) {
+    await assertDraft("instruction text");
+    update.instructionText = resolveInput(body, "--instruction-text", "--instruction-text-file") ?? "";
+  }
+  const hasSummary = hasFlag(body, "--summary") || hasFlag(body, "--summary-file");
+  const summaryRequest = strFlag(body, "--summary-request");
+  if (hasFlag(body, "--summary-request")) {
+    if (!summaryRequest || !SUMMARY_REQUEST_MODES.includes(summaryRequest)) {
+      throw new ApiError(
+        400,
+        "--summary-request must be summarize, regenerate or retry",
+        void 0,
+        "invalid_input"
+      );
+    }
+    if (hasSummary) {
+      throw new ApiError(
+        400,
+        "--summary-request cannot be combined with --summary/--summary-file",
+        void 0,
+        "invalid_input"
+      );
+    }
+  }
+  const current = hasSummary || summaryRequest ? await assertDraft("summary") : null;
+  if (hasSummary) {
+    update.summary = resolveInput(body, "--summary", "--summary-file") ?? "";
+  }
+  const placement = typeof update.summary === "string" && update.summary.trim() ? {
+    instructions: update.instructionText ?? current?.instructionText ?? "",
+    summary: update.summary
+  } : null;
+  Object.assign(update, objectiveAssignmentUpdate(body));
+  if (autoAdvance === void 0 && update.instructionText === void 0 && update.title === void 0 && update.summary === void 0 && update.assignedAgent === void 0 && !summaryRequest) {
+    throw new ApiError(
+      400,
+      "Provide at least one of --title, --summary/--summary-file, --summary-request, --auto-advance/--no-auto-advance, --instruction-text/--instruction-text-file, or --objective-agent"
+    );
+  }
+  return { update, wantsSummaryRequest: summaryRequest, placement };
+}
+
+// protocol/missions.ts
+async function withAgentOrigin({
+  ctx,
+  body
+}) {
+  return {
+    ...ctx,
+    origin: {
+      kind: "agent",
+      agent: strFlag(body, "--agent") ?? null,
+      sessionId: await resolveSessionId(readProtocolAddress(body).sessionKey)
+    }
+  };
+}
+async function assertDraftOnProtocolSurface(objectiveRef, what) {
+  const db = requireDatabaseClient();
+  const resolved = await resolveObjectiveIdForRest({ ref: objectiveRef, db });
+  const row = await db.get(
+    `SELECT state, instruction_text FROM objectives
+      WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
+    [resolved.id, resolved.workspaceId]
+  );
+  if (!row) {
+    throw new ApiError(404, "Objective not found");
+  }
+  if (row.state !== "draft") {
+    throw new ApiError(
+      400,
+      what === "summary" ? "An agent can change an objective summary or request a summary only in draft state" : "Objective instruction text can only be edited in draft state",
+      void 0,
+      what === "summary" ? "summary_not_editable" : void 0
+    );
+  }
+  return { instructionText: row.instruction_text ?? "" };
+}
 var missionSubcommands = {
   // Mission creation and discovery -----------------------------------------
   create: {
     // Gated per project inside the handler (requireProjectPermission), after
     // the unassigned-inbox branch has been ruled out.
     permission: null,
+    projectAutomation: "admitted",
     handler: async (ctx, body) => {
       const objectives = objectiveInputs(body);
-      const projectId = strFlag(body, "--project-id");
+      const projectId = readProtocolAddress(body).projectRef;
       rejectRemovedProtocolFlags(body, ["--inbox"]);
       const unassignedToProject = boolFlag(body, "--unassigned-to-project");
       if (unassignedToProject) {
@@ -177317,8 +177032,9 @@ var missionSubcommands = {
   },
   prompt: {
     permission: PERMISSIONS.MISSION_CREATE,
+    projectAutomation: "denied",
     handler: async (ctx, body) => {
-      const projectId = strFlag(body, "--project-id");
+      const projectId = readProtocolAddress(body).projectRef;
       if (!projectId) {
         throw new ApiError(
           400,
@@ -177349,6 +177065,7 @@ var missionSubcommands = {
   },
   "load-context": {
     permission: PERMISSIONS.MISSION_READ,
+    projectAutomation: "admitted",
     handler: (ctx, body) => loadMissionContext({
       ctx,
       missionId: missionRefFlag(body),
@@ -177358,10 +177075,12 @@ var missionSubcommands = {
   },
   "list-deliveries": {
     permission: PERMISSIONS.MISSION_READ,
+    projectAutomation: "admitted",
     handler: (_ctx, body) => listMissionDeliveries(missionRefFlag(body))
   },
   "objective-changes": {
     permission: PERMISSIONS.MISSION_READ,
+    projectAutomation: "admitted",
     handler: (ctx, body) => {
       const objectiveId = objectiveRefFlag(body);
       if (!objectiveId) throw new ApiError(400, "objective-changes requires --objective-id");
@@ -177375,7 +177094,8 @@ var missionSubcommands = {
   },
   "launch-objective": {
     permission: PERMISSIONS.EXECUTION_REQUEST_CREATE,
-    handler: (_ctx, body) => launchObjective(requireFlag(body, "--objective-id"), {
+    projectAutomation: "denied",
+    handler: (_ctx, body) => launchObjective(requireFlagValue(readProtocolAddress(body).objectiveRef, "--objective-id"), {
       agent: requireFlag(body, "--agent"),
       ...strFlag(body, "--model") !== void 0 ? { model: strFlag(body, "--model") } : {},
       ...strFlag(body, "--reasoning-effort") !== void 0 ? { reasoningEffort: strFlag(body, "--reasoning-effort") } : {},
@@ -177384,6 +177104,7 @@ var missionSubcommands = {
   },
   "reorder-objectives": {
     permission: PERMISSIONS.OBJECTIVE_UPDATE,
+    projectAutomation: "denied",
     handler: (_ctx, body) => {
       const orderedObjectiveIds = parseJsonInput(
         body,
@@ -177396,55 +177117,9 @@ var missionSubcommands = {
       return reorderObjectives(missionRefFlag(body), { orderedObjectiveIds });
     }
   },
-  search: {
-    // Not enforced at dispatch: v2/v3 and --reference authorize per workspace or project.
-    permission: PERMISSIONS.MISSION_READ,
-    handler: async (_ctx, body) => {
-      if (hasFlag(body, "--reference")) {
-        const reference = strFlag(body, "--reference");
-        if (!reference) throw new ApiError(400, "--reference requires a value");
-        return searchExactReference(body, reference);
-      }
-      if (hasFlag(body, "--cursor")) {
-        throw new ApiError(400, "--cursor applies only to an exact --reference lookup");
-      }
-      const responseVersion = hasFlag(body, "--response-version") ? intFlag(body, "--response-version") : 3;
-      if (responseVersion !== 2 && responseVersion !== 3) {
-        throw new ApiError(
-          400,
-          "--response-version must be 2 or 3 (version 1 is retired)",
-          void 0,
-          "invalid_input"
-        );
-      }
-      const version4 = responseVersion;
-      const options = parseMissionSearchOptions(
-        {
-          q: strFlag(body, "--query"),
-          statusTypes: strFlag(body, "--status"),
-          resourceKeys: strFlag(body, "--resource-key"),
-          dateField: strFlag(body, "--date-field"),
-          from: strFlag(body, "--from"),
-          to: strFlag(body, "--to"),
-          limit: strFlag(body, "--limit"),
-          entityTypes: strFlag(body, "--entity-types"),
-          objectiveStates: strFlag(body, "--objective-states"),
-          matchesPerResult: strFlag(body, "--matches-per-result")
-        },
-        { version: version4 }
-      );
-      const projectRef = strFlag(body, "--project-id") ?? null;
-      const limit2 = options.limit ?? 25;
-      const search = {
-        ...options,
-        projectIds: await resolveV2SearchProjectId(projectRef, strFlag(body, "--workspace-id")),
-        limit: limit2
-      };
-      return version4 === 3 ? searchMissionsAcrossWorkspacesV3(search) : searchMissionsAcrossWorkspacesV2(search);
-    }
-  },
   "discuss-objective": {
     permission: PERMISSIONS.OBJECTIVE_SUBMIT,
+    projectAutomation: "denied",
     handler: (ctx, body) => discussObjective({
       ctx,
       missionId: missionRefFlag(body),
@@ -177453,6 +177128,7 @@ var missionSubcommands = {
   },
   "add-objectives": {
     permission: PERMISSIONS.OBJECTIVE_UPDATE,
+    projectAutomation: "denied",
     handler: async (ctx, body) => {
       const objectives = withDefaultAgentSelection(
         withDefaultAutoAdvance(parseObjectiveArrayInput(body) ?? [], optionalAutoAdvanceFlag(body)),
@@ -177468,56 +177144,17 @@ var missionSubcommands = {
   },
   "update-objective": {
     permission: PERMISSIONS.OBJECTIVE_UPDATE,
+    projectAutomation: "denied",
+    addressing: "objective-only",
     handler: async (ctx, body) => {
-      const objectiveId = requireFlag(body, "--objective-id");
-      rejectRenamedObjectiveFlags(body, RETIRED_UPDATE_OBJECTIVE_FLAGS);
-      const update = {};
-      const autoAdvance = optionalAutoAdvanceFlag(body);
-      if (autoAdvance !== void 0) {
-        update.autoAdvance = autoAdvance;
-      }
-      if (hasFlag(body, "--title")) {
-        update.title = strFlag(body, "--title") ?? "";
-      }
-      if (hasFlag(body, "--instruction-text") || hasFlag(body, "--instruction-text-file")) {
-        await assertDraftOnProtocolSurface(objectiveId, "instruction text");
-        update.instructionText = resolveInput(body, "--instruction-text", "--instruction-text-file") ?? "";
-      }
-      const hasSummary = hasFlag(body, "--summary") || hasFlag(body, "--summary-file");
-      const summaryRequest = strFlag(body, "--summary-request");
-      if (hasFlag(body, "--summary-request")) {
-        if (!summaryRequest || !SUMMARY_REQUEST_MODES.includes(summaryRequest)) {
-          throw new ApiError(
-            400,
-            "--summary-request must be summarize, regenerate or retry",
-            void 0,
-            "invalid_input"
-          );
-        }
-        if (hasSummary) {
-          throw new ApiError(
-            400,
-            "--summary-request cannot be combined with --summary/--summary-file",
-            void 0,
-            "invalid_input"
-          );
-        }
-      }
-      const current = hasSummary || summaryRequest ? await assertDraftOnProtocolSurface(objectiveId, "summary") : null;
-      if (hasSummary) {
-        update.summary = resolveInput(body, "--summary", "--summary-file") ?? "";
-      }
-      const placement = typeof update.summary === "string" && update.summary.trim() ? {
-        instructions: update.instructionText ?? current?.instructionText ?? "",
-        summary: update.summary
-      } : null;
-      Object.assign(update, objectiveAssignmentUpdate(body));
-      if (autoAdvance === void 0 && update.instructionText === void 0 && update.title === void 0 && update.summary === void 0 && update.assignedAgent === void 0 && !summaryRequest) {
-        throw new ApiError(
-          400,
-          "Provide at least one of --title, --summary/--summary-file, --summary-request, --auto-advance/--no-auto-advance, --instruction-text/--instruction-text-file, or --objective-agent"
-        );
-      }
+      const objectiveId = requireFlagValue(
+        readProtocolAddress(body).objectiveRef,
+        "--objective-id"
+      );
+      const { update, wantsSummaryRequest, placement } = await objectiveUpdateFromFlags(
+        body,
+        (what) => assertDraftOnProtocolSurface(objectiveId, what)
+      );
       const { origin } = await withAgentOrigin({ ctx, body });
       const options = origin ? { origin } : {};
       const result2 = await updateObjectiveWithWarnings(objectiveId, update, options);
@@ -177529,8 +177166,12 @@ var missionSubcommands = {
           ...objectiveSummaryStyleWarnings(placement.summary.trim())
         );
       }
-      if (summaryRequest) {
-        objective = await requestObjectiveSummary(objective.id, { mode: summaryRequest }, options);
+      if (wantsSummaryRequest) {
+        objective = await requestObjectiveSummary(
+          objective.id,
+          { mode: wantsSummaryRequest },
+          options
+        );
       }
       return { ...objective, warnings };
     }
@@ -177540,6 +177181,7 @@ var missionSubcommands = {
     // services preflight the corresponding permission per target inside their
     // transaction, before any destructive write occurs.
     permission: null,
+    projectAutomation: "denied",
     handler: async (_ctx, body) => {
       if (!boolFlag(body, "--confirm")) {
         throw new ApiError(
@@ -177557,6 +177199,7 @@ var missionSubcommands = {
   "delete-objectives": {
     // Preflighted per target, as for delete-missions.
     permission: null,
+    projectAutomation: "denied",
     handler: async (_ctx, body) => {
       if (!boolFlag(body, "--confirm")) {
         throw new ApiError(
@@ -177578,6 +177221,7 @@ var missionSubcommands = {
   },
   "record-work": {
     permission: PERMISSIONS.MISSION_CREATE,
+    projectAutomation: "denied",
     handler: async (ctx, body) => {
       rejectRemovedProtocolFlags(body, RETIRED_RECORD_WORK_FLAGS);
       const envelope2 = parseDeliveryPayloadEnvelope(body);
@@ -177610,7 +177254,7 @@ var missionSubcommands = {
           'Missing objective text (use --objective, a positional argument, or an "objective" field in --payload-json)'
         );
       }
-      const projectId = strFlag(body, "--project-id");
+      const projectId = readProtocolAddress(body).projectRef;
       if (!projectId) {
         throw new ApiError(
           400,
@@ -177638,7 +177282,7 @@ var missionSubcommands = {
 };
 
 // workspaces.ts
-var import_node_crypto27 = require("node:crypto");
+var import_node_crypto26 = require("node:crypto");
 
 // sql-studio/sql-studio.ts
 var import_node_child_process7 = require("node:child_process");
@@ -182846,8 +182490,8 @@ var Receiving = class {
     const searchParams = new URLSearchParams();
     if (options.html_format !== void 0) searchParams.set("html_format", options.html_format);
     const queryString3 = searchParams.toString();
-    const path29 = queryString3 ? `/emails/receiving/${id2}?${queryString3}` : `/emails/receiving/${id2}`;
-    return await this.resend.get(path29);
+    const path28 = queryString3 ? `/emails/receiving/${id2}?${queryString3}` : `/emails/receiving/${id2}`;
+    return await this.resend.get(path28);
   }
   async list(options = {}) {
     const queryString3 = buildPaginationQuery(options);
@@ -183235,9 +182879,9 @@ var Resend = class {
       "Content-Type": "application/json"
     });
   }
-  async fetchRequest(path29, options = {}) {
+  async fetchRequest(path28, options = {}) {
     try {
-      const response = await fetch(`${this.baseUrl}${path29}`, options);
+      const response = await fetch(`${this.baseUrl}${path28}`, options);
       if (!response.ok) try {
         const rawError = await response.text();
         return {
@@ -183291,7 +182935,7 @@ var Resend = class {
       };
     }
   }
-  async post(path29, entity, options = {}) {
+  async post(path28, entity, options = {}) {
     const headers = new Headers(this.headers);
     const isFormData = typeof FormData !== "undefined" && entity instanceof FormData;
     if (isFormData) headers.delete("Content-Type");
@@ -183303,9 +182947,9 @@ var Resend = class {
       ...options,
       headers
     };
-    return this.fetchRequest(path29, requestOptions2);
+    return this.fetchRequest(path28, requestOptions2);
   }
-  async get(path29, options = {}) {
+  async get(path28, options = {}) {
     const headers = new Headers(this.headers);
     if (options.headers) for (const [key, value2] of new Headers(options.headers).entries()) headers.set(key, value2);
     const requestOptions2 = {
@@ -183313,9 +182957,9 @@ var Resend = class {
       ...options,
       headers
     };
-    return this.fetchRequest(path29, requestOptions2);
+    return this.fetchRequest(path28, requestOptions2);
   }
-  async put(path29, entity, options = {}) {
+  async put(path28, entity, options = {}) {
     const headers = new Headers(this.headers);
     if (options.headers) for (const [key, value2] of new Headers(options.headers).entries()) headers.set(key, value2);
     const requestOptions2 = {
@@ -183324,9 +182968,9 @@ var Resend = class {
       ...options,
       headers
     };
-    return this.fetchRequest(path29, requestOptions2);
+    return this.fetchRequest(path28, requestOptions2);
   }
-  async patch(path29, entity, options = {}) {
+  async patch(path28, entity, options = {}) {
     const headers = new Headers(this.headers);
     if (options.headers) for (const [key, value2] of new Headers(options.headers).entries()) headers.set(key, value2);
     const requestOptions2 = {
@@ -183335,9 +182979,9 @@ var Resend = class {
       ...options,
       headers
     };
-    return this.fetchRequest(path29, requestOptions2);
+    return this.fetchRequest(path28, requestOptions2);
   }
-  async delete(path29, query, options = {}) {
+  async delete(path28, query, options = {}) {
     const headers = new Headers(this.headers);
     if (options.headers) for (const [key, value2] of new Headers(options.headers).entries()) headers.set(key, value2);
     const requestOptions2 = {
@@ -183346,7 +182990,7 @@ var Resend = class {
       ...options,
       headers
     };
-    return this.fetchRequest(path29, requestOptions2);
+    return this.fetchRequest(path28, requestOptions2);
   }
 };
 
@@ -183415,7 +183059,7 @@ async function writeWorkspaceSetting({
     `UPDATE workspaces
         SET settings_json = ?, updated_at = ?, revision = revision + 1
       WHERE id = ? AND deleted_at IS NULL`,
-    [JSON.stringify(settings), nowIso2(), workspaceId2]
+    [JSON.stringify(settings), nowIso(), workspaceId2]
   );
 }
 function sqlStudioEnabledFromSettingsJson(raw) {
@@ -183542,7 +183186,7 @@ async function grantWorkspaceAdminRole({
     [workspaceId2, workspaceUserId]
   );
   if (existing) return;
-  const now2 = nowIso2();
+  const now2 = nowIso();
   await client.run(
     `INSERT INTO role_assignments
        (id, workspace_id, workspace_user_id, role_key, resource_type, resource_id,
@@ -183550,7 +183194,7 @@ async function grantWorkspaceAdminRole({
      VALUES
        (?, ?, ?, 'ADMIN', '', '',
         ?, ?, ?, 1)`,
-    [newId2(), workspaceId2, workspaceUserId, assignedByWorkspaceUserId, now2, now2]
+    [newId(), workspaceId2, workspaceUserId, assignedByWorkspaceUserId, now2, now2]
   );
 }
 var WORKSPACE_LIST_COLUMNS = `
@@ -183606,7 +183250,7 @@ async function seedWorkspaceStorageBuckets({
          id, workspace_id, bucket_key, storage_backend, base_url, local_path, settings_json,
          created_by_workspace_user_id, created_at, updated_at, revision
        ) VALUES (?, ?, ?, 'local_fs', NULL, 'database/.local/storage', '{}', ?, ?, ?, 1)`,
-      [newId2(), workspaceId2, bucketKey, createdByWorkspaceUserId, now2, now2]
+      [newId(), workspaceId2, bucketKey, createdByWorkspaceUserId, now2, now2]
     );
   }
 }
@@ -183621,7 +183265,7 @@ async function seedOrganizationStorageBucket({
        id, organization_id, bucket_key, storage_backend, base_url, local_path, settings_json,
        created_by_workspace_user_id, created_at, updated_at, revision
      ) VALUES (?, ?, 'organization-images', 'local_fs', NULL, 'database/.local/storage', '{}', ?, ?, ?, 1)`,
-    [newId2(), organizationId, createdByWorkspaceUserId, now2, now2]
+    [newId(), organizationId, createdByWorkspaceUserId, now2, now2]
   );
 }
 async function createWorkspace(body) {
@@ -183648,14 +183292,14 @@ async function createWorkspace(body) {
     );
     if (!organization) throw new ApiError(404, "Organization not found");
     const otherOrgAdminProfileIds = (await listOrganizationAdminProfileIds(organizationId, tx)).filter((id2) => id2 !== creatorProfileId);
-    const nextWorkspaceId = newId2();
+    const nextWorkspaceId = newId();
     const slug = await uniqueWorkspaceSlug({
       desired: body.slug?.trim() ? slugify4(body.slug) : suggestSlugFromName(name2),
       organizationId,
       client: tx
     });
-    const now2 = nowIso2();
-    const workspaceUserId = newId2();
+    const now2 = nowIso();
+    const workspaceUserId = newId();
     await tx.run(
       `INSERT INTO workspaces
          (id, organization_id, slug, name, kind, settings_json, created_at, updated_at, revision)
@@ -183699,7 +183343,7 @@ async function createWorkspace(body) {
       tx
     );
     for (const adminProfileId of otherOrgAdminProfileIds) {
-      const adminWorkspaceUserId = newId2();
+      const adminWorkspaceUserId = newId();
       await tx.run(
         `INSERT INTO workspace_users
            (id, workspace_id, profile_id, member_key, status, metadata_json,
@@ -183751,20 +183395,20 @@ async function createOrganizationOnboarding(body) {
     const organizationName = (body.organizationName ?? "").trim();
     if (!organizationName) throw new ApiError(400, "Organization name is required");
     const workspaceName = (body.workspaceName ?? "").trim() || "general";
-    const now2 = nowIso2();
-    const organizationId = newId2();
+    const now2 = nowIso();
+    const organizationId = newId();
     await tx.run(
       `INSERT INTO organizations (id, name, settings_json, created_at, updated_at, revision)
        VALUES (?, ?, '{}', ?, ?, 1)`,
       [organizationId, organizationName, now2, now2]
     );
-    const nextWorkspaceId = newId2();
+    const nextWorkspaceId = newId();
     const slug = await uniqueWorkspaceSlug({
       desired: body.workspaceSlug?.trim() ? slugify4(body.workspaceSlug) : suggestSlugFromName(workspaceName),
       organizationId,
       client: tx
     });
-    const workspaceUserId = newId2();
+    const workspaceUserId = newId();
     await tx.run(
       `INSERT INTO workspaces
          (id, organization_id, slug, name, kind, settings_json, created_at, updated_at, revision)
@@ -183846,7 +183490,7 @@ async function updateWorkspace(id2, body) {
       if (name2 !== existing.name) {
         await tx.run(
           `UPDATE workspaces SET name = ?, updated_at = ?, revision = revision + 1 WHERE id = ?`,
-          [name2, nowIso2(), id2]
+          [name2, nowIso(), id2]
         );
         changed.push("name");
       }
@@ -183902,7 +183546,7 @@ async function deleteWorkspace(id2) {
     await tx.run(
       `UPDATE workspaces SET deleted_at = ?, updated_at = ?, revision = ?
          WHERE id = ?`,
-      [nowIso2(), nowIso2(), revision3, id2]
+      [nowIso(), nowIso(), revision3, id2]
     );
     await recordChange2(
       {
@@ -184035,9 +183679,9 @@ var INVITATION_HASH_ALGORITHM = "sha256";
 var INVITATION_TTL_DAYS = 14;
 var WORKSPACE_ROLE_KEYS = /* @__PURE__ */ new Set(["ADMIN", "MANAGER", "MEMBER"]);
 function generateInvitationSecret() {
-  const prefix = `${INVITATION_TOKEN_SCHEME}_${(0, import_node_crypto27.randomBytes)(4).toString("hex")}`;
-  const secret = `${prefix}${(0, import_node_crypto27.randomBytes)(24).toString("hex")}`;
-  const hash2 = (0, import_node_crypto27.createHash)(INVITATION_HASH_ALGORITHM).update(secret).digest("hex");
+  const prefix = `${INVITATION_TOKEN_SCHEME}_${(0, import_node_crypto26.randomBytes)(4).toString("hex")}`;
+  const secret = `${prefix}${(0, import_node_crypto26.randomBytes)(24).toString("hex")}`;
+  const hash2 = (0, import_node_crypto26.createHash)(INVITATION_HASH_ALGORITHM).update(secret).digest("hex");
   return { secret, prefix, hash: hash2 };
 }
 var INVITATION_COLUMNS = "id, workspace_id, email, role_key, token_prefix, status, invited_by_workspace_user_id, expires_at, created_at, revision";
@@ -184085,7 +183729,7 @@ async function inviteWorkspaceMember(workspaceId2, body) {
          WHERE workspace_id = ? AND email = ? AND status = 'pending' AND deleted_at IS NULL`,
       [workspaceId2, email3]
     );
-    const now2 = nowIso2();
+    const now2 = nowIso();
     if (pending) {
       await tx.run(
         `UPDATE workspace_invitations
@@ -184109,7 +183753,7 @@ async function inviteWorkspaceMember(workspaceId2, body) {
     if (!generated) {
       throw new ApiError(409, "Could not allocate a unique invitation token; try again");
     }
-    const id2 = newId2();
+    const id2 = newId();
     const expiresAt = new Date(
       Date.now() + INVITATION_TTL_DAYS * 24 * 60 * 60 * 1e3
     ).toISOString();
@@ -184181,7 +183825,7 @@ async function revokeWorkspaceInvitation(workspaceId2, invitationId) {
     );
     if (!invitation) throw new ApiError(404, "Invitation not found");
     if (invitation.status !== "pending") return;
-    const now2 = nowIso2();
+    const now2 = nowIso();
     const revision3 = invitation.revision + 1;
     await tx.run(
       `UPDATE workspace_invitations
@@ -184207,7 +183851,7 @@ async function acceptWorkspaceInvitation(body) {
   if (!rawToken) throw new ApiError(400, "Invitation token is required");
   const profileId = getActiveProfileId();
   if (!profileId) throw new ApiError(401, "Authentication required");
-  const tokenHash = (0, import_node_crypto27.createHash)(INVITATION_HASH_ALGORITHM).update(rawToken).digest("hex");
+  const tokenHash = (0, import_node_crypto26.createHash)(INVITATION_HASH_ALGORITHM).update(rawToken).digest("hex");
   const client = requireDatabaseClient();
   const outcome = await client.transaction(async (tx) => {
     const invitation = await tx.get(
@@ -184220,7 +183864,7 @@ async function acceptWorkspaceInvitation(body) {
       throw new ApiError(409, `Invitation has already been ${invitation.status}`);
     }
     await requireTokenMayAcceptInvitation(invitation.workspace_id, tx);
-    const now2 = nowIso2();
+    const now2 = nowIso();
     if (invitation.expires_at <= now2) {
       const revision4 = invitation.revision + 1;
       await tx.run(
@@ -184258,7 +183902,7 @@ async function acceptWorkspaceInvitation(body) {
     if (existingMembershipId) {
       workspaceUserId = existingMembershipId;
     } else {
-      workspaceUserId = newId2();
+      workspaceUserId = newId();
       await tx.run(
         `INSERT INTO workspace_users
            (id, workspace_id, profile_id, member_key, status, metadata_json,
@@ -184297,7 +183941,7 @@ async function acceptWorkspaceInvitation(body) {
               assigned_by_workspace_user_id, created_at, updated_at, revision)
            VALUES (?, ?, ?, ?, '', '', ?, ?, ?, 1)`,
           [
-            newId2(),
+            newId(),
             invitation.workspace_id,
             workspaceUserId,
             invitation.role_key,
@@ -184409,7 +184053,7 @@ async function updateWorkspaceMemberRole(workspaceId2, workspaceUserId, body) {
       await assertNotLastWorkspaceAdmin({ workspaceId: workspaceId2, workspaceUserId, client: tx });
     }
     if (existingRoles.length === 1 && existingRoles[0] === roleKey) return;
-    const now2 = nowIso2();
+    const now2 = nowIso();
     await tx.run(
       `UPDATE role_assignments
           SET deleted_at = ?, updated_at = ?, revision = revision + 1
@@ -184421,7 +184065,7 @@ async function updateWorkspaceMemberRole(workspaceId2, workspaceUserId, body) {
          (id, workspace_id, workspace_user_id, role_key, resource_type, resource_id,
           assigned_by_workspace_user_id, created_at, updated_at, revision)
        VALUES (?, ?, ?, ?, '', '', ?, ?, ?, 1)`,
-      [newId2(), workspaceId2, workspaceUserId, roleKey, actorWorkspaceUserId, now2, now2]
+      [newId(), workspaceId2, workspaceUserId, roleKey, actorWorkspaceUserId, now2, now2]
     );
     await recordChange2(
       {
@@ -184466,7 +184110,7 @@ async function removeWorkspaceMember(workspaceId2, workspaceUserId) {
     if ((activeCount?.count ?? 0) <= 1) {
       throw new ApiError(409, "Cannot remove the only member of a workspace");
     }
-    const now2 = nowIso2();
+    const now2 = nowIso();
     const revision3 = membership.revision + 1;
     await tx.run(
       `UPDATE workspace_users
@@ -184502,7 +184146,7 @@ async function resolveParentlessWorkspace(body, selectionMessage) {
   }
   const memberWorkspaceIds = new Set(memberships.map((m3) => m3.workspaceId));
   const workspaces = (await listWorkspaces()).filter((w) => memberWorkspaceIds.has(w.id)).map((w) => ({ id: w.id, name: w.name, slug: w.slug }));
-  const requested = strFlag(body, "--workspace-id")?.trim();
+  const requested = readProtocolAddress(body).workspaceHint;
   if (requested) {
     const needle = requested.toLowerCase();
     const target = workspaces.find(
@@ -184585,13 +184229,15 @@ var projectSubcommands = {
   "auth-status": {
     // Intentionally ungated so any authenticated actor can check who it is.
     permission: null,
+    projectAutomation: "admitted",
     handler: (ctx) => authStatus({ ctx })
   },
   "discover-project": {
     permission: PERMISSIONS.PROJECT_READ,
+    projectAutomation: "admitted-with-project-id",
     handler: (ctx, body) => discoverProject({
       ctx,
-      projectId: strFlag(body, "--project-id") ?? null,
+      projectId: readProtocolAddress(body).projectRef,
       workingDirectory: strFlag(body, "--directory") ?? null
     })
   },
@@ -184600,9 +184246,10 @@ var projectSubcommands = {
   // status *definitions* are edited in project settings, never over the protocol.
   statuses: {
     permission: PERMISSIONS.PROJECT_READ,
+    projectAutomation: "admitted",
     handler: (ctx, body) => listProjectStatuses({
       ctx,
-      projectId: requireFlag(body, "--project-id")
+      projectId: requireFlagValue(readProtocolAddress(body).projectRef, "--project-id")
     })
   },
   // Parentless project creation. Resolves/validates the target workspace itself
@@ -184612,6 +184259,7 @@ var projectSubcommands = {
     // Enforced per-target inside the handler (requireWorkspacePermission) so the
     // multi-workspace selection flow runs before any default-workspace gate.
     permission: null,
+    projectAutomation: "denied",
     handler: (_ctx, body) => createProjectFromProtocol(body)
   },
   // Parentless execution-target registration. Resolves/validates the target
@@ -184621,18 +184269,14 @@ var projectSubcommands = {
   "register-target": {
     // Enforced per-target inside the handler, as for create-project.
     permission: null,
+    projectAutomation: "denied",
     handler: (_ctx, body) => registerTargetFromProtocol(body)
   }
 };
 
 // protocol/run-queue.ts
 function oneBasedQueuePosition(body) {
-  const raw = strFlag(body, "--position");
-  if (raw === void 0) return void 0;
-  if (!/^\d+$/.test(raw) || Number(raw) < 1 || !Number.isSafeInteger(Number(raw))) {
-    throw new ApiError(400, "--position must be a positive integer");
-  }
-  return Number(raw);
+  return integerFlag(body, "--position", { min: 1 });
 }
 function queueByRef(queues, ref) {
   const exactId = queues.find((queue) => queue.id === ref);
@@ -184644,12 +184288,16 @@ function queueByRef(queues, ref) {
   }
   throw new ApiError(404, `Run Queue not found: ${ref}`);
 }
+function entryMatchesRef(entry, ref) {
+  return entry.id === ref || entry.objectiveId === ref || entry.objectiveDisplayId === ref;
+}
+function queueEntries(queues) {
+  return queues.flatMap((queue) => queue.entries);
+}
 async function runQueueProjectIdFromProtocol(ctx, body) {
-  const objectiveRef = objectiveRefFlag(body);
-  const missionRef = strFlag(body, "--mission-id");
-  const objective = objectiveRef ? await resolveObjectiveRef({ ctx, ref: objectiveRef, missionId: missionRef }) : null;
-  const mission = missionRef ? await resolveMissionId(ctx, missionRef) : null;
-  const projectRef = strFlag(body, "--project-id");
+  const { objectiveRef, missionRef, projectRef } = readProtocolAddress(body);
+  const objective = objectiveRef ? await resolveObjectiveRef({ ctx, ref: objectiveRef, missionId: missionRef ?? void 0 }) : null;
+  const mission = !objective && missionRef ? await resolveMissionId(ctx, missionRef) : null;
   if (projectRef) {
     const projectId = await resolveProjectId(ctx, projectRef);
     if (objective && projectId !== objective.projectId) {
@@ -184683,9 +184331,7 @@ async function reorderRunQueueFromProtocol(ctx, body) {
   const projection = await listProjectRunQueues(ctx.db, projectId);
   const queue = queueByRef(projection.queues, requireFlag(body, "--queue"));
   const orderedEntryIds = orderedRefs.map((ref) => {
-    const entry = queue.entries.find(
-      (candidate) => candidate.id === ref || candidate.objectiveId === ref || candidate.objectiveDisplayId === ref
-    );
+    const entry = queue.entries.find((candidate) => entryMatchesRef(candidate, ref));
     if (!entry) throw new ApiError(404, `Run Queue entry not found: ${ref}`);
     return entry.id;
   });
@@ -184761,11 +184407,11 @@ async function reorderProjectRunQueuesFromProtocol(ctx, body) {
   return reorderProjectRunQueues(ctx.db, projectId, orderedQueueIds);
 }
 async function queueObjectiveFromProtocol(ctx, body) {
+  const { objectiveRef, projectRef } = readProtocolAddress(body);
   const objective = await resolveObjectiveRef({
     ctx,
-    ref: requireFlag(body, "--objective-id")
+    ref: requireFlagValue(objectiveRef, "--objective-id")
   });
-  const projectRef = strFlag(body, "--project-id");
   if (projectRef) {
     const projectId = await resolveProjectId(ctx, projectRef);
     if (projectId !== objective.projectId) {
@@ -184780,11 +184426,9 @@ async function queueObjectiveFromProtocol(ctx, body) {
   }
   const projection = await listProjectRunQueues(ctx.db, objective.projectId);
   const queues = projection.queues;
-  const existing = queues.flatMap((queue) => queue.entries).find((entry) => entry.objectiveId === objective.id);
+  const existing = queueEntries(queues).find((entry) => entry.objectiveId === objective.id);
   const afterRef = strFlag(body, "--after");
-  const after = afterRef ? queues.flatMap((queue) => queue.entries.map((entry) => ({ ...entry, queueId: queue.id }))).find(
-    (entry) => entry.id === afterRef || entry.objectiveId === afterRef || entry.objectiveDisplayId === afterRef
-  ) : void 0;
+  const after = afterRef ? queues.flatMap((queue) => queue.entries.map((entry) => ({ ...entry, queueId: queue.id }))).find((entry) => entryMatchesRef(entry, afterRef)) : void 0;
   if (afterRef && !after) throw new ApiError(404, `Queued predecessor not found: ${afterRef}`);
   if (after?.objectiveId === objective.id) {
     throw new ApiError(400, "An objective cannot be placed after itself");
@@ -184814,7 +184458,7 @@ async function queueObjectiveFromProtocol(ctx, body) {
     queueRef || afterEntryId || hasFront || requestedPosition !== void 0
   );
   if (existing && !wantsMove) {
-    return queues.flatMap((queue) => queue.entries).find((entry) => entry.id === existing.id);
+    return queueEntries(queues).find((entry) => entry.id === existing.id);
   }
   if (existing) {
     if (!selectedQueue) throw new ApiError(404, "Run Queue not found");
@@ -184832,27 +184476,27 @@ async function queueObjectiveFromProtocol(ctx, body) {
   });
 }
 async function dequeueObjectiveFromProtocol(ctx, body) {
+  const { objectiveRef, projectRef } = readProtocolAddress(body);
   const objective = await resolveObjectiveRef({
     ctx,
-    ref: requireFlag(body, "--objective-id")
+    ref: requireFlagValue(objectiveRef, "--objective-id")
   });
-  const projectRef = strFlag(body, "--project-id");
   if (projectRef && await resolveProjectId(ctx, projectRef) !== objective.projectId) {
     throw new ApiError(400, "--project-id does not own the addressed objective");
   }
   const projection = await listProjectRunQueues(ctx.db, objective.projectId);
-  const entry = projection.queues.flatMap((queue) => queue.entries).find((item) => item.objectiveId === objective.id);
+  const entry = queueEntries(projection.queues).find((item) => item.objectiveId === objective.id);
   if (!entry) return { removed: false, objectiveId: objective.id };
   await removeRunQueueEntry(ctx.db, entry.id);
   return { removed: true, objectiveId: objective.id };
 }
 async function retryRunQueueEntryFromProtocol(ctx, body) {
   const entryRef = strFlag(body, "--entry");
-  const objectiveRef = objectiveRefFlag(body);
+  const { objectiveRef, projectRef, missionRef } = readProtocolAddress(body);
   if (!entryRef && !objectiveRef) {
     throw new ApiError(400, "Missing required flag: --objective-id or --entry");
   }
-  const explicitScope = Boolean(objectiveRef) || Boolean(strFlag(body, "--project-id") ?? strFlag(body, "--mission-id"));
+  const explicitScope = objectiveRef || projectRef || missionRef;
   let projectId;
   if (explicitScope) {
     projectId = await runQueueProjectIdFromProtocol(ctx, body);
@@ -184871,10 +184515,10 @@ async function retryRunQueueEntryFromProtocol(ctx, body) {
     projectId = row.project_id;
   }
   const projection = await listProjectRunQueues(ctx.db, projectId);
-  const entries = projection.queues.flatMap((queue) => queue.entries);
+  const entries = queueEntries(projection.queues);
   const objective = objectiveRef ? await resolveObjectiveRef({ ctx, ref: objectiveRef }) : null;
   const entry = entries.find(
-    (candidate) => entryRef ? candidate.id === entryRef || candidate.objectiveId === entryRef || candidate.objectiveDisplayId === entryRef : candidate.objectiveId === objective.id
+    (candidate) => entryRef ? entryMatchesRef(candidate, entryRef) : candidate.objectiveId === objective.id
   );
   if (!entry) {
     throw new ApiError(404, `Run Queue entry not found: ${entryRef ?? objectiveRef}`);
@@ -184884,18 +184528,22 @@ async function retryRunQueueEntryFromProtocol(ctx, body) {
 var runQueueSubcommands = {
   "queue-objective": {
     permission: PERMISSIONS.EXECUTION_REQUEST_CREATE,
+    projectAutomation: "denied",
     handler: (ctx, body) => queueObjectiveFromProtocol(ctx, body)
   },
   "dequeue-objective": {
     permission: PERMISSIONS.EXECUTION_REQUEST_CREATE,
+    projectAutomation: "denied",
     handler: (ctx, body) => dequeueObjectiveFromProtocol(ctx, body)
   },
   "retry-queue-entry": {
     permission: PERMISSIONS.EXECUTION_REQUEST_CREATE,
+    projectAutomation: "denied",
     handler: (ctx, body) => retryRunQueueEntryFromProtocol(ctx, body)
   },
   "reorder-run-queue": {
     permission: PERMISSIONS.EXECUTION_REQUEST_CREATE,
+    projectAutomation: "denied",
     handler: (ctx, body) => reorderRunQueueFromProtocol(ctx, body)
   },
   // Queue definitions are project configuration, matching the REST mapping in
@@ -184903,22 +184551,27 @@ var runQueueSubcommands = {
   // so these four are full-token operations by design.
   "create-run-queue": {
     permission: PERMISSIONS.PROJECT_UPDATE,
+    projectAutomation: "denied",
     handler: (ctx, body) => createRunQueueFromProtocol(ctx, body)
   },
   "update-run-queue": {
     permission: PERMISSIONS.PROJECT_UPDATE,
+    projectAutomation: "denied",
     handler: (ctx, body) => updateRunQueueFromProtocol(ctx, body)
   },
   "delete-run-queue": {
     permission: PERMISSIONS.PROJECT_UPDATE,
+    projectAutomation: "denied",
     handler: (ctx, body) => deleteRunQueueFromProtocol(ctx, body)
   },
   "reorder-project-run-queues": {
     permission: PERMISSIONS.PROJECT_UPDATE,
+    projectAutomation: "denied",
     handler: (ctx, body) => reorderProjectRunQueuesFromProtocol(ctx, body)
   },
   "run-queue": {
     permission: PERMISSIONS.OBJECTIVE_READ,
+    projectAutomation: "denied",
     handler: async (ctx, body) => {
       const projection = await listProjectRunQueues(
         ctx.db,
@@ -184934,71 +184587,413 @@ var runQueueSubcommands = {
   }
 };
 
-// protocol.ts
-async function protocolWorkspaceId(body) {
-  const scopes = await callerWorkspaceMemberships();
-  if (scopes.length === 0) return null;
-  const workspaceIds = scopes.map((scope2) => scope2.workspaceId);
-  const placeholders = workspaceIds.map(() => "?").join(", ");
-  const db = serviceDatabaseClient();
-  const executionRequestId = strFlag(body, "--execution-request-id");
-  if (executionRequestId) {
-    const request = await db.get(
-      `SELECT workspace_id FROM execution_requests
-        WHERE id = ? AND deleted_at IS NULL AND workspace_id IN (${placeholders})`,
-      [executionRequestId, ...workspaceIds]
-    );
-    if (request) return request.workspace_id;
-  }
-  const sessionKey = strFlag(body, "--session-key");
-  if (sessionKey) {
-    const session = await db.get(
-      `SELECT workspace_id FROM agent_sessions
-        WHERE session_key_hash = ? AND deleted_at IS NULL AND workspace_id IN (${placeholders})`,
-      [hashSessionKey(sessionKey), ...workspaceIds]
-    );
-    if (session) return session.workspace_id;
-  }
-  const objectiveRef = strFlag(body, "--objective-id");
-  if (objectiveRef) {
-    const objective = await db.get(
-      `SELECT workspace_id FROM objectives
-        WHERE id = ? AND deleted_at IS NULL AND workspace_id IN (${placeholders})`,
-      [objectiveRef, ...workspaceIds]
-    );
-    if (objective) return objective.workspace_id;
-  }
-  const missionRef = strFlag(body, "--mission-id") ?? missionDisplayIdFromObjectiveRef(objectiveRef) ?? void 0;
-  if (missionRef) {
-    const byId = await db.get(
-      `SELECT workspace_id FROM missions
-        WHERE id = ? AND deleted_at IS NULL AND workspace_id IN (${placeholders})`,
-      [missionRef, ...workspaceIds]
-    );
-    if (byId) return byId.workspace_id;
-    const byDisplay = await db.all(
-      `SELECT workspace_id, project_id FROM missions
-        WHERE display_id = ? AND deleted_at IS NULL AND workspace_id IN (${placeholders})`,
-      [missionRef, ...workspaceIds]
-    );
-    const visible = byDisplay.filter((row) => projectInTokenScope(row.project_id));
-    if (visible.length > 1) {
-      throw new ApiError(409, `Mission reference is ambiguous across workspaces: ${missionRef}`);
-    }
-    if (visible[0]) return visible[0].workspace_id;
-  }
-  const projectRef = strFlag(body, "--project-id");
+// protocol/search.ts
+async function resolveV2SearchProjectId(projectRef, workspaceHint) {
   if (!projectRef) return null;
+  const scopes = await callerMembershipsInActiveOrganization(serviceDatabaseClient());
   const choices = await resolveProjectRefChoices({
     projectRef,
-    workspaceHint: strFlag(body, "--workspace-id"),
-    workspaceIds
+    workspaceHint,
+    workspaceIds: scopes.map((scope2) => scope2.workspaceId)
   });
+  if (choices.length === 0) throw new ApiError(404, `Project not found: ${projectRef}`);
   if (choices.length > 1) throw new ProjectSelectionRequiredError(projectRef, choices);
-  return choices[0]?.workspaceId ?? null;
+  return [choices[0].id];
 }
-async function buildProtocolContext(body, permission) {
-  const workspaceId2 = await protocolWorkspaceId(body);
+var RANKED_SEARCH_ONLY_FLAGS = [
+  "--query",
+  "--status",
+  "--resource-key",
+  "--date-field",
+  "--from",
+  "--to",
+  "--response-version",
+  "--entity-types",
+  "--objective-states",
+  "--matches-per-result"
+];
+async function searchExactReference(body, reference) {
+  const conflicting = RANKED_SEARCH_ONLY_FLAGS.filter((flag) => hasFlag(body, flag));
+  if (conflicting.length) {
+    throw new ApiError(400, `--reference cannot be combined with ${conflicting.join(", ")}`);
+  }
+  const { projectRef, workspaceHint } = readProtocolAddress(body);
+  if (!projectRef) throw new ApiError(400, "--reference requires --project-id");
+  const limit2 = integerFlag(body, "--limit") ?? null;
+  return searchMissionReferences({
+    projectIds: await resolveV2SearchProjectId(projectRef, workspaceHint),
+    reference,
+    cursor: strFlag(body, "--cursor") ?? null,
+    limit: limit2
+  });
+}
+var searchSubcommands = {
+  search: {
+    // Not enforced at dispatch: v2/v3 and --reference authorize per workspace or project.
+    permission: PERMISSIONS.MISSION_READ,
+    projectAutomation: "admitted",
+    dispatchGate: "handler",
+    handler: async (_ctx, body) => {
+      if (hasFlag(body, "--reference")) {
+        const reference = strFlag(body, "--reference");
+        if (!reference) throw new ApiError(400, "--reference requires a value");
+        return searchExactReference(body, reference);
+      }
+      if (hasFlag(body, "--cursor")) {
+        throw new ApiError(400, "--cursor applies only to an exact --reference lookup");
+      }
+      const responseVersion = hasFlag(body, "--response-version") ? integerFlag(body, "--response-version") : 3;
+      if (responseVersion !== 2 && responseVersion !== 3) {
+        throw new ApiError(
+          400,
+          "--response-version must be 2 or 3 (version 1 is retired)",
+          void 0,
+          "invalid_input"
+        );
+      }
+      const version4 = responseVersion;
+      const options = parseMissionSearchOptions(
+        {
+          q: strFlag(body, "--query"),
+          statusTypes: strFlag(body, "--status"),
+          resourceKeys: strFlag(body, "--resource-key"),
+          dateField: strFlag(body, "--date-field"),
+          from: strFlag(body, "--from"),
+          to: strFlag(body, "--to"),
+          limit: strFlag(body, "--limit"),
+          entityTypes: strFlag(body, "--entity-types"),
+          objectiveStates: strFlag(body, "--objective-states"),
+          matchesPerResult: strFlag(body, "--matches-per-result")
+        },
+        { version: version4 }
+      );
+      const { projectRef, workspaceHint } = readProtocolAddress(body);
+      const limit2 = options.limit ?? 25;
+      const search = {
+        ...options,
+        projectIds: await resolveV2SearchProjectId(projectRef, workspaceHint),
+        limit: limit2
+      };
+      return version4 === 3 ? searchMissionsAcrossWorkspacesV3(search) : searchMissionsAcrossWorkspacesV2(search);
+    }
+  }
+};
+
+// protocol/session.ts
+function captureBindingFlag(body) {
+  const value2 = strFlag(body, "--capture-binding");
+  return value2 === void 0 ? void 0 : value2;
+}
+function declaredPathsInput(body) {
+  return parseJsonArrayInput(
+    body,
+    "--declared-paths-json",
+    "--declared-paths-file",
+    "declaredPaths"
+  );
+}
+function reportDraftInput(body, { allowRevisionShorthand }) {
+  const input2 = parseJsonObjectInput(
+    body,
+    "--report-draft-json",
+    "--report-draft-file",
+    "reportDraft"
+  );
+  const revision3 = allowRevisionShorthand ? strFlag(body, "--expected-draft-revision") : void 0;
+  if (revision3 === void 0) return input2;
+  if (input2 !== void 0) {
+    throw new ApiError(
+      400,
+      "Use either --expected-draft-revision or --report-draft-json/--report-draft-file, not both",
+      void 0,
+      "invalid_input"
+    );
+  }
+  return { expectedRevision: integerFlag(body, "--expected-draft-revision", { min: 0 }) };
+}
+var sessionSubcommands = {
+  "project-items": {
+    permission: PERMISSIONS.MISSION_READ,
+    projectAutomation: "denied",
+    handler: (ctx, body) => readAgentProjectItems({
+      ctx,
+      missionId: missionRefFlag(body),
+      objectiveId: objectiveRefFlag(body) ?? void 0,
+      sessionKey: sessionKeyFlag(body),
+      kinds: strFlag(body, "--kind")?.split(",").map((s) => s.trim()),
+      query: strFlag(body, "--query"),
+      paths: strFlag(body, "--path")?.split(",").map((s) => s.trim()),
+      includeOwnMission: boolFlag(body, "--include-own-mission"),
+      limit: integerFlag(body, "--limit", { fallback: 20 }),
+      offset: integerFlag(body, "--offset", { fallback: 0 })
+    })
+  },
+  "mission-items": {
+    permission: PERMISSIONS.MISSION_READ,
+    projectAutomation: "denied",
+    handler: (ctx, body) => readAgentMissionItems({
+      ctx,
+      missionId: missionRefFlag(body),
+      sessionKey: sessionKeyFlag(body),
+      limit: integerFlag(body, "--limit", { fallback: 60 }),
+      offset: integerFlag(body, "--offset", { fallback: 0 })
+    })
+  },
+  "close-items": {
+    permission: PERMISSIONS.EVENT_CREATE,
+    projectAutomation: "denied",
+    handler: (ctx, body) => closeAgentMissionItems({
+      ctx,
+      missionId: missionRefFlag(body),
+      sessionKey: sessionKeyFlag(body),
+      closeItems: parseJsonArrayInput(
+        body,
+        "--close-items-json",
+        "--close-items-file",
+        "closeItems"
+      )
+    })
+  },
+  // Session lifecycle ------------------------------------------------------
+  attach: {
+    permission: PERMISSIONS.SESSION_ATTACH,
+    projectAutomation: "denied",
+    handler: (ctx, body) => attachSession({
+      ctx,
+      missionId: missionRefFlag(body),
+      agentIdentifier: strFlag(body, "--agent") ?? "unknown",
+      modelIdentifier: strFlag(body, "--model") ?? null,
+      connectionMethod: connectionMethodFlag(body),
+      existingSessionKey: readProtocolAddress(body).sessionKey,
+      externalSessionId: externalSessionId(body),
+      executionRequestId: readProtocolAddress(body).executionRequestId,
+      executionTargetId: strFlag(body, "--execution-target-id") ?? null,
+      // The channel id only. Its credential never travels in a protocol flag — it reaches the
+      // backend solely as an Authorization header on the adapter route family.
+      sessionChannelId: strFlag(body, "--session-channel-id") ?? null,
+      objectiveId: objectiveRefFlag(body),
+      captureBindingState: captureBindingFlag(body)
+    })
+  },
+  connect: {
+    permission: PERMISSIONS.SESSION_ATTACH,
+    projectAutomation: "denied",
+    handler: (ctx, body) => connectSession({
+      ctx,
+      missionId: missionRefFlag(body),
+      objectiveId: objectiveRefFlag(body),
+      agentIdentifier: strFlag(body, "--agent") ?? "unknown",
+      externalSessionId: externalSessionId(body)
+    })
+  },
+  update: {
+    permission: PERMISSIONS.EVENT_CREATE,
+    projectAutomation: "denied",
+    handler: (ctx, body) => {
+      rejectRemovedProtocolFlags(body, RETIRED_CHANGE_TRACKING_FLAGS);
+      const payloadJson = parseJsonObjectInput(
+        body,
+        "--payload-json",
+        "--payload-file",
+        "update payload"
+      );
+      rejectRemovedProtocolPayloadFields(payloadJson, "update");
+      return updateSession2({
+        ctx,
+        missionId: missionRefFlag(body),
+        sessionKey: sessionKeyFlag(body),
+        summary: resolveInput(body, "--summary", "--summary-file") ?? "",
+        phase: strFlag(body, "--phase") ?? null,
+        eventType: strFlag(body, "--event-type") ?? "update",
+        payloadJson,
+        externalUrl: strFlag(body, "--external-url") ?? null,
+        externalSessionId: externalSessionId(body),
+        beginFollowUpWork: boolFlag(body, "--begin-follow-up-work"),
+        followUpIntent: strFlag(body, "--follow-up-intent") ?? null,
+        declaredPaths: declaredPathsInput(body),
+        reportDraft: reportDraftInput(body, { allowRevisionShorthand: false })
+      });
+    }
+  },
+  "sync-changes": {
+    permission: PERMISSIONS.EVENT_CREATE,
+    projectAutomation: "denied",
+    handler: (ctx, body) => {
+      const changes = parseJsonArrayInput(
+        body,
+        "--changes-json",
+        "--changes-file",
+        "sync-changes input"
+      ) ?? [];
+      const capture = parseJsonObjectInput(
+        body,
+        "--capture-json",
+        "--capture-file",
+        "sync-changes capture"
+      );
+      return syncChanges({
+        ctx,
+        missionId: missionRefFlag(body),
+        sessionKey: sessionKeyFlag(body),
+        changes,
+        ...capture !== void 0 ? { capture } : {}
+      });
+    }
+  },
+  heartbeat: {
+    permission: PERMISSIONS.EVENT_CREATE,
+    projectAutomation: "denied",
+    handler: (ctx, body) => heartbeatSession({
+      ctx,
+      missionId: missionRefFlag(body),
+      sessionKey: sessionKeyFlag(body),
+      phase: strFlag(body, "--phase") ?? null,
+      note: strFlag(body, "--note") ?? null
+    })
+  },
+  ask: {
+    permission: PERMISSIONS.EVENT_CREATE,
+    projectAutomation: "denied",
+    handler: (ctx, body) => askQuestion({
+      ctx,
+      missionId: missionRefFlag(body),
+      sessionKey: sessionKeyFlag(body),
+      question: resolveInput(body, "--question", "--question-file") ?? "",
+      options: parseJsonArrayInput(body, "--options-json", "--options-file", "ask options") ?? [],
+      allowsFreeText: !boolFlag(body, "--no-free-text")
+    })
+  },
+  deliver: {
+    permission: PERMISSIONS.EVENT_CREATE,
+    projectAutomation: "denied",
+    handler: (ctx, body) => {
+      rejectRemovedProtocolFlags(body, RETIRED_CHANGE_TRACKING_FLAGS);
+      const envelope2 = parseDeliveryPayloadEnvelope(body);
+      rejectRemovedProtocolPayloadFields(envelope2.payloadJson, "delivery");
+      const artifacts = parseJsonArrayInput(
+        body,
+        "--artifacts",
+        "--artifacts-file",
+        "artifacts"
+      );
+      return deliverSession({
+        ctx,
+        missionId: missionRefFlag(body),
+        sessionKey: sessionKeyFlag(body),
+        summary: resolveInput(body, "--summary", "--summary-file") ?? envelope2.summary ?? "",
+        artifacts: artifacts ?? envelope2.artifacts ?? [],
+        declaredPaths: declaredPathsInput(body) ?? envelope2.declaredPaths,
+        payloadJson: envelope2.payloadJson,
+        verificationSummary: strFlag(body, "--verification-summary") ?? envelope2.verificationSummary ?? null,
+        followUpNotes: strFlag(body, "--follow-up-notes") ?? envelope2.followUpNotes ?? null,
+        missionSummary: envelope2.missionSummary,
+        operationId: envelope2.operationId,
+        reportDraft: reportDraftInput(body, { allowRevisionShorthand: true })
+      });
+    }
+  },
+  // The caller's own report draft (ADR 0078), with its final inspection while
+  // open; --draft-id reads an abandoned or sealed draft of the same objective.
+  "report-draft": {
+    permission: PERMISSIONS.MISSION_READ,
+    projectAutomation: "denied",
+    handler: (ctx, body) => readReportDraft({
+      ctx,
+      missionId: missionRefFlag(body),
+      sessionKey: sessionKeyFlag(body),
+      draftId: strFlag(body, "--draft-id") ?? null,
+      includeWithdrawn: boolFlag(body, "--include-withdrawn")
+    })
+  },
+  // Scoped read of the caller's own finalization receipt (ADR 0075), by
+  // delivery id or by operation id; available after the session ended.
+  "delivery-receipt": {
+    permission: PERMISSIONS.MISSION_READ,
+    projectAutomation: "denied",
+    handler: (ctx, body) => readDeliveryReceipt({
+      ctx,
+      missionId: readProtocolAddress(body).missionRef,
+      deliveryId: strFlag(body, "--delivery-id") ?? null,
+      operationId: strFlag(body, "--operation-id") ?? null,
+      operationKind: strFlag(body, "--operation-kind") ?? null
+    })
+  },
+  // Narrow post-delivery narrative surface (ADR 0076): the originating agent
+  // reads its delivery's publication opportunity and publishes once. The
+  // delivered, ended session is accepted here only; no other ended-session
+  // authority is granted.
+  "delivery-summary-context": {
+    permission: PERMISSIONS.EVENT_CREATE,
+    projectAutomation: "denied",
+    handler: (ctx, body) => readDeliverySummaryContext({
+      ctx,
+      missionId: missionRefFlag(body),
+      deliveryId: strFlag(body, "--delivery-id") ?? null,
+      publicationId: strFlag(body, "--publication-id") ?? null,
+      sessionKey: readProtocolAddress(body).sessionKey,
+      style: instructionStyleFor(connectionMethodFlag(body))
+    })
+  },
+  "publish-delivery-summary": {
+    permission: PERMISSIONS.EVENT_CREATE,
+    projectAutomation: "denied",
+    handler: (ctx, body) => {
+      const payload = parseJsonObjectInput(
+        body,
+        "--payload-json",
+        "--payload-file",
+        "publish-delivery-summary payload"
+      ) ?? {};
+      const { operationId: payloadOperationId, ...narrative } = payload;
+      return publishDeliverySummary({
+        ctx,
+        missionId: missionRefFlag(body),
+        deliveryId: strFlag(body, "--delivery-id") ?? null,
+        publicationId: strFlag(body, "--publication-id") ?? null,
+        sessionKey: readProtocolAddress(body).sessionKey,
+        operationId: strFlag(body, "--operation-id") ?? payloadOperationId,
+        narrative,
+        style: instructionStyleFor(connectionMethodFlag(body))
+      });
+    }
+  },
+  "hook-event": {
+    permission: PERMISSIONS.EVENT_CREATE,
+    projectAutomation: "denied",
+    handler: (ctx, body) => recordHookEvent({
+      ctx,
+      missionId: missionRefFlag(body),
+      hookType: requireFlag(body, "--hook-type"),
+      prompt: resolveInput(body, "--prompt", "--prompt-file") ?? "",
+      sessionKey: readProtocolAddress(body).sessionKey,
+      externalSessionId: externalSessionId(body) ?? null,
+      turnIndex: strFlag(body, "--turn-index") ?? null
+    })
+  },
+  "resume-follow-up": {
+    permission: PERMISSIONS.SESSION_ATTACH,
+    projectAutomation: "denied",
+    handler: (ctx, body) => resumeFollowUp({
+      ctx,
+      missionId: missionRefFlag(body),
+      objectiveId: objectiveRefFlag(body),
+      agentIdentifier: strFlag(body, "--agent") ?? "unknown",
+      modelIdentifier: strFlag(body, "--model") ?? null,
+      connectionMethod: connectionMethodFlag(body),
+      externalSessionId: externalSessionId(body),
+      summary: resolveInput(body, "--summary", "--summary-file") ?? null,
+      executionTargetId: strFlag(body, "--execution-target-id") ?? null
+    })
+  }
+};
+
+// protocol.ts
+async function buildProtocolContext(address, permission) {
+  const scopes = await callerWorkspaceMemberships();
+  const workspaceId2 = await deriveProtocolWorkspaceId(
+    address,
+    scopes.map((scope2) => scope2.workspaceId)
+  );
   if (!workspaceId2) {
     const authorized = getAuthorizedWorkspacesContext();
     if (authorized) {
@@ -185031,14 +185026,10 @@ async function buildProtocolContext(body, permission) {
 }
 async function validateObjectiveAddressing({
   ctx,
-  body,
-  subcommand
+  address
 }) {
-  if (subcommand === "update-objective") return;
-  const objectiveRef = objectiveRefFlag(body);
-  if (!objectiveRef) return;
-  const missionRef = strFlag(body, "--mission-id") ?? missionDisplayIdFromObjectiveRef(objectiveRef);
-  if (!missionRef) return;
+  const { objectiveRef, missionRef } = address;
+  if (!objectiveRef || !missionRef) return;
   await resolveObjectiveRef({ ctx, ref: objectiveRef, missionId: missionRef });
 }
 function mergeSubcommandTables(...tables) {
@@ -185054,6 +185045,7 @@ function mergeSubcommandTables(...tables) {
 var SUBCOMMANDS = mergeSubcommandTables(
   sessionSubcommands,
   missionSubcommands,
+  searchSubcommands,
   runQueueSubcommands,
   artifactSubcommands,
   projectSubcommands
@@ -185061,25 +185053,13 @@ var SUBCOMMANDS = mergeSubcommandTables(
 var SUBCOMMAND_PERMISSIONS = Object.fromEntries(
   Object.entries(SUBCOMMANDS).map(([name2, entry]) => [name2, entry.permission])
 );
+var PROJECT_AUTOMATION_SUBCOMMANDS = Object.entries(SUBCOMMANDS).filter(([, entry]) => entry.projectAutomation !== "denied").map(([name2]) => name2);
 async function runProtocolSubcommand(subcommand, body) {
-  if (getActiveTokenProjectIds() !== null && !(/* @__PURE__ */ new Set([
-    "create",
-    "load-context",
-    "search",
-    "discover-project",
-    "statuses",
-    "list-deliveries",
-    "objective-changes",
-    "attachment-list",
-    "attachment-download-url",
-    "auth-status"
-  ])).has(subcommand)) {
-    throw new ApiError(404, "Not found");
-  }
-  if (getActiveTokenProjectIds() !== null && subcommand === "discover-project" && !strFlag(body, "--project-id")) {
-    throw new ApiError(404, "Not found");
-  }
+  const address = readProtocolAddress(body);
   const entry = Object.hasOwn(SUBCOMMANDS, subcommand) ? SUBCOMMANDS[subcommand] : void 0;
+  if (getActiveTokenProjectIds() !== null && (!entry || entry.projectAutomation === "denied" || entry.projectAutomation === "admitted-with-project-id" && !address.projectRef)) {
+    throw new ApiError(404, "Not found");
+  }
   if (!entry) {
     throw new ApiError(
       404,
@@ -185087,10 +185067,12 @@ async function runProtocolSubcommand(subcommand, body) {
       `Supported subcommands: ${Object.keys(SUBCOMMANDS).sort().join(", ")}`
     );
   }
-  const requiredPermission = subcommand === "search" ? null : entry.permission;
+  const requiredPermission = entry.dispatchGate === "handler" ? null : entry.permission;
   try {
-    const ctx = await buildProtocolContext(body, requiredPermission);
-    await validateObjectiveAddressing({ ctx, body, subcommand });
+    const ctx = await buildProtocolContext(address, requiredPermission);
+    if (entry.addressing !== "objective-only") {
+      await validateObjectiveAddressing({ ctx, address });
+    }
     ctx.canUpdateMissionItems = () => actorCan(PERMISSIONS.MISSION_UPDATE, {
       workspaceId: ctx.workspace.id,
       workspaceUserId: ctx.actorWorkspaceUserId
@@ -185170,7 +185152,7 @@ function compactSearchResponse(value2) {
 }
 
 // ../mcp/tasks.ts
-var import_node_crypto28 = require("node:crypto");
+var import_node_crypto27 = require("node:crypto");
 var McpTaskError = class extends Error {
   code;
   constructor(code, message2) {
@@ -185212,7 +185194,7 @@ var McpTaskStore = class {
   constructor(options = {}) {
     this.limits = { ...DEFAULT_MCP_TASK_LIMITS, ...options.limits };
     this.now = options.now ?? Date.now;
-    this.newId = options.newId ?? import_node_crypto28.randomUUID;
+    this.newId = options.newId ?? import_node_crypto27.randomUUID;
     this.onSettled = options.onSettled;
   }
   /**
@@ -186977,7 +186959,7 @@ async function handleMcpPost(req, res, next) {
 }
 
 // ../packages/core/service/chat/conversations.ts
-var import_node_crypto32 = require("node:crypto");
+var import_node_crypto31 = require("node:crypto");
 
 // ../packages/core/service/chat/performance.ts
 var import_node_async_hooks3 = require("node:async_hooks");
@@ -187122,7 +187104,7 @@ var UNCERTAIN_WRITE_RESULT = {
 };
 
 // ../packages/core/service/chat/proposals.ts
-var import_node_crypto31 = require("node:crypto");
+var import_node_crypto30 = require("node:crypto");
 
 // ../packages/core/service/chat/access.ts
 var ChatAccess = class {
@@ -187243,11 +187225,11 @@ function assignmentCatalogProjection(value2) {
 }
 
 // ../packages/core/service/chat/runs.ts
-var import_node_crypto30 = require("node:crypto");
+var import_node_crypto29 = require("node:crypto");
 var import_node_util3 = require("node:util");
 
 // ../packages/core/service/chat/store.ts
-var import_node_crypto29 = require("node:crypto");
+var import_node_crypto28 = require("node:crypto");
 var import_node_util2 = require("node:util");
 var ChatError = class extends ServiceError {
   /**
@@ -187441,7 +187423,7 @@ var ChatStore = class _ChatStore {
     await this.db.run(
       `INSERT INTO chat_events (id, thread_id, seq, kind, run_id, attempt_id, fence, payload_json, dependency_set_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
-        (0, import_node_crypto29.randomUUID)(),
+        (0, import_node_crypto28.randomUUID)(),
         threadId,
         t.last_event_seq,
         payload.kind,
@@ -187518,7 +187500,7 @@ var ChatStore = class _ChatStore {
       await this.db.run(
         `INSERT INTO chat_source_refs (id, thread_id, source_kind, scope_key, connection_id, locator_json, access_state, access_checked_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, 'unknown', ?, ?, ?) ON CONFLICT (thread_id, scope_key) DO NOTHING`,
         [
-          (0, import_node_crypto29.randomUUID)(),
+          (0, import_node_crypto28.randomUUID)(),
           threadId,
           source.locator.kind,
           source.scopeKey,
@@ -187690,14 +187672,14 @@ var ChatStore = class _ChatStore {
         throw new ChatError("source_access_lost");
     }
     const authorizationRevision = (await this.thread(threadId)).authorization_revision;
-    const digest6 = (0, import_node_crypto29.createHash)("sha256").update(JSON.stringify({ ids, authorizationRevision })).digest("hex");
+    const digest6 = (0, import_node_crypto28.createHash)("sha256").update(JSON.stringify({ ids, authorizationRevision })).digest("hex");
     const old = await this.db.get(
       "SELECT id, invalidated_at FROM chat_dependency_sets WHERE thread_id = ? AND digest = ?",
       [threadId, digest6]
     );
     if (old?.invalidated_at) throw new ChatError("source_access_lost");
     if (old) return old.id;
-    const id2 = (0, import_node_crypto29.randomUUID)();
+    const id2 = (0, import_node_crypto28.randomUUID)();
     await this.db.run(
       "INSERT INTO chat_dependency_sets (id, thread_id, digest, created_at) VALUES (?, ?, ?, ?)",
       [id2, threadId, digest6, this.timestamp()]
@@ -187785,7 +187767,7 @@ var ChatStore = class _ChatStore {
     await this.db.run(
       `INSERT INTO chat_notifications (id, owner_profile_id, organization_id, thread_id, run_id, question_id, type, transition_key, event_seq, state, due_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?) ON CONFLICT (owner_profile_id, thread_id, run_id, type, transition_key) DO NOTHING`,
       [
-        (0, import_node_crypto29.randomUUID)(),
+        (0, import_node_crypto28.randomUUID)(),
         t.owner_profile_id,
         t.organization_id,
         t.id,
@@ -187938,7 +187920,7 @@ var ChatRuns = class _ChatRuns extends ChatStore {
             );
           }
         }
-        const id2 = (0, import_node_crypto30.randomUUID)(), fence = r5.current_fence + 1, now2 = s.timestamp();
+        const id2 = (0, import_node_crypto29.randomUUID)(), fence = r5.current_fence + 1, now2 = s.timestamp();
         await tx.run(
           "UPDATE chat_runs SET state = 'running', current_fence = ?, active_attempt_id = ?, updated_at = ?, revision = revision + 1 WHERE id = ?",
           [fence, id2, now2, r5.id]
@@ -188196,7 +188178,7 @@ var ChatRuns = class _ChatRuns extends ChatStore {
         requiredText(req.providerCallId, 200);
         const args = JSON.stringify(req.arguments);
         if (Buffer.byteLength(args) > 64 * 1024) throw new ChatError("limit_exceeded");
-        const callId = (0, import_node_crypto30.randomUUID)();
+        const callId = (0, import_node_crypto29.randomUUID)();
         await s.db.run(
           `INSERT INTO chat_tool_calls (id, run_id, attempt_id, operation_id, turn_index, call_order, provider_call_id, tool_id, policy_version, arguments_json, state, requested_fence, writer_fence, dependency_set_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, 'requested', ?, ?, ?, ?, ?)`,
           [
@@ -188366,8 +188348,8 @@ var ChatRuns = class _ChatRuns extends ChatStore {
         [messageId, a5.runId]
       );
       if (messageId && !old) throw new ChatError("invalid_request");
-      const id2 = old ? old.id : (0, import_node_crypto30.randomUUID)();
-      const blocks = old ? JSON.parse(old.blocks_json) : [{ id: (0, import_node_crypto30.randomUUID)(), kind: "text", text: "", evidenceIds: [], fallbackText: "" }];
+      const id2 = old ? old.id : (0, import_node_crypto29.randomUUID)();
+      const blocks = old ? JSON.parse(old.blocks_json) : [{ id: (0, import_node_crypto29.randomUUID)(), kind: "text", text: "", evidenceIds: [], fallbackText: "" }];
       const block = blocks[0];
       if (!block || block.kind !== "text") throw new ChatError("invalid_request");
       if (block.text.length + text.length > s.limits.messageMaxChars)
@@ -188418,7 +188400,7 @@ var ChatRuns = class _ChatRuns extends ChatStore {
         "SELECT COUNT(*) AS n FROM chat_questions WHERE run_id = ?",
         [a5.runId]
       );
-      const id2 = (0, import_node_crypto30.randomUUID)(), now2 = s.timestamp();
+      const id2 = (0, import_node_crypto29.randomUUID)(), now2 = s.timestamp();
       await s.db.run(
         `INSERT INTO chat_questions (id, thread_id, run_id, ordinal, state, prompt, options_json, allow_free_text, dependency_set_id, created_at, updated_at) VALUES (?, ?, ?, ?, 'open', ?, ?, ?, ?, ?, ?)`,
         [
@@ -188501,7 +188483,7 @@ var ChatRuns = class _ChatRuns extends ChatStore {
       );
       const evidence = [];
       for (const [i5, source] of sources.entries()) {
-        const evidenceId = (0, import_node_crypto30.randomUUID)();
+        const evidenceId = (0, import_node_crypto29.randomUUID)();
         await s.db.run(
           `INSERT INTO chat_evidence (id, thread_id, run_id, tool_call_id, source_ref_id, label, excerpt, excerpt_truncated, source_revision, observed_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
@@ -188559,7 +188541,7 @@ var ChatRuns = class _ChatRuns extends ChatStore {
       }));
       const others = blocks.filter((b5) => b5.kind !== "evidence");
       others.push({
-        id: (0, import_node_crypto30.randomUUID)(),
+        id: (0, import_node_crypto29.randomUUID)(),
         kind: "evidence",
         evidence,
         fallbackText: `Sources: ${evidence.map((e5) => e5.label).join("; ")}`.slice(0, 4e3)
@@ -188602,7 +188584,7 @@ var ChatRuns = class _ChatRuns extends ChatStore {
       if (regressed) throw new ChatError("invalid_request");
       await s.db.run(
         "INSERT INTO chat_thread_summaries (id, thread_id, summary_revision, summary_json, covers_through_message_id, dependency_set_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-        [(0, import_node_crypto30.randomUUID)(), a5.threadId, Number(last?.n ?? 0) + 1, json2, latest.id, deps, s.timestamp()]
+        [(0, import_node_crypto29.randomUUID)(), a5.threadId, Number(last?.n ?? 0) + 1, json2, latest.id, deps, s.timestamp()]
       );
     });
   }
@@ -188911,7 +188893,7 @@ var ChatProposals = class _ChatProposals extends ChatStore {
       await runs.assertLease(a5);
       const destinationSet = await s.dependencySet(a5.threadId, sourceIds);
       const dependencySetId = await s.generationDependencies(a5.threadId, destinationSet);
-      const id2 = body.proposalId ?? (0, import_node_crypto31.randomUUID)();
+      const id2 = body.proposalId ?? (0, import_node_crypto30.randomUUID)();
       let next = 1;
       if (body.proposalId) {
         const old = await tx.get(
@@ -188954,10 +188936,10 @@ var ChatProposals = class _ChatProposals extends ChatStore {
         id: a5.id,
         fence: a5.fence
       });
-      const messageId = (0, import_node_crypto31.randomUUID)();
+      const messageId = (0, import_node_crypto30.randomUUID)();
       const blocks = [
         {
-          id: (0, import_node_crypto31.randomUUID)(),
+          id: (0, import_node_crypto30.randomUUID)(),
           kind: "proposal",
           proposalId: id2,
           revision: next,
@@ -189069,7 +189051,7 @@ var ChatProposals = class _ChatProposals extends ChatStore {
           [scope2.project.id]
         );
       }
-      const receiptId = (0, import_node_crypto31.randomUUID)();
+      const receiptId = (0, import_node_crypto30.randomUUID)();
       for (const [i5, m3] of missions.entries()) {
         const scope2 = scopes[i5];
         await s.destination(owner, m3.projectId);
@@ -189133,7 +189115,7 @@ var ChatProposals = class _ChatProposals extends ChatStore {
               expected,
               owner.profileId,
               key,
-              (0, import_node_crypto31.createHash)("sha256").update(JSON.stringify({ id: id2, expected })).digest("hex"),
+              (0, import_node_crypto30.createHash)("sha256").update(JSON.stringify({ id: id2, expected })).digest("hex"),
               thread.authorization_revision,
               s.timestamp()
             ]
@@ -189167,9 +189149,9 @@ var ChatProposals = class _ChatProposals extends ChatStore {
 // ../packages/core/service/chat/conversations.ts
 var Conversations = class _Conversations extends ChatStore {
   /** Resolve HTTP observations through the same private owner gate as domain reads. */
-  async observeHttp(owner, method, path29, request, response) {
-    if (path29.includes("/diagnostics")) return;
-    const [family, id2] = path29.split("/").filter(Boolean);
+  async observeHttp(owner, method, path28, request, response) {
+    if (path28.includes("/diagnostics")) return;
+    const [family, id2] = path28.split("/").filter(Boolean);
     let threadId;
     if (family === "threads" && id2) threadId = id2;
     else if (id2) {
@@ -189188,7 +189170,7 @@ var Conversations = class _Conversations extends ChatStore {
     } catch {
       return;
     }
-    await this.diagnostic(threadId, "http.exchange", { method, path: path29, request, response });
+    await this.diagnostic(threadId, "http.exchange", { method, path: path28, request, response });
   }
   async diagnostics(owner, threadId, after) {
     if (!Number.isSafeInteger(after) || after < 0) throw new ChatError("invalid_request");
@@ -189213,7 +189195,7 @@ var Conversations = class _Conversations extends ChatStore {
     if (message2 !== void 0 && (!message2 || typeof message2 !== "object" || Array.isArray(message2)))
       throw new ChatError("invalid_request");
     return this.db.transaction(async (tx) => {
-      const s = new _Conversations(tx, this.options), id2 = (0, import_node_crypto32.randomUUID)(), now2 = s.timestamp();
+      const s = new _Conversations(tx, this.options), id2 = (0, import_node_crypto31.randomUUID)(), now2 = s.timestamp();
       await s.access(owner);
       await tx.run(
         "INSERT INTO chat_threads (id, owner_profile_id, organization_id, last_activity_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
@@ -189329,10 +189311,10 @@ var Conversations = class _Conversations extends ChatStore {
       if (Number(count?.n) >= this.limits.concurrentRunsPerOwner)
         throw new ChatError("limit_exceeded");
     }
-    const messageId = (0, import_node_crypto32.randomUUID)(), runId = active?.id ?? (0, import_node_crypto32.randomUUID)(), now2 = this.timestamp();
+    const messageId = (0, import_node_crypto31.randomUUID)(), runId = active?.id ?? (0, import_node_crypto31.randomUUID)(), now2 = this.timestamp();
     const messageCreatedAt = await this.createdAt("chat_messages", id2);
     const blocks = [
-      { id: (0, import_node_crypto32.randomUUID)(), kind: "text", text: body.text, fallbackText: body.text, evidenceIds: [] }
+      { id: (0, import_node_crypto31.randomUUID)(), kind: "text", text: body.text, fallbackText: body.text, evidenceIds: [] }
     ];
     await this.db.run(
       `INSERT INTO chat_messages (id, thread_id, role, state, blocks_json, answers_question_id, client_request_id, created_at, updated_at) VALUES (?, ?, 'user', 'complete', ?, ?, ?, ?, ?)`,
@@ -189457,12 +189439,12 @@ var Conversations = class _Conversations extends ChatStore {
       );
       if (Number(count?.n) >= s.limits.concurrentRunsPerOwner)
         throw new ChatError("limit_exceeded");
-      const newId3 = (0, import_node_crypto32.randomUUID)();
+      const newId2 = (0, import_node_crypto31.randomUUID)();
       const inheritedGrant = storedKnowledgebaseWrite(r5.knowledgebase_write_json);
       await s.db.run(
         `INSERT INTO chat_runs (id, thread_id, trigger_message_id, continued_from_run_id, state, limits_json, knowledgebase_write_json, created_at, updated_at) VALUES (?, ?, ?, ?, 'queued', ?, ?, ?, ?)`,
         [
-          newId3,
+          newId2,
           r5.thread_id,
           r5.trigger_message_id,
           id2,
@@ -189472,7 +189454,7 @@ var Conversations = class _Conversations extends ChatStore {
           s.timestamp()
         ]
       );
-      const run = runDto(await s.run(newId3));
+      const run = runDto(await s.run(newId2));
       await s.append(r5.thread_id, { kind: "run.updated", run });
       return { run, replayed: false };
     });
@@ -189626,7 +189608,7 @@ async function postExecutionTargetObservations({
 }
 
 // ../packages/core/service/repository-reads.ts
-var import_node_crypto33 = require("node:crypto");
+var import_node_crypto32 = require("node:crypto");
 function invalid3(message2) {
   throw new ServiceError(message2, "invalid_request", 400);
 }
@@ -189812,7 +189794,7 @@ var defaultProviderFactory = ({ target, queue }) => new RunnerQueueProvider(
   queue
 );
 function repositoryReadIdempotencyKey(actorWorkspaceUserId, operationId) {
-  const digest6 = (0, import_node_crypto33.createHash)("sha256").update(`${actorWorkspaceUserId}
+  const digest6 = (0, import_node_crypto32.createHash)("sha256").update(`${actorWorkspaceUserId}
 ${operationId}`).digest("hex").slice(0, 48);
   return `repository-read:${digest6}`;
 }
@@ -190362,60 +190344,60 @@ var FIND_FEATURE_MISSIONS_DECLARATION = {
     ["projectId", "workspace", "featureNodeId"]
   )
 };
-function validateToolArguments(schema2, value2, path29 = "arguments") {
+function validateToolArguments(schema2, value2, path28 = "arguments") {
   switch (schema2.type) {
     case void 0:
       return null;
     // Any JSON value; the reviewed tool's own validator bounds its size.
     case "object": {
-      if (!value2 || typeof value2 !== "object" || Array.isArray(value2)) return `${path29}_not_object`;
+      if (!value2 || typeof value2 !== "object" || Array.isArray(value2)) return `${path28}_not_object`;
       const record2 = value2;
       for (const key of schema2.required ?? [])
-        if (record2[key] === void 0 || record2[key] === null) return `${path29}.${key}_required`;
+        if (record2[key] === void 0 || record2[key] === null) return `${path28}.${key}_required`;
       if (schema2.maxProperties !== void 0 && Object.keys(record2).length > schema2.maxProperties)
-        return `${path29}_too_many_properties`;
+        return `${path28}_too_many_properties`;
       for (const [key, item] of Object.entries(record2)) {
         const declared = schema2.properties?.[key];
         const child = declared ?? (typeof schema2.additionalProperties === "object" ? schema2.additionalProperties : null);
         if (!child) {
-          if (schema2.additionalProperties === false) return `${path29}.${key}_not_allowed`;
+          if (schema2.additionalProperties === false) return `${path28}.${key}_not_allowed`;
           continue;
         }
         if (declared && (item === void 0 || item === null)) continue;
-        const error64 = validateToolArguments(child, item, `${path29}.${key}`);
+        const error64 = validateToolArguments(child, item, `${path28}.${key}`);
         if (error64) return error64;
       }
       return null;
     }
     case "number":
-      if (typeof value2 !== "number" || !Number.isFinite(value2)) return `${path29}_not_number`;
-      if (schema2.minimum !== void 0 && value2 < schema2.minimum) return `${path29}_too_small`;
-      if (schema2.maximum !== void 0 && value2 > schema2.maximum) return `${path29}_too_large`;
+      if (typeof value2 !== "number" || !Number.isFinite(value2)) return `${path28}_not_number`;
+      if (schema2.minimum !== void 0 && value2 < schema2.minimum) return `${path28}_too_small`;
+      if (schema2.maximum !== void 0 && value2 > schema2.maximum) return `${path28}_too_large`;
       return null;
     case "string":
-      if (typeof value2 !== "string") return `${path29}_not_string`;
+      if (typeof value2 !== "string") return `${path28}_not_string`;
       if (schema2.minLength !== void 0 && value2.length < schema2.minLength)
-        return `${path29}_too_short`;
+        return `${path28}_too_short`;
       if (schema2.maxLength !== void 0 && value2.length > schema2.maxLength)
-        return `${path29}_too_long`;
-      if (schema2.enum && !schema2.enum.includes(value2)) return `${path29}_not_allowed_value`;
-      if (schema2.pattern && !new RegExp(schema2.pattern).test(value2)) return `${path29}_bad_format`;
+        return `${path28}_too_long`;
+      if (schema2.enum && !schema2.enum.includes(value2)) return `${path28}_not_allowed_value`;
+      if (schema2.pattern && !new RegExp(schema2.pattern).test(value2)) return `${path28}_bad_format`;
       return null;
     case "integer":
-      if (!Number.isSafeInteger(value2)) return `${path29}_not_integer`;
+      if (!Number.isSafeInteger(value2)) return `${path28}_not_integer`;
       if (schema2.minimum !== void 0 && value2 < schema2.minimum)
-        return `${path29}_too_small`;
+        return `${path28}_too_small`;
       if (schema2.maximum !== void 0 && value2 > schema2.maximum)
-        return `${path29}_too_large`;
+        return `${path28}_too_large`;
       return null;
     case "boolean":
-      return typeof value2 === "boolean" ? null : `${path29}_not_boolean`;
+      return typeof value2 === "boolean" ? null : `${path28}_not_boolean`;
     case "array":
-      if (!Array.isArray(value2)) return `${path29}_not_array`;
+      if (!Array.isArray(value2)) return `${path28}_not_array`;
       if (schema2.maxItems !== void 0 && value2.length > schema2.maxItems)
-        return `${path29}_too_many`;
+        return `${path28}_too_many`;
       for (let i5 = 0; i5 < value2.length; i5++) {
-        const error64 = schema2.items ? validateToolArguments(schema2.items, value2[i5], `${path29}.${i5}`) : null;
+        const error64 = schema2.items ? validateToolArguments(schema2.items, value2[i5], `${path28}.${i5}`) : null;
         if (error64) return error64;
       }
       return null;
@@ -191057,7 +191039,7 @@ async function persistCatalog(catalog, client, workspaceId2) {
   await writeWorkspaceSetting({
     workspaceId: workspaceId2,
     key: "agentCatalog",
-    value: { ...catalog, updatedAt: nowIso2() },
+    value: { ...catalog, updatedAt: nowIso() },
     client
   });
 }
@@ -191224,11 +191206,11 @@ var MAX_LIVE_TEXT = 200;
 function liveText(value2, field) {
   if (value2 === void 0 || value2 === null) return null;
   if (typeof value2 !== "string") throw new ApiError(400, `${field} must be a string`);
-  const trimmed9 = value2.trim();
-  if (trimmed9.length > MAX_LIVE_TEXT) {
+  const trimmed = value2.trim();
+  if (trimmed.length > MAX_LIVE_TEXT) {
     throw new ApiError(400, `${field} must be at most ${MAX_LIVE_TEXT} characters`);
   }
-  return trimmed9 || null;
+  return trimmed || null;
 }
 function liveModelsFromBody(body) {
   if (!body || typeof body !== "object" || Array.isArray(body)) {
@@ -191312,7 +191294,7 @@ async function reportAgentLiveModels(body, workspaceId2) {
       existing: structuredClone(existing),
       live: report2.models,
       harnessVersion: report2.harnessVersion,
-      reportedAt: nowIso2()
+      reportedAt: nowIso()
     });
     await persistCatalog(stored, tx, targetWorkspaceId);
     return toCatalogDto(stored);
@@ -191344,10 +191326,10 @@ function classifyGeminiError(error64) {
 }
 
 // chat/gemini-runtime.ts
-var import_node_crypto37 = require("node:crypto");
+var import_node_crypto36 = require("node:crypto");
 
 // chat-worker.ts
-var import_node_crypto34 = require("node:crypto");
+var import_node_crypto33 = require("node:crypto");
 var ChatRuntimeFailure = class extends Error {
   constructor(failureCode) {
     super(failureCode);
@@ -191378,7 +191360,7 @@ var ChatWorker = class extends PollLoop {
   concurrency;
   lastRetentionAt = 0;
   active = /* @__PURE__ */ new Map();
-  id = (0, import_node_crypto34.randomUUID)();
+  id = (0, import_node_crypto33.randomUUID)();
   async stop() {
     const pass2 = super.stop();
     for (const job of this.active.values()) job.controller.abort();
@@ -191453,7 +191435,7 @@ var ChatWorker = class extends PollLoop {
 };
 
 // chat/gemini-diagnostics.ts
-var import_node_crypto35 = require("node:crypto");
+var import_node_crypto34 = require("node:crypto");
 var RunMetrics = class extends ChatPerformance {
   providerRounds = 0;
   providerRequests = 0;
@@ -191542,7 +191524,7 @@ function instrumentGeminiClient(client, hooks) {
   const { record: record2, metrics } = hooks;
   return {
     async stream(request) {
-      const exchangeId = (0, import_node_crypto35.randomUUID)();
+      const exchangeId = (0, import_node_crypto34.randomUUID)();
       if (metrics) metrics.providerRequests++;
       const started = metrics ? performance.now() : 0;
       const contentBytes = hooks.contentBytes(request);
@@ -191605,7 +191587,7 @@ function instrumentGeminiClient(client, hooks) {
       }
     },
     async generate(request) {
-      const exchangeId = (0, import_node_crypto35.randomUUID)();
+      const exchangeId = (0, import_node_crypto34.randomUUID)();
       if (metrics) metrics.summaryRounds++;
       const cached3 = hooks.staticUseFor(request);
       await record2("provider.request", {
@@ -191768,7 +191750,7 @@ ${text}`;
 }
 
 // chat/tool-manifest.ts
-var import_node_crypto36 = require("node:crypto");
+var import_node_crypto35 = require("node:crypto");
 var RELEVANCE_POLICY_VERSION = "expandable-families-v1";
 var TOOL_FAMILIES = ["status", "repository", "knowledgebase", "feature"];
 var EXPAND_CAPABILITIES_TOOL = "expand_capabilities";
@@ -191827,7 +191809,7 @@ function digest4(value2) {
       );
     return v;
   };
-  return (0, import_node_crypto36.createHash)("sha256").update(JSON.stringify(canonical(value2))).digest("hex");
+  return (0, import_node_crypto35.createHash)("sha256").update(JSON.stringify(canonical(value2))).digest("hex");
 }
 function createToolManifest(catalog, families) {
   const value2 = {
@@ -191895,7 +191877,7 @@ var GeminiChatRuntime = class {
       provider: "gemini",
       model,
       checkpointVersion: GEMINI_CHECKPOINT_VERSION,
-      configDigest: (0, import_node_crypto37.createHash)("sha256").update(
+      configDigest: (0, import_node_crypto36.createHash)("sha256").update(
         JSON.stringify({
           model,
           SYSTEM_PROMPT_VERSION,
@@ -192774,19 +192756,19 @@ function chatLimitsFromEnv(env3) {
 }
 
 // connections/keyring.ts
-var import_node_crypto39 = require("node:crypto");
+var import_node_crypto38 = require("node:crypto");
 
 // connections/crypto.ts
-var import_node_crypto38 = require("node:crypto");
+var import_node_crypto37 = require("node:crypto");
 var SecretEnvelopeError = class extends Error {
   constructor() {
     super("The stored secret cannot be decrypted.");
   }
 };
 function decodeEncryptionKey(encoded) {
-  const trimmed9 = encoded?.trim();
-  if (!trimmed9) return null;
-  const key = Buffer.from(trimmed9, "base64url");
+  const trimmed = encoded?.trim();
+  if (!trimmed) return null;
+  const key = Buffer.from(trimmed, "base64url");
   return key.length === 32 ? key : null;
 }
 function sealSecret({
@@ -192794,8 +192776,8 @@ function sealSecret({
   key,
   aad
 }) {
-  const nonce = (0, import_node_crypto38.randomBytes)(12);
-  const cipher = (0, import_node_crypto38.createCipheriv)("aes-256-gcm", key, nonce);
+  const nonce = (0, import_node_crypto37.randomBytes)(12);
+  const cipher = (0, import_node_crypto37.createCipheriv)("aes-256-gcm", key, nonce);
   cipher.setAAD(Buffer.from(aad, "utf8"));
   const ciphertext = Buffer.concat([cipher.update(plaintext, "utf8"), cipher.final()]);
   const tag2 = cipher.getAuthTag();
@@ -192811,7 +192793,7 @@ function openSecret({
     throw new SecretEnvelopeError();
   }
   try {
-    const decipher = (0, import_node_crypto38.createDecipheriv)("aes-256-gcm", key, Buffer.from(nonceText, "base64url"));
+    const decipher = (0, import_node_crypto37.createDecipheriv)("aes-256-gcm", key, Buffer.from(nonceText, "base64url"));
     decipher.setAAD(Buffer.from(aad, "utf8"));
     decipher.setAuthTag(Buffer.from(tagText, "base64url"));
     return Buffer.concat([
@@ -192823,7 +192805,7 @@ function openSecret({
   }
 }
 function hashSecret(value2) {
-  return (0, import_node_crypto38.createHash)("sha256").update(value2).digest("hex");
+  return (0, import_node_crypto37.createHash)("sha256").update(value2).digest("hex");
 }
 
 // connections/keyring.ts
@@ -192839,18 +192821,18 @@ function isReservedKeyId(id2) {
   return RESERVED_KEY_IDS.has(id2) || isPlatformKeyId(id2);
 }
 function platformKeyFromSecret(secret) {
-  const trimmed9 = secret?.trim();
-  if (!trimmed9 || trimmed9.length < MIN_PLATFORM_SECRET_LENGTH) return null;
+  const trimmed = secret?.trim();
+  if (!trimmed || trimmed.length < MIN_PLATFORM_SECRET_LENGTH) return null;
   const key = Buffer.from(
-    (0, import_node_crypto39.hkdfSync)(
+    (0, import_node_crypto38.hkdfSync)(
       "sha256",
-      Buffer.from(trimmed9, "utf8"),
+      Buffer.from(trimmed, "utf8"),
       Buffer.from("overlord:account-connections", "utf8"),
       Buffer.from("overlord:account-connections:platform-key:v1", "utf8"),
       32
     )
   );
-  const fingerprint = (0, import_node_crypto39.createHash)("sha256").update("overlord:account-connections:platform-key-id:v1:").update(key).digest("hex").slice(0, 16);
+  const fingerprint = (0, import_node_crypto38.createHash)("sha256").update("overlord:account-connections:platform-key-id:v1:").update(key).digest("hex").slice(0, 16);
   return { id: `${PLATFORM_KEY_ID_PREFIX}${fingerprint}`, key };
 }
 function keyRingFromEnv(env3) {
@@ -193442,7 +193424,7 @@ function validateJson(value2, at, depth, budget) {
 }
 
 // connections/service.ts
-var import_node_crypto42 = require("node:crypto");
+var import_node_crypto41 = require("node:crypto");
 
 // connections/credential-rows.ts
 var REFRESH_LEASE_MS = 15e3;
@@ -193575,7 +193557,7 @@ async function refreshLeased(db, row, lockOwner, options) {
 }
 
 // connections/oauth.ts
-var import_node_crypto40 = require("node:crypto");
+var import_node_crypto39 = require("node:crypto");
 var OAuthError = class extends Error {
   constructor(code) {
     super(code);
@@ -193589,8 +193571,8 @@ var METADATA_BYTES = 64 * 1024;
 var TOKEN_BYTES = 64 * 1024;
 var TIMEOUT_MS = 1e4;
 function pkcePair() {
-  const verifier = (0, import_node_crypto40.randomBytes)(32).toString("base64url");
-  return { verifier, challenge: (0, import_node_crypto40.createHash)("sha256").update(verifier).digest("base64url") };
+  const verifier = (0, import_node_crypto39.randomBytes)(32).toString("base64url");
+  return { verifier, challenge: (0, import_node_crypto39.createHash)("sha256").update(verifier).digest("base64url") };
 }
 function sameResource(a5, b5) {
   return a5.replace(/\/+$/, "") === b5.replace(/\/+$/, "");
@@ -193745,7 +193727,7 @@ var KnowledgebaseOAuth = class {
 };
 
 // connections/oauth-flow.ts
-var import_node_crypto41 = require("node:crypto");
+var import_node_crypto40 = require("node:crypto");
 
 // connections/authorizations.ts
 var AUTHORIZATION_TTL_MS = 10 * 60 * 1e3;
@@ -193800,16 +193782,16 @@ async function consumeAuthorization(tx, options) {
 
 // connections/oauth-flow.ts
 async function beginConnectionOAuth(db, options) {
-  const state2 = (0, import_node_crypto41.randomBytes)(32).toString("base64url");
+  const state2 = (0, import_node_crypto40.randomBytes)(32).toString("base64url");
   const { verifier, challenge } = pkcePair();
   const authorizeUrl = await options.authorizeUrl(state2, challenge);
-  const authorizationId = (0, import_node_crypto41.randomUUID)();
+  const authorizationId = (0, import_node_crypto40.randomUUID)();
   const expiresAt = options.timestamp(AUTHORIZATION_TTL_MS);
   const connectionId = await db.transaction(async (tx) => {
     const now2 = options.timestamp();
     let row = await options.findLiveRow(tx);
     if (!row) {
-      const id2 = (0, import_node_crypto41.randomUUID)();
+      const id2 = (0, import_node_crypto40.randomUUID)();
       await options.insertPendingRow(tx, id2, now2);
       row = await tx.get("SELECT * FROM account_connections WHERE id = ?", [id2]);
     }
@@ -193927,7 +193909,7 @@ var AccountConnections = class {
   }
   db;
   options;
-  lockOwner = (0, import_node_crypto42.randomUUID)();
+  lockOwner = (0, import_node_crypto41.randomUUID)();
   now() {
     return this.options.now?.() ?? Date.now();
   }
@@ -194647,8 +194629,8 @@ var KnowledgebaseMcp = class {
 };
 function parseRpcMessage(text, id2) {
   const candidates = [];
-  const trimmed9 = text.trim();
-  if (trimmed9.startsWith("{")) candidates.push(trimmed9);
+  const trimmed = text.trim();
+  if (trimmed.startsWith("{")) candidates.push(trimmed);
   else
     for (const block of text.split(/\r?\n\r?\n/)) {
       const data = block.split(/\r?\n/).filter((line2) => line2.startsWith("data:")).map((line2) => line2.slice(5).trimStart()).join("\n");
@@ -194739,7 +194721,7 @@ function provenance(text, connectionId, workspace2, maxSources) {
 }
 
 // connections/profile.ts
-var import_node_crypto43 = require("node:crypto");
+var import_node_crypto42 = require("node:crypto");
 var ProviderOAuthError = class extends Error {
   constructor(code) {
     super(code);
@@ -194773,7 +194755,7 @@ var ProfileConnections = class {
   db;
   ring;
   options;
-  lockOwner = (0, import_node_crypto43.randomUUID)();
+  lockOwner = (0, import_node_crypto42.randomUUID)();
   adapters;
   provider(provider) {
     return this.adapters.get(provider) ?? null;
@@ -194907,7 +194889,7 @@ var ProfileConnections = class {
       );
       return connectionDto(await this.row(profileId, existing.id));
     }
-    const id2 = (0, import_node_crypto43.randomUUID)();
+    const id2 = (0, import_node_crypto42.randomUUID)();
     const draft = { id: id2, owner_profile_id: profileId, organization_id: null, provider };
     await this.db.run(
       `INSERT INTO account_connections (id, owner_profile_id, organization_id, provider, server_url, state, credential_kind, credential_format, credential_ciphertext, credential_key_id, credential_revision, external_account_id, external_account_label, external_account_avatar_url, last_validated_at, connected_at, created_at, updated_at, revision) VALUES (?, ?, NULL, ?, ?, 'connected', 'api_key', 'connection-v1', ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, 1)`,
@@ -195596,7 +195578,7 @@ function createProfileConnectionCallbackHandler(options) {
 }
 
 // ../packages/core/service/end-latch-session.ts
-var import_node_crypto44 = require("node:crypto");
+var import_node_crypto43 = require("node:crypto");
 
 // ../packages/core/service/current-objective-attempt.ts
 var activeObjectiveAttemptSql = "o.state IN ('launching', 'executing', 'pending_delivery')";
@@ -195623,7 +195605,7 @@ async function endLatchSession({
   if (!row || !mapping) throw new ServiceError("Terminal session not found", "not_found", 404);
   const now2 = nowIso();
   const scope2 = "api.mission.terminal-session.end";
-  const requestHash = (0, import_node_crypto44.createHash)("sha256").update(JSON.stringify({ missionId, executionRequestId })).digest("hex");
+  const requestHash = (0, import_node_crypto43.createHash)("sha256").update(JSON.stringify({ missionId, executionRequestId })).digest("hex");
   await db.run(
     `INSERT INTO idempotency_keys
       (id, workspace_id, scope, key, request_hash, status, actor_workspace_user_id,
@@ -195880,9 +195862,9 @@ var MAX_EVENT_PAYLOAD_BYTES = 8 * 1024;
 var MAX_EVENT_IDENTIFIER_LENGTH = 200;
 function boundedText(value2, max) {
   if (typeof value2 !== "string") return null;
-  const trimmed9 = value2.trim();
-  if (trimmed9 === "") return null;
-  return trimmed9.length <= max ? trimmed9 : `${trimmed9.slice(0, max - 1)}\u2026`;
+  const trimmed = value2.trim();
+  if (trimmed === "") return null;
+  return trimmed.length <= max ? trimmed : `${trimmed.slice(0, max - 1)}\u2026`;
 }
 function requiredIdentifier(value2, field) {
   const bounded2 = boundedText(value2, MAX_EVENT_IDENTIFIER_LENGTH);
@@ -196272,6 +196254,11 @@ async function mintObjectiveSessionChannel(objectiveRef, rawBody) {
   });
 }
 
+// ../packages/core/dist/service/strings.js
+function trimmedOrNull2(value2) {
+  return typeof value2 === "string" && value2.trim() ? value2.trim() : null;
+}
+
 // ../packages/core/dist/service/terminal-profile-types.js
 var DEFAULT_VIEWER_OPEN_AS2 = "window";
 function viewerOpenAsForPlacement2(placement) {
@@ -196298,11 +196285,8 @@ var DEFAULT_LAUNCH_SESSION_DEFAULTS2 = {
   openViewerOnLaunch: DEFAULT_OPEN_VIEWER_ON_LAUNCH2,
   worktreeBranchAutomationEnabled: false
 };
-function trimmed8(value2) {
-  return typeof value2 === "string" && value2.trim() ? value2.trim() : null;
-}
 function viewerKindForLauncher2(launcher) {
-  const value2 = trimmed8(launcher);
+  const value2 = trimmedOrNull2(launcher);
   if (!value2)
     return "inline";
   const lowered = value2.toLowerCase();
@@ -196316,10 +196300,10 @@ function normalizeExecutionProvider2(value2) {
   if (!value2 || typeof value2 !== "object" || Array.isArray(value2))
     return null;
   const cast = value2;
-  const kind = trimmed8(cast.kind)?.toLowerCase() === "latch" ? "latch" : "direct";
+  const kind = trimmedOrNull2(cast.kind)?.toLowerCase() === "latch" ? "latch" : "direct";
   return {
     kind,
-    executable: trimmed8(cast.executable) ?? DEFAULT_LATCH_EXECUTABLE2
+    executable: trimmedOrNull2(cast.executable) ?? DEFAULT_LATCH_EXECUTABLE2
   };
 }
 function resolveLaunchSession2({ profile, defaults: defaults2 = DEFAULT_LAUNCH_SESSION_DEFAULTS2 }) {
@@ -196481,7 +196465,7 @@ async function updateAgentLaunchConfig(agentKey, body, workspaceId2) {
       `UPDATE user_execution_target_preferences
           SET agent_configs_json = ?, updated_at = ?, revision = revision + 1
         WHERE id = ?`,
-      [JSON.stringify(configs), nowIso2(), target.preferenceId]
+      [JSON.stringify(configs), nowIso(), target.preferenceId]
     );
     return launchSettingsDto({ target, ctx: scope2.ctx, agentConfigs: configs });
   });
@@ -196565,7 +196549,7 @@ async function updateLaunchPreference(projectId, body) {
       selectedModel: body.selectedModel !== void 0 ? body.selectedModel : current.selectedModel ?? null,
       selectedReasoningEffort: body.selectedReasoningEffort !== void 0 ? body.selectedReasoningEffort : current.selectedReasoningEffort ?? null
     };
-    const now2 = nowIso2();
+    const now2 = nowIso();
     if (row) {
       const preferences = { ...row.preferences, [LAUNCH_PREFERENCE_KEY]: next };
       await tx.run(
@@ -196581,7 +196565,7 @@ async function updateLaunchPreference(projectId, body) {
             created_at, updated_at, revision)
          VALUES (?, ?, ?, ?, ?, ?, ?, 1)`,
         [
-          newId2(),
+          newId(),
           workspaceId2,
           projectId,
           workspaceUserId,
@@ -196594,10 +196578,6 @@ async function updateLaunchPreference(projectId, body) {
     return next;
   });
 }
-
-// execution/local-target-invoke.ts
-var import_node_os12 = __toESM(require("node:os"), 1);
-var import_node_path33 = __toESM(require("node:path"), 1);
 
 // execution/local-target-capability.ts
 function isDevInProcessLocalTargetEnabled() {
@@ -196613,15 +196593,9 @@ function resolveLocalTargetServerCapability({
 }
 
 // execution/local-target-invoke.ts
-function resolveServerWorktreeRoot() {
-  const override = process.env.OVERLORD_WORKTREE_ROOT?.trim();
-  if (override) return import_node_path33.default.resolve(override);
-  const home = process.env.OVLD_HOME?.trim() || process.env.OVERLORD_HOME?.trim();
-  return import_node_path33.default.join(home ? import_node_path33.default.resolve(home) : import_node_path33.default.join(import_node_os12.default.homedir(), ".ovld"), "worktrees");
-}
 function withServerDefaults(call) {
   if (call.capability !== "listWorktrees") return call;
-  const worktreeRoot = call.input.worktreeRoot?.trim() ? call.input.worktreeRoot : resolveServerWorktreeRoot();
+  const worktreeRoot = call.input.worktreeRoot?.trim() ? call.input.worktreeRoot : resolveManagedWorktreeRoot();
   return { ...call, input: { ...call.input, worktreeRoot } };
 }
 function backendTargetMetadata2() {
@@ -196786,8 +196760,8 @@ function runnerRegistrationFromBody(value2) {
   const text = (key) => {
     const raw = body[key];
     if (typeof raw !== "string") return null;
-    const trimmed9 = raw.trim();
-    return trimmed9.length > 0 ? trimmed9 : null;
+    const trimmed = raw.trim();
+    return trimmed.length > 0 ? trimmed : null;
   };
   const relation = text("runnerRelation");
   const capabilities2 = body.capabilities && typeof body.capabilities === "object" && !Array.isArray(body.capabilities) ? body.capabilities : null;
@@ -196891,14 +196865,6 @@ var EXECUTION_REQUEST_COLUMNS = `
   launch_flags_json, status, requested_source, resolved_resource_id,
   resolved_working_directory, last_error, created_at, updated_at, revision
 `;
-function parseLaunchFlagsObject(json2) {
-  try {
-    const parsed = JSON.parse(json2);
-    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
-  } catch {
-    return {};
-  }
-}
 function serviceSummaryToDto(row) {
   return {
     id: row.id,
@@ -197112,7 +197078,7 @@ async function stampRequestBranchTx(tx, {
     [requestId, workspaceId2]
   );
   if (!requestRow) throw new ApiError(404, "Execution request not found");
-  const flags = parseLaunchFlagsObject(requestRow.launch_flags_json);
+  const flags = parseMetadataJson(requestRow.launch_flags_json);
   flags.branchAutomation = branch;
   const revision3 = requestRow.revision + 1;
   await tx.run(
@@ -197122,7 +197088,7 @@ async function stampRequestBranchTx(tx, {
             updated_at = ?,
             revision = ?
       WHERE id = ?`,
-    [JSON.stringify(flags), branch.worktreePath, nowIso2(), revision3, requestRow.id]
+    [JSON.stringify(flags), branch.worktreePath, nowIso(), revision3, requestRow.id]
   );
   await recordChange2(
     {
@@ -197221,7 +197187,7 @@ async function recordBranchPreparedTx(tx, {
   if (!mission) throw new ApiError(404, "Mission not found");
   const requestRow = requestId ? await stampRequestBranchTx(tx, { workspaceId: workspaceId2, requestId, branch }) : void 0;
   const objectiveId = requestRow?.objective_id ?? null;
-  const now2 = nowIso2();
+  const now2 = nowIso();
   if (objectiveId) {
     await recordObjectiveBranchTx(tx, {
       workspaceId: workspaceId2,
@@ -197471,10 +197437,10 @@ async function pruneChangeFeedBatch(db, options = {}) {
 
 // ext/everhour/service.ts
 var EVERHOUR_BASE_URL = "https://api.everhour.com";
-async function everhourFetch(apiKey, path29, init2 = {}) {
+async function everhourFetch(apiKey, path28, init2 = {}) {
   let res;
   try {
-    res = await fetch(`${EVERHOUR_BASE_URL}${path29}`, {
+    res = await fetch(`${EVERHOUR_BASE_URL}${path28}`, {
       method: init2.method ?? "GET",
       headers: {
         "X-Api-Key": apiKey,
@@ -197630,7 +197596,7 @@ function createEverhourService(connections) {
       id: source.account_id,
       label: source.account_name
     });
-    const now2 = nowIso2();
+    const now2 = nowIso();
     for (const row of adoptable) {
       const revision3 = row.revision + 1;
       await client.run(
@@ -197696,7 +197662,7 @@ function createEverhourService(connections) {
       const workspaceId2 = await assertProjectExists(projectId, tx);
       const existing = await readProjectLink2(projectId, workspaceId2, tx);
       if (!existing) return;
-      const now2 = nowIso2();
+      const now2 = nowIso();
       const revision3 = existing.revision + 1;
       await tx.run(
         `UPDATE ext_everhour_project_links
@@ -197731,7 +197697,7 @@ function createEverhourService(connections) {
     await requireDatabaseClient().transaction(async (tx) => {
       const workspaceId2 = await assertProjectExists(projectId, tx);
       const existing = await readProjectLink2(projectId, workspaceId2, tx);
-      const now2 = nowIso2();
+      const now2 = nowIso();
       if (existing) {
         const revision3 = existing.revision + 1;
         const projectChanged = existing.everhour_project_id !== everhourProjectId;
@@ -197769,7 +197735,7 @@ function createEverhourService(connections) {
         );
         return;
       }
-      const id2 = newId2();
+      const id2 = newId();
       await tx.run(
         `INSERT INTO ext_everhour_project_links
          (id, workspace_id, project_id, everhour_project_id, everhour_project_name,
@@ -197816,7 +197782,7 @@ function createEverhourService(connections) {
         );
       }
       if (existing.everhour_general_task_id === taskId) return;
-      const now2 = nowIso2();
+      const now2 = nowIso();
       const revision3 = existing.revision + 1;
       await tx.run(
         `UPDATE ext_everhour_project_links
@@ -197936,7 +197902,7 @@ function createEverhourService(connections) {
   async function writeMissionTaskId(mission, taskId) {
     await requireDatabaseClient().transaction(async (tx) => {
       const existing = await readMissionLink(mission.id, mission.workspace_id, tx);
-      const now2 = nowIso2();
+      const now2 = nowIso();
       if (existing) {
         const revision3 = existing.revision + 1;
         await tx.run(
@@ -197960,7 +197926,7 @@ function createEverhourService(connections) {
         );
         return;
       }
-      const id2 = newId2();
+      const id2 = newId();
       await tx.run(
         `INSERT INTO ext_everhour_mission_links
          (id, workspace_id, project_id, mission_id, everhour_task_id, created_at, updated_at, revision)
@@ -198478,8 +198444,8 @@ var PUBLIC_BACKEND_URL_ENV_KEYS = [
   "OVERLORD_BACKEND_URL"
 ];
 function normalizeOriginUrl(value2) {
-  const trimmed9 = value2.trim().replace(/\/+$/, "");
-  const withScheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed9) ? trimmed9 : `http://${trimmed9}`;
+  const trimmed = value2.trim().replace(/\/+$/, "");
+  const withScheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed) ? trimmed : `http://${trimmed}`;
   return new URL(withScheme).origin;
 }
 function readConfiguredPublicBackendUrls() {
@@ -198789,12 +198755,12 @@ function createGitHubUserOAuth(connections) {
       nextUrl: nextMatch?.[1] ?? null
     };
   }
-  async function githubUserFetch(path29, token, init2 = {}) {
-    return (await githubUserFetchUrl(path29, token, init2)).data;
+  async function githubUserFetch(path28, token, init2 = {}) {
+    return (await githubUserFetchUrl(path28, token, init2)).data;
   }
-  async function githubUserFetchAll(path29, token) {
+  async function githubUserFetchAll(path28, token) {
     const rows = [];
-    let nextUrl = path29;
+    let nextUrl = path28;
     const visited = /* @__PURE__ */ new Set();
     while (nextUrl) {
       const canonical = new URL(nextUrl, GITHUB_API3).toString();
@@ -199013,8 +198979,8 @@ function resolveAllowedBrowserOrigins({
   const extraOrigins = process.env.OVERLORD_WEB_ORIGINS?.trim();
   if (extraOrigins) {
     for (const origin of extraOrigins.split(",")) {
-      const trimmed9 = origin.trim();
-      if (trimmed9) origins.add(trimmed9);
+      const trimmed = origin.trim();
+      if (trimmed) origins.add(trimmed);
     }
   }
   return [...origins];
@@ -199077,6 +199043,40 @@ async function buildServerMeta(args) {
   };
 }
 
+// http/mission-read-response.ts
+var import_node_util4 = require("node:util");
+var import_node_zlib = require("node:zlib");
+var compressBrotli = (0, import_node_util4.promisify)(import_node_zlib.brotliCompress);
+var compressGzip = (0, import_node_util4.promisify)(import_node_zlib.gzip);
+var MIN_COMPRESSION_BYTES = 1024;
+async function sendMissionReadResponse(res, payload, cacheControl) {
+  res.set("Cache-Control", cacheControl);
+  res.vary("Accept-Encoding");
+  if (cacheControl === "private, no-cache") {
+    res.vary("Authorization");
+    res.vary("Cookie");
+  }
+  const body = Buffer.from(JSON.stringify(payload));
+  const etag = res.app.get("etag fn")?.(body);
+  if (etag) res.set("ETag", etag);
+  if (res.req.fresh) {
+    res.status(304).end();
+    return;
+  }
+  res.set("Content-Type", "application/json; charset=utf-8");
+  const encoding = res.req.acceptsEncodings("br", "gzip", "identity");
+  if (body.length < MIN_COMPRESSION_BYTES || encoding !== "br" && encoding !== "gzip") {
+    res.send(body);
+    return;
+  }
+  const compressed = encoding === "br" ? await compressBrotli(body, { params: { [import_node_zlib.constants.BROTLI_PARAM_QUALITY]: 4 } }) : await compressGzip(body);
+  if (compressed.length < body.length) {
+    res.set("Content-Encoding", encoding).send(compressed);
+    return;
+  }
+  res.send(body);
+}
+
 // http/raw-upload.ts
 var import_express4 = __toESM(require_express2(), 1);
 var IMAGE_UPLOAD_ROUTE = {
@@ -199114,8 +199114,8 @@ var byKey = new Map(
 function operationFor(method, openapiPath) {
   return byKey.get(`${method.toUpperCase()} ${openapiPath}`) ?? null;
 }
-function templateSegments(path29) {
-  return path29.split("/").slice(1);
+function templateSegments(path28) {
+  return path28.split("/").slice(1);
 }
 function bindPathParameters(operation2, requestPath) {
   const template = templateSegments(operation2.path);
@@ -199237,9 +199237,9 @@ function deferMalformedBody(parser) {
     });
   };
 }
-function issuePath(path29, prefix = "") {
+function issuePath(path28, prefix = "") {
   let out = prefix;
-  for (const segment of path29) {
+  for (const segment of path28) {
     if (typeof segment === "number") out += `[${segment}]`;
     else out += out ? `.${String(segment)}` : String(segment);
   }
@@ -199405,6 +199405,7 @@ function installRequestValidation(app2) {
 }
 
 // http/response-conformance.ts
+var import_node_zlib2 = require("node:zlib");
 init_zod();
 var closedCache = /* @__PURE__ */ new WeakMap();
 function defOf(schema2) {
@@ -199495,6 +199496,18 @@ function checkResponse(operation2, status, contentType, body) {
   return result2.error.issues.slice(0, 20).map((issue2) => `${issuePath(issue2.path, "body")}: ${issue2.message}`);
 }
 var MAX_CAPTURE_BYTES = 8 * 1024 * 1024;
+function decodeCapturedBody(chunks, encoding) {
+  const body = Buffer.concat(chunks);
+  const options = { maxOutputLength: MAX_CAPTURE_BYTES };
+  try {
+    if (encoding === "br") return (0, import_node_zlib2.brotliDecompressSync)(body, options).toString("utf8");
+    if (encoding === "gzip") return (0, import_node_zlib2.gunzipSync)(body, options).toString("utf8");
+    return body.toString("utf8");
+  } catch (error64) {
+    if (error64.code === "ERR_BUFFER_TOO_LARGE") return null;
+    return "";
+  }
+}
 function chunkBuffer(chunk, encoding) {
   if (chunk === void 0 || chunk === null || typeof chunk === "function") return null;
   if (Buffer.isBuffer(chunk)) return chunk;
@@ -199550,7 +199563,7 @@ function apiResponseConformance() {
       const operation2 = operationOf(req, res);
       if (!operation2) return;
       const contentType = mediaTypeOf(res.getHeader("content-type"));
-      const body = capturing() && res.writableFinished ? Buffer.concat(chunks).toString("utf8") : null;
+      const body = capturing() && res.writableFinished ? decodeCapturedBody(chunks, res.getHeader("content-encoding")) : null;
       recordConformance({
         kind: "response",
         operationId: operation2.operationId,
@@ -199634,10 +199647,10 @@ function compactHarnessMarkup(value2) {
 }
 function resolveAgentIdentifier(...candidates) {
   for (const candidate of candidates) {
-    const trimmed9 = candidate?.trim();
-    if (!trimmed9) continue;
-    if (trimmed9.toLowerCase() === "unknown") continue;
-    return trimmed9;
+    const trimmed = candidate?.trim();
+    if (!trimmed) continue;
+    if (trimmed.toLowerCase() === "unknown") continue;
+    return trimmed;
   }
   return null;
 }
@@ -199804,16 +199817,16 @@ async function loadQuestions(workspaceIds) {
     [...workspaceIds, askedAfter, QUESTION_LIMIT]
   );
 }
-function deliveredWindowStart(iso4) {
-  return new Date(Date.parse(iso4) - DELIVERED_WINDOW_MS).toISOString();
+function deliveredWindowStart(iso2) {
+  return new Date(Date.parse(iso2) - DELIVERED_WINDOW_MS).toISOString();
 }
 function parseFeedBefore(value2) {
   if (typeof value2 !== "string" || value2.trim() === "") return null;
-  const trimmed9 = value2.trim();
-  if (!ISO_UTC.test(trimmed9)) {
+  const trimmed = value2.trim();
+  if (!ISO_UTC.test(trimmed)) {
     throw new ApiError(400, "before must be an ISO-8601 UTC timestamp");
   }
-  return trimmed9;
+  return trimmed;
 }
 async function loadDelivered({
   workspaceIds,
@@ -201314,8 +201327,8 @@ var OWN_JSON_BODY_PREFIXES = [
   AGENT_REQUEST_HUMAN_ROUTE_PREFIX,
   AGENT_SESSION_INPUT_HUMAN_ROUTE_PREFIX
 ];
-function agentSessionRoutesOwnJsonBody(path29) {
-  return OWN_JSON_BODY_PREFIXES.some((prefix) => path29 === prefix || path29.startsWith(`${prefix}/`));
+function agentSessionRoutesOwnJsonBody(path28) {
+  return OWN_JSON_BODY_PREFIXES.some((prefix) => path28 === prefix || path28.startsWith(`${prefix}/`));
 }
 async function prepareMissionSessionChannel(_missionRef, _body) {
   sessionControlsGone();
@@ -201758,8 +201771,8 @@ function extractBearerToken(req) {
   return token || null;
 }
 function usesNonBrowserAuthSurface(req) {
-  const path29 = req.path || req.url || req.originalUrl;
-  return path29 === "/protocol" || path29.startsWith("/protocol/") || path29 === "/runner" || path29.startsWith("/runner/") || path29 === "/mcp" || path29.startsWith("/mcp/");
+  const path28 = req.path || req.url || req.originalUrl;
+  return path28 === "/protocol" || path28.startsWith("/protocol/") || path28 === "/runner" || path28.startsWith("/runner/") || path28 === "/mcp" || path28.startsWith("/mcp/");
 }
 function isLoopbackAddress(addr) {
   if (!addr) return false;
@@ -202334,7 +202347,7 @@ function createChatRouter(options) {
 }
 
 // chat-notification-dispatcher.ts
-var import_node_crypto46 = require("node:crypto");
+var import_node_crypto45 = require("node:crypto");
 
 // ../packages/core/service/push-notification-jobs.ts
 var PUSH_NOTIFICATION_DISPATCH_JOB_TYPE = "overlord.push_notification.dispatch.v1";
@@ -202349,7 +202362,7 @@ function isPushNotificationMode(value2) {
 }
 
 // apns-client.ts
-var import_node_crypto45 = require("node:crypto");
+var import_node_crypto44 = require("node:crypto");
 var import_node_http2 = __toESM(require("node:http2"), 1);
 var SANDBOX_HOST = "https://api.sandbox.push.apple.com";
 var PRODUCTION_HOST = "https://api.push.apple.com";
@@ -202378,7 +202391,7 @@ function apnsJwt(config4) {
   const signingInput = `${b64url(JSON.stringify({ alg: "ES256", kid: config4.keyId }))}.${b64url(
     JSON.stringify({ iss: config4.teamId, iat: now2 })
   )}`;
-  const signer = (0, import_node_crypto45.createSign)("SHA256");
+  const signer = (0, import_node_crypto44.createSign)("SHA256");
   signer.update(signingInput);
   signer.end();
   const signature = signer.sign({ key: config4.privateKey, dsaEncoding: "ieee-p1363" });
@@ -202966,7 +202979,7 @@ var ChatNotificationDispatcher = class extends PollLoop {
   db;
   options;
   send;
-  workerId = `chat-notifications:${(0, import_node_crypto46.randomUUID)()}`;
+  workerId = `chat-notifications:${(0, import_node_crypto45.randomUUID)()}`;
   /** One claim/deliver pass. Returns how many candidates it processed. */
   async tick() {
     return await this.poll() ?? 0;
@@ -203047,7 +203060,7 @@ function writeFailure(result2) {
 }
 async function closeMissionItemAsPerson(input2) {
   const actor = await personActor(input2.workspaceId, input2.workspaceUserId);
-  const now2 = nowIso2();
+  const now2 = nowIso();
   return requireDatabaseClient().transaction(async (tx) => {
     const item = await getMissionItem(tx, input2.itemId);
     if (!item) throw new ApiError(404, "Mission item not found");
@@ -203073,7 +203086,7 @@ async function restoreMissionItemAsPerson({
   supersededUnchanged = false
 }) {
   const actor = await personActor(workspaceId2, workspaceUserId);
-  const now2 = nowIso2();
+  const now2 = nowIso();
   return requireDatabaseClient().transaction(async (tx) => {
     const item = await getMissionItem(tx, itemId);
     if (!item) throw new ApiError(404, "Mission item not found");
@@ -203140,14 +203153,14 @@ function parseItemResolution(body) {
   if (reason !== void 0 && reason !== null && typeof reason !== "string") {
     throw new ApiError(400, "reason must be a string");
   }
-  const trimmed9 = reason?.trim() ?? "";
-  if (trimmed9.length > MISSION_ITEM_STATUS_REASON_MAX_LENGTH) {
+  const trimmed = reason?.trim() ?? "";
+  if (trimmed.length > MISSION_ITEM_STATUS_REASON_MAX_LENGTH) {
     throw new ApiError(
       400,
       `reason must be at most ${MISSION_ITEM_STATUS_REASON_MAX_LENGTH} characters`
     );
   }
-  return { status, reason: trimmed9 || null };
+  return { status, reason: trimmed || null };
 }
 async function resolveMissionItem(itemId, body) {
   const { status, reason } = parseItemResolution(body);
@@ -203602,7 +203615,7 @@ function boundComposeText(value2, maxChars) {
 var deliveryComposeWorker = new DeliveryComposeWorker();
 
 // desktop-oauth-handoff.ts
-var import_node_crypto47 = require("node:crypto");
+var import_node_crypto46 = require("node:crypto");
 var HANDOFF_TTL_MS = 6e4;
 var TICKET_PATTERN = /^[A-Za-z0-9_-]{32,128}$/;
 var handoffs = /* @__PURE__ */ new Map();
@@ -203613,7 +203626,7 @@ function discardExpiredHandoffs(now2 = Date.now()) {
 }
 function createOAuthHandoff(sessionToken, audience) {
   discardExpiredHandoffs();
-  const ticket = (0, import_node_crypto47.randomBytes)(32).toString("base64url");
+  const ticket = (0, import_node_crypto46.randomBytes)(32).toString("base64url");
   handoffs.set(ticket, { audience, sessionToken, expiresAt: Date.now() + HANDOFF_TTL_MS });
   return ticket;
 }
@@ -203659,7 +203672,7 @@ function beginDesktopGitHubOAuth(auth2, authBaseUrl2) {
 }
 
 // live-activities.ts
-var import_node_crypto48 = require("node:crypto");
+var import_node_crypto47 = require("node:crypto");
 var MAX_RUNNING = 2;
 var COMPLETION_HOLD_MS = 30 * 60 * 1e3;
 var START_TOKEN_MAX_LENGTH = 512;
@@ -203679,9 +203692,6 @@ function projectColor(settingsJson) {
   } catch {
     return "#2563eb";
   }
-}
-function asBool(value2) {
-  return value2 === true || value2 === 1;
 }
 function toSnapshot(row) {
   return {
@@ -203959,8 +203969,8 @@ async function buildLiveActivityContentState(db, profileId, now2 = /* @__PURE__ 
   );
   const running = runningRows.slice(0, MAX_RUNNING);
   const completion = rows.find((row) => {
-    if (asBool(row.has_executing_objective)) return false;
-    if (!asBool(row.has_completed_objective) && row.status_type !== "complete") return false;
+    if (isTruthyFlag(row.has_executing_objective)) return false;
+    if (!isTruthyFlag(row.has_completed_objective) && row.status_type !== "complete") return false;
     const updated = Date.parse(row.updated_at);
     return Number.isFinite(updated) && now2.getTime() - updated <= COMPLETION_HOLD_MS;
   });
@@ -203975,7 +203985,7 @@ async function buildLiveActivityContentState(db, profileId, now2 = /* @__PURE__ 
   };
 }
 function liveActivityContentHash(state2) {
-  return (0, import_node_crypto48.createHash)("sha256").update(
+  return (0, import_node_crypto47.createHash)("sha256").update(
     JSON.stringify(
       state2 && {
         running: state2.running,
@@ -204501,11 +204511,11 @@ async function markMissionSummarySeen(missionRef, body) {
 }
 
 // native-github-oauth.ts
-var import_node_crypto49 = require("node:crypto");
+var import_node_crypto48 = require("node:crypto");
 var FLOW_TTL_MS = 10 * 6e4;
 var RECOVERY_TTL_MS = 6e4;
 var MAX_FLOWS = 256;
-var digest5 = (value2) => (0, import_node_crypto49.createHash)("sha256").update(value2).digest("hex");
+var digest5 = (value2) => (0, import_node_crypto48.createHash)("sha256").update(value2).digest("hex");
 function cookieValue(request, name2) {
   const values = (request.headers.get("cookie") ?? "").split(";").map((value2) => value2.trim()).filter((value2) => value2.startsWith(`${name2}=`));
   return values.length === 1 ? values[0].slice(name2.length + 1) : void 0;
@@ -204574,7 +204584,7 @@ function createNativeGitHubOAuth(auth2, baseUrl, options = {}) {
         if (typeof payload.url !== "string") throw new Error("Missing GitHub authorization URL");
         const state2 = new URL(payload.url).searchParams.get("state");
         if (!state2) throw new Error("Missing GitHub OAuth state");
-        const marker = (0, import_node_crypto49.randomBytes)(32).toString("base64url");
+        const marker = (0, import_node_crypto48.randomBytes)(32).toString("base64url");
         const stateCookie = response.headers.getSetCookie().map((value2) => /^((?:__Secure-)?better-auth\.state)=([^;]+)/.exec(value2)).find(Boolean);
         const flow = {
           expiresAt: now2() + FLOW_TTL_MS,
@@ -204874,7 +204884,7 @@ var NotificationDispatcher = class extends WorkerJobPoller {
 var notificationDispatcher = new NotificationDispatcher();
 
 // oauth.ts
-var import_node_crypto50 = require("node:crypto");
+var import_node_crypto49 = require("node:crypto");
 var CLIENT_ID_PREFIX = "ovlc_";
 var AUTH_CODE_PREFIX = "ovla_";
 var AUTH_CODE_TTL_MS = 5 * 60 * 1e3;
@@ -204908,12 +204918,12 @@ function oauthSigningSecret() {
   return process.env.OVERLORD_OAUTH_SIGNING_SECRET?.trim() || process.env.BETTER_AUTH_SECRET?.trim() || "overlord-local-oauth-development-secret";
 }
 function signPayload(payload) {
-  return (0, import_node_crypto50.createHmac)("sha256", oauthSigningSecret()).update(payload).digest("base64url");
+  return (0, import_node_crypto49.createHmac)("sha256", oauthSigningSecret()).update(payload).digest("base64url");
 }
 function fixedTimeEqual(a5, b5) {
   const left = Buffer.from(a5);
   const right = Buffer.from(b5);
-  return left.length === right.length && (0, import_node_crypto50.timingSafeEqual)(left, right);
+  return left.length === right.length && (0, import_node_crypto49.timingSafeEqual)(left, right);
 }
 function jsonError(res, status, error64, description) {
   res.status(status).json({ error: error64, error_description: description });
@@ -205234,7 +205244,7 @@ async function handleOAuthApprove(req, res) {
       issuanceWorkspaceUserId: consent.issuanceWorkspace.workspaceUserId
     }
   );
-  const code = `${AUTH_CODE_PREFIX}${(0, import_node_crypto50.randomBytes)(32).toString("base64url")}`;
+  const code = `${AUTH_CODE_PREFIX}${(0, import_node_crypto49.randomBytes)(32).toString("base64url")}`;
   authorizationCodes.set(code, {
     clientId: parsed.clientId,
     redirectUri: parsed.redirectUri,
@@ -205278,7 +205288,7 @@ async function handleOAuthToken(req, res) {
     jsonError(res, 400, "invalid_target", "OAuth resource does not match the authorization code.");
     return;
   }
-  const challenge = (0, import_node_crypto50.createHash)("sha256").update(codeVerifier).digest("base64url");
+  const challenge = (0, import_node_crypto49.createHash)("sha256").update(codeVerifier).digest("base64url");
   if (!codeVerifier || challenge !== entry.codeChallenge) {
     await revokeOrphanedAccessToken(entry.accessToken);
     jsonError(res, 400, "invalid_grant", "PKCE verification failed.");
@@ -205751,6 +205761,9 @@ async function listObjectiveTranscript(query = {}) {
 }
 
 // project-automation-routes.ts
+var protocolSubcommandPattern = PROJECT_AUTOMATION_SUBCOMMANDS.map(
+  (name2) => name2.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+).join("|");
 var ALLOWED = [
   ["GET", /^\/api\/authorized-workspaces$/],
   ["GET", /^\/api\/projects$/],
@@ -205766,15 +205779,12 @@ var ALLOWED = [
   ["GET", /^\/api\/storage\/attachments\/[^/]+$/],
   ["GET", /^\/(?:api\/stream|realtime|sync\/(?:changes|baseline)|mcp)$/],
   ["POST", /^\/mcp$/],
-  [
-    "POST",
-    /^\/api\/protocol\/(?:create|load-context|search|discover-project|statuses|list-deliveries|objective-changes|attachment-list|attachment-download-url|auth-status)$/
-  ]
+  ["POST", new RegExp(`^/api/protocol/(?:${protocolSubcommandPattern})$`)]
 ];
 function projectAutomationRouteGuard(req, res, next) {
   if (getActiveTokenProjectIds() === null) return next();
-  const path29 = req.originalUrl.split("?")[0] ?? "";
-  if (ALLOWED.some(([method, pattern]) => req.method === method && pattern.test(path29)))
+  const path28 = req.originalUrl.split("?")[0] ?? "";
+  if (ALLOWED.some(([method, pattern]) => req.method === method && pattern.test(path28)))
     return next();
   res.status(404).json({ error: "Not found" });
 }
@@ -206141,7 +206151,7 @@ var RunQueueDispatchWorker = class extends WorkerJobPoller {
 var runQueueDispatchWorker = new RunQueueDispatchWorker();
 
 // ../packages/core/service/terminal-observation-probes.ts
-var import_node_crypto51 = require("node:crypto");
+var import_node_crypto50 = require("node:crypto");
 async function inspectTerminalInBackground({
   ctx,
   projectId,
@@ -206177,7 +206187,7 @@ async function inspectTerminalInBackground({
     );
     if (!anchor2) return null;
     const executable = launchSessionSnapshotFromMetadata(metadata)?.executionProvider.executable ?? "latch";
-    const backgroundProbeKey = (0, import_node_crypto51.createHash)("sha256").update(
+    const backgroundProbeKey = (0, import_node_crypto50.createHash)("sha256").update(
       JSON.stringify([
         ctx.workspace.id,
         projectId,
@@ -206359,12 +206369,12 @@ var TerminalSessionObserver = class extends PollLoop {
 var terminalSessionObserver = new TerminalSessionObserver();
 
 // webhook-security.ts
-var import_node_crypto52 = require("node:crypto");
+var import_node_crypto51 = require("node:crypto");
 var import_promises6 = __toESM(require("node:dns/promises"), 1);
 var import_node_net = require("node:net");
 function signWebhookPayload(secret, rawBody) {
   const timestamp2 = Math.floor(Date.now() / 1e3);
-  const signature = (0, import_node_crypto52.createHmac)("sha256", secret).update(`${timestamp2}.${rawBody}`).digest("hex");
+  const signature = (0, import_node_crypto51.createHmac)("sha256", secret).update(`${timestamp2}.${rawBody}`).digest("hex");
   return { header: `t=${timestamp2},v1=${signature}`, timestamp: timestamp2 };
 }
 function internalHostPatterns() {
@@ -206701,7 +206711,7 @@ async function recordSubscriptionFailure(client, subscriptionId, currentConsecut
 var webhookDispatcher = new WebhookDispatcher();
 
 // webhooks.ts
-var import_node_crypto53 = require("node:crypto");
+var import_node_crypto52 = require("node:crypto");
 var WEBHOOK_SECRET_SCHEME = "whsec";
 var SUBSCRIPTION_COLUMNS = "id, workspace_id, project_id, name, endpoint_url, secret, event_types_json, payload_mode, created_by_workspace_user_id, enabled, disabled_reason, consecutive_failures, last_success_at, last_failure_at, created_at, updated_at, revision";
 function parseEventTypes(json2) {
@@ -206734,7 +206744,7 @@ function toSubscriptionDto(row) {
   };
 }
 function generateWebhookSecret() {
-  return { secret: `${WEBHOOK_SECRET_SCHEME}_${(0, import_node_crypto53.randomBytes)(24).toString("hex")}` };
+  return { secret: `${WEBHOOK_SECRET_SCHEME}_${(0, import_node_crypto52.randomBytes)(24).toString("hex")}` };
 }
 function normalizeEventTypes(input2) {
   if (!Array.isArray(input2) || input2.length === 0) {
@@ -206829,8 +206839,8 @@ async function createWebhookSubscription(body) {
     );
     if (body.projectId) await assertProjectInWorkspace(tx, body.projectId, workspaceId2);
     const { secret } = generateWebhookSecret();
-    const id2 = newId2();
-    const now2 = nowIso2();
+    const id2 = newId();
+    const now2 = nowIso();
     await tx.run(
       `INSERT INTO webhook_subscriptions (
            id, workspace_id, project_id, name, endpoint_url, secret, event_types_json,
@@ -206919,7 +206929,7 @@ async function updateWebhookSubscription(id2, body) {
       changed.push("enabled", "disabled_reason");
     }
     if (setClauses.length === 0) return toSubscriptionDto(existing);
-    const now2 = nowIso2();
+    const now2 = nowIso();
     const revision3 = existing.revision + 1;
     const updated = await tx.run(
       `UPDATE webhook_subscriptions SET ${setClauses.join(", ")}, updated_at = ?, revision = ?
@@ -206945,7 +206955,7 @@ async function updateWebhookSubscription(id2, body) {
 async function deleteWebhookSubscription(id2) {
   await requireDatabaseClient().transaction(async (tx) => {
     const existing = await loadSubscriptionForUpdate(tx, id2, PERMISSIONS.WEBHOOK_DELETE);
-    const now2 = nowIso2();
+    const now2 = nowIso();
     await tx.run(
       `UPDATE webhook_subscriptions SET deleted_at = ?, updated_at = ?, revision = revision + 1 WHERE id = ?`,
       [now2, now2, id2]
@@ -206966,7 +206976,7 @@ async function rotateWebhookSecret(id2) {
   return requireDatabaseClient().transaction(async (tx) => {
     const existing = await loadSubscriptionForUpdate(tx, id2, PERMISSIONS.WEBHOOK_UPDATE);
     const { secret } = generateWebhookSecret();
-    const now2 = nowIso2();
+    const now2 = nowIso();
     const revision3 = existing.revision + 1;
     await tx.run(
       `UPDATE webhook_subscriptions SET secret = ?, updated_at = ?, revision = ? WHERE id = ?`,
@@ -206997,10 +207007,10 @@ async function testWebhookSubscription(id2) {
   const url2 = new URL(subscription.endpoint_url);
   await assertPublicWebhookTarget(url2);
   const envelope2 = {
-    id: newId2(),
+    id: newId(),
     apiVersion: "2026-07-01",
     type: "webhook.ping",
-    occurredAt: nowIso2(),
+    occurredAt: nowIso(),
     message: "This is a test delivery from Overlord. No mission data is included."
   };
   const rawBody = JSON.stringify(envelope2);
@@ -207042,7 +207052,7 @@ async function testWebhookSubscription(id2) {
           response_status, response_snippet, error, duration_ms, attempted_at)
        VALUES (?, ?, ?, ?, 'webhook.ping', 1, ?, NULL, ?, ?, ?)`,
     [
-      newId2(),
+      newId(),
       subscription.workspace_id,
       id2,
       // Ping attempts are not backed by a real outbox row; the FK requires one,
@@ -207051,15 +207061,15 @@ async function testWebhookSubscription(id2) {
       responseStatus,
       error64,
       Date.now() - startedAt,
-      nowIso2()
+      nowIso()
     ]
   );
   if (error64) throw new ApiError(502, `Test delivery failed: ${error64}`);
   return { ok: true, responseStatus };
 }
 async function ensurePingOutboxRow(client, subscriptionId, workspaceId2) {
-  const id2 = newId2();
-  const now2 = nowIso2();
+  const id2 = newId();
+  const now2 = nowIso();
   await client.run(
     `INSERT INTO outbox_messages (id, workspace_id, topic, payload_json, status, available_at, attempt_count, created_at, updated_at)
        VALUES (?, ?, 'webhook.ping', ?, 'cancelled', ?, 0, ?, ?)`,
@@ -207120,7 +207130,7 @@ async function redeliverWebhookDelivery(subscriptionId, outboxMessageId) {
   if (payloadSubscriptionId !== subscriptionId) {
     throw new ApiError(404, "Delivery does not belong to this subscription");
   }
-  const now2 = nowIso2();
+  const now2 = nowIso();
   await client.run(
     `UPDATE outbox_messages SET status = 'pending', available_at = ?, attempt_count = 0, last_error = NULL, updated_at = ?
        WHERE id = ?`,
@@ -207167,8 +207177,8 @@ async function getAuthorizedWorkspaceDiscovery() {
 }
 
 // app.ts
-var here2 = import_node_path34.default.dirname((0, import_node_url6.fileURLToPath)(__overlord_import_meta_url));
-var distDir = process.env.OVERLORD_WEBAPP_DIST ? import_node_path34.default.resolve(process.env.OVERLORD_WEBAPP_DIST) : import_node_path34.default.resolve(here2, "..", "dist");
+var here2 = import_node_path33.default.dirname((0, import_node_url6.fileURLToPath)(__overlord_import_meta_url));
+var distDir = process.env.OVERLORD_WEBAPP_DIST ? import_node_path33.default.resolve(process.env.OVERLORD_WEBAPP_DIST) : import_node_path33.default.resolve(here2, "..", "dist");
 var MIN_BACKEND_NODE_MAJOR = 24;
 function assertSupportedBackendNodeVersion() {
   const major = Number.parseInt(process.versions.node.split(".")[0] ?? "", 10);
@@ -207988,11 +207998,12 @@ app.delete(
 );
 app.get(
   "/api/activity-feed",
-  handle3(
-    (req) => listActivityFeed({
+  handle3(async (req, res) => {
+    const feed = await listActivityFeed({
       before: queryString(req, "before", { trim: false, first: false })
-    })
-  )
+    });
+    await sendMissionReadResponse(res, feed, "private, no-store");
+  })
 );
 app.get(
   "/api/objective-transcript",
@@ -208230,12 +208241,13 @@ app.get(
   // `GET /api/missions/:id/objectives` per mission.
   // `?includeAllCompleted=1` lifts the rolling completed-mission window that
   // otherwise bounds `complete`/`cancelled` missions (coo:941).
-  handle3(
-    (req) => listMissions(req.params.id, {
+  handle3(async (req, res) => {
+    const missions = await listMissions(req.params.id, {
       includeObjectives: queryFlag(req, "includeObjectives"),
       includeAllCompleted: queryFlag(req, "includeAllCompleted")
-    })
-  )
+    });
+    await sendMissionReadResponse(res, missions, "private, no-cache");
+  })
 );
 app.use(
   "/ext/everhour",
@@ -208796,7 +208808,7 @@ if (resolveServeSpa({ dialect: DATABASE_DIALECT }) && (0, import_node_fs22.exist
   app.use(import_express7.default.static(distDir));
   app.get("*", (req, res, next) => {
     if (req.path.startsWith("/api/")) return next();
-    res.sendFile(import_node_path34.default.join(distDir, "index.html"));
+    res.sendFile(import_node_path33.default.join(distDir, "index.html"));
   });
 }
 installRequestValidation(app);
