@@ -6,6 +6,7 @@
 // does not document fails. Event streams and binary bodies are checked for status
 // and media type only, and are never buffered. Unset (production), the middleware
 // does nothing.
+import { brotliDecompressSync, gunzipSync } from 'node:zlib';
 import { apiOperations } from '@overlord/contract/api';
 import type { NextFunction, Request, RequestHandler, Response } from 'express';
 import { z } from 'zod';
@@ -131,6 +132,20 @@ export function checkResponse(
 
 const MAX_CAPTURE_BYTES = 8 * 1024 * 1024;
 
+function decodeCapturedBody(chunks: Buffer[], encoding: unknown): string | null {
+  const body = Buffer.concat(chunks);
+  const options = { maxOutputLength: MAX_CAPTURE_BYTES };
+  try {
+    if (encoding === 'br') return brotliDecompressSync(body, options).toString('utf8');
+    if (encoding === 'gzip') return gunzipSync(body, options).toString('utf8');
+    return body.toString('utf8');
+  } catch (error) {
+    // Apply the same capture cap to the decoded and wire representations.
+    if ((error as NodeJS.ErrnoException).code === 'ERR_BUFFER_TOO_LARGE') return null;
+    return ''; // The malformed body fails the representation check.
+  }
+}
+
 function chunkBuffer(chunk: unknown, encoding: unknown): Buffer | null {
   if (chunk === undefined || chunk === null || typeof chunk === 'function') return null;
   if (Buffer.isBuffer(chunk)) return chunk;
@@ -194,7 +209,9 @@ export function apiResponseConformance(): RequestHandler {
       const contentType = mediaTypeOf(res.getHeader('content-type'));
       // A response cut short (client gone) is checked for status and media type only.
       const body =
-        capturing() && res.writableFinished ? Buffer.concat(chunks).toString('utf8') : null;
+        capturing() && res.writableFinished
+          ? decodeCapturedBody(chunks, res.getHeader('content-encoding'))
+          : null;
       recordConformance({
         kind: 'response',
         operationId: operation.operationId,

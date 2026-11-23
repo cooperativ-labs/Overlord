@@ -1,4 +1,5 @@
 import { PERMISSIONS } from '@overlord/auth';
+import type { RunQueueDto, RunQueueEntryDto } from '@overlord/contract';
 
 import {
   resolveMissionId,
@@ -24,6 +25,7 @@ import { ApiError } from '../errors.ts';
 import { readProtocolAddress } from './addressing.ts';
 import {
   boolFlag,
+  integerFlag,
   parseJsonInput,
   type ProtocolRequestBody,
   requireFlag,
@@ -39,36 +41,16 @@ import {
 // packages/core/service/run-queue.ts the REST sibling (backend/run-queue.ts)
 // calls. protocol.ts spreads `runQueueSubcommands` into its dispatch table.
 
-type QueueEntryProjection = {
-  id: string;
-  objectiveId: string;
-  objectiveDisplayId: string;
-};
-
-type QueueProjection = {
-  id: string;
-  name: string;
-  isDefault: boolean;
-  /** Mission this queue belongs to, or `null` for a free-standing project queue. */
-  missionId: string | null;
-  entries: QueueEntryProjection[];
-};
-
 type QueueOrderErrorDetails = {
   currentOrder: string[];
   runningEntryId: string | null;
 };
 
 function oneBasedQueuePosition(body: ProtocolRequestBody): number | undefined {
-  const raw = strFlag(body, '--position');
-  if (raw === undefined) return undefined;
-  if (!/^\d+$/.test(raw) || Number(raw) < 1 || !Number.isSafeInteger(Number(raw))) {
-    throw new ApiError(400, '--position must be a positive integer');
-  }
-  return Number(raw);
+  return integerFlag(body, '--position', { min: 1 });
 }
 
-function queueByRef(queues: QueueProjection[], ref: string): QueueProjection {
+function queueByRef(queues: RunQueueDto[], ref: string): RunQueueDto {
   const exactId = queues.find(queue => queue.id === ref);
   if (exactId) return exactId;
   const matches = queues.filter(queue => queue.name.toLowerCase() === ref.toLowerCase());
@@ -77,6 +59,14 @@ function queueByRef(queues: QueueProjection[], ref: string): QueueProjection {
     throw new ApiError(409, `Run Queue name is ambiguous in this project: ${ref}`);
   }
   throw new ApiError(404, `Run Queue not found: ${ref}`);
+}
+
+function entryMatchesRef(entry: RunQueueEntryDto, ref: string): boolean {
+  return entry.id === ref || entry.objectiveId === ref || entry.objectiveDisplayId === ref;
+}
+
+function queueEntries(queues: RunQueueDto[]): RunQueueEntryDto[] {
+  return queues.flatMap(queue => queue.entries);
 }
 
 /** Resolve a Run Queue's project from its explicit project, objective, or mission scope. */
@@ -127,14 +117,9 @@ async function reorderRunQueueFromProtocol(
 
   const projectId = await runQueueProjectIdFromProtocol(ctx, body);
   const projection = await listProjectRunQueues(ctx.db, projectId);
-  const queue = queueByRef(projection.queues as QueueProjection[], requireFlag(body, '--queue'));
+  const queue = queueByRef(projection.queues, requireFlag(body, '--queue'));
   const orderedEntryIds = orderedRefs.map(ref => {
-    const entry = queue.entries.find(
-      candidate =>
-        candidate.id === ref ||
-        candidate.objectiveId === ref ||
-        candidate.objectiveDisplayId === ref
-    );
+    const entry = queue.entries.find(candidate => entryMatchesRef(candidate, ref));
     if (!entry) throw new ApiError(404, `Run Queue entry not found: ${ref}`);
     return entry.id;
   });
@@ -159,10 +144,10 @@ async function addressedRunQueue(
   ctx: ServiceContext,
   body: ProtocolRequestBody,
   flag: string
-): Promise<{ projectId: string; queues: QueueProjection[]; queue: QueueProjection }> {
+): Promise<{ projectId: string; queues: RunQueueDto[]; queue: RunQueueDto }> {
   const projectId = await runQueueProjectIdFromProtocol(ctx, body);
   const projection = await listProjectRunQueues(ctx.db, projectId);
-  const queues = projection.queues as QueueProjection[];
+  const queues = projection.queues;
   return { projectId, queues, queue: queueByRef(queues, requireFlag(body, flag)) };
 }
 
@@ -233,7 +218,7 @@ async function reorderProjectRunQueuesFromProtocol(
 
   const projectId = await runQueueProjectIdFromProtocol(ctx, body);
   const projection = await listProjectRunQueues(ctx.db, projectId);
-  const queues = projection.queues as QueueProjection[];
+  const queues = projection.queues;
   const orderedQueueIds = orderedRefs.map(ref => queueByRef(queues, ref).id);
   return reorderProjectRunQueues(ctx.db, projectId, orderedQueueIds);
 }
@@ -265,20 +250,13 @@ async function queueObjectiveFromProtocol(
   }
 
   const projection = await listProjectRunQueues(ctx.db, objective.projectId);
-  const queues = projection.queues as QueueProjection[];
-  const existing = queues
-    .flatMap(queue => queue.entries)
-    .find(entry => entry.objectiveId === objective.id);
+  const queues = projection.queues;
+  const existing = queueEntries(queues).find(entry => entry.objectiveId === objective.id);
   const afterRef = strFlag(body, '--after');
   const after = afterRef
     ? queues
         .flatMap(queue => queue.entries.map(entry => ({ ...entry, queueId: queue.id })))
-        .find(
-          entry =>
-            entry.id === afterRef ||
-            entry.objectiveId === afterRef ||
-            entry.objectiveDisplayId === afterRef
-        )
+        .find(entry => entryMatchesRef(entry, afterRef))
     : undefined;
   if (afterRef && !after) throw new ApiError(404, `Queued predecessor not found: ${afterRef}`);
   if (after?.objectiveId === objective.id) {
@@ -323,7 +301,7 @@ async function queueObjectiveFromProtocol(
     queueRef || afterEntryId || hasFront || requestedPosition !== undefined
   );
   if (existing && !wantsMove) {
-    return queues.flatMap(queue => queue.entries).find(entry => entry.id === existing.id)!;
+    return queueEntries(queues).find(entry => entry.id === existing.id)!;
   }
   if (existing) {
     if (!selectedQueue) throw new ApiError(404, 'Run Queue not found');
@@ -354,9 +332,7 @@ async function dequeueObjectiveFromProtocol(
     throw new ApiError(400, '--project-id does not own the addressed objective');
   }
   const projection = await listProjectRunQueues(ctx.db, objective.projectId);
-  const entry = projection.queues
-    .flatMap(queue => queue.entries)
-    .find(item => item.objectiveId === objective.id);
+  const entry = queueEntries(projection.queues).find(item => item.objectiveId === objective.id);
   if (!entry) return { removed: false, objectiveId: objective.id };
   await removeRunQueueEntry(ctx.db, entry.id);
   return { removed: true, objectiveId: objective.id };
@@ -400,13 +376,11 @@ async function retryRunQueueEntryFromProtocol(
     projectId = row.project_id;
   }
   const projection = await listProjectRunQueues(ctx.db, projectId);
-  const entries = projection.queues.flatMap(queue => queue.entries) as QueueEntryProjection[];
+  const entries = queueEntries(projection.queues);
   const objective = objectiveRef ? await resolveObjectiveRef({ ctx, ref: objectiveRef }) : null;
   const entry = entries.find(candidate =>
     entryRef
-      ? candidate.id === entryRef ||
-        candidate.objectiveId === entryRef ||
-        candidate.objectiveDisplayId === entryRef
+      ? entryMatchesRef(candidate, entryRef)
       : candidate.objectiveId === objective!.id
   );
   if (!entry) {
@@ -419,21 +393,25 @@ async function retryRunQueueEntryFromProtocol(
 export const runQueueSubcommands: SubcommandTable = {
   'queue-objective': {
     permission: PERMISSIONS.EXECUTION_REQUEST_CREATE,
+    projectAutomation: 'denied',
     handler: (ctx, body) => queueObjectiveFromProtocol(ctx, body)
   },
 
   'dequeue-objective': {
     permission: PERMISSIONS.EXECUTION_REQUEST_CREATE,
+    projectAutomation: 'denied',
     handler: (ctx, body) => dequeueObjectiveFromProtocol(ctx, body)
   },
 
   'retry-queue-entry': {
     permission: PERMISSIONS.EXECUTION_REQUEST_CREATE,
+    projectAutomation: 'denied',
     handler: (ctx, body) => retryRunQueueEntryFromProtocol(ctx, body)
   },
 
   'reorder-run-queue': {
     permission: PERMISSIONS.EXECUTION_REQUEST_CREATE,
+    projectAutomation: 'denied',
     handler: (ctx, body) => reorderRunQueueFromProtocol(ctx, body)
   },
 
@@ -442,26 +420,31 @@ export const runQueueSubcommands: SubcommandTable = {
   // so these four are full-token operations by design.
   'create-run-queue': {
     permission: PERMISSIONS.PROJECT_UPDATE,
+    projectAutomation: 'denied',
     handler: (ctx, body) => createRunQueueFromProtocol(ctx, body)
   },
 
   'update-run-queue': {
     permission: PERMISSIONS.PROJECT_UPDATE,
+    projectAutomation: 'denied',
     handler: (ctx, body) => updateRunQueueFromProtocol(ctx, body)
   },
 
   'delete-run-queue': {
     permission: PERMISSIONS.PROJECT_UPDATE,
+    projectAutomation: 'denied',
     handler: (ctx, body) => deleteRunQueueFromProtocol(ctx, body)
   },
 
   'reorder-project-run-queues': {
     permission: PERMISSIONS.PROJECT_UPDATE,
+    projectAutomation: 'denied',
     handler: (ctx, body) => reorderProjectRunQueuesFromProtocol(ctx, body)
   },
 
   'run-queue': {
     permission: PERMISSIONS.OBJECTIVE_READ,
+    projectAutomation: 'denied',
     handler: async (ctx, body) => {
       const projection = await listProjectRunQueues(
         ctx.db,
@@ -471,7 +454,7 @@ export const runQueueSubcommands: SubcommandTable = {
       if (!queueRef) return projection;
       return {
         ...projection,
-        queues: [queueByRef(projection.queues as QueueProjection[], queueRef)]
+        queues: [queueByRef(projection.queues, queueRef)]
       };
     }
   }

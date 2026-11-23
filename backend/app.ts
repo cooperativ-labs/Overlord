@@ -95,6 +95,7 @@ import {
 } from './http/raw-upload.ts';
 import { deferMalformedBody, installRequestValidation } from './http/request-validation.ts';
 import { apiResponseConformance } from './http/response-conformance.ts';
+import { sendMissionReadResponse } from './http/mission-read-response.ts';
 import { asyncRoute, createRouteHandler } from './http/route-handler.ts';
 import { resolveServeSpa } from './http/serve-spa.ts';
 import {
@@ -1402,11 +1403,12 @@ app.delete(
 // workspace selection.
 app.get(
   '/api/activity-feed',
-  handle(req =>
-    listActivityFeed({
+  handle(async (req, res) => {
+    const feed = await listActivityFeed({
       before: queryString(req, 'before', { trim: false, first: false })
-    })
-  )
+    });
+    await sendMissionReadResponse(res, feed, 'private, no-store');
+  })
 );
 
 app.get(
@@ -1682,12 +1684,13 @@ app.get(
   // `GET /api/missions/:id/objectives` per mission.
   // `?includeAllCompleted=1` lifts the rolling completed-mission window that
   // otherwise bounds `complete`/`cancelled` missions (coo:941).
-  handle(req =>
-    listMissions(req.params.id, {
+  handle(async (req, res) => {
+    const missions = await listMissions(req.params.id, {
       includeObjectives: queryFlag(req, 'includeObjectives'),
       includeAllCompleted: queryFlag(req, 'includeAllCompleted')
-    })
-  )
+    });
+    await sendMissionReadResponse(res, missions, 'private, no-cache');
+  })
 );
 
 // Extension routers run behind `requireAuthenticatedSession` exactly like every

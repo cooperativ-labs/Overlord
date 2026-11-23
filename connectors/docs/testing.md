@@ -163,6 +163,14 @@ protocol surface, which requires a contract version bump first (asserted by the
 [drift guard](../../TEST_PLAN.md#34-contract-drift-guard)). This is the test that
 keeps connector growth contract-safe.
 
+Assess exact freeform chat resume for every new harness. Declare
+`savedChatResume` in the adapter descriptor and reference the evidence for its
+status. To claim support, identify the observed native ID, pin the tested
+version, and link an executable close-and-resume fixture that exercises the
+adapter's exact-ID launch and verifies the old history and a follow-up through
+Latch. Include an app or client restart. A documented CLI switch alone is
+insufficient. See the [saved freeform chat resume contract](../../contract/conformance.md#saved-freeform-chat-resume-conformance).
+
 ## Test Layout
 
 ```

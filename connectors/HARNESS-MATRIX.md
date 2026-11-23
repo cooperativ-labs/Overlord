@@ -42,6 +42,7 @@ Legend: ✅ supported (fixture-proven) · ⛔ unsupported (harness cannot) · �
 | `inject.nextTurn` | 🚧 not-implemented | 🚧 not-implemented | 🚧 not-implemented | ✅ supported | ✅ supported | ✅ supported | 🚧 not-implemented |
 | `terminal.concurrentAnswer` | ❓ unverified | ⛔ unsupported | ⛔ unsupported | ✅ supported | ⛔ unsupported | ✅ supported | ⛔ unsupported |
 | `terminal.statusSurface` | ❓ unverified | ✅ supported | ✅ supported | ✅ supported | ❓ unverified | 🚧 not-implemented | 🚧 not-implemented |
+| Saved chat resume | 🚧 not-implemented | ✅ supported | ❓ unverified | 🚧 not-implemented | 🚧 not-implemented | 🚧 not-implemented | 🚧 not-implemented |
 
 ## Open hazards
 

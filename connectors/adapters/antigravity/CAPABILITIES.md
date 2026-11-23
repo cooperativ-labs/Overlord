@@ -6,7 +6,7 @@
 
 **Harness version verified** `docs + agy changelog 1.5.13` · **range** `>=1.5.4` · **scheme** `semver`
 
-**Descriptor digest** `c99353d29093e78117e61a930e091a5bdba53952a29c578cad8c113b397a1474`
+**Descriptor digest** `de365807648036c961169528d2235bf6d51a04bf0bf540152f9149b67edbfea6`
 
 > The tier is derived from passing fixtures, never authored. `unsupported` means the harness
 > cannot do it — do not attempt it. `not-implemented` means it is buildable and unbuilt: that is
@@ -54,6 +54,16 @@ records objective-bound, non-exclusive `declared_edit`/`direct` evidence.
 Codec-normalized read, search, and fetch callbacks are silent no-ops. Mutation-capable
 callbacks without a normalized edit path, plus shell, generic, unknown, and unmapped
 callbacks, record unavailable evidence health.
+
+## Saved freeform chat resume
+
+**Status** 🚧 not-implemented · **Evidence** Latch docs/INTEGRATIONS.md#antigravity
+
+**Native command** `agy --conversation <conversation-id>`
+
+tracked as `coo:1370`
+
+The paired gateway has no Antigravity launch path or native Conversation Hub observer.
 
 ## Capabilities
 

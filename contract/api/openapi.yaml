@@ -3,10 +3,10 @@ info:
   title: Overlord API
   # info.version is the API description's own Semantic Version; it changes when
   # this document changes and is never compared with the contract version.
-  version: 7.1.0
+  version: 7.2.0
   # The contract version (contract/VERSION) this document belongs to. Written
   # only by `yarn version:contract`.
-  x-overlord-contract-version: 182.1.0
+  x-overlord-contract-version: 182.3.0
   description: >-
     Normative description of Overlord's REST surface (ADR 0006): one operation for every
     method and path the backend registers, at the path it is served (ADR 0007), excluding
@@ -5130,6 +5130,7 @@ paths:
         Aggregates every workspace of the active organization where the caller is an active member with
         `mission:read`; no workspace answers an empty feed rather than 403. Mission runs and questions are
         capped together; truncation is reported through `counts`. No raw payload JSON is exposed.
+        Successful reads send `Cache-Control: private, no-store` and may negotiate Brotli or gzip.
       security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
       parameters:
         - name: before
@@ -5145,6 +5146,8 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ActivityFeedDto' }
+        '304':
+          description: The caller's freshly authorized feed matches the HTTP precondition. No body.
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -6100,7 +6103,9 @@ paths:
         Requires `mission:read` on the project's workspace, and `objective:read` too with
         `includeObjectives`. Ordered by board position, newest sequence first on ties. `complete` and
         `cancelled` missions not updated in the last 21 days are omitted unless `includeAllCompleted` is
-        set.
+        set. Successful reads may negotiate Brotli or gzip, and permit only private caching with
+        revalidation on every reuse. The server authorizes the read and computes the current
+        representation before evaluating `If-None-Match`.
       security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
       parameters:
         - name: includeObjectives
@@ -6114,12 +6119,27 @@ paths:
           required: false
           description: Present and not `0`/`false` lifts the 21-day window on completed missions.
           schema: { type: string }
+        - name: If-None-Match
+          in: header
+          required: false
+          description: HTTP validator from an earlier read of this board and query variant.
+          schema: { type: string }
       responses:
         '200':
           description: The missions.
+          headers:
+            ETag:
+              description: Weak validator for the JSON board representation across content encodings.
+              schema: { type: string }
           content:
             application/json:
               schema: { $ref: '#/components/schemas/MissionList' }
+        '304':
+          description: The caller's current authorized board matches the validator. No body.
+          headers:
+            ETag:
+              description: Weak validator for the current board representation.
+              schema: { type: string }
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }

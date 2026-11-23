@@ -15,7 +15,13 @@ import { callerWorkspaceMemberships } from '../repository.ts';
 import { listWorkspaces } from '../workspaces.ts';
 
 import { readProtocolAddress } from './addressing.ts';
-import { type ProtocolRequestBody, requireFlag, requireFlagValue, strFlag, type SubcommandTable } from './flags.ts';
+import {
+  type ProtocolRequestBody,
+  requireFlag,
+  requireFlagValue,
+  strFlag,
+  type SubcommandTable
+} from './flags.ts';
 
 // ---- Auth, project, and workspace protocol subcommands --------------------
 //
@@ -158,11 +164,13 @@ export const projectSubcommands: SubcommandTable = {
   'auth-status': {
     // Intentionally ungated so any authenticated actor can check who it is.
     permission: null,
+    projectAutomation: 'admitted',
     handler: ctx => authStatus({ ctx })
   },
 
   'discover-project': {
     permission: PERMISSIONS.PROJECT_READ,
+    projectAutomation: 'admitted-with-project-id',
     handler: (ctx, body) =>
       discoverProject({
         ctx,
@@ -176,6 +184,7 @@ export const projectSubcommands: SubcommandTable = {
   // status *definitions* are edited in project settings, never over the protocol.
   statuses: {
     permission: PERMISSIONS.PROJECT_READ,
+    projectAutomation: 'admitted',
     handler: (ctx, body) =>
       listProjectStatuses({
         ctx,
@@ -190,6 +199,7 @@ export const projectSubcommands: SubcommandTable = {
     // Enforced per-target inside the handler (requireWorkspacePermission) so the
     // multi-workspace selection flow runs before any default-workspace gate.
     permission: null,
+    projectAutomation: 'denied',
     handler: (_ctx, body) => createProjectFromProtocol(body)
   },
 
@@ -200,6 +210,7 @@ export const projectSubcommands: SubcommandTable = {
   'register-target': {
     // Enforced per-target inside the handler, as for create-project.
     permission: null,
+    projectAutomation: 'denied',
     handler: (_ctx, body) => registerTargetFromProtocol(body)
   }
 };

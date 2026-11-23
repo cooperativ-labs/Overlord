@@ -1,6 +1,11 @@
 import type { NextFunction, Request, Response } from 'express';
 
 import { getActiveTokenProjectIds } from './db.ts';
+import { PROJECT_AUTOMATION_SUBCOMMANDS } from './protocol.ts';
+
+const protocolSubcommandPattern = PROJECT_AUTOMATION_SUBCOMMANDS.map(name =>
+  name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+).join('|');
 
 /** Contract v151 route inventory. A newly added route remains closed by default. */
 const ALLOWED: readonly [string, RegExp][] = [
@@ -18,10 +23,7 @@ const ALLOWED: readonly [string, RegExp][] = [
   ['GET', /^\/api\/storage\/attachments\/[^/]+$/],
   ['GET', /^\/(?:api\/stream|realtime|sync\/(?:changes|baseline)|mcp)$/],
   ['POST', /^\/mcp$/],
-  [
-    'POST',
-    /^\/api\/protocol\/(?:create|load-context|search|discover-project|statuses|list-deliveries|objective-changes|attachment-list|attachment-download-url|auth-status)$/
-  ]
+  ['POST', new RegExp(`^/api/protocol/(?:${protocolSubcommandPattern})$`)]
 ];
 
 export function projectAutomationRouteGuard(req: Request, res: Response, next: NextFunction): void {

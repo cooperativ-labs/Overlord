@@ -235,6 +235,10 @@ function validateDescriptor({ adapter, descriptor, errors }) {
     errors.push(at('adapter') + `: must equal the directory name (${adapter})`);
   }
 
+  if (!descriptor.savedChatResume) {
+    errors.push(at('savedChatResume') + ': every adapter must assess exact freeform chat resume');
+  }
+
   const capabilities = descriptor.capabilities ?? {};
   for (const id of CAPABILITY_IDS) {
     const node = capabilities[id];
@@ -259,6 +263,7 @@ function validateDescriptor({ adapter, descriptor, errors }) {
 function collectFixtureRefs(descriptor) {
   const refs = new Set();
   if (descriptor.binding?.fixture) refs.add(descriptor.binding.fixture);
+  if (descriptor.savedChatResume?.fixture) refs.add(descriptor.savedChatResume.fixture);
   if (descriptor.decisionHold?.fixture) refs.add(descriptor.decisionHold.fixture);
   if (descriptor.mutationHooks?.fixture) refs.add(descriptor.mutationHooks.fixture);
   for (const node of Object.values(descriptor.capabilities ?? {})) {
@@ -321,6 +326,17 @@ function runAdapterFixtures({ adapter, descriptor, errors }) {
       : unboundResult.observed?.stdout === '';
     if (!silent || unboundResult.observed?.stderr !== '') {
       errors.push(`${adapter}: unbound-session fixture must be silent`);
+    }
+  }
+  const resume = descriptor.savedChatResume;
+  if (resume?.status === 'supported') {
+    const result = results[resume.fixture];
+    if (
+      result?.kind !== 'saved-chat-resume' ||
+      result.observed?.adapter !== adapter ||
+      result.observed?.version !== resume.verifiedVersion
+    ) {
+      errors.push(adapter + ': resume support requires a matching close-and-resume fixture and version');
     }
   }
   if (descriptor.integrationShape !== 'controlPlane') {
@@ -498,6 +514,15 @@ function renderAdapterPage({ adapter, descriptor, tier, digest, fixtureResults }
     );
   }
 
+  const resume = descriptor.savedChatResume;
+  lines.push('## Saved freeform chat resume', '');
+  lines.push('**Status** ' + renderStatusCell(resume) + ' · **Evidence** ' + resume.evidenceRef, '');
+  if (resume.native) lines.push(`**Native command** \`${resume.native}\``, '');
+  if (resume.verifiedVersion) lines.push(`**Verified version** \`${resume.verifiedVersion}\``, '');
+  const resumeEvidence = renderEvidence(resume);
+  if (resumeEvidence) lines.push(resumeEvidence, '');
+  if (resume.reason && resume.status !== 'unsupported') lines.push(resume.reason, '');
+
   lines.push('## Capabilities', '');
   lines.push('| Capability | Status | Native | Evidence |', '| --- | --- | --- | --- |');
   for (const id of CAPABILITY_IDS) {
@@ -613,7 +638,7 @@ function renderMatrix({ adapters }) {
         .join(' | ')} |`
     );
   }
-  lines.push('');
+  lines.push('| Saved chat resume | ' + adapters.map(a => renderStatusCell(a.descriptor.savedChatResume)).join(' | ') + ' |', '');
 
   const hazardRows = adapters.flatMap(({ adapter, descriptor }) =>
     (descriptor.hazards ?? []).map(hazard => ({ adapter, hazard }))
@@ -931,6 +956,7 @@ function renderCatalog({ adapters }) {
     descriptorDigest: digest,
     descriptorSchemaVersion: descriptor.schemaVersion,
     harness: descriptor.harness,
+    savedChatResume: descriptor.savedChatResume,
     binding: {
       source: descriptor.binding.source,
       field: descriptor.binding.field ?? null,
@@ -1038,6 +1064,15 @@ export type HarnessDescriptor = {
     verifiedVersion?: string;
     versionRange?: string;
     versionScheme: 'semver' | 'calendar' | 'opaque';
+  };
+  savedChatResume: {
+    status: AgentSessionCapabilityStatus;
+    native?: string;
+    verifiedVersion?: string;
+    fixture?: string;
+    reason?: string;
+    evidenceRef: string;
+    trackedAs?: string;
   };
   binding: {
     source: 'env' | 'payload' | 'api' | 'none';

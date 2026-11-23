@@ -54,6 +54,12 @@ mutationHooks:
   fixture: fixtures/mutation-window-evidence.json
   notes: A completed tool frame is recorded, but no matching in-progress frame exists.
 
+savedChatResume:
+  status: not-implemented
+  trackedAs: 'coo:1370'
+  evidenceRef: 'Latch docs/INTEGRATIONS.md#other-harnesses'
+  reason: 'The Overlord control-plane observer is independent of the paired Latch freeform chat surface.'
+
 capabilities:
   observe.prompt:
     status: not-implemented

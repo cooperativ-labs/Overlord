@@ -9,7 +9,7 @@ import { createArtifact, updateArtifact } from '../repository.ts';
 import { readProtocolAddress } from './addressing.ts';
 import {
   hasFlag,
-  intFlag,
+  integerFlag,
   missionRefFlag,
   objectiveRefFlag,
   parseJsonInput,
@@ -27,17 +27,19 @@ export const artifactSubcommands: SubcommandTable = {
   // Shared context ---------------------------------------------------------
   'read-context': {
     permission: PERMISSIONS.MISSION_READ,
+    projectAutomation: 'denied',
     handler: (ctx, body) =>
       listSharedContext({
         ctx,
         missionId: missionRefFlag(body),
         keySubstring: strFlag(body, '--key') ?? null,
-        limit: intFlag(body, '--limit') ?? 50
+        limit: integerFlag(body, '--limit') ?? 50
       })
   },
 
   'write-context': {
     permission: PERMISSIONS.MISSION_UPDATE,
+    projectAutomation: 'denied',
     handler: (ctx, body) => {
       const valueJson = parseJsonInput<unknown>(body, '--value-json', '--value-file');
       const value = valueJson !== undefined ? valueJson : (strFlag(body, '--value') ?? '');
@@ -54,6 +56,7 @@ export const artifactSubcommands: SubcommandTable = {
   // stamps session/objective provenance when the agent is on a live turn.
   'add-artifact': {
     permission: PERMISSIONS.ARTIFACT_CREATE,
+    projectAutomation: 'denied',
     handler: (_ctx, body) => {
       const create: CreateArtifactBody = {
         type: requireFlag(body, '--type'),
@@ -86,8 +89,9 @@ export const artifactSubcommands: SubcommandTable = {
   // later objective or follow-up can revise an artifact created earlier.
   'update-artifact': {
     permission: PERMISSIONS.MISSION_UPDATE,
+    projectAutomation: 'denied',
     handler: (_ctx, body) => {
-      const expectedRevision = intFlag(body, '--expected-revision');
+      const expectedRevision = integerFlag(body, '--expected-revision');
       if (expectedRevision === undefined) {
         throw new ApiError(400, 'Missing required flag: --expected-revision');
       }
@@ -109,6 +113,7 @@ export const artifactSubcommands: SubcommandTable = {
 
   'attachment-list': {
     permission: PERMISSIONS.ARTIFACT_READ,
+    projectAutomation: 'admitted',
     handler: async (ctx, body) => {
       const missionId = missionRefFlag(body);
       const attachments = await listAttachments({
@@ -125,6 +130,7 @@ export const artifactSubcommands: SubcommandTable = {
 
   'attachment-download-url': {
     permission: PERMISSIONS.ARTIFACT_READ,
+    projectAutomation: 'admitted',
     handler: async (ctx, body) => {
       const missionId = missionRefFlag(body);
       const attachmentId = requireFlag(body, '--attachment-id');

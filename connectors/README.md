@@ -94,12 +94,15 @@ or the harness extension catalog (→ Extension System, see [Database module](..
 > alongside code drifts, and a matrix that is 60% accurate is worse than none because it is
 > trusted. Run `ovld agent-session capabilities <agent>` for the same answer in a terminal.
 
+The matrix also records exact resume for paired Latch-backed freeform chats.
+Every new adapter must assess it under the [connector admission checklist](docs/testing.md#f-new-connector-admission-gate).
+
 The table below is about **packaging**, not interaction: which files each adapter ships and,
 where a mechanism is absent, whether the gap is a decision or simply unported work — so a
 contributor adding an adapter can tell signal from neglect. Source of truth for the
 "ships" columns is each adapter's `conformance-manifest.yaml`.
 
-| Adapter       | Commands      | Hooks                                                 | Local MCP shim | MCP config        | Rules    | Native resume |
+| Adapter       | Commands      | Hooks                                                 | Local MCP shim | MCP config        | Rules    | Objective launch resume |
 | ------------- | ------------- | ----------------------------------------------------- | -------------- | ----------------- | -------- | ------------- |
 | `claude`      | `commands/`   | `hooks/hooks.json` (3 types)                          | —              | —                 | —        | —             |
 | `codex`       | —             | `.codex-plugin/hooks.json` + `scripts/*.sh` (2 types) | rendered       | `.mcp.json`       | —        | yes           |

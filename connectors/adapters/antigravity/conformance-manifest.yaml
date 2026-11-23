@@ -1,4 +1,4 @@
-contractVersion: "182.1.0"
+contractVersion: "182.3.0"
 componentType: connector
 componentKey: antigravity
 label: "Antigravity Connector"
@@ -14,7 +14,7 @@ connector:
   harnessCapabilities:
     path: connectors/adapters/antigravity/harness-capabilities.yaml
     schemaVersion: 1
-    digest: "c99353d29093e78117e61a930e091a5bdba53952a29c578cad8c113b397a1474"
+    digest: "de365807648036c961169528d2235bf6d51a04bf0bf540152f9149b67edbfea6"
   # ── END GENERATED ────────────────────────────────────────────────────────────
   installPath: "~/.gemini/config/plugins/overlord"
   managedFiles:

@@ -134,6 +134,27 @@ test('protocol update-artifact revises an existing artifact without a session', 
   assert.equal(updated.revision, 2);
 });
 
+test('protocol update-artifact rejects malformed expected revision', async () => {
+  const { artifactId, mission } = await createArtifactFixture();
+  const { runProtocolSubcommand } = await import('./protocol.ts');
+  for (const value of ['abc', '3abc', '']) {
+    await assert.rejects(
+      runProtocolSubcommand('update-artifact', {
+        flags: {
+          '--mission-id': mission.id,
+          '--artifact-id': artifactId,
+          '--expected-revision': value
+        }
+      }),
+      (error: unknown) =>
+        error instanceof ApiError &&
+        error.status === 400 &&
+        error.code === 'invalid_input' &&
+        /--expected-revision/.test(error.message)
+    );
+  }
+});
+
 test('creates a mid-turn artifact without a delivery', async () => {
   const project = await createProject({ name: `Create artifacts ${Date.now()}` });
   const mission = await createMission({

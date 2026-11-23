@@ -63,6 +63,13 @@ mutationHooks:
     objective-bound, non-exclusive `declared_edit`/`direct` evidence; a failed edit records
     `outcome_partial`, and `run_command` records `shell_activity_unverified`.
 
+savedChatResume:
+  status: not-implemented
+  trackedAs: 'coo:1370'
+  evidenceRef: 'Latch docs/INTEGRATIONS.md#antigravity'
+  reason: 'The paired gateway has no Antigravity launch path or native Conversation Hub observer.'
+  native: 'agy --conversation <conversation-id>'
+
 capabilities:
   observe.prompt:
     status: supported

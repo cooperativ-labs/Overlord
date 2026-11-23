@@ -1,13 +1,18 @@
 import { PERMISSIONS } from '@overlord/auth';
 import assert from 'node:assert/strict';
-import { mkdtempSync, readdirSync, readFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
-const tempDir = mkdtempSync(path.join('/tmp', 'ovld-protocol-subcommand-table-'));
+const scratch = process.env.OVERLORD_TMPDIR ?? path.join(import.meta.dirname, '../.overlord/tmp');
+mkdirSync(scratch, { recursive: true });
+const tempDir = mkdtempSync(path.join(scratch, 'ovld-protocol-subcommand-table-'));
 const { bootstrapIntegrationTestDb } = await import('./test-helpers.ts');
-await bootstrapIntegrationTestDb({ sqlitePath: path.join(tempDir, 'webapp.sqlite') });
+const { operatorWorkspaceUserId, setActiveWorkspaceUser } = await bootstrapIntegrationTestDb({
+  sqlitePath: path.join(tempDir, 'webapp.sqlite')
+});
+const { setActiveTokenAuth } = await import('./db.ts');
 const { ApiError } = await import('./errors.ts');
 const { runProtocolSubcommand, SUBCOMMAND_PERMISSIONS } = await import('./protocol.ts');
 
@@ -65,6 +70,75 @@ const EXPECTED_PERMISSIONS = {
   'create-project': null,
   'register-target': null
 };
+
+// The protocol subcommands named by contract/authorization.md.
+const EXPECTED_PROJECT_AUTOMATION = new Set([
+  'create',
+  'load-context',
+  'search',
+  'discover-project',
+  'statuses',
+  'list-deliveries',
+  'objective-changes',
+  'attachment-list',
+  'attachment-download-url',
+  'auth-status'
+]);
+
+const NOT_FOUND = {
+  status: 404,
+  message: 'Not found',
+  detail: undefined,
+  code: undefined
+};
+
+test('project automation dispatch admits only the contract subcommands', async () => {
+  setActiveTokenAuth({
+    workspaceUserId: operatorWorkspaceUserId,
+    tokenId: 'automation-token',
+    scopeGrants: [],
+    projectIds: ['selected-project']
+  });
+  try {
+    for (const name of Object.keys(SUBCOMMAND_PERMISSIONS)) {
+      // Omit mutation inputs. Admitted commands can still fail validation or RBAC.
+      const flags: Record<string, string> = {};
+      if (name === 'discover-project') flags['--project-id'] = 'selected-project';
+      if (name === 'search') flags['--response-version'] = '1';
+      const body = { flags };
+      if (EXPECTED_PROJECT_AUTOMATION.has(name)) {
+        try {
+          await runProtocolSubcommand(name, body);
+        } catch (error) {
+          assert.ok(error instanceof ApiError, `${name}: ${error}`);
+          assert.ok([400, 403].includes(error.status), `${name}: ${error.status} ${error.message}`);
+        }
+      } else {
+        await assert.rejects(() => runProtocolSubcommand(name, body), NOT_FOUND, name);
+      }
+    }
+    for (const name of ['no-such-subcommand', 'toString', 'constructor']) {
+      await assert.rejects(() => runProtocolSubcommand(name, {}), NOT_FOUND, name);
+    }
+    const invalidDiscoveryFlags: Record<string, string | boolean>[] = [
+      { '--directory': '/repo' },
+      { '--project-id': '' },
+      { '--project-id': true }
+    ];
+    for (const flags of invalidDiscoveryFlags) {
+      await assert.rejects(() => runProtocolSubcommand('discover-project', { flags }), NOT_FOUND);
+    }
+    await assert.rejects(
+      () =>
+        runProtocolSubcommand('create', {
+          flags: { '--unassigned-to-project': true, '--objective-instructions': 'Test objective' }
+        }),
+      NOT_FOUND
+    );
+  } finally {
+    setActiveWorkspaceUser(operatorWorkspaceUserId);
+  }
+});
 
 test('every protocol subcommand keeps its permission across the group split', () => {
   assert.deepEqual({ ...SUBCOMMAND_PERMISSIONS }, EXPECTED_PERMISSIONS);

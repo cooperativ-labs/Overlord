@@ -16,6 +16,7 @@ export type ProtocolAddress = {
 };
 
 /** Read the address consistently for workspace routing and handlers. */
+/** Read the address consistently for workspace routing and handlers. */
 export function readProtocolAddress(body: ProtocolRequestBody): ProtocolAddress {
   const read = (flag: string): string | null => {
     const value = body.flags?.[flag];

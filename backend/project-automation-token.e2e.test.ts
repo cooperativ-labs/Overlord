@@ -534,6 +534,85 @@ describe('issuance', () => {
 });
 
 describe('reads inside the selected project', () => {
+  it('revalidates the authorized board representation and negotiates its content encoding', async () => {
+    const board = `/api/projects/${P.projectId}/missions`;
+    const expanded = `${board}?includeObjectives=1`;
+    const identity = await full('GET', expanded, undefined, { 'Accept-Encoding': 'identity' });
+    assert.equal(identity.status, 200);
+    assert.equal(identity.headers.get('content-encoding'), null);
+    const etag = identity.headers.get('etag');
+    assert.ok(etag);
+    assert.match(etag, /^W\//);
+
+    for (const encoding of ['br', 'gzip']) {
+      const headers = { 'Accept-Encoding': encoding };
+      const encoded = await full('GET', expanded, undefined, headers);
+      assert.equal(encoded.status, 200);
+      assert.equal(encoded.headers.get('content-encoding'), encoding);
+      assert.equal(encoded.headers.get('etag'), etag);
+      assert.equal(encoded.text, identity.text);
+      assert.ok(Number(encoded.headers.get('content-length')) < Buffer.byteLength(identity.text));
+
+      const repeat = await full('GET', expanded, undefined, {
+        ...headers,
+        'Cache-Control': 'max-age=0',
+        'If-None-Match': etag
+      });
+      assert.equal(repeat.status, 304);
+      assert.equal(repeat.text, '');
+      assert.equal(repeat.headers.get('content-encoding'), null);
+      assert.equal(repeat.headers.get('cache-control'), 'private, no-cache');
+      const vary = repeat.headers.get('vary')?.toLowerCase().split(/,\s*/);
+      for (const header of ['accept-encoding', 'authorization', 'cookie']) {
+        assert.ok(vary?.includes(header));
+      }
+    }
+
+    const oldBoard = { 'Cache-Control': 'max-age=0', 'If-None-Match': etag };
+    assert.equal((await full('GET', board, undefined, oldBoard)).status, 200);
+    const mission = identity.json.find((entry: Json) => entry.id === P.missionId);
+    const missionPath = `/api/missions/${P.missionId}`;
+    const editedTitle = `${mission.title} updated`;
+    try {
+      await expectOk(full('PATCH', missionPath, { title: editedTitle }), 'update board mission');
+      const edited = await full('GET', expanded, undefined, oldBoard);
+      assert.equal(edited.status, 200);
+      assert.notEqual(edited.headers.get('etag'), etag);
+      assert.equal(edited.json.find((entry: Json) => entry.id === P.missionId).title, editedTitle);
+    } finally {
+      await expectOk(full('PATCH', missionPath, { title: mission.title }), 'restore board mission');
+    }
+
+    const foreignBoard = `/api/projects/${Q.projectId}/missions`;
+    const foreign = await full('GET', foreignBoard);
+    assert.equal(foreign.status, 200);
+    const foreignEtag = foreign.headers.get('etag');
+    assert.ok(foreignEtag);
+    const conditional = { 'Cache-Control': 'max-age=0', 'If-None-Match': foreignEtag };
+    assert.equal((await auto('GET', foreignBoard, undefined, conditional)).status, 404);
+    assert.equal((await request(null, 'GET', foreignBoard, undefined, conditional)).status, 401);
+  });
+
+  it('compresses current feed JSON and keeps reads fresh', async () => {
+    const route = '/api/activity-feed';
+    const encoded = await full('GET', route, undefined, { 'Accept-Encoding': 'br' });
+    assert.equal(encoded.status, 200);
+    assert.equal(encoded.headers.get('content-encoding'), 'br');
+    assert.equal(encoded.headers.get('cache-control'), 'private, no-store');
+    assert.ok(encoded.json.items.length > 0);
+    const etag = encoded.headers.get('etag');
+    assert.ok(etag);
+    const repeat = await full('GET', route, undefined, {
+      'Accept-Encoding': 'identity',
+      'Cache-Control': 'max-age=0',
+      'If-None-Match': etag
+    });
+    assert.equal(repeat.status, 200);
+    assert.ok(repeat.json.generatedAt > encoded.json.generatedAt);
+    assert.deepEqual(repeat.json.items, encoded.json.items);
+    assert.deepEqual(repeat.json.counts, encoded.json.counts);
+  });
+
   it('serves project P, its statuses, tags, missions, objectives, events, sessions, deliveries, artifacts, attachments and context', async () => {
     const projects = await expectOk(auto('GET', '/api/projects'), 'projects');
     assert.deepEqual(

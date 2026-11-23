@@ -1,4 +1,4 @@
-contractVersion: "182.1.0"
+contractVersion: "182.3.0"
 componentType: connector
 componentKey: codex-app-server
 label: "Codex app-server Connector"
@@ -14,7 +14,7 @@ connector:
   harnessCapabilities:
     path: connectors/adapters/codex-app-server/harness-capabilities.yaml
     schemaVersion: 1
-    digest: "62fe3dc93ee7f64f6fb52d48e88e10679c9a32a92abc6b16ace29571284fcbf2"
+    digest: "a36249e0aa02f150fe0d50fbf05d743c8a282ef821d3febcb7d509afa97359fb"
   # ── END GENERATED ────────────────────────────────────────────────────────────
   installPath: "~/.ovld/codex-app-server"
   managedFiles:

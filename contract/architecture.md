@@ -1146,6 +1146,24 @@ Specified in [protocol.md](protocol.md).
   and mission-question answers continue through their existing authorization
   and runner or control-plane delivery paths.
 
+### Mobile → Latch (Saved Freeform Chats)
+
+- **Ownership**: Mobile keeps the chat identity and verified native target
+  under the signed-in account and authenticated host key. Latch owns the paired
+  device authorization, original canonical launch directory, native binding,
+  idempotent resume, and the Conversation Hub. Overlord REST and objective
+  execution are outside this flow.
+- **Resume**: A user with the original pairing and control grant may request
+  resume after Latch confirms the terminal ended. Latch resolves the exact
+  native ID, original working directory and adapter launch locally and exposes
+  resume only on qualified harness versions. Mobile verifies the new terminal's
+  native binding before opening the Hub and retains the same chat row.
+- **Failure and compatibility**: A missing or ambiguous binding, missing
+  history, missing original environment, or uncertain launch leaves the saved
+  chat available for recovery. Retries use the same operation ID. A resume must
+  never select a different native conversation or start a fresh one. Older
+  gateways and older local records keep their existing live-chat behavior.
+
 ### Mobile → REST (Live Activity Push Surface)
 
 - **Transport**: Authenticated HTTPS/JSON with the existing Better Auth session or `out_…` bearer token; no ambient workspace input is accepted.

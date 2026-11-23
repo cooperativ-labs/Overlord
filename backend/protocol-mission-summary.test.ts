@@ -309,6 +309,20 @@ test('stale parallel prose is accepted and withheld, then published once through
   assert.equal(outdated.narrative?.state, 'outdated');
   assert.equal(outdated.narrative?.outstandingDeliveryId, delivered.deliveryId);
 
+  for (const command of ['delivery-summary-context', 'publish-delivery-summary']) {
+    await assert.rejects(
+      runProtocolSubcommand(command, {
+        flags: {
+          '--mission-id': mission.displayId,
+          '--delivery-id': delivered.deliveryId,
+          '--session-key': b.sessionKey,
+          '--connection-method': 'bogus'
+        }
+      }),
+      (error: unknown) => error instanceof Error && /--connection-method/.test(error.message)
+    );
+  }
+
   const context = (await runProtocolSubcommand('delivery-summary-context', {
     flags: {
       '--mission-id': mission.displayId,

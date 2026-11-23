@@ -65,6 +65,12 @@ mutationHooks:
     final status. The diff is used only for the approval card's line counts and never leaves
     the machine.
 
+savedChatResume:
+  status: not-implemented
+  trackedAs: 'coo:1370'
+  evidenceRef: 'Latch docs/INTEGRATIONS.md#other-harnesses'
+  reason: 'Overlord objective app-server threads use a separate control-plane path from paired Latch freeform chats.'
+
 capabilities:
   observe.prompt:
     status: supported

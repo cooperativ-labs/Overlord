@@ -2,6 +2,7 @@ import { type Permission } from '@overlord/auth';
 import { type ProtocolRequestBody } from '@overlord/contract';
 
 import { type ServiceContext } from '../../packages/core/service/context.ts';
+import { ATTACH_CONNECTION_METHODS } from '../../packages/core/service/protocol.ts';
 import { ApiError } from '../errors.ts';
 
 import { readProtocolAddress } from './addressing.ts';
@@ -18,14 +19,17 @@ export type { ProtocolRequestBody };
 export type Handler = (ctx: ServiceContext, body: ProtocolRequestBody) => unknown;
 
 /**
- * One protocol subcommand: its handler and the RBAC permission enforced before
- * dispatch. `null` means authorization happens inside the handler (or, for
- * `auth-status`, not at all); it is always an explicit statement, so a
- * subcommand cannot be registered without deciding its permission.
+ * A subcommand declares its RBAC permission and project automation admission.
+ * Dispatch enforces non-null permissions unless the handler owns that gate.
+ * When both address flags are supplied, dispatch validates their relationship
+ * unless the command is addressed by objective alone.
  */
 export type SubcommandEntry = {
   handler: Handler;
   permission: Permission | null;
+  projectAutomation: 'denied' | 'admitted' | 'admitted-with-project-id';
+  dispatchGate?: 'permission' | 'handler';
+  addressing?: 'mission-and-objective' | 'objective-only';
 };
 
 /** A group of subcommands, spread into the dispatch table in backend/protocol.ts. */
@@ -39,6 +43,24 @@ function flagsOf(body: ProtocolRequestBody): Record<string, string | boolean> {
 export function strFlag(body: ProtocolRequestBody, name: string): string | undefined {
   const value = flagsOf(body)[name];
   return typeof value === 'string' ? value : undefined;
+}
+
+/**
+ * Optional `--connection-method cli|mcp` (default cli). MCP servers send `mcp`
+ * so `agentInstructions` names MCP tools and payload fields instead of CLI flags.
+ */
+export function connectionMethodFlag(body: ProtocolRequestBody): string | undefined {
+  const value = strFlag(body, '--connection-method');
+  if (value === undefined) return undefined;
+  if (!(ATTACH_CONNECTION_METHODS as readonly string[]).includes(value)) {
+    throw new ApiError(
+      400,
+      `--connection-method must be one of: ${ATTACH_CONNECTION_METHODS.join(', ')}`,
+      undefined,
+      'invalid_input'
+    );
+  }
+  return value;
 }
 
 /** True when a boolean flag is present (`--flag` or `--flag true`). */
@@ -192,9 +214,21 @@ export function parseJsonObjectInput(
   return input as Record<string, unknown>;
 }
 
-export function intFlag(body: ProtocolRequestBody, name: string): number | undefined {
+export function integerFlag(
+  body: ProtocolRequestBody,
+  name: string,
+  options: { min?: number; max?: number; fallback?: number } = {}
+): number | undefined {
   const value = strFlag(body, name);
-  if (value === undefined) return undefined;
-  const parsed = Number.parseInt(value, 10);
-  return Number.isFinite(parsed) ? parsed : undefined;
+  if (value === undefined) return options.fallback;
+  const parsed = Number(value);
+  if (
+    !/^-?\d+$/.test(value) ||
+    !Number.isSafeInteger(parsed) ||
+    (options.min !== undefined && parsed < options.min) ||
+    (options.max !== undefined && parsed > options.max)
+  ) {
+    throw new ApiError(400, `${name} must be a valid integer`, undefined, 'invalid_input');
+  }
+  return parsed;
 }

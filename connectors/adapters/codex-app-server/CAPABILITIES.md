@@ -6,7 +6,7 @@
 
 **Harness version verified** `0.171.0` · **range** `>=0.170.0` · **scheme** `semver`
 
-**Descriptor digest** `62fe3dc93ee7f64f6fb52d48e88e10679c9a32a92abc6b16ace29571284fcbf2`
+**Descriptor digest** `a36249e0aa02f150fe0d50fbf05d743c8a282ef821d3febcb7d509afa97359fb`
 
 > The tier is derived from passing fixtures, never authored. `unsupported` means the harness
 > cannot do it — do not attempt it. `not-implemented` means it is buildable and unbuilt: that is
@@ -49,6 +49,14 @@ Codex holds an approval as a pending JSON-RPC request until some subscribed clie
 
 The fixture proves a matching native pre/post window. Runtime window evidence must retain
 the same session, call, workspace, tool, outcome, and direct-path semantics.
+
+## Saved freeform chat resume
+
+**Status** 🚧 not-implemented · **Evidence** Latch docs/INTEGRATIONS.md#other-harnesses
+
+tracked as `coo:1370`
+
+Overlord objective app-server threads use a separate control-plane path from paired Latch freeform chats.
 
 ## Capabilities
 

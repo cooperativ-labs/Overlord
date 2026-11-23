@@ -6,7 +6,7 @@
 
 **Harness version verified** `0.171.0` · **range** `>=0.124.0` · **scheme** `semver`
 
-**Descriptor digest** `689c59aa63597d90cf3ef64ac11fd339f543c9f381646f98e6c417c5c31bbc38`
+**Descriptor digest** `d25b74422bdd917eca9ea334cbff581cf5855a0b779d3937a2a65d2f93c6319a`
 
 > The tier is derived from passing fixtures, never authored. `unsupported` means the harness
 > cannot do it — do not attempt it. `not-implemented` means it is buildable and unbuilt: that is
@@ -51,6 +51,16 @@ Recorded pre/post shapes are separate calls and do not prove a paired window. A 
 
 The completion fixture proves post-only timing but exposes no normalized `file.edited`
 path. Runtime file evidence is unavailable for this adapter.
+
+## Saved freeform chat resume
+
+**Status** ❓ unverified · **Evidence** Latch docs/INTEGRATIONS.md#codex-cli
+
+**Native command** `codex resume <thread-id>`
+
+tracked as `coo:1370`
+
+Latch can capture a native ID and transcript path through the Codex SessionStart hook. Paired close-and-resume qualification is pending.
 
 ## Capabilities
 

@@ -56,6 +56,13 @@ mutationHooks:
     callbacks are silent no-ops. Mutation-capable callbacks without a normalized edit path, plus
     shell, generic, unknown, and unmapped callbacks, record unavailable evidence health.
 
+savedChatResume:
+  status: not-implemented
+  trackedAs: 'coo:1370'
+  evidenceRef: 'Latch docs/INTEGRATIONS.md#cursor'
+  reason: 'Latch observes Cursor in locally launched terminals. The paired gateway does not currently launch Cursor for freeform chat.'
+  native: 'agent --resume=<chat-id>'
+
 capabilities:
   observe.prompt:
     status: supported

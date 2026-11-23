@@ -1,4 +1,4 @@
-contractVersion: "182.1.0"
+contractVersion: "182.3.0"
 componentType: connector
 componentKey: pi
 label: "PI Connector"
@@ -14,7 +14,7 @@ connector:
   harnessCapabilities:
     path: connectors/adapters/pi/harness-capabilities.yaml
     schemaVersion: 1
-    digest: "00ac7950f03ff225b0ed39ab3b57b4db4d28f4fe0331d0ee50bcb2c51bfa6823"
+    digest: "fcbc037fcb1d5f878dd3fafd69d36fe1e715f5787c5bc5aed181d72839ae400d"
   # ── END GENERATED ────────────────────────────────────────────────────────────
   installPath: "~/.pi/agent"
   managedFiles:

@@ -6,7 +6,7 @@
 
 **Harness version verified** `2.1.329` · **range** `>=2.1.328` · **scheme** `semver`
 
-**Descriptor digest** `ea275756dcff0c1ed16b366f8bcfad9a185545d2c7fd55ab7afc6933bbad2552`
+**Descriptor digest** `9dec64e621957264f471e31371a5e55e30af5a8e92437e1e200707ccc1433ff3`
 
 > The tier is derived from passing fixtures, never authored. `unsupported` means the harness
 > cannot do it — do not attempt it. `not-implemented` means it is buildable and unbuilt: that is
@@ -53,6 +53,16 @@ records objective-bound, non-exclusive `declared_edit`/`direct` evidence.
 Codec-normalized read, search, and fetch callbacks are silent no-ops. Mutation-capable
 callbacks without a normalized edit path, plus shell, generic, unknown, and unmapped
 callbacks, record unavailable evidence health.
+
+## Saved freeform chat resume
+
+**Status** ✅ supported · **Evidence** Latch docs/INTEGRATIONS.md#claude-code
+
+**Native command** `claude --resume <session-id>`
+
+**Verified version** `2.1.330`
+
+fixtures: `fixtures/saved-chat-resume.json`
 
 ## Capabilities
 

@@ -69,6 +69,12 @@ function printDescriptor(descriptor: HarnessDescriptor): void {
       `${descriptor.binding.field ? ` ${descriptor.binding.field}` : ''})`
   );
   console.log(`  decision hold: ${descriptor.decisionHold.status}`);
+  const resume = descriptor.savedChatResume;
+  console.log(
+    `  saved chat resume: ${resume.status}` +
+      (resume.verifiedVersion ? ` (${resume.verifiedVersion})` : '')
+  );
+  console.log(`    ${resume.reason ?? resume.native ?? ''} [evidence: ${resume.evidenceRef}]`);
   console.log(`  descriptor digest: ${descriptor.descriptorDigest.slice(0, 16)}`);
   console.log('');
   for (const id of AGENT_SESSION_CAPABILITY_IDS) {

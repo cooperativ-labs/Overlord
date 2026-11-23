@@ -218,6 +218,37 @@ properties:
         then:
           required: [reason]
 
+  savedChatResume:
+    type: object
+    description: >
+      End-to-end exact native conversation resume for Latch-backed freeform chat.
+      Optional in published descriptors for compatibility with older connectors.
+    additionalProperties: false
+    required: [status, evidenceRef]
+    properties:
+      status:
+        '$ref': '#/$defs/capabilityStatus'
+      native:
+        type: string
+      verifiedVersion:
+        type: string
+        minLength: 1
+      fixture:
+        '$ref': '#/$defs/fixtureRef'
+      reason:
+        type: string
+      evidenceRef:
+        '$ref': '#/$defs/evidenceRef'
+      trackedAs:
+        '$ref': '#/$defs/trackerRef'
+    allOf:
+      - '$ref': '#/$defs/statusEvidenceRules'
+      - if:
+          properties: { status: { const: supported } }
+          required: [status]
+        then:
+          required: [native, verifiedVersion, fixture]
+
   # ── Capability vector ────────────────────────────────────────────────────────
 
   capabilities:

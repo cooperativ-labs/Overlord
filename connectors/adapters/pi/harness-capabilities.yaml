@@ -44,6 +44,12 @@ mutationHooks:
   fixture: fixtures/mutation-window-evidence.json
   reason: No recorded completion callback with the same native call id proves a pair.
 
+savedChatResume:
+  status: not-implemented
+  trackedAs: 'coo:1370'
+  evidenceRef: 'Latch docs/INTEGRATIONS.md#other-harnesses'
+  reason: 'Latch does not offer a paired freeform launch or Conversation Hub observer for Pi.'
+
 capabilities:
   observe.prompt:
     status: supported

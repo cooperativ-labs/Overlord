@@ -46,6 +46,17 @@ In addition to the requirements above, a connector must:
 6. **Make no network call from adapter code.** Adapters translate and hand off to the CLI, which
    owns transport, auth, retry, and redaction.
 
+### Saved freeform chat resume conformance
+
+Every newly authored connector descriptor declares a saved-chat resume status
+and references evidence. This status is independent of the mission session
+capability tier. Support requires an exact native ID capture, adapter-owned
+resume with that ID, a verified harness version, and a passing close-and-resume
+fixture which sees the same native ID, restored history through the Latch
+Conversation Hub, and a successful follow-up. The Mobile client gates on the
+authenticated Latch gateway and its per-chat result. Older published
+descriptors can omit the declaration.
+
 ### Mobile objective conversation conformance
 
 A Mobile consumer that adopts the optional Latch surface declares its use of

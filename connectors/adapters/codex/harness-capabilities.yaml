@@ -66,6 +66,13 @@ mutationHooks:
     non-exclusive `declared_edit`/`direct` evidence. `apply_patch` destinations are reduced only
     from its declared `*** Add|Update|Delete File:` headers; patch text itself is never retained.
 
+savedChatResume:
+  status: unverified
+  trackedAs: 'coo:1370'
+  evidenceRef: 'Latch docs/INTEGRATIONS.md#codex-cli'
+  reason: 'Latch can capture a native ID and transcript path through the Codex SessionStart hook. Paired close-and-resume qualification is pending.'
+  native: 'codex resume <thread-id>'
+
 capabilities:
   observe.prompt:
     status: supported

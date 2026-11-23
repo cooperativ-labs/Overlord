@@ -3,7 +3,7 @@
  * Executable fixture runner for connector harness-capability descriptors.
  *
  * A `supported` capability is only true if a fixture proves it, and a fixture is only
- * proof if it actually runs. This runner executes the six fixture kinds that are
+ * proof if it actually runs. This runner executes the fixture kinds that are
  * meaningful for a connector adapter and returns a structured pass/fail result.
  *
  *   native-payload  Assert the shape of a RECORDED native harness payload: the fields the
@@ -62,7 +62,8 @@ export const FIXTURE_KINDS = [
   'source-guard',
   'normalized-event',
   'decision-codec',
-  'mutation-window'
+  'mutation-window',
+  'saved-chat-resume'
 ];
 
 function fail(message) {
@@ -790,6 +791,27 @@ function runDecisionCodecFixture({ fixture, repoRoot, adapterDir }) {
  * @param {{ fixturePath: string, repoRoot: string }} args
  * @returns {{ ok: boolean, failures: string[], kind?: string, observed?: unknown }}
  */
+// Replay the bounded field evidence emitted by Latch's live harness fixture.
+function runSavedChatResumeFixture({ fixture }) {
+  const { adapter, version, original, resumed, followUp, gatewayRestarted } = fixture;
+  if (
+    !adapter || !version || gatewayRestarted !== true ||
+    !original?.terminal || !resumed?.terminal || original.terminal === resumed.terminal ||
+    !original.nativeId || original.nativeId !== resumed.nativeId
+  ) {
+    return fail('resume must use a new Latch terminal with the same native id after restart');
+  }
+  if (
+    !Array.isArray(original.hubMessages) || original.hubMessages.length === 0 ||
+    !Array.isArray(resumed.hubMessages) || !followUp || original.hubMessages.includes(followUp) ||
+    original.hubMessages.some((message, index) => resumed.hubMessages[index] !== message) ||
+    !resumed.hubMessages.slice(original.hubMessages.length).includes(followUp)
+  ) {
+    return fail('resume must restore the prior Hub messages and observe a fresh reply');
+  }
+  return { ok: true, failures: [], observed: { adapter, version } };
+}
+
 export function runFixture({ fixturePath, repoRoot }) {
   let fixture;
   try {
@@ -810,6 +832,7 @@ export function runFixture({ fixturePath, repoRoot }) {
     'native-payload': runNativePayloadFixture,
     'script-io': runScriptIoFixture,
     'source-guard': runSourceGuardFixture,
+    'saved-chat-resume': runSavedChatResumeFixture,
     'normalized-event': runNormalizedEventFixture,
     'decision-codec': runDecisionCodecFixture,
     'mutation-window': runMutationWindowFixture

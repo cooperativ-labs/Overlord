@@ -5,6 +5,43 @@ is the current version and must equal [VERSION](VERSION); `yarn version:contract
 writes its skeleton. Dates use ISO 8601 and describe the contract change, not
 merely the files edited.
 
+## [182.3.0] - 2026-11-23
+
+Contract impact: minor. Board and activity-feed reads support negotiated Brotli
+and gzip. The project mission list supports private HTTP cache revalidation
+with a bodyless 304 for a matching authorized representation.
+
+### Impact on modules
+
+- The REST backend evaluates permissions and reads the current representation
+  before validating a cached board. The activity feed is never stored in an
+  HTTP cache and retains its live timestamps and delivery cursors.
+- Web and native clients can use their HTTP stacks' content decoding and board
+  cache revalidation with the same JSON shapes and realtime invalidations.
+
+### Version
+
+- Minor contract version 182.3.0, from 182.2.0.
+
+## [182.2.0] - 2026-11-23
+
+Contract impact: minor. Define exact resume for paired Latch-backed freeform
+Compose chats and add the separate saved-chat resume qualification to connector
+descriptors. See ADR 0105.
+
+### Impact on modules
+
+- Mobile keeps the verified target and retry identity with the local chat and
+  requires verified native identity and restored Hub history before reconnecting.
+- Latch owns the resume endpoint, device authorization, qualified launch,
+  original environment, native identity verification and durable operation outcome.
+- Connector conformance requires evidence for each saved-chat resume status.
+  The Overlord API, mission sessions and their interaction tiers are unaffected.
+
+### Version
+
+- Minor contract version 182.2.0, from 182.1.0.
+
 ## [182.1.0] - 2026-11-22
 
 Contract impact: minor. Objective transcripts add optional nullable

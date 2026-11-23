@@ -6,7 +6,7 @@
 
 **Harness version verified** `0.83.0` · **range** `>=0.83.0 <0.84.0` · **scheme** `semver`
 
-**Descriptor digest** `00ac7950f03ff225b0ed39ab3b57b4db4d28f4fe0331d0ee50bcb2c51bfa6823`
+**Descriptor digest** `fcbc037fcb1d5f878dd3fafd69d36fe1e715f5787c5bc5aed181d72839ae400d`
 
 > The tier is derived from passing fixtures, never authored. `unsupported` means the harness
 > cannot do it — do not attempt it. `not-implemented` means it is buildable and unbuilt: that is
@@ -49,6 +49,14 @@ No recorded completion callback with the same native call id proves a pair.
 
 File attribution may not be synthesized for this adapter. Missing mutation evidence is
 reported as unavailable health, never recovered from a worktree-wide delta.
+
+## Saved freeform chat resume
+
+**Status** 🚧 not-implemented · **Evidence** Latch docs/INTEGRATIONS.md#other-harnesses
+
+tracked as `coo:1370`
+
+Latch does not offer a paired freeform launch or Conversation Hub observer for Pi.
 
 ## Capabilities
 

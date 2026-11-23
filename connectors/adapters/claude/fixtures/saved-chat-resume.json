@@ -1,0 +1,23 @@
+{
+  "fixtureVersion": 1,
+  "kind": "saved-chat-resume",
+  "adapter": "claude",
+  "version": "2.1.330",
+  "original": {
+    "terminal": "original-terminal",
+    "nativeId": "native-id",
+    "hubMessages": [
+      "original-assistant"
+    ]
+  },
+  "resumed": {
+    "terminal": "resumed-terminal",
+    "nativeId": "native-id",
+    "hubMessages": [
+      "original-assistant",
+      "follow-up-assistant"
+    ]
+  },
+  "gatewayRestarted": true,
+  "followUp": "follow-up-assistant"
+}

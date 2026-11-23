@@ -64,6 +64,15 @@ export type HarnessDescriptor = {
     versionRange?: string;
     versionScheme: 'semver' | 'calendar' | 'opaque';
   };
+  savedChatResume: {
+    status: AgentSessionCapabilityStatus;
+    native?: string;
+    verifiedVersion?: string;
+    fixture?: string;
+    reason?: string;
+    evidenceRef: string;
+    trackedAs?: string;
+  };
   binding: {
     source: 'env' | 'payload' | 'api' | 'none';
     field: string | null;
@@ -113,13 +122,20 @@ export const HARNESS_DESCRIPTORS: HarnessDescriptor[] = [
     "codec": "antigravity",
     "integrationShape": "callback",
     "capabilityTier": 1,
-    "descriptorDigest": "c99353d29093e78117e61a930e091a5bdba53952a29c578cad8c113b397a1474",
+    "descriptorDigest": "de365807648036c961169528d2235bf6d51a04bf0bf540152f9149b67edbfea6",
     "descriptorSchemaVersion": 1,
     "harness": {
       "name": "Antigravity CLI",
       "verifiedVersion": "docs + agy changelog 1.5.13",
       "versionRange": ">=1.5.4",
       "versionScheme": "semver"
+    },
+    "savedChatResume": {
+      "status": "not-implemented",
+      "trackedAs": "coo:1370",
+      "evidenceRef": "Latch docs/INTEGRATIONS.md#antigravity",
+      "reason": "The paired gateway has no Antigravity launch path or native Conversation Hub observer.",
+      "native": "agy --conversation <conversation-id>"
     },
     "binding": {
       "source": "payload",
@@ -300,13 +316,20 @@ export const HARNESS_DESCRIPTORS: HarnessDescriptor[] = [
     "codec": "claude",
     "integrationShape": "callback",
     "capabilityTier": 1,
-    "descriptorDigest": "ea275756dcff0c1ed16b366f8bcfad9a185545d2c7fd55ab7afc6933bbad2552",
+    "descriptorDigest": "9dec64e621957264f471e31371a5e55e30af5a8e92437e1e200707ccc1433ff3",
     "descriptorSchemaVersion": 1,
     "harness": {
       "name": "Claude Code",
       "verifiedVersion": "2.1.329",
       "versionRange": ">=2.1.328",
       "versionScheme": "semver"
+    },
+    "savedChatResume": {
+      "status": "supported",
+      "native": "claude --resume <session-id>",
+      "verifiedVersion": "2.1.330",
+      "evidenceRef": "Latch docs/INTEGRATIONS.md#claude-code",
+      "fixture": "fixtures/saved-chat-resume.json"
     },
     "binding": {
       "source": "payload",
@@ -534,13 +557,20 @@ export const HARNESS_DESCRIPTORS: HarnessDescriptor[] = [
     "codec": "codex",
     "integrationShape": "callback",
     "capabilityTier": 1,
-    "descriptorDigest": "689c59aa63597d90cf3ef64ac11fd339f543c9f381646f98e6c417c5c31bbc38",
+    "descriptorDigest": "d25b74422bdd917eca9ea334cbff581cf5855a0b779d3937a2a65d2f93c6319a",
     "descriptorSchemaVersion": 1,
     "harness": {
       "name": "Codex CLI",
       "verifiedVersion": "0.171.0",
       "versionRange": ">=0.124.0",
       "versionScheme": "semver"
+    },
+    "savedChatResume": {
+      "status": "unverified",
+      "trackedAs": "coo:1370",
+      "evidenceRef": "Latch docs/INTEGRATIONS.md#codex-cli",
+      "reason": "Latch can capture a native ID and transcript path through the Codex SessionStart hook. Paired close-and-resume qualification is pending.",
+      "native": "codex resume <thread-id>"
     },
     "binding": {
       "source": "payload",
@@ -761,13 +791,19 @@ export const HARNESS_DESCRIPTORS: HarnessDescriptor[] = [
     "codec": "codex-app-server",
     "integrationShape": "controlPlane",
     "capabilityTier": 3,
-    "descriptorDigest": "62fe3dc93ee7f64f6fb52d48e88e10679c9a32a92abc6b16ace29571284fcbf2",
+    "descriptorDigest": "a36249e0aa02f150fe0d50fbf05d743c8a282ef821d3febcb7d509afa97359fb",
     "descriptorSchemaVersion": 1,
     "harness": {
       "name": "Codex app server",
       "versionScheme": "semver",
       "verifiedVersion": "0.171.0",
       "versionRange": ">=0.170.0"
+    },
+    "savedChatResume": {
+      "status": "not-implemented",
+      "trackedAs": "coo:1370",
+      "evidenceRef": "Latch docs/INTEGRATIONS.md#other-harnesses",
+      "reason": "Overlord objective app-server threads use a separate control-plane path from paired Latch freeform chats."
     },
     "binding": {
       "source": "env",
@@ -1051,13 +1087,20 @@ export const HARNESS_DESCRIPTORS: HarnessDescriptor[] = [
     "codec": "cursor",
     "integrationShape": "callback",
     "capabilityTier": 1,
-    "descriptorDigest": "55c24b2e53d557d9c07e593effc230fc2ec72f985168765b5f23f494b2fc7c0b",
+    "descriptorDigest": "0a6482773fd45f10c8b30ed52da316a00d648df49b51ae066e1e0374b5a044ff",
     "descriptorSchemaVersion": 1,
     "harness": {
       "name": "Cursor Agent CLI",
       "verifiedVersion": "2026.08.04-aaa8809",
       "versionRange": ">=2026.07.01",
       "versionScheme": "calendar"
+    },
+    "savedChatResume": {
+      "status": "not-implemented",
+      "trackedAs": "coo:1370",
+      "evidenceRef": "Latch docs/INTEGRATIONS.md#cursor",
+      "reason": "Latch observes Cursor in locally launched terminals. The paired gateway does not currently launch Cursor for freeform chat.",
+      "native": "agent --resume=<chat-id>"
     },
     "binding": {
       "source": "payload",
@@ -1244,12 +1287,18 @@ export const HARNESS_DESCRIPTORS: HarnessDescriptor[] = [
     "codec": "opencode",
     "integrationShape": "controlPlane",
     "capabilityTier": 3,
-    "descriptorDigest": "4af085fa3987501b85e323fdbfcc0c3cfe1a8da47ef373f0b509082749d2c44f",
+    "descriptorDigest": "9965c917843589fbc9ea9fa313d962868c6f10a3519fb2334a1e1bf79fcbfa10",
     "descriptorSchemaVersion": 1,
     "harness": {
       "name": "OpenCode",
       "versionScheme": "semver",
       "versionRange": ">=0.5.0"
+    },
+    "savedChatResume": {
+      "status": "not-implemented",
+      "trackedAs": "coo:1370",
+      "evidenceRef": "Latch docs/INTEGRATIONS.md#other-harnesses",
+      "reason": "The Overlord control-plane observer is independent of the paired Latch freeform chat surface."
     },
     "binding": {
       "source": "env",
@@ -1437,13 +1486,19 @@ export const HARNESS_DESCRIPTORS: HarnessDescriptor[] = [
     "codec": "pi",
     "integrationShape": "extension",
     "capabilityTier": 1,
-    "descriptorDigest": "00ac7950f03ff225b0ed39ab3b57b4db4d28f4fe0331d0ee50bcb2c51bfa6823",
+    "descriptorDigest": "fcbc037fcb1d5f878dd3fafd69d36fe1e715f5787c5bc5aed181d72839ae400d",
     "descriptorSchemaVersion": 1,
     "harness": {
       "name": "Pi Coding Agent",
       "verifiedVersion": "0.83.0",
       "versionRange": ">=0.83.0 <0.84.0",
       "versionScheme": "semver"
+    },
+    "savedChatResume": {
+      "status": "not-implemented",
+      "trackedAs": "coo:1370",
+      "evidenceRef": "Latch docs/INTEGRATIONS.md#other-harnesses",
+      "reason": "Latch does not offer a paired freeform launch or Conversation Hub observer for Pi."
     },
     "binding": {
       "source": "api",
@@ -1635,7 +1690,7 @@ export const HARNESS_DESCRIPTORS: HarnessDescriptor[] = [
   }
 ];
 
-export const HARNESS_CATALOG_DIGEST = 'd0d425ba03bbe499091d6963d6e53620d1d08d9f6c5c7f77b2324d18f18eceb2';
+export const HARNESS_CATALOG_DIGEST = '4437fb4989a27af5a260febaead1e8a6f3a05059d31a96422edda7177fe9fc14';
 
 export function findHarnessDescriptor(adapter: string): HarnessDescriptor | undefined {
   return HARNESS_DESCRIPTORS.find(entry => entry.adapter === adapter);

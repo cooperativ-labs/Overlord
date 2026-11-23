@@ -8,12 +8,12 @@ import {
 } from '../../packages/core/service/delivery-summary-publication.ts';
 import {
   askQuestion,
-  ATTACH_CONNECTION_METHODS,
   attachSession,
   closeAgentMissionItems,
   connectSession,
   deliverSession,
   heartbeatSession,
+  instructionStyleFor,
   readAgentMissionItems,
   readAgentProjectItems,
   recordHookEvent,
@@ -34,7 +34,9 @@ import {
 } from './delivery-payload.ts';
 import {
   boolFlag,
+  connectionMethodFlag,
   externalSessionId,
+  integerFlag,
   missionRefFlag,
   objectiveRefFlag,
   parseJsonArrayInput,
@@ -46,11 +48,6 @@ import {
   type SubcommandTable
 } from './flags.ts';
 
-/** `--connection-method mcp` words publication instructions for MCP tools. */
-function publicationStyleFlag(body: Parameters<typeof strFlag>[0]): 'cli' | 'mcp' {
-  return strFlag(body, '--connection-method') === 'mcp' ? 'mcp' : 'cli';
-}
-
 // ---- Session lifecycle protocol subcommands -------------------------------
 //
 // attach/connect through deliver: the agent-session lifecycle, spread into the
@@ -60,24 +57,6 @@ function publicationStyleFlag(body: Parameters<typeof strFlag>[0]): 'cli' | 'mcp
 function captureBindingFlag(body: Parameters<typeof strFlag>[0]): CaptureBindingState | undefined {
   const value = strFlag(body, '--capture-binding');
   return value === undefined ? undefined : (value as CaptureBindingState);
-}
-
-/**
- * Optional `--connection-method cli|mcp` (default cli). MCP servers send `mcp`
- * so `agentInstructions` names MCP tools and payload fields instead of CLI flags.
- */
-export function connectionMethodFlag(body: Parameters<typeof strFlag>[0]): string | undefined {
-  const value = strFlag(body, '--connection-method');
-  if (value === undefined) return undefined;
-  if (!(ATTACH_CONNECTION_METHODS as readonly string[]).includes(value)) {
-    throw new ApiError(
-      400,
-      `--connection-method must be one of: ${ATTACH_CONNECTION_METHODS.join(', ')}`,
-      undefined,
-      'invalid_input'
-    );
-  }
-  return value;
 }
 
 /** Agent-declared shell/script outputs, deletes, and renames (`--declared-paths-json|file`). */
@@ -115,20 +94,13 @@ export function reportDraftInput(
       'invalid_input'
     );
   }
-  if (!/^\d+$/.test(revision)) {
-    throw new ApiError(
-      400,
-      '--expected-draft-revision must be a non-negative integer',
-      undefined,
-      'invalid_input'
-    );
-  }
-  return { expectedRevision: Number(revision) };
+  return { expectedRevision: integerFlag(body, '--expected-draft-revision', { min: 0 }) };
 }
 
 export const sessionSubcommands: SubcommandTable = {
   'project-items': {
     permission: PERMISSIONS.MISSION_READ,
+    projectAutomation: 'denied',
     handler: (ctx, body) =>
       readAgentProjectItems({
         ctx,
@@ -143,23 +115,25 @@ export const sessionSubcommands: SubcommandTable = {
           ?.split(',')
           .map(s => s.trim()),
         includeOwnMission: boolFlag(body, '--include-own-mission'),
-        limit: Number(strFlag(body, '--limit') ?? 20),
-        offset: Number(strFlag(body, '--offset') ?? 0)
+        limit: integerFlag(body, '--limit', { fallback: 20 })!,
+        offset: integerFlag(body, '--offset', { fallback: 0 })!
       })
   },
   'mission-items': {
     permission: PERMISSIONS.MISSION_READ,
+    projectAutomation: 'denied',
     handler: (ctx, body) =>
       readAgentMissionItems({
         ctx,
         missionId: missionRefFlag(body),
         sessionKey: sessionKeyFlag(body),
-        limit: Number(strFlag(body, '--limit') ?? 60),
-        offset: Number(strFlag(body, '--offset') ?? 0)
+        limit: integerFlag(body, '--limit', { fallback: 60 })!,
+        offset: integerFlag(body, '--offset', { fallback: 0 })!
       })
   },
   'close-items': {
     permission: PERMISSIONS.EVENT_CREATE,
+    projectAutomation: 'denied',
     handler: (ctx, body) =>
       closeAgentMissionItems({
         ctx,
@@ -176,6 +150,7 @@ export const sessionSubcommands: SubcommandTable = {
   // Session lifecycle ------------------------------------------------------
   attach: {
     permission: PERMISSIONS.SESSION_ATTACH,
+    projectAutomation: 'denied',
     handler: (ctx, body) =>
       attachSession({
         ctx,
@@ -197,6 +172,7 @@ export const sessionSubcommands: SubcommandTable = {
 
   connect: {
     permission: PERMISSIONS.SESSION_ATTACH,
+    projectAutomation: 'denied',
     handler: (ctx, body) =>
       connectSession({
         ctx,
@@ -209,6 +185,7 @@ export const sessionSubcommands: SubcommandTable = {
 
   update: {
     permission: PERMISSIONS.EVENT_CREATE,
+    projectAutomation: 'denied',
     handler: (ctx, body) => {
       rejectRemovedProtocolFlags(body, RETIRED_CHANGE_TRACKING_FLAGS);
       const payloadJson = parseJsonObjectInput(
@@ -238,6 +215,7 @@ export const sessionSubcommands: SubcommandTable = {
 
   'sync-changes': {
     permission: PERMISSIONS.EVENT_CREATE,
+    projectAutomation: 'denied',
     handler: (ctx, body) => {
       const changes =
         parseJsonArrayInput<unknown>(
@@ -264,6 +242,7 @@ export const sessionSubcommands: SubcommandTable = {
 
   heartbeat: {
     permission: PERMISSIONS.EVENT_CREATE,
+    projectAutomation: 'denied',
     handler: (ctx, body) =>
       heartbeatSession({
         ctx,
@@ -276,6 +255,7 @@ export const sessionSubcommands: SubcommandTable = {
 
   ask: {
     permission: PERMISSIONS.EVENT_CREATE,
+    projectAutomation: 'denied',
     handler: (ctx, body) =>
       askQuestion({
         ctx,
@@ -294,6 +274,7 @@ export const sessionSubcommands: SubcommandTable = {
 
   deliver: {
     permission: PERMISSIONS.EVENT_CREATE,
+    projectAutomation: 'denied',
     handler: (ctx, body) => {
       rejectRemovedProtocolFlags(body, RETIRED_CHANGE_TRACKING_FLAGS);
       const envelope = parseDeliveryPayloadEnvelope(body);
@@ -326,6 +307,7 @@ export const sessionSubcommands: SubcommandTable = {
   // open; --draft-id reads an abandoned or sealed draft of the same objective.
   'report-draft': {
     permission: PERMISSIONS.MISSION_READ,
+    projectAutomation: 'denied',
     handler: (ctx, body) =>
       readReportDraft({
         ctx,
@@ -340,6 +322,7 @@ export const sessionSubcommands: SubcommandTable = {
   // delivery id or by operation id; available after the session ended.
   'delivery-receipt': {
     permission: PERMISSIONS.MISSION_READ,
+    projectAutomation: 'denied',
     handler: (ctx, body) =>
       readDeliveryReceipt({
         ctx,
@@ -356,6 +339,7 @@ export const sessionSubcommands: SubcommandTable = {
   // authority is granted.
   'delivery-summary-context': {
     permission: PERMISSIONS.EVENT_CREATE,
+    projectAutomation: 'denied',
     handler: (ctx, body) =>
       readDeliverySummaryContext({
         ctx,
@@ -363,12 +347,13 @@ export const sessionSubcommands: SubcommandTable = {
         deliveryId: strFlag(body, '--delivery-id') ?? null,
         publicationId: strFlag(body, '--publication-id') ?? null,
         sessionKey: readProtocolAddress(body).sessionKey,
-        style: publicationStyleFlag(body)
+        style: instructionStyleFor(connectionMethodFlag(body))
       })
   },
 
   'publish-delivery-summary': {
     permission: PERMISSIONS.EVENT_CREATE,
+    projectAutomation: 'denied',
     handler: (ctx, body) => {
       const payload =
         parseJsonObjectInput(
@@ -386,13 +371,14 @@ export const sessionSubcommands: SubcommandTable = {
         sessionKey: readProtocolAddress(body).sessionKey,
         operationId: strFlag(body, '--operation-id') ?? payloadOperationId,
         narrative,
-        style: publicationStyleFlag(body)
+        style: instructionStyleFor(connectionMethodFlag(body))
       });
     }
   },
 
   'hook-event': {
     permission: PERMISSIONS.EVENT_CREATE,
+    projectAutomation: 'denied',
     handler: (ctx, body) =>
       recordHookEvent({
         ctx,
@@ -407,6 +393,7 @@ export const sessionSubcommands: SubcommandTable = {
 
   'resume-follow-up': {
     permission: PERMISSIONS.SESSION_ATTACH,
+    projectAutomation: 'denied',
     handler: (ctx, body) =>
       resumeFollowUp({
         ctx,

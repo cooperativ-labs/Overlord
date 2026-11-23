@@ -69,6 +69,13 @@ mutationHooks:
     callbacks are silent no-ops. Mutation-capable callbacks without a normalized edit path, plus
     shell, generic, unknown, and unmapped callbacks, record unavailable evidence health.
 
+savedChatResume:
+  status: supported
+  native: 'claude --resume <session-id>'
+  verifiedVersion: '2.1.330'
+  evidenceRef: 'Latch docs/INTEGRATIONS.md#claude-code'
+  fixture: fixtures/saved-chat-resume.json
+
 capabilities:
   observe.prompt:
     status: supported

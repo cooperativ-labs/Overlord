@@ -6,7 +6,7 @@
 
 **Harness version verified** `2026.08.04-aaa8809` · **range** `>=2026.07.01` · **scheme** `calendar`
 
-**Descriptor digest** `55c24b2e53d557d9c07e593effc230fc2ec72f985168765b5f23f494b2fc7c0b`
+**Descriptor digest** `0a6482773fd45f10c8b30ed52da316a00d648df49b51ae066e1e0374b5a044ff`
 
 > The tier is derived from passing fixtures, never authored. `unsupported` means the harness
 > cannot do it — do not attempt it. `not-implemented` means it is buildable and unbuilt: that is
@@ -55,6 +55,16 @@ records objective-bound, non-exclusive `declared_edit`/`direct` evidence.
 Codec-normalized read, search, and fetch callbacks are silent no-ops. Mutation-capable
 callbacks without a normalized edit path, plus shell, generic, unknown, and unmapped
 callbacks, record unavailable evidence health.
+
+## Saved freeform chat resume
+
+**Status** 🚧 not-implemented · **Evidence** Latch docs/INTEGRATIONS.md#cursor
+
+**Native command** `agent --resume=<chat-id>`
+
+tracked as `coo:1370`
+
+Latch observes Cursor in locally launched terminals. The paired gateway does not currently launch Cursor for freeform chat.
 
 ## Capabilities
 

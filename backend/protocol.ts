@@ -8,14 +8,12 @@ import {
   readProtocolAddress
 } from './protocol/addressing.ts';
 import { artifactSubcommands } from './protocol/artifacts.ts';
-import {
-  type ProtocolRequestBody,
-  type SubcommandTable
-} from './protocol/flags.ts';
+import { type ProtocolRequestBody, type SubcommandTable } from './protocol/flags.ts';
 import { missionSubcommands } from './protocol/missions.ts';
 import { ProjectSelectionRequiredError } from './protocol/project-refs.ts';
 import { projectSubcommands } from './protocol/projects.ts';
 import { runQueueSubcommands } from './protocol/run-queue.ts';
+import { searchSubcommands } from './protocol/search.ts';
 import { sessionSubcommands } from './protocol/session.ts';
 import {
   buildWebappServiceContext,
@@ -43,7 +41,7 @@ export type { ProtocolRequestBody } from './protocol/flags.ts';
 // into a service-layer call shared with the rest of Overlord.
 //
 // Subcommand handlers live in grouped modules under ./protocol/; each group
-// exports a table of `{ handler, permission }` entries that is merged below.
+// exports a table of subcommand entries that is merged below.
 // Shared flag helpers live in ./protocol/flags.ts, which imports nothing from
 // this file.
 
@@ -100,16 +98,11 @@ async function buildProtocolContext(
 /** Validate the mission/objective pair even when a command uses the objective only as scope. */
 async function validateObjectiveAddressing({
   ctx,
-  address,
-  subcommand
+  address
 }: {
   ctx: ServiceContext;
   address: ProtocolAddress;
-  subcommand: string;
 }): Promise<void> {
-  // update-objective is addressed by an objective alone and deliberately has
-  // no mission scope to validate against.
-  if (subcommand === 'update-objective') return;
   const { objectiveRef, missionRef } = address;
   if (!objectiveRef || !missionRef) return;
   await resolveObjectiveRef({ ctx, ref: objectiveRef, missionId: missionRef });
@@ -132,21 +125,24 @@ function mergeSubcommandTables(...tables: SubcommandTable[]): SubcommandTable {
 const SUBCOMMANDS = mergeSubcommandTables(
   sessionSubcommands,
   missionSubcommands,
+  searchSubcommands,
   runQueueSubcommands,
   artifactSubcommands,
   projectSubcommands
 );
 
 /**
- * RBAC permission each protocol subcommand requires, derived from the dispatch
- * table. Enforced before dispatch so a scoped `USER_TOKEN` (and any
- * under-privileged actor) is rejected uniformly — the `mission_lifecycle` scope
- * grants exactly the set used here. `auth-status` is intentionally ungated so
- * any authenticated actor can check who it is.
+ * RBAC permission declared by each protocol subcommand. Entries can delegate
+ * enforcement to the handler through `dispatchGate`.
  */
 export const SUBCOMMAND_PERMISSIONS: Record<string, Permission | null> = Object.fromEntries(
   Object.entries(SUBCOMMANDS).map(([name, entry]) => [name, entry.permission])
 );
+
+/** Subcommands admitted by the HTTP route guard. Dispatch checks flag requirements. */
+export const PROJECT_AUTOMATION_SUBCOMMANDS: readonly string[] = Object.entries(SUBCOMMANDS)
+  .filter(([, entry]) => entry.projectAutomation !== 'denied')
+  .map(([name]) => name);
 
 /**
  * Dispatch a single `ovld protocol <subcommand>` invocation to the service
@@ -158,31 +154,15 @@ export async function runProtocolSubcommand(
   body: ProtocolRequestBody
 ): Promise<unknown> {
   const address = readProtocolAddress(body);
-  if (
-    getActiveTokenProjectIds() !== null &&
-    !new Set([
-      'create',
-      'load-context',
-      'search',
-      'discover-project',
-      'statuses',
-      'list-deliveries',
-      'objective-changes',
-      'attachment-list',
-      'attachment-download-url',
-      'auth-status'
-    ]).has(subcommand)
-  ) {
-    throw new ApiError(404, 'Not found');
-  }
-  if (
-    getActiveTokenProjectIds() !== null &&
-    subcommand === 'discover-project' &&
-    !address.projectRef
-  ) {
-    throw new ApiError(404, 'Not found');
-  }
   const entry = Object.hasOwn(SUBCOMMANDS, subcommand) ? SUBCOMMANDS[subcommand] : undefined;
+  if (
+    getActiveTokenProjectIds() !== null &&
+    (!entry ||
+      entry.projectAutomation === 'denied' ||
+      (entry.projectAutomation === 'admitted-with-project-id' && !address.projectRef))
+  ) {
+    throw new ApiError(404, 'Not found');
+  }
   if (!entry) {
     throw new ApiError(
       404,
@@ -190,14 +170,12 @@ export async function runProtocolSubcommand(
       `Supported subcommands: ${Object.keys(SUBCOMMANDS).sort().join(', ')}`
     );
   }
-  // Search (v2, v3 and an exact --reference lookup; v1 is retired, ADR 0054)
-  // authorizes mission:read per workspace inside the repository fan-out, or per
-  // project for --reference (v155). A single ambient workspace check would deny
-  // valid secondary workspaces and reintroduce the pre-v95 scoping bug.
-  const requiredPermission = subcommand === 'search' ? null : entry.permission;
+  const requiredPermission = entry.dispatchGate === 'handler' ? null : entry.permission;
   try {
     const ctx = await buildProtocolContext(address, requiredPermission);
-    await validateObjectiveAddressing({ ctx, address, subcommand });
+    if (entry.addressing !== 'objective-only') {
+      await validateObjectiveAddressing({ ctx, address });
+    }
     ctx.canUpdateMissionItems = () =>
       actorCan(PERMISSIONS.MISSION_UPDATE, {
         workspaceId: ctx.workspace.id,

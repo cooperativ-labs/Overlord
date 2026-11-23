@@ -6,7 +6,7 @@
 
 **Harness version verified** _not verified_ · **range** `>=0.5.0` · **scheme** `semver`
 
-**Descriptor digest** `4af085fa3987501b85e323fdbfcc0c3cfe1a8da47ef373f0b509082749d2c44f`
+**Descriptor digest** `9965c917843589fbc9ea9fa313d962868c6f10a3519fb2334a1e1bf79fcbfa10`
 
 > The tier is derived from passing fixtures, never authored. `unsupported` means the harness
 > cannot do it — do not attempt it. `not-implemented` means it is buildable and unbuilt: that is
@@ -49,6 +49,14 @@ A completed tool frame is recorded, but no matching in-progress frame exists.
 
 The completion fixture proves post-only timing but exposes no normalized `file.edited`
 path. Runtime file evidence is unavailable for this adapter.
+
+## Saved freeform chat resume
+
+**Status** 🚧 not-implemented · **Evidence** Latch docs/INTEGRATIONS.md#other-harnesses
+
+tracked as `coo:1370`
+
+The Overlord control-plane observer is independent of the paired Latch freeform chat surface.
 
 ## Capabilities
 

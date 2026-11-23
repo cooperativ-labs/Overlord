@@ -159,6 +159,10 @@ extensionPoints:
 agentSession:
   descriptorSchema: contract/harness-capabilities.schema.yaml
   descriptorPath: connectors/adapters/<agent>/harness-capabilities.yaml
+  savedChatResume:
+    descriptorField: savedChatResume
+    fixtureKind: saved-chat-resume
+    description: 'Separate qualification for paired Latch freeform chats. Does not affect the mission session capability vocabulary or tier.'
   capabilityIds:
     - observe.prompt
     - observe.toolCall
@@ -202,6 +206,7 @@ agentSession:
       # the bounded redacted request card and exact allow/deny/defer bytes
     - mutation-window # Execute recorded pre/post mutation evidence and prove the adapter's
       # paired, post-only, or unsupported classification without inferring harness parity
+    - saved-chat-resume # Replay closed/restarted Latch history and matching native identity evidence
   rules:
     - 'capabilityTier is derived from passing fixtures only; it is never authored or persisted'
     - 'Promoting a status out of `unsupported` must replace evidenceRef with executable fixtures in the same change'

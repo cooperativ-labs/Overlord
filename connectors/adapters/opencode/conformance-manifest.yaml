@@ -1,4 +1,4 @@
-contractVersion: "182.1.0"
+contractVersion: "182.3.0"
 componentType: connector
 componentKey: opencode
 label: "OpenCode Connector"
@@ -14,7 +14,7 @@ connector:
   harnessCapabilities:
     path: connectors/adapters/opencode/harness-capabilities.yaml
     schemaVersion: 1
-    digest: "4af085fa3987501b85e323fdbfcc0c3cfe1a8da47ef373f0b509082749d2c44f"
+    digest: "9965c917843589fbc9ea9fa313d962868c6f10a3519fb2334a1e1bf79fcbfa10"
   # ── END GENERATED ────────────────────────────────────────────────────────────
   installPath: "~/.ovld/opencode"
   managedFiles:

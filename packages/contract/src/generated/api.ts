@@ -5,10 +5,10 @@
 import { z } from 'zod';
 
 /** The contract version (contract/VERSION) this API description belongs to. */
-export const contractVersion = "182.1.0";
+export const contractVersion = "182.3.0";
 
 /** The API description's own version (OpenAPI `info.version`). */
-export const apiVersion = "7.1.0";
+export const apiVersion = "7.2.0";
 
 /** A non-JSON request or response body: raw bytes (G3). */
 export type BinaryBody = Uint8Array | ArrayBuffer | Blob;
@@ -7512,6 +7512,14 @@ export interface GetProjectsByIdMissionsQueryParams {
 }
 export const getProjectsByIdMissionsQueryParamsSchema: z.ZodType<GetProjectsByIdMissionsQueryParams> = z.object({ "includeObjectives": z.exactOptional(z.string()), "includeAllCompleted": z.exactOptional(z.string()) });
 
+export interface GetProjectsByIdMissionsHeaderParams {
+  /**
+   * HTTP validator from an earlier read of this board and query variant.
+   */
+  "if-none-match"?: string;
+}
+export const getProjectsByIdMissionsHeaderParamsSchema: z.ZodType<GetProjectsByIdMissionsHeaderParams> = z.object({ "if-none-match": z.exactOptional(z.string()) });
+
 export interface GetExtEverhourProjectsByProjectIdLinkPathParams {
   /**
    * Project UUID (404 for an unknown, deleted or foreign project).
@@ -11262,7 +11270,7 @@ export const apiOperations = {
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
     parameters: { path: null, query: getActivityFeedQueryParamsSchema, header: null },
     requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: activityFeedDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: activityFeedDtoSchema } } }, "304": { headers: [], content: {} }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
   },
   /**
    * GET /api/objective-transcript: Full-text objective history across workspaces
@@ -11849,9 +11857,9 @@ export const apiOperations = {
     consumers: ["mobile","webapp"],
     extension: null,
     security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
-    parameters: { path: getProjectsByIdMissionsPathParamsSchema, query: getProjectsByIdMissionsQueryParamsSchema, header: null },
+    parameters: { path: getProjectsByIdMissionsPathParamsSchema, query: getProjectsByIdMissionsQueryParamsSchema, header: getProjectsByIdMissionsHeaderParamsSchema },
     requestBody: null,
-    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: missionListSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+    responses: { "200": { headers: ["ETag"], content: { "application/json": { kind: "json", schema: missionListSchema } } }, "304": { headers: ["ETag"], content: {} }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
   },
   /**
    * GET /ext/everhour/projects/{projectId}/link: Read a project's Everhour link
