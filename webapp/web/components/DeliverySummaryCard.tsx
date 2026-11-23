@@ -9,6 +9,7 @@ import {
   AccordionItem,
   AccordionTrigger
 } from '@/components/ui/accordion';
+import { formatTimestamp } from '@/lib/format-date';
 
 import { DeferredWorkItem } from './DeferredWorkItem.tsx';
 import { HumanActionDetails } from './HumanActionDetails.tsx';
@@ -35,11 +36,6 @@ export function deliveryOneSentenceSummary(delivery: DeliveryDto): string {
   const plain = stripMarkdownInline(source);
   const match = plain.match(/^[^.!?]+[.!?]?/);
   return match?.[0]?.trim() || plain.slice(0, 200);
-}
-
-export function formatDeliveryTimestamp(iso: string): string {
-  const date = new Date(iso);
-  return Number.isNaN(date.getTime()) ? iso : date.toLocaleString();
 }
 
 function DeliveryBulletSection({
@@ -327,7 +323,7 @@ export function MissionDeliveryCard({
             {objectiveTitle ?? 'Delivery'}
           </span>
           <span className="text-[11px] text-(--color-ink-dim)">
-            {formatDeliveryTimestamp(delivery.deliveredAt)}
+            {formatTimestamp(delivery.deliveredAt)}
           </span>
         </button>
         <DeliveryPresentation
@@ -356,7 +352,7 @@ export function MissionDeliveryCard({
           </span>
           <span className="flex flex-wrap items-center gap-2 text-[11px] text-(--color-ink-dim)">
             <Badge className="px-1.5 py-0 text-[10px] uppercase tracking-wide">Delivered</Badge>
-            <span>{formatDeliveryTimestamp(delivery.deliveredAt)}</span>
+            <span>{formatTimestamp(delivery.deliveredAt)}</span>
           </span>
           <p className="line-clamp-2 wrap-anywhere text-sm text-(--color-ink-dim)">{preview}</p>
         </span>

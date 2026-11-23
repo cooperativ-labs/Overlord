@@ -12,7 +12,7 @@ import {
 import { useProjectResources, useUpdateObjective } from '../../lib/queries.ts';
 import { useRepositoryMentionOptions } from '../../lib/useRepositoryMentionOptions.ts';
 import { cn } from '../../lib/utils.ts';
-import { MentionableTextarea } from '../MentionableTextarea.tsx';
+import { isWithinOwnedOverlay, MentionableTextarea } from '../MentionableTextarea.tsx';
 import { FileDropZone } from '../ui/file-drop-zone.tsx';
 
 import { AgentLaunchButton } from './AgentLaunchButton.tsx';
@@ -28,9 +28,6 @@ import { ObjectiveQueuePopover } from './ObjectiveQueuePopover.tsx';
 import { ObjectiveResourcePicker } from './ObjectiveResourcePicker.tsx';
 import { ObjectiveSaveButton } from './ObjectiveSaveButton.tsx';
 import { useObjectiveAgentSelection } from './useObjectiveAgentSelection.ts';
-
-/** Matches the owner attribute MentionableTextarea stamps on its portal menus. */
-const OVERLAY_OWNER_ATTRIBUTE = 'data-blank-mission-card-owner';
 
 const QUEUE_CONTROL_STATES = new Set<ObjectiveDto['state']>(['draft', 'submitted', 'launching']);
 
@@ -143,12 +140,7 @@ export function ComposerSavedObjective({
   saveRef.current = save;
 
   const isInsideCard = useCallback(
-    (target: EventTarget | null) => {
-      if (!(target instanceof Node)) return false;
-      if (rootRef.current?.contains(target)) return true;
-      const element = target instanceof Element ? target : target.parentElement;
-      return Boolean(element?.closest(`[${OVERLAY_OWNER_ATTRIBUTE}="${overlayOwnerId}"]`));
-    },
+    (target: EventTarget | null) => isWithinOwnedOverlay(target, rootRef.current, overlayOwnerId),
     [overlayOwnerId]
   );
 

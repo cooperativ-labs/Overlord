@@ -1,5 +1,5 @@
 import type { TokenScope, UserTokenDto, UserTokenStatus } from '@overlord/contract';
-import { Check, Copy, KeyRound, Trash2 } from 'lucide-react';
+import { KeyRound, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 
 import { Badge } from '@/components/ui/badge';
@@ -17,7 +17,6 @@ import {
 } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { formatDate } from '@/lib/format-date';
-import { useCopyToClipboard } from '@/lib/hooks/use-copy-to-clipboard';
 import {
   useAllProjects,
   useCreateUserToken,
@@ -26,6 +25,8 @@ import {
   useRevokeUserToken,
   useUserTokens
 } from '@/lib/queries';
+
+import { CopyField } from './CopyField.tsx';
 
 const SCOPE_LABELS: Record<TokenScope, string> = {
   full: 'Full user privileges',
@@ -348,39 +349,6 @@ function NewSecret({ secret, onDismiss }: { secret: string; onDismiss: () => voi
       <Button type="button" variant="ghost" size="sm" className="h-7" onClick={onDismiss}>
         Done
       </Button>
-    </div>
-  );
-}
-
-function CopyField({ label, value }: { label: string; value: string }) {
-  const { copied, copy } = useCopyToClipboard();
-
-  async function handleCopy() {
-    try {
-      await copy(value);
-    } catch {
-      /* clipboard may be unavailable; the value stays visible to copy manually */
-    }
-  }
-
-  return (
-    <div className="space-y-1">
-      <p className="text-xs text-muted-foreground">{label}</p>
-      <div className="flex items-center gap-2">
-        <code className="min-w-0 flex-1 truncate rounded bg-background px-2 py-1.5 font-mono text-xs">
-          {value}
-        </code>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="h-8 shrink-0"
-          onClick={handleCopy}
-        >
-          {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
-          {copied ? 'Copied' : 'Copy'}
-        </Button>
-      </div>
     </div>
   );
 }

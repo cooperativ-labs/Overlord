@@ -1,9 +1,9 @@
 import {
   type AgentCatalogAgentDto,
   type AgentLaunchConfigDto,
-  type AgentLaunchFlagDto,
   agentLaunchFlagKey,
   formatAgentLaunchFlagText,
+  normalizeAgentLaunchFlags,
   parseAgentLaunchFlagText
 } from '@overlord/contract';
 import { Plus, X } from 'lucide-react';
@@ -12,12 +12,6 @@ import { useEffect, useState } from 'react';
 import { Input } from '@/components/ui/input';
 
 const EMPTY_CONFIG: AgentLaunchConfigDto = { preCommand: '', flags: [] };
-
-function cleanFlags(flags: AgentLaunchFlagDto[]): AgentLaunchFlagDto[] {
-  return flags
-    .map(flag => ({ name: flag.name.trim(), value: flag.value?.trim() ? flag.value.trim() : null }))
-    .filter(flag => flag.name.length > 0);
-}
 
 function isConfigured(config: AgentLaunchConfigDto): boolean {
   return config.preCommand.trim().length > 0 || config.flags.length > 0;
@@ -44,7 +38,7 @@ function AgentDefaultsRow({
   useEffect(() => setPreCommand(config.preCommand), [config.preCommand]);
 
   function commit(next: AgentLaunchConfigDto) {
-    onCommit({ preCommand: next.preCommand.trim(), flags: cleanFlags(next.flags) });
+    onCommit({ preCommand: next.preCommand.trim(), flags: normalizeAgentLaunchFlags(next.flags) });
   }
 
   function addDraftFlag() {

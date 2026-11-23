@@ -1,7 +1,8 @@
 import {
   type AgentLaunchFlagDto,
   agentLaunchFlagKey,
-  formatAgentLaunchFlagText
+  formatAgentLaunchFlagText,
+  normalizeAgentLaunchFlags
 } from '@overlord/contract';
 
 const RECENT_AGENT_LAUNCH_FLAGS_STORAGE_PREFIX = 'overlord:recent-agent-launch-flags';
@@ -26,17 +27,7 @@ function readAllRecentFlags(): RecentFlagsByAgent {
     if (!parsed || typeof parsed !== 'object') return {};
     const result: RecentFlagsByAgent = {};
     for (const [agentKey, flags] of Object.entries(parsed)) {
-      if (!Array.isArray(flags)) continue;
-      const normalized: AgentLaunchFlagDto[] = [];
-      for (const item of flags) {
-        if (!item || typeof item !== 'object') continue;
-        const record = item as { name?: unknown; value?: unknown };
-        if (typeof record.name !== 'string') continue;
-        const name = record.name.trim();
-        if (!name) continue;
-        const value = typeof record.value === 'string' ? record.value.trim() || null : null;
-        normalized.push({ name, value });
-      }
+      const normalized = normalizeAgentLaunchFlags(flags);
       if (normalized.length > 0) {
         result[agentKey] = normalized.slice(0, MAX_RECENT_FLAGS_PER_AGENT);
       }

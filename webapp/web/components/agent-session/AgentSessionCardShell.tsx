@@ -1,6 +1,7 @@
 import type { LucideIcon } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
+import { formatTimestamp } from '../../lib/format-date.ts';
 import { Badge } from '../ui.tsx';
 
 // The gating and ordering rules are pure and unit-tested; they are re-exported here so a card
@@ -41,11 +42,6 @@ const TONE_CLASSES: Record<CardTone, { frame: string; icon: string; title: strin
     title: 'text-red-700 dark:text-red-300'
   }
 };
-
-export function formatCardTimestamp(iso: string): string {
-  const date = new Date(iso);
-  return Number.isNaN(date.getTime()) ? iso : date.toLocaleString();
-}
 
 /**
  * Live countdown for the remote decision window.
@@ -103,9 +99,7 @@ export function AgentSessionCardShell({
         <div className="flex flex-wrap items-center gap-2">
           <span className={`text-xs font-medium ${classes.title}`}>{title}</span>
           {badges}
-          <span className="text-[11px] text-(--color-ink-dim)">
-            {formatCardTimestamp(timestamp)}
-          </span>
+          <span className="text-[11px] text-(--color-ink-dim)">{formatTimestamp(timestamp)}</span>
         </div>
         {children}
       </div>

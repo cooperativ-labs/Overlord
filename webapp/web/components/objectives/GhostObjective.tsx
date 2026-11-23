@@ -16,7 +16,7 @@ import { keys, useProjectResources, useUpdateLaunchPreference } from '../../lib/
 import { refetchNonEverhourQueries } from '../../lib/query-invalidation.ts';
 import { useRepositoryMentionOptions } from '../../lib/useRepositoryMentionOptions.ts';
 import { cn } from '../../lib/utils.ts';
-import { MentionableTextarea } from '../MentionableTextarea.tsx';
+import { isWithinOwnedOverlay, MentionableTextarea } from '../MentionableTextarea.tsx';
 import { Button } from '../ui/button.tsx';
 import { FileDropZone } from '../ui/file-drop-zone.tsx';
 
@@ -60,9 +60,6 @@ type LaunchConfigBuffer = { agent: string; config: AgentLaunchConfigDto };
 
 /** Which of the card's portal popups is open. Clicks and focus inside them are not exits. */
 type PopupName = 'resource' | 'agent' | 'mention';
-
-/** Matches the owner attribute MentionableTextarea stamps on its portal menus. */
-const OVERLAY_OWNER_ATTRIBUTE = 'data-blank-mission-card-owner';
 
 /** Longest the commit waits for the post-create refetch before handing over. */
 const REFETCH_WAIT_CAP_MS = 8000;
@@ -331,12 +328,7 @@ export function GhostObjective({
   commitRef.current = commit;
 
   const isInsideCard = useCallback(
-    (target: EventTarget | null) => {
-      if (!(target instanceof Node)) return false;
-      if (rootRef.current?.contains(target)) return true;
-      const element = target instanceof Element ? target : target.parentElement;
-      return Boolean(element?.closest(`[${OVERLAY_OWNER_ATTRIBUTE}="${overlayOwnerId}"]`));
-    },
+    (target: EventTarget | null) => isWithinOwnedOverlay(target, rootRef.current, overlayOwnerId),
     [overlayOwnerId]
   );
 
