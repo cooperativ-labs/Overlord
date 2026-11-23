@@ -58,7 +58,7 @@ Behaviour notes:
 - **#16.** `normalizeAgentLaunchFlags` also accepts legacy `string[]` entries in localStorage,
   which the old loop silently dropped.
 
-Net result: about 330 lines removed across 50 files.
+Net result: about 260 net lines removed across 68 code files (439 added, 698 deleted).
 
 ## Divergent copies that look like bugs — need an owner decision
 
