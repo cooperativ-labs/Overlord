@@ -1033,7 +1033,7 @@ export async function dispatchMcpRequest(
       case 'initialize':
         return success(request.id, {
           protocolVersion: MCP_PROTOCOL_VERSION,
-          serverInfo: { name: 'overlord', version: '0.1.0' },
+          serverInfo: { name: 'overlord', version: '0.3.84' },
           instructions:
             'Overlord manages explicit user-authorized work. Resolve project identity before creating work, use read tools before writes, and call session lifecycle tools only when the user explicitly asks to begin, update, or deliver mission work.',
           capabilities: {

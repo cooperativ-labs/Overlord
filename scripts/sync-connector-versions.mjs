@@ -33,6 +33,11 @@ const MCP_SERVER_INFO_TARGETS = [
   {
     path: 'connectors/core/scripts/overlord-mcp.mjs',
     serverName: 'overlord-__OVERLORD_ADAPTER_KEY__'
+  },
+  // Standalone MCP server users add directly to ChatGPT and other MCP clients.
+  {
+    path: 'mcp/server.ts',
+    serverName: 'overlord'
   }
 ];
 

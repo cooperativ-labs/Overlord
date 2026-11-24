@@ -26,6 +26,7 @@ Do **not** skip this step when only one adapter changes. All agent connectors sh
 - `connectors/adapters/cursor/.cursor-plugin/plugin.json`
 - `connectors/adapters/antigravity/plugin.json`
 - `connectors/core/scripts/overlord-mcp.mjs` (`serverInfo.version`) — the single source for the Codex, Cursor, and Antigravity local MCP shims, which are rendered per adapter at setup time
+- `mcp/server.ts` (`serverInfo.version`) — the standalone Overlord MCP server added directly to ChatGPT and other MCP clients
 
 Never hand-edit those version fields in multiple files. Update `connectors/VERSION` through the script, then sync.
 
