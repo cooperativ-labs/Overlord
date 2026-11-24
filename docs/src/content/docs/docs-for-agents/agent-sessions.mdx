@@ -21,10 +21,12 @@ not be edited.
 ## Shared diagnostic order
 
 1. Confirm `OVERLORD_SESSION_CHANNEL_ID` exists in the launched process. Without it, the hook
-   must exit before spawning `ovld`; silence is correct. As of the Latch v2 cutover, neither
-   `ovld launch` nor a runner-dispatched launch currently calls `createSessionChannel`, so
-   expect this variable to be absent for every session today — that is the current state of
-   launch wiring, not evidence of a broken adapter. Do not spend time debugging a specific
+   must exit before spawning `ovld`; silence is correct. As of the Latch v2 cutover, the only
+   launch that mints a channel is a Codex objective in app-server mode (ADR 0092: `POST
+   /api/objectives/{id}/session-channels`, `launch_kind = 'control_plane'`, adapter
+   `codex-app-server` only; any other key answers 400 `adapter_not_control_plane`). Expect the
+   variable to be absent for every other session — that is the current state of launch wiring,
+   not evidence of a broken adapter. Do not spend time debugging a specific
    connector on this signal alone. A channel with `launch_kind = 'protocol'` is not a launch
    channel: `ovld protocol ask` creates it, without a credential or lease, so a blocking
    question has a request to hang off (ADR 0065). Its existence does not mean hooks can
@@ -49,7 +51,8 @@ harness and is the only Decide path live today:
    session has none.
 2. A person answers in the mission panel or with `ovld requests resolve`. Answerability is decided
    per read from the mission's Latch terminal session: `AgentRequestDto.delivery.mode` is `latch`
-   or `read_only`.
+   or `read_only`. A request on a live `control_plane` channel instead reads `control_plane` and
+   bypasses steps 3 and the Latch diagnostics below (see the Codex app server section).
 3. The backend queues a `sendLatchMessage` job for the execution target's runner, which posts the
    answer into the agent's Latch conversation. Latch must have a conversation connector for the
    harness that accepts `send_message`: Claude Code, Codex and Cursor do; other harnesses are
@@ -77,6 +80,8 @@ Diagnose a missing answer from `delivery`, not from `resolved`:
 
 **Shape:** callback plugin. **Observe (supported):** `UserPromptSubmit` and `PostToolUse` file edits;
 `PreToolUse`, tool results, and `SessionStart` lifecycle are `not-implemented`.
+**Terminal status surface (supported):** the opt-in status line (`ovld agent-setup claude
+--status-line`, `ovld status-line --agent claude`).
 **Decide (not-implemented — target shape):** `PermissionRequest`. **Inject
 (not-implemented — target shape):** `asyncRewake` during a turn plus a Stop boundary.
 
@@ -127,6 +132,8 @@ ships.
 
 **Shape:** callback plugin using documented hooks. **Observe (supported):** `UserPromptSubmit`
 and `PostToolUse` file edits; pre-tool, tool-result, and `SessionStart` lifecycle are `not-implemented`.
+**Terminal status surface (supported):** the status line provider in Codex 0.171+ (feature
+`tui_extensions_statusline`, selected by `ovld agent-setup codex --status-line`).
 **Decide (not-implemented — target shape):** `PermissionRequest`. **Inject
 (not-implemented — target shape):** Stop-boundary delivery.
 
@@ -142,7 +149,9 @@ design to build against, not live behavior.
 - The response is nested `hookSpecificOutput.decision.behavior`; `ask` deliberately emits no
   bytes so Codex owns the native prompt.
 - Do not start an app-server decision subscriber beside the hook adapter. That creates two
-  authorities capable of resolving one permission.
+  authorities capable of resolving one permission. The private app server Overlord launches sets
+  `OVERLORD_CONTROL_PLANE_SURFACE`, which keeps this plugin's own hooks silent inside its threads
+  (hazard `plugin-hooks-fire-inside-app-server-threads`).
 - The plugin root fallback is `~/.codex/plugins/overlord`. If managed scripts exist elsewhere,
   refresh with `ovld agent-setup codex` rather than editing generated paths.
 - Stop injection is turn-boundary behavior, not mid-turn steering.
@@ -225,10 +234,37 @@ and result, file edit (paired pre/post), lifecycle, `decide.shell`, `decide.file
 `answer.structuredQuestion` are `unverified`; `decide.anyTool` and `decide.universal` are
 `unsupported`. User-started Codex sessions keep the hooks adapter in the Codex section above.
 
-- `ovld agent-session sidecar --agent codex-app-server` runs only with
-  `OVERLORD_CODEX_APP_SERVER=1` and a session channel. Launch does not start it yet, and the human
-  answer and input routes currently refuse permission answers and new inputs, so web and mobile
-  cannot drive it end to end.
+- **Launch (ADR 0092).** A Codex launch uses app-server mode when the per-machine harness mode
+  (Settings → Terminal & IDE, `harnessMode: appServer`), the launching process's
+  `OVERLORD_CODEX_APP_SERVER=1`, or the project's launch env var of that name selects it. It falls
+  back to the hooks terminal launch, with a warning, when Codex is missing or older than 0.170.0,
+  the launch has no objective, or minting the channel fails. User-started Codex sessions always
+  use hooks.
+- Launch mints a `control_plane` channel, stages its credential in the owner-only cache (never
+  argv), and starts `ovld agent-session sidecar --agent codex-app-server` detached with
+  `OVERLORD_CODEX_APP_SERVER=1`, after the project's pre-launch commands. The supervisor starts one
+  private server and a persistent thread with the launch's model, effort, approval policy and
+  sandbox, and sends the objective prompt as the first turn. Other Codex flags and the
+  pre-command are reported as ignored. Protocol attach inside the thread binds this channel by
+  objective.
+- The visible terminal runs `ovld agent-session attach [--objective-id <ref>] [--channel-id <id>]`,
+  which waits for the thread's rollout and runs `codex --remote unix://<socket> resume <thread>`.
+  A runner with no terminal needs none; a person can attach later.
+- **Lifecycle.** A crashed server is respawned up to three times and the thread resumed, with one
+  continuation turn when none is running. The supervisor stops when the objective is `complete` or
+  `deleted`, or when the session delivered and the thread has been idle for 15 minutes. On every
+  exit it interrupts a running turn, ends the channel, stops the server, and removes its state,
+  credential cache, and any implicit `trust_level = "trusted"` entry the thread start added.
+  `ovld doctor` reaps orphaned servers and reports which Codex sessions run in app-server mode.
+- **Answers (ADR 0094).** Its requests read `delivery.mode = 'control_plane'` while open and the
+  channel is `preparing`, `online` or `degraded`; otherwise `read_only` with `request_closed` or
+  `channel_ended`. Resolve records the answer with no Latch delivery; the supervisor applies it and
+  `delivery.stage` moves from `recorded` to `confirmed` (`emitted`/`applied`), `failed`
+  (`not_applied`) or `unconfirmed` (`unknown`). `/redeliver` refuses every control-plane request.
+  A `permission` answer is only the card's own `allow` or `deny` (`{ optionId }`, or `--decision
+  allow|deny`; anything else is 400 `invalid_resolution`) and only from the launching member
+  (403 `not_session_owner`). Session inputs still answer 410 for every channel; type follow-ups
+  in the attached TUI.
 - The private server listens only on `unix://` in `~/.ovld/cx/`; its environment carries no
   Overlord token or objective scope, plus `OVERLORD_CONTROL_PLANE_SURFACE`, which silences
   Overlord's own Codex plugin hooks inside it. Never point it at the user's shared daemon.
@@ -241,15 +277,27 @@ and result, file edit (paired pre/post), lifecycle, `decide.shell`, `decide.file
 
 ## Antigravity
 
-**Shape:** callback compatibility plugin, currently fixture-proven only at tier 0. No observe,
-decide, or inject capability is `supported`; `PreInvocation` prompt observation is `unsupported`.
+**Shape:** callback plugin (agy 1.5.4+), capability tier 1 (Observational) per
+`connectors/adapters/antigravity/CAPABILITIES.md` and ADR 0090. **Observe (supported):**
+`PreInvocation` prompt (`lastUserInput`), and `PostToolUse` tool results and file edits; tool
+call and session lifecycle are `not-implemented`. **Inject (supported):** `Stop` turn boundary,
+`decision: "continue"` with `reason`. **Decide:** `not-implemented` or `unverified`; mid-turn
+inject is `unsupported`.
 
-- Mission lifecycle capture may work while agent-session observe/decide/inject remains
-  unverified. Do not promote UI controls based on the agent name or resemblance to Gemini.
-- `PreToolUse` currently returns allow for legacy telemetry and is not a remote decision path.
-- Native hook names are harness-specific. Record a native fixture before
-  changing mappings or claiming post-tool or stop behavior.
-- Upgrade work belongs in a separate verification objective with executable fixtures.
+- `PreInvocation` fires before every model call. `hook-event` records a prompt only when it
+  differs from the last one recorded for the conversation (only a hash is kept); the launch
+  prompt is skipped. The payload's `conversationId` is the native session id, a correlation alias
+  only.
+- `PostToolUse` (matcher `write_to_file|replace_file_content|multi_replace_file_content|run_command`)
+  runs the core capture callback, which forwards to local `capture-change --agent antigravity`
+  only when `OVERLORD_OBJECTIVE_ID` is in the launch environment. The payload never carries tool
+  output; error text is not retained.
+- The live `Stop` path is the once-per-objective delivery reminder from `hook-event`, skipped while
+  `continuation_active` is true or `fullyIdle` is false.
+- No `PreToolUse` hook is registered, so Antigravity's native permission flow is the only
+  authority. The decision codec still pins `auto_approve` / `deny` / silence bytes for a future
+  session-channel path; never emit `overwrite`.
+- Hooks fail open: a non-zero exit is logged and ignored.
 
 ## Development verification
 
