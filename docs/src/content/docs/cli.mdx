@@ -109,10 +109,14 @@ Repeat `--flag <value>` to pass supported options through to the agent, and use
 
 These commands cover the [agent-session](/agent-sessions/) surface — the live observe/decide/inject
 channel between a running agent harness and Overlord, separate from the durable mission protocol.
-As of the Latch v2 cutover, no launch path creates the credentialed session channel the hook
-commands below need, and `inputs send` always fails. Blocking questions still work: an attached
+As of the Latch v2 cutover, only a Codex launch in
+[app-server mode](/agents/#codex-app-server-mode-experimental) creates the credentialed session
+channel the commands below need; no other launch does, and `inputs send` always fails. Blocking questions still work: an attached
 agent's `ovld protocol ask` opens the request, and `requests resolve` answers a **question** or
-**choice** while the mission's attached objective has a live Latch terminal session. A resolved
+**choice** while the mission's attached objective has a live Latch terminal session. In a Codex
+app-server session, `requests resolve --decision allow|deny` also answers an approval (launching
+member only) and the session's supervisor applies it; see
+[Codex app-server sessions](/agent-sessions/#codex-app-server-sessions). A resolved
 request reports delivery separately (`delivery.stage`: `queued`, `dispatched`, `confirmed`,
 `unconfirmed`, or `failed`); recorded is not the same as delivered. See
 [Live agent sessions](/agent-sessions/#answering-a-held-question) for the current state.
@@ -178,6 +182,13 @@ Every command below is available from `ovld protocol help`.
 | `heartbeat`                        | Send liveness information without creating a feed event.                                                  |
 | `ask`                              | Raise a blocking question for a human reviewer and open an answerable request (`--options-json` + `--no-free-text` for a fixed choice). |
 | `deliver`                          | Finish the session with summary, artifacts, optional declared paths, and an optional mission summary write (`--mission-summary-file`; see [Agent protocol](/docs-for-agents/agent-protocol/#mission-summary)). |
+| `delivery-receipt`                 | Read your own accepted deliver or record-work receipt by `--operation-id` or `--delivery-id` (for example after a lost response). Needs no session key. |
+| `report-draft`                     | Read your session's provisional report draft and what `deliver` would seal from it. Requires `--session-key`. |
+| `delivery-summary-context`         | Read your own accepted delivery's mission-summary publication opportunity and a fresh baseline. Requires `--mission-id`. |
+| `publish-delivery-summary`         | Publish one reconciled mission headline and summary for that delivery. Requires `--mission-id` and a caller-chosen `--operation-id`. |
+| `project-items`                    | List accepted open items of other missions in the attached session's project, ranked by changed files (`--kind`, `--query`, `--path`, `--limit`, `--offset`). Requires `--session-key`. |
+| `mission-items`                    | Read all open items of the attached session's mission with full detail, paged. Requires `--session-key`. |
+| `close-items`                      | Close 1–50 verified open items as `done` or `dismissed` with a reason, without delivering (`--close-items-json` / `--close-items-file`). Requires `--session-key`. |
 | `resume-follow-up`                 | Reopen completed work for a follow-up.                                                                    |
 | `hook-event`                       | Record a connector lifecycle event (`UserPromptSubmit`, or read-only `Stop` delivery status). `--agent <key> --payload-file -` reads a native hook payload and prints `hookOutput`. |
 | `capture-change`                   | Locally capture direct, objective-bound native edit paths (connector use).                                |

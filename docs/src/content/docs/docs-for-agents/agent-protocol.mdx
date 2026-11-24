@@ -747,6 +747,9 @@ EOF
 | `report-draft`                   | Read your provisional report draft and what deliver would seal from it.                           |
 | `delivery-summary-context`       | Read your delivery's mission-summary publication opportunity and a fresh baseline.                |
 | `publish-delivery-summary`       | Publish one reconciled mission summary for your accepted delivery.                                |
+| `project-items`                  | Discover accepted open items of other missions in your project, ranked by changed files. Requires `--session-key`. |
+| `mission-items`                  | Read all open items of your mission with full detail, paged. Requires `--session-key`. |
+| `close-items`                    | Close 1–50 verified open items as `done` or `dismissed` with a reason, without delivering. Requires `--session-key`. |
 | `changes`                        | Local-only read of this checkout's recorded paths for an objective.                               |
 | `objective-changes`              | Server read of an objective's changed files across sessions and devices.                          |
 | `resume-follow-up`               | Reopen a delivered objective for follow-up.                                                       |
@@ -769,6 +772,11 @@ the live objective ledger and optional comma-separated `--path` evidence.
 Only accepted live open items count; provisional report drafts remain isolated.
 `scanTruncated` reports the newest-2,000-row scan bound. `ledger.captureGap`
 suggests passing explicit paths. Restart paging after writes.
+
+To read your own mission's open items with full detail (suggestion change, location,
+doneWhen; action command and verify), run `ovld protocol mission-items --session-key <key>`
+(MCP: `overlord_mission_items`); page with `--limit 1..200` (default 60) and `--offset` until
+`nextOffset` is null, and restart at offset 0 if items change.
 
 Verify resolution in code before closing an item with a reason naming the change.
 Standalone `close-items` and delivery `missionSummary.closeItems` both accept
