@@ -9,16 +9,20 @@ the agent-session connection handles activity, time-bounded decisions, and instr
 the harness is running.
 
 :::caution
-As of the Latch v2 cutover, no launch path (manual `ovld launch` or a runner-dispatched launch)
-creates the credentialed session channel this page describes, so `OVERLORD_SESSION_CHANNEL_ID`
-is not set in a launched agent's environment and the connector hooks exit immediately without
-reaching Overlord. **Observe** activity events and **Inject**ed instructions are effectively
-inactive today. Of the four **Decide** request kinds, only a blocking **question** or a fixed
-**choice** can be answered remotely. Since contract 173.6.0 (ADR 0065), `ovld protocol ask`
-opens that answerable request for any attached session, and the answer is delivered to the
-agent through the mission's live [Latch](https://latch.sh) terminal session — see
-[Answering a held question](#answering-a-held-question). **Permission** and **retry** requests
-cannot be answered remotely; they fall back to native harness behavior.
+As of the Latch v2 cutover, launches create the credentialed session channel this page
+describes only in one case: a Codex objective launched in the experimental
+[Codex app-server mode](/agents/#codex-app-server-mode-experimental) (ADR 0092). Every other
+launch (manual `ovld launch` or a runner-dispatched launch) creates none, so
+`OVERLORD_SESSION_CHANNEL_ID` is not set in the agent's environment and the connector hooks exit
+immediately without reaching Overlord. For those sessions **Observe** activity events and
+**Inject**ed instructions are effectively inactive. Of the four **Decide** request kinds, only a
+blocking **question** or a fixed **choice** can be answered remotely. Since contract 173.6.0
+(ADR 0065), `ovld protocol ask` opens that answerable request for any attached session, and the
+answer is delivered to the agent through the mission's live [Latch](https://latch.sh) terminal
+session — see [Answering a held question](#answering-a-held-question). **Permission** and
+**retry** requests cannot be answered remotely for them; they fall back to native harness
+behavior. A Codex app-server session is the exception: see
+[Codex app-server sessions](#codex-app-server-sessions).
 :::
 
 ## The three live paths
@@ -45,8 +49,10 @@ Agent harness
   among fixed options, or a **retry** intent — depending on what the harness asked for. Only
   **question** and **choice** requests can currently be answered remotely, and only when the
   mission's objective has a live Latch terminal session Overlord can reach
-  (`AgentRequestDto.delivery.mode === 'latch'`); a **permission** or **retry** request always
-  falls back to the harness's own native prompt or policy.
+  (`AgentRequestDto.delivery.mode === 'latch'`); a **permission** or **retry** request falls
+  back to the harness's own native prompt or policy. In a Codex app-server session
+  (`delivery.mode === 'control_plane'`), a **permission** request can also be answered remotely,
+  by the member who launched the session.
 - **Inject** sends an instruction to a specific live session. The result is honest about what
   the harness proved: **Delivered**, **Queued (turn boundary)**, **Queued (next turn)**, or
   **Unsupported**. An instruction already emitted to a harness is never automatically retried.
@@ -65,10 +71,11 @@ runner/manual launch
                 └─ protocol attach binds channel to agent session
 ```
 
-As the caution above notes, this creation step is not currently called from either launch
-path, so a launched session today runs without a credentialed channel (an `ask` may later add a
-credential-free, correlation-only one) — the diagram describes the intended
-shape, not current behavior. The native harness session id is only a correlation label in any
+As the caution above notes, this creation step runs today only for a Codex launch in
+app-server mode (`POST /api/objectives/{id}/session-channels`, `launch_kind = 'control_plane'`).
+Every other launched session runs without a credentialed channel (an `ask` may later add a
+credential-free, correlation-only one), so for them the diagram describes the intended shape,
+not current behavior. The native harness session id is only a correlation label in any
 case. Neither it nor the checkout path grants access. This matters when several missions,
 worktrees, or agents are active on the same machine.
 
@@ -133,8 +140,37 @@ live harness never opened one.
 
 Sending an arbitrary instruction into a running session (`ovld inputs send`) and the mission
 panel's session-instructions control are retired along with the session channel above; the
-backend now rejects both with `session_controls_gone`. `ovld inputs list` still reads historical
-rows for a mission but cannot be used to queue a new one.
+backend now rejects both with `session_controls_gone`, for Codex app-server sessions too.
+`ovld inputs list` still reads historical rows for a mission but cannot be used to queue a new
+one.
+
+## Codex app-server sessions
+
+When a Codex objective is launched in the experimental
+[Codex app-server mode](/agents/#codex-app-server-mode-experimental), Overlord runs Codex
+through a private app server and creates a credentialed session channel for it
+(`launch_kind = 'control_plane'`, ADR 0092). This is the one path where all three live paths
+work today:
+
+- **Observe:** prompts, tool calls and results, file edits, and session lifecycle reach the
+  activity feed.
+- **Decide:** command and file-change approvals appear on the mission as blocking cards with
+  **Allow once** and **Deny**. Questions and choices also appear. Their requests report
+  `delivery.mode = 'control_plane'`: the answer is recorded in Overlord and the session's
+  supervisor applies it to Codex, never through Latch or the terminal (ADR 0094). Only the member
+  who launched the session can answer an approval; other members see it read-only
+  (`not_session_owner`). An approval answer is exactly allow or deny — Overlord never sends a
+  standing "allow for this session" grant. From a terminal:
+  `ovld requests resolve <id> --revision <n> --decision allow|deny`.
+- **Inject:** instructions from web or mobile are still refused. Type follow-ups, steers, or
+  interrupts in the attached Codex terminal.
+
+Open the Codex terminal on a running session with `ovld agent-session attach [--objective-id
+<ref>]`. You can answer an approval there or in Overlord; Codex takes the first answer and the
+other card closes as resolved elsewhere. `delivery.stage` stays `recorded` until the supervisor
+reports it applied the answer, then reads `confirmed`, `failed`, or `unconfirmed`. **Send again**
+does not apply to these requests: there is no Latch delivery to repeat. When the session's
+channel ends, open requests become read-only (`channel_ended`).
 
 ## Mission terminal sessions
 
@@ -229,8 +265,9 @@ offline and shows what is fixture-proven, unsupported, not implemented, or still
 After an Overlord upgrade, refresh the connector with `ovld agent-setup <agent>`.
 
 Given the caution at the top of this page, expect `OVERLORD_SESSION_CHANNEL_ID` to be absent
-from every launched session's environment today — that reflects the current, unwired state of
-launch, not a misconfigured connector. A question that stays `read_only` points at the Latch
+from every launched session's environment except a Codex app-server launch — that reflects the
+current state of launch, not a misconfigured connector. `ovld doctor` reports which Codex
+sessions on the machine run in app-server mode. A question that stays `read_only` points at the Latch
 terminal session (is it still running, and is its execution target online?), not at the
 connector hooks.
 

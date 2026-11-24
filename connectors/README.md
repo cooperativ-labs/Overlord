@@ -123,7 +123,9 @@ Intentional omissions:
 - **`codex-app-server` ships no hooks either.** It drives Codex through `codex app-server`
   instead of the plugin hooks, and the private server's environment silences the `codex`
   plugin's hooks inside it (`OVERLORD_CONTROL_PLANE_SURFACE`), so one Codex session is never
-  reported through both. It is experimental and launch does not start it yet.
+  reported through both. It is experimental and opt-in: a Codex launch in app-server mode (per-machine
+  harness mode, `OVERLORD_CODEX_APP_SERVER=1`, or the project launch env var) mints a
+  `control_plane` session channel and starts it (ADR 0092); every other Codex launch uses hooks.
 - **Only the `codex` shim is a status line provider.** The Codex rendering of the local MCP
   shim also lists `overlord_status_line` and serves `ui://overlord/status-line`, the Codex 0.171
   statusline provider (`terminal.statusSurface`, ADR 0093). It is a terminal UI surface, not a

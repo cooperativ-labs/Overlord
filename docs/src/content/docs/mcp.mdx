@@ -36,6 +36,9 @@ The hosted server advertises these mission-lifecycle tools:
 | `overlord_report_draft`              | Reads your session's provisional report draft and what deliver would seal from it (opt-in draft evidence).               |
 | `overlord_delivery_summary_context`  | Reads your own accepted delivery's mission-summary publication opportunity and a fresh baseline. |
 | `overlord_publish_delivery_summary`  | Publishes one reconciled mission summary for that delivery (required caller-chosen `operationId`). |
+| `overlord_project_items`             | Lists accepted open items (risks, human actions, suggestions) of other missions in the attached session's project, ranked by the objective's changed files and any `paths` you pass. Default 20 rows, at most 100. Requires `sessionKey`. |
+| `overlord_mission_items`             | Reads all open items of the attached session's mission with full text and detail; blocking human actions first. Page until `nextOffset` is null. Requires `sessionKey`. |
+| `overlord_close_items`               | Closes 1–50 verified open items of any mission in the attached session's project as `done` or `dismissed`, each with a reason, without delivering. Requires `sessionKey`. |
 | `overlord_changes` | Reads one objective's synchronized changed-file evidence (`ObjectiveFileChangesDto`, scope `server_objective`, capped at 200 with `total`/`truncated` and capture diagnostics). Excludes unsynchronized local evidence. |
 | `overlord_create_mission`            | Creates a draft mission in a project you specify, or an account-owned inbox item when no project is given (never chooses a project for you). |
 | `overlord_create_inbox_item`         | Creates a private, account-owned unassigned task capture.                                                                                    |

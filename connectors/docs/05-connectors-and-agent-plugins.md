@@ -109,6 +109,17 @@ Requirements:
   - `--model <model>`
   - `-c model_reasoning_effort="<level>"`
 - For large context or wrappers, write a context file and pass a short prompt that points to it.
+- Optional, experimental app-server mode (ADR 0091, ADR 0092): when the per-machine harness mode
+  (`harnessMode: appServer`), `OVERLORD_CODEX_APP_SERVER=1`, or the project's launch env var
+  selects it, `ovld launch` and runners mint a `control_plane` session channel and start
+  `ovld agent-session sidecar --agent codex-app-server`, which drives a private `codex app-server`
+  on an owner-only Unix socket. The visible terminal runs `ovld agent-session attach`
+  (`codex --remote unix://<socket> resume <thread>`). It falls back to the hooks launch when
+  Codex is missing or older than 0.170.0, the launch has no objective, or minting fails.
+  User-started Codex sessions always use the hooks adapter; never run both decision authorities
+  for one session. See `connectors/adapters/codex-app-server/CAPABILITIES.md`.
+- Optional status line: `ovld agent-setup codex --status-line` selects the Overlord status line
+  provider in Codex 0.171+ (ADR 0093).
 
 Setup/managed files should be documented once implementation paths are chosen. Upstream uses `~/.codex/plugins/overlord`, `~/.agents/plugins/marketplace.json`, Codex rules, and hook scripts.
 
@@ -242,11 +253,14 @@ Requirements:
 - Degrades gracefully without a web app open: the harness's own fallback
   decision (allow/deny/ask) applies when no one answers in time.
 
-As of the Latch v2 cutover, no shipped launch path currently supplies the session-channel
-credential this mechanism depends on (`createSessionChannel` has no production callers), so
-"blocks the harness's tool call until answered" does not happen end-to-end for any existing
-adapter today — do not assume a new connector can exercise this path against a real Overlord
-deployment without first restoring that wiring. The decision kinds that are still remotely
+As of the Latch v2 cutover, the only launch that supplies the session-channel credential this
+mechanism depends on is a Codex launch in app-server mode (ADR 0092), and that path is not a
+callback hook: the `codex-app-server` control-plane supervisor answers Codex's JSON-RPC
+approvals itself, from answers recorded in Overlord with `delivery.mode = 'control_plane'`
+(ADR 0094; permission answers only from the launching member). For every callback adapter
+"blocks the harness's tool call until answered" does not happen end-to-end today — do not
+assume a new connector can exercise this path against a real Overlord deployment without
+first restoring that wiring. The decision kinds that are still remotely
 answerable — a blocking **question** or fixed **choice** — go through the mission protocol's
 `ask`/resolve flow and a live Latch terminal session, not through this session-channel
 mechanism. `ovld protocol ask` opens the request (creating a credential-free, correlation-only
