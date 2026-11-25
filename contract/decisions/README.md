@@ -141,3 +141,5 @@ record and the index disagree.
 - [0103 — Coordinate the PostgreSQL change feed with an advisory gate](0103-postgres-feed-gate.md)
 - [0104 — Correlate Mobile objective conversations with the current Latch attempt](0104-current-latch-attempt.md)
 - [0105 — Resume saved freeform chats through the original paired Latch host](0105-saved-freeform-chat-resume.md)
+
+- [0106 — Retain the status preceding completion](0106-mission-previous-status.md)

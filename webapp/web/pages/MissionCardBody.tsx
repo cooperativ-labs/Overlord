@@ -163,9 +163,8 @@ export function MissionCardBody({
       <div className="h-2" />
 
       <MissionCardHoverFooter
-        missionId={mission.id}
+        mission={mission}
         projectId={projectId}
-        displayId={mission.displayId}
         assignedTagIds={tags.map(tag => tag.id)}
       />
     </CardContent>

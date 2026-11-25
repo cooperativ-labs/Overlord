@@ -82,27 +82,36 @@ export function projectColorTint(color: string | null | undefined) {
 export function MissionCompleteCheckbox({
   color,
   completed,
-  onComplete
+  onComplete,
+  onReopen
 }: {
   color: string | null | undefined;
   completed: boolean;
   onComplete?: () => void;
+  onReopen?: () => void;
 }) {
   const { accent, tint, checkColor } = missionCheckboxColors(color);
-  const interactive = Boolean(onComplete) && !completed;
+  const interactive = Boolean(completed ? onReopen : onComplete);
 
   return (
     <button
       type="button"
       role="checkbox"
       aria-checked={completed}
-      aria-label={completed ? 'Completed' : 'Mark mission complete'}
-      title={completed ? 'Completed' : 'Mark complete'}
+      aria-label={
+        completed
+          ? interactive
+            ? 'Restore previous status'
+            : 'Completed'
+          : 'Mark mission complete'
+      }
+      title={completed ? (interactive ? 'Restore previous status' : 'Completed') : 'Mark complete'}
       disabled={!interactive}
       onClick={event => {
         event.stopPropagation();
-        if (interactive) onComplete?.();
+        if (interactive) (completed ? onReopen : onComplete)?.();
       }}
+      onKeyDown={event => event.stopPropagation()}
       className={cn(
         'flex h-4 w-4 shrink-0 items-center justify-center rounded-[5px] border transition-colors',
         interactive && 'cursor-pointer'

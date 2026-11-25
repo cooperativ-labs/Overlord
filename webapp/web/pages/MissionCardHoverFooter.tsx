@@ -1,8 +1,8 @@
+import type { MissionDto } from '@overlord/contract';
 import { Tag } from 'lucide-react';
-import { type MouseEvent, type PointerEvent, useMemo, useState } from 'react';
+import { type MouseEvent, type PointerEvent, useMemo } from 'react';
 
 import { DeleteMissionButton } from '@/components/DeleteMissionButton';
-import { MissionTimerCircleButton } from '@/components/everhour/MissionTimerButtons';
 import { Button } from '@/components/ui/button';
 import { CardFooter } from '@/components/ui/card';
 import {
@@ -16,6 +16,8 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { useProjectTags, useUpdateMission } from '@/lib/queries.ts';
 import { cn } from '@/lib/utils';
+
+import { MissionCardPlayButton } from './MissionCardPlayButton.tsx';
 
 function TagsSelector({
   missionId,
@@ -102,17 +104,14 @@ function TagsSelector({
 }
 
 export function MissionCardHoverFooter({
-  missionId,
+  mission,
   projectId,
-  displayId,
   assignedTagIds
 }: {
-  missionId: string;
+  mission: MissionDto;
   projectId: string;
-  displayId: string;
   assignedTagIds: string[];
 }) {
-  const [timerVisible, setTimerVisible] = useState(false);
   const stopPropagation = (event: MouseEvent | PointerEvent) => {
     event.stopPropagation();
   };
@@ -127,15 +126,11 @@ export function MissionCardHoverFooter({
       )}
       onClick={stopPropagation}
       onPointerDown={stopPropagation}
-      onPointerEnter={() => setTimerVisible(true)}
     >
       <div className="overflow-hidden">
-        <div
-          className="flex items-center gap-1.5 border-t border-border/60 bg-muted/80 px-2 py-1"
-          onFocusCapture={() => setTimerVisible(true)}
-        >
+        <div className="flex items-center gap-1.5 border-t border-border/60 bg-muted/80 px-2 py-1">
           <TagsSelector
-            missionId={missionId}
+            missionId={mission.id}
             projectId={projectId}
             assignedTagIds={assignedTagIds}
           />
@@ -143,13 +138,13 @@ export function MissionCardHoverFooter({
           <div className="ml-auto flex items-center gap-1.5">
             <span
               className="text-[10px] tabular-nums text-muted-foreground"
-              title={`Mission ID: ${displayId}`}
+              title={`Mission ID: ${mission.displayId}`}
             >
-              {displayId}
+              {mission.displayId}
             </span>
-            {timerVisible ? <MissionTimerCircleButton missionId={missionId} /> : null}
+            <MissionCardPlayButton mission={mission} />
             <DeleteMissionButton
-              missionId={missionId}
+              missionId={mission.id}
               projectId={projectId}
               className="h-6 w-6 border-0 bg-transparent text-muted-foreground hover:bg-transparent hover:text-red-500 [&_svg]:h-3.5 [&_svg]:w-3.5"
             />

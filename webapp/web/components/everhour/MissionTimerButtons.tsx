@@ -1,13 +1,9 @@
-import { Play, Square } from 'lucide-react';
-import type { MouseEvent } from 'react';
-
 import {
   useEverhourIntegration,
   useMissionEverhour,
   useStartMissionTimer,
   useStopMissionTimer
 } from '@/lib/queries';
-import { cn } from '@/lib/utils';
 
 import { useLiveSeconds } from '../../lib/everhour.ts';
 
@@ -43,49 +39,4 @@ export function useMissionTimerControls(missionId: string, options: { poll?: boo
     state: everhour.data,
     dataUpdatedAt: everhour.dataUpdatedAt
   };
-}
-
-/**
- * Small play/stop circle for dense surfaces (e.g. the mission card hover footer).
- * Idle: gray play, green on hover. Running: red stop. Renders nothing when the
- * acting user hasn't connected Everhour.
- */
-export function MissionTimerCircleButton({
-  missionId,
-  className
-}: {
-  missionId: string;
-  className?: string;
-}) {
-  const { connected, running, busy, toggle } = useMissionTimerControls(missionId);
-  if (!connected) return null;
-
-  const handleClick = (event: MouseEvent) => {
-    event.stopPropagation();
-    toggle();
-  };
-
-  return (
-    <button
-      type="button"
-      aria-label={running ? 'Stop timer' : 'Start timer'}
-      title={running ? 'Stop timer' : 'Start timer'}
-      onClick={handleClick}
-      onPointerDown={event => event.stopPropagation()}
-      disabled={busy}
-      className={cn(
-        'inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border transition-colors disabled:opacity-50',
-        running
-          ? 'border-red-500/40 bg-red-500/15 text-red-500 hover:bg-red-500/25'
-          : 'border-border bg-transparent text-muted-foreground hover:border-emerald-500/40 hover:bg-emerald-500/15 hover:text-emerald-500',
-        className
-      )}
-    >
-      {running ? (
-        <Square className="h-3 w-3 fill-current" />
-      ) : (
-        <Play className="h-3 w-3 fill-current" />
-      )}
-    </button>
-  );
 }

@@ -1179,6 +1179,7 @@ export interface Missions {
   metadata_json: Generated<string>;
   notes_text: string | null;
   output_format_text: string | null;
+  previous_status_id: string | null;
   priority: string | null;
   project_id: string;
   returned_to_execute_at: string | null;

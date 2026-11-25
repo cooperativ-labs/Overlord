@@ -6,13 +6,13 @@ import {
   createRouter,
   RouterProvider
 } from '@tanstack/react-router';
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import assert from 'node:assert/strict';
 import { afterEach, beforeEach, describe, it } from 'node:test';
 
-import { resetDismissedAgentRequestsForTests } from '../../lib/dismissed-agent-requests.ts';
 import { useMissionOpenAgentRequests } from '../../lib/queries.ts';
 import { keys } from '../../lib/query-keys.ts';
+import { invalidateRealtimeChanges } from '../../lib/realtime-invalidation.ts';
 
 import {
   MissionBlockingQuestions,
@@ -27,8 +27,6 @@ const originalFetch = globalThis.fetch;
 const clients: QueryClient[] = [];
 
 beforeEach(() => {
-  window.localStorage.clear();
-  resetDismissedAgentRequestsForTests();
   // Refetches fail: the cards seeded below must survive a failed refresh.
   globalThis.fetch = (async () =>
     new Response(JSON.stringify({ error: 'offline' }), { status: 503 })) as typeof fetch;
@@ -86,7 +84,10 @@ function Slot({ onOpen }: { onOpen: (ref: string) => void }) {
 
 async function mount(requests: HumanAgentRequestDto[], onOpen: (ref: string) => void = () => {}) {
   const client = new QueryClient({
-    defaultOptions: { queries: { retry: false, staleTime: Infinity } }
+    defaultOptions: {
+      queries: { retry: false, staleTime: Infinity },
+      mutations: { retry: false, gcTime: 0 }
+    }
   });
   clients.push(client);
   client.setQueryData(keys.missionOpenAgentRequests(mission.id, null), {
@@ -153,19 +154,70 @@ describe('MissionBlockingQuestions (plan §5)', () => {
     assert.deepEqual(opened, ['coo:1.a']);
   });
 
-  it('dismisses per request id, survives a remount, and shows a new request again', async () => {
+  it('writes dismissal with the displayed revision and restores it through the server', async () => {
+    let serverRequest = q1;
+    const writes: Array<{ method: string; body?: BodyInit | null }> = [];
+    globalThis.fetch = async (input, init) => {
+      const path = new URL(String(input), 'http://localhost').pathname;
+      if (path === '/api/agent-requests/q1/dismissal') {
+        const method = init?.method ?? 'GET';
+        writes.push({ method, body: init?.body });
+        serverRequest = { ...q1, dismissed: method === 'POST' };
+        return Response.json({ changed: true, request: serverRequest });
+      }
+      return Response.json({ requests: [serverRequest] });
+    };
     await mount([q1]);
     fireEvent.click(screen.getByRole('button', { name: 'Dismiss this notification' }));
-    assert.equal(slotPresent(), false);
+    await waitFor(() => assert.ok(screen.getByText('Dismissed notifications (1)')));
+    assert.equal(document.querySelector('[data-request-id="q1"]'), null);
+    assert.deepEqual(writes, [{ method: 'POST', body: JSON.stringify({ expectedRevision: 1 }) }]);
     cleanup();
-    await mount([q1]);
-    assert.equal(slotPresent(), false);
-    cleanup();
-    await mount([q1, q2]);
+
+    await mount([serverRequest]);
+    assert.equal(document.querySelector('[data-request-id="q1"]'), null);
+    fireEvent.click(screen.getByText('Dismissed notifications (1)'));
+    fireEvent.click(screen.getByText('Restore', { selector: 'button' }));
+    await waitFor(() =>
+      assert.ok(screen.getByRole('button', { name: 'Dismiss this notification' }))
+    );
+    assert.deepEqual(
+      writes.map(write => write.method),
+      ['POST', 'DELETE']
+    );
+  });
+
+  it('refreshes the card after another client dismisses the same request revision', async () => {
+    globalThis.fetch = async () => Response.json({ requests: [{ ...q1, dismissed: true }, q2] });
+    const client = await mount([q1, q2]);
+    await act(async () => {
+      invalidateRealtimeChanges(client, [
+        {
+          seq: 1,
+          workspaceId: mission.workspaceId,
+          projectId: mission.projectId,
+          missionId: mission.id,
+          objectiveId: 'a',
+          entityId: q1.id,
+          entityType: 'agent_request',
+          operation: 'update',
+          changedFields: ['dismissal'],
+          occurredAt: q1.createdAt
+        }
+      ]);
+    });
+    await waitFor(() => assert.ok(screen.getByText('Dismissed notifications (1)')));
     const ids = [...document.querySelectorAll('[data-request-id]')].map(node =>
       node.getAttribute('data-request-id')
     );
     assert.deepEqual(ids, ['q2']);
+  });
+
+  it('keeps the card and reports an error when dismissal fails', async () => {
+    await mount([q1]);
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss this notification' }));
+    await waitFor(() => assert.ok(screen.getByText(/Could not dismiss notification/)));
+    assert.ok(screen.getByRole('button', { name: 'Dismiss this notification' }));
   });
 
   it('disappears when the last request resolves', async () => {

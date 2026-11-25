@@ -4,9 +4,9 @@ import type { MissionDto, WorkspaceMemberDto } from '@overlord/contract';
 import { useNavigate } from '@tanstack/react-router';
 import { GripVertical } from 'lucide-react';
 
-import { MissionTimerCircleButton } from '@/components/everhour/MissionTimerButtons';
 import { cn } from '@/lib/utils';
 
+import { MissionCardPlayButton } from './MissionCardPlayButton.tsx';
 import {
   MissionAssigneeAvatar,
   MissionCompleteCheckbox,
@@ -22,7 +22,8 @@ export function MissionListCard({
   assignee,
   selected,
   isDragOverlay,
-  onComplete
+  onComplete,
+  onReopen
 }: {
   mission: MissionDto;
   projectId: string;
@@ -32,6 +33,7 @@ export function MissionListCard({
   selected?: boolean;
   isDragOverlay?: boolean;
   onComplete?: (missionId: string) => void;
+  onReopen?: (missionId: string) => void;
 }) {
   const navigate = useNavigate();
   const { listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } =
@@ -81,6 +83,7 @@ export function MissionListCard({
         color={projectColor}
         completed={mission.statusType === 'complete'}
         onComplete={onComplete ? () => onComplete(mission.id) : undefined}
+        onReopen={onReopen ? () => onReopen(mission.id) : undefined}
       />
 
       {/* Title */}
@@ -126,7 +129,7 @@ export function MissionListCard({
             {mission.completedObjectiveCount}/{mission.objectiveCount}
           </span>
         ) : null}
-        <MissionTimerCircleButton missionId={mission.id} />
+        <MissionCardPlayButton mission={mission} />
         <MissionOriginMark
           createdByKind={mission.createdByKind}
           createdByAgent={mission.createdByAgent}

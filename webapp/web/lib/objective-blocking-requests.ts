@@ -5,7 +5,7 @@ import type { HumanAgentRequestDto } from '@overlord/contract';
  *
  * The mission-wide open-request collection is filtered with this predicate for
  * the question slot, the row tints and the objective detail's Blocking
- * questions list. Dismissal lives in `lib/dismissed-agent-requests.ts`.
+ * questions list. Notification surfaces also use the member's server dismissal state.
  */
 
 /** The request shape this module needs — a subset of {@link HumanAgentRequestDto}. */

@@ -9,22 +9,23 @@ import type {
   UpdateProjectExecutionTargetBody,
   UpdateTerminalProfileBody
 } from '@overlord/contract';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { queryOptions, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { api } from '../api.ts';
 import { invalidateNonEverhourQueries as invalidateAll } from '../query-invalidation.ts';
 import { keys } from '../query-keys.ts';
 
+export const agentCatalogQueryOptions = (workspaceId?: string | null) =>
+  queryOptions({
+    queryKey: keys.agentCatalog(workspaceId),
+    queryFn: () => api.getAgentCatalog(workspaceId),
+    staleTime: 60_000
+  });
+
 export const useAgentCatalog = (
   workspaceId?: string | null,
   { enabled = true }: { enabled?: boolean } = {}
-) =>
-  useQuery({
-    queryKey: keys.agentCatalog(workspaceId),
-    queryFn: () => api.getAgentCatalog(workspaceId),
-    enabled,
-    staleTime: 60_000
-  });
+) => useQuery({ ...agentCatalogQueryOptions(workspaceId), enabled });
 
 export const useLaunchSettings = (
   workspaceId?: string | null,
@@ -37,13 +38,15 @@ export const useLaunchSettings = (
     staleTime: 60_000
   });
 
-export const useLaunchPreference = (projectId: string) =>
-  useQuery({
+export const launchPreferenceQueryOptions = (projectId: string) =>
+  queryOptions({
     queryKey: keys.launchPreference(projectId),
     queryFn: () => api.getLaunchPreference(projectId),
-    staleTime: 60_000,
-    enabled: Boolean(projectId)
+    staleTime: 60_000
   });
+
+export const useLaunchPreference = (projectId: string) =>
+  useQuery({ ...launchPreferenceQueryOptions(projectId), enabled: Boolean(projectId) });
 
 export const useObjectiveEffectiveLaunchConfig = ({
   objectiveId,

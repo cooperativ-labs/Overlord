@@ -22,7 +22,9 @@ export function MissionListView<TMission extends MissionDto = MissionDto>({
   renderStatusFooter,
   onCreateMission,
   onCreateAndOpenMission,
-  onCompleteMission
+  onCompleteMission,
+  onReopenMission,
+  canReopenMission
 }: {
   statuses: BoardColumnStatus[];
   /**
@@ -53,6 +55,8 @@ export function MissionListView<TMission extends MissionDto = MissionDto>({
     options?: BlankMissionCreateOptions
   ) => Promise<void> | void;
   onCompleteMission?: (missionId: string) => void;
+  onReopenMission?: (missionId: string) => void;
+  canReopenMission?: (missionId: string) => boolean;
 }) {
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
   const { activeId, displayColumns, dndContextProps } = dnd;
@@ -100,6 +104,8 @@ export function MissionListView<TMission extends MissionDto = MissionDto>({
             onCreateMission={onCreateMission}
             onCreateAndOpenMission={onCreateAndOpenMission}
             onCompleteMission={onCompleteMission}
+            onReopenMission={onReopenMission}
+            canReopenMission={canReopenMission}
           />
         ))}
       </div>

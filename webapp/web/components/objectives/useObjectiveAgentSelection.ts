@@ -1,4 +1,9 @@
-import type { AgentLaunchConfigDto, ObjectiveDto } from '@overlord/contract';
+import type {
+  AgentCatalogDto,
+  AgentLaunchConfigDto,
+  LaunchPreferenceDto,
+  ObjectiveDto
+} from '@overlord/contract';
 import { useCallback, useMemo } from 'react';
 
 import {
@@ -24,6 +29,30 @@ type SelectableObjective = Pick<
   'id' | 'projectId' | 'assignedAgent' | 'model' | 'reasoningEffort'
 > &
   Partial<Pick<ObjectiveDto, 'launchConfigOverrides'>>;
+
+export function resolveObjectiveAgentSelection(
+  {
+    assignedAgent,
+    model,
+    reasoningEffort
+  }: Pick<SelectableObjective, 'assignedAgent' | 'model' | 'reasoningEffort'>,
+  preference: LaunchPreferenceDto | null,
+  catalog: AgentCatalogDto | null
+): AgentModelSelection {
+  if (assignedAgent) return { agent: assignedAgent, model, reasoningEffort };
+  if (preference?.selectedAgent) {
+    return {
+      agent: preference.selectedAgent,
+      model: preference.selectedModel,
+      reasoningEffort: preference.selectedReasoningEffort
+    };
+  }
+  return {
+    agent: catalog?.defaultAgent ?? 'claude',
+    model: catalog?.defaultModel ?? null,
+    reasoningEffort: null
+  };
+}
 
 /**
  * Wires an objective's agent/model selection to its storage owners, following
@@ -58,27 +87,16 @@ export function useObjectiveAgentSelection(objective: SelectableObjective) {
   const preference = preferenceQ.data ?? null;
   const loaded = Boolean(catalog) && !preferenceQ.isLoading;
 
-  const selection = useMemo<AgentModelSelection>(() => {
-    if (objective.assignedAgent) {
-      return {
-        agent: objective.assignedAgent,
-        model: objective.model,
-        reasoningEffort: objective.reasoningEffort
-      };
-    }
-    if (preference?.selectedAgent) {
-      return {
-        agent: preference.selectedAgent,
-        model: preference.selectedModel,
-        reasoningEffort: preference.selectedReasoningEffort
-      };
-    }
-    return {
-      agent: catalog?.defaultAgent ?? 'claude',
-      model: catalog?.defaultModel ?? null,
-      reasoningEffort: null
-    };
-  }, [catalog, objective.assignedAgent, objective.model, objective.reasoningEffort, preference]);
+  const { assignedAgent, model, reasoningEffort } = objective;
+  const selection = useMemo(
+    () =>
+      resolveObjectiveAgentSelection(
+        { assignedAgent, model, reasoningEffort },
+        preference,
+        catalog
+      ),
+    [assignedAgent, model, reasoningEffort, preference, catalog]
+  );
 
   const effectiveConfigQ = useObjectiveEffectiveLaunchConfig({
     objectiveId: objective.id,

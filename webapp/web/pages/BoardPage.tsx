@@ -285,19 +285,40 @@ export function BoardPage() {
     [createMissionInColumn, navigate]
   );
 
-  // The list-row checkbox marks a mission complete by moving it into this
-  // project's status whose type is `complete`. No-op if no such status exists.
   const completeStatusId = useMemo(
     () => statuses.find(status => status.type === 'complete')?.id ?? null,
     [statuses]
   );
-
   const handleCompleteMission = useCallback(
-    (missionId: string) => {
-      if (!completeStatusId) return;
-      void setMissionStatus.mutateAsync({ missionId, statusId: completeStatusId });
+    async (missionId: string) => {
+      const mission = missionById.get(missionId);
+      if (!completeStatusId || !mission || mission.statusType === 'complete') return;
+      try {
+        await setMissionStatus.mutateAsync({ missionId, statusId: completeStatusId });
+      } catch {
+        /* The mutation leaves the mission unchanged. */
+      }
     },
-    [completeStatusId, setMissionStatus]
+    [completeStatusId, missionById, setMissionStatus]
+  );
+  const canReopenMission = useCallback(
+    (missionId: string) => {
+      const previousStatusId = missionById.get(missionId)?.previousStatusId;
+      return statuses.some(status => status.id === previousStatusId && status.type !== 'complete');
+    },
+    [missionById, statuses]
+  );
+  const handleReopenMission = useCallback(
+    async (missionId: string) => {
+      const statusId = missionById.get(missionId)?.previousStatusId;
+      if (!statusId || !canReopenMission(missionId)) return;
+      try {
+        await setMissionStatus.mutateAsync({ missionId, statusId });
+      } catch {
+        /* The saved status remains available for retry. */
+      }
+    },
+    [canReopenMission, missionById, setMissionStatus]
   );
 
   const isTagFilterActive = selectedTagIds.length > 0;
@@ -489,6 +510,8 @@ export function BoardPage() {
             onCreateMission={handleCreateMissionFromColumn}
             onCreateAndOpenMission={handleCreateAndOpenMissionFromColumn}
             onCompleteMission={completeStatusId ? handleCompleteMission : undefined}
+            onReopenMission={handleReopenMission}
+            canReopenMission={canReopenMission}
           />
         )}
       </div>

@@ -12,7 +12,6 @@ import {
 import { type ReactNode, type RefObject, useCallback, useEffect, useRef, useState } from 'react';
 
 import { useAnswerFollowUps } from '../../lib/answered-agent-requests.ts';
-import { useDismissedAgentRequests } from '../../lib/dismissed-agent-requests.ts';
 import { buildAgentResumeCommand } from '../../lib/helpers/agent-resume-command.ts';
 import { useCopyToClipboard } from '../../lib/hooks/use-copy-to-clipboard.ts';
 import { useIsMobile } from '../../lib/hooks/use-mobile.ts';
@@ -32,6 +31,7 @@ import {
   objectiveHasHistory
 } from '../../lib/objective-evidence.ts';
 import {
+  useAgentRequestDismissal,
   useMissionOpenAgentRequests,
   useObjectiveFileChanges,
   useUpdateObjective
@@ -310,22 +310,15 @@ type LayoutProps = BodyProps & {
   setDetailsOpen: (open: boolean) => void;
 };
 
-const NO_DISMISSED: ReadonlySet<string> = new Set();
-
 function useBlockedState(mission: MissionDetailDto, objective: ObjectiveDto) {
   const openRequests = useMissionOpenAgentRequests(mission.id);
-  const { dismissedIds } = useDismissedAgentRequests({
-    workspaceId: mission.workspaceId,
-    missionId: mission.id
-  });
-  // A dismissed question is no longer highlighted anywhere; it stays in the activity section.
-  const requests = (openRequests.blockingByObjective.get(objective.id) ?? []).filter(
-    request => !dismissedIds.has(request.id)
-  );
+  const requests = openRequests.blockingByObjective.get(objective.id) ?? [];
+  const notifications = requests.filter(request => !request.dismissed);
   return {
     openRequests,
     requests,
-    blocked: isInFlightObjective(objective.state) && requests.length > 0
+    notifications,
+    blocked: isInFlightObjective(objective.state) && notifications.length > 0
   };
 }
 
@@ -618,14 +611,8 @@ function DetailMenu(props: LayoutProps & { triggerClassName?: string }) {
  */
 function DetailMainColumn(props: LayoutProps) {
   const { mission, objective, evidence } = props;
-  const { openRequests, requests, blocked } = useBlockedState(mission, objective);
-  const { dismissedIds, dismiss } = useDismissedAgentRequests(
-    { workspaceId: mission.workspaceId, missionId: mission.id },
-    {
-      openRequestIds: openRequests.requests.map(request => request.id),
-      authoritative: openRequests.authoritative
-    }
-  );
+  const { openRequests, requests, notifications } = useBlockedState(mission, objective);
+  const dismissal = useAgentRequestDismissal(mission.id);
   const notStarted = isNotStartedObjective(objective.state);
   const inFlight = isInFlightObjective(objective.state);
   const attachmentState = useObjectiveAttachmentState(objective.id);
@@ -644,7 +631,7 @@ function DetailMainColumn(props: LayoutProps) {
     !attachmentState.attachmentsKnown || attachmentState.isUploading || !historyKnown
       ? null
       : { attachmentCount: attachmentState.attachments.length, hasHistory };
-  const topCards = inFlight ? requests.filter(request => !dismissedIds.has(request.id)) : [];
+  const topCards = inFlight ? notifications : [];
   const answerFollowUps = useAnswerFollowUps(mission.id, objective.id);
   const openIds = new Set(openRequests.requests.map(request => request.id));
   const answeredCards = inFlight
@@ -654,10 +641,20 @@ function DetailMainColumn(props: LayoutProps) {
 
   return (
     <div className="grid min-w-0 gap-5">
+      {dismissal.isError ? (
+        <p role="alert" className="text-xs text-amber-800 dark:text-amber-300">
+          Could not dismiss notification. {dismissal.error.message}
+        </p>
+      ) : null}
       {topCards.length > 0 || answeredCards.length > 0 ? (
         <div className="grid min-w-0 gap-2">
           {topCards.map(request => (
-            <DismissibleAgentRequestCard key={request.id} request={request} onDismiss={dismiss} />
+            <DismissibleAgentRequestCard
+              key={request.id}
+              request={request}
+              onDismiss={request => dismissal.mutate({ request, dismissed: true })}
+              dismissPending={dismissal.isPending}
+            />
           ))}
           {answeredCards.map(request => (
             <AnsweredAgentRequestCard
@@ -719,8 +716,7 @@ function DetailMainColumn(props: LayoutProps) {
 
       <ObjectiveBlockingQuestions
         requests={requests}
-        dismissedIds={NO_DISMISSED}
-        stale={openRequests.stale && blocked}
+        stale={openRequests.stale}
         onRetry={() => void openRequests.retry()}
       />
 

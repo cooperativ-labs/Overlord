@@ -26,7 +26,9 @@ export function MissionListStatusGroup<TMission extends MissionDto = MissionDto>
   footer,
   onCreateMission,
   onCreateAndOpenMission,
-  onCompleteMission
+  onCompleteMission,
+  onReopenMission,
+  canReopenMission
 }: {
   status: BoardColumnStatus;
   style: StatusStyle;
@@ -44,6 +46,8 @@ export function MissionListStatusGroup<TMission extends MissionDto = MissionDto>
    */
   footer?: ReactNode;
   onCompleteMission?: (missionId: string) => void;
+  onReopenMission?: (missionId: string) => void;
+  canReopenMission?: (missionId: string) => boolean;
   onCreateMission?: (
     statusId: string,
     objective: string,
@@ -174,6 +178,7 @@ export function MissionListStatusGroup<TMission extends MissionDto = MissionDto>
                     assignee={resolveAssignee(mission, membersByWorkspaceUserId)}
                     selected={mission.id === selectedMissionId}
                     onComplete={onCompleteMission}
+                    onReopen={canReopenMission?.(mission.id) ? onReopenMission : undefined}
                   />
                 );
               })

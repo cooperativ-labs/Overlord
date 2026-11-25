@@ -5,6 +5,19 @@ is the current version and must equal [VERSION](VERSION); `yarn version:contract
 writes its skeleton. Dates use ISO 8601 and describe the contract change, not
 merely the files edited.
 
+## [182.4.0] - 2026-11-25
+
+Contract impact: minor. Mission responses expose the status preceding completion, retained atomically by both database adapters. Existing completed missions have no historical value.
+
+### Impact on modules
+
+- Database adapters maintain the optional prior status for all status writers.
+- REST exposes the optional field; web and other consumers can use it to restore completion.
+
+### Version
+
+- Minor contract version 182.4.0, from 182.3.0.
+
 ## [182.3.0] - 2026-11-23
 
 Contract impact: minor. Board and activity-feed reads support negotiated Brotli

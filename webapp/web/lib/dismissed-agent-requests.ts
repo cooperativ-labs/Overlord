@@ -3,12 +3,8 @@ import { useCallback, useEffect, useMemo, useSyncExternalStore } from 'react';
 import { getActiveBackendId } from './api-base.ts';
 
 /**
- * Which blocking-request notifications a person dismissed (mission-panel-redesign plan §5).
- *
- * Dismissing a request's notification hides its card at the top of the mission panel and of
- * the objective detail, and nothing else: the request stays open, answerable, tinted on its row
- * and listed in the detail's Blocking questions list. Dismissal is per request id, so a new
- * question from the agent shows again without any extra bookkeeping.
+ * Which blocking-question cards a person hid from their Activity Feed on this client.
+ * Mission and objective notifications use server dismissal (ADR 0063).
  *
  * Ids persist in `localStorage` so a reload does not bring a dismissed card back. Storage is
  * namespaced by backend, account, workspace and mission, so one person's dismissals never hide

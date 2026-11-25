@@ -22,13 +22,11 @@ import { firstLine } from './objective-detail-model.ts';
  */
 export function ObjectiveBlockingQuestions({
   requests,
-  dismissedIds,
   stale = false,
   onRetry
 }: {
   /** Open question/choice requests for this objective, oldest first. */
   requests: readonly HumanAgentRequestDto[];
-  dismissedIds: ReadonlySet<string>;
   /** The shared collection failed to refresh; these rows are from the last successful read. */
   stale?: boolean;
   onRetry?: () => void;
@@ -37,11 +35,11 @@ export function ObjectiveBlockingQuestions({
   const sectionRef = useRef<HTMLElement | null>(null);
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => {
     const first = requests[0];
-    const allDismissed = requests.length > 0 && requests.every(r => dismissedIds.has(r.id));
+    const allDismissed = requests.length > 0 && requests.every(request => request.dismissed);
     return first && allDismissed ? new Set([first.id]) : new Set();
   });
   const [scrollOnMount] = useState(
-    () => requests.length > 0 && requests.every(r => dismissedIds.has(r.id))
+    () => requests.length > 0 && requests.every(request => request.dismissed)
   );
   useEffect(() => {
     if (scrollOnMount) sectionRef.current?.scrollIntoView?.({ block: 'nearest' });

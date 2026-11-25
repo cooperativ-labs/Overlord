@@ -3,8 +3,7 @@ import { AlertTriangle, ChevronDown, RotateCw } from 'lucide-react';
 import { useId, useMemo, useState } from 'react';
 
 import { useAnswerFollowUps } from '../../lib/answered-agent-requests.ts';
-import { useDismissedAgentRequests } from '../../lib/dismissed-agent-requests.ts';
-import type { useMissionOpenAgentRequests } from '../../lib/queries.ts';
+import { useAgentRequestDismissal, type useMissionOpenAgentRequests } from '../../lib/queries.ts';
 import {
   AnsweredAgentRequestCard,
   DismissibleAgentRequestCard
@@ -43,7 +42,7 @@ export function missionNotificationRequests(
  * the delivery is pending, failed or unconfirmed (and, on the answering device, once confirmed
  * until closed), so the outcome and any "Send again" stay where the answer was given.
  *
- * Renders nothing when no undismissed notification or answer follow-up remains. A failed refresh
+ * Dismissed requests are reachable from a restore disclosure. A failed refresh
  * keeps the last successful cards with a retry, rather than claiming the questions went away.
  */
 export function MissionBlockingQuestions({
@@ -57,24 +56,20 @@ export function MissionBlockingQuestions({
 }) {
   const [expanded, setExpanded] = useState(false);
   const moreId = useId();
-  const { dismissedIds, dismiss } = useDismissedAgentRequests(
-    { workspaceId: mission.workspaceId, missionId: mission.id },
-    {
-      openRequestIds: openRequests.requests.map(request => request.id),
-      authoritative: openRequests.authoritative
-    }
-  );
+  const dismissal = useAgentRequestDismissal(mission.id);
   const objectivesById = useMemo(
     () => new Map(mission.objectives.map(objective => [objective.id, objective])),
     [mission.objectives]
   );
   const cards = useMemo(
     () =>
-      missionNotificationRequests(openRequests.blocking, mission.objectives).filter(
-        request => !dismissedIds.has(request.id)
+      missionNotificationRequests(
+        openRequests.blocking.filter(request => !request.dismissed),
+        mission.objectives
       ),
-    [dismissedIds, mission.objectives, openRequests.blocking]
+    [mission.objectives, openRequests.blocking]
   );
+  const dismissed = openRequests.blocking.filter(request => request.dismissed);
 
   const { followUps, close } = useAnswerFollowUps(mission.id);
   const answeredCards = useMemo(() => {
@@ -84,7 +79,8 @@ export function MissionBlockingQuestions({
     );
   }, [followUps, mission.objectives, openRequests.requests]);
 
-  if (cards.length === 0 && answeredCards.length === 0) return null;
+  const hasQuestions = cards.length > 0 || answeredCards.length > 0 || dismissed.length > 0;
+  if (!hasQuestions && !dismissal.isError) return null;
   const visible = expanded ? cards : cards.slice(0, BLOCKING_QUESTIONS_VISIBLE);
   const hiddenCount = cards.length - BLOCKING_QUESTIONS_VISIBLE;
   const objectiveHeader = (request: HumanAgentRequestDto, lead: string) => {
@@ -111,7 +107,15 @@ export function MissionBlockingQuestions({
 
   return (
     <section aria-label="Blocking questions" className="grid min-w-0 gap-2 px-5 pt-3">
-      {openRequests.state === 'error' ? (
+      {dismissal.isError ? (
+        <p role="alert" className="text-xs text-amber-800 dark:text-amber-300">
+          {dismissal.variables?.dismissed
+            ? 'Could not dismiss notification.'
+            : 'Could not restore notification.'}{' '}
+          {dismissal.error.message}
+        </p>
+      ) : null}
+      {openRequests.state === 'error' && hasQuestions ? (
         <p
           role="alert"
           className="flex items-center gap-2 text-xs text-amber-800 dark:text-amber-200"
@@ -135,7 +139,8 @@ export function MissionBlockingQuestions({
           <DismissibleAgentRequestCard
             key={request.id}
             request={request}
-            onDismiss={dismiss}
+            onDismiss={request => dismissal.mutate({ request, dismissed: true })}
+            dismissPending={dismissal.isPending}
             header={objectiveHeader(request, 'Waiting on you in')}
           />
         ))}
@@ -151,6 +156,27 @@ export function MissionBlockingQuestions({
           <ChevronDown className={expanded ? 'size-3 rotate-180' : 'size-3'} aria-hidden="true" />
           {expanded ? 'Show fewer' : `Show ${hiddenCount} more`}
         </button>
+      ) : null}
+      {dismissed.length > 0 ? (
+        <details className="text-xs text-(--color-ink-dim)">
+          <summary className="cursor-pointer">Dismissed notifications ({dismissed.length})</summary>
+          <ul className="mt-1 grid gap-1">
+            {dismissed.map(request => (
+              <li key={request.id} className="flex flex-wrap items-center gap-x-2">
+                <span>{request.summary}</span>
+                <button
+                  type="button"
+                  className="min-h-7 font-medium underline"
+                  aria-label={`Restore notification for ${request.summary}`}
+                  disabled={dismissal.isPending}
+                  onClick={() => dismissal.mutate({ request, dismissed: false })}
+                >
+                  Restore
+                </button>
+              </li>
+            ))}
+          </ul>
+        </details>
       ) : null}
       {answeredCards.map(request => (
         <AnsweredAgentRequestCard

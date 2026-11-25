@@ -3,10 +3,10 @@ info:
   title: Overlord API
   # info.version is the API description's own Semantic Version; it changes when
   # this document changes and is never compared with the contract version.
-  version: 7.2.0
+  version: 7.3.0
   # The contract version (contract/VERSION) this document belongs to. Written
   # only by `yarn version:contract`.
-  x-overlord-contract-version: 182.3.0
+  x-overlord-contract-version: 182.4.0
   description: >-
     Normative description of Overlord's REST surface (ADR 0006): one operation for every
     method and path the backend registers, at the path it is served (ADR 0007), excluding
@@ -12042,6 +12042,12 @@ components:
         sequenceNumber: { type: integer, minimum: 1 }
         title: { type: string }
         statusId: { type: string, format: uuid }
+        previousStatusId:
+          description: Status before entering complete, or null when unavailable.
+          oneOf:
+            - type: string
+              format: uuid
+            - type: 'null'
         statusType: { $ref: '#/components/schemas/StatusType' }
         boardPosition: { type: integer }
         priority:

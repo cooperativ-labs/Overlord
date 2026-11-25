@@ -22,6 +22,7 @@ import type {
 import {
   keepPreviousData,
   type QueryClient,
+  queryOptions,
   useInfiniteQuery,
   useMutation,
   useQuery,
@@ -79,10 +80,15 @@ export const useMissions = (projectId: string, scope: MissionBoardScope = 'recen
     placeholderData: keepPreviousData
   });
 
+export const missionQueryOptions = (id: string) =>
+  queryOptions({
+    queryKey: keys.mission(id),
+    queryFn: () => api.getMission(id)
+  });
+
 export const useMission = (id: string, options: { refetchBranchState?: boolean } = {}) =>
   useQuery({
-    queryKey: keys.mission(id),
-    queryFn: () => api.getMission(id),
+    ...missionQueryOptions(id),
     // Mission branch metadata is derived from live git state at request time, not
     // persisted database rows, so the SSE feed cannot observe external git
     // changes. Poll only for open detail panels that opt into branch freshness.
@@ -288,6 +294,42 @@ export function useMissionOpenAgentRequests(
 }
 
 const EMPTY_OPEN_REQUESTS: HumanAgentRequestDto[] = [];
+
+/** Dismiss or restore only the member's notification (ADR 0063). */
+export function useAgentRequestDismissal(missionId: string) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      request,
+      dismissed
+    }: {
+      request: Pick<HumanAgentRequestDto, 'id' | 'revision'>;
+      dismissed: boolean;
+    }) =>
+      dismissed
+        ? api.dismissAgentRequest(request.id, { expectedRevision: request.revision })
+        : api.restoreAgentRequest(request.id),
+    onSuccess: ({ request }) => {
+      client.setQueryData<OpenAgentRequestCollection>(
+        keys.missionOpenAgentRequests(missionId),
+        current =>
+          current && {
+            ...current,
+            requests: current.requests.map(item =>
+              item.id === request.id && item.revision === request.revision
+                ? {
+                    ...item,
+                    dismissed: request.dismissed === true,
+                    dismissedAt: request.dismissedAt ?? null
+                  }
+                : item
+            )
+          }
+      );
+    },
+    onSettled: () => client.invalidateQueries({ queryKey: keys.missionAgentRequests(missionId) })
+  });
+}
 
 /**
  * Answer a request under revision CAS. A `resolved: false` response is not an error — it means

@@ -32,10 +32,12 @@ export function AgentRequestCard({ request }: { request: HumanAgentRequestDto })
 export function DismissibleAgentRequestCard({
   request,
   onDismiss,
+  dismissPending = false,
   header
 }: {
   request: HumanAgentRequestDto;
-  onDismiss: (requestId: string) => void;
+  onDismiss: (request: HumanAgentRequestDto) => void;
+  dismissPending?: boolean;
   header?: ReactNode;
 }) {
   return (
@@ -48,7 +50,8 @@ export function DismissibleAgentRequestCard({
           aria-label="Dismiss this notification"
           title="Dismiss this notification"
           className="absolute right-1.5 top-1.5 z-10 inline-flex size-7 items-center justify-center rounded-md text-(--color-ink-dim) outline-none hover:bg-black/5 hover:text-(--color-ink) focus-visible:ring-2 focus-visible:ring-ring/50 dark:hover:bg-white/10"
-          onClick={() => onDismiss(request.id)}
+          disabled={dismissPending}
+          onClick={() => onDismiss(request)}
         >
           <X className="size-3.5" aria-hidden="true" />
         </button>

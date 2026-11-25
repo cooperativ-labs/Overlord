@@ -46,6 +46,10 @@ import type {
   UpsertSharedContextBody,
   WorktreeDto
 } from '@overlord/contract';
+import type {
+  AgentRequestDismissalBody,
+  AgentRequestDismissalResultDto
+} from '@overlord/contract/api';
 
 import { request } from './request.ts';
 
@@ -234,6 +238,17 @@ export const missionsApi = {
     if (options.cursor) params.set('cursor', options.cursor);
     return request<AgentRequestListResponse>('GET', `/api/agent-requests?${params.toString()}`);
   },
+  dismissAgentRequest: (requestId: string, body: AgentRequestDismissalBody) =>
+    request<AgentRequestDismissalResultDto>(
+      'POST',
+      `/api/agent-requests/${encodeURIComponent(requestId)}/dismissal`,
+      body
+    ),
+  restoreAgentRequest: (requestId: string) =>
+    request<AgentRequestDismissalResultDto>(
+      'DELETE',
+      `/api/agent-requests/${encodeURIComponent(requestId)}/dismissal`
+    ),
   /**
    * Answer a request. `expectedRevision` is required by the server: a stale card must lose
    * rather than overwrite a decision someone else already made.

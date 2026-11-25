@@ -11,10 +11,6 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, it } from 'node:test';
 
-import {
-  dismissAgentRequest,
-  resetDismissedAgentRequestsForTests
-} from '../../lib/dismissed-agent-requests.ts';
 import { useMissionOpenAgentRequests } from '../../lib/queries.ts';
 import { keys } from '../../lib/query-keys.ts';
 
@@ -132,7 +128,8 @@ function openResolved(count?: number) {
 
 async function mount(
   response: MissionSummaryResponse = structuredClone(fixture.summaryResponse),
-  deliveries: unknown[] = fixture.deliveries
+  deliveries: unknown[] = fixture.deliveries,
+  agentRequests: readonly FixtureRequest[] = fixture.agentRequests
 ) {
   // gcTime 0: a finished mutation's five-minute gc timer would keep the test process alive.
   const client = new QueryClient({
@@ -144,7 +141,7 @@ async function mount(
   clients.push(client);
   const id = fixture.mission.id;
   client.setQueryData(keys.missionSummary(id), response);
-  setOpenRequests(client, fixture.agentRequests);
+  setOpenRequests(client, agentRequests);
   // The Files tab mounts after the first render; seed what it reads so no request outlives the
   // test's fetch stub.
   client.setQueryData(keys.profile, { editorScheme: null });
@@ -196,35 +193,33 @@ function seenWrites(): string[] {
 }
 
 it('keeps old missions to Objectives and For you, and shows the before-first-delivery state', async () => {
-  // Its notification was dismissed: For you no longer lists it; the objective activity keeps it.
-  resetDismissedAgentRequestsForTests();
-  for (const request of fixture.agentRequests as Array<{ id: string }>) {
-    dismissAgentRequest(
-      { workspaceId: fixture.mission.workspaceId, missionId: fixture.mission.id },
-      request.id
-    );
-  }
-  await mount({
-    eligible: false,
-    summary: null,
-    evidence: null,
-    watermark: null,
-    narrative: null,
-    narrativeWatermark: null,
-    seenAt: null
-  });
-  // The card never hides: it carries the objective list and, on an old summary-ineligible
-  // mission, a dismissed question is not highlighted under For you (plan §6.1, decision 13).
+  // Dismissal removes the top notification, leaving the question available under For you.
+  const dismissed = (fixture.agentRequests as FixtureRequest[]).map(request => ({
+    ...request,
+    dismissed: true
+  }));
+  await mount(
+    {
+      eligible: false,
+      summary: null,
+      evidence: null,
+      watermark: null,
+      narrative: null,
+      narrativeWatermark: null,
+      seenAt: null
+    },
+    fixture.deliveries,
+    dismissed
+  );
   assert.ok(screen.getByText('Objective rows'));
-  const tabs = screen.getAllByRole('tab').map(tab => tab.textContent);
-  assert.deepEqual(tabs, ['Objectives1/6']);
+  assert.ok(screen.getByRole('tab', { name: /For you/ }));
+  assert.equal(screen.getAllByRole('tab').length, 2);
   assert.equal(
     screen.getByRole('tab', { name: /Objectives/ }).getAttribute('aria-selected'),
     'true'
   );
   cleanup();
   window.localStorage.clear();
-  resetDismissedAgentRequestsForTests();
   const response = structuredClone(fixture.summaryResponse);
   response.summary = null;
   response.evidence = {

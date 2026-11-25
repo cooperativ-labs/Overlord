@@ -684,6 +684,7 @@ interface MissionRow {
   sequence_number: number;
   title: string;
   status_id: string;
+  previous_status_id: string | null;
   status_type: string;
   board_position: number;
   priority: string | null;
@@ -992,6 +993,7 @@ function toMissionDto(r: MissionRow, tags: ProjectTagDto[] = []): MissionDto {
     sequenceNumber: r.sequence_number,
     title: r.title,
     statusId: r.status_id,
+    previousStatusId: r.previous_status_id ?? null,
     statusType: r.status_type as StatusType,
     boardPosition: r.board_position,
     priority: r.priority as MissionDto['priority'],
@@ -3845,7 +3847,7 @@ const missionHasUnseenReturnedToExecuteSql = `
 function selectMissionsSql(dialect: SqlDialect): string {
   return `
   SELECT t.id, t.workspace_id, t.project_id, t.display_id, t.sequence_number, t.title,
-         t.status_id, t.status_type, t.board_position, t.priority,
+         t.status_id, t.previous_status_id, t.status_type, t.board_position, t.priority,
          t.assigned_workspace_user_id,
          t.notes_text,
          t.schedule_id, t.due_datetime,

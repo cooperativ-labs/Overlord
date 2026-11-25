@@ -5,10 +5,10 @@
 import { z } from 'zod';
 
 /** The contract version (contract/VERSION) this API description belongs to. */
-export const contractVersion = "182.3.0";
+export const contractVersion = "182.4.0";
 
 /** The API description's own version (OpenAPI `info.version`). */
-export const apiVersion = "7.2.0";
+export const apiVersion = "7.3.0";
 
 /** A non-JSON request or response body: raw bytes (G3). */
 export type BinaryBody = Uint8Array | ArrayBuffer | Blob;
@@ -488,6 +488,10 @@ export interface MissionDto {
   sequenceNumber: number;
   title: string;
   statusId: string;
+  /**
+   * Status before entering complete, or null when unavailable.
+   */
+  previousStatusId?: string | null;
   statusType: StatusType;
   boardPosition: number;
   priority: MissionPriority | null;
@@ -523,7 +527,7 @@ export interface MissionDto {
    */
   objectives?: ObjectiveDto[];
 }
-const missionDtoShape = { "id": z.string(), "workspaceId": z.string(), "projectId": z.string(), "displayId": z.string(), "sequenceNumber": z.int().min(1), "title": z.string(), "statusId": z.string(), "statusType": statusTypeSchema, "boardPosition": z.int(), "priority": missionPrioritySchema.nullable(), "assignedWorkspaceUserId": z.string().nullable(), "notes": z.string().nullable(), "scheduleId": z.string().nullable(), "dueDatetime": dateTimeSchema.nullable(), "createdAt": dateTimeSchema, "updatedAt": dateTimeSchema, "revision": z.int().min(1), "objectiveCount": z.int().min(0), "completedObjectiveCount": z.int().min(0), "hasExecutingObjective": z.boolean(), "hasCompletedObjective": z.boolean(), "hasPendingObjectiveWithInstructions": z.boolean(), "hasUnseenBlockingQuestion": z.boolean(), "hasUnseenReturnedToExecute": z.boolean(), "allowParallelObjectives": z.boolean(), "draftObjectiveResourceKey": z.string().nullable(), "tags": z.array(projectTagDtoSchema), "createdByKind": createdByKindSchema, "createdByAgent": z.string().nullable(), "createdByWorkspaceUserId": z.string().nullable(), "createdByToken": missionCreatorTokenDtoSchema.nullable(), "objectives": z.exactOptional(z.array(objectiveDtoSchema)) };
+const missionDtoShape = { "id": z.string(), "workspaceId": z.string(), "projectId": z.string(), "displayId": z.string(), "sequenceNumber": z.int().min(1), "title": z.string(), "statusId": z.string(), "previousStatusId": z.exactOptional(z.string().nullable()), "statusType": statusTypeSchema, "boardPosition": z.int(), "priority": missionPrioritySchema.nullable(), "assignedWorkspaceUserId": z.string().nullable(), "notes": z.string().nullable(), "scheduleId": z.string().nullable(), "dueDatetime": dateTimeSchema.nullable(), "createdAt": dateTimeSchema, "updatedAt": dateTimeSchema, "revision": z.int().min(1), "objectiveCount": z.int().min(0), "completedObjectiveCount": z.int().min(0), "hasExecutingObjective": z.boolean(), "hasCompletedObjective": z.boolean(), "hasPendingObjectiveWithInstructions": z.boolean(), "hasUnseenBlockingQuestion": z.boolean(), "hasUnseenReturnedToExecute": z.boolean(), "allowParallelObjectives": z.boolean(), "draftObjectiveResourceKey": z.string().nullable(), "tags": z.array(projectTagDtoSchema), "createdByKind": createdByKindSchema, "createdByAgent": z.string().nullable(), "createdByWorkspaceUserId": z.string().nullable(), "createdByToken": missionCreatorTokenDtoSchema.nullable(), "objectives": z.exactOptional(z.array(objectiveDtoSchema)) };
 export const missionDtoSchema: z.ZodType<MissionDto> = z.object(missionDtoShape);
 
 export interface ExecutionRequestDto {

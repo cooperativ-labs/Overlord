@@ -13,7 +13,6 @@ import assert from 'node:assert/strict';
 import { afterEach, beforeEach, describe, it } from 'node:test';
 import { useState } from 'react';
 
-import { resetDismissedAgentRequestsForTests } from '../../lib/dismissed-agent-requests.ts';
 import { useObjectiveDetailNavigation } from '../../lib/hooks/use-objective-detail-navigation.ts';
 import {
   objectiveSearchFromLocation,
@@ -58,7 +57,6 @@ beforeEach(() => {
   attachments = [];
   respond = () => null;
   window.localStorage.clear();
-  resetDismissedAgentRequestsForTests();
   resetObjectiveEditBuffers();
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(String(input), 'http://localhost');
@@ -521,8 +519,14 @@ describe('ObjectiveDetail (plan §9)', () => {
     assert.equal(screen.queryByText(/Nothing has run yet/), null);
   });
 
-  it('dismissing the top notification removes every highlight of the request', async () => {
+  it('dismisses the top notification and keeps the question in the objective list', async () => {
     openRequests = [request({ id: 'req-1' })];
+    respond = ({ method, path }) => {
+      if (method !== 'POST' || path !== '/api/agent-requests/req-1/dismissal') return null;
+      const dismissed = { ...openRequests[0], dismissed: true };
+      openRequests = [dismissed];
+      return { status: 200, body: { changed: true, request: dismissed } };
+    };
     await renderDetail(
       [objective({ id: 'a', state: 'executing', startedAt: '2026-11-15T10:00:00.000Z' })],
       '/missions/mission-1?objective=coo:1.a'
@@ -532,21 +536,27 @@ describe('ObjectiveDetail (plan §9)', () => {
     assert.ok(screen.getByText('Blocking questions'));
     fireEvent.click(dismiss);
     await waitFor(() =>
-      assert.equal(screen.queryByRole('button', { name: 'Dismiss this notification' }), null)
+      assert.equal(
+        screen.queryByRole('button', { name: 'Dismiss this notification' }) !== null,
+        false
+      )
     );
-    assert.equal(screen.queryByRole('button', { name: /Which database should I use\?/ }), null);
-    assert.equal(screen.queryByText('Blocking questions'), null);
+    assert.deepEqual(requests.find(req => req.path.endsWith('/dismissal'))?.body, {
+      expectedRevision: 1
+    });
+    assert.ok(screen.getByRole('button', { name: /Which database should I use\?/ }));
+    assert.ok(screen.getByText('Blocking questions'));
     assert.equal(screen.queryByText('Waiting on you'), null);
   });
 });
 
 describe('ObjectiveBlockingQuestions (plan §9.7)', () => {
-  function renderList(requestsList: HumanAgentRequestDto[], dismissed: string[] = []) {
+  function renderList(requestsList: HumanAgentRequestDto[]) {
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     clients.push(qc);
     return render(
       <QueryClientProvider client={qc}>
-        <ObjectiveBlockingQuestions requests={requestsList} dismissedIds={new Set(dismissed)} />
+        <ObjectiveBlockingQuestions requests={requestsList} />
       </QueryClientProvider>
     );
   }
@@ -572,7 +582,7 @@ describe('ObjectiveBlockingQuestions (plan §9.7)', () => {
   });
 
   it('starts expanded on the first row when every notification was dismissed', () => {
-    const { container } = renderList([request({ id: 'r1' })], ['r1']);
+    const { container } = renderList([request({ id: 'r1', dismissed: true })]);
     assert.equal(
       container.querySelector('button[aria-expanded]')?.getAttribute('aria-expanded'),
       'true'
