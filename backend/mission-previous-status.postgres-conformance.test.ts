@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync } from 'node:fs';
 import path from 'node:path';
 import { describe, it } from 'node:test';
+
 import {
   bindWebappDatabaseClient,
   conformanceAdapters,

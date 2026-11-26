@@ -1,6 +1,7 @@
-import { afterEach, test } from 'node:test';
-import assert from 'node:assert/strict';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import assert from 'node:assert/strict';
+import { afterEach, test } from 'node:test';
+
 import { MissionCompleteCheckbox } from './MissionCardPrimitives.tsx';
 
 afterEach(cleanup);
