@@ -560,9 +560,11 @@ export class ChatProposals extends ChatStore {
             model: string | null;
             reasoning_effort: string | null;
             resource_key: string;
-            auto_advance: unknown;
+            queue_member: number;
           }>(
-            'SELECT assigned_agent, model, reasoning_effort, resource_key, auto_advance FROM objectives WHERE id = ?',
+            `SELECT assigned_agent, model, reasoning_effort, resource_key,
+                    CASE WHEN EXISTS (SELECT 1 FROM run_queue_entries e WHERE e.objective_id = o.id AND e.deleted_at IS NULL) THEN 1 ELSE 0 END AS queue_member
+               FROM objectives o WHERE id = ?`,
             [o.id]
           );
           const frozen = m.objectives[j]!;
@@ -572,8 +574,7 @@ export class ChatProposals extends ChatStore {
             saved.model !== frozen.assignment.model ||
             saved.reasoning_effort !== frozen.assignment.reasoningEffort ||
             saved.resource_key !== frozen.resourceKey ||
-            saved.auto_advance === true ||
-            saved.auto_advance === 1
+            saved.queue_member === 1
           )
             throw new ChatError('proposal_not_creatable');
         }

@@ -252,10 +252,10 @@ async function seedRunningPredecessors(
         now
       ]
     );
-    await db.run(
-      'UPDATE objectives SET auto_advance = ?, updated_at = ?, revision = revision + 1 WHERE id = ?',
-      [db.dialect === 'postgres' ? true : 1, now, objective.id]
-    );
+    await db.run('UPDATE objectives SET updated_at = ?, revision = revision + 1 WHERE id = ?', [
+      now,
+      objective.id
+    ]);
   }
   await db.run(
     'UPDATE run_queues SET paused = ?, updated_at = ?, revision = revision + 1 WHERE id = ?',
@@ -379,7 +379,7 @@ export async function retireRunQueueIfEmpty(
   queueId: string
 ): Promise<string | null> {
   const queue = await db.get<Pick<QueueRow, 'id' | 'is_default'>>(
-    'SELECT id, is_default FROM run_queues WHERE id = ? AND deleted_at IS NULL',
+    `SELECT id, is_default FROM run_queues WHERE id = ? AND deleted_at IS NULL${db.dialect === 'postgres' ? ' FOR UPDATE' : ''}`,
     [queueId]
   );
   if (!queue || isTruthyFlag(queue.is_default)) return null;
@@ -415,17 +415,16 @@ export async function retireEmptyRunQueues(
         AND NOT EXISTS (
           SELECT 1 FROM run_queue_entries e WHERE e.queue_id = q.id AND e.deleted_at IS NULL
         )
-        AND EXISTS (SELECT 1 FROM run_queue_entries e WHERE e.queue_id = q.id)`,
+        AND EXISTS (SELECT 1 FROM run_queue_entries e WHERE e.queue_id = q.id)
+      ORDER BY q.id`,
     [projectId, db.dialect === 'postgres' ? false : 0]
   );
-  if (!rows.length) return [];
-  const now = nowIso();
-  for (const row of rows)
-    await db.run(
-      'UPDATE run_queues SET deleted_at = ?, updated_at = ?, revision = revision + 1 WHERE id = ? AND deleted_at IS NULL',
-      [now, now, row.id]
-    );
-  return rows.map(row => row.id);
+  const retired: string[] = [];
+  for (const { id } of rows) {
+    const retiredId = await db.transaction(tx => retireRunQueueIfEmpty(tx, id));
+    if (retiredId) retired.push(retiredId);
+  }
+  return retired;
 }
 
 /** Objective states that have not started and may still be sequenced. */
@@ -788,7 +787,8 @@ export async function enqueueRunQueueEntry(
         }
       : await resolveMissionRunQueue(tx, projectId, objective.mission_id, options.actorId ?? null);
     const queue = resolved.queue;
-    if (!queue) throw new ServiceError('Run Queue not found', 'run_queue_not_found', 404);
+    if (!queue || !(await lockLiveRunQueues(tx, projectId, [queue.id])).has(queue.id))
+      throw new ServiceError('Run Queue not found', 'run_queue_not_found', 404);
     // A new queue starts paused, except when an earlier sibling is already
     // running: then the running work joins the queue ahead of this objective
     // and the queue runs, so this objective starts as soon as it finishes.
@@ -856,10 +856,10 @@ export async function enqueueRunQueueEntry(
         [tx.dialect === 'postgres' ? false : 0, now, queue.id]
       );
     }
-    await tx.run(
-      'UPDATE objectives SET auto_advance = ?, updated_at = ?, revision = revision + 1 WHERE id = ?',
-      [tx.dialect === 'postgres' ? true : 1, now, objectiveId]
-    );
+    await tx.run('UPDATE objectives SET updated_at = ?, revision = revision + 1 WHERE id = ?', [
+      now,
+      objectiveId
+    ]);
     if (options.cascade !== false) {
       // Queueing an objective queues the rest of the mission positioned after
       // it ("this and everything after"). Earlier unqueued drafts stay unqueued
@@ -898,8 +898,8 @@ export async function enqueueRunQueueEntry(
             ]
           );
           await tx.run(
-            'UPDATE objectives SET auto_advance = ?, updated_at = ?, revision = revision + 1 WHERE id = ?',
-            [tx.dialect === 'postgres' ? true : 1, now, follower.id]
+            'UPDATE objectives SET updated_at = ?, revision = revision + 1 WHERE id = ?',
+            [now, follower.id]
           );
         }
         // Renumber the queue with the followers slotted directly behind the
@@ -1152,10 +1152,10 @@ export async function removeRunQueueEntry(
       'UPDATE run_queue_entries SET deleted_at = ?, execution_request_id = NULL, updated_at = ?, revision = revision + 1 WHERE id = ?',
       [now, now, entryId]
     );
-    await tx.run(
-      'UPDATE objectives SET auto_advance = ?, updated_at = ?, revision = revision + 1 WHERE id = ?',
-      [tx.dialect === 'postgres' ? false : 0, now, row.objective_id]
-    );
+    await tx.run('UPDATE objectives SET updated_at = ?, revision = revision + 1 WHERE id = ?', [
+      now,
+      row.objective_id
+    ]);
     // A dispatch that never reached a runner parks the objective in `launching`,
     // where nothing can relaunch it. Forced removal puts it back in `draft`.
     // `executing` is left alone: that objective has a live session a user must
@@ -1342,27 +1342,30 @@ export async function moveRunQueueEntry(
   options: { queueId?: string; afterEntryId?: string; position?: number }
 ): Promise<RunQueueEntryDto> {
   return db.transaction(async tx => {
-    const current = await tx.get<{
-      project_id: string;
-      workspace_id: string;
-      mission_id: string;
-      queue_id: string;
-      state: string;
-    }>(
-      'SELECT project_id, workspace_id, mission_id, queue_id, state FROM run_queue_entries WHERE id = ? AND deleted_at IS NULL',
-      [entryId]
-    );
+    const readEntry = () =>
+      tx.get<{
+        project_id: string;
+        workspace_id: string;
+        mission_id: string;
+        queue_id: string;
+        state: string;
+      }>(
+        'SELECT project_id, workspace_id, mission_id, queue_id, state FROM run_queue_entries WHERE id = ? AND deleted_at IS NULL',
+        [entryId]
+      );
+    const initial = await readEntry();
+    if (!initial)
+      throw new ServiceError('Run Queue entry not found', 'run_queue_entry_not_found', 404);
+    await lockMissionObjectiveQueue(tx, initial.mission_id);
+    const current = await readEntry();
     if (!current)
       throw new ServiceError('Run Queue entry not found', 'run_queue_entry_not_found', 404);
-    await lockMissionObjectiveQueue(tx, current.mission_id);
     if (current.state === 'running' || current.state === 'dispatched')
       throw new ServiceError('Running entries cannot be moved', 'run_queue_entry_running', 409);
     const queueId = options.queueId ?? current.queue_id;
-    const queue = await tx.get<{ id: string }>(
-      'SELECT id FROM run_queues WHERE id = ? AND project_id = ? AND deleted_at IS NULL',
-      [queueId, current.project_id]
-    );
-    if (!queue) throw new ServiceError('Run Queue not found', 'run_queue_not_found', 404);
+    const queues = await lockLiveRunQueues(tx, current.project_id, [current.queue_id, queueId]);
+    if (!queues.has(current.queue_id) || !queues.has(queueId))
+      throw new ServiceError('Run Queue not found', 'run_queue_not_found', 404);
     let position = options.position;
     if (options.afterEntryId) {
       const after = await tx.get<{ position: number }>(
@@ -1463,6 +1466,23 @@ export async function enqueueRunQueueDispatchForWorkspace(
   for (const row of rows) await enqueueRunQueueDispatch(db, row.project_id, workspaceId);
 }
 
+// Take queue locks after mission locks, and in ID order for two-queue writes.
+// SQLite serializes writes in its transaction adapter.
+async function lockLiveRunQueues(
+  db: DatabaseClient,
+  projectId: string,
+  queueIds: string[]
+): Promise<Set<string>> {
+  const ids = [...new Set(queueIds)];
+  const rows = await db.all<{ id: string }>(
+    `SELECT id FROM run_queues
+      WHERE project_id = ? AND deleted_at IS NULL AND id IN (${ids.map(() => '?').join(', ')})
+      ORDER BY id${db.dialect === 'postgres' ? ' FOR UPDATE' : ''}`,
+    [projectId, ...ids]
+  );
+  return new Set(rows.map(row => row.id));
+}
+
 export async function deleteRunQueue(
   db: DatabaseClient,
   queueId: string,
@@ -1474,15 +1494,29 @@ export async function deleteRunQueue(
       [queueId]
     );
     if (!queue) throw new ServiceError('Run Queue not found', 'run_queue_not_found', 404);
-    if (isTruthyFlag(queue.is_default))
-      throw new ServiceError('The default Run Queue cannot be deleted', 'default_run_queue', 409);
-    const entries = await tx.all<{ id: string; mission_id: string }>(
-      'SELECT id, mission_id FROM run_queue_entries WHERE queue_id = ? AND deleted_at IS NULL',
-      [queueId]
-    );
-    for (const missionId of [...new Set(entries.map(entry => entry.mission_id))].sort()) {
+    if (moveEntriesTo === queueId)
+      throw new ServiceError(
+        'Destination must be a different Run Queue',
+        'invalid_run_queue_destination',
+        400
+      );
+    const readEntries = () =>
+      tx.all<{ id: string; mission_id: string }>(
+        'SELECT id, mission_id FROM run_queue_entries WHERE queue_id = ? AND deleted_at IS NULL ORDER BY position, id',
+        [queueId]
+      );
+    const lockedMissions = new Set((await readEntries()).map(entry => entry.mission_id));
+    for (const missionId of [...lockedMissions].sort()) {
       await lockMissionObjectiveQueue(tx, missionId);
     }
+    const liveQueues = await lockLiveRunQueues(
+      tx,
+      queue.project_id,
+      moveEntriesTo ? [queueId, moveEntriesTo] : [queueId]
+    );
+    if (!liveQueues.has(queueId))
+      throw new ServiceError('Run Queue not found', 'run_queue_not_found', 404);
+    const entries = await readEntries();
     if (entries.length && !moveEntriesTo)
       throw new ServiceError(
         'moveEntriesTo is required for a non-empty queue',
@@ -1490,19 +1524,21 @@ export async function deleteRunQueue(
         409
       );
     if (moveEntriesTo) {
-      const target = await tx.get<{ id: string }>(
-        'SELECT id FROM run_queues WHERE id = ? AND project_id = ? AND deleted_at IS NULL',
-        [moveEntriesTo, queue.project_id]
-      );
-      if (!target)
+      if (!liveQueues.has(moveEntriesTo))
         throw new ServiceError('Destination Run Queue not found', 'run_queue_not_found', 404);
+      if (entries.some(entry => !lockedMissions.has(entry.mission_id)))
+        throw new ServiceError(
+          'Run Queue entries changed. Retry deletion.',
+          'run_queue_changed',
+          409
+        );
       const max = await tx.get<{ value: number | null }>(
         'SELECT MAX(position) value FROM run_queue_entries WHERE queue_id = ? AND deleted_at IS NULL',
         [moveEntriesTo]
       );
       for (let i = 0; i < entries.length; i++)
         await tx.run(
-          'UPDATE run_queue_entries SET queue_id = ?, position = ?, updated_at = ?, revision = revision + 1 WHERE id = ?',
+          'UPDATE run_queue_entries SET queue_id = ?, position = ?, updated_at = ?, revision = revision + 1 WHERE id = ? AND deleted_at IS NULL',
           [moveEntriesTo, (max?.value ?? 0) + (i + 1) * STEP, nowIso(), entries[i]!.id]
         );
     }

@@ -7,7 +7,7 @@ import { listObjectiveFileChanges } from './changes.js';
 import type { ServiceContext } from './context.js';
 import { ServiceError } from './errors.js';
 import { createMissionWithObjectives, insertObjective } from './missions.js';
-import { addProjectResource, createProject } from './projects.js';
+import { createProject } from './projects.js';
 import {
   askQuestion,
   attachSession,
@@ -17,7 +17,6 @@ import {
   updateSession
 } from './protocol.js';
 import { createRunQueue, enqueueRunQueueEntry, listProjectRunQueues } from './run-queue.js';
-import { createIsolatedCheckout } from './test-checkout.ts';
 import { createSeededServiceContext } from './test-helpers.js';
 import { nowIso } from './util.js';
 
@@ -809,41 +808,16 @@ describe('deliverSession mechanical change capture', () => {
     await db.close();
   });
 
-  it('queues durable Run Queue dispatch instead of launching auto-advance inline', async () => {
+  it('queues durable Run Queue dispatch instead of launching the successor inline', async () => {
     const { db, ctx } = await setup();
-    const project = await createProject({ ctx, name: 'Auto Advance Launch Flags' });
+    const project = await createProject({ ctx, name: 'Delivery Dispatch Tick' });
     const { mission, objectives } = await createMissionWithObjectives({
       ctx,
       projectId: project.id,
-      objectives: [
-        { instructions: 'First objective' },
-        { instructions: 'Second objective', autoAdvance: true }
-      ]
+      objectives: [{ instructions: 'First objective' }, { instructions: 'Second objective' }]
     });
-    const secondObjectiveId = objectives[1]?.id as string;
-
-    // createExecutionRequest resolves the working directory from the project's
-    // primary resource, so the auto-advance path needs one linked.
-    await addProjectResource({
-      ctx,
-      projectId: project.id,
-      directoryPath: createIsolatedCheckout('ovld-auto-advance-'),
-      isPrimary: true
-    });
-
-    // Workspace catalog launch default for the agent — the lowest-priority
-    // launch-config source the shared resolver must still honor on the
-    // auto-advance path (previously this path stamped an empty config).
-    await ctx.db.run(`UPDATE workspaces SET settings_json = ? WHERE id = ?`, [
-      JSON.stringify({
-        agentCatalog: {
-          agents: {
-            claude: { launchDefaults: { preCommand: 'nvm use 20', flags: [{ name: '--verbose' }] } }
-          }
-        }
-      }),
-      ctx.workspace.id
-    ]);
+    const secondObjectiveId = objectives[1]!.id;
+    await enqueueRunQueueEntry(ctx.db, project.id, secondObjectiveId);
 
     await ctx.db.run(`UPDATE objectives SET state = 'submitted' WHERE id = ?`, [objectives[0]?.id]);
     const attached = await attachSession({
@@ -856,7 +830,7 @@ describe('deliverSession mechanical change capture', () => {
       ctx,
       missionId: mission.displayId,
       sessionKey: attached.sessionKey,
-      summary: 'Delivered first objective; auto-advance the second.'
+      summary: 'Delivered the first objective.'
     });
 
     const request = (await ctx.db.get(

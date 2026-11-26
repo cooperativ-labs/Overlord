@@ -27,7 +27,7 @@ function KindChip({ row }: { row: SummaryActionRow }) {
         'inline-flex shrink-0 items-center rounded px-1.5 text-[10px] font-bold uppercase leading-4 tracking-wide',
         row.kind === 'action'
           ? 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-200'
-          : 'bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-200'
+          : !row.dismissed && 'bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-200'
       )}
     >
       {label}
@@ -57,7 +57,8 @@ function ActionRow({ row, missionId }: { row: SummaryActionRow; missionId: strin
           'mt-0.5 size-4',
           row.kind === 'action'
             ? 'text-sky-700 dark:text-sky-300'
-            : 'text-amber-700 dark:text-amber-300'
+            : !row.dismissed && 'text-amber-700 dark:text-amber-300',
+          row.dismissed && 'text-(--color-ink-dim)'
         )}
         aria-hidden="true"
       />

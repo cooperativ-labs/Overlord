@@ -36,7 +36,7 @@ export function missionNotificationRequests(
  * answer card per open, undismissed request, oldest first. Two show; more sit behind "Show n
  * more". Each card names its objective, which opens that objective's detail, and can be
  * dismissed. Dismissing hides only the notification (here and at the top of the objective
- * detail); the request stays open, tinted on its row and listed in For you and in the detail.
+ * detail); the request stays open and listed in For you and in the detail.
  *
  * After a person answers, the request leaves the open list; its answered card stays here while
  * the delivery is pending, failed or unconfirmed (and, on the answering device, once confirmed

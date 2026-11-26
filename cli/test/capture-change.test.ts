@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -77,6 +77,48 @@ test('captures a direct native path under the canonical objective ledger', () =>
     }).length,
     1
   );
+});
+
+test('stores edits from a nested hook cwd relative to the objective checkout', () => {
+  const workspace = makeWorkspace();
+  const hookCwd = path.join(workspace, 'analysis', 'private');
+  mkdirSync(path.join(hookCwd, 'scripts'), { recursive: true });
+  writeFileSync(path.join(workspace, '.gitignore'), 'analysis/private/\n');
+  writeFileSync(path.join(workspace, '.overlordignore'), 'analysis/private/excluded.ts\n');
+  const absoluteEdit = path.join(hookCwd, 'scripts', 'report.ts');
+  writeFileSync(absoluteEdit, '');
+  writeFileSync(path.join(hookCwd, 'notes.ts'), '');
+  writeFileSync(path.join(hookCwd, 'excluded.ts'), '');
+
+  for (const [filePath, recorded] of [
+    [absoluteEdit, true],
+    ['notes.ts', true],
+    ['excluded.ts', false]
+  ] as const) {
+    const result = captureChangeFromPayload({
+      agent: 'claude',
+      rawPayload: JSON.stringify({
+        hook_event_name: 'PostToolUse',
+        tool_name: 'Write',
+        tool_input: { file_path: filePath },
+        cwd: hookCwd
+      }),
+      objectiveOverride: OBJECTIVE_DISPLAY_ID,
+      fallbackCwd: workspace
+    });
+    assert.equal(result.recorded, recorded);
+  }
+
+  const identity = {
+    workingDirectory: workspace,
+    objectiveId: OBJECTIVE_ID,
+    sessionKey: SESSION_KEY
+  };
+  assert.deepEqual(
+    readUnsyncedChangeEvidence(identity).map(entry => entry.filePath),
+    ['analysis/private/scripts/report.ts', 'analysis/private/notes.ts']
+  );
+  assert.ok(readChangeLedgerHealth(identity).some(entry => entry.code === 'ignored_path:1'));
 });
 
 test('captures declared notebook and apply_patch paths without retaining native content', () => {

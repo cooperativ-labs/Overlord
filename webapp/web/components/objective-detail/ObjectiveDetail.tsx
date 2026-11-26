@@ -1,4 +1,9 @@
-import type { MissionDetailDto, ObjectiveDto, TerminalSessionDto } from '@overlord/contract';
+import type {
+  HumanAgentRequestDto,
+  MissionDetailDto,
+  ObjectiveDto,
+  TerminalSessionDto
+} from '@overlord/contract';
 import { useBlocker } from '@tanstack/react-router';
 import {
   ChevronDown,
@@ -613,6 +618,7 @@ function DetailMainColumn(props: LayoutProps) {
   const { mission, objective, evidence } = props;
   const { openRequests, requests, notifications } = useBlockedState(mission, objective);
   const dismissal = useAgentRequestDismissal(mission.id);
+  const dismiss = (request: HumanAgentRequestDto) => dismissal.mutate({ request, dismissed: true });
   const notStarted = isNotStartedObjective(objective.state);
   const inFlight = isInFlightObjective(objective.state);
   const attachmentState = useObjectiveAttachmentState(objective.id);
@@ -652,7 +658,7 @@ function DetailMainColumn(props: LayoutProps) {
             <DismissibleAgentRequestCard
               key={request.id}
               request={request}
-              onDismiss={request => dismissal.mutate({ request, dismissed: true })}
+              onDismiss={dismiss}
               dismissPending={dismissal.isPending}
             />
           ))}
@@ -718,6 +724,8 @@ function DetailMainColumn(props: LayoutProps) {
         requests={requests}
         stale={openRequests.stale}
         onRetry={() => void openRequests.retry()}
+        onDismiss={dismiss}
+        dismissPending={dismissal.isPending}
       />
 
       {evidenceMode ? (

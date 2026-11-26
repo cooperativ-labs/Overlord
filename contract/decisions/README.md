@@ -143,3 +143,5 @@ record and the index disagree.
 - [0105 — Resume saved freeform chats through the original paired Latch host](0105-saved-freeform-chat-resume.md)
 
 - [0106 — Retain the status preceding completion](0106-mission-previous-status.md)
+- [0107 — Allow explicit deletion of legacy default Run Queues](0107-delete-legacy-default-run-queues.md)
+- [0108 — Retire the stored auto-advance mirror](0108-retire-auto-advance-mirror.md)

@@ -16,7 +16,7 @@ import { StructuredChoiceCard } from '../agent-session/StructuredChoiceCard.tsx'
  * `StructuredChoiceCard` for a choice and `PermissionRequestCard` for an approval. The answer form
  * is never forked (plan §5).
  */
-export function AgentRequestCard({ request }: { request: HumanAgentRequestDto }) {
+function AgentRequestCard({ request }: { request: HumanAgentRequestDto }) {
   if (request.kind === 'question') return <BlockingQuestionCard request={request} />;
   if (request.kind === 'choice') return <StructuredChoiceCard request={request} />;
   if (request.kind === 'permission') return <PermissionRequestCard request={request} />;
@@ -24,10 +24,9 @@ export function AgentRequestCard({ request }: { request: HumanAgentRequestDto })
 }
 
 /**
- * A blocking-request notification with a dismiss button (plan §5, §9.4). Dismissing hides only
- * this notification, in the mission panel and the objective detail alike; the request stays open
- * and answerable in the detail's Blocking questions list. `header` adds content above the card
- * (the mission-level slot puts the objective's id there).
+ * A blocking-request card with a dismissal control while the notification is active.
+ * The objective list keeps rendering the card after dismissal so it stays answerable.
+ * `header` adds content above the card (the mission-level slot puts the objective's id there).
  */
 export function DismissibleAgentRequestCard({
   request,
@@ -36,7 +35,7 @@ export function DismissibleAgentRequestCard({
   header
 }: {
   request: HumanAgentRequestDto;
-  onDismiss: (request: HumanAgentRequestDto) => void;
+  onDismiss?: (request: HumanAgentRequestDto) => void;
   dismissPending?: boolean;
   header?: ReactNode;
 }) {
@@ -45,16 +44,18 @@ export function DismissibleAgentRequestCard({
       {header}
       <div className="relative min-w-0">
         <AgentRequestCard request={request} />
-        <button
-          type="button"
-          aria-label="Dismiss this notification"
-          title="Dismiss this notification"
-          className="absolute right-1.5 top-1.5 z-10 inline-flex size-7 items-center justify-center rounded-md text-(--color-ink-dim) outline-none hover:bg-black/5 hover:text-(--color-ink) focus-visible:ring-2 focus-visible:ring-ring/50 dark:hover:bg-white/10"
-          disabled={dismissPending}
-          onClick={() => onDismiss(request)}
-        >
-          <X className="size-3.5" aria-hidden="true" />
-        </button>
+        {onDismiss && !request.dismissed ? (
+          <button
+            type="button"
+            aria-label="Dismiss this notification"
+            title="Dismiss this notification"
+            className="absolute right-1.5 top-1.5 z-10 inline-flex size-7 items-center justify-center rounded-md text-(--color-ink-dim) outline-none hover:bg-black/5 hover:text-(--color-ink) focus-visible:ring-2 focus-visible:ring-ring/50 dark:hover:bg-white/10"
+            disabled={dismissPending}
+            onClick={() => onDismiss(request)}
+          >
+            <X className="size-3.5" aria-hidden="true" />
+          </button>
+        ) : null}
       </div>
     </div>
   );

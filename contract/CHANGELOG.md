@@ -5,6 +5,30 @@ is the current version and must equal [VERSION](VERSION); `yarn version:contract
 writes its skeleton. Dates use ISO 8601 and describe the contract change, not
 merely the files edited.
 
+## [182.5.1] - 2026-11-26
+
+Contract impact: patch. Legacy auto-advance responses use live Run Queue
+membership across Protocol, REST and the activity feed. Core retires the
+unused planner and stops maintaining the stored mirror. See ADR 0108.
+
+## [182.5.0] - 2026-11-26
+
+Contract impact: minor. Legacy default Run Queues can be explicitly deleted
+through the existing queue-definition operation. Deleting an occupied queue
+requires moving its entries to another queue in the project. See ADR 0107.
+
+### Impact on modules
+
+- Core applies the same explicit deletion rules to both default and named
+  queues in SQLite and PostgreSQL. Automatic retirement still skips default queues.
+- REST, Protocol, and MCP use the existing delete operation and permission.
+- The shared web and desktop panel offers deletion and can create a queue
+  after the last one is removed.
+
+### Version
+
+- Minor contract version 182.5.0, from 182.4.0.
+
 ## [182.4.0] - 2026-11-25
 
 Contract impact: minor. Mission responses expose the status preceding completion, retained atomically by both database adapters. Existing completed missions have no historical value.

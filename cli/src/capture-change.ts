@@ -214,6 +214,11 @@ export function captureChangeFromPayload({
     projectRootPaths: codec.projectRootPaths,
     workingDirectory: lexicalProjectRoot({ workingDirectory, pathHints })
   });
+  const normalizationDirectory = resolveHookWorkingDirectory({
+    payload: payloadForNormalize,
+    projectRootPaths: codec.projectRootPaths,
+    fallbackCwd: workingDirectory
+  });
   const normalized = payloadFailure
     ? null
     : normalizeForAdapter({ codec, payload: payloadForNormalize });
@@ -306,7 +311,10 @@ export function captureChangeFromPayload({
         workingDirectory,
         objectiveId: session.objectiveId,
         sessionKey: session.sessionKey,
-        filePaths: directPaths,
+        // The codec emits paths relative to the native cwd, which can be below
+        // the checkout. Give the ledger their absolute locations so it can
+        // apply containment and ignore rules before making them checkout-relative.
+        filePaths: directPaths.map(filePath => path.resolve(normalizationDirectory, filePath)),
         source: 'declared_edit',
         hookHealth: 'direct_path_observed'
       });

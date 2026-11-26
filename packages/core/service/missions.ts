@@ -36,11 +36,8 @@ import {
 import { allocateObjectiveDisplayKey } from './objective-display-id.js';
 import { lockMissionObjectiveQueue } from './objective-queue.js';
 import { assertProjectResourceKeyExists } from './projects.js';
-import {
-  enqueueObjectiveAfterLastQueuedSibling,
-  removeRunQueueEntryForObjective
-} from './run-queue.js';
-import { initialTitleFromInstruction, isTruthyFlag, newId, nowIso } from './util.js';
+import { enqueueObjectiveAfterLastQueuedSibling } from './run-queue.js';
+import { initialTitleFromInstruction, newId, nowIso } from './util.js';
 import { enqueueWebhookEvent } from './webhook-events.js';
 import { enqueueObjectiveBriefComposeJob } from './worker-jobs.js';
 
@@ -282,7 +279,8 @@ export async function listObjectives({
   const rows = (await ctx.db.all(
     `SELECT o.id, o.mission_id, o.project_id, o.position, o.title, o.instruction_text, o.state,
             o.assigned_agent, o.model, o.reasoning_effort,
-            o.auto_advance, o.resource_key, o.display_key, m.display_id AS mission_display_id
+            CASE WHEN EXISTS (SELECT 1 FROM run_queue_entries e WHERE e.objective_id = o.id AND e.deleted_at IS NULL) THEN 1 ELSE 0 END AS queue_member,
+            o.resource_key, o.display_key, m.display_id AS mission_display_id
        FROM objectives o
        JOIN missions m ON m.id = o.mission_id
       WHERE o.mission_id = ? AND o.deleted_at IS NULL
@@ -299,7 +297,7 @@ export async function listObjectives({
     assigned_agent: string | null;
     model: string | null;
     reasoning_effort: string | null;
-    auto_advance: number;
+    queue_member: number;
     resource_key: string | null;
     display_key: string;
     mission_display_id: string;
@@ -319,7 +317,7 @@ function toObjectiveSummary(row: {
   assigned_agent: string | null;
   model: string | null;
   reasoning_effort: string | null;
-  auto_advance: number;
+  queue_member: number;
   resource_key: string | null;
   display_key: string;
   mission_display_id: string;
@@ -340,7 +338,7 @@ function toObjectiveSummary(row: {
     assignedAgent: row.assigned_agent,
     model: row.model,
     reasoningEffort: row.reasoning_effort,
-    autoAdvance: isTruthyFlag(row.auto_advance),
+    autoAdvance: row.queue_member === 1,
     resourceKey: row.resource_key?.trim() || null
   };
 }
@@ -498,11 +496,11 @@ export async function insertObjective({
   await ctx.db.run(
     `INSERT INTO objectives
          (id, workspace_id, project_id, mission_id, position, title, instruction_text, state,
-          assigned_agent, model, reasoning_effort, agent_flags_json, auto_advance,
+          assigned_agent, model, reasoning_effort, agent_flags_json,
           execution_metadata_json, resource_key, launch_config_json, display_key,
           created_by_workspace_user_id, created_by_kind, created_by_agent, created_by_session_id,
           created_at, updated_at, revision${briefColumns.columns.map(c => `, ${c}`).join('')})
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '{}', ?, '{}', ?, ?, ?, ?, ?, ?, ?, ?, ?, 1${briefColumns.columns.map(() => ', ?').join('')})`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '{}', '{}', ?, ?, ?, ?, ?, ?, ?, ?, ?, 1${briefColumns.columns.map(() => ', ?').join('')})`,
     [
       id,
       ctx.workspace.id,
@@ -515,7 +513,6 @@ export async function insertObjective({
       resolvedAssignedAgent,
       resolvedModel,
       resolvedReasoningEffort,
-      bindBool(ctx.db.dialect, autoAdvance),
       normalizedResourceKey,
       launchConfigJson,
       displayKey,
@@ -550,9 +547,7 @@ export async function insertObjective({
     });
   }
 
-  // Queue membership is authoritative. Keep writing the legacy boolean during
-  // the staged retirement, but immediately materialize opted-in objectives in
-  // the Run Queue so every surface observes the same sequence.
+  // Translate the legacy creation flag into queue membership for older clients.
   if (autoAdvance) {
     await enqueueObjectiveAfterLastQueuedSibling(
       ctx.db,
@@ -573,7 +568,7 @@ export async function insertObjective({
     assigned_agent: explicitAgent,
     model: model ?? null,
     reasoning_effort: reasoningEffort ?? null,
-    auto_advance: autoAdvance ? 1 : 0,
+    queue_member: autoAdvance ? 1 : 0,
     resource_key: normalizedResourceKey,
     display_key: displayKey,
     mission_display_id: mission.displayId
@@ -1077,83 +1072,6 @@ export async function addObjectivesToMission({
     }
   });
   return created;
-}
-
-export async function updateObjective({
-  ctx,
-  objectiveId,
-  autoAdvance
-}: {
-  ctx: ServiceContext;
-  objectiveId: string;
-  autoAdvance: boolean;
-}): Promise<ObjectiveSummary> {
-  const resolved = await resolveObjectiveRef({ ctx, ref: objectiveId });
-  const existing = (await ctx.db.get(
-    `SELECT o.id, o.mission_id, o.project_id, o.position, o.title, o.instruction_text, o.state,
-            o.assigned_agent, o.model, o.reasoning_effort,
-            o.auto_advance, o.resource_key, o.display_key, o.revision,
-            m.display_id AS mission_display_id
-       FROM objectives o
-       JOIN missions m ON m.id = o.mission_id
-      WHERE o.id = ? AND o.workspace_id = ? AND o.deleted_at IS NULL`,
-    [resolved.id, ctx.workspace.id]
-  )) as
-    | {
-        id: string;
-        mission_id: string;
-        project_id: string;
-        position: number;
-        title: string | null;
-        instruction_text: string;
-        state: string;
-        assigned_agent: string | null;
-        model: string | null;
-        reasoning_effort: string | null;
-        auto_advance: number;
-        resource_key: string | null;
-        display_key: string;
-        revision: number;
-        mission_display_id: string;
-      }
-    | undefined;
-  if (!existing) {
-    throw new ServiceError('Objective not found', 'not_found', 404);
-  }
-
-  const now = nowIso();
-  const nextRevision = existing.revision + 1;
-  await ctx.db.run(
-    `UPDATE objectives
-        SET auto_advance = ?, updated_at = ?, revision = ?
-      WHERE id = ? AND workspace_id = ?`,
-    [bindBool(ctx.db.dialect, autoAdvance), now, nextRevision, existing.id, ctx.workspace.id]
-  );
-
-  if (autoAdvance) {
-    await enqueueObjectiveAfterLastQueuedSibling(
-      ctx.db,
-      existing.project_id,
-      existing.id,
-      ctx.actorWorkspaceUserId
-    );
-  } else {
-    await removeRunQueueEntryForObjective(ctx.db, existing.project_id, existing.id);
-  }
-
-  await recordChange({
-    ctx,
-    entityType: 'objective',
-    entityId: existing.id,
-    operation: 'update',
-    entityRevision: nextRevision,
-    projectId: existing.project_id,
-    missionId: existing.mission_id,
-    objectiveId: existing.id,
-    changedFields: ['auto_advance']
-  });
-
-  return toObjectiveSummary({ ...existing, auto_advance: autoAdvance ? 1 : 0 });
 }
 
 async function resolveDraftObjectiveToDiscuss({

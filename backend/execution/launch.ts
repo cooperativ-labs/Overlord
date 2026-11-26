@@ -254,7 +254,7 @@ export async function launchObjective(
     if (activeSibling) {
       throw new ApiError(
         409,
-        'Another objective on this mission is already active. Enable auto-advance on this objective instead of delegating it to the runner.'
+        'Another objective on this mission is already active. Add this objective to a Run Queue to run it after the active objective.'
       );
     }
 

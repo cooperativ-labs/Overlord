@@ -346,6 +346,8 @@ export interface SummaryActionRow {
   introducedAt: string;
   /** Introduced after the visit baseline. */
   isNew: boolean;
+  /** The member dismissed this question or choice's notification. */
+  dismissed: boolean;
   /** The delivery that reported an action; null for a question. */
   deliveryId: string | null;
   /** The `mission_items` id a person closes; null for a question or choice. */
@@ -433,6 +435,7 @@ export function missionSummaryActions({
         objectiveKey: objective?.displayId ?? null,
         introducedAt: action.deliveredAt,
         isNew: isLater(action.deliveredAt, baseline),
+        dismissed: false,
         deliveryId: action.deliveryId,
         itemId: action.id,
         group: groupOf(action, duplicatesOf.get(index) ?? [], live)
@@ -456,7 +459,8 @@ export function missionSummaryActions({
         objectiveId: request.objectiveId,
         objectiveKey: objective?.displayId ?? null,
         introducedAt: request.createdAt,
-        isNew: isLater(request.createdAt, baseline),
+        isNew: !request.dismissed && isLater(request.createdAt, baseline),
+        dismissed: request.dismissed === true,
         deliveryId: null,
         itemId: null,
         group: { itemIds: [], count: 1, sources: [] }

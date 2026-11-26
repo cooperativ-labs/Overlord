@@ -9,6 +9,56 @@ import {
 
 for (const adapter of conformanceAdapters()) {
   describe(`objective queue races [${adapter}]`, () => {
+    it('serializes default queue deletion versus enqueue without stranding live work', async () => {
+      const { db, cleanup } = await createConformanceDatabase(adapter, 'ovld_queue_delete_race');
+      await bindWebappDatabaseClient({ client: db });
+      try {
+        const repo = await import('./repository.ts');
+        const queues = await import('./run-queue.ts');
+        const project = await repo.createProject({ name: 'Default queue delete race' });
+        const mission = await repo.createMission({ projectId: project.id, firstObjective: 'A' });
+        const legacy = await queues.postProjectRunQueue(project.id, { name: 'Run Queue' });
+        const destination = await queues.postProjectRunQueue(project.id, { name: 'Destination' });
+        await db.run('UPDATE run_queues SET is_default = ? WHERE id = ?', [
+          adapter === 'postgres' ? true : 1,
+          legacy.id
+        ]);
+
+        const [deletion, enqueue] = await Promise.allSettled([
+          queues.removeRunQueue(legacy.id, { moveEntriesTo: destination.id }),
+          queues.postRunQueueEntry(project.id, {
+            queueId: legacy.id,
+            objectiveId: mission.objectives[0]!.id
+          })
+        ]);
+        if (deletion.status === 'rejected') {
+          assert.equal(deletion.reason?.code, 'run_queue_changed');
+          assert.equal(enqueue.status, 'fulfilled');
+          await queues.removeRunQueue(legacy.id, { moveEntriesTo: destination.id });
+        }
+        if (enqueue.status === 'rejected') {
+          assert.equal(enqueue.reason?.code, 'run_queue_not_found');
+          assert.equal(deletion.status, 'fulfilled');
+        }
+
+        const projectQueues = (await queues.getProjectRunQueues(project.id)).queues;
+        assert.deepEqual(
+          projectQueues.map(queue => queue.id),
+          [destination.id]
+        );
+        const liveEntries = await db.all<{ queue_id: string }>(
+          'SELECT queue_id FROM run_queue_entries WHERE project_id = ? AND deleted_at IS NULL',
+          [project.id]
+        );
+        assert.deepEqual(
+          liveEntries.map(entry => entry.queue_id),
+          enqueue.status === 'fulfilled' ? [destination.id] : []
+        );
+      } finally {
+        await cleanup();
+      }
+    });
+
     for (const mutation of ['insert', 'delete', 'reopen', 'launch', 'run-queue'] as const) {
       it(`serializes reorder versus ${mutation} without moving active/history anchors`, async () => {
         const { db, cleanup } = await createConformanceDatabase(adapter, 'ovld_queue_race');

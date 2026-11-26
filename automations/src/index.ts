@@ -31,7 +31,6 @@ export {
   OBJECTIVE_BRIEF_TITLE_MAX_CHARS
 } from './objective-brief/index.js';
 export type {
-  AutoAdvanceDecision,
   ManageObjectiveLifecycleInput,
   ManageObjectiveLifecycleOutput,
   ObjectiveLifecycleObjective,
@@ -49,7 +48,6 @@ export type {
 export {
   ACTIVE_OBJECTIVE_STATES,
   canonicalObjectiveResourceKey,
-  decideAutoAdvanceAfterDelivery,
   DEFAULT_PRIMARY_RESOURCE_KEY,
   deriveObjectiveLifecycleView,
   EDITABLE_NEXT_UP_OBJECTIVE_STATES,

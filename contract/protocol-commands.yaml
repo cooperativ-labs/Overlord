@@ -757,7 +757,7 @@ missionDiscovery:
     responseShape: '{ removed: boolean, projectId: string }'
     rules:
       - 'Queue and destination references accept UUIDs or unambiguous names in the addressed project; the destination must differ from the deleted queue.'
-      - 'The default queue cannot be deleted. A non-empty queue requires --move-entries-to.'
+      - 'Legacy default queues can be deleted. A non-empty queue requires --move-entries-to.'
       - 'Uses project:update; mission_lifecycle-scoped tokens cannot modify queue definitions.'
     sideEffects:
       - deletes-run-queue

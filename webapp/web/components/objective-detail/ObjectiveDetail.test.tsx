@@ -8,7 +8,7 @@ import {
   Outlet,
   RouterProvider
 } from '@tanstack/react-router';
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import assert from 'node:assert/strict';
 import { afterEach, beforeEach, describe, it } from 'node:test';
 import { useState } from 'react';
@@ -547,6 +547,59 @@ describe('ObjectiveDetail (plan §9)', () => {
     assert.ok(screen.getByRole('button', { name: /Which database should I use\?/ }));
     assert.ok(screen.getByText('Blocking questions'));
     assert.equal(screen.queryByText('Waiting on you'), null);
+  });
+
+  it('dismisses the expanded question in place while keeping its Latch reply and other alerts', async () => {
+    const first = request({
+      id: 'req-1',
+      delivery: { mode: 'latch', reason: null, state: null, observedAt: null }
+    });
+    const second = request({ id: 'req-2', summary: 'What is the database name?' });
+    openRequests = [first, second];
+    respond = ({ method, path }) => {
+      if (method !== 'POST' || path !== '/api/agent-requests/req-1/dismissal') return null;
+      const dismissed = { ...first, dismissed: true };
+      openRequests = [dismissed, second];
+      return { status: 200, body: { changed: true, request: dismissed } };
+    };
+    await renderDetail(
+      [objective({ id: 'a', state: 'executing', startedAt: '2026-11-15T10:00:00.000Z' })],
+      '/missions/mission-1?objective=coo:1.a'
+    );
+    await dialog();
+    const row = await screen.findByRole('button', { name: /Which database should I use\?/ });
+    fireEvent.click(row);
+    const body = document.getElementById(row.getAttribute('aria-controls') ?? '');
+    assert.ok(body);
+    const card = within(body);
+    assert.match(row.className, /bg-yellow/);
+    assert.match(card.getByRole('article').className, /bg-amber/);
+    fireEvent.change(card.getByRole('textbox', { name: 'Answer the agent' }), {
+      target: { value: 'Use Postgres.' }
+    });
+    fireEvent.click(card.getByRole('button', { name: 'Dismiss this notification' }));
+
+    await waitFor(() => assert.ok(!card.queryByRole('button', { name: /Dismiss/ })));
+    assert.equal(screen.getAllByRole('button', { name: 'Dismiss this notification' }).length, 1);
+    assert.doesNotMatch(row.className, /bg-yellow/);
+    assert.doesNotMatch(card.getByRole('article').className, /bg-amber/);
+    assert.equal(row.getAttribute('aria-expanded'), 'true');
+    assert.equal(
+      (card.getByRole('textbox', { name: 'Answer the agent' }) as HTMLInputElement).value,
+      'Use Postgres.'
+    );
+    assert.equal(
+      (card.getByRole('button', { name: 'Reply' }) as HTMLButtonElement).disabled,
+      false
+    );
+    assert.match(
+      screen.getByRole('button', { name: /What is the database name\?/ }).className,
+      /bg-yellow/
+    );
+    assert.equal(
+      requests.some(req => req.path.endsWith('/resolve')),
+      false
+    );
   });
 });
 

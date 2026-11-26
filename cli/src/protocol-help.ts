@@ -534,7 +534,7 @@ reorder-run-queue:
 
 create-run-queue:
   Purpose:
-    Create an additional Run Queue alongside the project's default queue.
+    Create a named Run Queue in the project.
   Required:
     --project-id <id|slug|name> Project UUID, slug, or name; or derive via --objective-id/--mission-id
     --name <text>               Name for the new queue
@@ -583,7 +583,7 @@ delete-run-queue:
   Returns:
     { removed, projectId }.
   Rules:
-    The default queue cannot be deleted, and a non-empty queue requires
+    Legacy default queues can be deleted. A non-empty queue requires
     --move-entries-to. Requires project:update, so a mission_lifecycle-scoped
     agent token cannot run this.
 
@@ -602,7 +602,7 @@ reorder-project-run-queues:
     ProjectRunQueuesDto in its new order.
   Rules:
     Each item may be a queue UUID or an unambiguous queue name. Supply every live
-    queue exactly once, and keep the default queue first. Requires
+    queue exactly once, and keep the default queue first if one exists. Requires
     project:update, so a mission_lifecycle-scoped agent token cannot run this.
 
 queue-objective:

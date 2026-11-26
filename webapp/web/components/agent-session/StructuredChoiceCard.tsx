@@ -29,7 +29,7 @@ export function StructuredChoiceCard({ request }: { request: HumanAgentRequestDt
     <AgentSessionCardShell
       icon={ListChecks}
       title="Choose an option"
-      tone="action"
+      tone={request.dismissed ? 'neutral' : 'action'}
       timestamp={request.createdAt}
       badges={
         answerable && remainingMs !== null && remainingMs > 0 ? (

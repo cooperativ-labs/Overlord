@@ -218,6 +218,12 @@ it('keeps old missions to Objectives and For you, and shows the before-first-del
     screen.getByRole('tab', { name: /Objectives/ }).getAttribute('aria-selected'),
     'true'
   );
+  const status = screen.getByRole('group', { name: 'Mission status' });
+  const waiting = within(status).getByText('Waiting on you');
+  assert.doesNotMatch(waiting.className, /bg-amber/);
+  selectTab(/For you/);
+  const questionChip = screen.getByText('Question', { exact: true });
+  assert.doesNotMatch(questionChip.className, /bg-amber/);
   cleanup();
   window.localStorage.clear();
   const response = structuredClone(fixture.summaryResponse);

@@ -12,7 +12,6 @@ export type ObjectiveLifecycleObjective = {
   state: ObjectiveLifecycleState | string;
   instructionText?: string;
   objective?: string;
-  autoAdvance?: boolean;
   assignedAgent?: string | null;
   createdAt?: string;
   /** When the objective first entered `launching`; null until launched. */
@@ -361,7 +360,7 @@ export function isQueuedObjective(objective: ObjectiveLifecycleObjective): boole
  * Next runnable draft: the first live `draft` with non-empty instruction text,
  * by `position`, then `createdAt`, then `id`. Skips `submitted` objectives
  * (being discussed) and saved blank drafts. Use only for *automatic* draft
- * selection (auto-advance, awaiting-approval notices, default attach after
+ * selection (awaiting-approval notices, default attach after
  * active-state resolution). SQL mirrors: `state = 'draft' AND
  * TRIM(COALESCE(instruction_text, '')) <> '' ORDER BY position, created_at, id`.
  */
@@ -605,41 +604,5 @@ export function deriveObjectiveLifecycleView<TObjective extends ObjectiveLifecyc
     nextUpObjective,
     hasNonExecuted: launchingObjectives.length + queuedObjectives.length > 0,
     violations: validateObjectiveLifecycle(orderedObjectives, options)
-  };
-}
-
-export function decideAutoAdvanceAfterDelivery(
-  objectives: readonly ObjectiveLifecycleObjective[],
-  options: { humanOnly?: boolean; defaultApprovalReason?: string } = {}
-): AutoAdvanceDecision {
-  const nextDraft = nextUpDraft(objectives);
-
-  if (!nextDraft) {
-    return { action: 'none', reason: 'no_non_empty_draft' };
-  }
-  if (options.humanOnly) {
-    return { action: 'none', reason: 'human_only_mission' };
-  }
-  if (!nextDraft.autoAdvance) {
-    return {
-      action: 'await_approval',
-      objectiveId: nextDraft.id,
-      reason: options.defaultApprovalReason ?? 'Next objective is waiting for approval.'
-    };
-  }
-  if (hasNoLaunchableAgent(nextDraft.assignedAgent)) {
-    return {
-      action: 'await_approval',
-      objectiveId: nextDraft.id,
-      reason: nextDraft.assignedAgent?.trim()
-        ? 'Next objective is assigned to Manual; a person does it.'
-        : 'Queue launch requires an assigned agent.'
-    };
-  }
-
-  return {
-    action: 'queue_launch',
-    objectiveId: nextDraft.id,
-    idempotencyKey: `auto_advance:${nextDraft.id}`
   };
 }

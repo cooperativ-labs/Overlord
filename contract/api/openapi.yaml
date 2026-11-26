@@ -3,10 +3,10 @@ info:
   title: Overlord API
   # info.version is the API description's own Semantic Version; it changes when
   # this document changes and is never compared with the contract version.
-  version: 7.3.0
+  version: 7.4.1
   # The contract version (contract/VERSION) this document belongs to. Written
   # only by `yarn version:contract`.
-  x-overlord-contract-version: 182.4.0
+  x-overlord-contract-version: 182.5.1
   description: >-
     Normative description of Overlord's REST surface (ADR 0006): one operation for every
     method and path the backend registers, at the path it is served (ADR 0007), excluding
@@ -4823,10 +4823,12 @@ paths:
       x-overlord-consumers: [mobile, webapp]
       summary: Delete a Run Queue
       description: >-
-        Requires `project:update` in the queue's project. Takes an optional JSON body. The default queue
-        cannot be deleted (409 `default_run_queue`); a queue that still holds entries needs
-        `moveEntriesTo` (409 `run_queue_not_empty`), a live queue of the same project (404
-        `run_queue_not_found` otherwise), whose end the entries are appended to. Soft-deletes the queue.
+        Requires `project:update` in the queue's project. Takes an optional JSON body and soft-deletes
+        the queue, including a legacy default queue. A queue that still holds entries needs
+        `moveEntriesTo` (409 `run_queue_not_empty`). The destination must differ from the source (400
+        `invalid_run_queue_destination`) and be live in the same project (404 `run_queue_not_found`
+        otherwise). Entries are appended in source order. If concurrent changes prevent a safe move,
+        retry the delete (409 `run_queue_changed`).
       security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
       requestBody:
         required: false
@@ -12294,7 +12296,7 @@ components:
         state: { $ref: '#/components/schemas/ObjectiveState' }
         autoAdvance:
           type: boolean
-          description: Deprecated; derived from live queue membership when the read joins it.
+          description: Deprecated compatibility field derived from live Run Queue membership.
         queueEntry:
           description: Live Run Queue membership; null when not queued or when the read does not join queue
             state (create and update responses).
@@ -15166,7 +15168,9 @@ components:
           oneOf:
             - type: string
             - type: 'null'
-        autoAdvance: { type: boolean }
+        autoAdvance:
+          type: boolean
+          description: Deprecated compatibility field derived from live Run Queue membership.
         blocked:
           type: boolean
           description: True while an open question or choice request waits on a human for this objective.

@@ -5,10 +5,10 @@
 import { z } from 'zod';
 
 /** The contract version (contract/VERSION) this API description belongs to. */
-export const contractVersion = "182.4.0";
+export const contractVersion = "182.5.1";
 
 /** The API description's own version (OpenAPI `info.version`). */
-export const apiVersion = "7.3.0";
+export const apiVersion = "7.4.1";
 
 /** A non-JSON request or response body: raw bytes (G3). */
 export type BinaryBody = Uint8Array | ArrayBuffer | Blob;
@@ -439,7 +439,7 @@ export interface ObjectiveDto {
   instructionText: string;
   state: ObjectiveState;
   /**
-   * Deprecated; derived from live queue membership when the read joins it.
+   * Deprecated compatibility field derived from live Run Queue membership.
    */
   autoAdvance: boolean;
   /**
@@ -2368,6 +2368,9 @@ export interface ActivityFeedMissionObjectiveDto {
   state: ObjectiveState;
   position: number;
   assignedAgent: string | null;
+  /**
+   * Deprecated compatibility field derived from live Run Queue membership.
+   */
   autoAdvance: boolean;
   /**
    * True while an open question or choice request waits on a human for this objective.

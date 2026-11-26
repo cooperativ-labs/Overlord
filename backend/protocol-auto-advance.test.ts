@@ -13,7 +13,7 @@ const { serviceDatabaseClient, setAuthorizedWorkspacesContext, withRequestContex
 const { createTestWorkspaceContext } = await import('./test-helpers.ts');
 const { getActiveWorkspace } = createTestWorkspaceContext(await import('./db.ts'));
 
-const { createProject, updateObjective } = await import('./repository.ts');
+const { createProject, listObjectives, updateObjective } = await import('./repository.ts');
 const { ApiError } = await import('./errors.ts');
 const { runProtocolSubcommand } = await import('./protocol.ts');
 
@@ -288,7 +288,7 @@ test('agent queue commands keep legacy auto-advance work in mission-local queue 
   assert.deepEqual(dequeued, { removed: true, objectiveId: second.id });
 });
 
-test('protocol update-objective toggles auto-advance', async () => {
+test('protocol update-objective changes membership without writing the legacy mirror', async () => {
   const project = await createProject({ name: `Auto advance update ${Date.now()}` });
   const created = (await runProtocolSubcommand('create', {
     flags: {
@@ -309,6 +309,14 @@ test('protocol update-objective toggles auto-advance', async () => {
     })
   )) as { id: string; autoAdvance: boolean };
   assert.equal(enabled.autoAdvance, true);
+  const db = serviceDatabaseClient();
+  assert.deepEqual(
+    await db.get('SELECT auto_advance FROM objectives WHERE id = ?', [objectiveId]),
+    {
+      auto_advance: 0
+    }
+  );
+  await db.run('UPDATE objectives SET auto_advance = 1 WHERE id = ?', [objectiveId]);
 
   const disabled = (await asAuthenticatedOperator(() =>
     runProtocolSubcommand('update-objective', {
@@ -319,6 +327,14 @@ test('protocol update-objective toggles auto-advance', async () => {
     })
   )) as { id: string; autoAdvance: boolean };
   assert.equal(disabled.autoAdvance, false);
+  assert.deepEqual(
+    await db.get('SELECT auto_advance FROM objectives WHERE id = ?', [objectiveId]),
+    {
+      auto_advance: 1
+    }
+  );
+  const objectives = await listObjectives(created.mission.id);
+  assert.equal(objectives.find(objective => objective.id === objectiveId)?.autoAdvance, false);
 });
 
 test('protocol update-objective edits instruction text on draft and future objectives', async () => {

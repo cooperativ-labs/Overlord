@@ -4,6 +4,7 @@
 - Status: accepted
 - Contract version: 143
 - Supersedes: none
+- Amended by: [ADR 0107](0107-delete-legacy-default-run-queues.md)
 - Origin: contract v143 (no ticket named), backfilled 2026-11
 
 ## Context

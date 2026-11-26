@@ -34,7 +34,7 @@ import {
   Trash2,
   X
 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 
 import {
   useCreateRunQueue,
@@ -239,6 +239,7 @@ function QueueSection({
   queue,
   queueIndex,
   queueCount,
+  firstMovableIndex,
   onRename,
   onDelete,
   onMoveQueue,
@@ -250,6 +251,7 @@ function QueueSection({
   queue: RunQueueDto;
   queueIndex: number;
   queueCount: number;
+  firstMovableIndex: number;
   onRename: (queue: RunQueueDto) => void;
   onDelete: (queue: RunQueueDto) => void;
   onMoveQueue: (queue: RunQueueDto, direction: -1 | 1) => void;
@@ -284,7 +286,7 @@ function QueueSection({
             variant="ghost"
             className="h-7 w-7 p-0"
             title="Move queue earlier"
-            disabled={queue.isDefault || queueIndex <= 1}
+            disabled={queue.isDefault || queueIndex <= firstMovableIndex}
             onClick={() => onMoveQueue(queue, -1)}
           >
             <ArrowUp className="h-3.5 w-3.5" />
@@ -306,16 +308,15 @@ function QueueSection({
           >
             <Pencil className="h-3.5 w-3.5" />
           </Button>
-          {!queue.isDefault ? (
-            <Button
-              variant="ghost"
-              className="h-7 w-7 p-0 text-destructive hover:text-destructive"
-              title="Delete queue"
-              onClick={() => onDelete(queue)}
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-            </Button>
-          ) : null}
+          <Button
+            variant="ghost"
+            className="h-7 w-7 p-0 text-destructive hover:text-destructive"
+            title="Delete queue"
+            aria-label={`Delete queue ${queue.name}`}
+            onClick={() => onDelete(queue)}
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </Button>
         </div>
         <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
           {queue.paused ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
@@ -375,20 +376,10 @@ export function RunQueuePanel({
   const [queueName, setQueueName] = useState('');
   const [creating, setCreating] = useState(false);
   const [renaming, setRenaming] = useState<RunQueueDto | null>(null);
-  const [deleting, setDeleting] = useState<RunQueueDto | null>(null);
-  const [moveEntriesTo, setMoveEntriesTo] = useState('');
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [selectedDestination, setSelectedDestination] = useState('');
   const [pendingMove, setPendingMove] = useState<PendingEntryMove | null>(null);
   const [removingEntry, setRemovingEntry] = useState<RunQueueEntryDto | null>(null);
-
-  useEffect(() => {
-    if (deleting && !moveEntriesTo)
-      setMoveEntriesTo(
-        (
-          queues.data?.queues.find(queue => queue.isDefault && queue.id !== deleting.id) ??
-          queues.data?.queues.find(queue => queue.id !== deleting.id)
-        )?.id ?? ''
-      );
-  }, [deleting, moveEntriesTo, queues.data?.queues]);
 
   if (queues.isLoading)
     return (
@@ -402,14 +393,10 @@ export function RunQueuePanel({
         Could not load Run Queues. Check access and retry.
       </p>
     );
-  if (!queues.data?.queues.length)
-    return (
-      <EmptyState
-        title="No Run Queues"
-        hint="Create a queue here, or queue an objective from its mission — that creates the mission's queue on first use."
-      />
-    );
-  const queueList = queues.data.queues;
+  const queueList = queues.data?.queues ?? [];
+  const deleting = queueList.find(queue => queue.id === deletingId);
+  const destinations = queueList.filter(queue => queue.id !== deletingId);
+  const moveEntriesTo = destinations.find(queue => queue.id === selectedDestination)?.id ?? '';
 
   function reorderQueueDefinition(queue: RunQueueDto, direction: -1 | 1) {
     const from = queueList.findIndex(item => item.id === queue.id);
@@ -480,6 +467,12 @@ export function RunQueuePanel({
           <Plus className="mr-1.5 h-4 w-4" /> New queue
         </Button>
       )}
+      {queueList.length === 0 && (
+        <EmptyState
+          title="No Run Queues"
+          hint="Create a queue here, or queue an objective from its mission to create a mission queue."
+        />
+      )}
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
         {queueList.map((queue, index) => (
           <QueueSection
@@ -488,18 +481,18 @@ export function RunQueuePanel({
             queue={queue}
             queueIndex={index}
             queueCount={queueList.length}
+            firstMovableIndex={queueList[0]?.isDefault ? 1 : 0}
             onRename={queue => {
               setQueueName(queue.name);
               setRenaming(queue);
             }}
             onDelete={queue => {
-              setMoveEntriesTo(
-                (
-                  queueList.find(item => item.isDefault && item.id !== queue.id) ??
-                  queueList.find(item => item.id !== queue.id)
-                )?.id ?? ''
+              deleteQueue.reset();
+              const otherQueues = queueList.filter(item => item.id !== queue.id);
+              setSelectedDestination(
+                otherQueues.find(item => item.isDefault)?.id ?? otherQueues[0]?.id ?? ''
               );
-              setDeleting(queue);
+              setDeletingId(queue.id);
             }}
             onMoveQueue={reorderQueueDefinition}
             onRemoveEntry={setRemovingEntry}
@@ -528,7 +521,7 @@ export function RunQueuePanel({
           Could not remove this entry. Check your project permission and retry.
         </p>
       ) : null}
-      {createQueue.isError || updateQueue.isError || deleteQueue.isError ? (
+      {createQueue.isError || updateQueue.isError ? (
         <p role="alert" className="text-xs text-destructive">
           Could not update this queue. Check your project permission and retry.
         </p>
@@ -589,34 +582,44 @@ export function RunQueuePanel({
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      <Dialog open={Boolean(deleting)} onOpenChange={open => !open && setDeleting(null)}>
+      <Dialog open={Boolean(deleting)} onOpenChange={open => !open && setDeletingId(null)}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Delete {deleting?.name}?</DialogTitle>
             <DialogDescription>
               {deleting?.entries.length
-                ? 'Move every queued objective to another queue before deletion.'
+                ? destinations.length
+                  ? 'Move every queued objective to another queue before deletion.'
+                  : 'Create another queue or remove the queued objectives before deleting this queue.'
                 : 'This empty queue will be removed.'}
             </DialogDescription>
           </DialogHeader>
-          {deleting?.entries.length ? (
+          {deleting?.entries.length && destinations.length ? (
             <select
+              aria-label="Move queued objectives to"
               className="h-9 rounded-md border bg-background px-3 text-sm"
               value={moveEntriesTo}
-              onChange={event => setMoveEntriesTo(event.target.value)}
+              onChange={event => setSelectedDestination(event.target.value)}
             >
-              {queueList
-                .filter(queue => queue.id !== deleting.id)
-                .map(queue => (
-                  <option key={queue.id} value={queue.id}>
-                    {queue.name}
-                    {queue.isDefault ? ' (Default)' : ''}
-                  </option>
-                ))}
+              <option value="" disabled>
+                Select a destination queue
+              </option>
+              {destinations.map(queue => (
+                <option key={queue.id} value={queue.id}>
+                  {queue.name}
+                  {queue.isDefault ? ' (Default)' : ''}
+                </option>
+              ))}
             </select>
           ) : null}
+          {deleteQueue.isError && (
+            <p role="alert" className="text-xs text-destructive">
+              Could not delete this queue. Check your project permission and refresh the queue
+              before retrying.
+            </p>
+          )}
           <DialogFooter>
-            <Button variant="secondary" onClick={() => setDeleting(null)}>
+            <Button variant="secondary" onClick={() => setDeletingId(null)}>
               Cancel
             </Button>
             <Button
@@ -630,7 +633,7 @@ export function RunQueuePanel({
                 deleting &&
                 deleteQueue.mutate(
                   { queueId: deleting.id, ...(deleting.entries.length ? { moveEntriesTo } : {}) },
-                  { onSuccess: () => setDeleting(null) }
+                  { onSuccess: () => setDeletingId(null) }
                 )
               }
             >

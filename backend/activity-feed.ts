@@ -120,7 +120,7 @@ interface MissionObjectiveRow {
   state: string;
   position: number;
   assigned_agent: string | null;
-  auto_advance: number;
+  queue_member: number;
   created_at: string;
   launched_at: string | null;
   started_at: string | null;
@@ -292,7 +292,8 @@ async function loadMissionObjectives(
   const rows = (await requireDatabaseClient().all(
     `SELECT o.mission_id, m.display_id AS mission_display_id, o.id AS objective_id,
             o.display_key, o.title, o.instruction_text, o.state, o.position,
-            o.assigned_agent, o.auto_advance, o.created_at,
+            o.assigned_agent, o.created_at,
+            CASE WHEN EXISTS (SELECT 1 FROM run_queue_entries e WHERE e.objective_id = o.id AND e.deleted_at IS NULL) THEN 1 ELSE 0 END AS queue_member,
             o.launched_at, o.started_at, o.completed_at,
             CASE WHEN EXISTS (
               SELECT 1 FROM agent_requests ar
@@ -563,7 +564,7 @@ function toMissionObjective(row: MissionObjectiveRow): ActivityFeedMissionObject
     state: row.state as ObjectiveState,
     position: row.position,
     assignedAgent: row.assigned_agent,
-    autoAdvance: row.auto_advance === 1,
+    autoAdvance: row.queue_member === 1,
     blocked: Number(row.is_blocked) === 1
   };
 }
@@ -584,7 +585,6 @@ function toMissionItem({
       position: row.position,
       state: row.state,
       instructionText: row.instruction_text ?? '',
-      autoAdvance: row.auto_advance === 1,
       assignedAgent: row.assigned_agent,
       createdAt: row.created_at,
       launchedAt: row.launched_at,
@@ -638,7 +638,6 @@ function toDeliveredMissionItem({
       position: objective.position,
       state: objective.state,
       instructionText: objective.instruction_text ?? '',
-      autoAdvance: objective.auto_advance === 1,
       assignedAgent: objective.assigned_agent,
       createdAt: objective.created_at,
       launchedAt: objective.launched_at,

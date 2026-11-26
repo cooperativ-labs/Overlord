@@ -2,7 +2,6 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
 import {
-  decideAutoAdvanceAfterDelivery,
   deriveObjectiveLifecycleView,
   firstDraft,
   manageObjectiveLifecycle,
@@ -24,7 +23,6 @@ function objective(
     position: 0,
     state: 'draft',
     instructionText: 'Do work',
-    autoAdvance: false,
     assignedAgent: null,
     ...overrides
   };
@@ -265,83 +263,18 @@ describe('objective lifecycle rules', () => {
     }
   });
 
-  it('decides post-delivery auto-advance policy for the next draft', () => {
-    assert.deepEqual(
-      decideAutoAdvanceAfterDelivery([
-        objective({ id: 'done', position: 0, state: 'complete' }),
-        objective({
-          id: 'next',
-          position: 1,
-          state: 'draft',
-          autoAdvance: true,
-          assignedAgent: 'codex'
-        })
-      ]),
-      { action: 'queue_launch', objectiveId: 'next', idempotencyKey: 'auto_advance:next' }
-    );
-
-    assert.deepEqual(
-      decideAutoAdvanceAfterDelivery([
-        objective({ id: 'next', position: 0, state: 'draft', autoAdvance: false })
-      ]),
-      {
-        action: 'await_approval',
-        objectiveId: 'next',
-        reason: 'Next objective is waiting for approval.'
-      }
-    );
-  });
-
-  it('auto-advance skips submitted and blank drafts, including lower positions', () => {
-    assert.deepEqual(
-      decideAutoAdvanceAfterDelivery([
-        objective({ id: 'discussing', position: 0, state: 'submitted' }),
-        objective({ id: 'blank', position: 1, state: 'draft', instructionText: '' }),
-        objective({ id: 'lower', position: 2, state: 'draft', autoAdvance: false }),
-        objective({ id: 'delivered', position: 3, state: 'complete' })
-      ]),
-      {
-        action: 'await_approval',
-        objectiveId: 'lower',
-        reason: 'Next objective is waiting for approval.'
-      }
-    );
-  });
-
-  it('never auto-advances into a Manual objective', () => {
-    assert.deepEqual(
-      decideAutoAdvanceAfterDelivery([
-        objective({ id: 'done', position: 0, state: 'complete' }),
-        objective({
-          id: 'next',
-          position: 1,
-          state: 'draft',
-          autoAdvance: true,
-          assignedAgent: 'manual'
-        })
-      ]),
-      {
-        action: 'await_approval',
-        objectiveId: 'next',
-        reason: 'Next objective is assigned to Manual; a person does it.'
-      }
-    );
-  });
-
   it('exposes a registry-friendly automation output', () => {
     const output = manageObjectiveLifecycle({
       objectives: [
         objective({ id: 'done', position: 0, state: 'complete' }),
         objective({ id: 'next', position: 1, state: 'draft' }),
         objective({ id: 'later', position: 2, state: 'draft' })
-      ],
-      planAutoAdvance: true
+      ]
     });
 
     assert.deepEqual(output.orderedObjectiveIds, ['done', 'next', 'later']);
     assert.deepEqual(output.queuedObjectiveIds, ['next', 'later']);
     assert.deepEqual(output.launchingObjectiveIds, []);
-    assert.equal(output.autoAdvanceDecision?.action, 'await_approval');
   });
 
   it('allows two active objectives on different resources when parallel is opted in', () => {

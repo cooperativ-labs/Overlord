@@ -289,24 +289,78 @@ test('protocol creates, renames, pauses, and deletes a Run Queue', async () => {
   assert.equal(after.queues.find(entry => entry.id === sourceQueue.id)?.entries.length, 3);
 });
 
-test('protocol refuses to delete the default Run Queue', async () => {
-  const { project } = await createQueuedObjectives();
+test('deleting the only default queue leaves the project empty until work is queued', async () => {
+  const project = await createProject({ name: 'Legacy default queue only' });
   const fallback = (await runProtocolSubcommand('create-run-queue', {
     flags: { '--project-id': project.id, '--name': 'Default' }
   })) as RunQueue;
   markDefaultQueue(fallback.id);
 
-  await assert.rejects(
-    () =>
-      runProtocolSubcommand('delete-run-queue', {
-        flags: { '--project-id': project.id, '--queue': fallback.id }
-      }),
-    error => {
-      assert.ok(error instanceof ServiceError);
-      assert.equal(error.code, 'default_run_queue');
-      assert.equal(error.status, 409);
-      return true;
+  assert.deepEqual(
+    await runProtocolSubcommand('delete-run-queue', {
+      flags: { '--project-id': project.id, '--queue': fallback.id }
+    }),
+    { removed: true, projectId: project.id }
+  );
+  const afterDelete = (await runProtocolSubcommand('run-queue', {
+    flags: { '--project-id': project.id }
+  })) as RunQueues;
+  assert.deepEqual(afterDelete.queues, []);
+
+  const mission = (await runProtocolSubcommand('create', {
+    flags: {
+      '--project-id': project.id,
+      '--objectives-json': JSON.stringify([{ instructions: 'Queue after deleting default' }])
     }
+  })) as CreatedMission;
+  await runProtocolSubcommand('queue-objective', {
+    flags: { '--objective-id': mission.objectives[0]!.id }
+  });
+  const afterEnqueue = (await runProtocolSubcommand('run-queue', {
+    flags: { '--project-id': project.id }
+  })) as RunQueues;
+  assert.equal(afterEnqueue.queues.length, 1);
+  assert.equal(afterEnqueue.queues[0]!.isDefault, false);
+  assert.equal(afterEnqueue.queues[0]!.entries[0]!.objectiveId, mission.objectives[0]!.id);
+});
+
+test('an occupied default queue requires a different destination and moves entries in queue order', async () => {
+  const { project, queue } = await createQueuedObjectives();
+  markDefaultQueue(queue.id);
+  const destination = (await runProtocolSubcommand('create-run-queue', {
+    flags: { '--project-id': project.id, '--name': 'Destination' }
+  })) as RunQueue;
+  const { removeRunQueue, getProjectRunQueues } = await import('./run-queue.ts');
+
+  await assert.rejects(() => removeRunQueue(queue.id), {
+    code: 'run_queue_not_empty',
+    status: 409
+  });
+  await assert.rejects(() => removeRunQueue(queue.id, { moveEntriesTo: queue.id }), {
+    code: 'invalid_run_queue_destination',
+    status: 400
+  });
+  const orderedEntryIds = queue.entries.map(entry => entry.id).reverse();
+  await runProtocolSubcommand('reorder-run-queue', {
+    flags: {
+      '--project-id': project.id,
+      '--queue': queue.id,
+      '--ordered-entries-json': JSON.stringify(orderedEntryIds)
+    }
+  });
+
+  assert.deepEqual(await removeRunQueue(queue.id, { moveEntriesTo: destination.id }), {
+    removed: true,
+    projectId: project.id
+  });
+  const after = await getProjectRunQueues(project.id);
+  assert.deepEqual(
+    after.queues.map(item => item.id),
+    [destination.id]
+  );
+  assert.deepEqual(
+    after.queues[0]!.entries.map(entry => entry.id),
+    orderedEntryIds
   );
 });
 

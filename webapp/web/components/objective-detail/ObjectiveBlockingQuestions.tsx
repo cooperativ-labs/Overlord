@@ -5,7 +5,7 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { relativeTime } from '../../lib/format-date.ts';
 import { cn } from '../../lib/utils.ts';
 
-import { AgentRequestCard } from './AgentRequestCards.tsx';
+import { DismissibleAgentRequestCard } from './AgentRequestCards.tsx';
 import { firstLine } from './objective-detail-model.ts';
 
 /**
@@ -13,23 +13,24 @@ import { firstLine } from './objective-detail-model.ts';
  * complete open-request collection grouped by objective. Rendered only when there is at least
  * one; answered, expired and cancelled requests are not listed.
  *
- * Each row is a disclosure button in the blocked-row yellow: relative time, the question's
- * first line and "Answer". Its body is a sibling of the button (never nested in it) holding the
- * existing answer card. A row appears whether or not the request's top notification was
- * dismissed; while the notification still shows, the row starts collapsed so the form is not on
- * screen twice. When every open request's notification was dismissed as the detail opens, the
- * list scrolls into view with its first row expanded.
+ * Each row opens the answer card and offers the same dismissal as the notification above it.
+ * A dismissed request stays in this list with neutral styling. When every open request was
+ * dismissed as the detail opens, the list scrolls into view with its first row expanded.
  */
 export function ObjectiveBlockingQuestions({
   requests,
   stale = false,
-  onRetry
+  onRetry,
+  onDismiss,
+  dismissPending
 }: {
   /** Open question/choice requests for this objective, oldest first. */
   requests: readonly HumanAgentRequestDto[];
   /** The shared collection failed to refresh; these rows are from the last successful read. */
   stale?: boolean;
   onRetry?: () => void;
+  onDismiss?: (request: HumanAgentRequestDto) => void;
+  dismissPending?: boolean;
 }) {
   const headingId = useId();
   const sectionRef = useRef<HTMLElement | null>(null);
@@ -85,7 +86,12 @@ export function ObjectiveBlockingQuestions({
                 aria-expanded={open}
                 aria-controls={bodyId}
                 onClick={() => toggle(request.id)}
-                className="flex w-full min-w-0 items-center gap-2 rounded-md bg-yellow-300/60 px-2.5 py-2 text-left text-sm outline-none hover:bg-yellow-300/80 focus-visible:ring-2 focus-visible:ring-ring/50 dark:bg-yellow-400/25 dark:hover:bg-yellow-400/35"
+                className={cn(
+                  'flex w-full min-w-0 items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
+                  request.dismissed
+                    ? 'bg-muted hover:bg-muted/70'
+                    : 'bg-yellow-300/60 hover:bg-yellow-300/80 dark:bg-yellow-400/25 dark:hover:bg-yellow-400/35'
+                )}
               >
                 <ChevronRight
                   className={cn('size-3.5 shrink-0 transition-transform', open && 'rotate-90')}
@@ -101,7 +107,13 @@ export function ObjectiveBlockingQuestions({
                 <span className="shrink-0 text-xs font-medium text-(--color-ink)">Answer</span>
               </button>
               <div id={bodyId} hidden={!open} className="mt-1.5 min-w-0">
-                {open ? <AgentRequestCard request={request} /> : null}
+                {open ? (
+                  <DismissibleAgentRequestCard
+                    request={request}
+                    onDismiss={onDismiss}
+                    dismissPending={dismissPending}
+                  />
+                ) : null}
               </div>
             </li>
           );

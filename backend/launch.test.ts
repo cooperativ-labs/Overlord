@@ -181,7 +181,10 @@ test('parking an active objective to submitted clears its queue and allows launc
     instructionText: 'Second objective'
   });
 
-  await assert.rejects(() => launchObjective(second.id, { agent: 'codex' }), /Enable auto-advance/);
+  await assert.rejects(
+    () => launchObjective(second.id, { agent: 'codex' }),
+    /Add this objective to a Run Queue/
+  );
 
   const parked = await updateObjective(firstObjectiveId, { state: 'submitted' });
   assert.equal(parked.state, 'submitted');
@@ -307,17 +310,20 @@ test('launching another objective while one is active is rejected without queuei
     instructionText: 'Second objective'
   });
 
-  await assert.rejects(() => launchObjective(second.id, { agent: 'codex' }), /Enable auto-advance/);
+  await assert.rejects(
+    () => launchObjective(second.id, { agent: 'codex' }),
+    /Add this objective to a Run Queue/
+  );
 
   const secondRequestCount = db
     .prepare(`SELECT COUNT(*) AS n FROM execution_requests WHERE objective_id = ?`)
     .get(second.id) as { n: number };
   assert.equal(secondRequestCount.n, 0);
 
-  const secondObjective = db
-    .prepare(`SELECT auto_advance FROM objectives WHERE id = ?`)
-    .get(second.id) as { auto_advance: number };
-  assert.equal(secondObjective.auto_advance, 0);
+  const queueEntry = db
+    .prepare(`SELECT id FROM run_queue_entries WHERE objective_id = ? AND deleted_at IS NULL`)
+    .get(second.id);
+  assert.equal(queueEntry, undefined);
 });
 
 test('updateAgentCatalog persists model order and display names', async () => {
@@ -466,7 +472,10 @@ test('still rejects a same-resource sibling launch while parallel is off', async
     instructionText: 'Also on primary'
   });
 
-  await assert.rejects(() => launchObjective(second.id, { agent: 'codex' }), /Enable auto-advance/);
+  await assert.rejects(
+    () => launchObjective(second.id, { agent: 'codex' }),
+    /Add this objective to a Run Queue/
+  );
 
   const secondRequestCount = db
     .prepare(`SELECT COUNT(*) AS n FROM execution_requests WHERE objective_id = ?`)

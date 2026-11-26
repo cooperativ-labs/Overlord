@@ -126,7 +126,7 @@ Owns:
 - `execution_requests` queue claiming and launch
 - Agent-facing repository read capabilities: `git_status`, resource-addressed `diff`, bounded `read_file`, and literal `search_text`, alongside the existing `observe`/`tree`/`branches`/`worktrees`, executed for mission-less capability calls with the requested `resource_key` (never silently the primary resource), path containment including symlinks, credential/sensitive-path exclusion, disabled external diff/textconv/hooks, and explicit bounds and truncation
 - Working directory resolution, ordered as explicit `workingDirectory`, objective `resource_key` on the claiming execution target, primary project resource for the target, then matching cwd `.overlord/project.json` fallback (the link whose `projectId` matches the mission project, among any number of projects recorded in that file); a missing objective-bound resource fails with `objective_resource_not_connected`
-- Launch-config resolution for manual, auto-advance, and claim-time launches: an explicit objective override wins, then per-agent defaults on the selected `project_resource_sources` descriptor, then user execution-target and workspace defaults
+- Launch-config resolution for manual, Run Queue, and claim-time launches: an explicit objective override wins, then per-agent defaults on the selected `project_resource_sources` descriptor, then user execution-target and workspace defaults
 - Per-mission branch/worktree preparation before local agent spawn when enabled, including the deterministic branch/worktree **planning** algorithm (`cli/src/branch-planning.ts`) — co-owned with the service layer and pinned to `contract/branch-planning-vectors.json` (see "Shared Deterministic Algorithms")
 - Branch and worktree layout: mission branches are named `<mission-title-slug>-<mission-sequence>` and worktrees live under `~/.ovld/worktrees/<project-slug>/<resource-key>/<branch-name-with-slashes-flattened>` (root overridable with `OVERLORD_WORKTREE_ROOT`), so the branch name is mission-scoped while the worktree path is resource-scoped. Subsequent launches reuse the branch recorded in `missions.active_branch`; once it has been merged or deleted after merge, the next launch starts a new cycle with a numeric suffix (`-2`, `-3`, ...). Preparation is never destructive: the main checkout is not stashed, reset, or force-checked out. After preparation the runner records `POST /api/missions/:id/branch-prepared`, which writes the resolved branch to `missions.active_branch` (the source of truth), records an audit entry under an allowed `mission_events` type (no dedicated `branch_prepared` event type exists), and stamps `execution_requests.launch_flags_json.branchAutomation` for queued runner requests
 - Same-mission branch/worktree reuse: if the planned worktree already exists and is checked out on the expected mission branch, the runner may launch into it even when it has uncommitted changes, so sequential objectives can continue work on the same branch without forcing an intermediate commit
@@ -225,7 +225,10 @@ Owns:
   execution request, the same shape a direct Run of a queued objective produces, and the new
   queue is created unpaused. The dispatcher never passes an in-flight entry, and delivery
   removes the entry and ticks the dispatcher, so the queued objective launches as soon as its
-  predecessor delivers. The default project queue is never auto-created. Any non-default queue
+  predecessor delivers. The default project queue is never auto-created. A queue-definition
+  delete can explicitly remove a legacy default queue, including the project's last queue.
+  A non-empty queue must move its live entries to a different live queue in the same project
+  in the same transaction (ADR 0107). Any non-default queue
   that has held an entry retires (soft-deletes) once its last live entry leaves by removal,
   move, drop or delivery completion; a never-used queue is kept. A forced entry removal (`force`
   on `deleteRunQueuesEntriesByEntryId`) also drops an entry wedged in `dispatched`/`running`,
@@ -251,7 +254,7 @@ Owns:
   moves that objective to the end of the mission's objective positions (re-queueing appends it
   to the queue, so it stays last until a user moves it), while removal on completion,
   disconnect or deletion leaves positions alone; the dispatch tick sweeps the project for empty
-  queues to retire, the default queue is never retired, and the entry DELETE response reports
+  queues to retire, the default queue is exempt from automatic retirement, and the entry DELETE response reports
   any retired queue, so clients must tolerate a queue id disappearing from the project's queue
   projection after any entry mutation or delivery. The queue read projection's bounded
   `diagnosticCode` names an impossible queue/request pair and never exposes launch commands,

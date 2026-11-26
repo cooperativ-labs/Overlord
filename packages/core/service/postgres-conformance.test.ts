@@ -33,20 +33,22 @@ import {
   reconcileDeliveryMissionItems,
   restoreMissionItem
 } from './mission-items.js';
+import { createMissionWithObjectives, listObjectives } from './missions.js';
 import {
   getProjectExecutionTargetSelection,
   listEligibleProjectExecutionTargets,
   resolveLaunchConfig
 } from './project-execution-target.js';
-import { findPrimaryProjectResource } from './projects.js';
-import { syncChanges } from './protocol.js';
+import { createProject, findPrimaryProjectResource } from './projects.js';
+import { attachSession, deliverSession, syncChanges } from './protocol.js';
 import { claimNextQueuedRequest } from './queue-runtime.js';
 import {
   blockRunQueueEntry,
   enqueueRunQueueEntry,
   holdRunQueueEntry,
   recordRunQueueDispatchFailure,
-  resetWedgedLaunchingObjective
+  resetWedgedLaunchingObjective,
+  RUN_QUEUE_DISPATCH_JOB_TYPE
 } from './run-queue.js';
 import { seedServiceOperator } from './test-helpers.js';
 import { generateSessionKey } from './util.js';
@@ -1094,6 +1096,58 @@ for (const adapter of adapters) {
           objectiveId: secondObjectiveId
         });
         assert.equal(second.total, 1, 'same path in two objectives remains independent');
+      } finally {
+        await teardown();
+      }
+    });
+
+    it('wakes the Run Queue on delivery with membership independent of legacy flags', async () => {
+      const { client, teardown } = await adapter.create();
+      try {
+        const ctx = await createServiceContext({ db: client, source: 'cli' });
+        const project = await createProject({ ctx, name: 'Delivery Queue Conformance' });
+        const {
+          mission,
+          objectives: [first, second]
+        } = await createMissionWithObjectives({
+          ctx,
+          projectId: project.id,
+          objectives: [
+            { instructions: 'Deliver this objective', agent: 'codex' },
+            { instructions: 'Queue this successor', agent: 'codex' }
+          ]
+        });
+        assert.ok(first && second);
+        await enqueueRunQueueEntry(client, project.id, second.id);
+        const attached = await attachSession({
+          ctx,
+          missionId: mission.displayId,
+          objectiveId: first.id,
+          agentIdentifier: 'codex'
+        });
+        await client.run('DELETE FROM worker_jobs WHERE type = ?', [RUN_QUEUE_DISPATCH_JOB_TYPE]);
+
+        await deliverSession({
+          ctx,
+          missionId: mission.displayId,
+          sessionKey: attached.sessionKey,
+          summary: 'Delivered the first objective.'
+        });
+
+        const remaining = await listObjectives({ ctx, missionId: mission.displayId });
+        assert.deepEqual(
+          remaining.map(objective => [objective.id, objective.state, objective.autoAdvance]),
+          [
+            [first.id, 'complete', false],
+            [second.id, 'draft', true]
+          ]
+        );
+        const job = await client.get<{ payload_json: string }>(
+          "SELECT payload_json FROM worker_jobs WHERE type = ? AND status = 'queued'",
+          [RUN_QUEUE_DISPATCH_JOB_TYPE]
+        );
+        assert.ok(job);
+        assert.equal(JSON.parse(job.payload_json).projectId, project.id);
       } finally {
         await teardown();
       }

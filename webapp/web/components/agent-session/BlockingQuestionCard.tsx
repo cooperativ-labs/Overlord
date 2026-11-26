@@ -30,7 +30,7 @@ export function BlockingQuestionCard({ request }: { request: HumanAgentRequestDt
     <AgentSessionCardShell
       icon={HelpCircle}
       title="Blocking question"
-      tone="question"
+      tone={request.dismissed ? 'neutral' : 'question'}
       timestamp={request.createdAt}
       badges={
         answerable && remainingMs !== null && remainingMs > 0 ? (

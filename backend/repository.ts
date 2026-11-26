@@ -729,7 +729,7 @@ interface ObjectiveRow {
   title: string | null;
   instruction_text: string;
   state: string;
-  auto_advance: number;
+  queue_member?: number;
   assigned_agent: string | null;
   model: string | null;
   reasoning_effort: string | null;
@@ -1859,6 +1859,11 @@ async function getTagsByMission(missionIds: string[]): Promise<Map<string, Proje
   return byMission;
 }
 
+// Standalone objective mutation responses only need the compatibility boolean.
+const OBJECTIVE_QUEUE_MEMBERSHIP_PROJECTION = `CASE WHEN EXISTS (
+  SELECT 1 FROM run_queue_entries e WHERE e.objective_id = o.id AND e.deleted_at IS NULL
+) THEN 1 ELSE 0 END AS queue_member`;
+
 function toObjectiveDto(r: ObjectiveRow): ObjectiveDto {
   let launchConfigOverrides: Record<
     string,
@@ -1896,8 +1901,7 @@ function toObjectiveDto(r: ObjectiveRow): ObjectiveDto {
     title: r.title,
     instructionText: r.instruction_text,
     state: r.state as ObjectiveDto['state'],
-    autoAdvance:
-      r.queue_entry_id !== undefined ? Boolean(r.queue_entry_id) : isTruthyFlag(r.auto_advance),
+    autoAdvance: Boolean(r.queue_entry_id) || r.queue_member === 1,
     queueEntry:
       r.queue_entry_id &&
       r.queue_id &&
@@ -7122,7 +7126,8 @@ async function insertObjective(
   });
 
   const row = (await db.get(
-    `SELECT o.*, m.display_id AS mission_display_id
+    `SELECT o.*, m.display_id AS mission_display_id,
+               ${OBJECTIVE_QUEUE_MEMBERSHIP_PROJECTION}
        FROM objectives o
        JOIN missions m ON m.id = o.mission_id
       WHERE o.id = ?`,
@@ -7196,7 +7201,8 @@ async function updateObjectiveTx(
     });
     const readExisting = async (lock: boolean) =>
       (await tx.get(
-        `SELECT o.*, m.display_id AS mission_display_id
+        `SELECT o.*, m.display_id AS mission_display_id,
+               ${OBJECTIVE_QUEUE_MEMBERSHIP_PROJECTION}
            FROM objectives o
            JOIN missions m ON m.id = o.mission_id
           WHERE o.id = ? AND o.workspace_id = ? AND o.deleted_at IS NULL${lock ? ' FOR UPDATE OF o' : ''}`,
@@ -7210,7 +7216,9 @@ async function updateObjectiveTx(
     // queue lock; take it first, in the same mission → objective order as
     // reorder and launch, so the two locks cannot deadlock.
     if (tx.dialect === 'postgres') {
-      if (body.state === 'draft') await lockMissionObjectiveQueue(tx, existing.mission_id);
+      if (body.state === 'draft' || body.autoAdvance !== undefined) {
+        await lockMissionObjectiveQueue(tx, existing.mission_id);
+      }
       existing = await readExisting(true);
       if (!existing) throw new ApiError(404, 'Objective not found');
     }
@@ -7273,8 +7281,6 @@ async function updateObjectiveTx(
       }
     }
     if (body.autoAdvance !== undefined) {
-      fields.push('auto_advance = ?');
-      setParams.push(bindBool(DATABASE_DIALECT, body.autoAdvance));
       changed.push('auto_advance');
     }
     if (body.position !== undefined) {
@@ -7322,7 +7328,7 @@ async function updateObjectiveTx(
       setParams.push(nextLaunchConfigJson);
       changed.push('launch_config_json');
     }
-    if (fields.length === 0 && summaryInput.kind === 'omit') {
+    if (fields.length === 0 && body.autoAdvance === undefined && summaryInput.kind === 'omit') {
       return { objective: toObjectiveDto(existing), warnings: [] };
     }
 
@@ -7358,7 +7364,7 @@ async function updateObjectiveTx(
     // A summary-only edit is presentation metadata: it never touches
     // instructions, lifecycle, Run Queue membership, evidence or `updated_at`
     // (which orders the activity feed), in any objective state (ADR 0057).
-    if (fields.length === 0) {
+    if (fields.length === 0 && body.autoAdvance === undefined) {
       const briefOnly = objectiveBriefPatchAssignments(tx, briefPlan.patch);
       if (briefOnly.assignments.length > 0) {
         const briefRevision = existing.revision + 1;
@@ -7390,7 +7396,8 @@ async function updateObjectiveTx(
         );
       }
       const briefOnlyRow = (await tx.get(
-        `SELECT o.*, m.display_id AS mission_display_id
+        `SELECT o.*, m.display_id AS mission_display_id,
+               ${OBJECTIVE_QUEUE_MEMBERSHIP_PROJECTION}
            FROM objectives o
            JOIN missions m ON m.id = o.mission_id
           WHERE o.id = ?`,
@@ -7426,7 +7433,7 @@ async function updateObjectiveTx(
     if (reopening) await lockMissionObjectiveQueue(tx, existing.mission_id);
 
     await tx.run(
-      `UPDATE objectives SET ${fields.join(', ')}, updated_at = ?, revision = ?
+      `UPDATE objectives SET ${[...fields, 'updated_at = ?', 'revision = ?'].join(', ')}
          WHERE id = ? AND workspace_id = ?`,
       [...setParams, now, revision, id, workspaceId]
     );
@@ -7551,9 +7558,7 @@ async function updateObjectiveTx(
       }
     }
 
-    // REST and Protocol retain `autoAdvance` as a compatibility input, but the
-    // Run Queue is the only sequencer. Keep the legacy column write above during
-    // the staged retirement and materialize/remove live membership here.
+    // Translate the legacy REST and Protocol flag into a queue mutation.
     if (body.autoAdvance !== undefined) {
       if (body.autoAdvance) {
         await enqueueObjectiveAfterLastQueuedSibling(tx, existing.project_id, id, workspaceUserId);
@@ -7576,7 +7581,8 @@ async function updateObjectiveTx(
     }
 
     const row = (await tx.get(
-      `SELECT o.*, m.display_id AS mission_display_id
+      `SELECT o.*, m.display_id AS mission_display_id,
+               ${OBJECTIVE_QUEUE_MEMBERSHIP_PROJECTION}
          FROM objectives o
          JOIN missions m ON m.id = o.mission_id
         WHERE o.id = ?`,
@@ -7643,7 +7649,8 @@ export async function requestObjectiveSummary(
       mode: mode as ObjectiveSummaryGenerationMode
     });
     const row = (await tx.get(
-      `SELECT o.*, m.display_id AS mission_display_id
+      `SELECT o.*, m.display_id AS mission_display_id,
+               ${OBJECTIVE_QUEUE_MEMBERSHIP_PROJECTION}
          FROM objectives o
          JOIN missions m ON m.id = o.mission_id
         WHERE o.id = ?`,

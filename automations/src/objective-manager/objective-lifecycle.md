@@ -25,13 +25,11 @@ through a state machine driven by three kinds of triggers:
 
 1. **User actions** — run, reorder, edit, complete, revert.
 2. **Agent protocol calls** — `attach`, `update`, `deliver`.
-3. **Background automation** — auto-advance after delivery, launch settlement.
+3. **Background automation** — Run Queue dispatch and launch settlement.
 
 There is no queue refill. A mission's unstarted objectives form one ordered **draft
 queue** (`draft` and `submitted`, by position); "next up" is always *derived* from that
-queue, never maintained by promoting or demoting rows. **Auto-advance is opt-in
-policy**: a draft launching automatically after a delivery happens only when the user
-enabled `auto_advance` on that objective.
+queue, never maintained by promoting or demoting rows. Live Run Queue membership determines automatic dispatch.
 
 ---
 
@@ -75,8 +73,7 @@ Three derived selectors, none persisted, all ordered by `position`, then
 - **First draft** (`firstDraft`) — the first `draft`, blank allowed. Used for
   editing, `discuss-objective` defaults and the mission card's draft resource badge.
 - **Next runnable draft** (`nextUpDraft`) — the first `draft` with non-empty
-  instruction text. The only selector automatic paths use (auto-advance,
-  awaiting-approval notices, default attach after active-state resolution). It skips
+  instruction text. Used for awaiting-approval notices and default attach after active-state resolution. It skips
   `submitted` objectives and blank drafts.
 
 > Naming note: `objectives.state = 'launching'` and
@@ -94,7 +91,7 @@ stateDiagram-v2
     [*] --> draft : created (always appended to the draft queue)
     draft --> submitted : discuss-objective
 
-    draft --> launching : launch requested<br/>(manual run, API, auto-advance)
+    draft --> launching : launch requested<br/>(manual run, API, Run Queue)
     launching --> draft : launch-queue creation failure revert
 
     draft --> executing : agent attaches (fallback)
@@ -125,7 +122,7 @@ enforce them and the adapter conformance suite must test that enforcement.
    by position.
 2. **At most one `executing` _or_ `pending_delivery` objective per mission, unless
    `missions.allow_parallel_objectives` is true.** The default remains serial so
-   auto-advance races cannot leave two objectives active on the same checkout.
+   dispatch races cannot leave two objectives active on the same checkout.
    When the flag is on, several active objectives are allowed on any resource,
    including the same one. Checkout safety moves to the Runner Layer: a mission that
    uses worktrees puts a concurrently launched same-resource objective on its own
@@ -148,8 +145,7 @@ enforce them and the adapter conformance suite must test that enforcement.
    any prior active session for the objective.
 8. **At most one in-flight execution request per objective.** All launch paths reuse
    or re-queue an existing active request instead of inserting duplicates.
-9. **`auto_advance` defaults to `false`.** Auto-advance is explicit opt-in per
-   objective.
+9. **Automatic dispatch requires live Run Queue membership.**
 10. **CAS-guarded transitions.** Every state change is guarded on the expected current
     state (compare-and-swap on `state`), so concurrent triggers degrade to no-ops,
     never to duplicate transitions.
@@ -173,9 +169,7 @@ enforce them and the adapter conformance suite must test that enforcement.
   Each group sorts by its own recorded moment; a missing moment (rows written
   before the timestamps existed) falls back to position, so an untimestamped
   mission renders exactly as it did before. Only group 4 is position-ordered,
-  which is why drag-to-reorder covers the draft queue alone. Planning and dispatch
-  (`decideAutoAdvanceAfterDelivery`, run-queue dispatch) keep using the position
-  order — display order is presentation only.
+  which is why drag-to-reorder covers the draft queue alone. Run Queue dispatch uses entry position.
 - **Lifecycle timestamps.** `objectives.launched_at` and `objectives.started_at`
   are stamped first-wins (`COALESCE`) on entry to `launching` and `executing`;
   `completed_at` is written on delivery. First-wins matters: re-launching, or
@@ -234,7 +228,7 @@ selection skips submitted objectives; they remain explicitly launchable.
 
 **Trigger:** an execution request is created for the objective. Sources
 (`requested_source`): a user manually running the objective, the public API/CLI, or
-auto-advance after a delivery (see 5.6).
+Run Queue dispatch (see 5.6).
 
 Sequence (all steps guarded so races cannot double-queue):
 
@@ -248,16 +242,16 @@ Sequence (all steps guarded so races cannot double-queue):
    CAS-reset to `queued` and a fresh `execution_requested` event is emitted so runners
    wake up. No new request, no objective-state change beyond what already happened.
 3. If the objective is `draft`, update it to `launching` (CAS-guarded on
-   `state = 'draft'`). Auto-advance also stamps `auto_advanced_at`. (A `launching`
+   `state = 'draft'`). (A `launching`
    objective stays `launching`.)
 4. Insert the execution request with `status = 'queued'` and an idempotency key
-   (`auto_advance:<objective_id>` for auto-advance; unique otherwise). A uniqueness
+   (`run_queue:<entry_id>:attempt:<n>` for Run Queue dispatch). A uniqueness
    violation on insert is resolved by reusing the request that won the race.
 5. Emit an `execution_requested` mission event (this is what wakes runners).
 
 **Failure revert:** if the request cannot be created (insert error, unresolvable
 race), revert the objective `launching` → `draft` (CAS-guarded on
-`state = 'launching'`) and clear `auto_advanced_at`. This is the only automated
+`state = 'launching'`). This is the only automated
 backward transition out of `launching`.
 
 ### 5.4 `launching`/`draft` → `executing` — agent attaches
@@ -300,12 +294,9 @@ artifacts, delivery report, and any declared paths:
    CAS-guarded on `state IN ('executing','pending_delivery','launching','draft')` —
    deliver completes the objective from any active state, but never resurrects an
    already-complete row.
-2. Mark the agent session completed/detached **before** auto-advance runs, so
-   launchers see no active session when the next `execution_requested` event arrives.
-3. Run the **auto-advance decision** (5.6).
-4. If auto-advance did **not** queue anything: move the mission to the project's
-   `review`-type status, placed at the **top** of that board column, and emit a
-   `status_change` event.
+2. Mark the agent session completed/detached and request a Run Queue dispatch tick.
+3. When no sibling is active, delivery moves the mission to review. A subsequent
+   queue dispatch can move it back to execution.
 
 Other paths to `complete`:
 
@@ -316,41 +307,11 @@ Other paths to `complete`:
   active execution requests for the objective are cancelled. Idempotent for
   already-complete objectives.
 
-### 5.6 Auto-advance decision (runs inside deliver)
+### 5.6 Run Queue dispatch after delivery
 
-After completing the delivered objective, inspect the **next runnable draft**
-(`nextUpDraft`) on the mission — regardless of whether it sits before or after the
-delivered objective, since objectives can launch out of order:
-
-```text
-next_draft = lowest-position draft with non-empty instruction text (skips submitted)
-if none                     → no advance → mission goes to review
-elif mission is human-only   → no advance
-elif draft.auto_advance     → (requires assigned agent)
-                              draft → launching, insert queued execution request,
-                              emit execution_requested  → runner launches next agent
-else (auto_advance = false) → emit blocking awaiting_approval event
-                              (summary = objective.approval_reason or a default),
-                              flag the mission as awaiting a response,
-                              notify the user; objective STAYS draft
-```
-
-Notes:
-
-- Auto-advance is **policy, not structure**: it only chooses whether the next draft
-  _launches_ automatically.
-- A saved **blank** draft never auto-advances and is skipped by automatic selection.
-- In production, delivery enqueues the durable Run Queue worker; explicit Run Queue
-  membership and order stay authoritative. A later queued objective does not
-  implicitly enqueue earlier unqueued drafts.
-- The awaiting-approval branch counts as "advanced" for mission-status purposes: the
-  mission does **not** move to review while an approval is pending.
-- **Approval gating:** an agent can pre-gate a queued objective (set
-  `auto_advance = false` plus an `approval_reason`). A user approves by setting
-  `auto_advance = true`, which clears `approval_reason` and the mission's waiting flag;
-  the objective then launches on the next trigger (manual run, or auto-advance after
-  the next delivery). Toggling `auto_advance` is only allowed while the objective is
-  in `draft`/`submitted`/`launching`; enabling it clears `approval_reason`.
+Delivery removes the completed entry and wakes the Run Queue dispatcher. The
+dispatcher checks live queue membership, entry order, mission concurrency,
+and target readiness. An unqueued runnable draft can be surfaced for approval.
 
 ### 5.7 → `pending_delivery` — follow-up work after a delivery
 
@@ -440,8 +401,7 @@ transitions resolve the project's preferred status name per type.
 | Objective event                                                 | Mission effect                                                                                  |
 | --------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
 | Agent attaches (→ `executing`)                                  | Mission → `execute`-type status. If it was in `review`/`complete`, a reopened event is emitted. |
-| Deliver with nothing auto-advanced                              | Mission → `review`-type status, top of the review column, marked unread — **unless** another objective is still `launching` / `executing` / `pending_delivery`, in which case the mission stays `execute`. |
-| Deliver with auto-advance queued                                | Mission **stays** in execute; the next objective launches.                                      |
+| Deliver with no active sibling                              | Mission → `review`-type status, top of the review column, marked unread — **unless** another objective is still `launching` / `executing` / `pending_delivery`, in which case the mission stays `execute`. |
 | Deliver gated on approval                                       | Mission stays put; flagged as awaiting a response, blocking `awaiting_approval` event.          |
 | Agent `update` with a phase mapping to a `complete`-type status | All `executing`/`pending_delivery` objectives → `complete`.                                    |
 
@@ -458,8 +418,6 @@ transitions resolve the project's preferred status name per type.
 - **`assigned_agent` inheritance** — every UI-added draft
   copies the most recent `assigned_agent` so the chosen agent/model persists down the
   queue; it only changes via explicit user/agent action.
-- **`auto_advanced_at`** — stamped when auto-advance moves a draft to `launching`;
-  cleared on revert.
 - **Events** — every meaningful transition writes a mission event
   (`execution_requested`, `awaiting_approval`, `status_change`, alerts, system notes),
   which power the activity feed, notifications, and runner wake-ups. Objective state
@@ -490,8 +448,8 @@ a contract review, not as license to diverge silently.
    in the service layer inside the same transaction, and cover both with the adapter
    conformance suite.
 6. **Idempotency keys over heuristics.** Every automated request creation
-   (auto-advance especially) carries a deterministic idempotency key
-   (`auto_advance:<objective_id>`), making dedup a uniqueness property rather than a
+   from a Run Queue carries a deterministic idempotency key
+   (`run_queue:<entry_id>:attempt:<n>`), making dedup a uniqueness property rather than a
    query-then-insert race.
 
 ---
@@ -512,9 +470,7 @@ To replicate this system, enforce — transactionally, not just in application c
    execution order launches it (`→ launching` or `→ executing`).
 7. No refill or promotion: creating, launching, reordering or reopening one
    objective never changes another objective's state.
-8. Auto-advance only on explicit opt-in (`auto_advance = true`), only with non-empty
-   text and an assigned agent, never on human-only missions; otherwise emit an
-   approval gate instead of launching.
+8. Automatically dispatch objectives with live Run Queue entries when eligible.
 9. Delivery completes the objective _before_ deciding what runs next; if nothing
    advances, surface the mission for review.
 10. Post-delivery work on a delivered objective re-opens it as `pending_delivery`,

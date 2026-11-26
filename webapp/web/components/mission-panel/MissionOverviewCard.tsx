@@ -113,7 +113,13 @@ function useMinuteClock(): string {
  * refresh, without a delivery. It is a polite live region (a labelled group) and the change is
  * announced.
  */
-function LiveStatusLine({ status }: { status: MissionLiveStatus }) {
+function LiveStatusLine({
+  status,
+  highlightWaiting
+}: {
+  status: MissionLiveStatus;
+  highlightWaiting: boolean;
+}) {
   const badge = (() => {
     switch (status.kind) {
       case 'blocked':
@@ -127,7 +133,7 @@ function LiveStatusLine({ status }: { status: MissionLiveStatus }) {
       case 'waiting':
         return (
           <KindBadge
-            tone="question"
+            tone={highlightWaiting ? 'question' : 'delivered'}
             icon={<HelpCircle className="size-3" aria-hidden="true" />}
             label={status.label}
           />
@@ -621,7 +627,10 @@ export function MissionOverviewCard({
             </button>
           </p>
         ) : null}
-        <LiveStatusLine status={liveStatus} />
+        <LiveStatusLine
+          status={liveStatus}
+          highlightWaiting={openQuestions.some(request => !request.dismissed)}
+        />
         <OverviewTabs tabs={tabs} selected={selectedTab} onSelect={setRequestedTab} idFor={idFor} />
       </div>
 

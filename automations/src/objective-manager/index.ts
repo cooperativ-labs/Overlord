@@ -1,8 +1,6 @@
 import type { Automation } from '../types.js';
 
 import {
-  type AutoAdvanceDecision,
-  decideAutoAdvanceAfterDelivery,
   deriveObjectiveLifecycleView,
   type ObjectiveLifecycleObjective,
   type ObjectiveLifecycleOptions,
@@ -10,7 +8,6 @@ import {
 } from './rules.js';
 
 export type {
-  AutoAdvanceDecision,
   ObjectiveLifecycleObjective,
   ObjectiveLifecycleOptions,
   ObjectiveLifecycleState,
@@ -26,7 +23,6 @@ export type {
 export {
   ACTIVE_OBJECTIVE_STATES,
   canonicalObjectiveResourceKey,
-  decideAutoAdvanceAfterDelivery,
   DEFAULT_PRIMARY_RESOURCE_KEY,
   deriveObjectiveLifecycleView,
   EDITABLE_NEXT_UP_OBJECTIVE_STATES,
@@ -53,11 +49,9 @@ export {
 export type ManageObjectiveLifecycleInput = {
   objectives: ObjectiveLifecycleObjective[];
   mission?: {
-    humanOnly?: boolean;
     allowParallelObjectives?: boolean;
     primaryResourceKey?: string;
   };
-  planAutoAdvance?: boolean;
 };
 
 export type ManageObjectiveLifecycleOutput = {
@@ -69,7 +63,6 @@ export type ManageObjectiveLifecycleOutput = {
   nextUpObjectiveId: string | null;
   hasNonExecuted: boolean;
   violations: ObjectiveLifecycleViolation[];
-  autoAdvanceDecision: AutoAdvanceDecision | null;
 };
 
 export function manageObjectiveLifecycle(
@@ -83,8 +76,6 @@ export function manageObjectiveLifecycle(
     options.primaryResourceKey = input.mission.primaryResourceKey;
   }
   const view = deriveObjectiveLifecycleView(input.objectives, options);
-  const autoAdvanceOptions =
-    input.mission?.humanOnly === undefined ? {} : { humanOnly: input.mission.humanOnly };
 
   return {
     orderedObjectiveIds: view.orderedObjectives.map(objective => objective.id),
@@ -94,10 +85,7 @@ export function manageObjectiveLifecycle(
     activeObjectiveId: view.activeObjective?.id ?? null,
     nextUpObjectiveId: view.nextUpObjective?.id ?? null,
     hasNonExecuted: view.hasNonExecuted,
-    violations: view.violations,
-    autoAdvanceDecision: input.planAutoAdvance
-      ? decideAutoAdvanceAfterDelivery(input.objectives, autoAdvanceOptions)
-      : null
+    violations: view.violations
   };
 }
 
@@ -108,6 +96,6 @@ export const manageObjectiveLifecycleTool: Automation<
   id: 'manage-objective-lifecycle',
   label: 'Manage objective lifecycle',
   description:
-    'Applies the objective lifecycle ruleset to classify objectives, validate invariants, and plan auto-advance actions without writing persistence.',
+    'Applies the objective lifecycle ruleset to classify objectives and validate invariants without writing persistence.',
   run: async ({ input }) => manageObjectiveLifecycle(input)
 };
