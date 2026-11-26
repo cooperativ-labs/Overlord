@@ -10,12 +10,14 @@ import {
   Sparkles
 } from 'lucide-react';
 import type { ReactNode } from 'react';
+import { useQuery } from '@tanstack/react-query';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { getApiBaseUrl, getAuthBaseUrl, isRemoteBackend } from '@/lib/api-base.ts';
 import { getDesktopChrome } from '@/lib/desktop-chrome';
 import { useCopyToClipboard } from '@/lib/hooks/use-copy-to-clipboard';
+import { readHostedMcpConnection } from '@/lib/hosted-mcp-connection.ts';
 import { useMeta } from '@/lib/queries';
 
 function isHostedMcpBackend({
@@ -72,11 +74,13 @@ function resolveMcpBaseUrl(): string {
 function CopyValueRow({
   label,
   value,
-  description
+  description,
+  disabled = false
 }: {
   label: string;
   value: string;
   description?: string;
+  disabled?: boolean;
 }) {
   const { copied, copy } = useCopyToClipboard();
 
@@ -90,6 +94,7 @@ function CopyValueRow({
           size="sm"
           className="h-7 shrink-0 gap-1.5 px-2 text-xs"
           onClick={() => void copy(value)}
+          disabled={disabled}
         >
           {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
           {copied ? 'Copied' : 'Copy'}
@@ -199,9 +204,24 @@ export function McpPage({ onNavigateToBackend, onNavigateToTokens }: McpPageProp
     clientUsesRemoteBackend: isRemoteBackend()
   });
   const mcpEnabled = meta.data?.capabilities.mcp === true;
+  const apiBaseUrl = getApiBaseUrl().trim();
+  const needsDesktopDiscovery = isDesktop && isRemoteBackend() && isCloudBackend;
+  const hostedConnection = useQuery({
+    queryKey: ['hosted-mcp-connection', apiBaseUrl],
+    queryFn: () => readHostedMcpConnection(apiBaseUrl),
+    enabled: needsDesktopDiscovery && mcpEnabled && Boolean(apiBaseUrl),
+    retry: 1
+  });
   const baseUrl = resolveMcpBaseUrl();
-  const mcpUrl = `${baseUrl}/mcp`;
-  const authorizationUrl = `${baseUrl}/oauth/approve`;
+  const mcpUrl = needsDesktopDiscovery
+    ? hostedConnection.data?.mcpUrl ?? ''
+    : `${baseUrl}/mcp`;
+  const authorizationUrl = needsDesktopDiscovery
+    ? hostedConnection.data?.authorizationUrl ?? ''
+    : `${baseUrl}/oauth/approve`;
+  const unavailableValue = hostedConnection.isError
+    ? 'Unavailable — could not read MCP discovery'
+    : 'Resolving MCP endpoint…';
 
   if (meta.isLoading && !meta.data) {
     return <p className="text-sm text-muted-foreground">Loading MCP settings…</p>;
@@ -269,13 +289,15 @@ export function McpPage({ onNavigateToBackend, onNavigateToTokens }: McpPageProp
         <div className="space-y-4">
           <CopyValueRow
             label="MCP server URL"
-            value={mcpUrl}
+            value={mcpUrl || unavailableValue}
             description="Primary endpoint for remote MCP clients."
+            disabled={!mcpUrl}
           />
           <CopyValueRow
             label="OAuth approval page"
-            value={authorizationUrl}
+            value={authorizationUrl || unavailableValue}
             description="Browser page shown when an MCP client asks you to approve access."
+            disabled={!authorizationUrl}
           />
         </div>
       </div>
@@ -293,8 +315,11 @@ export function McpPage({ onNavigateToBackend, onNavigateToTokens }: McpPageProp
             <CopyValueRow
               key={connector.agent}
               label={connector.label}
-              value={buildMcpConnectCommand({ mcpUrl, agent: connector.agent })}
+              value={
+                mcpUrl ? buildMcpConnectCommand({ mcpUrl, agent: connector.agent }) : unavailableValue
+              }
               description="Uses add-mcp to write the remote MCP config for this harness."
+              disabled={!mcpUrl}
             />
           ))}
         </div>

@@ -125,6 +125,15 @@ assistant's connector settings and complete the OAuth flow, or provide a
 outbound domain allowlist, allow the Overlord apex domain and its subdomains so
 the connector can reach the server.
 
+For the hosted cloud service, the public MCP resource is
+`https://app.ovld.ai/mcp`. The backend also answers at
+`https://backend.ovld.ai/mcp`, but it advertises the `app.ovld.ai` URL as the
+OAuth resource and authorization server. Use the URL shown in **Settings →
+Agents & MCP** (which uses the app origin for the hosted web app); the backend
+hostname is the API origin, not the published connector URL.
+The desktop settings screen reads the backend's discovery metadata to show the
+same public resource instead of copying the API origin.
+
 For the full hosted MCP surface — endpoints, OAuth, tools, and boundaries — and
 the deeper agent-facing walkthrough, see
 [Docs for agents → MCP access](/docs-for-agents/mcp/) and
