@@ -134777,34 +134777,6 @@ function deriveObjectiveLifecycleView(objectives, options = {}) {
     violations: validateObjectiveLifecycle(orderedObjectives, options)
   };
 }
-function decideAutoAdvanceAfterDelivery(objectives, options = {}) {
-  const nextDraft = nextUpDraft(objectives);
-  if (!nextDraft) {
-    return { action: "none", reason: "no_non_empty_draft" };
-  }
-  if (options.humanOnly) {
-    return { action: "none", reason: "human_only_mission" };
-  }
-  if (!nextDraft.autoAdvance) {
-    return {
-      action: "await_approval",
-      objectiveId: nextDraft.id,
-      reason: options.defaultApprovalReason ?? "Next objective is waiting for approval."
-    };
-  }
-  if (hasNoLaunchableAgent(nextDraft.assignedAgent)) {
-    return {
-      action: "await_approval",
-      objectiveId: nextDraft.id,
-      reason: nextDraft.assignedAgent?.trim() ? "Next objective is assigned to Manual; a person does it." : "Queue launch requires an assigned agent."
-    };
-  }
-  return {
-    action: "queue_launch",
-    objectiveId: nextDraft.id,
-    idempotencyKey: `auto_advance:${nextDraft.id}`
-  };
-}
 
 // ../automations/dist/objective-manager/index.js
 function manageObjectiveLifecycle(input2) {
@@ -134816,7 +134788,6 @@ function manageObjectiveLifecycle(input2) {
     options.primaryResourceKey = input2.mission.primaryResourceKey;
   }
   const view = deriveObjectiveLifecycleView(input2.objectives, options);
-  const autoAdvanceOptions = input2.mission?.humanOnly === void 0 ? {} : { humanOnly: input2.mission.humanOnly };
   return {
     orderedObjectiveIds: view.orderedObjectives.map((objective) => objective.id),
     executedObjectiveIds: view.executedObjectives.map((objective) => objective.id),
@@ -134825,14 +134796,13 @@ function manageObjectiveLifecycle(input2) {
     activeObjectiveId: view.activeObjective?.id ?? null,
     nextUpObjectiveId: view.nextUpObjective?.id ?? null,
     hasNonExecuted: view.hasNonExecuted,
-    violations: view.violations,
-    autoAdvanceDecision: input2.planAutoAdvance ? decideAutoAdvanceAfterDelivery(input2.objectives, autoAdvanceOptions) : null
+    violations: view.violations
   };
 }
 var manageObjectiveLifecycleTool = {
   id: "manage-objective-lifecycle",
   label: "Manage objective lifecycle",
-  description: "Applies the objective lifecycle ruleset to classify objectives, validate invariants, and plan auto-advance actions without writing persistence.",
+  description: "Applies the objective lifecycle ruleset to classify objectives and validate invariants without writing persistence.",
   run: async ({ input: input2 }) => manageObjectiveLifecycle(input2)
 };
 
@@ -153930,10 +153900,10 @@ async function seedRunningPredecessors(db, queue, missionId, beforePosition, act
         now2
       ]
     );
-    await db.run(
-      "UPDATE objectives SET auto_advance = ?, updated_at = ?, revision = revision + 1 WHERE id = ?",
-      [db.dialect === "postgres" ? true : 1, now2, objective.id]
-    );
+    await db.run("UPDATE objectives SET updated_at = ?, revision = revision + 1 WHERE id = ?", [
+      now2,
+      objective.id
+    ]);
   }
   await db.run(
     "UPDATE run_queues SET paused = ?, updated_at = ?, revision = revision + 1 WHERE id = ?",
@@ -154028,7 +153998,7 @@ async function listProjectRunQueues(db, projectId) {
 }
 async function retireRunQueueIfEmpty(db, queueId) {
   const queue = await db.get(
-    "SELECT id, is_default FROM run_queues WHERE id = ? AND deleted_at IS NULL",
+    `SELECT id, is_default FROM run_queues WHERE id = ? AND deleted_at IS NULL${db.dialect === "postgres" ? " FOR UPDATE" : ""}`,
     [queueId]
   );
   if (!queue || isTruthyFlag(queue.is_default)) return null;
@@ -154051,17 +154021,16 @@ async function retireEmptyRunQueues(db, projectId) {
         AND NOT EXISTS (
           SELECT 1 FROM run_queue_entries e WHERE e.queue_id = q.id AND e.deleted_at IS NULL
         )
-        AND EXISTS (SELECT 1 FROM run_queue_entries e WHERE e.queue_id = q.id)`,
+        AND EXISTS (SELECT 1 FROM run_queue_entries e WHERE e.queue_id = q.id)
+      ORDER BY q.id`,
     [projectId, db.dialect === "postgres" ? false : 0]
   );
-  if (!rows.length) return [];
-  const now2 = nowIso();
-  for (const row of rows)
-    await db.run(
-      "UPDATE run_queues SET deleted_at = ?, updated_at = ?, revision = revision + 1 WHERE id = ? AND deleted_at IS NULL",
-      [now2, now2, row.id]
-    );
-  return rows.map((row) => row.id);
+  const retired = [];
+  for (const { id: id2 } of rows) {
+    const retiredId = await db.transaction((tx) => retireRunQueueIfEmpty(tx, id2));
+    if (retiredId) retired.push(retiredId);
+  }
+  return retired;
 }
 var SEQUENCEABLE_OBJECTIVE_STATES = /* @__PURE__ */ new Set(["draft", "submitted"]);
 async function rewriteMissionPositions(db, missionId, options = {}) {
@@ -154290,7 +154259,8 @@ async function enqueueRunQueueEntry(db, projectId, objectiveId, options = {}) {
       created: false
     } : await resolveMissionRunQueue(tx, projectId, objective.mission_id, options.actorId ?? null);
     const queue = resolved.queue;
-    if (!queue) throw new ServiceError("Run Queue not found", "run_queue_not_found", 404);
+    if (!queue || !(await lockLiveRunQueues(tx, projectId, [queue.id])).has(queue.id))
+      throw new ServiceError("Run Queue not found", "run_queue_not_found", 404);
     if (resolved.created)
       await seedRunningPredecessors(
         tx,
@@ -154352,10 +154322,10 @@ async function enqueueRunQueueEntry(db, projectId, objectiveId, options = {}) {
         [tx.dialect === "postgres" ? false : 0, now2, queue.id]
       );
     }
-    await tx.run(
-      "UPDATE objectives SET auto_advance = ?, updated_at = ?, revision = revision + 1 WHERE id = ?",
-      [tx.dialect === "postgres" ? true : 1, now2, objectiveId]
-    );
+    await tx.run("UPDATE objectives SET updated_at = ?, revision = revision + 1 WHERE id = ?", [
+      now2,
+      objectiveId
+    ]);
     if (options.cascade !== false) {
       const followers = await tx.all(
         `SELECT o.id FROM objectives o
@@ -154390,8 +154360,8 @@ async function enqueueRunQueueEntry(db, projectId, objectiveId, options = {}) {
             ]
           );
           await tx.run(
-            "UPDATE objectives SET auto_advance = ?, updated_at = ?, revision = revision + 1 WHERE id = ?",
-            [tx.dialect === "postgres" ? true : 1, now2, follower.id]
+            "UPDATE objectives SET updated_at = ?, revision = revision + 1 WHERE id = ?",
+            [now2, follower.id]
           );
         }
         const current = await tx.all(
@@ -154488,10 +154458,10 @@ async function removeRunQueueEntry(db, entryId, options = {}) {
       "UPDATE run_queue_entries SET deleted_at = ?, execution_request_id = NULL, updated_at = ?, revision = revision + 1 WHERE id = ?",
       [now2, now2, entryId]
     );
-    await tx.run(
-      "UPDATE objectives SET auto_advance = ?, updated_at = ?, revision = revision + 1 WHERE id = ?",
-      [tx.dialect === "postgres" ? false : 0, now2, row.objective_id]
-    );
+    await tx.run("UPDATE objectives SET updated_at = ?, revision = revision + 1 WHERE id = ?", [
+      now2,
+      row.objective_id
+    ]);
     const objective = await tx.get(
       "SELECT state FROM objectives WHERE id = ? AND deleted_at IS NULL",
       [row.objective_id]
@@ -154606,21 +154576,23 @@ async function reorderRunQueue(db, queueId, orderedEntryIds) {
 }
 async function moveRunQueueEntry(db, entryId, options) {
   return db.transaction(async (tx) => {
-    const current = await tx.get(
+    const readEntry = () => tx.get(
       "SELECT project_id, workspace_id, mission_id, queue_id, state FROM run_queue_entries WHERE id = ? AND deleted_at IS NULL",
       [entryId]
     );
+    const initial = await readEntry();
+    if (!initial)
+      throw new ServiceError("Run Queue entry not found", "run_queue_entry_not_found", 404);
+    await lockMissionObjectiveQueue(tx, initial.mission_id);
+    const current = await readEntry();
     if (!current)
       throw new ServiceError("Run Queue entry not found", "run_queue_entry_not_found", 404);
-    await lockMissionObjectiveQueue(tx, current.mission_id);
     if (current.state === "running" || current.state === "dispatched")
       throw new ServiceError("Running entries cannot be moved", "run_queue_entry_running", 409);
     const queueId = options.queueId ?? current.queue_id;
-    const queue = await tx.get(
-      "SELECT id FROM run_queues WHERE id = ? AND project_id = ? AND deleted_at IS NULL",
-      [queueId, current.project_id]
-    );
-    if (!queue) throw new ServiceError("Run Queue not found", "run_queue_not_found", 404);
+    const queues = await lockLiveRunQueues(tx, current.project_id, [current.queue_id, queueId]);
+    if (!queues.has(current.queue_id) || !queues.has(queueId))
+      throw new ServiceError("Run Queue not found", "run_queue_not_found", 404);
     let position = options.position;
     if (options.afterEntryId) {
       const after = await tx.get(
@@ -154684,6 +154656,16 @@ async function enqueueRunQueueDispatchForWorkspace(db, workspaceId2) {
   );
   for (const row of rows) await enqueueRunQueueDispatch(db, row.project_id, workspaceId2);
 }
+async function lockLiveRunQueues(db, projectId, queueIds) {
+  const ids = [...new Set(queueIds)];
+  const rows = await db.all(
+    `SELECT id FROM run_queues
+      WHERE project_id = ? AND deleted_at IS NULL AND id IN (${ids.map(() => "?").join(", ")})
+      ORDER BY id${db.dialect === "postgres" ? " FOR UPDATE" : ""}`,
+    [projectId, ...ids]
+  );
+  return new Set(rows.map((row) => row.id));
+}
 async function deleteRunQueue(db, queueId, moveEntriesTo) {
   return db.transaction(async (tx) => {
     const queue = await tx.get(
@@ -154691,15 +154673,28 @@ async function deleteRunQueue(db, queueId, moveEntriesTo) {
       [queueId]
     );
     if (!queue) throw new ServiceError("Run Queue not found", "run_queue_not_found", 404);
-    if (isTruthyFlag(queue.is_default))
-      throw new ServiceError("The default Run Queue cannot be deleted", "default_run_queue", 409);
-    const entries = await tx.all(
-      "SELECT id, mission_id FROM run_queue_entries WHERE queue_id = ? AND deleted_at IS NULL",
+    if (moveEntriesTo === queueId)
+      throw new ServiceError(
+        "Destination must be a different Run Queue",
+        "invalid_run_queue_destination",
+        400
+      );
+    const readEntries = () => tx.all(
+      "SELECT id, mission_id FROM run_queue_entries WHERE queue_id = ? AND deleted_at IS NULL ORDER BY position, id",
       [queueId]
     );
-    for (const missionId of [...new Set(entries.map((entry) => entry.mission_id))].sort()) {
+    const lockedMissions = new Set((await readEntries()).map((entry) => entry.mission_id));
+    for (const missionId of [...lockedMissions].sort()) {
       await lockMissionObjectiveQueue(tx, missionId);
     }
+    const liveQueues = await lockLiveRunQueues(
+      tx,
+      queue.project_id,
+      moveEntriesTo ? [queueId, moveEntriesTo] : [queueId]
+    );
+    if (!liveQueues.has(queueId))
+      throw new ServiceError("Run Queue not found", "run_queue_not_found", 404);
+    const entries = await readEntries();
     if (entries.length && !moveEntriesTo)
       throw new ServiceError(
         "moveEntriesTo is required for a non-empty queue",
@@ -154707,19 +154702,21 @@ async function deleteRunQueue(db, queueId, moveEntriesTo) {
         409
       );
     if (moveEntriesTo) {
-      const target = await tx.get(
-        "SELECT id FROM run_queues WHERE id = ? AND project_id = ? AND deleted_at IS NULL",
-        [moveEntriesTo, queue.project_id]
-      );
-      if (!target)
+      if (!liveQueues.has(moveEntriesTo))
         throw new ServiceError("Destination Run Queue not found", "run_queue_not_found", 404);
+      if (entries.some((entry) => !lockedMissions.has(entry.mission_id)))
+        throw new ServiceError(
+          "Run Queue entries changed. Retry deletion.",
+          "run_queue_changed",
+          409
+        );
       const max = await tx.get(
         "SELECT MAX(position) value FROM run_queue_entries WHERE queue_id = ? AND deleted_at IS NULL",
         [moveEntriesTo]
       );
       for (let i5 = 0; i5 < entries.length; i5++)
         await tx.run(
-          "UPDATE run_queue_entries SET queue_id = ?, position = ?, updated_at = ?, revision = revision + 1 WHERE id = ?",
+          "UPDATE run_queue_entries SET queue_id = ?, position = ?, updated_at = ?, revision = revision + 1 WHERE id = ? AND deleted_at IS NULL",
           [moveEntriesTo, (max?.value ?? 0) + (i5 + 1) * STEP, nowIso(), entries[i5].id]
         );
     }
@@ -154839,7 +154836,8 @@ async function listObjectives({
   const rows = await ctx.db.all(
     `SELECT o.id, o.mission_id, o.project_id, o.position, o.title, o.instruction_text, o.state,
             o.assigned_agent, o.model, o.reasoning_effort,
-            o.auto_advance, o.resource_key, o.display_key, m.display_id AS mission_display_id
+            CASE WHEN EXISTS (SELECT 1 FROM run_queue_entries e WHERE e.objective_id = o.id AND e.deleted_at IS NULL) THEN 1 ELSE 0 END AS queue_member,
+            o.resource_key, o.display_key, m.display_id AS mission_display_id
        FROM objectives o
        JOIN missions m ON m.id = o.mission_id
       WHERE o.mission_id = ? AND o.deleted_at IS NULL
@@ -154865,7 +154863,7 @@ function toObjectiveSummary(row) {
     assignedAgent: row.assigned_agent,
     model: row.model,
     reasoningEffort: row.reasoning_effort,
-    autoAdvance: isTruthyFlag(row.auto_advance),
+    autoAdvance: row.queue_member === 1,
     resourceKey: row.resource_key?.trim() || null
   };
 }
@@ -154960,11 +154958,11 @@ async function insertObjective({
   await ctx.db.run(
     `INSERT INTO objectives
          (id, workspace_id, project_id, mission_id, position, title, instruction_text, state,
-          assigned_agent, model, reasoning_effort, agent_flags_json, auto_advance,
+          assigned_agent, model, reasoning_effort, agent_flags_json,
           execution_metadata_json, resource_key, launch_config_json, display_key,
           created_by_workspace_user_id, created_by_kind, created_by_agent, created_by_session_id,
           created_at, updated_at, revision${briefColumns.columns.map((c5) => `, ${c5}`).join("")})
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '{}', ?, '{}', ?, ?, ?, ?, ?, ?, ?, ?, ?, 1${briefColumns.columns.map(() => ", ?").join("")})`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '{}', '{}', ?, ?, ?, ?, ?, ?, ?, ?, ?, 1${briefColumns.columns.map(() => ", ?").join("")})`,
     [
       id2,
       ctx.workspace.id,
@@ -154977,7 +154975,6 @@ async function insertObjective({
       resolvedAssignedAgent,
       resolvedModel,
       resolvedReasoningEffort,
-      bindBool(ctx.db.dialect, autoAdvance),
       normalizedResourceKey,
       launchConfigJson,
       displayKey,
@@ -155026,7 +155023,7 @@ async function insertObjective({
     assigned_agent: explicitAgent,
     model: model ?? null,
     reasoning_effort: reasoningEffort ?? null,
-    auto_advance: autoAdvance ? 1 : 0,
+    queue_member: autoAdvance ? 1 : 0,
     resource_key: normalizedResourceKey,
     display_key: displayKey,
     mission_display_id: mission.displayId
@@ -167548,7 +167545,7 @@ async function launchObjective(objectiveRef, body) {
     if (activeSibling) {
       throw new ApiError(
         409,
-        "Another objective on this mission is already active. Enable auto-advance on this objective instead of delegating it to the runner."
+        "Another objective on this mission is already active. Add this objective to a Run Queue to run it after the active objective."
       );
     }
     const launchTarget = await resolveLaunchExecutionTarget({
@@ -171219,6 +171216,9 @@ async function getTagsByMission(missionIds) {
   }
   return byMission;
 }
+var OBJECTIVE_QUEUE_MEMBERSHIP_PROJECTION = `CASE WHEN EXISTS (
+  SELECT 1 FROM run_queue_entries e WHERE e.objective_id = o.id AND e.deleted_at IS NULL
+) THEN 1 ELSE 0 END AS queue_member`;
 function toObjectiveDto(r5) {
   let launchConfigOverrides = {};
   try {
@@ -171250,7 +171250,7 @@ function toObjectiveDto(r5) {
     title: r5.title,
     instructionText: r5.instruction_text,
     state: r5.state,
-    autoAdvance: r5.queue_entry_id !== void 0 ? Boolean(r5.queue_entry_id) : isTruthyFlag(r5.auto_advance),
+    autoAdvance: Boolean(r5.queue_entry_id) || r5.queue_member === 1,
     queueEntry: r5.queue_entry_id && r5.queue_id && r5.queue_name && typeof r5.queue_position === "number" && r5.queue_state ? {
       id: r5.queue_entry_id,
       queueId: r5.queue_id,
@@ -175225,7 +175225,8 @@ async function insertObjective2(db, ctx, body) {
     ...launchConfigJson !== void 0 ? { launchConfigJson } : {}
   });
   const row = await db.get(
-    `SELECT o.*, m.display_id AS mission_display_id
+    `SELECT o.*, m.display_id AS mission_display_id,
+               ${OBJECTIVE_QUEUE_MEMBERSHIP_PROJECTION}
        FROM objectives o
        JOIN missions m ON m.id = o.mission_id
       WHERE o.id = ?`,
@@ -175272,7 +175273,8 @@ async function updateObjectiveTx(idRef, body, options = {}) {
       db: tx
     });
     const readExisting = async (lock) => await tx.get(
-      `SELECT o.*, m.display_id AS mission_display_id
+      `SELECT o.*, m.display_id AS mission_display_id,
+               ${OBJECTIVE_QUEUE_MEMBERSHIP_PROJECTION}
            FROM objectives o
            JOIN missions m ON m.id = o.mission_id
           WHERE o.id = ? AND o.workspace_id = ? AND o.deleted_at IS NULL${lock ? " FOR UPDATE OF o" : ""}`,
@@ -175281,7 +175283,9 @@ async function updateObjectiveTx(idRef, body, options = {}) {
     let existing = await readExisting(false);
     if (!existing) throw new ApiError(404, "Objective not found");
     if (tx.dialect === "postgres") {
-      if (body.state === "draft") await lockMissionObjectiveQueue(tx, existing.mission_id);
+      if (body.state === "draft" || body.autoAdvance !== void 0) {
+        await lockMissionObjectiveQueue(tx, existing.mission_id);
+      }
       existing = await readExisting(true);
       if (!existing) throw new ApiError(404, "Objective not found");
     }
@@ -175337,8 +175341,6 @@ async function updateObjectiveTx(idRef, body, options = {}) {
       }
     }
     if (body.autoAdvance !== void 0) {
-      fields.push("auto_advance = ?");
-      setParams.push(bindBool(DATABASE_DIALECT, body.autoAdvance));
       changed.push("auto_advance");
     }
     if (body.position !== void 0) {
@@ -175383,7 +175385,7 @@ async function updateObjectiveTx(idRef, body, options = {}) {
       setParams.push(nextLaunchConfigJson);
       changed.push("launch_config_json");
     }
-    if (fields.length === 0 && summaryInput.kind === "omit") {
+    if (fields.length === 0 && body.autoAdvance === void 0 && summaryInput.kind === "omit") {
       return { objective: toObjectiveDto(existing), warnings: [] };
     }
     const briefRow = await loadObjectiveBriefRow(tx, id2);
@@ -175407,7 +175409,7 @@ async function updateObjectiveTx(idRef, body, options = {}) {
       ),
       now: nowIso()
     });
-    if (fields.length === 0) {
+    if (fields.length === 0 && body.autoAdvance === void 0) {
       const briefOnly = objectiveBriefPatchAssignments(tx, briefPlan.patch);
       if (briefOnly.assignments.length > 0) {
         const briefRevision = existing.revision + 1;
@@ -175439,7 +175441,8 @@ async function updateObjectiveTx(idRef, body, options = {}) {
         );
       }
       const briefOnlyRow = await tx.get(
-        `SELECT o.*, m.display_id AS mission_display_id
+        `SELECT o.*, m.display_id AS mission_display_id,
+               ${OBJECTIVE_QUEUE_MEMBERSHIP_PROJECTION}
            FROM objectives o
            JOIN missions m ON m.id = o.mission_id
           WHERE o.id = ?`,
@@ -175468,7 +175471,7 @@ async function updateObjectiveTx(idRef, body, options = {}) {
     const reopening = body.state === "draft" && body.state !== existing.state && OBJECTIVE_REOPENABLE_STATES2.includes(existing.state);
     if (reopening) await lockMissionObjectiveQueue(tx, existing.mission_id);
     await tx.run(
-      `UPDATE objectives SET ${fields.join(", ")}, updated_at = ?, revision = ?
+      `UPDATE objectives SET ${[...fields, "updated_at = ?", "revision = ?"].join(", ")}
          WHERE id = ? AND workspace_id = ?`,
       [...setParams, now2, revision3, id2, workspaceId2]
     );
@@ -175575,7 +175578,8 @@ async function updateObjectiveTx(idRef, body, options = {}) {
       if (liveEntry) await enqueueRunQueueDispatch(tx, existing.project_id, workspaceId2);
     }
     const row = await tx.get(
-      `SELECT o.*, m.display_id AS mission_display_id
+      `SELECT o.*, m.display_id AS mission_display_id,
+               ${OBJECTIVE_QUEUE_MEMBERSHIP_PROJECTION}
          FROM objectives o
          JOIN missions m ON m.id = o.mission_id
         WHERE o.id = ?`,
@@ -175584,7 +175588,7 @@ async function updateObjectiveTx(idRef, body, options = {}) {
     return { objective: toObjectiveDto(row), warnings: briefPlan.warnings };
   });
 }
-async function updateObjective2(id2, body, options = {}) {
+async function updateObjective(id2, body, options = {}) {
   return (await updateObjectiveTx(id2, body, options)).objective;
 }
 async function updateObjectiveWithWarnings(id2, body, options = {}) {
@@ -175613,7 +175617,8 @@ async function requestObjectiveSummary(idRef, body, options = {}) {
       mode
     });
     const row = await tx.get(
-      `SELECT o.*, m.display_id AS mission_display_id
+      `SELECT o.*, m.display_id AS mission_display_id,
+               ${OBJECTIVE_QUEUE_MEMBERSHIP_PROJECTION}
          FROM objectives o
          JOIN missions m ON m.id = o.mission_id
         WHERE o.id = ?`,
@@ -189100,11 +189105,13 @@ var ChatProposals = class _ChatProposals extends ChatStore {
         });
         for (const [j5, o3] of created.objectives.entries()) {
           const saved = await tx.get(
-            "SELECT assigned_agent, model, reasoning_effort, resource_key, auto_advance FROM objectives WHERE id = ?",
+            `SELECT assigned_agent, model, reasoning_effort, resource_key,
+                    CASE WHEN EXISTS (SELECT 1 FROM run_queue_entries e WHERE e.objective_id = o.id AND e.deleted_at IS NULL) THEN 1 ELSE 0 END AS queue_member
+               FROM objectives o WHERE id = ?`,
             [o3.id]
           );
           const frozen = m3.objectives[j5];
-          if (!saved || saved.assigned_agent !== frozen.assignment.agent || saved.model !== frozen.assignment.model || saved.reasoning_effort !== frozen.assignment.reasoningEffort || saved.resource_key !== frozen.resourceKey || saved.auto_advance === true || saved.auto_advance === 1)
+          if (!saved || saved.assigned_agent !== frozen.assignment.agent || saved.model !== frozen.assignment.model || saved.reasoning_effort !== frozen.assignment.reasoningEffort || saved.resource_key !== frozen.resourceKey || saved.queue_member === 1)
             throw new ChatError("proposal_not_creatable");
         }
         if (i5 === 0)
@@ -199730,7 +199737,8 @@ async function loadMissionObjectives(missionIds) {
   const rows = await requireDatabaseClient().all(
     `SELECT o.mission_id, m.display_id AS mission_display_id, o.id AS objective_id,
             o.display_key, o.title, o.instruction_text, o.state, o.position,
-            o.assigned_agent, o.auto_advance, o.created_at,
+            o.assigned_agent, o.created_at,
+            CASE WHEN EXISTS (SELECT 1 FROM run_queue_entries e WHERE e.objective_id = o.id AND e.deleted_at IS NULL) THEN 1 ELSE 0 END AS queue_member,
             o.launched_at, o.started_at, o.completed_at,
             CASE WHEN EXISTS (
               SELECT 1 FROM agent_requests ar
@@ -199934,7 +199942,7 @@ function toMissionObjective(row) {
     state: row.state,
     position: row.position,
     assignedAgent: row.assigned_agent,
-    autoAdvance: row.auto_advance === 1,
+    autoAdvance: row.queue_member === 1,
     blocked: Number(row.is_blocked) === 1
   };
 }
@@ -199950,7 +199958,6 @@ function toMissionItem2({
       position: row.position,
       state: row.state,
       instructionText: row.instruction_text ?? "",
-      autoAdvance: row.auto_advance === 1,
       assignedAgent: row.assigned_agent,
       createdAt: row.created_at,
       launchedAt: row.launched_at,
@@ -199997,7 +200004,6 @@ function toDeliveredMissionItem({
       position: objective.position,
       state: objective.state,
       instructionText: objective.instruction_text ?? "",
-      autoAdvance: objective.auto_advance === 1,
       assignedAgent: objective.assigned_agent,
       createdAt: objective.created_at,
       launchedAt: objective.launched_at,
@@ -208472,7 +208478,7 @@ app.post(
 );
 app.patch(
   "/api/objectives/:id",
-  handle3((req) => updateObjective2(req.params.id, req.body), { mutates: true })
+  handle3((req) => updateObjective(req.params.id, req.body), { mutates: true })
 );
 app.delete(
   "/api/objectives/:id",
