@@ -250,3 +250,19 @@ and ownership, and works even when the runner is offline or target access was
 withdrawn. Paired Latch clients independently authenticate the public key and
 enforce the current device grant. The link confers neither project nor Latch
 permissions.
+
+ADR 0110 extends the same project and target checks to shared roots. On link
+and relink the native runner must verify an owner-selected root for this source
+with an active Control grant at its recorded revision. An authorized owner
+can unlink the root while the runner is offline. Clients require the current
+grant for their authenticated pairing before reading. A saved selector alone
+does not authorize a directory listing or preview.
+
+### Web project resource reads (ADR 0111)
+
+The catalog and read route require `project:read` in the project workspace.
+The caller must hold active access to the selected local execution target.
+The backend rechecks authorization and the exact source before returning
+results. Only the target owner's registered native runner, operating as that
+target's device, can claim and complete the job. Pairing credentials confer no
+authority on these routes.

@@ -10,11 +10,17 @@
 // an ordinary `LocalTargetCapabilities` instance and never branch on whether
 // the target happens to be this machine.
 
+import {
+  type ProjectResourceReadInput,
+  type ProjectResourceReadValue
+} from './project-resource-read.ts';
 import type { ServiceContext } from '../context.ts';
 import { ServiceError } from '../errors.ts';
+import { PROJECT_RESOURCE_READ_JOB_KEY } from '../project-resource-read-bindings.ts';
 import {
   cancelQueuedLocalTargetMutation,
   createLocalTargetMutationRequest,
+  clearProjectResourceReadJob,
   LOCAL_TARGET_MUTATION_READ_TIMEOUT_MS,
   LOCAL_TARGET_MUTATION_WRITE_TIMEOUT_MS,
   type LocalTargetMutationCompletionListenerFactory,
@@ -115,6 +121,7 @@ const READ_CAPABILITIES = new Set<QueueableCapabilityName>([
   'listWorktrees',
   'readCurrentDiff',
   'readGitStatus',
+  'readProjectResource',
   'readRepositoryFile',
   'searchRepositoryText',
   'generateCommitMessageFromLocalDiff',
@@ -138,6 +145,12 @@ function mutationKindFor(capability: QueueableCapabilityName): LocalTargetMutati
 }
 
 export class RunnerQueueProvider implements LocalTargetCapabilities {
+  readProjectResource(
+    input: ProjectResourceReadInput
+  ): Promise<CapabilityResult<ProjectResourceReadValue>> {
+    return this.#call('readProjectResource', { ...input });
+  }
+
   readonly target: TargetMetadata;
 
   constructor(
@@ -183,7 +196,9 @@ export class RunnerQueueProvider implements LocalTargetCapabilities {
         capability,
         input,
         operationId: options.operationId ?? this.queue.operationId ?? null,
-        resourceKey: this.queue.resourceKey ?? null
+        resourceKey: this.queue.resourceKey ?? null,
+        backgroundProbeKey:
+          capability === 'readProjectResource' ? PROJECT_RESOURCE_READ_JOB_KEY : null
       });
       requestId = queued.id;
     } catch (error) {
@@ -197,21 +212,27 @@ export class RunnerQueueProvider implements LocalTargetCapabilities {
           : 'Could not queue the operation for this execution target.'
       );
     }
-    const result = (await waitForLocalTargetMutationResult({
-      ctx: this.queue.ctx,
-      requestId,
-      target: this.target,
-      timeoutMs,
-      ...(this.queue.pollIntervalMs === undefined
-        ? {}
-        : { pollIntervalMs: this.queue.pollIntervalMs }),
-      createListener: this.queue.createCompletionListener ?? null,
-      signal: this.queue.signal ?? null
-    })) as CapabilityResult<T>;
-    if (capability === 'readLatchHostIdentity' && !result.ok) {
-      await cancelQueuedLocalTargetMutation({ ctx: this.queue.ctx, requestId });
+    try {
+      const result = (await waitForLocalTargetMutationResult({
+        ctx: this.queue.ctx,
+        requestId,
+        target: this.target,
+        timeoutMs,
+        ...(this.queue.pollIntervalMs === undefined
+          ? {}
+          : { pollIntervalMs: this.queue.pollIntervalMs }),
+        createListener: this.queue.createCompletionListener ?? null,
+        signal: this.queue.signal ?? null
+      })) as CapabilityResult<T>;
+      if (capability === 'readLatchHostIdentity' && !result.ok) {
+        await cancelQueuedLocalTargetMutation({ ctx: this.queue.ctx, requestId });
+      }
+      return result;
+    } finally {
+      if (capability === 'readProjectResource') {
+        await clearProjectResourceReadJob({ ctx: this.queue.ctx, requestId });
+      }
     }
-    return result;
   }
 
   writeProjectMetadata(
@@ -306,8 +327,13 @@ export class RunnerQueueProvider implements LocalTargetCapabilities {
     return this.#call('discoverLatch', { ...input });
   }
 
-  readLatchHostIdentity(): Promise<CapabilityResult<{ hostKeyDigest: string }>> {
-    return this.#call('readLatchHostIdentity', {});
+  readLatchHostIdentity({
+    sharedRootId
+  }: Pick<
+    Parameters<LocalTargetCapabilities['readLatchHostIdentity']>[0],
+    'sharedRootId'
+  > = {}): ReturnType<LocalTargetCapabilities['readLatchHostIdentity']> {
+    return this.#call('readLatchHostIdentity', sharedRootId === undefined ? {} : { sharedRootId });
   }
 
   inspectLatchSession(

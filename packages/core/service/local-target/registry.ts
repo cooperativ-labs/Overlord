@@ -5,6 +5,7 @@
 // the chosen target is co-located, across an IPC bridge, or a CLI-only VM on the
 // far side of the runner queue.
 
+import { type ProjectResourceReadInput } from './project-resource-read.ts';
 import { fail } from './result.ts';
 import type {
   CapabilityFailure,
@@ -108,6 +109,10 @@ export function targetMetadata(
  * `LOCAL_FILESYSTEM_UNAVAILABLE` guard) and as a base for partial providers.
  */
 export class UnavailableProvider implements LocalTargetCapabilities {
+  readProjectResource(_input: ProjectResourceReadInput) {
+    return this.#fail();
+  }
+
   constructor(
     readonly target: TargetMetadata,
     private readonly code: LocalTargetErrorCode,

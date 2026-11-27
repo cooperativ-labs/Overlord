@@ -10,7 +10,11 @@ import { recordChange } from './change-feed.ts';
 import { requireProjectInScope, type ServiceContext } from './context.ts';
 import { ServiceError } from './errors.ts';
 import { RUNNER_HEARTBEAT_STALE_MS } from './execution-target-runners.ts';
-import { isLatchHostPublicKey, latchHostKeyDigest } from './latch-host-identity.ts';
+import {
+  isLatchHostPublicKey,
+  isLatchSharedRootId,
+  latchHostKeyDigest
+} from './latch-host-identity.ts';
 import { parseMetadataJson } from './records.ts';
 import { newId, nowIso } from './util.ts';
 
@@ -76,12 +80,15 @@ async function loadOwnedSources({
   );
 }
 
-function currentHostKey(source: OwnedSource, workspaceUserId: string): string | null {
+function currentBinding(source: OwnedSource, workspaceUserId: string) {
   const saved = parseMetadataJson(source.latch_host_binding_json ?? '{}');
   return saved.sourceRevision === source.revision &&
     saved.workspaceUserId === workspaceUserId &&
     isLatchHostPublicKey(saved.hostPublicKey)
-    ? saved.hostPublicKey
+    ? {
+        hostPublicKey: saved.hostPublicKey,
+        sharedRootId: isLatchSharedRootId(saved.sharedRootId) ? saved.sharedRootId : undefined
+      }
     : null;
 }
 
@@ -94,7 +101,7 @@ export async function loadProjectResourceLatchHosts(
   const sources = await loadOwnedSources(scope);
   const hostCounts = new Map<string, number>();
   for (const source of sources) {
-    const key = currentHostKey(source, scope.workspaceUserId);
+    const key = currentBinding(source, scope.workspaceUserId)?.hostPublicKey;
     if (!key || !source.has_access || Number(source.native_runners) === 0) continue;
     const group = `${source.resource_id}:${key}`;
     hostCounts.set(group, (hostCounts.get(group) ?? 0) + 1);
@@ -102,7 +109,8 @@ export async function loadProjectResourceLatchHosts(
 
   const links = new Map<string, LatchHostLink>();
   for (const source of sources) {
-    const key = currentHostKey(source, scope.workspaceUserId);
+    const binding = currentBinding(source, scope.workspaceUserId);
+    const key = binding?.hostPublicKey;
     const canVerify = Boolean(source.has_access) && Number(source.live_native_runners) === 1;
     if (!source.has_access || Number(source.native_runners) === 0) continue;
     const ambiguous =
@@ -112,8 +120,10 @@ export async function loadProjectResourceLatchHosts(
       sourceRevision: source.revision,
       state: ambiguous ? 'ambiguous' : key ? 'linked' : 'unlinked',
       canVerify,
-      canUnlink: key !== null,
-      ...(!ambiguous && key ? { hostPublicKey: key } : {})
+      canUnlink: Boolean(key),
+      ...(!ambiguous && key ? { hostPublicKey: key } : {}),
+      ...(binding?.sharedRootId ? { canUnlinkSharedRoot: true } : {}),
+      ...(!ambiguous && binding?.sharedRootId ? { sharedRootId: binding.sharedRootId } : {})
     });
   }
   return links;
@@ -148,7 +158,7 @@ export async function setProjectResourceLatchHost({
   requireProjectInScope(ctx, projectId);
   const { db, actorWorkspaceUserId: workspaceUserId } = ctx;
   const workspaceId = ctx.workspace.id;
-  const { hostPublicKey, sourceRevision } = body;
+  const { hostPublicKey, sharedRootId, sourceRevision } = body;
   const missing = () =>
     new ServiceError(
       'Eligible project resource source not found',
@@ -158,6 +168,17 @@ export async function setProjectResourceLatchHost({
   if (!workspaceUserId) throw missing();
   if (hostPublicKey !== null && !isLatchHostPublicKey(hostPublicKey)) {
     throw new ServiceError('Invalid Latch host public key', 'invalid_latch_host_public_key');
+  }
+  const removeRoot = sharedRootId === null;
+  const rootToVerify = sharedRootId ?? undefined;
+  if (
+    (removeRoot && hostPublicKey !== null) ||
+    (rootToVerify !== undefined && (!isLatchSharedRootId(rootToVerify) || hostPublicKey === null))
+  ) {
+    throw new ServiceError(
+      'Provide a shared root ID with its Latch host key, or null for both.',
+      'invalid_latch_shared_root'
+    );
   }
 
   const load = async (client: DatabaseClient) => {
@@ -173,7 +194,16 @@ export async function setProjectResourceLatchHost({
   };
   const receiptKey = `${workspaceUserId}:${sourceId}:${sourceRevision}`;
   const requestHash = createHash('sha256')
-    .update(JSON.stringify([projectId, resourceId, sourceId, sourceRevision, hostPublicKey]))
+    .update(
+      JSON.stringify([
+        projectId,
+        resourceId,
+        sourceId,
+        sourceRevision,
+        hostPublicKey,
+        ...(sharedRootId === undefined ? [] : [sharedRootId])
+      ])
+    )
     .digest('hex');
   const accepted = async (client: DatabaseClient) =>
     Boolean(
@@ -210,12 +240,20 @@ export async function setProjectResourceLatchHost({
       },
       { ctx, projectId, resourceKey: source.resource_key, signal }
     );
-    const result = await provider.readLatchHostIdentity();
+    const result = await provider.readLatchHostIdentity(
+      rootToVerify === undefined ? undefined : { sharedRootId: rootToVerify }
+    );
     if (
-      !result.ok ||
-      result.value.hostKeyDigest !== latchHostKeyDigest(hostPublicKey) ||
-      signal?.aborted
+      rootToVerify !== undefined &&
+      (!result.ok || result.value.verifiedSharedRootId !== rootToVerify)
     ) {
+      throw new ServiceError(
+        'The runner could not verify this shared root and its active Control grant.',
+        'latch_shared_root_unverified',
+        409
+      );
+    }
+    if (!result.ok || result.value.hostKeyDigest !== latchHostKeyDigest(hostPublicKey)) {
       throw new ServiceError(
         'The native runner did not verify the expected Latch host key.',
         'latch_host_unverified',
@@ -228,14 +266,23 @@ export async function setProjectResourceLatchHost({
     const current = await load(tx);
     if (await accepted(tx)) return;
     check(current);
-    if (current.execution_target_id !== source.execution_target_id) throw sourceConflict();
+    if (signal?.aborted || current.execution_target_id !== source.execution_target_id)
+      throw sourceConflict();
 
     const now = nowIso();
+    const previous = currentBinding(current, workspaceUserId);
+    if (removeRoot && !previous?.sharedRootId) throw sourceConflict();
+    const nextHost = removeRoot ? (previous?.hostPublicKey ?? null) : hostPublicKey;
+    const nextRoot =
+      sharedRootId === undefined && previous?.hostPublicKey === nextHost
+        ? previous?.sharedRootId
+        : (sharedRootId ?? undefined);
     const saved =
-      hostPublicKey === null
+      nextHost === null
         ? null
         : JSON.stringify({
-            hostPublicKey,
+            hostPublicKey: nextHost,
+            sharedRootId: nextRoot,
             sourceRevision: current.revision + 1,
             workspaceUserId
           });

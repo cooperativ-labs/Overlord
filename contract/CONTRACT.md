@@ -1,6 +1,6 @@
 # Overlord contract
 
-> Contract version: **182.7.0**
+> Contract version: **182.9.0**
 >
 > Status: the production baseline is `169.2.1`; approvals are recorded under [releases/](releases/README.md) (section 7)
 

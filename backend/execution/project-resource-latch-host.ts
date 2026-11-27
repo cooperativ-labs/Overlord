@@ -25,7 +25,10 @@ export async function updateProjectResourceLatchHost({
   });
   const parsed = updateProjectResourceLatchHostBodySchema.safeParse(body);
   if (!parsed.success)
-    throw new ApiError(400, 'Provide a source revision and a Latch host public key or null.');
+    throw new ApiError(
+      400,
+      'Provide a source revision and valid Latch host or shared root fields.'
+    );
   const ctx = await buildWebappServiceContextForWorkspace(
     scope.workspaceId,
     undefined,

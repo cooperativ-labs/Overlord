@@ -288,6 +288,10 @@ import {
 } from './repository.ts';
 import { postProjectRepositoryRead } from './repository-reads.ts';
 import {
+  getProjectResourceReadCatalog,
+  postProjectResourceRead
+} from './project-resource-reads.ts';
+import {
   deleteRunQueueEntry,
   getProjectRunQueues,
   patchProjectRunQueueOrder,
@@ -1671,6 +1675,28 @@ app.post(
       if (!res.writableEnded) controller.abort();
     });
     return postProjectRepositoryRead({
+      projectId: req.params.id,
+      body: req.body,
+      signal: controller.signal
+    });
+  })
+);
+app.get(
+  '/api/projects/:id/resource-reads',
+  handle((req, res) => {
+    res.setHeader('Cache-Control', 'private, no-store');
+    return getProjectResourceReadCatalog(req.params.id);
+  })
+);
+app.post(
+  '/api/projects/:id/resource-reads',
+  handle((req, res) => {
+    res.setHeader('Cache-Control', 'private, no-store');
+    const controller = new AbortController();
+    res.on('close', () => {
+      if (!res.writableEnded) controller.abort();
+    });
+    return postProjectResourceRead({
       projectId: req.params.id,
       body: req.body,
       signal: controller.signal

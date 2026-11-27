@@ -168,6 +168,26 @@ export function resolveContainedRepositoryPath(root: string, relative: unknown):
   return { ok: true, absolutePath: realCandidate, relativePath: checked.relativePath, realRoot };
 }
 
+/**
+ * Web previews accept regular paths only, including every parent directory.
+ * The registered root itself can be an alias chosen by the target owner.
+ */
+export function resolveProjectPreviewPath(root: string, relative: unknown): ContainedPath {
+  const resolved = resolveContainedRepositoryPath(root, relative);
+  if (!resolved.ok) return resolved;
+  const candidate = path.join(resolved.realRoot, resolved.relativePath);
+  const ancestors = resolved.relativePath.split('/');
+  const extra = configuredSensitiveGlobs();
+  const excluded = ancestors.some((_, index) => {
+    const prefix = ancestors.slice(0, index + 1).join('/');
+    return prefix.toLowerCase() === '.overlord/tmp' || isSensitiveRepositoryPath(prefix, extra);
+  });
+  if (resolved.absolutePath !== candidate || excluded) {
+    return { ok: false, outcome: 'denied', message: 'This path is excluded.' };
+  }
+  return resolved;
+}
+
 /** `statSync` that answers null instead of throwing. */
 export function statOrNull(absolutePath: string): ReturnType<typeof statSync> | null {
   try {

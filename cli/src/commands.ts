@@ -2627,7 +2627,9 @@ export async function runRunnerOnce({
     typeof requestRecord.executionTargetId === 'string'
       ? requestRecord.executionTargetId.trim()
       : '';
-  if (projectId && executionTargetId) {
+  const mutation = parseMutationFromMetadata(requestRecord.metadata);
+  const privateResourceRead = mutation?.capability === 'readProjectResource';
+  if (projectId && executionTargetId && !privateResourceRead) {
     try {
       await reportRunnerResourceObservations({
         backend: runtime.backend,
@@ -2647,8 +2649,9 @@ export async function runRunnerOnce({
     // work was never retried and the UI kept rendering "Queued" forever with nothing
     // anywhere saying why. Reporting the failure returns the objective to a launchable
     // state on the first poll instead of stranding it until someone clears the queue.
-    await runtime.backend.post({ path: `/api/runner/requests/${requestId}/launching` });
-    const mutation = parseMutationFromMetadata(requestRecord.metadata);
+    if (!privateResourceRead) {
+      await runtime.backend.post({ path: `/api/runner/requests/${requestId}/launching` });
+    }
     if (mutation) {
       const mutationResult = await executeLocalTargetMutation({
         mutation,
@@ -2671,6 +2674,11 @@ export async function runRunnerOnce({
         mutation.capability === 'inspectLatchSession' &&
         !mutationResult.ok &&
         mutationResult.code === 'LATCH_SESSION_ABSENT';
+      if (privateResourceRead) {
+        if (json) printJson({ requestId, processed: true });
+        else console.log(`Completed project resource read for ${requestRecord.projectId}`);
+        return { launched: false, longPoll, processed: true };
+      }
       if (!mutationResult.ok && !absentSession) {
         throw new CliError({ message: mutationResult.message });
       }

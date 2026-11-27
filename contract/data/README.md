@@ -2064,6 +2064,13 @@ transport lifecycle generates no change-feed or timeline entries. Durable
 provider mappings and meaningful terminal transitions use their existing
 history contract. See ADR 0098 for reuse, retry and retention rules.
 
+The private runner transport also marks web project resource reads with
+`background_probe_key = 'project-resource-read'` (ADR 0111). Their source and
+result live in queue metadata only while the caller waits. The waiter clears
+metadata and the resolved directory on completion or cancellation. The private
+queue retention sweep removes rows left behind by an interrupted waiter.
+These jobs do not appear in execution-request lists or the change feed.
+
 | Column                              | Type         | Required | Notes                                                                                                                                                                                                                                                                                                                                                                                                  |
 | ----------------------------------- | ------------ | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `id`                                | Id           | yes      |                                                                                                                                                                                                                                                                                                                                                                                                        |
@@ -2295,7 +2302,7 @@ have target-specific descriptors.
 | `execution_target_id`     | Id           | no       | FK to `execution_targets` when the descriptor is target-specific; null is a project-global descriptor.                                                                                                                                                                                                                                                                      |
 | `source_kind`             | text         | yes      | Open vocabulary: `git`, `local_checkout`, `source_bundle`, or namespaced kinds.                                                                                                                                                                                                                                                                                             |
 | `descriptor_json`         | Json         | yes      | Canonical source descriptor (e.g. git URL + credential-reference ID; opaque `targetRelativeRef`) plus optional `launchDefaults`, an object keyed by agent identifier whose values contain `preCommand` and normalized `flags`. No raw secrets; local-checkout paths remain local-target descriptors and virtual descriptors never contain server-readable filesystem paths. |
-| `latch_host_binding_json` | text (JSON) | no | Account-scoped Latch association per ADR 0109. Stores a public host key, workspace member ID and source revision. |
+| `latch_host_binding_json` | text (JSON) | no | Account-scoped Latch association per ADRs 0109 and 0110. Stores a public host key, workspace member ID, source revision and optional shared root selector. |
 | `observed_revision`       | text         | no       | Gateway-observed commit/revision.                                                                                                                                                                                                                                                                                                                                           |
 | `observed_content_digest` | text         | no       | Gateway-observed content digest.                                                                                                                                                                                                                                                                                                                                            |
 | `created_at`              | TimestampUTC | yes      |                                                                                                                                                                                                                                                                                                                                                                             |
@@ -2309,11 +2316,14 @@ Indexes:
 - `(project_id, source_kind)`.
 
 Only the resource Latch host mutation writes the association. It compares
-the source revision and stores the new revision alongside the public key.
+the source revision and stores the new revision alongside the public key
+and any root selector.
 A subsequent revision, source or resource tombstone, or unavailable target
 grant invalidates its projection. Raw Latch status, pairing credentials and
 scoped worktree references stay outside persistence. The transient runner
-request records only a bounded public-key digest or a fixed failure result.
+request records only a bounded public-key digest, optional confirmation of the
+requested root selector, or a fixed failure result. Latch CLI root paths,
+device records, credentials and file contents never travel in this operation.
 
 ### `execution_request_snapshots`
 

@@ -7,24 +7,25 @@
 // CAPABILITY_NOT_IMPLEMENTED failure (never throw), so a partially-migrated
 // provider is still safe to hand to any caller.
 
+import {
+  readProjectResource,
+  type ProjectResourceReadInput,
+  type ProjectResourceReadValue
+} from './project-resource-read.ts';
 import { existsSync } from 'node:fs';
 
 import {
   readRepositoryTree as readGitRepositoryTree,
   RepositoryReadError
 } from '../../repository/git-tree.ts';
+import { sendLatchMessage } from '../latch/conversation.ts';
 import {
   defaultLatchDiscoveryCachePath,
   discoverLatchForExecutionTarget
-} from '../latch-discovery.ts';
-import { readLatchHostIdentity } from '../latch-host-identity.ts';
-import {
-  inspectLatchSession,
-  LatchSessionAbsentError,
-  openLatchSession,
-  sendLatchMessage,
-  stopLatchSession
-} from '../latch-session.ts';
+} from '../latch/discovery.ts';
+import { type LatchHostIdentityInput, readLatchHostIdentity } from '../latch/host-identity.ts';
+import { inspectLatchSession, openLatchSession, stopLatchSession } from '../latch/session.ts';
+import { LatchSessionAbsentError } from '../latch/session-errors.ts';
 import { DEFAULT_LATCH_EXECUTABLE } from '../terminal-profile-types.ts';
 
 import { performBranchActionGit } from './branch-actions-git.ts';
@@ -124,6 +125,10 @@ function failLatchCommand({
 }
 
 export class InProcessProvider implements LocalTargetCapabilities {
+  readProjectResource(input: ProjectResourceReadInput) {
+    return this.#read<ProjectResourceReadValue>(readProjectResource(input));
+  }
+
   constructor(readonly target: TargetMetadata) {}
 
   // ---- routed (WS-D 1) -------------------------------------------------
@@ -378,8 +383,8 @@ export class InProcessProvider implements LocalTargetCapabilities {
     }
   }
 
-  async readLatchHostIdentity() {
-    const identity = await readLatchHostIdentity();
+  async readLatchHostIdentity(input: LatchHostIdentityInput) {
+    const identity = await readLatchHostIdentity(input);
     if (identity) return ok(this.target, identity);
     return fail(
       this.target,

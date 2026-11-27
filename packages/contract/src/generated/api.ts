@@ -5,10 +5,10 @@
 import { z } from 'zod';
 
 /** The contract version (contract/VERSION) this API description belongs to. */
-export const contractVersion = "182.7.0";
+export const contractVersion = "182.9.0";
 
 /** The API description's own version (OpenAPI `info.version`). */
-export const apiVersion = "7.6.0";
+export const apiVersion = "7.8.0";
 
 /** A non-JSON request or response body: raw bytes (G3). */
 export type BinaryBody = Uint8Array | ArrayBuffer | Blob;
@@ -329,9 +329,17 @@ export interface ProjectResourceSourceDto {
      * Present only for an unambiguous link. Verify it against the authenticated pairing.
      */
     hostPublicKey?: string;
+    /**
+     * A saved selector on an unambiguous link. Require it in the current paired device's advertised active roots before listing or previewing.
+     */
+    sharedRootId?: string;
+    /**
+     * A root is linked and can be removed independently of the host link by an authorized editor.
+     */
+    canUnlinkSharedRoot?: boolean;
   };
 }
-export const projectResourceSourceDtoSchema: z.ZodType<ProjectResourceSourceDto> = z.object({ "id": z.string(), "executionTargetId": z.string().nullable(), "sourceKind": z.string(), "descriptor": z.record(z.string(), z.unknown()), "launchDefaults": z.record(z.string(), agentLaunchConfigDtoSchema), "observedRevision": z.string().nullable(), "observedContentDigest": z.string().nullable(), "latchHostLink": z.exactOptional(z.object({ "sourceRevision": z.int().min(1), "state": z.enum(["unlinked", "linked", "ambiguous"]), "canVerify": z.boolean(), "canUnlink": z.boolean(), "hostPublicKey": z.exactOptional(z.string().min(64).max(64)) })) });
+export const projectResourceSourceDtoSchema: z.ZodType<ProjectResourceSourceDto> = z.object({ "id": z.string(), "executionTargetId": z.string().nullable(), "sourceKind": z.string(), "descriptor": z.record(z.string(), z.unknown()), "launchDefaults": z.record(z.string(), agentLaunchConfigDtoSchema), "observedRevision": z.string().nullable(), "observedContentDigest": z.string().nullable(), "latchHostLink": z.exactOptional(z.object({ "sourceRevision": z.int().min(1), "state": z.enum(["unlinked", "linked", "ambiguous"]), "canVerify": z.boolean(), "canUnlink": z.boolean(), "hostPublicKey": z.exactOptional(z.string().min(64).max(64)), "sharedRootId": z.exactOptional(z.string().min(64).max(64)), "canUnlinkSharedRoot": z.exactOptional(z.boolean()) })) });
 
 export interface ProjectResourceDto {
   id: string;
@@ -960,6 +968,80 @@ export const reorderBoardColumnBodySchema: z.ZodType<ReorderBoardColumnBody> = z
 export type RepositoryReadOperation = "observe" | "tree" | "branches" | "worktrees" | "git_status" | "diff" | "read_file" | "search_text";
 export const repositoryReadOperationSchema: z.ZodType<RepositoryReadOperation> = z.enum(["observe", "tree", "branches", "worktrees", "git_status", "diff", "read_file", "search_text"]);
 
+export type ProjectResourceReadCatalog = Array<{
+  id: string;
+  resourceKey: string;
+  label: string | null;
+  /**
+   * A project-global Git source is configured for this resource.
+   */
+  hasGitSource: boolean;
+  sources: Array<{
+    sourceId: string;
+    sourceRevision: number;
+    executionTargetId: string;
+    targetLabel: string;
+    availability: "ready" | "target_offline" | "unsupported";
+  }>;
+}>;
+export const projectResourceReadCatalogSchema: z.ZodType<ProjectResourceReadCatalog> = z.array(z.object({ "id": z.string(), "resourceKey": z.string(), "label": z.string().nullable(), "hasGitSource": z.boolean(), "sources": z.array(z.object({ "sourceId": z.string(), "sourceRevision": z.int().min(1), "executionTargetId": z.string(), "targetLabel": z.string(), "availability": z.enum(["ready", "target_offline", "unsupported"]) })) }));
+
+export type ProjectResourceReadRequest = ({
+  operation: "git_status";
+  resourceKey: string;
+  sourceId: string;
+  sourceRevision: number;
+  executionTargetId: string;
+}) | ({
+  operation: "diff";
+  resourceKey: string;
+  sourceId: string;
+  sourceRevision: number;
+  executionTargetId: string;
+  relativePath: string;
+  scope: "staged" | "unstaged" | "all";
+}) | ({
+  operation: "list_directory";
+  resourceKey: string;
+  sourceId: string;
+  sourceRevision: number;
+  executionTargetId: string;
+  relativePath?: string;
+  offset?: number;
+}) | ({
+  operation: "read_file";
+  resourceKey: string;
+  sourceId: string;
+  sourceRevision: number;
+  executionTargetId: string;
+  relativePath: string;
+});
+export const projectResourceReadRequestSchema: z.ZodType<ProjectResourceReadRequest> = z.union([z.strictObject({ "operation": z.literal("git_status"), "resourceKey": z.string().min(1), "sourceId": z.string(), "sourceRevision": z.int().min(1), "executionTargetId": z.string() }), z.strictObject({ "operation": z.literal("diff"), "resourceKey": z.string().min(1), "sourceId": z.string(), "sourceRevision": z.int().min(1), "executionTargetId": z.string(), "relativePath": z.string().min(1).max(1024), "scope": z.enum(["staged", "unstaged", "all"]) }), z.strictObject({ "operation": z.literal("list_directory"), "resourceKey": z.string().min(1), "sourceId": z.string(), "sourceRevision": z.int().min(1), "executionTargetId": z.string(), "relativePath": z.exactOptional(z.string().max(1024)), "offset": z.exactOptional(z.int().min(0).max(9999)) }), z.strictObject({ "operation": z.literal("read_file"), "resourceKey": z.string().min(1), "sourceId": z.string(), "sourceRevision": z.int().min(1), "executionTargetId": z.string(), "relativePath": z.string().min(1).max(1024) })]);
+
+export interface RepositoryDirectoryData {
+  relativePath: string;
+  entries: Array<{
+    name: string;
+    relativePath: string;
+    type: "directory" | "file";
+  }>;
+  nextOffset: number | null;
+}
+export const repositoryDirectoryDataSchema: z.ZodType<RepositoryDirectoryData> = z.object({ "relativePath": z.string(), "entries": z.array(z.object({ "name": z.string(), "relativePath": z.string(), "type": z.enum(["directory", "file"]) })).max(100), "nextOffset": z.int().min(0).max(9999).nullable() });
+
+export interface ProjectResourceReadResult {
+  outcome: "ok" | "unavailable" | "target_offline" | "unsupported" | "timeout" | "denied" | "binary" | "oversized" | "not_found" | "not_git_repository";
+  message: string | null;
+  observedAt: DateTime;
+  branch: string | null;
+  truncated: boolean;
+  /**
+   * RepositoryGitStatusData, RepositoryDiffData or RepositoryFileData from packages/contract/src/chat.ts, RepositoryDirectoryData, or null.
+   */
+  data: JsonValue;
+}
+export const projectResourceReadResultSchema: z.ZodType<ProjectResourceReadResult> = z.object({ "outcome": z.enum(["ok", "unavailable", "target_offline", "unsupported", "timeout", "denied", "binary", "oversized", "not_found", "not_git_repository"]), "message": z.string().nullable(), "observedAt": dateTimeSchema, "branch": z.string().nullable(), "truncated": z.boolean(), "data": jsonValueSchema });
+
 /**
  * One bounded, read-only repository read on a registered resource binding. Every variant carries the binding (`executionTargetId`, `projectId`, `resourceKey`) and an `operationId` matching `^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$`, reused on retry. Paths are repository-relative; absolute or escaping paths answer 400.
  */
@@ -1145,8 +1227,12 @@ export interface UpdateProjectResourceLatchHostBody {
    * Expected Latch host public key, or null to revoke.
    */
   hostPublicKey: string | null;
+  /**
+   * An owner-shared root ID for the expected host, or null with a null host key to clear only the root.
+   */
+  sharedRootId?: string | null;
 }
-export const updateProjectResourceLatchHostBodySchema: z.ZodType<UpdateProjectResourceLatchHostBody> = z.strictObject({ "sourceRevision": z.int().min(1), "hostPublicKey": z.string().min(64).max(64).nullable() });
+export const updateProjectResourceLatchHostBodySchema: z.ZodType<UpdateProjectResourceLatchHostBody> = z.strictObject({ "sourceRevision": z.int().min(1), "hostPublicKey": z.string().min(64).max(64).nullable(), "sharedRootId": z.exactOptional(z.string().min(64).max(64).nullable()) });
 
 export interface UpdateProjectResourceSourceBody {
   /**
@@ -7514,6 +7600,22 @@ export interface PutProjectsByIdResourcesByResourceIdSourcesBySourceIdLatchHostP
 }
 export const putProjectsByIdResourcesByResourceIdSourcesBySourceIdLatchHostPathParamsSchema: z.ZodType<PutProjectsByIdResourcesByResourceIdSourcesBySourceIdLatchHostPathParams> = z.object({ "id": z.string(), "resourceId": z.string(), "sourceId": z.string() });
 
+export interface GetProjectsByIdResourceReadsPathParams {
+  /**
+   * Project UUID in the caller’s authorized workspace.
+   */
+  id: string;
+}
+export const getProjectsByIdResourceReadsPathParamsSchema: z.ZodType<GetProjectsByIdResourceReadsPathParams> = z.object({ "id": z.string() });
+
+export interface PostProjectsByIdResourceReadsPathParams {
+  /**
+   * Project UUID in the caller’s authorized workspace.
+   */
+  id: string;
+}
+export const postProjectsByIdResourceReadsPathParamsSchema: z.ZodType<PostProjectsByIdResourceReadsPathParams> = z.object({ "id": z.string() });
+
 export interface PostProjectsByIdRepositoryReadsPathParams {
   /**
    * Project UUID (display names and slugs are not accepted).
@@ -11836,7 +11938,7 @@ export const apiOperations = {
     responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: projectResourceDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
   },
   /**
-   * PUT /api/projects/{id}/resources/{resourceId}/sources/{sourceId}/latch-host: Verify or revoke a resource source's Latch host link
+   * PUT /api/projects/{id}/resources/{resourceId}/sources/{sourceId}/latch-host: Verify or revoke a resource source's Latch host or shared root link
    */
   putProjectsByIdResourcesByResourceIdSourcesBySourceIdLatchHost: {
     operationId: "putProjectsByIdResourcesByResourceIdSourcesBySourceIdLatchHost",
@@ -11853,6 +11955,44 @@ export const apiOperations = {
     parameters: { path: putProjectsByIdResourcesByResourceIdSourcesBySourceIdLatchHostPathParamsSchema, query: null, header: null },
     requestBody: { required: true, content: { "application/json": { kind: "json", schema: updateProjectResourceLatchHostBodySchema } } },
     responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: okResponseSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * GET /api/projects/{id}/resource-reads: List project resources and their eligible runner-backed checkout sources
+   */
+  getProjectsByIdResourceReads: {
+    operationId: "getProjectsByIdResourceReads",
+    method: "GET",
+    path: "/api/projects/{id}/resource-reads",
+    tags: ["projects"],
+    deprecated: false,
+    permission: "project:read",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["webapp"],
+    extension: null,
+    security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
+    parameters: { path: getProjectsByIdResourceReadsPathParamsSchema, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: projectResourceReadCatalogSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+  },
+  /**
+   * POST /api/projects/{id}/resource-reads: Read Git status, a file diff, a directory page or a text preview on a project checkout
+   */
+  postProjectsByIdResourceReads: {
+    operationId: "postProjectsByIdResourceReads",
+    method: "POST",
+    path: "/api/projects/{id}/resource-reads",
+    tags: ["projects"],
+    deprecated: false,
+    permission: "project:read",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["webapp"],
+    extension: null,
+    security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
+    parameters: { path: postProjectsByIdResourceReadsPathParamsSchema, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: projectResourceReadRequestSchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: projectResourceReadResultSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
   },
   /**
    * POST /api/projects/{id}/repository-reads: Run a bounded read-only repository read on an execution target

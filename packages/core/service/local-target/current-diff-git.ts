@@ -123,7 +123,7 @@ export async function readCurrentDiffGit(
   if (!root.ok) return root;
   const observedAt = () => new Date().toISOString();
   const base = { head: root.head, branch: root.branch, truncated: false };
-  if (!root.isGitRepository) {
+  if (!root.isGitRepository || (input.requireExactRoot && root.prefix !== '')) {
     return {
       ok: false,
       code: 'NOT_GIT_REPOSITORY',

@@ -30,7 +30,11 @@ import {
   parseExecutionProviderSession
 } from '../../packages/core/service/latch-launch.ts';
 import type { CapabilityResult } from '../../packages/core/service/local-target/types.ts';
-import { completeLocalTargetMutationRequest } from '../../packages/core/service/local-target-mutations.ts';
+import { READ_PROJECT_RESOURCE } from '../../packages/core/service/project-resource-read-bindings.ts';
+import {
+  completeLocalTargetMutationRequest,
+  parseLocalTargetMutation
+} from '../../packages/core/service/local-target-mutations.ts';
 import { upsertMissionBranchObservationTx } from '../../packages/core/service/mission-branch-observations.ts';
 import { resolveClaimLaunchConfig } from '../../packages/core/service/project-execution-target.ts';
 import { parseMetadataJson } from '../../packages/core/service/records.ts';
@@ -415,7 +419,10 @@ export async function completeRunnerMutationRequest({
     });
   }
   const request = await getExecutionRequest({ ctx, id: requestId });
-  return serviceSummaryToDto(request);
+  const dto = serviceSummaryToDto(request);
+  const isResourceRead =
+    (completed ?? parseLocalTargetMutation(request.metadata))?.capability === READ_PROJECT_RESOURCE;
+  return isResourceRead ? { ...dto, metadata: {}, workingDirectory: null } : dto;
 }
 
 /** Every `BranchAutomationAction`; the `Record` keeps this exhaustive at compile time. */

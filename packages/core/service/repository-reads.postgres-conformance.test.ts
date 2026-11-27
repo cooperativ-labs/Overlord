@@ -1,3 +1,4 @@
+import { PROJECT_RESOURCE_READ_CAPABILITY } from '@overlord/contract';
 import {
   createPostgresSessionClient,
   createSqliteClient,
@@ -8,22 +9,28 @@ import {
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, it } from 'node:test';
 
 import { InProcessProvider } from './local-target/in-process-provider.ts';
+import { RunnerQueueProvider } from './local-target/runner-queue-provider.ts';
 import { createServiceContext, type ServiceContext } from './context.ts';
 import { ServiceError } from './errors.ts';
 import { claimNextExecutionRequest } from './execution-requests.ts';
 import { recordRunnerHeartbeat } from './execution-target-runners.ts';
+import { backendHostFingerprint } from './execution-targets.ts';
 import { executeLocalTargetMutation } from './local-target-mutation-runner.ts';
 import {
   completeLocalTargetMutationRequest,
   parseLocalTargetMutation
 } from './local-target-mutations.ts';
 import { createProject } from './projects.ts';
+import {
+  listProjectResourceReadCatalog,
+  resolveProjectResourceReadSource
+} from './project-resource-read-bindings.ts';
 import { parseRepositoryReadRequest, performRepositoryRead } from './repository-reads.ts';
 import { seedServiceOperator } from './test-helpers.ts';
 import { newId, nowIso } from './util.ts';
@@ -101,11 +108,12 @@ async function seedRemoteTarget(ctx: ServiceContext) {
   const project = await createProject({ ctx, name: `Reads ${randomUUID().slice(0, 6)}` });
   const deviceId = newId();
   const executionTargetId = newId();
+  const fingerprint = `fp-${randomUUID()}`;
   await ctx.db.run(
     `INSERT INTO devices (id, workspace_id, fingerprint, label, platform, status, last_seen_at,
         metadata_json, created_at, updated_at, revision)
       VALUES (?, ?, ?, 'Remote Mac', 'darwin', 'active', ?, '{}', ?, ?, 1)`,
-    [deviceId, ctx.workspace.id, `fp-${randomUUID()}`, now, now, now]
+    [deviceId, ctx.workspace.id, fingerprint, now, now, now]
   );
   await ctx.db.run(
     `INSERT INTO execution_targets (id, workspace_id, device_id, owner_workspace_user_id, type,
@@ -153,7 +161,7 @@ async function seedRemoteTarget(ctx: ServiceContext) {
     runnerInstanceId: 'conformance-runner',
     relation: 'adopted'
   });
-  return { projectId: project.id, executionTargetId, dirs };
+  return { projectId: project.id, executionTargetId, dirs, fingerprint };
 }
 
 async function drain(ctx: ServiceContext, executionTargetId: string): Promise<string | null> {
@@ -233,6 +241,109 @@ for (const adapter of adapters) {
           (error: unknown) => error instanceof ServiceError && error.code === 'operation_conflict'
         );
       } finally {
+        await teardown();
+      }
+    });
+
+    it('serves web resource reads through the owning native registration and clears queue content', async () => {
+      const { client, teardown } = await adapter.create();
+      let dirs: Awaited<ReturnType<typeof seedRemoteTarget>>['dirs'] | undefined;
+      try {
+        const ctx = await createServiceContext({ db: client, source: 'webapp' });
+        const {
+          projectId,
+          executionTargetId,
+          fingerprint,
+          dirs: checkouts
+        } = await seedRemoteTarget(ctx);
+        dirs = checkouts;
+        const capabilities = { [PROJECT_RESOURCE_READ_CAPABILITY]: true };
+        const runner = {
+          executionTargetId,
+          runnerInstanceId: 'native-read-conformance',
+          relation: 'native' as const,
+          capabilities
+        };
+        if (client.dialect === 'sqlite') {
+          await client.run(
+            'UPDATE devices SET fingerprint = ? WHERE workspace_id = ? AND fingerprint = ?',
+            [backendHostFingerprint(), ctx.workspace.id, fingerprint]
+          );
+        }
+        const runnerCtx = {
+          ...ctx,
+          clientDevice: {
+            deviceFingerprint: fingerprint,
+            deviceLabel: 'Remote Mac',
+            devicePlatform: 'darwin'
+          }
+        };
+        await recordRunnerHeartbeat({ ctx, ...runner });
+        const catalog = await listProjectResourceReadCatalog(ctx, projectId);
+        const mobile = catalog.find(resource => resource.resourceKey === 'mobile')!;
+        const { sourceId, sourceRevision, availability } = mobile.sources[0]!;
+        assert.equal(availability, 'ready');
+        const binding = {
+          sourceId,
+          sourceRevision,
+          resourceKey: mobile.resourceKey,
+          executionTargetId
+        };
+        assert.deepEqual(
+          await resolveProjectResourceReadSource({ ctx, projectId, source: binding }),
+          {
+            resourceId: mobile.id,
+            repoPath: dirs.mobile
+          }
+        );
+        const queue = new RunnerQueueProvider(
+          { executionTargetId, deviceLabel: null, transport: 'runner_queue' },
+          {
+            ctx,
+            projectId,
+            resourceKey: mobile.resourceKey,
+            pollIntervalMs: 10,
+            readTimeoutMs: 3000
+          }
+        );
+        const waiting = queue.readProjectResource({
+          ...binding,
+          operation: 'read_file',
+          relativePath: 'mobile.swift',
+          repoPath: '',
+          resourceId: mobile.id
+        });
+        let claimed: Awaited<ReturnType<typeof claimNextExecutionRequest>> = null;
+        for (let attempt = 0; attempt < 100 && !claimed; attempt++) {
+          claimed = await claimNextExecutionRequest({ ctx: runnerCtx, projectId, runner });
+          if (!claimed) await new Promise(resolve => setTimeout(resolve, 10));
+        }
+        if (!claimed) await waiting;
+        assert.ok(claimed);
+        assert.equal(claimed.workingDirectory, dirs.mobile);
+        const mutation = parseLocalTargetMutation(claimed.metadata);
+        assert.ok(mutation);
+        const result = await executeLocalTargetMutation({
+          mutation,
+          workingDirectory: claimed.workingDirectory
+        });
+        await completeLocalTargetMutationRequest({ ctx: runnerCtx, requestId: claimed.id, result });
+        const completed = await waiting;
+        assert.ok(completed.ok);
+        assert.equal(completed.value.outcome, 'ok');
+        assert.equal((completed.value.data as { content: string }).content, 'let mobile = true');
+        const row = await client.get<{
+          metadata_json: string;
+          resolved_working_directory: string | null;
+        }>(
+          'SELECT metadata_json, resolved_working_directory FROM execution_requests WHERE id = ?',
+          [claimed.id]
+        );
+        assert.equal(row?.metadata_json, '{}');
+        assert.equal(row?.resolved_working_directory, null);
+      } finally {
+        if (dirs)
+          for (const dir of Object.values(dirs)) rmSync(dir, { recursive: true, force: true });
         await teardown();
       }
     });

@@ -49,6 +49,7 @@ function inProcessProvider(): LocalTargetCapabilities {
 const INPUT_PRE_HOOKS: Partial<
   Record<QueueableCapabilityName, (input: Record<string, unknown>) => Record<string, unknown>>
 > = {
+  readLatchHostIdentity: input => ({ sharedRootId: input.sharedRootId }),
   performBranchAction: input => {
     const branchInput = input as unknown as PerformBranchActionInput;
     return {
@@ -72,7 +73,10 @@ const RESOURCE_BINDINGS: Partial<
     (input: Record<string, unknown>, workingDirectory: string) => Record<string, unknown>
   >
 > = {
-  readLatchHostIdentity: () => ({}),
+  readLatchHostIdentity: (input, dir) =>
+    input.sharedRootId === undefined
+      ? {}
+      : { sharedRootId: input.sharedRootId, sourceDirectory: dir },
   observeResource: (input, dir) => ({ ...input, path: dir }),
   readRepositoryTree: (input, dir) => ({ ...input, repoPath: dir }),
   listBranches: (input, dir) => ({ ...input, repoPath: dir }),
@@ -84,6 +88,7 @@ const RESOURCE_BINDINGS: Partial<
         : resolveManagedWorktreeRoot(),
     projects: [{ primaryRepoPath: dir }]
   }),
+  readProjectResource: (input, dir) => ({ ...input, repoPath: dir }),
   readGitStatus: (input, dir) => ({ ...input, repoPath: dir }),
   readCurrentDiff: (input, dir) => ({ ...input, repoPath: dir }),
   readRepositoryFile: (input, dir) => ({ ...input, repoPath: dir }),
@@ -113,6 +118,9 @@ export async function executeLocalTargetMutation({
     );
   }
   let input = INPUT_PRE_HOOKS[capability]?.(mutation.input) ?? mutation.input;
+  if (capability === 'readProjectResource' && !mutation.resourceKey) {
+    return fail(provider.target, 'RESOURCE_MISSING', 'A project resource binding is required.');
+  }
   if (mutation.resourceKey) {
     const bind = RESOURCE_BINDINGS[capability];
     if (!bind) {

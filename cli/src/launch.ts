@@ -1,10 +1,17 @@
 import { type AgentLaunchFlagDto, agentLaunchFlagsToArgv } from '@overlord/contract';
+import { discoverLatchOnThisDevice } from '@overlord/core/service/latch/discovery';
 import {
+  type ExecutionProviderSession,
   existingLatchProviderSession,
   formatObjectiveLatchDisplay,
   selectLatchAgentLaunch,
   shouldUseLatchProvider
-} from '@overlord/core/service/latch-launch';
+} from '@overlord/core/service/latch/launch';
+import {
+  createLatchSession,
+  type LatchOpenResult,
+  openLatchViewer
+} from '@overlord/core/service/latch/launch-process';
 import type { LaunchSessionSnapshot } from '@overlord/core/service/terminal-profile-types';
 import { spawnSync, type SpawnSyncOptions, type SpawnSyncReturns } from 'node:child_process';
 import { chmodSync, writeFileSync } from 'node:fs';
@@ -39,13 +46,6 @@ import {
 } from './codex-models.js';
 import { resolveHome } from './connectors.js';
 import { CliError } from './errors.js';
-import { discoverLatchOnThisDevice } from './latch-discovery.js';
-import {
-  createLatchSession,
-  type ExecutionProviderSession,
-  type LatchOpenResult,
-  openLatchViewer
-} from './latch-launch.js';
 import {
   buildPreLaunchVariables,
   substituteLaunchEnvVars,

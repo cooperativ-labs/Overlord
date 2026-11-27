@@ -6,6 +6,9 @@ import type {
   ProjectDto,
   ProjectListLifecycle,
   ProjectRepositoryDto,
+  ProjectResourceReadCatalog,
+  ProjectResourceReadRequest,
+  ProjectResourceReadResult,
   ProjectResourceDto,
   ProjectStatusDto,
   ProjectTagDto,
@@ -54,6 +57,22 @@ export const projectsApi = {
     request<ProjectTagDto>('PATCH', `/api/projects/${projectId}/tags/${tagId}`, body),
   deleteProjectTag: (projectId: string, tagId: string) =>
     request<{ ok: true }>('DELETE', `/api/projects/${projectId}/tags/${tagId}`),
+  listProjectResourceReads: (id: string, signal: AbortSignal) =>
+    request<ProjectResourceReadCatalog>(
+      'GET',
+      `/api/projects/${id}/resource-reads`,
+      undefined,
+      undefined,
+      signal
+    ),
+  readProjectResource: (id: string, body: ProjectResourceReadRequest, signal: AbortSignal) =>
+    request<ProjectResourceReadResult>(
+      'POST',
+      `/api/projects/${id}/resource-reads`,
+      body,
+      undefined,
+      signal
+    ),
   listProjectResources: (id: string) =>
     request<ProjectResourceDto[]>('GET', `/api/projects/${id}/resources`),
   createProjectResource: (projectId: string, body: CreateProjectResourceBody) =>

@@ -5,12 +5,13 @@
 // hardened inspection runner, files are read with `fs`, nothing is fetched,
 // checked out, built, or locked.
 
-import { closeSync, openSync, readSync, realpathSync } from 'node:fs';
+import { closeSync, constants, fstatSync, openSync, readSync, realpathSync } from 'node:fs';
 
 import { neutralizedFilterArgs, runInspectionGit } from './git-run.ts';
 import {
   isSensitiveRepositoryPath,
   resolveContainedRepositoryPath,
+  resolveProjectPreviewPath,
   statOrNull
 } from './repository-paths.ts';
 import type {
@@ -56,7 +57,7 @@ export interface RepositoryRootInfo {
   head: string | null;
   branch: string | null;
   /** The resource root's path inside its repository (`rev-parse --show-prefix`), `''` at the top. */
-  prefix: string;
+  prefix: string | null;
   /** Filter-driver overrides for commands that read worktree content. */
   filterArgs: string[];
 }
@@ -133,7 +134,17 @@ export async function inspectRepositoryRoot(
   const [head, branch, prefix] = await Promise.all([
     gitLine(realRoot, ['rev-parse', '--verify', '--quiet', 'HEAD'], deadline),
     gitLine(realRoot, ['branch', '--show-current'], deadline),
-    gitLine(realRoot, ['rev-parse', '--show-prefix'], deadline)
+    runInspectionGit({
+      cwd: realRoot,
+      args: ['rev-parse', '--show-prefix'],
+      timeoutMs: deadline.remaining(),
+      maxBytes: 8192,
+      signal: deadline.signal
+    }).then(result =>
+      result.exitCode === 0 && !result.truncated
+        ? result.stdout.toString('utf8').replace(/\r?\n$/, '')
+        : null
+    )
   ]);
   return {
     ok: true,
@@ -141,7 +152,7 @@ export async function inspectRepositoryRoot(
     isGitRepository: true,
     head,
     branch,
-    prefix: prefix ?? '',
+    prefix,
     filterArgs: neutralizedFilterArgs(realRoot)
   };
 }
@@ -259,7 +270,7 @@ export async function readGitStatusGit(
   const deadline = new ReadDeadline(REPOSITORY_READ_TARGET_BOUNDS.commandTimeoutMs, signal);
   const root = await inspectRepositoryRoot(input.repoPath, deadline);
   if (!root.ok) return root;
-  if (!root.isGitRepository) {
+  if (!root.isGitRepository || (input.requireExactRoot && root.prefix !== '')) {
     return {
       ok: false,
       code: 'NOT_GIT_REPOSITORY',
@@ -292,7 +303,7 @@ export async function readGitStatusGit(
   if (run.exitCode !== 0 && !run.truncated) {
     return { ok: false, code: 'GIT_COMMAND_FAILED', message: 'git status failed on the target.' };
   }
-  const parsed = parseStatusV2(run.stdout, limit, root.prefix);
+  const parsed = parseStatusV2(run.stdout, limit, root.prefix ?? '');
   return value(
     { head: parsed.data.head ?? root.head, branch: parsed.data.branch ?? root.branch },
     parsed.data,
@@ -312,9 +323,21 @@ export function cutUtf8(text: string, maxBytes: number): string {
   return buffer.subarray(0, end).toString('utf8');
 }
 
-function readPrefix(absolutePath: string, bytes: number): Buffer {
-  const fd = openSync(absolutePath, 'r');
+function readPrefix(
+  absolutePath: string,
+  bytes: number,
+  expected?: { dev: number | bigint; ino: number | bigint }
+): Buffer | null {
+  const fd = openSync(
+    absolutePath,
+    expected ? constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK : 'r'
+  );
   try {
+    if (expected) {
+      const opened = fstatSync(fd);
+      if (!opened.isFile() || opened.dev !== expected.dev || opened.ino !== expected.ino)
+        return null;
+    }
     const buffer = Buffer.alloc(bytes);
     let offset = 0;
     while (offset < bytes) {
@@ -334,13 +357,18 @@ export async function readRepositoryFileGit(
   input: ReadRepositoryFileInput,
   signal?: AbortSignal
 ): Promise<RepositoryReadTargetValue<RepositoryFileData | null> | RepositoryReadFailure> {
-  const deadline = new ReadDeadline(REPOSITORY_READ_TARGET_BOUNDS.commandTimeoutMs, signal);
-  const root = await inspectRepositoryRoot(input.repoPath, deadline);
+  const root = input.filesystemOnly
+    ? { ok: true as const, realRoot: input.repoPath, head: null, branch: null }
+    : await inspectRepositoryRoot(
+        input.repoPath,
+        new ReadDeadline(REPOSITORY_READ_TARGET_BOUNDS.commandTimeoutMs, signal)
+      );
   if (!root.ok) return root;
   if (typeof input.relativePath !== 'string' || input.relativePath.trim() === '') {
     return value(root, null, { outcome: 'denied', message: 'A file path is required.' });
   }
-  const contained = resolveContainedRepositoryPath(root.realRoot, input.relativePath);
+  const resolve = input.filesystemOnly ? resolveProjectPreviewPath : resolveContainedRepositoryPath;
+  const contained = resolve(root.realRoot, input.relativePath);
   if (!contained.ok)
     return value(root, null, { outcome: contained.outcome, message: contained.message });
   const stats = statOrNull(contained.absolutePath);
@@ -366,8 +394,29 @@ export async function readRepositoryFileGit(
       message: 'The file is too large to read; only its size is reported.'
     });
   }
-  const raw = readPrefix(contained.absolutePath, totalBytes);
-  if (raw.subarray(0, 8192).includes(0)) {
+  const raw = readPrefix(
+    contained.absolutePath,
+    totalBytes,
+    input.filesystemOnly ? stats : undefined
+  );
+  if (input.filesystemOnly) {
+    const current = resolve(root.realRoot, input.relativePath);
+    const after = current.ok ? statOrNull(current.absolutePath) : null;
+    if (
+      !raw ||
+      !current.ok ||
+      current.absolutePath !== contained.absolutePath ||
+      after?.dev !== stats.dev ||
+      after?.ino !== stats.ino
+    ) {
+      return value(root, null, {
+        outcome: 'denied',
+        message: 'The file changed while it was being read.'
+      });
+    }
+  }
+  if (!raw) return value(root, null, { outcome: 'unavailable' });
+  if ((input.filesystemOnly ? raw : raw.subarray(0, 8192)).includes(0)) {
     return value(root, metadataOnly, { outcome: 'binary', message: 'The file is binary.' });
   }
   let text: string;

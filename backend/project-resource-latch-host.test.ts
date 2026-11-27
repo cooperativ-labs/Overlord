@@ -36,6 +36,8 @@ const {
 
 const HOST_A = '01'.repeat(32);
 const HOST_B = '02'.repeat(32);
+const ROOT_A = 'ab'.repeat(32);
+const ROOT_B = 'cd'.repeat(32);
 const ctx = dbModule.buildWebappServiceContext();
 const runner = { runnerInstanceId: 'native-latch-host-fixture' };
 const otherActor = seedAuthenticatedOperator({
@@ -179,7 +181,7 @@ test('same path on two targets binds only the verified host; changes, ambiguity 
   assert.equal(probe.mock.callCount(), 5);
 });
 
-test('the real queue accepts proof only from the target owner’s registered native runner', async () => {
+test('the real queue accepts root proof only from the target owner’s registered native runner', async () => {
   const project = await createProject({ name: 'Authenticated native runner verification' });
   const resource = await createProjectResource(project.id, { directoryPath: tempDir });
   const source = resource.sources[0]!;
@@ -189,7 +191,7 @@ test('the real queue accepts proof only from the target owner’s registered nat
     projectId: project.id,
     resourceId: resource.id,
     sourceId: source.id,
-    body: { sourceRevision: 1, hostPublicKey: HOST_A }
+    body: { sourceRevision: 1, hostPublicKey: HOST_A, sharedRootId: ROOT_A }
   });
   const finished = pending.then(
     result => ({ result }),
@@ -229,6 +231,7 @@ test('the real queue accepts proof only from the target owner’s registered nat
   assert.ok(request);
   const mutation = parseLocalTargetMutation(request.metadata);
   assert.ok(mutation);
+  assert.deepEqual(mutation.input, { sharedRootId: ROOT_A });
   const target = {
     executionTargetId: targetId,
     deviceLabel: null,
@@ -237,7 +240,16 @@ test('the real queue accepts proof only from the target owner’s registered nat
   const provider = new FakeLocalTargetProvider({
     target,
     handlers: {
-      readLatchHostIdentity: async () => ok(target, { hostKeyDigest: latchHostKeyDigest(HOST_A) })
+      readLatchHostIdentity: async input => {
+        assert.deepEqual(input, {
+          sharedRootId: ROOT_A,
+          sourceDirectory: request.workingDirectory
+        });
+        return ok(target, {
+          hostKeyDigest: latchHostKeyDigest(HOST_A),
+          verifiedSharedRootId: ROOT_A
+        });
+      }
     }
   });
   const result = await executeLocalTargetMutation({
@@ -255,9 +267,18 @@ test('the real queue accepts proof only from the target owner’s registered nat
   );
   await completeLocalTargetMutationRequest({ ctx, requestId: request.id, result });
   assert.deepEqual(await finished, { result: { ok: true } });
-  assert.equal(
-    (await listProjectResources(project.id))[0]!.sources[0]!.latchHostLink?.hostPublicKey,
-    HOST_A
+  const link = (await listProjectResources(project.id))[0]!.sources[0]!.latchHostLink;
+  assert.equal(link?.hostPublicKey, HOST_A);
+  assert.equal(link?.sharedRootId, ROOT_A);
+  await dbModule.withRequestContextAsync(async () => {
+    dbModule.setActiveProfileId('other-latch-account');
+    assert.equal((await listProjectResources(project.id))[0]!.sources[0]!.latchHostLink, undefined);
+  });
+  await deleteProjectResourceSource(project.id, resource.id, source.id);
+  assert.ok(
+    (await listProjectResources(project.id)).every(row =>
+      row.sources.every(candidate => candidate.latchHostLink?.sharedRootId === undefined)
+    )
   );
 });
 
@@ -267,11 +288,15 @@ test('resource settings route validates input and returns a private resource pro
   const source = resource.sources[0]!;
   const targetId = source.executionTargetId!;
   await recordRunnerHeartbeat({ ctx, executionTargetId: targetId, ...runner, relation: 'native' });
-  t.mock.method(
+  let verifiedRoot: string | undefined;
+  const probe = t.mock.method(
     RunnerQueueProvider.prototype,
     'readLatchHostIdentity',
     async function (this: RunnerQueueProvider) {
-      return ok(this.target, { hostKeyDigest: latchHostKeyDigest(HOST_A) });
+      return ok(this.target, {
+        hostKeyDigest: latchHostKeyDigest(HOST_A),
+        verifiedSharedRootId: verifiedRoot
+      });
     }
   );
 
@@ -300,4 +325,42 @@ test('resource settings route validates input and returns a private resource pro
   assert.equal(listed.headers.get('cache-control'), 'private, no-store');
   const [row] = (await listed.json()) as Awaited<ReturnType<typeof listProjectResources>>;
   assert.equal(row?.sources[0]?.latchHostLink?.hostPublicKey, HOST_A);
+  assert.equal(row?.sources[0]?.latchHostLink?.sharedRootId, undefined);
+
+  const readLink = async () => {
+    const response = await fetch(resources, { headers: authorization });
+    const [resourceRow] = (await response.json()) as Awaited<
+      ReturnType<typeof listProjectResources>
+    >;
+    return resourceRow?.sources[0]?.latchHostLink;
+  };
+  const setRoot = (sourceRevision: number, sharedRootId: string) =>
+    put({ sourceRevision, hostPublicKey: HOST_A, sharedRootId });
+  assert.equal((await setRoot(2, 'z'.repeat(64))).status, 400);
+  assert.equal((await setRoot(2, ROOT_A)).status, 409); // legacy runner returns a host digest only
+  assert.equal((await readLink())?.sharedRootId, undefined);
+  verifiedRoot = ROOT_A;
+  assert.equal((await setRoot(2, ROOT_A)).status, 200);
+  assert.equal((await setRoot(2, ROOT_A)).status, 200);
+  assert.equal((await setRoot(2, ROOT_B)).status, 409);
+  assert.equal((await readLink())?.sharedRootId, ROOT_A);
+
+  verifiedRoot = undefined;
+  assert.equal((await put({ sourceRevision: 3, hostPublicKey: HOST_A })).status, 200);
+  assert.equal((await readLink())?.sharedRootId, ROOT_A);
+  verifiedRoot = ROOT_B;
+  assert.equal((await setRoot(4, ROOT_B)).status, 200);
+  assert.equal((await readLink())?.sharedRootId, ROOT_B);
+
+  const beforeUnlink = probe.mock.callCount();
+  db.prepare(
+    "UPDATE execution_target_runner_registrations SET last_heartbeat_at = '2000-01-01T00:00:00.000Z' WHERE execution_target_id = ?"
+  ).run(targetId);
+  assert.equal(
+    (await put({ sourceRevision: 5, hostPublicKey: null, sharedRootId: null })).status,
+    200
+  );
+  assert.equal(probe.mock.callCount(), beforeUnlink);
+  assert.equal((await readLink())?.sharedRootId, undefined);
+  assert.equal((await readLink())?.hostPublicKey, HOST_A);
 });

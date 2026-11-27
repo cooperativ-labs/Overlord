@@ -3,10 +3,10 @@ info:
   title: Overlord API
   # info.version is the API description's own Semantic Version; it changes when
   # this document changes and is never compared with the contract version.
-  version: 7.6.0
+  version: 7.8.0
   # The contract version (contract/VERSION) this document belongs to. Written
   # only by `yarn version:contract`.
-  x-overlord-contract-version: 182.7.0
+  x-overlord-contract-version: 182.9.0
   description: >-
     Normative description of Overlord's REST surface (ADR 0006): one operation for every
     method and path the backend registers, at the path it is served (ADR 0007), excluding
@@ -6000,11 +6000,14 @@ paths:
       x-overlord-permission: project:update
       x-overlord-edition: both
       x-overlord-consumers: [webapp]
-      summary: Verify or revoke a resource source's Latch host link
+      summary: Verify or revoke a resource source's Latch host or shared root link
       description: >-
         Requires project update permission and ownership of the source's registered local target.
         Linking and relinking cross-check the expected pairing public key with the active native
-        runner. A null host key revokes the link. All writes compare the source revision. An exact
+        runner. An optional shared root ID also requires an exact source directory match and
+        an active Control grant. Sending null for both fields revokes just the shared root.
+        A null host key with the root field omitted revokes the host and any associated root.
+        All writes compare the source revision. An exact
         retry of an accepted mutation replays its acknowledgement for 24 hours.
       security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
       requestBody:
@@ -6014,7 +6017,7 @@ paths:
             schema: { $ref: '#/components/schemas/UpdateProjectResourceLatchHostBody' }
       responses:
         '200':
-          description: Host link verified or revoked.
+          description: Host or shared root link verified or revoked.
           content:
             application/json:
               schema: { $ref: '#/components/schemas/OkResponse' }
@@ -6023,6 +6026,62 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
+  "/api/projects/{id}/resource-reads":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Project UUID in the caller’s authorized workspace.
+        schema: { type: string, format: uuid }
+    get:
+      operationId: getProjectsByIdResourceReads
+      tags: [projects]
+      x-overlord-permission: project:read
+      x-overlord-edition: both
+      x-overlord-consumers: [webapp]
+      summary: List project resources and their eligible runner-backed checkout sources
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      responses:
+        '200':
+          description: The project resource read catalog.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProjectResourceReadCatalog' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+    post:
+      operationId: postProjectsByIdResourceReads
+      tags: [projects]
+      x-overlord-permission: project:read
+      x-overlord-edition: both
+      x-overlord-consumers: [webapp]
+      summary: Read Git status, a file diff, a directory page or a text preview on a project checkout
+      description: >-
+        Requires the exact current source ID, revision, resource key and execution target from the
+        catalog. A missing, changed or unauthorized source answers 404. A live native runner on
+        the owning target must advertise project resource reads. Target outcomes answer 200.
+        Responses are private and must not be stored by clients or caches.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ProjectResourceReadRequest' }
+      responses:
+        '200':
+          description: A bounded read result on the selected checkout.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProjectResourceReadResult' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
         '413': { $ref: '#/components/responses/PayloadTooLarge' }
         '500': { $ref: '#/components/responses/InternalError' }
   "/api/projects/{id}/repository-reads":
@@ -11999,6 +12058,14 @@ components:
               minLength: 64
               maxLength: 64
               description: Present only for an unambiguous link. Verify it against the authenticated pairing.
+            sharedRootId:
+              type: string
+              minLength: 64
+              maxLength: 64
+              description: A saved selector on an unambiguous link. Require it in the current paired device's advertised active roots before listing or previewing.
+            canUnlinkSharedRoot:
+              type: boolean
+              description: A root is linked and can be removed independently of the host link by an authorized editor.
     ProjectResourceDto:
       type: object
       required:
@@ -13126,6 +13193,108 @@ components:
     RepositoryReadOperation:
       type: string
       enum: [ observe, tree, branches, worktrees, git_status, diff, read_file, search_text ]
+    ProjectResourceReadCatalog:
+      type: array
+      items:
+        type: object
+        required: [id, resourceKey, label, hasGitSource, sources]
+        properties:
+          id: { type: string }
+          resourceKey: { type: string }
+          label:
+            oneOf: [ { type: string }, { type: 'null' } ]
+          hasGitSource:
+            type: boolean
+            description: A project-global Git source is configured for this resource.
+          sources:
+            type: array
+            items:
+              type: object
+              required: [sourceId, sourceRevision, executionTargetId, targetLabel, availability]
+              properties:
+                sourceId: { type: string }
+                sourceRevision: { type: integer, minimum: 1 }
+                executionTargetId: { type: string }
+                targetLabel: { type: string }
+                availability: { type: string, enum: [ready, target_offline, unsupported] }
+    ProjectResourceReadRequest:
+      oneOf:
+        - type: object
+          additionalProperties: false
+          required: [operation, resourceKey, sourceId, sourceRevision, executionTargetId]
+          properties:
+            operation: { const: git_status }
+            resourceKey: { type: string, minLength: 1 }
+            sourceId: { type: string, format: uuid }
+            sourceRevision: { type: integer, minimum: 1 }
+            executionTargetId: { type: string, format: uuid }
+        - type: object
+          additionalProperties: false
+          required: [operation, resourceKey, sourceId, sourceRevision, executionTargetId, relativePath, scope]
+          properties:
+            operation: { const: diff }
+            resourceKey: { type: string, minLength: 1 }
+            sourceId: { type: string, format: uuid }
+            sourceRevision: { type: integer, minimum: 1 }
+            executionTargetId: { type: string, format: uuid }
+            relativePath: { type: string, minLength: 1, maxLength: 1024 }
+            scope: { type: string, enum: [staged, unstaged, all] }
+        - type: object
+          additionalProperties: false
+          required: [operation, resourceKey, sourceId, sourceRevision, executionTargetId]
+          properties:
+            operation: { const: list_directory }
+            resourceKey: { type: string, minLength: 1 }
+            sourceId: { type: string, format: uuid }
+            sourceRevision: { type: integer, minimum: 1 }
+            executionTargetId: { type: string, format: uuid }
+            relativePath: { type: string, maxLength: 1024 }
+            offset: { type: integer, minimum: 0, maximum: 9999 }
+        - type: object
+          additionalProperties: false
+          required: [operation, resourceKey, sourceId, sourceRevision, executionTargetId, relativePath]
+          properties:
+            operation: { const: read_file }
+            resourceKey: { type: string, minLength: 1 }
+            sourceId: { type: string, format: uuid }
+            sourceRevision: { type: integer, minimum: 1 }
+            executionTargetId: { type: string, format: uuid }
+            relativePath: { type: string, minLength: 1, maxLength: 1024 }
+    RepositoryDirectoryData:
+      type: object
+      required: [relativePath, entries, nextOffset]
+      properties:
+        relativePath: { type: string }
+        entries:
+          type: array
+          maxItems: 100
+          items:
+            type: object
+            required: [name, relativePath, type]
+            properties:
+              name: { type: string }
+              relativePath: { type: string }
+              type: { type: string, enum: [directory, file] }
+        nextOffset:
+          oneOf: [ { type: integer, minimum: 0, maximum: 9999 }, { type: 'null' } ]
+    ProjectResourceReadResult:
+      type: object
+      required: [outcome, message, observedAt, branch, truncated, data]
+      properties:
+        outcome:
+          type: string
+          enum: [ok, unavailable, target_offline, unsupported, timeout, denied, binary, oversized, not_found, not_git_repository]
+        message:
+          oneOf: [ { type: string }, { type: 'null' } ]
+        observedAt: { $ref: '#/components/schemas/DateTime' }
+        branch:
+          oneOf: [ { type: string }, { type: 'null' } ]
+        truncated: { type: boolean }
+        data:
+          description: >-
+            RepositoryGitStatusData, RepositoryDiffData or RepositoryFileData from
+            packages/contract/src/chat.ts, RepositoryDirectoryData, or null.
+          $ref: '#/components/schemas/JsonValue'
     RepositoryReadRequest:
       description: >-
         One bounded, read-only repository read on a registered resource binding. Every variant carries
@@ -13374,6 +13543,11 @@ components:
         sourceRevision: { type: integer, minimum: 1 }
         hostPublicKey:
           description: Expected Latch host public key, or null to revoke.
+          oneOf:
+            - { type: string, minLength: 64, maxLength: 64 }
+            - { type: 'null' }
+        sharedRootId:
+          description: An owner-shared root ID for the expected host, or null with a null host key to clear only the root.
           oneOf:
             - { type: string, minLength: 64, maxLength: 64 }
             - { type: 'null' }

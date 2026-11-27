@@ -322,6 +322,8 @@ export const REPOSITORY_READ_DEFAULT_BOUNDS = {
 export const REPOSITORY_READ_OPERATION_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$/;
 
 /** `unstaged`: worktree vs index; `staged`: index vs HEAD; `all`: worktree vs HEAD. */
+export const PROJECT_RESOURCE_READ_CAPABILITY = 'projectResourceReads';
+
 export type RepositoryDiffScope = 'unstaged' | 'staged' | 'all';
 
 export interface RepositoryReadBinding {

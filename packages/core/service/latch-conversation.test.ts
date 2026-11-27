@@ -516,7 +516,7 @@ test('a capabilities document missing required fields is not accepted', () => {
  */
 test('the Latch conversation client dials loopback only', () => {
   const here = path.dirname(fileURLToPath(import.meta.url));
-  const sources = ['latch-gateway.ts', 'latch-session.ts'].map(name =>
+  const sources = ['latch/gateway.ts', 'latch/conversation.ts'].map(name =>
     readFileSync(path.join(here, name), 'utf8')
   );
   const gatewaySource = sources[0];

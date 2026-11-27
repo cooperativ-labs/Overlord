@@ -13,7 +13,13 @@
 // Payload types are defined natively here (not as REST DTOs from
 // `@overlord/contract`) to keep the boundary clean; the backend in-process
 // provider adapts between these payloads and its DTOs.
+import type {
+  ProjectResourceReadInput,
+  ProjectResourceReadValue
+} from './project-resource-read.ts';
 import type { LocalTargetErrorCode, TargetObservationState } from '@overlord/contract';
+
+import type { LatchHostIdentityInput, LatchHostIdentityResult } from '../latch-host-identity.ts';
 
 // REST DTOs generated from contract/api/openapi.yaml (ADR 0006).
 export type { LocalTargetErrorCode, TargetObservationState } from '@overlord/contract';
@@ -263,6 +269,7 @@ export interface RepositoryReadTargetValue<T> {
 }
 
 export interface ReadGitStatusInput extends RepositoryReadTargetInput {
+  requireExactRoot?: boolean;
   maxEntriesPerClass?: number;
 }
 export interface GitStatusEntry {
@@ -291,6 +298,7 @@ export type CurrentDiffScope = 'unstaged' | 'staged' | 'all';
  * shares its argument builder (`current-diff-git.ts`).
  */
 export interface ReadCurrentDiffInput extends RepositoryReadTargetInput {
+  requireExactRoot?: boolean;
   scope: CurrentDiffScope;
   relativePaths?: string[] | null;
   maxBytes?: number;
@@ -304,6 +312,7 @@ export interface CurrentDiffData {
 export type CurrentDiffResult = RepositoryReadTargetValue<CurrentDiffData | null>;
 
 export interface ReadRepositoryFileInput extends RepositoryReadTargetInput {
+  filesystemOnly?: boolean;
   relativePath: string;
   /** 1-based inclusive. */
   startLine?: number | null;
@@ -525,6 +534,9 @@ export interface DoctorResult {
  * method returns a {@link CapabilityResult} rather than throwing.
  */
 export interface LocalTargetCapabilities {
+  readProjectResource(
+    input: ProjectResourceReadInput
+  ): Promise<CapabilityResult<ProjectResourceReadValue>>;
   readonly target: TargetMetadata;
 
   writeProjectMetadata(
@@ -560,8 +572,8 @@ export interface LocalTargetCapabilities {
   launchAgent(input: LaunchAgentInput): Promise<CapabilityResult<LaunchAgentResult>>;
   discoverLatch(input: DiscoverLatchInput): Promise<CapabilityResult<DiscoverLatchResult>>;
   readLatchHostIdentity(
-    input: Record<string, never>
-  ): Promise<CapabilityResult<{ hostKeyDigest: string }>>;
+    input: LatchHostIdentityInput
+  ): Promise<CapabilityResult<LatchHostIdentityResult>>;
   inspectLatchSession(
     input: InspectLatchSessionInput
   ): Promise<CapabilityResult<InspectLatchSessionResult>>;
@@ -593,6 +605,7 @@ export const LOCAL_TARGET_CAPABILITY_NAMES = [
   'performBranchAction',
   'readCurrentDiff',
   'readGitStatus',
+  'readProjectResource',
   'readRepositoryFile',
   'searchRepositoryText',
   'generateCommitMessageFromLocalDiff',

@@ -29,8 +29,14 @@ import type { ServiceContext } from './context.ts';
 import { resolveMissionId, resolveProjectId } from './context.ts';
 import { ServiceError } from './errors.ts';
 import { findActingDeviceExecutionTargetId } from './execution-targets.ts';
-import { isLatchHostPublicKey, READ_LATCH_HOST_IDENTITY } from './latch-host-identity.ts';
+import {
+  isLatchHostPublicKey,
+  isLatchSharedRootId,
+  type LatchHostIdentityResult,
+  READ_LATCH_HOST_IDENTITY
+} from './latch-host-identity.ts';
 import { forgetAbsentLatchProviderSessions } from './latch-provider-session.ts';
+import { PROJECT_RESOURCE_READ_JOB_KEY } from './project-resource-read-bindings.ts';
 import { parseMetadataJson } from './records.ts';
 import { newId, nowIso } from './util.ts';
 
@@ -211,7 +217,7 @@ export async function createLocalTargetMutationRequest({
   operationId?: string | null;
   /** Project resource to resolve at claim (mission-less calls); null means primary. */
   resourceKey?: string | null;
-  /** Internal marker supplied only by the scoped terminal observer. */
+  /** Internal marker for a private terminal probe or project resource read. */
   backgroundProbeKey?: string | null;
   eventSummary?: string;
 }): Promise<{ id: string; reused: boolean; createdAt: string }> {
@@ -478,8 +484,19 @@ export async function completeLocalTargetMutationRequest({
   }
   const mutation = parseLocalTargetMutation(row.metadata_json);
   // A runner retry after a lost completion response keeps the first result.
-  if (row.background_probe_key && mutation?.result) return mutation;
-  if (row.status !== 'launching' && row.status !== 'claimed') {
+  if (
+    row.background_probe_key &&
+    row.background_probe_key !== PROJECT_RESOURCE_READ_JOB_KEY &&
+    mutation?.result
+  )
+    return mutation;
+  const targetId = row.claimed_by_execution_target_id;
+  const privateResourceRead = row.background_probe_key === PROJECT_RESOURCE_READ_JOB_KEY;
+  const latchIdentity = mutation?.capability === READ_LATCH_HOST_IDENTITY;
+  const canComplete = row.status === 'launching' || row.status === 'claimed';
+  const acknowledgeLateRead =
+    privateResourceRead && !mutation && ['cancelled', 'launched', 'failed'].includes(row.status);
+  if (!canComplete && !acknowledgeLateRead) {
     throw new ServiceError(
       `Cannot complete local-target mutation from status ${row.status}.`,
       'invalid_execution_request_transition',
@@ -487,16 +504,7 @@ export async function completeLocalTargetMutationRequest({
     );
   }
 
-  if (!mutation) {
-    throw new ServiceError(
-      'Execution request is missing local-target mutation metadata.',
-      'invalid_local_target_mutation',
-      409
-    );
-  }
-
-  if (mutation.capability === READ_LATCH_HOST_IDENTITY) {
-    const targetId = row.claimed_by_execution_target_id;
+  if (latchIdentity || privateResourceRead) {
     const registered =
       targetId &&
       row.claimed_by_runner_registration_id &&
@@ -522,31 +530,50 @@ export async function completeLocalTargetMutationRequest({
       ));
     if (
       !ctx.actorWorkspaceUserId ||
-      ctx.actorWorkspaceUserId !== row.requested_by_workspace_user_id ||
+      (latchIdentity && ctx.actorWorkspaceUserId !== row.requested_by_workspace_user_id) ||
       !registered ||
       (await findActingDeviceExecutionTargetId({ ctx })) !== targetId
     ) {
       throw new ServiceError(
-        'Latch host identity must come from the target owner’s native runner.',
-        'latch_host_unverified',
+        latchIdentity
+          ? 'Latch host identity must come from the target owner’s native runner.'
+          : 'Project resource reads must come from the target owner’s native runner.',
+        latchIdentity ? 'latch_host_unverified' : 'project_resource_runner_unverified',
         403
       );
     }
-    // Persist only a validated public-key digest or a fixed failure. Never retain the raw status.
-    const key = result.ok
-      ? (result.value as { hostKeyDigest?: unknown } | null)?.hostKeyDigest
-      : null;
-    result = isLatchHostPublicKey(key)
-      ? {
-          ok: true,
-          value: { hostKeyDigest: key },
-          target: { executionTargetId: targetId, deviceLabel: null, transport: 'runner_queue' }
-        }
-      : fail(
-          { executionTargetId: targetId, deviceLabel: null, transport: 'runner_queue' },
-          'TARGET_OPERATION_FAILED',
-          'Latch Remote Link identity is unavailable.'
-        );
+  }
+  // The browser may abandon a claimed read before completion.
+  if (acknowledgeLateRead) return null;
+  if (!mutation) {
+    throw new ServiceError(
+      'Execution request is missing local-target mutation metadata.',
+      'invalid_local_target_mutation',
+      409
+    );
+  }
+
+  if (mutation.capability === READ_LATCH_HOST_IDENTITY) {
+    // Keep only the public-key digest and confirmation of the requested selector.
+    const value = result.ok ? (result.value as Partial<LatchHostIdentityResult> | null) : null;
+    const requestedRoot = mutation.input.sharedRootId;
+    const rootVerified =
+      isLatchSharedRootId(requestedRoot) && requestedRoot === value?.verifiedSharedRootId;
+    result =
+      isLatchHostPublicKey(value?.hostKeyDigest) && (requestedRoot === undefined || rootVerified)
+        ? {
+            ok: true,
+            value: {
+              hostKeyDigest: value.hostKeyDigest,
+              ...(rootVerified ? { verifiedSharedRootId: requestedRoot } : {})
+            },
+            target: { executionTargetId: targetId, deviceLabel: null, transport: 'runner_queue' }
+          }
+        : fail(
+            { executionTargetId: targetId, deviceLabel: null, transport: 'runner_queue' },
+            'TARGET_OPERATION_FAILED',
+            'Latch Remote Link identity is unavailable.'
+          );
   }
 
   const storedResult: LocalTargetMutationStoredResult = result.ok
@@ -594,12 +621,13 @@ export async function completeLocalTargetMutationRequest({
     );
     if (updated.changes === 0) {
       if (row.background_probe_key) {
-        const current = await tx.get<{ metadata_json: string }>(
-          'SELECT metadata_json FROM execution_requests WHERE id = ? AND workspace_id = ?',
+        const current = await tx.get<{ metadata_json: string; status: string }>(
+          'SELECT metadata_json, status FROM execution_requests WHERE id = ? AND workspace_id = ?',
           [row.id, ctx.workspace.id]
         );
         const completed = current && parseLocalTargetMutation(current.metadata_json);
-        if (completed?.result) return completed;
+        if (privateResourceRead && !completed && current?.status === 'cancelled') return null;
+        if (!privateResourceRead && completed?.result) return completed;
       }
       throw new ServiceError(
         'Execution request changed while completing local-target mutation.',
@@ -783,4 +811,23 @@ export async function cancelQueuedLocalTargetMutation({
     });
     return { cancelled: true };
   });
+}
+
+/** Remove checkout material after the sole caller receives or abandons the result. */
+export async function clearProjectResourceReadJob({
+  ctx,
+  requestId
+}: {
+  ctx: ServiceContext;
+  requestId: string;
+}): Promise<void> {
+  await ctx.db.run(
+    `UPDATE execution_requests
+        SET metadata_json = '{}', resolved_working_directory = NULL,
+            status = CASE WHEN status IN ('queued', 'claimed', 'launching') THEN 'cancelled' ELSE status END,
+            revision = revision + 1, updated_at = ?
+      WHERE workspace_id = ? AND id = ? AND background_probe_key = ?
+        AND requested_by_workspace_user_id = ? AND deleted_at IS NULL`,
+    [nowIso(), ctx.workspace.id, requestId, PROJECT_RESOURCE_READ_JOB_KEY, ctx.actorWorkspaceUserId]
+  );
 }

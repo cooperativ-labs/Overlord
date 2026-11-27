@@ -13,7 +13,7 @@ import { addProjectResource, createProject } from '../packages/core/service/proj
 import { bindWebappDatabaseClient, createConformanceDatabase } from './test-helpers.ts';
 
 test(
-  'PostgreSQL verifies, projects and revokes a source link through the native runner queue',
+  'PostgreSQL verifies, projects and independently removes a shared root through the native runner queue',
   {
     skip: !process.env.TEST_DATABASE_URL
   },
@@ -52,11 +52,12 @@ test(
     assert.equal(links.size, 1);
     const [sourceId, link] = [...links.entries()][0]!;
     const hostPublicKey = '12'.repeat(32);
+    const sharedRootId = '34'.repeat(32);
     const pending = updateProjectResourceLatchHost({
       projectId: project.id,
       sourceId,
       resourceId: resource.id,
-      body: { sourceRevision: link.sourceRevision, hostPublicKey }
+      body: { sourceRevision: link.sourceRevision, hostPublicKey, sharedRootId }
     }).then(
       result => ({ result }),
       error => ({ error })
@@ -80,7 +81,8 @@ test(
       result: ok(
         { executionTargetId: targetId, deviceLabel: null, transport: 'in_process' },
         {
-          hostKeyDigest: latchHostKeyDigest(hostPublicKey)
+          hostKeyDigest: latchHostKeyDigest(hostPublicKey),
+          verifiedSharedRootId: sharedRootId
         }
       )
     });
@@ -88,13 +90,16 @@ test(
     assert.deepEqual(await pending, { result: { ok: true } });
     const verified = (await loadProjectResourceLatchHosts(scope)).get(sourceId)!;
     assert.equal(verified.hostPublicKey, hostPublicKey);
+    assert.equal(verified.sharedRootId, sharedRootId);
     assert.equal(verified.sourceRevision, link.sourceRevision + 1);
     await updateProjectResourceLatchHost({
       projectId: project.id,
       sourceId,
       resourceId: resource.id,
-      body: { sourceRevision: verified.sourceRevision, hostPublicKey: null }
+      body: { sourceRevision: verified.sourceRevision, hostPublicKey: null, sharedRootId: null }
     });
-    assert.equal((await loadProjectResourceLatchHosts(scope)).get(sourceId)?.state, 'unlinked');
+    const unlinked = (await loadProjectResourceLatchHosts(scope)).get(sourceId);
+    assert.equal(unlinked?.hostPublicKey, hostPublicKey);
+    assert.equal(unlinked?.sharedRootId, undefined);
   }
 );

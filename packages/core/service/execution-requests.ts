@@ -2,6 +2,7 @@ import {
   type AgentLaunchFlagDto,
   formatAgentLaunchFlagText,
   type ObjectiveState,
+  PROJECT_RESOURCE_READ_CAPABILITY,
   parseObjectiveRef
 } from '@overlord/contract';
 import type { DatabaseClient } from '@overlord/database';
@@ -30,6 +31,13 @@ import {
   missionAllowsParallelObjectives
 } from './objective-parallelism.js';
 import { resolveLaunchSessionForExecutionTarget } from './project-execution-target.js';
+import {
+  PROJECT_RESOURCE_READ_JOB_KEY,
+  PROJECT_RESOURCE_READ_TIMEOUT_MS,
+  READ_PROJECT_RESOURCE,
+  resolveProjectResourceReadSource,
+  type ProjectResourceReadSource
+} from './project-resource-read-bindings.ts';
 import { resolveObjectiveWorkingDirectory } from './projects.js';
 import { asRecord, parseMetadataJson } from './records.js';
 import { enqueueRunQueueDispatch } from './run-queue.js';
@@ -757,13 +765,16 @@ export async function claimNextExecutionRequest({
     'o.deleted_at IS NULL',
     `(er.requested_source = ? OR o.state IN (${LAUNCHABLE_OBJECTIVE_STATES.map(() => '?').join(', ')}))`,
     '(er.execution_target_id IS NULL OR er.execution_target_id = ?)',
-    '(er.background_probe_key IS NULL OR er.created_at >= ?)'
+    `(er.background_probe_key IS NULL OR
+      (er.background_probe_key = ? AND er.created_at >= ?) OR er.created_at >= ?)`
   ];
   const params: string[] = [
     ctx.workspace.id,
     LOCAL_TARGET_MUTATION_REQUESTED_SOURCE,
     ...LAUNCHABLE_OBJECTIVE_STATES,
     target.executionTargetId,
+    PROJECT_RESOURCE_READ_JOB_KEY,
+    new Date(Date.now() - PROJECT_RESOURCE_READ_TIMEOUT_MS).toISOString(),
     new Date(Date.now() - TERMINAL_PROBE_TIMEOUT_MS).toISOString()
   ];
   const capability = localTargetMutationCapabilitySql(ctx.db.dialect);
@@ -784,6 +795,18 @@ export async function claimNextExecutionRequest({
     conditions.push(`COALESCE(${capability}, '') <> ?`);
     params.push(READ_LATCH_HOST_IDENTITY);
   }
+  if (isOwnNativeRunner && runnerInput.capabilities?.[PROJECT_RESOURCE_READ_CAPABILITY] === true) {
+    conditions.push(`(COALESCE(${capability}, '') <> ? OR EXISTS (
+      SELECT 1 FROM execution_targets owner_target
+       WHERE owner_target.id = er.execution_target_id
+         AND owner_target.workspace_id = er.workspace_id
+         AND owner_target.owner_workspace_user_id = ?
+    ))`);
+    params.push(READ_PROJECT_RESOURCE, requester);
+  } else {
+    conditions.push(`COALESCE(${capability}, '') <> ?`);
+    params.push(READ_PROJECT_RESOURCE);
+  }
   if (projectId) {
     conditions.push('er.project_id = ?');
     params.push(await resolveProjectId(ctx, projectId));
@@ -795,7 +818,7 @@ export async function claimNextExecutionRequest({
       `SELECT er.id, er.workspace_id, er.project_id, er.mission_id, er.objective_id,
                 er.execution_target_id, er.status, er.revision, er.launch_flags_json,
                 er.launched_session_id, er.resolved_working_directory, er.metadata_json,
-                er.background_probe_key,
+                er.background_probe_key, er.requested_by_workspace_user_id,
                 o.resource_key
            FROM execution_requests er
            LEFT JOIN objectives o ON o.id = er.objective_id
@@ -808,6 +831,7 @@ export async function claimNextExecutionRequest({
           resolved_working_directory: string | null;
           metadata_json: string;
           resource_key: string | null;
+          requested_by_workspace_user_id: string | null;
         })
       | undefined;
 
@@ -816,16 +840,34 @@ export async function claimNextExecutionRequest({
     let workingDirectory: string;
     let resourceId: string | null;
     try {
-      ({ workingDirectory, resourceId } = await resolveWorkingDirectory({
-        ctx: txCtx,
-        projectId: candidate.project_id,
-        // A mission-less capability call names its resource in the queued
-        // metadata (a repository read of `mobile` must not resolve `primary`).
-        objectiveResourceKey:
-          candidate.resource_key ?? parseLocalTargetMutation(candidate.metadata_json)?.resourceKey,
-        explicitWorkingDirectory: candidate.resolved_working_directory,
-        executionTargetId: candidate.execution_target_id ?? target.executionTargetId
-      }));
+      const mutation = parseLocalTargetMutation(candidate.metadata_json);
+      if (mutation?.capability === READ_PROJECT_RESOURCE) {
+        const source = await resolveProjectResourceReadSource({
+          ctx: txCtx,
+          projectId: candidate.project_id,
+          source: mutation.input as ProjectResourceReadSource,
+          actor: candidate.requested_by_workspace_user_id
+        });
+        if (!source || mutation.input.executionTargetId !== target.executionTargetId) {
+          await markExecutionFailed({
+            ctx: txCtx,
+            requestId: candidate.id,
+            error: 'The project resource source is no longer available.'
+          });
+          return null;
+        }
+        ({ repoPath: workingDirectory, resourceId } = source);
+      } else {
+        ({ workingDirectory, resourceId } = await resolveWorkingDirectory({
+          ctx: txCtx,
+          projectId: candidate.project_id,
+          // A mission-less capability call names its resource in the queued
+          // metadata (a repository read of `mobile` must not resolve `primary`).
+          objectiveResourceKey: candidate.resource_key ?? mutation?.resourceKey,
+          explicitWorkingDirectory: candidate.resolved_working_directory,
+          executionTargetId: candidate.execution_target_id ?? target.executionTargetId
+        }));
+      }
     } catch (error) {
       if (
         error instanceof ServiceError &&

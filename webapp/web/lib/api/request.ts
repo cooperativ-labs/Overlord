@@ -48,13 +48,15 @@ export async function request<T>(
   method: string,
   url: string,
   body?: unknown,
-  rawHeaders?: Record<string, string>
+  rawHeaders?: Record<string, string>,
+  signal?: AbortSignal
 ): Promise<T> {
   // A Blob/File body is sent as-is (used by the upload service); everything else
   // is JSON. `rawHeaders` lets callers send a binary body with its own headers.
   const isRaw = rawHeaders !== undefined;
   const res = await fetchApi(url, {
     method,
+    signal,
     headers: isRaw
       ? rawHeaders
       : body !== undefined

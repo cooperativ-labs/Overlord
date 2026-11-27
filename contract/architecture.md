@@ -1150,6 +1150,14 @@ worktree reference remains in the client and is invalidated when the Overlord
 account, project, source revision, authenticated host or Latch grant changes.
 The binding contains a public key and conveys no pairing or Git authority.
 
+Project Files uses an optional shared root selector on the same binding
+(ADR 0110). A native runner verifies that the owner shared the exact source
+directory with a current Control pairing. Before opening and during use,
+paired clients require current project access, an unambiguous host match and
+the selector in the active roots for their own authenticated pairing. Clear
+pending reads and content when any of those checks fails or the source changes.
+Latch serves directories and previews directly and enforces every read.
+
 ### Mobile → Latch (Objective Conversation Surface)
 
 - **Transport**: The optional Mobile integration connects to a host through its own
@@ -1558,6 +1566,41 @@ _Repository-read implementation details (coo:1108.zg8m)._
   up to 1 MiB (every other JSON route keeps the 100 KB default), so a bounded read result
   and its envelope always fit. Tree reads are scoped (`subPath`) and capped
   (`maxEntries`) on the target before they cross the queue.
+
+**Web project Git and Files.** The browser uses `GET` and `POST
+/api/projects/:id/resource-reads` (ADR 0111). The catalog lists active logical
+resources and caller-accessible local checkout bindings with labels and runner
+availability. It carries no registered directory paths. Where several targets
+offer a resource, the browser requires explicit selection. The source ID,
+revision, resource key and target ID bind each request to one checkout.
+
+- Both routes require `project:read` in the owning workspace. The read requires
+  active access to that target. It returns 404 for a missing, foreign, revoked or
+  changed source and checks project permission and the source again before
+  disclosure. Runner liveness comes from recent healthy or degraded native
+  registrations. A runner advertising `projectResourceReads` serves only its
+  own target's requests. Adopted and legacy runners skip them. A paired Latch
+  connection grants no authority on this surface.
+- Reads use the mission-less private capability queue and a 30-second deadline.
+  They share the four-read route limit with other repository reads for the
+  caller. Only a device-matched native runner authenticated as the target owner
+  can claim and complete them. A claim checks the requester's active membership, project read role
+  and target access and resolves the same source and revision. The runner
+  receives the directory from the claim. The browser can abandon a queued
+  read. A late completion for a cleared read cannot restore its contents.
+- Git shows bounded worktree-root status and one tracked file diff at a time.
+  Status caps each change group at 50 entries. Files accepts ordinary
+  directories and regular files, including in non-Git resources. It omits
+  symlinks and sensitive paths and checks physical containment before and after
+  each file or directory read. A directory page has at most 100 entries and a
+  continuation offset within a 10,000-entry scan limit. Concurrent directory
+  changes can affect pages. Text previews use the existing 64 KiB and 8 MiB
+  preview and file-size bounds. The response distinguishes binary, oversized,
+  offline, unsupported, missing, denied and truncated reads.
+- Responses use `private, no-store`. The browser discards results when the
+  account, project, source or availability changes and revalidates the catalog
+  while the view is open. Agent repository reads keep their existing route,
+  capabilities, bounds and authorization.
 
 **Gemini research runtime and tool gateway (coo:1108.vx29).**
 

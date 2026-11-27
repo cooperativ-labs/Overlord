@@ -1,3 +1,4 @@
+import { PROJECT_RESOURCE_READ_CAPABILITY } from '@overlord/contract';
 import { randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { hostname } from 'node:os';
@@ -15,6 +16,7 @@ export type RunnerRegistrationPayload = {
   runnerRelation?: 'native' | 'adopted';
   runnerLabel: string;
   runnerVersion: string;
+  capabilities: Record<string, boolean>;
 };
 
 function envValue(name: string): string | null {
@@ -96,6 +98,7 @@ export function runnerRegistrationPayload(
     // this machine's own and derives native/adopted from that.
     ...(relationEnv ? { runnerRelation: relationEnv } : {}),
     runnerLabel: envValue('OVERLORD_DEVICE_LABEL') ?? hostname(),
-    runnerVersion: getCliVersion()
+    runnerVersion: getCliVersion(),
+    capabilities: { [PROJECT_RESOURCE_READ_CAPABILITY]: true }
   };
 }

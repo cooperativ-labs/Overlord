@@ -8,6 +8,7 @@ import {
 } from '@/components/projects/ProjectColorSetter';
 import { ProjectExecutionTargetSelector } from '@/components/projects/ProjectExecutionTargetSelector';
 import { ProjectOpenInIdeButton } from '@/components/projects/ProjectOpenInIdeButton';
+import { ProjectResourceBrowser } from '@/components/projects/ProjectResourceBrowser';
 import { useProjectSettings } from '@/components/projects/ProjectSettingsContext';
 import { Button } from '@/components/ui/button';
 import {
@@ -175,6 +176,7 @@ export function ProjectSettingsSection({
             </div>
           </div>
         </div>
+        <ProjectResourceBrowser projectId={projectId} />
       </div>
 
       {nameError ? <p className="text-xs text-destructive">{nameError}</p> : null}

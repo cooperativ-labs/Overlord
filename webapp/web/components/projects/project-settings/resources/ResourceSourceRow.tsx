@@ -54,6 +54,7 @@ export function ResourceSourceRow({
   const updateLatchHost = useUpdateProjectResourceLatchHost(projectId);
   const link = source.latchHostLink;
   const [hostKey, setHostKey] = useState('');
+  const [sharedRootId, setSharedRootId] = useState('');
   const [linkError, setLinkError] = useState<string | null>(null);
 
   const value = sourceDescriptorValue(source);
@@ -91,16 +92,21 @@ export function ResourceSourceRow({
     }
   }
 
-  async function handleLatchHostUpdate(key: string | null) {
+  async function handleLatchHostUpdate(key: string | null, rootId?: string | null) {
     if (!link) return;
     setLinkError(null);
     try {
       await updateLatchHost.mutateAsync({
         resourceId: resource.id,
         sourceId: source.id,
-        body: { sourceRevision: link.sourceRevision, hostPublicKey: key }
+        body: {
+          sourceRevision: link.sourceRevision,
+          hostPublicKey: key,
+          ...(rootId === undefined ? {} : { sharedRootId: rootId })
+        }
       });
       setHostKey('');
+      setSharedRootId('');
     } catch (err) {
       setLinkError(err instanceof Error ? err.message : 'Failed to update the Latch host link.');
     }
@@ -263,6 +269,68 @@ export function ResourceSourceRow({
               >
                 Unlink Latch host
               </Button>
+            )}
+            {(link.hostPublicKey || link.canUnlinkSharedRoot) && (
+              <div className="grid gap-1.5">
+                <h5 className="text-xs font-medium">Project Files</h5>
+                <p className="text-xs text-muted-foreground">
+                  {link.sharedRootId
+                    ? 'A shared root is linked. Latch checks the current device grant on each read.'
+                    : link.canUnlinkSharedRoot
+                      ? 'The linked root is unavailable while the host match is ambiguous.'
+                      : 'No shared root is linked.'}
+                </p>
+                {link.canVerify && link.hostPublicKey && (
+                  <>
+                    <Label htmlFor={`latch-root-${source.id}`} className="text-xs">
+                      Shared root ID
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                      On the Latch host, run{' '}
+                      <code>latch remote-access share-root DEVICE_ID /path/to/source</code> for a
+                      paired Control device and enter the resulting root ID.
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        id={`latch-root-${source.id}`}
+                        value={sharedRootId}
+                        onChange={event => setSharedRootId(event.target.value)}
+                        className="h-8 min-w-0 flex-1 font-mono text-xs"
+                        autoComplete="off"
+                        spellCheck={false}
+                        maxLength={64}
+                      />
+                      <Button
+                        type="button"
+                        size="sm"
+                        disabled={
+                          !/^[0-9a-f]{64}$/.test(sharedRootId.trim()) || updateLatchHost.isPending
+                        }
+                        onClick={() =>
+                          void handleLatchHostUpdate(
+                            link.hostPublicKey ?? null,
+                            sharedRootId.trim()
+                          )
+                        }
+                      >
+                        {link.sharedRootId ? 'Relink shared root' : 'Link shared root'}
+                      </Button>
+                    </div>
+                  </>
+                )}
+                {link.canUnlinkSharedRoot && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="justify-self-start"
+                    disabled={updateLatchHost.isPending}
+                    onClick={() => void handleLatchHostUpdate(null, null)}
+                  >
+                    Unlink shared root
+                  </Button>
+                )}
+              </div>
             )}
             {linkError && (
               <p role="alert" className="text-xs text-destructive">

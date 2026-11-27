@@ -12,6 +12,20 @@ import {
   knowledgebaseEditsEverywhere,
   knowledgebaseWriteTargets
 } from '@/lib/chat/knowledgebase-writes.ts';
+import {
+  cancelEditing,
+  claimNext,
+  drainDecision,
+  enqueue,
+  finishSend,
+  pauseForStoppedRun,
+  removeQueued,
+  resume,
+  saveEdit,
+  startEditing,
+  updateQueue,
+  useChatMessageQueue
+} from '@/lib/chat/message-queue.ts';
 import { beginChatPaint, bindChatPaint, observeChatTextPaint } from '@/lib/chat/performance.ts';
 import { clearRequestId, stableRequestId } from '@/lib/chat/request-ids.ts';
 import {
@@ -24,7 +38,7 @@ import { useChatPresence, useChatProviders, useChatThreadStream } from '@/lib/ch
 import { cn } from '@/lib/utils.ts';
 
 import { type ChatBlockContext, ChatMessageBlocks } from './ChatBlocks.tsx';
-import { ChatComposer } from './ChatComposer.tsx';
+import { ChatComposer, type ComposerQueue } from './ChatComposer.tsx';
 import { ChatDiagnostics } from './ChatDiagnostics.tsx';
 import { ChatQuestionCard } from './ChatQuestionCard.tsx';
 
@@ -112,10 +126,11 @@ function ThreadBody({
     if (element && stickToBottom.current) element.scrollTop = element.scrollHeight;
   }, [state.messages, state.activeRun, state.tools]);
 
-  const submit = async (
+  /** `busy` means the server already has a run in progress; the stream is resyncing. */
+  const send = async (
     text: string,
     knowledgebaseWrite: ChatKnowledgebaseWriteDto | null
-  ): Promise<boolean> => {
+  ): Promise<'accepted' | 'busy' | 'failed'> => {
     // Reuse the id while retrying the same text and grant; a changed draft is a new request.
     const grant = grantKey(knowledgebaseWrite);
     const pending =
@@ -135,13 +150,73 @@ function ThreadBody({
       pendingSubmission.current = null;
       bindChatPaint(threadId, result.run.id);
       stream.merge({ message: result.message, run: result.run });
-      return true;
+      return 'accepted';
     } catch (cause) {
       if (!isRetryableChatError(cause)) pendingSubmission.current = null;
-      if (chatErrorCode(cause) === 'run_in_progress') stream.resync();
       setComposerError(chatErrorMessage(cause));
-      return false;
+      if (chatErrorCode(cause) === 'run_in_progress') {
+        stream.resync();
+        return 'busy';
+      }
+      return 'failed';
     }
+  };
+
+  // Messages typed while the assistant is busy wait in a per-thread queue and are
+  // sent one at a time once the thread is idle again (see message-queue.ts).
+  const queueKey = `${scope}|${threadId}`;
+  const queueState = useChatMessageQueue(queueKey);
+  const [composerSending, setComposerSending] = useState(false);
+  const submitFromComposer = async (
+    text: string,
+    knowledgebaseWrite: ChatKnowledgebaseWriteDto | null
+  ): Promise<boolean> => {
+    setComposerSending(true);
+    try {
+      return (await send(text, knowledgebaseWrite)) === 'accepted';
+    } finally {
+      setComposerSending(false);
+    }
+  };
+  const sendRef = useRef(send);
+  sendRef.current = send;
+  const decision = drainDecision(queueState, {
+    mode,
+    composerSending,
+    latestRun: state.latestRun
+  });
+  const sendId = decision.kind === 'send' ? decision.item.id : null;
+  const pauseRunId = decision.kind === 'pause' ? decision.runId : null;
+  useEffect(() => {
+    if (pauseRunId) {
+      updateQueue(queueKey, queue => pauseForStoppedRun(queue, pauseRunId));
+      return;
+    }
+    if (!sendId) return;
+    // Claiming is atomic in the store, so a repeated effect (StrictMode, re-render)
+    // cannot send the same queued message twice.
+    const item = claimNext(queueKey, sendId);
+    if (!item) return;
+    void sendRef.current(item.text, item.knowledgebaseWrite).then(
+      outcome => {
+        // A run the client had not seen yet: keep the message queued for after it.
+        if (outcome === 'busy') setComposerError(null);
+        updateQueue(queueKey, queue => finishSend(queue, item.id, outcome));
+      },
+      () => updateQueue(queueKey, queue => finishSend(queue, item.id, 'failed'))
+    );
+  }, [queueKey, sendId, pauseRunId]);
+  const composerQueue: ComposerQueue = {
+    state: queueState,
+    onQueue: (text, knowledgebaseWrite) =>
+      updateQueue(queueKey, queue =>
+        enqueue(queue, { id: globalThis.crypto.randomUUID(), text, knowledgebaseWrite })
+      ),
+    onEdit: id => updateQueue(queueKey, queue => startEditing(queue, id)),
+    onCancelEdit: () => updateQueue(queueKey, cancelEditing),
+    onSave: (id, text) => updateQueue(queueKey, queue => saveEdit(queue, id, text)),
+    onRemove: id => updateQueue(queueKey, queue => removeQueued(queue, id)),
+    onResume: () => updateQueue(queueKey, resume)
   };
 
   return (
@@ -198,7 +273,8 @@ function ThreadBody({
         <ChatComposer
           mode={mode}
           error={composerError}
-          onSubmit={submit}
+          onSubmit={submitFromComposer}
+          queue={composerQueue}
           writeTargets={writeTargets}
           editsEverywhere={editsEverywhere}
           autoFocus

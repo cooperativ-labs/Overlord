@@ -5,6 +5,20 @@ is the current version and must equal [VERSION](VERSION); `yarn version:contract
 writes its skeleton. Dates use ISO 8601 and describe the contract change, not
 merely the files edited.
 
+## [182.9.0] - 2026-11-27
+
+Contract impact: minor. The project web header opens read-only Git and Files
+for exact resource sources on registered native runners. Adds a source
+catalog, a bounded resource read operation and a native runner capability.
+The existing agent repository-read route keeps its wire contract. See ADR 0111.
+
+## [182.8.0] - 2026-11-27
+
+Contract impact: minor. Project settings can link, replace or remove an explicit
+Latch shared root on a registered source. Linking checks the owner’s native
+runner, exact directory and current Control grant. Older clients can continue
+to manage host links. See ADR 0110.
+
 ## [182.7.0] - 2026-11-27
 
 Contract impact: minor. Resumed `GET /realtime` streams can opt in to a

@@ -4,6 +4,10 @@
 // capability has a sensible default success; tests override individual
 // capabilities through `handlers` and assert against the recorded `calls`.
 
+import {
+  type ProjectResourceReadInput,
+  type ProjectResourceReadValue
+} from './project-resource-read.ts';
 import { fail, ok } from './result.ts';
 import type {
   BranchListResult,
@@ -69,6 +73,16 @@ const DEFAULT_TARGET: TargetMetadata = {
 };
 
 export class FakeLocalTargetProvider implements LocalTargetCapabilities {
+  async readProjectResource(
+    input: ProjectResourceReadInput
+  ): Promise<CapabilityResult<ProjectResourceReadValue>> {
+    this.#record('readProjectResource', [input]);
+    return (
+      this.#handlers.readProjectResource?.(input) ??
+      fail(this.target, 'CAPABILITY_NOT_IMPLEMENTED', 'No project resource read fixture.')
+    );
+  }
+
   readonly target: TargetMetadata;
   readonly #handlers: FakeHandlers;
   /** Every capability call, in order, for assertions. */
@@ -261,10 +275,12 @@ export class FakeLocalTargetProvider implements LocalTargetCapabilities {
     });
   }
 
-  async readLatchHostIdentity(): Promise<CapabilityResult<{ hostKeyDigest: string }>> {
-    this.#record('readLatchHostIdentity', [{}]);
+  async readLatchHostIdentity(
+    input: Parameters<LocalTargetCapabilities['readLatchHostIdentity']>[0] = {}
+  ): ReturnType<LocalTargetCapabilities['readLatchHostIdentity']> {
+    this.#record('readLatchHostIdentity', [input]);
     return (
-      this.#handlers.readLatchHostIdentity?.({}) ??
+      this.#handlers.readLatchHostIdentity?.(input) ??
       fail(this.target, 'TARGET_OPERATION_FAILED', 'No simulated Latch host identity.')
     );
   }
