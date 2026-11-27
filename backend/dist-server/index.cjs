@@ -134125,7 +134125,7 @@ function stripUnsafeChars(value2) {
   return out;
 }
 function normalizeBriefFragment(value2) {
-  return stripUnsafeChars(value2).split(/\r?\n/).filter((line2) => !/^\s*#{1,6}\s/.test(line2)).map((line2) => line2.trim().replace(/^>\s*/, "").replace(/^(?:[-*•+]|\d{1,2}[.)])\s+/, "")).filter(Boolean).join(" ").replace(/<\/?[A-Za-z][^<>]*>/g, "").replace(/\*\*([^*]+)\*\*/g, "$1").replace(/__([^_]+)__/g, "$1").replace(/\s+/g, " ").trim();
+  return stripUnsafeChars(value2).split(/\r?\n/).filter((line2) => !/^\s*#{1,6}\s/.test(line2)).map((line2) => line2.trim().replace(/^>\s*/, "").replace(/^(?:[-*•+]|\d{1,2}[.)])\s+/, "")).filter(Boolean).join(" ").replace(/<\/?[A-Za-z][^<>]*>/g, "").replace(/\*\*([^*]+)\*\*/g, "$1").replace(/(\s)__([^_\n]+)__(\s)/g, "$1$2$3").replace(/\s+/g, " ").trim();
 }
 function endSentence(value2) {
   if (!value2)
@@ -202459,7 +202459,7 @@ function bounded(value2, max) {
 }
 function presentationText(value2, max) {
   return bounded(
-    value2.replace(/\[([^\]]+)\]\([^)]+\)/g, "$1").replace(/[*_`]/g, "").replace(/^[#>\-+*]\s+/gm, "").replace(/\s+/g, " ").trim(),
+    value2.replace(/\[([^\]]+)\]\([^)]+\)/g, "$1").replace(/(\s)_([^_\n]+)_(\s)/g, "$1$2$3").replace(/[*`]/g, "").replace(/^[#>\-+*]\s+/gm, "").replace(/\s+/g, " ").trim(),
     max
   );
 }
@@ -202503,6 +202503,16 @@ var PREFERENCE_CATALOG = { ...NOTIFICATION_CATALOG, ...CHAT_NOTIFICATION_CATALOG
 var CATEGORY_VERBS = Object.fromEntries(
   PUSH_NOTIFICATION_CATEGORIES.map((category) => [category, NOTIFICATION_CATALOG[category].verb])
 );
+var CATEGORY_ICONS = {
+  agent_question: "\u26A0\uFE0F",
+  mission_failed: "\u{1F6D1}",
+  mission_awaiting_review: "\u2705",
+  mission_complete: "\u{1F3C1}"
+};
+function pushBody(category, body) {
+  const icon = CATEGORY_ICONS[category];
+  return icon ? `${icon} ${body}` : body;
+}
 async function registerDevicePushToken(body) {
   const deviceToken = requiredString(body.deviceToken, "deviceToken", DEVICE_TOKEN_MAX_LENGTH);
   const bundleId = requiredString(body.bundleId, "bundleId", BUNDLE_ID_MAX_LENGTH);
@@ -202719,7 +202729,7 @@ async function buildPushNotificationPresentation({
   });
   return {
     title: bounded(mission.project_name.trim() || "Project", PROJECT_NAME_MAX_LENGTH),
-    body: notificationBody(subject, CATEGORY_VERBS[category]),
+    body: pushBody(category, notificationBody(subject, CATEGORY_VERBS[category])),
     badge,
     missionId: mission.id,
     objectiveId: objective?.id ?? null,
