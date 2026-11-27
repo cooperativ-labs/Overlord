@@ -17,9 +17,11 @@ import {
   type RunnerRegistrationInput
 } from './execution-target-runners.js';
 import type { ClientDeviceIdentity } from './execution-targets.js';
+import { READ_LATCH_HOST_IDENTITY } from './latch-host-identity.ts';
 import { type ExecutionProviderSession, mergeProviderSessionIntoMetadata } from './latch-launch.js';
 import {
   LOCAL_TARGET_MUTATION_REQUESTED_SOURCE,
+  localTargetMutationCapabilitySql,
   parseLocalTargetMutation,
   recordAnswerDeliveryForTerminalRequest
 } from './local-target-mutations.ts';
@@ -764,6 +766,24 @@ export async function claimNextExecutionRequest({
     target.executionTargetId,
     new Date(Date.now() - TERMINAL_PROBE_TIMEOUT_MS).toISOString()
   ];
+  const capability = localTargetMutationCapabilitySql(ctx.db.dialect);
+  const requester = ctx.actorWorkspaceUserId;
+  const isOwnNativeRunner =
+    requester !== null && registration?.relation === 'native' && target.matchesActingDevice;
+  if (isOwnNativeRunner) {
+    conditions.push(`(COALESCE(${capability}, '') <> ? OR
+      (er.requested_by_workspace_user_id = ? AND EXISTS (
+        SELECT 1 FROM execution_targets owner_target
+         WHERE owner_target.id = er.execution_target_id
+           AND owner_target.workspace_id = er.workspace_id
+           AND owner_target.owner_workspace_user_id = er.requested_by_workspace_user_id
+           AND owner_target.status = 'active' AND owner_target.deleted_at IS NULL
+      )))`);
+    params.push(READ_LATCH_HOST_IDENTITY, requester);
+  } else {
+    conditions.push(`COALESCE(${capability}, '') <> ?`);
+    params.push(READ_LATCH_HOST_IDENTITY);
+  }
   if (projectId) {
     conditions.push('er.project_id = ?');
     params.push(await resolveProjectId(ctx, projectId));

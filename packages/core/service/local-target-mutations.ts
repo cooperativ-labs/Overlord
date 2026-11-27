@@ -28,11 +28,19 @@ import { recordChange } from './change-feed.ts';
 import type { ServiceContext } from './context.ts';
 import { resolveMissionId, resolveProjectId } from './context.ts';
 import { ServiceError } from './errors.ts';
+import { findActingDeviceExecutionTargetId } from './execution-targets.ts';
+import { isLatchHostPublicKey, READ_LATCH_HOST_IDENTITY } from './latch-host-identity.ts';
 import { forgetAbsentLatchProviderSessions } from './latch-provider-session.ts';
 import { parseMetadataJson } from './records.ts';
 import { newId, nowIso } from './util.ts';
 
 export const LOCAL_TARGET_MUTATION_METADATA_KEY = 'overlord.localTargetMutation';
+export function localTargetMutationCapabilitySql(dialect: string): string {
+  return dialect === 'postgres'
+    ? `er.metadata_json->'${LOCAL_TARGET_MUTATION_METADATA_KEY}'->>'capability'`
+    : `json_extract(er.metadata_json, '$."${LOCAL_TARGET_MUTATION_METADATA_KEY}".capability')`;
+}
+
 export const LOCAL_TARGET_MUTATION_REQUESTED_SOURCE = 'local_target_mutation';
 
 /**
@@ -433,7 +441,8 @@ export async function completeLocalTargetMutationRequest({
 }): Promise<LocalTargetMutationPayload | null> {
   const row = (await ctx.db.get(
     `SELECT id, workspace_id, project_id, mission_id, objective_id, status, revision, metadata_json,
-            background_probe_key,
+            background_probe_key, requested_by_workspace_user_id,
+            claimed_by_runner_registration_id, claimed_by_execution_target_id,
             requested_source, COALESCE(claimed_by_execution_target_id, execution_target_id) AS target_id
        FROM execution_requests
       WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
@@ -449,6 +458,9 @@ export async function completeLocalTargetMutationRequest({
         revision: number;
         metadata_json: string;
         background_probe_key: string | null;
+        requested_by_workspace_user_id: string | null;
+        claimed_by_runner_registration_id: string | null;
+        claimed_by_execution_target_id: string | null;
         requested_source: string;
         target_id: string | null;
       }
@@ -481,6 +493,60 @@ export async function completeLocalTargetMutationRequest({
       'invalid_local_target_mutation',
       409
     );
+  }
+
+  if (mutation.capability === READ_LATCH_HOST_IDENTITY) {
+    const targetId = row.claimed_by_execution_target_id;
+    const registered =
+      targetId &&
+      row.claimed_by_runner_registration_id &&
+      (await ctx.db.get(
+        `SELECT registration.id
+         FROM execution_target_runner_registrations registration
+         JOIN execution_targets target
+           ON target.id = registration.execution_target_id AND target.workspace_id = registration.workspace_id
+         JOIN workspace_user_execution_targets access
+           ON access.execution_target_id = target.id AND access.workspace_id = target.workspace_id
+          AND access.workspace_user_id = target.owner_workspace_user_id
+          AND access.access_status = 'active' AND access.deleted_at IS NULL
+        WHERE registration.id = ? AND registration.workspace_id = ? AND registration.execution_target_id = ?
+          AND registration.relation = 'native' AND registration.deleted_at IS NULL
+          AND target.status = 'active' AND target.type = 'local' AND target.deleted_at IS NULL
+          AND target.owner_workspace_user_id = ?`,
+        [
+          row.claimed_by_runner_registration_id,
+          ctx.workspace.id,
+          targetId,
+          ctx.actorWorkspaceUserId
+        ]
+      ));
+    if (
+      !ctx.actorWorkspaceUserId ||
+      ctx.actorWorkspaceUserId !== row.requested_by_workspace_user_id ||
+      !registered ||
+      (await findActingDeviceExecutionTargetId({ ctx })) !== targetId
+    ) {
+      throw new ServiceError(
+        'Latch host identity must come from the target owner’s native runner.',
+        'latch_host_unverified',
+        403
+      );
+    }
+    // Persist only a validated public-key digest or a fixed failure. Never retain the raw status.
+    const key = result.ok
+      ? (result.value as { hostKeyDigest?: unknown } | null)?.hostKeyDigest
+      : null;
+    result = isLatchHostPublicKey(key)
+      ? {
+          ok: true,
+          value: { hostKeyDigest: key },
+          target: { executionTargetId: targetId, deviceLabel: null, transport: 'runner_queue' }
+        }
+      : fail(
+          { executionTargetId: targetId, deviceLabel: null, transport: 'runner_queue' },
+          'TARGET_OPERATION_FAILED',
+          'Latch Remote Link identity is unavailable.'
+        );
   }
 
   const storedResult: LocalTargetMutationStoredResult = result.ok

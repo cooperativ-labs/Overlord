@@ -28,23 +28,22 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<LinkState>('connecting');
   const [lastSeq, setLastSeq] = useState(0);
   const [lastChanges, setLastChanges] = useState<EntityChangeDto[]>([]);
-  const cursorRef = useRef(0);
+  const cursorRef = useRef<number | undefined>(undefined);
 
   useEffect(() => {
     let recovering = false;
     let recoveryPending = false;
     let changedDuringRecovery = false;
     let stopped = false;
+    let streamReady = false;
+    let streamAttempt = 0;
+    let requestedCursor: number | undefined;
     let retryTimer: ReturnType<typeof setTimeout> | undefined;
     const invalidateAll = () => invalidateNonEverhourQueries(queryClient);
     const updateCursor = (cursor: number) => {
-      if (!Number.isFinite(cursor) || cursor <= cursorRef.current) return;
+      if (!Number.isSafeInteger(cursor) || cursor <= (cursorRef.current ?? -1)) return;
       cursorRef.current = cursor;
       setLastSeq(cursor);
-    };
-    const onHello = (cursor: number) => {
-      if (recoveryPending) return;
-      if (cursorRef.current === 0) updateCursor(cursor);
     };
     const applyChangePayload = (payload: { cursor?: number; changes?: unknown[] }) => {
       const changes = Array.isArray(payload.changes) ? (payload.changes as EntityChangeDto[]) : [];
@@ -58,11 +57,10 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
       setLastChanges(changes);
       invalidateRealtimeChanges(queryClient, payload.changes);
     };
-    const catchUp = async (start = cursorRef.current) => {
+    const catchUp = async (start: number, current = () => !stopped) => {
       let cursor = start;
-      if (cursor <= 0) return;
 
-      while (true) {
+      while (current()) {
         const response = await fetchApi(`/sync/changes?after=${cursor}`);
         if (response.status === 409) {
           const body = await response.json();
@@ -76,8 +74,9 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
         }
         if (!response.ok) throw new Error('Realtime catch-up failed');
         const payload = (await response.json()) as Partial<SyncChangesDto>;
+        if (!current()) return;
         applyChangePayload(payload);
-        cursor = typeof payload.cursor === 'number' ? payload.cursor : cursorRef.current;
+        cursor = payload.cursor ?? cursor;
         if (!payload.hasMore) return;
       }
     };
@@ -128,11 +127,11 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
               // live; failed refreshes retry from the previous safe cursor.
               await queryClient.refetchQueries({ type: 'active', stale: true });
               verifyRefreshedQueries();
-              cursor = cursorRef.current;
+              cursor = cursorRef.current ?? cursor;
             } while (changedDuringRecovery && !stopped);
             if (!stopped) {
               recoveryPending = false;
-              setState('live');
+              if (streamReady) setState('live');
             }
             return;
           } catch (error) {
@@ -149,20 +148,32 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
         recovering = false;
       }
     };
-    const onOpen = () => {
-      if (recoveryPending) return;
-      const hadCursor = cursorRef.current > 0;
-      if (!hadCursor) {
-        setState('live');
+    const markStreamReady = () => {
+      streamReady = true;
+      if (!recoveryPending) setState('live');
+    };
+    const onHello = (cursor: number, replayComplete: boolean) => {
+      if (replayComplete || requestedCursor === undefined) {
+        if (!recoveryPending) updateCursor(cursor);
+        else if (cursor > (cursorRef.current ?? -1)) changedDuringRecovery = true;
+        markStreamReady();
         return;
       }
-      void catchUp()
+      // An older backend sends its greeting before replay and ignores the opt-in.
+      if (recoveryPending) {
+        markStreamReady();
+        return;
+      }
+      const attempt = streamAttempt;
+      const current = () => !stopped && streamAttempt === attempt;
+      void catchUp(requestedCursor, () => current() && !recoveryPending)
         .catch(error => {
+          if (!current() || recoveryPending) return;
           if (error instanceof SnapshotRequired) void recover(error.cursor);
           else invalidateAll();
         })
         .finally(() => {
-          if (!recoveryPending) setState('live');
+          if (current()) markStreamReady();
         });
     };
 
@@ -171,20 +182,23 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
     // `credentials: 'include'` (cookie auth) when no header is present, so the
     // local same-origin case no longer needs a separate native EventSource branch.
     const disconnect = connectEventStream({
-      url: () =>
-        resolveEventSourceUrl(
-          cursorRef.current > 0 ? `/realtime?after=${cursorRef.current}` : '/realtime'
-        ),
+      url: () => {
+        streamAttempt++;
+        requestedCursor = cursorRef.current;
+        return resolveEventSourceUrl(
+          requestedCursor === undefined
+            ? '/realtime'
+            : `/realtime?after=${requestedCursor}&replayComplete=1`
+        );
+      },
       headers: getAuthorizationHeader(),
       handlers: {
-        onOpen,
         onHello,
         onChange: payload => {
           if (recoveryPending) {
             changedDuringRecovery = true;
             return;
           }
-          setState('live');
           applyChangePayload(payload);
         },
         onRefresh: () => {
@@ -192,10 +206,13 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
             changedDuringRecovery = true;
             return;
           }
-          setState('live');
           invalidateAll();
         },
-        onError: () => setState('reconnecting'),
+        onError: () => {
+          streamAttempt++;
+          streamReady = false;
+          setState('reconnecting');
+        },
         onSnapshotRequired: cursor => void recover(cursor)
       }
     });

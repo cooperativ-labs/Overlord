@@ -5,6 +5,20 @@ is the current version and must equal [VERSION](VERSION); `yarn version:contract
 writes its skeleton. Dates use ISO 8601 and describe the contract change, not
 merely the files edited.
 
+## [182.7.0] - 2026-11-27
+
+Contract impact: minor. Resumed `GET /realtime` streams can opt in to a
+completion greeting carrying the safe cursor after replay and queued changes.
+Web and Desktop use the greeting to finish normal reconnects over SSE.
+
+## [182.6.0] - 2026-11-27
+
+Contract impact: minor. Project settings can verify, relink and revoke a
+registered local checkout source's account-scoped Latch host link. Project
+resource reads expose an optional revision-bound, non-cacheable projection.
+The owner’s native runner supplies a digest of Latch’s public pairing key.
+See ADR 0109.
+
 ## [182.5.1] - 2026-11-26
 
 Contract impact: patch. Legacy auto-advance responses use live Run Queue

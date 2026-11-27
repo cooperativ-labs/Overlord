@@ -2295,6 +2295,7 @@ have target-specific descriptors.
 | `execution_target_id`     | Id           | no       | FK to `execution_targets` when the descriptor is target-specific; null is a project-global descriptor.                                                                                                                                                                                                                                                                      |
 | `source_kind`             | text         | yes      | Open vocabulary: `git`, `local_checkout`, `source_bundle`, or namespaced kinds.                                                                                                                                                                                                                                                                                             |
 | `descriptor_json`         | Json         | yes      | Canonical source descriptor (e.g. git URL + credential-reference ID; opaque `targetRelativeRef`) plus optional `launchDefaults`, an object keyed by agent identifier whose values contain `preCommand` and normalized `flags`. No raw secrets; local-checkout paths remain local-target descriptors and virtual descriptors never contain server-readable filesystem paths. |
+| `latch_host_binding_json` | text (JSON) | no | Account-scoped Latch association per ADR 0109. Stores a public host key, workspace member ID and source revision. |
 | `observed_revision`       | text         | no       | Gateway-observed commit/revision.                                                                                                                                                                                                                                                                                                                                           |
 | `observed_content_digest` | text         | no       | Gateway-observed content digest.                                                                                                                                                                                                                                                                                                                                            |
 | `created_at`              | TimestampUTC | yes      |                                                                                                                                                                                                                                                                                                                                                                             |
@@ -2306,6 +2307,13 @@ Indexes:
 
 - Unique active `(resource_id, execution_target_id, source_kind)` when target-scoped, and unique active `(resource_id, source_kind)` when global.
 - `(project_id, source_kind)`.
+
+Only the resource Latch host mutation writes the association. It compares
+the source revision and stores the new revision alongside the public key.
+A subsequent revision, source or resource tombstone, or unavailable target
+grant invalidates its projection. Raw Latch status, pairing credentials and
+scoped worktree references stay outside persistence. The transient runner
+request records only a bounded public-key digest or a fixed failure result.
 
 ### `execution_request_snapshots`
 

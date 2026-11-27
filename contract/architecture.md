@@ -533,6 +533,17 @@ Owns:
   backend, otherwise a non-browser, non-backend-host `x-overlord-device-*` hint. A caller with no
   such identity is refused with 409 `no_execution_target_registered` and an actionable message;
   it is never given an inferred target.
+- **Project-resource Latch host link** (ADR 0109): the project resource list includes
+  an optional account-scoped projection for eligible local checkout sources
+  owned by the caller. A project editor who owns the target can verify or relink
+  a source by supplying the expected public pairing key and current source
+  revision. One live native runner on that target must return a matching digest
+  from Latch Remote Link status. Claim and completion require the target owner
+  and the acting registered local target. Revocation uses the same revision
+  check and target ownership. An exact retry replays the acknowledgement for
+  24 hours using an owner- and source-revision-scoped receipt. Source changes, deletion, lost target access and
+  ambiguous source/host matches make the binding unavailable. Return the list
+  with private, no-store cache policy.
 - **Project-resource source declaration**: writing a `local_checkout` source with an explicit
   `executionTargetId` updates that already-declared target's source and creates nothing (this is
   how an ordinary browser edits a source); writing a `sourceUrl` Git source creates nothing
@@ -1128,6 +1139,16 @@ Specified in [protocol.md](protocol.md).
 - **Consumer**: Mobile may adopt this additive surface; current consumers of
   project mission lists are unchanged. The project-automation route allowlist
   remains closed to this new route.
+
+### Project sources and Latch host identity
+
+The Overlord association identifies a project source on an authenticated Latch
+host (ADR 0109). A future Mobile Git consumer must check the current project
+resource list and require one binding for its selected host's authenticated
+pairing public key. Latch owns its grant and the exact-root Git open. The scoped
+worktree reference remains in the client and is invalidated when the Overlord
+account, project, source revision, authenticated host or Latch grant changes.
+The binding contains a public key and conveys no pairing or Git authority.
 
 ### Mobile → Latch (Objective Conversation Surface)
 

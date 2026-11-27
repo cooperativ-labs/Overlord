@@ -916,10 +916,11 @@ describe('realtime', () => {
     await stream.close();
 
     const resumed = new SseReader();
-    await resumed.open(automationSecret, '/realtime', { 'Last-Event-ID': '0' });
-    await resumed.waitFor(() =>
-      resumed.changes().some(change => change.missionId === visibleMission.id)
-    );
+    await resumed.open(automationSecret, '/realtime?replayComplete=1', { 'Last-Event-ID': '0' });
+    await resumed.waitFor(() => resumed.events.some(entry => entry.event === 'hello'));
+    assert.equal(resumed.events.at(-1)?.event, 'hello');
+    assert.equal(resumed.events.at(-1)?.data.replayComplete, true);
+    assert.ok(resumed.changes().some(change => change.missionId === visibleMission.id));
     assert.ok(
       !JSON.stringify(resumed.events).includes(hiddenMission.id),
       'reconnect catch-up hides Q'

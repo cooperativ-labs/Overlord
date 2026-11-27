@@ -17,6 +17,7 @@ import {
   defaultLatchDiscoveryCachePath,
   discoverLatchForExecutionTarget
 } from '../latch-discovery.ts';
+import { readLatchHostIdentity } from '../latch-host-identity.ts';
 import {
   inspectLatchSession,
   LatchSessionAbsentError,
@@ -375,6 +376,16 @@ export class InProcessProvider implements LocalTargetCapabilities {
         error instanceof Error ? error.message : 'Latch discovery failed on this device.'
       );
     }
+  }
+
+  async readLatchHostIdentity() {
+    const identity = await readLatchHostIdentity();
+    if (identity) return ok(this.target, identity);
+    return fail(
+      this.target,
+      'TARGET_OPERATION_FAILED',
+      'Latch Remote Link has no identity on this runner.'
+    );
   }
 
   async inspectLatchSession(input: InspectLatchSessionInput) {

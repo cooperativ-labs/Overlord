@@ -24,7 +24,9 @@ test(
         scratch,
         `feed-order-module-${randomUUID()}.sqlite`
       );
-      const { currentMaxSeq, withCommittedFeed, bindDatabaseClient } = await import('./db.ts');
+      const { withCommittedFeed, bindDatabaseClient } = await import('./db.ts');
+      const { readChangesAfter } = await import('./realtime.ts');
+      await bindDatabaseClient(db);
       let inserted!: () => void;
       let commit!: () => void;
       const ready = new Promise<void>(resolve => {
@@ -54,7 +56,7 @@ test(
         ]
       );
       let finished = false;
-      const read = currentMaxSeq(db).then(value => {
+      const read = readChangesAfter(0, ['feed-order-workspace']).then(value => {
         finished = true;
         return value;
       });
@@ -65,7 +67,12 @@ test(
         commit();
       }
       await writer;
-      const cursor = await read;
+      const { changes: replayed, cursor, hasMore } = await read;
+      assert.equal(hasMore, false);
+      assert.deepEqual(
+        replayed.map(change => change.entityId),
+        ['uncommitted', 'committed-later-sequence']
+      );
       const row = await db.get<{ seq: number }>(
         `SELECT seq FROM entity_changes WHERE entity_id = 'uncommitted'`
       );
@@ -125,7 +132,6 @@ test(
           new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
         ]
       );
-      await bindDatabaseClient(db);
       const { ChangeFeedRetentionWorker } = await import('./change-feed-retention-worker.ts');
       const worker = new ChangeFeedRetentionWorker();
       const previous = process.env.OVERLORD_CHANGE_FEED_PRUNING_ENABLED;

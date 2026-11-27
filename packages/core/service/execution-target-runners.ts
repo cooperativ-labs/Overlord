@@ -193,7 +193,12 @@ export async function resolveRunnerTarget({
   ctx: ServiceContext;
   input: RunnerRegistrationInput;
   actingTarget?: LocalExecutionTarget | null;
-}): Promise<{ executionTargetId: string; deviceId: string | null; relation: RunnerRelation }> {
+}): Promise<{
+  executionTargetId: string;
+  deviceId: string | null;
+  relation: RunnerRelation;
+  matchesActingDevice: boolean;
+}> {
   const explicitId = trimmedOrNull(input.executionTargetId);
   if (!explicitId) {
     // No explicit target: the acting machine must already be declared. This is
@@ -203,7 +208,8 @@ export async function resolveRunnerTarget({
     return {
       executionTargetId: target.executionTargetId,
       deviceId: target.deviceId,
-      relation: input.relation ?? 'native'
+      relation: input.relation ?? 'native',
+      matchesActingDevice: true
     };
   }
 
@@ -213,7 +219,8 @@ export async function resolveRunnerTarget({
   return {
     executionTargetId: row.id,
     deviceId: row.device_id,
-    relation: input.relation ?? (isOwnMachine ? 'native' : 'adopted')
+    relation: input.relation ?? (isOwnMachine ? 'native' : 'adopted'),
+    matchesActingDevice: isOwnMachine
   };
 }
 

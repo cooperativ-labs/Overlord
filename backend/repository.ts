@@ -190,6 +190,7 @@ import {
 } from '../packages/core/service/profiles.ts';
 import { resolveProjectExecutionTargetForLaunch } from '../packages/core/service/project-execution-target.ts';
 import { deriveProjectResourceKey } from '../packages/core/service/project-resource-key.ts';
+import { loadProjectResourceLatchHosts } from '../packages/core/service/project-resource-latch-host.ts';
 import { seedDefaultProjectStatuses } from '../packages/core/service/projects.ts';
 import { parseMetadataJson } from '../packages/core/service/records.ts';
 import {
@@ -2741,23 +2742,37 @@ export async function listProjectResources(projectId: string): Promise<ProjectRe
   )) as ProjectResourceRow[];
   const sources = (await db.all(
     `SELECT id, resource_id, execution_target_id, source_kind, descriptor_json,
-            observed_revision, observed_content_digest
+            observed_revision, observed_content_digest, revision
        FROM project_resource_sources
       WHERE project_id = ? AND deleted_at IS NULL`,
     [projectId]
-  )) as ProjectResourceSourceRow[];
-  const sourcesByResourceId = new Map<string, ProjectResourceSourceRow[]>();
+  )) as Array<ProjectResourceSourceRow & { revision: number }>;
+  const sourcesByResourceId = new Map<string, typeof sources>();
   for (const source of sources) {
     const bucket = sourcesByResourceId.get(source.resource_id) ?? [];
     bucket.push(source);
     sourcesByResourceId.set(source.resource_id, bucket);
   }
-  const observations = await loadTargetResourceObservations({
-    ctx: await buildWebappServiceContextForWorkspace(project.workspaceId, db, workspaceUserId),
-    resourceIds: rows.map(row => row.id)
-  });
+  const ctx = await buildWebappServiceContextForWorkspace(project.workspaceId, db, workspaceUserId);
+  const [latchHosts, observations] = await Promise.all([
+    loadProjectResourceLatchHosts({
+      db,
+      workspaceId: project.workspaceId,
+      workspaceUserId,
+      projectId
+    }),
+    loadTargetResourceObservations({ ctx, resourceIds: rows.map(row => row.id) })
+  ]);
   return await Promise.all(
-    rows.map(row => toProjectResourceDto(row, observations, sourcesByResourceId.get(row.id) ?? []))
+    rows.map(async row => {
+      const sourceRows = sourcesByResourceId.get(row.id) ?? [];
+      const resource = await toProjectResourceDto(row, observations, sourceRows);
+      for (const [index, source] of resource.sources.entries()) {
+        const link = latchHosts.get(source.id);
+        if (link?.sourceRevision === sourceRows[index]?.revision) source.latchHostLink = link;
+      }
+      return resource;
+    })
   );
 }
 

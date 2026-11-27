@@ -62,6 +62,7 @@ import {
   updateProjectExecutionTarget,
   updateWorkspaceExecutionTarget
 } from './execution/project-execution-target.ts';
+import { updateProjectResourceLatchHost } from './execution/project-resource-latch-host.ts';
 import {
   claimRunnerRequest,
   clearRunnerRequests,
@@ -1251,10 +1252,11 @@ const streamRealtime = asyncRoute(async (req, res) => {
     queryCursor(req, 'after') ?? parseSeqCursor(req.headers['last-event-id']) ?? undefined;
   realtime.addClient(res, {
     afterSeq,
+    signalReplayCompletion:
+      req.route.path === '/realtime' && queryString(req, 'replayComplete') === '1',
     workspaceIds,
     projectIds: getActiveTokenProjectIds()
   });
-  req.on('close', () => realtime.removeClient(res));
 });
 
 app.get('/api/stream', streamRealtime);
@@ -1591,7 +1593,10 @@ app.delete(
 );
 app.get(
   '/api/projects/:id/resources',
-  handle(req => listProjectResources(req.params.id))
+  handle((req, res) => {
+    res.setHeader('Cache-Control', 'private, no-store');
+    return listProjectResources(req.params.id);
+  })
 );
 app.post(
   '/api/projects/:id/resources',
@@ -1635,6 +1640,25 @@ app.patch(
         req.params.sourceId,
         req.body
       ),
+    { mutates: true }
+  )
+);
+app.put(
+  '/api/projects/:id/resources/:resourceId/sources/:sourceId/latch-host',
+  handle(
+    (req, res) => {
+      const controller = new AbortController();
+      res.on('close', () => {
+        if (!res.writableEnded) controller.abort();
+      });
+      return updateProjectResourceLatchHost({
+        projectId: req.params.id,
+        resourceId: req.params.resourceId,
+        sourceId: req.params.sourceId,
+        body: req.body,
+        signal: controller.signal
+      });
+    },
     { mutates: true }
   )
 );

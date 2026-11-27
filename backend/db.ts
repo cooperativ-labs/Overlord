@@ -923,14 +923,20 @@ export async function withCommittedFeed<T>(
   });
 }
 
+/** Read both feed bounds inside the transaction supplied by withCommittedFeed. */
+export async function readCommittedFeedBounds(
+  tx: DatabaseClient
+): Promise<{ highWaterMark: number; retainedThrough: number }> {
+  const row = await tx.get<{ seq: number | null; retained_through: number }>(
+    `SELECT (SELECT MAX(seq) FROM entity_changes) AS seq, retained_through FROM entity_change_retention WHERE id = 1`
+  );
+  if (!row) throw new Error('Change-feed retention boundary is missing');
+  const retainedThrough = Number(row.retained_through);
+  return { highWaterMark: Math.max(Number(row.seq ?? 0), retainedThrough), retainedThrough };
+}
+
 export async function currentMaxSeq(
   client: DatabaseClient = requireDatabaseClient()
 ): Promise<number> {
-  return withCommittedFeed(client, async tx => {
-    const row = await tx.get<{ seq: number | null; retained_through: number }>(
-      `SELECT (SELECT MAX(seq) FROM entity_changes) AS seq, retained_through FROM entity_change_retention WHERE id = 1`
-    );
-    if (!row) throw new Error('Change-feed retention boundary is missing');
-    return Math.max(Number(row.seq ?? 0), Number(row.retained_through));
-  });
+  return withCommittedFeed(client, async tx => (await readCommittedFeedBounds(tx)).highWaterMark);
 }

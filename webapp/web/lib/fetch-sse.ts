@@ -1,6 +1,5 @@
 type SseHandlers = {
-  onOpen?: () => void;
-  onHello?: (cursor: number) => void;
+  onHello?: (cursor: number, replayComplete: boolean) => void;
   onChange?: (payload: { cursor?: number; changes?: unknown[] }) => void;
   onRefresh?: () => void;
   onSnapshotRequired?: (cursor: number) => void;
@@ -60,7 +59,6 @@ export function connectEventStream({
           continue;
         }
 
-        handlers.onOpen?.();
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
         let eventName = 'message';
@@ -71,9 +69,12 @@ export function connectEventStream({
           dataLines = [];
           if (eventName === 'hello') {
             try {
-              handlers.onHello?.(JSON.parse(data).cursor ?? 0);
+              const { cursor, replayComplete } = JSON.parse(data);
+              if (Number.isSafeInteger(cursor) && cursor >= 0) {
+                handlers.onHello?.(cursor, replayComplete === true);
+              }
             } catch {
-              handlers.onHello?.(0);
+              handlers.onError?.();
             }
           } else if (eventName === 'change') {
             try {
@@ -116,7 +117,6 @@ export function connectEventStream({
             }
           }
         }
-        dispatch();
       } catch {
         // The AbortController owns intentional shutdown; every other failure
         // triggers a reconnect attempt after reporting the degraded state.

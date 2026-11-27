@@ -17,6 +17,7 @@ import type {
   ReorderProjectStatusesBody,
   UpdateProjectBody,
   UpdateProjectResourceBody,
+  UpdateProjectResourceLatchHostBody,
   UpdateProjectResourceSourceBody,
   UpdateProjectStatusBody,
   UpdateProjectTagBody
@@ -79,6 +80,17 @@ export const projectsApi = {
     request<ProjectResourceDto>(
       'PATCH',
       `/api/projects/${projectId}/resources/${resourceId}/sources/${sourceId}`,
+      body
+    ),
+  updateProjectResourceLatchHost: (
+    projectId: string,
+    resourceId: string,
+    sourceId: string,
+    body: UpdateProjectResourceLatchHostBody
+  ) =>
+    request<{ ok: true }>(
+      'PUT',
+      `/api/projects/${projectId}/resources/${resourceId}/sources/${sourceId}/latch-host`,
       body
     ),
   recordTargetResourceObservations: (

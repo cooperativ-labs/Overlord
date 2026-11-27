@@ -5,10 +5,10 @@
 import { z } from 'zod';
 
 /** The contract version (contract/VERSION) this API description belongs to. */
-export const contractVersion = "182.5.1";
+export const contractVersion = "182.7.0";
 
 /** The API description's own version (OpenAPI `info.version`). */
-export const apiVersion = "7.4.1";
+export const apiVersion = "7.6.0";
 
 /** A non-JSON request or response body: raw bytes (G3). */
 export type BinaryBody = Uint8Array | ArrayBuffer | Blob;
@@ -317,8 +317,21 @@ export interface ProjectResourceSourceDto {
   launchDefaults: { [key: string]: AgentLaunchConfigDto };
   observedRevision: string | null;
   observedContentDigest: string | null;
+  /**
+   * Account-scoped link metadata on the project resource list.
+   */
+  latchHostLink?: {
+    sourceRevision: number;
+    state: "unlinked" | "linked" | "ambiguous";
+    canVerify: boolean;
+    canUnlink: boolean;
+    /**
+     * Present only for an unambiguous link. Verify it against the authenticated pairing.
+     */
+    hostPublicKey?: string;
+  };
 }
-export const projectResourceSourceDtoSchema: z.ZodType<ProjectResourceSourceDto> = z.object({ "id": z.string(), "executionTargetId": z.string().nullable(), "sourceKind": z.string(), "descriptor": z.record(z.string(), z.unknown()), "launchDefaults": z.record(z.string(), agentLaunchConfigDtoSchema), "observedRevision": z.string().nullable(), "observedContentDigest": z.string().nullable() });
+export const projectResourceSourceDtoSchema: z.ZodType<ProjectResourceSourceDto> = z.object({ "id": z.string(), "executionTargetId": z.string().nullable(), "sourceKind": z.string(), "descriptor": z.record(z.string(), z.unknown()), "launchDefaults": z.record(z.string(), agentLaunchConfigDtoSchema), "observedRevision": z.string().nullable(), "observedContentDigest": z.string().nullable(), "latchHostLink": z.exactOptional(z.object({ "sourceRevision": z.int().min(1), "state": z.enum(["unlinked", "linked", "ambiguous"]), "canVerify": z.boolean(), "canUnlink": z.boolean(), "hostPublicKey": z.exactOptional(z.string().min(64).max(64)) })) });
 
 export interface ProjectResourceDto {
   id: string;
@@ -1125,6 +1138,15 @@ export interface UpdateProjectResourceBody {
   accessMode?: ProjectResourceAccessMode;
 }
 export const updateProjectResourceBodySchema: z.ZodType<UpdateProjectResourceBody> = z.object({ "resourceKey": z.exactOptional(z.string().nullable()), "isPrimary": z.exactOptional(z.boolean()), "accessMode": z.exactOptional(projectResourceAccessModeSchema) });
+
+export interface UpdateProjectResourceLatchHostBody {
+  sourceRevision: number;
+  /**
+   * Expected Latch host public key, or null to revoke.
+   */
+  hostPublicKey: string | null;
+}
+export const updateProjectResourceLatchHostBodySchema: z.ZodType<UpdateProjectResourceLatchHostBody> = z.strictObject({ "sourceRevision": z.int().min(1), "hostPublicKey": z.string().min(64).max(64).nullable() });
 
 export interface UpdateProjectResourceSourceBody {
   /**
@@ -3581,13 +3603,14 @@ export const realtimeChangeEventDtoSchema: z.ZodType<RealtimeChangeEventDto> = z
 export type RealtimeStreamEvent = {
   type: "hello";
   cursor: number;
+  replayComplete?: true;
 } | RealtimeChangeEventDto | {
   type: "refresh";
 } | {
   type: "snapshot_required";
   cursor: number;
 };
-export const realtimeStreamEventSchema: z.ZodType<RealtimeStreamEvent> = z.union([z.object({ "type": z.literal("hello"), "cursor": z.int().min(0) }), realtimeChangeEventDtoSchema, z.object({ "type": z.literal("refresh") }), z.object({ "type": z.literal("snapshot_required"), "cursor": z.int().min(0) })]);
+export const realtimeStreamEventSchema: z.ZodType<RealtimeStreamEvent> = z.union([z.object({ "type": z.literal("hello"), "cursor": z.int().min(0), "replayComplete": z.exactOptional(z.literal(true)) }), realtimeChangeEventDtoSchema, z.object({ "type": z.literal("refresh") }), z.object({ "type": z.literal("snapshot_required"), "cursor": z.int().min(0) })]);
 
 export type OAuthScope = "overlord.workspace.read" | "overlord.mission.read" | "overlord.mission.write" | "overlord.session.write";
 export const oAuthScopeSchema: z.ZodType<OAuthScope> = z.enum(["overlord.workspace.read", "overlord.mission.read", "overlord.mission.write", "overlord.session.write"]);
@@ -7076,8 +7099,12 @@ export interface GetRealtimeQueryParams {
    * Resume cursor (an `entity_changes.seq`). A non-negative number (floored); anything else is ignored and `Last-Event-ID` is tried.
    */
   after?: string;
+  /**
+   * Set to `1` to receive the completion greeting on a resumed stream.
+   */
+  replayComplete?: "1";
 }
-export const getRealtimeQueryParamsSchema: z.ZodType<GetRealtimeQueryParams> = z.object({ "after": z.exactOptional(z.string()) });
+export const getRealtimeQueryParamsSchema: z.ZodType<GetRealtimeQueryParams> = z.object({ "after": z.exactOptional(z.string()), "replayComplete": z.exactOptional(z.literal("1")) });
 
 export interface GetRealtimeHeaderParams {
   /**
@@ -7470,6 +7497,22 @@ export interface PatchProjectsByIdResourcesByResourceIdSourcesBySourceIdPathPara
   sourceId: string;
 }
 export const patchProjectsByIdResourcesByResourceIdSourcesBySourceIdPathParamsSchema: z.ZodType<PatchProjectsByIdResourcesByResourceIdSourcesBySourceIdPathParams> = z.object({ "id": z.string(), "resourceId": z.string(), "sourceId": z.string() });
+
+export interface PutProjectsByIdResourcesByResourceIdSourcesBySourceIdLatchHostPathParams {
+  /**
+   * Project UUID.
+   */
+  id: string;
+  /**
+   * Logical project resource UUID.
+   */
+  resourceId: string;
+  /**
+   * Local checkout source UUID.
+   */
+  sourceId: string;
+}
+export const putProjectsByIdResourcesByResourceIdSourcesBySourceIdLatchHostPathParamsSchema: z.ZodType<PutProjectsByIdResourcesByResourceIdSourcesBySourceIdLatchHostPathParams> = z.object({ "id": z.string(), "resourceId": z.string(), "sourceId": z.string() });
 
 export interface PostProjectsByIdRepositoryReadsPathParams {
   /**
@@ -11791,6 +11834,25 @@ export const apiOperations = {
     parameters: { path: patchProjectsByIdResourcesByResourceIdSourcesBySourceIdPathParamsSchema, query: null, header: null },
     requestBody: { required: true, content: { "application/json": { kind: "json", schema: updateProjectResourceSourceBodySchema } } },
     responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: projectResourceDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * PUT /api/projects/{id}/resources/{resourceId}/sources/{sourceId}/latch-host: Verify or revoke a resource source's Latch host link
+   */
+  putProjectsByIdResourcesByResourceIdSourcesBySourceIdLatchHost: {
+    operationId: "putProjectsByIdResourcesByResourceIdSourcesBySourceIdLatchHost",
+    method: "PUT",
+    path: "/api/projects/{id}/resources/{resourceId}/sources/{sourceId}/latch-host",
+    tags: ["project-resources"],
+    deprecated: false,
+    permission: "project:update",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["webapp"],
+    extension: null,
+    security: [{"sessionCookie":[]},{"sessionBearer":[]},{"userToken":[]}],
+    parameters: { path: putProjectsByIdResourcesByResourceIdSourcesBySourceIdLatchHostPathParamsSchema, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: updateProjectResourceLatchHostBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: okResponseSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
   },
   /**
    * POST /api/projects/{id}/repository-reads: Run a bounded read-only repository read on an execution target

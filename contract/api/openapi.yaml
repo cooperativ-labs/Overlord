@@ -3,10 +3,10 @@ info:
   title: Overlord API
   # info.version is the API description's own Semantic Version; it changes when
   # this document changes and is never compared with the contract version.
-  version: 7.4.1
+  version: 7.6.0
   # The contract version (contract/VERSION) this document belongs to. Written
   # only by `yarn version:contract`.
-  x-overlord-contract-version: 182.5.1
+  x-overlord-contract-version: 182.7.0
   description: >-
     Normative description of Overlord's REST surface (ADR 0006): one operation for every
     method and path the backend registers, at the path it is served (ADR 0007), excluding
@@ -4323,6 +4323,10 @@ paths:
         or workspace change is committed, so the client reconnects through authentication and resumes from
         its last cursor. With `after` (or `Last-Event-ID`) below the server's cursor, the missed visible
         changes are replayed as `change` events first, in pages of at most 500.
+        When a resume cursor and `replayComplete=1` are supplied, the stream sends its `hello` after
+        replay and any queued changes, even when replay is empty. Its `replayComplete: true` confirms
+        that live delivery has begun, and its cursor is the safe resume position, including across
+        filtered gaps. An expired cursor sends `snapshot_required` and closes without that greeting.
       security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
       parameters:
         - name: after
@@ -4337,11 +4341,17 @@ paths:
           required: false
           description: The EventSource resume header, read like `after` when `after` is absent or invalid.
           schema: { type: string }
+        - name: replayComplete
+          in: query
+          required: false
+          description: Set to `1` to receive the completion greeting on a resumed stream.
+          schema: { type: string, const: '1' }
       responses:
         '200':
           description: >-
             `text/event-stream`. Events: `hello` with `{ type: 'hello', cursor }` (the server's current
-            global cursor); `change` with `RealtimeChangeEventDto`; `refresh` with `{ type: 'refresh' }`;
+            global cursor) or `{ type: 'hello', cursor, replayComplete: true }` after opted-in replay;
+            `change` with `RealtimeChangeEventDto`; `refresh` with `{ type: 'refresh' }`;
             or `snapshot_required` with a safe cursor when replay has expired, followed by stream closure.
             Headers `Cache-Control: no-cache, no-transform` and `X-Accel-Buffering: no`.
           content:
@@ -5793,7 +5803,8 @@ paths:
       description: >-
         Requires `project:read`. Every live resource with all its sources, ordered by status, primary
         first, then label and key; `status` and `observedAt` merge the latest target observation of the
-        representative source.
+        representative source. Private, non-cacheable Latch link metadata is included only for the
+        caller's eligible local targets.
       security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
       responses:
         '200':
@@ -5964,6 +5975,54 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
+  "/api/projects/{id}/resources/{resourceId}/sources/{sourceId}/latch-host":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Project UUID.
+        schema: { type: string }
+      - name: resourceId
+        in: path
+        required: true
+        description: Logical project resource UUID.
+        schema: { type: string }
+      - name: sourceId
+        in: path
+        required: true
+        description: Local checkout source UUID.
+        schema: { type: string }
+    put:
+      operationId: putProjectsByIdResourcesByResourceIdSourcesBySourceIdLatchHost
+      tags: [project-resources]
+      x-overlord-permission: project:update
+      x-overlord-edition: both
+      x-overlord-consumers: [webapp]
+      summary: Verify or revoke a resource source's Latch host link
+      description: >-
+        Requires project update permission and ownership of the source's registered local target.
+        Linking and relinking cross-check the expected pairing public key with the active native
+        runner. A null host key revokes the link. All writes compare the source revision. An exact
+        retry of an accepted mutation replays its acknowledgement for 24 hours.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateProjectResourceLatchHostBody' }
+      responses:
+        '200':
+          description: Host link verified or revoked.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OkResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
         '413': { $ref: '#/components/responses/PayloadTooLarge' }
         '500': { $ref: '#/components/responses/InternalError' }
   "/api/projects/{id}/repository-reads":
@@ -11209,7 +11268,9 @@ paths:
         boolean `ok` (400 otherwise, for any id). Then requires `execution_request:claim` in the request's
         workspace. The request must be a local-target mutation (409 `not_local_target_mutation`) in
         `claimed` or `launching` (409 `invalid_execution_request_transition`) with readable mutation
-        metadata (409 `invalid_local_target_mutation`). A successful branch action with a `summary`
+        metadata (409 `invalid_local_target_mutation`). Latch host identity probe completion also
+        requires the requesting target owner on the registered native target (403 otherwise).
+        A successful branch action with a `summary`
         records branch activity. This route accepts a JSON body of up to 1 MiB. Loopback local operator: a
         call from the loopback interface with no session or user token is not refused; it acts as the
         oldest member of the server's bootstrap workspace (with no identity when there is none).
@@ -11924,6 +11985,20 @@ components:
           oneOf:
             - type: string
             - type: 'null'
+        latchHostLink:
+          type: object
+          description: Account-scoped link metadata on the project resource list.
+          required: [sourceRevision, state, canVerify, canUnlink]
+          properties:
+            sourceRevision: { type: integer, minimum: 1 }
+            state: { type: string, enum: [unlinked, linked, ambiguous] }
+            canVerify: { type: boolean }
+            canUnlink: { type: boolean }
+            hostPublicKey:
+              type: string
+              minLength: 64
+              maxLength: 64
+              description: Present only for an unambiguous link. Verify it against the authenticated pairing.
     ProjectResourceDto:
       type: object
       required:
@@ -13291,6 +13366,17 @@ components:
         accessMode:
           $ref: '#/components/schemas/ProjectResourceAccessMode'
           description: Ignored for a primary resource.
+    UpdateProjectResourceLatchHostBody:
+      type: object
+      additionalProperties: false
+      required: [sourceRevision, hostPublicKey]
+      properties:
+        sourceRevision: { type: integer, minimum: 1 }
+        hostPublicKey:
+          description: Expected Latch host public key, or null to revoke.
+          oneOf:
+            - { type: string, minLength: 64, maxLength: 64 }
+            - { type: 'null' }
     UpdateProjectResourceSourceBody:
       type: object
       required: [ launchDefaults ]
@@ -16647,6 +16733,7 @@ components:
           properties:
             type: { const: hello }
             cursor: { type: integer, minimum: 0 }
+            replayComplete: { const: true }
         - $ref: '#/components/schemas/RealtimeChangeEventDto'
         - type: object
           required: [ type ]

@@ -60,10 +60,19 @@ export function ActivityFeed({
 }: {
   onOpenMission: (args: { missionId: string; objectiveDisplayId?: string | null }) => void;
 }) {
-  const { data, error, fetchNextPage, hasNextPage, isError, isFetchingNextPage, isLoading } =
-    useActivityFeed();
   const [enabledKinds, setEnabledKinds] = useState<Set<string>>(() => new Set(FEED_KINDS));
   const [projectId, setProjectId] = useState<string | null>(null);
+  const showDelivered = enabledKinds.has('mission_delivered');
+  const {
+    data,
+    error,
+    fetchNextPage,
+    hasNextPage,
+    isError,
+    isFetching,
+    isFetchingNextPage,
+    isLoading
+  } = useActivityFeed(showDelivered);
   // Elapsed/relative labels advance between refetches by walking a local clock
   // forward, rather than by refetching the feed on a timer.
   const [clock, setClock] = useState(() => Date.now());
@@ -103,19 +112,18 @@ export function ActivityFeed({
   useEffect(() => {
     const root = scrollRef.current;
     const sentinel = sentinelRef.current;
-    if (!root || !sentinel || !hasNextPage) return;
+    if (!root || !sentinel || !hasNextPage || isFetching) return;
 
     const observer = new IntersectionObserver(
       entries => {
         if (!entries.some(entry => entry.isIntersecting)) return;
-        if (isFetchingNextPage || !hasNextPage) return;
-        void fetchNextPage();
+        void fetchNextPage({ cancelRefetch: false });
       },
       { root, rootMargin: '200px', threshold: 0 }
     );
     observer.observe(sentinel);
     return () => observer.disconnect();
-  }, [fetchNextPage, hasNextPage, isFetchingNextPage, items.length]);
+  }, [fetchNextPage, hasNextPage, isFetching, items.length]);
 
   const toggleKind = (kind: string) => {
     setEnabledKinds(current => {
@@ -233,7 +241,7 @@ export function ActivityFeed({
             <p className="pb-2 text-center text-[11px] text-(--color-ink-dim)">{truncated}</p>
           ) : null}
 
-          {hasNextPage || isFetchingNextPage ? (
+          {showDelivered && (hasNextPage || isFetchingNextPage) ? (
             <div ref={sentinelRef} className="flex flex-col items-center gap-2 py-3">
               {isFetchingNextPage ? <Spinner /> : null}
               <p className="text-[11px] text-(--color-ink-dim)">

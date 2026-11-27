@@ -21,6 +21,7 @@ import { writeLocalProjectMetadata } from '@/lib/project-metadata';
 import {
   useCreateProjectResource,
   useDeleteProjectResourceSource,
+  useUpdateProjectResourceLatchHost,
   useUpdateProjectResourceSource
 } from '@/lib/queries';
 
@@ -49,6 +50,11 @@ export function ResourceSourceRow({
   const createResource = useCreateProjectResource(projectId);
   const deleteSource = useDeleteProjectResourceSource(projectId);
   const updateSource = useUpdateProjectResourceSource(projectId);
+
+  const updateLatchHost = useUpdateProjectResourceLatchHost(projectId);
+  const link = source.latchHostLink;
+  const [hostKey, setHostKey] = useState('');
+  const [linkError, setLinkError] = useState<string | null>(null);
 
   const value = sourceDescriptorValue(source);
   const isGit = source.sourceKind === 'git';
@@ -82,6 +88,21 @@ export function ResourceSourceRow({
       onSaved();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save agent settings.');
+    }
+  }
+
+  async function handleLatchHostUpdate(key: string | null) {
+    if (!link) return;
+    setLinkError(null);
+    try {
+      await updateLatchHost.mutateAsync({
+        resourceId: resource.id,
+        sourceId: source.id,
+        body: { sourceRevision: link.sourceRevision, hostPublicKey: key }
+      });
+      setHostKey('');
+    } catch (err) {
+      setLinkError(err instanceof Error ? err.message : 'Failed to update the Latch host link.');
     }
   }
 
@@ -187,6 +208,69 @@ export function ResourceSourceRow({
             </Button>
           </div>
         </div>
+
+        {link && (
+          <div className="space-y-2">
+            <h5 className="text-xs font-medium">Latch host</h5>
+            <p className="text-xs text-muted-foreground">
+              {link.state === 'linked'
+                ? `Verified host ${link.hostPublicKey?.slice(0, 12)}…`
+                : link.state === 'ambiguous'
+                  ? 'Multiple host or source matches. This source is unavailable in project Git.'
+                  : 'This source has no verified Latch host.'}
+            </p>
+            {link.canVerify ? (
+              <div className="grid gap-1.5">
+                <Label htmlFor={`latch-host-${source.id}`} className="text-xs">
+                  Latch host public key
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  On the intended host, run <code>latch remote-access status --json</code> and copy
+                  its <code>publicKey</code>.
+                </p>
+                <div className="flex items-center gap-2">
+                  <Input
+                    id={`latch-host-${source.id}`}
+                    value={hostKey}
+                    onChange={event => setHostKey(event.target.value)}
+                    className="h-8 min-w-0 flex-1 font-mono text-xs"
+                    autoComplete="off"
+                    spellCheck={false}
+                    maxLength={64}
+                  />
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={!/^[0-9a-f]{64}$/.test(hostKey.trim()) || updateLatchHost.isPending}
+                    onClick={() => void handleLatchHostUpdate(hostKey.trim())}
+                  >
+                    {link.canUnlink ? 'Verify and relink' : 'Verify and link'}
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                Verification requires one active native Overlord runner on this target.
+              </p>
+            )}
+            {link.canUnlink && (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={updateLatchHost.isPending}
+                onClick={() => void handleLatchHostUpdate(null)}
+              >
+                Unlink Latch host
+              </Button>
+            )}
+            {linkError && (
+              <p role="alert" className="text-xs text-destructive">
+                {linkError}
+              </p>
+            )}
+          </div>
+        )}
 
         <div className="space-y-2">
           <div>

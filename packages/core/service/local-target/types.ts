@@ -559,6 +559,9 @@ export interface LocalTargetCapabilities {
   ): Promise<CapabilityResult<GenerateCommitMessageResult>>;
   launchAgent(input: LaunchAgentInput): Promise<CapabilityResult<LaunchAgentResult>>;
   discoverLatch(input: DiscoverLatchInput): Promise<CapabilityResult<DiscoverLatchResult>>;
+  readLatchHostIdentity(
+    input: Record<string, never>
+  ): Promise<CapabilityResult<{ hostKeyDigest: string }>>;
   inspectLatchSession(
     input: InspectLatchSessionInput
   ): Promise<CapabilityResult<InspectLatchSessionResult>>;
@@ -595,6 +598,7 @@ export const LOCAL_TARGET_CAPABILITY_NAMES = [
   'generateCommitMessageFromLocalDiff',
   'launchAgent',
   'discoverLatch',
+  'readLatchHostIdentity',
   'inspectLatchSession',
   'openLatchSession',
   'stopLatchSession',

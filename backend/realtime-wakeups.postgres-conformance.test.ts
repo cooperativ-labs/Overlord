@@ -1,6 +1,7 @@
 import type { Response } from 'express';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
+import { EventEmitter } from 'node:events';
 import path from 'node:path';
 import { test } from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -25,15 +26,16 @@ async function waitFor<T>(probe: () => T | Promise<T>, timeoutMs: number): Promi
 function stream() {
   const chunks: string[] = [];
   let ended = false;
-  const response = {
+  const response = Object.assign(new EventEmitter(), {
     writeHead() {},
     write(chunk: string) {
       chunks.push(chunk);
+      return true;
     },
     end() {
       ended = true;
     }
-  } as unknown as Response;
+  }) as unknown as Response;
   return {
     response,
     text: () => chunks.join(''),

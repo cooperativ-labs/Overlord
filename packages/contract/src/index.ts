@@ -351,6 +351,7 @@ export type {
   UpdateProjectBody,
   UpdateProjectExecutionTargetBody,
   UpdateProjectResourceBody,
+  UpdateProjectResourceLatchHostBody,
   UpdateProjectResourceSourceBody,
   UpdateProjectStatusBody,
   UpdateProjectTagBody,

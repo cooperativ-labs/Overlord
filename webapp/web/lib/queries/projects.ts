@@ -11,6 +11,7 @@ import type {
   ReorderProjectStatusesBody,
   UpdateProjectBody,
   UpdateProjectResourceBody,
+  UpdateProjectResourceLatchHostBody,
   UpdateProjectResourceSourceBody,
   UpdateProjectStatusBody,
   UpdateProjectTagBody
@@ -22,10 +23,12 @@ import {
   useQuery,
   useQueryClient
 } from '@tanstack/react-query';
+import { useContext } from 'react';
 
 import { api } from '../api.ts';
 import { invalidateNonEverhourQueries as invalidateAll } from '../query-invalidation.ts';
 import { keys } from '../query-keys.ts';
+import { ResourceAccountContext } from '../resource-account.ts';
 
 import { useMeta } from './profile.ts';
 
@@ -86,12 +89,15 @@ export const useProjectStatuses = (projectId: string) =>
 // `/api/projects//resources` and every sibling project route with an empty id,
 // which the backend answers 404 — a burst of red herrings in the request log
 // that looks like a launch failure and is only an unselected project.
-export const useProjectResources = (id: string) =>
-  useQuery({
-    queryKey: keys.projectResources(id),
+export function useProjectResources(id: string) {
+  const accountId = useContext(ResourceAccountContext);
+  const resourceKey = keys.projectResources(id);
+  return useQuery({
+    queryKey: accountId ? [...resourceKey, accountId] : resourceKey,
     queryFn: () => api.listProjectResources(id),
     enabled: Boolean(id)
   });
+}
 
 export const useProjectTags = (id: string | null) =>
   useQuery({
@@ -272,6 +278,22 @@ export function useUpdateProjectResourceSource(projectId: string) {
       body: UpdateProjectResourceSourceBody;
     }) => api.updateProjectResourceSource(projectId, resourceId, sourceId, body),
     onSuccess: () => invalidateAll(qc)
+  });
+}
+
+export function useUpdateProjectResourceLatchHost(projectId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      resourceId,
+      sourceId,
+      body
+    }: {
+      resourceId: string;
+      sourceId: string;
+      body: UpdateProjectResourceLatchHostBody;
+    }) => api.updateProjectResourceLatchHost(projectId, resourceId, sourceId, body),
+    onSettled: () => qc.invalidateQueries({ queryKey: keys.projectResources(projectId) })
   });
 }
 

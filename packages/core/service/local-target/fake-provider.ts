@@ -4,7 +4,7 @@
 // capability has a sensible default success; tests override individual
 // capabilities through `handlers` and assert against the recorded `calls`.
 
-import { ok } from './result.ts';
+import { fail, ok } from './result.ts';
 import type {
   BranchListResult,
   CapabilityResult,
@@ -259,6 +259,14 @@ export class FakeLocalTargetProvider implements LocalTargetCapabilities {
       latchSelectable: false,
       directSelectable: true
     });
+  }
+
+  async readLatchHostIdentity(): Promise<CapabilityResult<{ hostKeyDigest: string }>> {
+    this.#record('readLatchHostIdentity', [{}]);
+    return (
+      this.#handlers.readLatchHostIdentity?.({}) ??
+      fail(this.target, 'TARGET_OPERATION_FAILED', 'No simulated Latch host identity.')
+    );
   }
 
   async inspectLatchSession(

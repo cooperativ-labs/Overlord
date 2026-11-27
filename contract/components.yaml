@@ -5,7 +5,7 @@
 # IMPORTANT: Update this file and those documents together when adding components or surfaces.
 # contractVersion is written only by `yarn version:contract` and must equal contract/VERSION.
 
-contractVersion: '182.5.1'
+contractVersion: '182.7.0'
 
 components:
   protocol:
@@ -80,6 +80,7 @@ components:
       - 'private device_push_tokens registrations (globally unique device_token bound to one profile, with platform, environment, and bundle_id) and notification_preferences rows unique per (profile_id, type, transport), with a reserved (all, all) master row; standard APNs device tokens are stored separately from ActivityKit tokens and are never projected through REST, realtime, or audit payloads'
       - 'private notifications history rows addressed to exactly one assigned mission-owner profile, with workspace/mission/objective references, read and soft-dismiss lifecycle, revision CAS, and no token, prompt, instruction, summary, or event payload storage'
       - 'project_resources as project-scoped logical identities and project_resource_sources as the sole target/source materialization descriptors (local checkout paths, Git, bundles, or opaque virtual handles), with optional per-agent launchDefaults (pre-command and normalized flags) in descriptor_json; existing resource rows are intentionally discarded by the contract-v4 migration rather than carried through a legacy compatibility shape'
+      - 'project_resource_sources.latch_host_binding_json holds an optional revision-bound public Latch identity scoped to the owning workspace member (ADR 0109)'
       - 'execution_target_runner_registrations: one-to-many live runner processes serving one local execution target (runner_instance_id, native/adopted relation, non-secret label/runner_version/capabilities_json/supported_agents_json, health/last_heartbeat_at/last_error_code); source of truth for local target reachability, distinct from the gateway-owned one-per-virtual-target execution_target_registrations; execution_requests.claimed_by_runner_registration_id records the winning runner instance'
       - 'explicit leased lifecycle policy for disposable independent local execution targets: lifecycle_kind, lease duration/grace/expiry, compare-and-set heartbeat renewal, and an idempotent backend cleanup worker; expiry is offline only and never performs cleanup'
       - 'virtual execution target core tables (execution_target_registrations, project_environment_definitions, project_resource_sources, execution_request_snapshots, execution_request_grants, execution_request_observations, mission_target_resources) and additive execution_requests snapshot/failure/gateway columns; immutable snapshot (payload_json + SHA-256 payload_digest) created in the same transaction as the queued request and never updated; grant records store hashes/opaque IDs, never bearer values'
@@ -472,6 +473,7 @@ interactionSurfaces:
       - 'Objective chat requires a unique authenticated host match for a running provider session with a connector and source kind overlord whose external run ID equals the selected Overlord execution request ID'
       - 'Revalidate Overlord read access, attempt and host before opening and before mutations. Latch enforces observe and action grants, and owns conversation state, history and operation receipts'
       - 'Keep chat content in memory and clear it on access loss. Missing or unverified binding opens the mission panel. Overlord-owned lifecycle and mission answers keep their existing authorized paths'
+      - 'A project resource Latch host link is account-scoped correlation. Clients must match the authenticated pairing key and current grant before obtaining a scoped worktree reference (ADR 0109)'
       - 'Freeform resume requires the original paired device, control grant and a qualified adapter. Latch verifies an exact native target in its original directory and deduplicates resume by a durable operation ID'
 
   mobilePushToRest:
@@ -580,6 +582,7 @@ interactionSurfaces:
       - 'A claim resolves an already-declared local execution target and never creates one; an explicit executionTargetId in the claim body must exist, be non-deleted, be type local, have status active, and be accessible to the authenticated member, otherwise the claim fails with 409 no_execution_target_registered'
       - 'Claim body additively carries runnerInstanceId, runnerRelation (native | adopted), runnerLabel, runnerVersion, capabilities, and supportedAgents; when runnerInstanceId is present the backend upserts only the execution_target_runner_registrations row (health healthy, heartbeat now) for the resolved target'
       - 'Several runner instances may serve one local target (host runner plus adopting containers); claim competition stays target-level and no request field selects a runner instance'
+      - 'The internal readLatchHostIdentity capability is claimed and completed only by the requesting target owner on their registered native target. Return only the public pairing key digest or a fixed failure (ADR 0109)'
       - 'Local target reachability derives from a recent healthy/degraded runner registration; devices.last_seen_at is honored only for a target that has never had a runner registration (upgrade compatibility)'
       - 'Backend state transitions must append mission_events and entity_changes in the same transaction'
       - 'Allowed transitions are queued → claimed → launching → launched|failed; active requests may be cleared; stale claims, launched-without-attach requests, and a launching request whose runner never reported launched within the launch TTL (measured from execution_requests.launch_started_at) may move to expired; other terminal statuses are sinks unless a new request is explicitly queued'

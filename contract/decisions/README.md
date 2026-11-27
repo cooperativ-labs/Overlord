@@ -145,3 +145,4 @@ record and the index disagree.
 - [0106 — Retain the status preceding completion](0106-mission-previous-status.md)
 - [0107 — Allow explicit deletion of legacy default Run Queues](0107-delete-legacy-default-run-queues.md)
 - [0108 — Retire the stored auto-advance mirror](0108-retire-auto-advance-mirror.md)
+- [0109 — Bind project resource sources to verified Latch hosts](0109-project-resource-latch-host.md)

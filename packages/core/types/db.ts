@@ -1430,6 +1430,7 @@ export interface ProjectResourceSources {
   descriptor_json: Generated<string>;
   execution_target_id: string | null;
   id: string | null;
+  latch_host_binding_json: string | null;
   observed_content_digest: string | null;
   observed_revision: string | null;
   project_id: string;

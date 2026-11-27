@@ -72,6 +72,7 @@ const RESOURCE_BINDINGS: Partial<
     (input: Record<string, unknown>, workingDirectory: string) => Record<string, unknown>
   >
 > = {
+  readLatchHostIdentity: () => ({}),
   observeResource: (input, dir) => ({ ...input, path: dir }),
   readRepositoryTree: (input, dir) => ({ ...input, repoPath: dir }),
   listBranches: (input, dir) => ({ ...input, repoPath: dir }),

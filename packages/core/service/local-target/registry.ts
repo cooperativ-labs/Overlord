@@ -168,6 +168,9 @@ export class UnavailableProvider implements LocalTargetCapabilities {
   discoverLatch(_input: DiscoverLatchInput) {
     return this.#fail();
   }
+  readLatchHostIdentity() {
+    return this.#fail();
+  }
   inspectLatchSession(_input: InspectLatchSessionInput) {
     return this.#fail();
   }

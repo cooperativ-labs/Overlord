@@ -3,6 +3,7 @@ import { type ReactNode, useEffect } from 'react';
 import { AuthScreen } from '@/components/auth/AuthScreen';
 import { authClient } from '@/lib/auth-client';
 import { setDismissalAccount } from '@/lib/dismissed-agent-requests';
+import { ResourceAccountContext } from '@/lib/resource-account';
 
 type AuthGateProps = {
   children: ReactNode;
@@ -32,5 +33,9 @@ export function AuthGate({ children }: AuthGateProps) {
     );
   }
 
-  return children;
+  return (
+    <ResourceAccountContext.Provider key={accountId} value={accountId}>
+      {children}
+    </ResourceAccountContext.Provider>
+  );
 }

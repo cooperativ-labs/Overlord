@@ -6,10 +6,82 @@ import { test } from 'node:test';
 import { ApiRequestError } from './api/request.ts';
 import { RealtimeProvider, useRealtime } from './realtime.tsx';
 
+test('resumed stream applies pages once and waits for completion even when replay is empty', async () => {
+  const originalFetch = globalThis.fetch;
+  const client = new QueryClient();
+  const streams: Array<ReadableStreamDefaultController<Uint8Array>> = [];
+  const requests: string[] = [];
+  const seenPages: number[] = [];
+  globalThis.fetch = (async (input: RequestInfo | URL) => {
+    const url = String(input);
+    requests.push(url);
+    assert.ok(url.includes('/realtime'), `Unexpected request ${url}`);
+    return new Response(
+      new ReadableStream<Uint8Array>({
+        start: controller => streams.push(controller)
+      })
+    );
+  }) as typeof fetch;
+  const send = (streamIndex: number, event: string, payload: unknown, end = '\n\n') =>
+    streams[streamIndex]!.enqueue(
+      new TextEncoder().encode(`event: ${event}\ndata: ${JSON.stringify(payload)}${end}`)
+    );
+  function View() {
+    const { state, lastSeq, lastChanges } = useRealtime();
+    const pageSeq = lastChanges.at(-1)?.seq;
+    if (pageSeq !== undefined && seenPages.at(-1) !== pageSeq) seenPages.push(pageSeq);
+    return (
+      <div>
+        {state}:{lastSeq}
+      </div>
+    );
+  }
+  try {
+    const result = render(
+      <QueryClientProvider client={client}>
+        <RealtimeProvider>
+          <View />
+        </RealtimeProvider>
+      </QueryClientProvider>
+    );
+    const expectState = (expected: string) =>
+      waitFor(() => assert.equal(result.container.textContent, expected));
+    await act(async () => send(0, 'hello', { cursor: 0 }));
+    await expectState('live:0');
+    await act(async () => streams[0]!.close());
+    await waitFor(() => assert.equal(streams.length, 2), { timeout: 6_000 });
+    assert.match(requests.at(-1)!, /\/realtime\?after=0&replayComplete=1$/);
+    await act(async () => send(1, 'change', { cursor: 500, changes: [{ seq: 500 }] }));
+    await expectState('reconnecting:500');
+    await act(async () => {
+      send(1, 'change', { cursor: 501, changes: [{ seq: 501 }] }, '\n');
+      streams[1]!.close();
+    });
+    await waitFor(() => assert.equal(streams.length, 3), { timeout: 6_000 });
+    assert.match(requests.at(-1)!, /\/realtime\?after=500&replayComplete=1$/);
+    await act(async () => send(2, 'change', { cursor: 501, changes: [{ seq: 501 }] }));
+    await expectState('reconnecting:501');
+    await act(async () => send(2, 'hello', { cursor: 503, replayComplete: true }));
+    await expectState('live:503');
+    await act(async () => streams[2]!.close());
+    await waitFor(() => assert.equal(streams.length, 4), { timeout: 6_000 });
+    assert.match(requests.at(-1)!, /\/realtime\?after=503&replayComplete=1$/);
+    await act(async () => send(3, 'hello', { cursor: 505, replayComplete: true }));
+    await expectState('live:505');
+    assert.deepEqual(seenPages, [500, 501]);
+    assert.equal(requests.length, 4, 'normal reconnect never requests the HTTP feed');
+  } finally {
+    cleanup();
+    streams.at(-1)?.error(new Error('test finished'));
+    client.clear();
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test('expired stream refreshes stale data and replays writes made during refresh', async () => {
   const originalFetch = globalThis.fetch;
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  let stream!: ReadableStreamDefaultController<Uint8Array>;
+  const streams: Array<ReadableStreamDefaultController<Uint8Array>> = [];
   let finishRefresh!: (value: string[]) => void;
   const refresh = new Promise<string[]>(resolve => {
     finishRefresh = resolve;
@@ -23,7 +95,7 @@ test('expired stream refreshes stale data and replays writes made during refresh
       return new Response(
         new ReadableStream<Uint8Array>({
           start(controller) {
-            stream = controller;
+            streams.push(controller);
           }
         }),
         {
@@ -78,34 +150,40 @@ test('expired stream refreshes stale data and replays writes made during refresh
         </RealtimeProvider>
       </QueryClientProvider>
     );
-    await waitFor(() => assert.ok(stream));
-    const send = (event: string, body: unknown) =>
-      stream.enqueue(
+    await waitFor(() => assert.equal(streams.length, 1));
+    const send = (index: number, event: string, body: unknown) =>
+      streams[index]!.enqueue(
         new TextEncoder().encode(`event: ${event}\ndata: ${JSON.stringify(body)}\n\n`)
       );
     await act(async () => {
-      send('hello', { type: 'hello', cursor: 1 });
+      send(0, 'hello', { type: 'hello', cursor: 1 });
     });
     await act(async () => {
-      send('snapshot_required', { type: 'snapshot_required', cursor: 10 });
+      send(0, 'snapshot_required', { type: 'snapshot_required', cursor: 10 });
+      streams[0]!.close();
     });
     await waitFor(() => assert.match(result.container.textContent ?? '', /reconnecting/));
     await act(async () => {
-      send('change', { type: 'change', cursor: 11, changes: [] });
       finishRefresh(['current']);
     });
+    await waitFor(() =>
+      assert.match(result.container.textContent ?? '', /reconnecting:11:post-write/)
+    );
+    await waitFor(() => assert.equal(streams.length, 2), { timeout: 6_000 });
+    assert.match(requests.at(-1)!, /\/realtime\?after=11&replayComplete=1$/);
+    await act(async () => send(1, 'hello', { cursor: 11, replayComplete: true }));
     await waitFor(() => assert.match(result.container.textContent ?? '', /live:11:post-write/));
     assert.ok(requests.some(url => url.includes('/sync/changes?after=10')));
     assert.doesNotMatch(result.container.textContent ?? '', /offline-deleted/);
   } finally {
     cleanup();
-    stream?.close();
+    for (const stream of streams.slice(1)) stream.close();
     client.clear();
     globalThis.fetch = originalFetch;
   }
 });
 
-test('expired REST catch-up refreshes before replaying from its baseline', async () => {
+test('legacy stream falls back to HTTP and refreshes before replaying an expired cursor', async () => {
   const originalFetch = globalThis.fetch;
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const streams: Array<ReadableStreamDefaultController<Uint8Array>> = [];
@@ -162,9 +240,13 @@ test('expired REST catch-up refreshes before replaying from its baseline', async
       );
       streams[0]!.close();
     });
-    await waitFor(() => assert.match(result.container.textContent ?? '', /live:12:current/), {
-      timeout: 6000
+    await waitFor(() => assert.equal(streams.length, 2), { timeout: 6000 });
+    await act(async () => {
+      streams[1]!.enqueue(
+        new TextEncoder().encode('event: hello\ndata: {"type":"hello","cursor":10}\n\n')
+      );
     });
+    await waitFor(() => assert.match(result.container.textContent ?? '', /live:12:current/));
     assert.ok(calls.some(url => url.endsWith('/sync/changes?after=1')));
     assert.ok(calls.some(url => url.endsWith('/sync/changes?after=10')));
   } finally {
@@ -225,7 +307,7 @@ test('failed refresh remains reconnecting until a retry succeeds', async () => {
     await act(async () => {
       stream.enqueue(
         new TextEncoder().encode(
-          'event: snapshot_required\ndata: {"type":"snapshot_required","cursor":10}\n\n'
+          'event: hello\ndata: {"cursor":1}\n\nevent: snapshot_required\ndata: {"cursor":10}\n\n'
         )
       );
     });
@@ -312,7 +394,7 @@ test('an active record deleted while offline loses stale data and recovery compl
     await act(async () => {
       stream.enqueue(
         new TextEncoder().encode(
-          'event: snapshot_required\ndata: {"type":"snapshot_required","cursor":10}\n\n'
+          'event: hello\ndata: {"cursor":1}\n\nevent: snapshot_required\ndata: {"cursor":10}\n\n'
         )
       );
     });

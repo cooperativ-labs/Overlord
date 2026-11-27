@@ -238,3 +238,15 @@ undelivered attached session matching the addressed mission and optional objecti
 The project_automation protocol allowlist excludes discovery despite its read grant.
 The ended-session exception is still exclusive to publication/receipt operations;
 no discovery authority is added. Attach counts are scoped to its authorized project.
+
+### Project-resource Latch host links
+
+ADR 0109 binds a local checkout source only for its owning target's Overlord
+workspace account. The project list requires `project:read` and active target
+access for the caller to see their link. Link and relink require
+`project:update`, target ownership, active target access and matching evidence
+from the target owner's native runner. Revocation requires `project:update`
+and ownership, and works even when the runner is offline or target access was
+withdrawn. Paired Latch clients independently authenticate the public key and
+enforce the current device grant. The link confers neither project nor Latch
+permissions.

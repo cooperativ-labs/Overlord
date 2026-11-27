@@ -1,12 +1,14 @@
 import { PERMISSIONS } from '@overlord/auth';
 import type { EntityChangeDto, SyncChangesDto } from '@overlord/contract';
 import type { Response } from 'express';
+import { once } from 'node:events';
 
 import { subscribePostgres } from './execution/pg-listen.ts';
 import {
   currentMaxSeq,
   getActiveTokenProjectIds,
   getAuthorizedWorkspacesContext,
+  readCommittedFeedBounds,
   requireDatabaseClient,
   withCommittedFeed
 } from './db.ts';
@@ -14,6 +16,8 @@ import { PollLoop } from './poll-loop.ts';
 import { actorCan } from './rbac.ts';
 
 const CHANGE_BATCH_LIMIT = 500;
+const REPLAY_PENDING_BATCH_LIMIT = 100;
+const REPLAY_PENDING_BYTE_LIMIT = 1024 * 1024;
 const POSTGRES_WAKE_CHANNEL = 'overlord_entity_changes';
 const POLL_INTERVAL_MS = 500;
 const RECONCILIATION_MS = 5_000;
@@ -117,13 +121,9 @@ export async function readChangesAfter(
     // Snapshot the global high-water mark before the filtered read. When the
     // visible page is exhausted, advancing to this value skips unauthorized
     // gaps without skipping a row committed after the snapshot.
-    const scanThroughSeq = Math.max(normalizedAfter, await currentMaxSeq(client));
-    const state = await client.get<{ retained_through: number }>(
-      `SELECT retained_through FROM entity_change_retention WHERE id = 1`
-    );
-    if (!state) throw new Error('Change-feed retention boundary is missing');
-    if (normalizedAfter < Number(state.retained_through))
-      throw new ExpiredChangeCursor(scanThroughSeq);
+    const { highWaterMark, retainedThrough } = await readCommittedFeedBounds(client);
+    const scanThroughSeq = Math.max(normalizedAfter, highWaterMark);
+    if (normalizedAfter < retainedThrough) throw new ExpiredChangeCursor(scanThroughSeq);
     const authorizedWorkspaceIds = [...new Set(workspaceIds.filter(Boolean))];
     if (authorizedWorkspaceIds.length === 0 || scanThroughSeq === normalizedAfter) {
       return { changes: [], cursor: scanThroughSeq, hasMore: false };
@@ -164,11 +164,16 @@ interface RealtimeClient {
   projectIds: Set<string> | null;
   lastCursor: number;
   replaying: boolean;
-  pending: Array<{ changes: EntityChangeDto[]; cursor: number }>;
+  pending: Array<{ changes: EntityChangeDto[]; cursor: number; bytes: number }>;
+  pendingBytes: number;
+  refreshPending: boolean;
+  closed: AbortController;
+  onClose: () => void;
 }
 
 export interface AddRealtimeClientOptions {
   afterSeq?: number;
+  signalReplayCompletion?: boolean;
   workspaceIds: readonly string[];
   projectIds?: readonly string[] | null;
 }
@@ -287,6 +292,7 @@ export class RealtimeHub extends PollLoop {
   }
 
   addClient(res: Response, options: AddRealtimeClientOptions): void {
+    if (res.destroyed || res.writableEnded) return;
     res.writeHead(200, {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache, no-transform',
@@ -303,45 +309,43 @@ export class RealtimeHub extends PollLoop {
           : new Set(options.projectIds),
       lastCursor: options.afterSeq ?? this.cursor,
       replaying: options.afterSeq !== undefined,
-      pending: []
+      pending: [],
+      pendingBytes: 0,
+      refreshPending: false,
+      closed: new AbortController(),
+      onClose: () => this.removeClient(res)
     };
     const firstClient = this.clients.size === 0;
     this.clients.set(res, client);
-    this.send(res, 'hello', { type: 'hello', cursor: this.cursor });
+    res.once('close', client.onClose);
+    // Opted-in resume clients use the greeting to acknowledge replay, including empty pages.
+    const signalReplayCompletion = options.signalReplayCompletion && client.replaying;
+    if (!signalReplayCompletion) this.send(res, 'hello', { type: 'hello', cursor: this.cursor });
     if (options.afterSeq !== undefined) {
-      void this.sendCatchUp(res, options.afterSeq)
-        .then(cursor => {
-          const current = this.clients.get(res);
-          if (!current) return;
-          for (const pending of current.pending) {
-            const changes = pending.changes.filter(change => change.seq > cursor);
-            if (changes.length)
-              this.send(res, 'change', { type: 'change', changes, cursor: pending.cursor });
-            cursor = Math.max(cursor, pending.cursor);
-          }
-          current.lastCursor = cursor;
-          current.pending = [];
-          current.replaying = false;
-        })
-        .catch(error => {
-          if (!this.clients.has(res)) return;
-          if (error instanceof ExpiredChangeCursor) {
-            this.send(res, 'snapshot_required', {
-              type: 'snapshot_required',
-              cursor: error.cursor
-            });
-          } else {
-            this.onPollError(error);
-          }
-          this.removeClient(res);
-          res.end();
-        });
+      void this.sendCatchUp(client, Boolean(signalReplayCompletion)).catch(error => {
+        if (client.closed.signal.aborted) return;
+        if (error instanceof ExpiredChangeCursor) {
+          this.send(res, 'snapshot_required', {
+            type: 'snapshot_required',
+            cursor: error.cursor
+          });
+        } else {
+          this.onPollError(error);
+        }
+        this.removeClient(res);
+        res.end();
+      });
     }
     if (firstClient && this.postgres) void this.pollNow();
   }
 
   removeClient(res: Response): void {
+    const client = this.clients.get(res);
+    if (!client) return;
     this.clients.delete(res);
+    res.off('close', client.onClose);
+    client.pending.length = 0;
+    client.closed.abort();
   }
 
   /**
@@ -351,7 +355,7 @@ export class RealtimeHub extends PollLoop {
    */
   refreshAll(): void {
     for (const client of this.clients.values()) {
-      if (client.projectIds === null) this.send(client.response, 'refresh', { type: 'refresh' });
+      if (client.projectIds === null) this.sendRefresh(client);
     }
   }
 
@@ -375,13 +379,9 @@ export class RealtimeHub extends PollLoop {
     }
 
     const pass = await withCommittedFeed(client, async tx => {
-      const state = await tx.get<{ retained_through: number }>(
-        `SELECT retained_through FROM entity_change_retention WHERE id = 1`
-      );
-      if (!state) throw new Error('Change-feed retention boundary is missing');
-      const retainedThrough = Number(state.retained_through);
+      const { highWaterMark, retainedThrough } = await readCommittedFeedBounds(tx);
       if (this.cursor < retainedThrough) {
-        return { expired: true as const, retainedThrough, cursor: await currentMaxSeq(tx) };
+        return { expired: true as const, retainedThrough, cursor: highWaterMark };
       }
       return {
         expired: false as const,
@@ -431,15 +431,16 @@ export class RealtimeHub extends PollLoop {
       if (rows.length === 0) {
         // External write that did not (or has not yet) produced feed rows.
         for (const client of this.clients.values()) {
-          if (client.projectIds === null)
-            this.send(client.response, 'refresh', { type: 'refresh' });
+          if (client.projectIds === null) this.sendRefresh(client);
         }
       }
     }
   }
 
   private heartbeat(): void {
-    for (const { response } of this.clients.values()) response.write(': ping\n\n');
+    for (const { response } of this.clients.values()) {
+      if (!response.writableNeedDrain) response.write(': ping\n\n');
+    }
   }
 
   private broadcastChanges(rows: ChangeRow[], cursor: number): void {
@@ -454,15 +455,27 @@ export class RealtimeHub extends PollLoop {
         )
         .map(entityChangeDtoFromRow);
       if (changes.length > 0) {
+        const res = client.response;
         if (client.replaying) {
-          client.pending.push({ changes, cursor });
-          if (client.pending.length > 100) {
-            this.removeClient(client.response);
-            client.response.end();
+          const bytes = Buffer.byteLength(JSON.stringify(changes));
+          if (
+            client.pending.length >= REPLAY_PENDING_BATCH_LIMIT ||
+            client.pendingBytes + bytes > REPLAY_PENDING_BYTE_LIMIT
+          ) {
+            this.removeClient(res);
+            res.destroy();
+          } else {
+            client.pending.push({ changes, cursor, bytes });
+            client.pendingBytes += bytes;
           }
+        } else if (res.writableNeedDrain) {
+          // A live delta is durable. Reconnect from the applied cursor instead
+          // of piling more pages behind the socket's outstanding write.
+          this.removeClient(res);
+          res.destroy();
         } else {
           client.lastCursor = cursor;
-          this.send(client.response, 'change', { type: 'change', changes, cursor });
+          this.send(res, 'change', { type: 'change', changes, cursor });
         }
       }
     }
@@ -471,40 +484,86 @@ export class RealtimeHub extends PollLoop {
   private reconnectClientsForAuthorizationChange(): void {
     for (const { response } of [...this.clients.values()]) {
       this.removeClient(response);
-      response.end();
+      if (response.writableNeedDrain) response.destroy();
+      else response.end();
     }
   }
 
-  private async sendCatchUp(res: Response, afterSeq: number): Promise<number> {
-    let cursor = afterSeq;
-    while (this.clients.has(res)) {
-      const client = this.clients.get(res)!;
+  private async sendCatchUp(
+    client: RealtimeClient,
+    signalReplayCompletion: boolean
+  ): Promise<void> {
+    const { response: res, closed, workspaceIds, projectIds } = client;
+    const workspaces = [...workspaceIds];
+    const projects = projectIds === null ? null : [...projectIds];
+    while (true) {
+      while (res.writableNeedDrain && !closed.signal.aborted)
+        await once(res, 'drain', { signal: closed.signal });
+      if (closed.signal.aborted) return;
       const batch = await readChangesAfter(
-        cursor,
-        [...client.workspaceIds],
+        client.lastCursor,
+        workspaces,
         CHANGE_BATCH_LIMIT,
-        client.projectIds === null ? null : [...client.projectIds]
+        projects
       );
       // A concurrent poll may have ended this stream because its authorization
       // snapshot changed while the filtered query was in flight.
-      if (!this.clients.has(res)) return cursor;
+      while (res.writableNeedDrain && !closed.signal.aborted)
+        await once(res, 'drain', { signal: closed.signal });
+      if (closed.signal.aborted) return;
       if (batch.changes.length > 0) {
         this.send(res, 'change', { type: 'change', changes: batch.changes, cursor: batch.cursor });
       }
-      cursor = batch.cursor;
-      if (!batch.hasMore) return cursor;
+      client.lastCursor = batch.cursor;
+      // Polling can see the same committed rows as replay. Release covered
+      // queue entries now so they cannot consume the next drain's budget.
+      while (client.pending[0] && client.pending[0].cursor <= batch.cursor) {
+        client.pendingBytes -= client.pending.shift()!.bytes;
+      }
+      if (!batch.hasMore) break;
     }
-    return cursor;
+    while (true) {
+      while (res.writableNeedDrain && !closed.signal.aborted)
+        await once(res, 'drain', { signal: closed.signal });
+      if (closed.signal.aborted) return;
+      const pending = client.pending.shift();
+      if (!pending) break;
+      client.pendingBytes -= pending.bytes;
+      const changes = pending.changes.filter(change => change.seq > client.lastCursor);
+      if (changes.length > 0)
+        this.send(res, 'change', { type: 'change', changes, cursor: pending.cursor });
+      client.lastCursor = Math.max(client.lastCursor, pending.cursor);
+    }
+    client.replaying = false;
+    if (signalReplayCompletion) {
+      this.send(res, 'hello', { type: 'hello', cursor: client.lastCursor, replayComplete: true });
+    }
+  }
+
+  private sendRefresh(client: RealtimeClient): void {
+    const { response: res, closed } = client;
+    if (!res.writableNeedDrain) {
+      this.send(res, 'refresh', { type: 'refresh' });
+    } else if (!client.refreshPending) {
+      client.refreshPending = true;
+      void once(res, 'drain', { signal: closed.signal })
+        .then(() => {
+          client.refreshPending = false;
+          if (!closed.signal.aborted) this.sendRefresh(client);
+        })
+        .catch(error => {
+          if (!closed.signal.aborted) this.onPollError(error);
+        });
+    }
   }
 
   private send(res: Response, event: string, data: unknown): void {
-    res.write(`event: ${event}\n`);
     const cursor =
       typeof data === 'object' && data && 'cursor' in data
         ? Number((data as { cursor?: unknown }).cursor)
         : NaN;
-    if (Number.isFinite(cursor) && event === 'change') res.write(`id: ${cursor}\n`);
-    res.write(`data: ${JSON.stringify(data)}\n\n`);
+    const id = Number.isFinite(cursor) && event === 'change' ? `id: ${cursor}\n` : '';
+    res.write(`event: ${event}\n${id}data: ${JSON.stringify(data)}\n\n`);
   }
 }
 

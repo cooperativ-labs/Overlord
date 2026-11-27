@@ -13,6 +13,7 @@
 import type { ServiceContext } from '../context.ts';
 import { ServiceError } from '../errors.ts';
 import {
+  cancelQueuedLocalTargetMutation,
   createLocalTargetMutationRequest,
   LOCAL_TARGET_MUTATION_READ_TIMEOUT_MS,
   LOCAL_TARGET_MUTATION_WRITE_TIMEOUT_MS,
@@ -118,6 +119,7 @@ const READ_CAPABILITIES = new Set<QueueableCapabilityName>([
   'searchRepositoryText',
   'generateCommitMessageFromLocalDiff',
   'discoverLatch',
+  'readLatchHostIdentity',
   'inspectLatchSession',
   'doctor'
 ]);
@@ -195,7 +197,7 @@ export class RunnerQueueProvider implements LocalTargetCapabilities {
           : 'Could not queue the operation for this execution target.'
       );
     }
-    return (await waitForLocalTargetMutationResult({
+    const result = (await waitForLocalTargetMutationResult({
       ctx: this.queue.ctx,
       requestId,
       target: this.target,
@@ -206,6 +208,10 @@ export class RunnerQueueProvider implements LocalTargetCapabilities {
       createListener: this.queue.createCompletionListener ?? null,
       signal: this.queue.signal ?? null
     })) as CapabilityResult<T>;
+    if (capability === 'readLatchHostIdentity' && !result.ok) {
+      await cancelQueuedLocalTargetMutation({ ctx: this.queue.ctx, requestId });
+    }
+    return result;
   }
 
   writeProjectMetadata(
@@ -298,6 +304,10 @@ export class RunnerQueueProvider implements LocalTargetCapabilities {
 
   discoverLatch(input: DiscoverLatchInput): Promise<CapabilityResult<DiscoverLatchResult>> {
     return this.#call('discoverLatch', { ...input });
+  }
+
+  readLatchHostIdentity(): Promise<CapabilityResult<{ hostKeyDigest: string }>> {
+    return this.#call('readLatchHostIdentity', {});
   }
 
   inspectLatchSession(
