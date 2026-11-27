@@ -16,7 +16,10 @@ export function presentationText(value: string, max: number): string {
   return bounded(
     value
       .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
-      .replace(/[*_`]/g, '')
+      // Treat underscores as emphasis markers only when whitespace surrounds
+      // the emphasized text. Underscores inside identifiers stay literal.
+      .replace(/(\s)_([^_\n]+)_(\s)/g, '$1$2$3')
+      .replace(/[*`]/g, '')
       .replace(/^[#>\-+*]\s+/gm, '')
       .replace(/\s+/g, ' ')
       .trim(),

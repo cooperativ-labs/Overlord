@@ -180,7 +180,9 @@ export function normalizeBriefFragment(value: string): string {
       .join(' ')
       .replace(/<\/?[A-Za-z][^<>]*>/g, '')
       .replace(/\*\*([^*]+)\*\*/g, '$1')
-      .replace(/__([^_]+)__/g, '$1')
+      // Only unwrap underscore emphasis when whitespace bounds it; names like
+      // request_outstanding_items are ordinary identifiers.
+      .replace(/(\s)__([^_\n]+)__(\s)/g, '$1$2$3')
       .replace(/\s+/g, ' ')
       .trim()
   );

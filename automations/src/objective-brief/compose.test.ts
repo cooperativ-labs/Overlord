@@ -270,6 +270,13 @@ describe('objective brief assembly and checks', () => {
     );
   });
 
+  it('preserves snake_case while removing whitespace-delimited underscore emphasis', () => {
+    assert.equal(
+      normalizeBriefFragment('request_outstanding_items and __emphasized__ text'),
+      'request_outstanding_items and emphasized text'
+    );
+  });
+
   it('parses a string body and rejects non-object output', () => {
     assert.equal(parseObjectiveBriefOutput('not json', { title: true, summary: false }), null);
     const parsed = parseObjectiveBriefOutput(
