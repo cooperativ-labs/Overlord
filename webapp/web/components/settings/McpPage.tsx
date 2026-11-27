@@ -1,3 +1,4 @@
+import { useQuery } from '@tanstack/react-query';
 import {
   Bot,
   Cable,
@@ -10,7 +11,6 @@ import {
   Sparkles
 } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { useQuery } from '@tanstack/react-query';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -213,11 +213,9 @@ export function McpPage({ onNavigateToBackend, onNavigateToTokens }: McpPageProp
     retry: 1
   });
   const baseUrl = resolveMcpBaseUrl();
-  const mcpUrl = needsDesktopDiscovery
-    ? hostedConnection.data?.mcpUrl ?? ''
-    : `${baseUrl}/mcp`;
+  const mcpUrl = needsDesktopDiscovery ? (hostedConnection.data?.mcpUrl ?? '') : `${baseUrl}/mcp`;
   const authorizationUrl = needsDesktopDiscovery
-    ? hostedConnection.data?.authorizationUrl ?? ''
+    ? (hostedConnection.data?.authorizationUrl ?? '')
     : `${baseUrl}/oauth/approve`;
   const unavailableValue = hostedConnection.isError
     ? 'Unavailable — could not read MCP discovery'
@@ -316,7 +314,9 @@ export function McpPage({ onNavigateToBackend, onNavigateToTokens }: McpPageProp
               key={connector.agent}
               label={connector.label}
               value={
-                mcpUrl ? buildMcpConnectCommand({ mcpUrl, agent: connector.agent }) : unavailableValue
+                mcpUrl
+                  ? buildMcpConnectCommand({ mcpUrl, agent: connector.agent })
+                  : unavailableValue
               }
               description="Uses add-mcp to write the remote MCP config for this harness."
               disabled={!mcpUrl}
