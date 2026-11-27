@@ -48,7 +48,7 @@ var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: tru
 var require_main = __commonJS({
   "../node_modules/dotenv/lib/main.js"(exports2, module2) {
     var fs2 = require("fs");
-    var path28 = require("path");
+    var path30 = require("path");
     var os7 = require("os");
     var crypto2 = require("crypto");
     var TIPS = [
@@ -187,7 +187,7 @@ var require_main = __commonJS({
           possibleVaultPath = options.path.endsWith(".vault") ? options.path : `${options.path}.vault`;
         }
       } else {
-        possibleVaultPath = path28.resolve(process.cwd(), ".env.vault");
+        possibleVaultPath = path30.resolve(process.cwd(), ".env.vault");
       }
       if (fs2.existsSync(possibleVaultPath)) {
         return possibleVaultPath;
@@ -195,7 +195,7 @@ var require_main = __commonJS({
       return null;
     }
     function _resolveHome(envPath) {
-      return envPath[0] === "~" ? path28.join(os7.homedir(), envPath.slice(1)) : envPath;
+      return envPath[0] === "~" ? path30.join(os7.homedir(), envPath.slice(1)) : envPath;
     }
     function _configVault(options) {
       const debug = parseBoolean2(process.env.DOTENV_CONFIG_DEBUG || options && options.debug);
@@ -212,7 +212,7 @@ var require_main = __commonJS({
       return { parsed };
     }
     function configDotenv(options) {
-      const dotenvPath = path28.resolve(process.cwd(), ".env");
+      const dotenvPath = path30.resolve(process.cwd(), ".env");
       let encoding = "utf8";
       let processEnv = process.env;
       if (options && options.processEnv != null) {
@@ -240,13 +240,13 @@ var require_main = __commonJS({
       }
       let lastError;
       const parsedAll = {};
-      for (const path29 of optionPaths) {
+      for (const path31 of optionPaths) {
         try {
-          const parsed = DotenvModule.parse(fs2.readFileSync(path29, { encoding }));
+          const parsed = DotenvModule.parse(fs2.readFileSync(path31, { encoding }));
           DotenvModule.populate(parsedAll, parsed, options);
         } catch (e5) {
           if (debug) {
-            _debug(`failed to load ${path29} ${e5.message}`);
+            _debug(`failed to load ${path31} ${e5.message}`);
           }
           lastError = e5;
         }
@@ -259,7 +259,7 @@ var require_main = __commonJS({
         const shortPaths = [];
         for (const filePath of optionPaths) {
           try {
-            const relative = path28.relative(process.cwd(), filePath);
+            const relative = path30.relative(process.cwd(), filePath);
             shortPaths.push(relative);
           } catch (e5) {
             if (debug) {
@@ -585,10 +585,10 @@ function mergeDefs(...defs) {
 function cloneDef(schema2) {
   return mergeDefs(schema2._zod.def);
 }
-function getElementAtPath(obj2, path28) {
-  if (!path28)
+function getElementAtPath(obj2, path30) {
+  if (!path30)
     return obj2;
-  return path28.reduce((acc, key) => acc?.[key], obj2);
+  return path30.reduce((acc, key) => acc?.[key], obj2);
 }
 function promiseAllObject(promisesObj) {
   const keys = Object.keys(promisesObj);
@@ -847,11 +847,11 @@ function explicitlyAborted(x, startIndex = 0) {
   }
   return false;
 }
-function prefixIssues(path28, issues) {
+function prefixIssues(path30, issues) {
   return issues.map((iss) => {
     var _a8;
     (_a8 = iss).path ?? (_a8.path = []);
-    iss.path.unshift(path28);
+    iss.path.unshift(path30);
     return iss;
   });
 }
@@ -1384,16 +1384,16 @@ function flattenError(error64, mapper = (issue2) => issue2.message) {
 }
 function formatError(error64, mapper = (issue2) => issue2.message) {
   const fieldErrors = { _errors: [] };
-  const processError = (error65, path28 = []) => {
+  const processError = (error65, path30 = []) => {
     for (const issue2 of error65.issues) {
       if (issue2.code === "invalid_union" && issue2.errors.length) {
-        issue2.errors.map((issues) => processError({ issues }, [...path28, ...issue2.path]));
+        issue2.errors.map((issues) => processError({ issues }, [...path30, ...issue2.path]));
       } else if (issue2.code === "invalid_key") {
-        processError({ issues: issue2.issues }, [...path28, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path30, ...issue2.path]);
       } else if (issue2.code === "invalid_element") {
-        processError({ issues: issue2.issues }, [...path28, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path30, ...issue2.path]);
       } else {
-        const fullpath = [...path28, ...issue2.path];
+        const fullpath = [...path30, ...issue2.path];
         if (fullpath.length === 0) {
           fieldErrors._errors.push(mapper(issue2));
         } else {
@@ -1432,17 +1432,17 @@ function formatError(error64, mapper = (issue2) => issue2.message) {
 }
 function treeifyError(error64, mapper = (issue2) => issue2.message) {
   const result2 = { errors: [] };
-  const processError = (error65, path28 = []) => {
+  const processError = (error65, path30 = []) => {
     var _a8;
     for (const issue2 of error65.issues) {
       if (issue2.code === "invalid_union" && issue2.errors.length) {
-        issue2.errors.map((issues) => processError({ issues }, [...path28, ...issue2.path]));
+        issue2.errors.map((issues) => processError({ issues }, [...path30, ...issue2.path]));
       } else if (issue2.code === "invalid_key") {
-        processError({ issues: issue2.issues }, [...path28, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path30, ...issue2.path]);
       } else if (issue2.code === "invalid_element") {
-        processError({ issues: issue2.issues }, [...path28, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path30, ...issue2.path]);
       } else {
-        const fullpath = [...path28, ...issue2.path];
+        const fullpath = [...path30, ...issue2.path];
         if (fullpath.length === 0) {
           result2.errors.push(mapper(issue2));
           continue;
@@ -1481,8 +1481,8 @@ function treeifyError(error64, mapper = (issue2) => issue2.message) {
 }
 function toDotPath(_path) {
   const segs = [];
-  const path28 = _path.map((seg) => typeof seg === "object" ? seg.key : seg);
-  for (const seg of path28) {
+  const path30 = _path.map((seg) => typeof seg === "object" ? seg.key : seg);
+  for (const seg of path30) {
     if (typeof seg === "number")
       segs.push(`[${seg}]`);
     else if (typeof seg === "symbol")
@@ -19514,13 +19514,13 @@ function resolveRef(ref, ctx) {
   if (!ref.startsWith("#")) {
     throw new Error("External $ref is not supported, only local refs (#/...) are allowed");
   }
-  const path28 = ref.slice(1).split("/").filter(Boolean);
-  if (path28.length === 0) {
+  const path30 = ref.slice(1).split("/").filter(Boolean);
+  if (path30.length === 0) {
     return ctx.rootSchema;
   }
   const defsKey = ctx.version === "draft-2020-12" ? "$defs" : "definitions";
-  if (path28[0] === defsKey) {
-    const key = path28[1] === void 0 ? void 0 : decodeJSONPointerSegment(path28[1]);
+  if (path30[0] === defsKey) {
+    const key = path30[1] === void 0 ? void 0 : decodeJSONPointerSegment(path30[1]);
     if (!key || !ctx.defs[key]) {
       throw new Error(`Reference not found: ${ref}`);
     }
@@ -24132,7 +24132,7 @@ var require_split2 = __commonJS({
 var require_helper = __commonJS({
   "../node_modules/pgpass/lib/helper.js"(exports2, module2) {
     "use strict";
-    var path28 = require("path");
+    var path30 = require("path");
     var Stream = require("stream").Stream;
     var split2 = require_split2();
     var util = require("util");
@@ -24171,7 +24171,7 @@ var require_helper = __commonJS({
     };
     module2.exports.getFileName = function(rawEnv) {
       var env3 = rawEnv || process.env;
-      var file2 = env3.PGPASSFILE || (isWin ? path28.join(env3.APPDATA || "./", "postgresql", "pgpass.conf") : path28.join(env3.HOME || "./", ".pgpass"));
+      var file2 = env3.PGPASSFILE || (isWin ? path30.join(env3.APPDATA || "./", "postgresql", "pgpass.conf") : path30.join(env3.HOME || "./", ".pgpass"));
       return file2;
     };
     module2.exports.usePgPass = function(stats, fname) {
@@ -24303,13 +24303,13 @@ var require_helper = __commonJS({
 var require_lib = __commonJS({
   "../node_modules/pgpass/lib/index.js"(exports2, module2) {
     "use strict";
-    var path28 = require("path");
+    var path30 = require("path");
     var fs2 = require("fs");
     var helper = require_helper();
     module2.exports = function(connInfo, cb) {
       var file2 = helper.getFileName();
-      fs2.stat(file2, function(err, stat) {
-        if (err || !helper.usePgPass(stat, file2)) {
+      fs2.stat(file2, function(err, stat2) {
+        if (err || !helper.usePgPass(stat2, file2)) {
           return cb(void 0);
         }
         var st = fs2.createReadStream(file2);
@@ -63890,11 +63890,11 @@ var require_mime_types = __commonJS({
       }
       return exts[0];
     }
-    function lookup(path28) {
-      if (!path28 || typeof path28 !== "string") {
+    function lookup(path30) {
+      if (!path30 || typeof path30 !== "string") {
         return false;
       }
-      var extension2 = extname("x." + path28).toLowerCase().substr(1);
+      var extension2 = extname("x." + path30).toLowerCase().substr(1);
       if (!extension2) {
         return false;
       }
@@ -68317,7 +68317,7 @@ var require_path_to_regexp = __commonJS({
   "../node_modules/path-to-regexp/index.js"(exports2, module2) {
     module2.exports = pathToRegexp;
     var MATCHING_GROUP_REGEXP = /\\.|\((?:\?<(.*?)>)?(?!\?)/g;
-    function pathToRegexp(path28, keys, options) {
+    function pathToRegexp(path30, keys, options) {
       options = options || {};
       keys = keys || [];
       var strict = options.strict;
@@ -68331,8 +68331,8 @@ var require_path_to_regexp = __commonJS({
       var pos = 0;
       var backtrack = "";
       var m3;
-      if (path28 instanceof RegExp) {
-        while (m3 = MATCHING_GROUP_REGEXP.exec(path28.source)) {
+      if (path30 instanceof RegExp) {
+        while (m3 = MATCHING_GROUP_REGEXP.exec(path30.source)) {
           if (m3[0][0] === "\\") continue;
           keys.push({
             name: m3[1] || name2++,
@@ -68340,18 +68340,18 @@ var require_path_to_regexp = __commonJS({
             offset: m3.index
           });
         }
-        return path28;
+        return path30;
       }
-      if (Array.isArray(path28)) {
-        path28 = path28.map(function(value2) {
+      if (Array.isArray(path30)) {
+        path30 = path30.map(function(value2) {
           return pathToRegexp(value2, keys, options).source;
         });
-        return new RegExp(path28.join("|"), flags);
+        return new RegExp(path30.join("|"), flags);
       }
-      if (typeof path28 !== "string") {
+      if (typeof path30 !== "string") {
         throw new TypeError("path must be a string, array of strings, or regular expression");
       }
-      path28 = path28.replace(
+      path30 = path30.replace(
         /\\.|(\/)?(\.)?:(\w+)(\(.*?\))?(\*)?(\?)?|[.*]|\/\(/g,
         function(match, slash, format2, key, capture, star, optional2, offset) {
           if (match[0] === "\\") {
@@ -68368,7 +68368,7 @@ var require_path_to_regexp = __commonJS({
           if (slash || format2) {
             backtrack = "";
           } else {
-            backtrack += path28.slice(pos, offset);
+            backtrack += path30.slice(pos, offset);
           }
           pos = offset + match.length;
           if (match === "*") {
@@ -68398,7 +68398,7 @@ var require_path_to_regexp = __commonJS({
           return result2;
         }
       );
-      while (m3 = MATCHING_GROUP_REGEXP.exec(path28)) {
+      while (m3 = MATCHING_GROUP_REGEXP.exec(path30)) {
         if (m3[0][0] === "\\") continue;
         if (keysOffset + i5 === keys.length || keys[keysOffset + i5].offset > m3.index) {
           keys.splice(keysOffset + i5, 0, {
@@ -68410,13 +68410,13 @@ var require_path_to_regexp = __commonJS({
         }
         i5++;
       }
-      path28 += strict ? "" : path28[path28.length - 1] === "/" ? "?" : "/?";
+      path30 += strict ? "" : path30[path30.length - 1] === "/" ? "?" : "/?";
       if (end) {
-        path28 += "$";
-      } else if (path28[path28.length - 1] !== "/") {
-        path28 += lookahead ? "(?=/|$)" : "(?:/|$)";
+        path30 += "$";
+      } else if (path30[path30.length - 1] !== "/") {
+        path30 += lookahead ? "(?=/|$)" : "(?:/|$)";
       }
-      return new RegExp("^" + path28, flags);
+      return new RegExp("^" + path30, flags);
     }
   }
 });
@@ -68429,19 +68429,19 @@ var require_layer = __commonJS({
     var debug = require_src3()("express:router:layer");
     var hasOwnProperty = Object.prototype.hasOwnProperty;
     module2.exports = Layer;
-    function Layer(path28, options, fn) {
+    function Layer(path30, options, fn) {
       if (!(this instanceof Layer)) {
-        return new Layer(path28, options, fn);
+        return new Layer(path30, options, fn);
       }
-      debug("new %o", path28);
+      debug("new %o", path30);
       var opts = options || {};
       this.handle = fn;
       this.name = fn.name || "<anonymous>";
       this.params = void 0;
       this.path = void 0;
-      this.regexp = pathRegexp(path28, this.keys = [], opts);
-      this.regexp.fast_star = path28 === "*";
-      this.regexp.fast_slash = path28 === "/" && opts.end === false;
+      this.regexp = pathRegexp(path30, this.keys = [], opts);
+      this.regexp.fast_star = path30 === "*";
+      this.regexp.fast_slash = path30 === "/" && opts.end === false;
     }
     Layer.prototype.handle_error = function handle_error(error64, req, res, next) {
       var fn = this.handle;
@@ -68465,20 +68465,20 @@ var require_layer = __commonJS({
         next(err);
       }
     };
-    Layer.prototype.match = function match(path28) {
+    Layer.prototype.match = function match(path30) {
       var match2;
-      if (path28 != null) {
+      if (path30 != null) {
         if (this.regexp.fast_slash) {
           this.params = {};
           this.path = "";
           return true;
         }
         if (this.regexp.fast_star) {
-          this.params = { "0": decode_param(path28) };
-          this.path = path28;
+          this.params = { "0": decode_param(path30) };
+          this.path = path30;
           return true;
         }
-        match2 = this.regexp.exec(path28);
+        match2 = this.regexp.exec(path30);
       }
       if (!match2) {
         this.params = void 0;
@@ -68571,10 +68571,10 @@ var require_route = __commonJS({
     var slice = Array.prototype.slice;
     var toString = Object.prototype.toString;
     module2.exports = Route;
-    function Route(path28) {
-      this.path = path28;
+    function Route(path30) {
+      this.path = path30;
       this.stack = [];
-      debug("new %o", path28);
+      debug("new %o", path30);
       this.methods = {};
     }
     Route.prototype._handles_method = function _handles_method(method) {
@@ -68786,8 +68786,8 @@ var require_router = __commonJS({
         if (++sync > 100) {
           return setImmediate(next, err);
         }
-        var path28 = getPathname(req);
-        if (path28 == null) {
+        var path30 = getPathname(req);
+        if (path30 == null) {
           return done(layerError);
         }
         var layer;
@@ -68795,7 +68795,7 @@ var require_router = __commonJS({
         var route;
         while (match !== true && idx < stack.length) {
           layer = stack[idx++];
-          match = matchLayer(layer, path28);
+          match = matchLayer(layer, path30);
           route = layer.route;
           if (typeof match !== "boolean") {
             layerError = layerError || match;
@@ -68833,18 +68833,18 @@ var require_router = __commonJS({
           } else if (route) {
             layer.handle_request(req, res, next);
           } else {
-            trim_prefix(layer, layerError, layerPath, path28);
+            trim_prefix(layer, layerError, layerPath, path30);
           }
           sync = 0;
         });
       }
-      function trim_prefix(layer, layerError, layerPath, path28) {
+      function trim_prefix(layer, layerError, layerPath, path30) {
         if (layerPath.length !== 0) {
-          if (layerPath !== path28.slice(0, layerPath.length)) {
+          if (layerPath !== path30.slice(0, layerPath.length)) {
             next(layerError);
             return;
           }
-          var c5 = path28[layerPath.length];
+          var c5 = path30[layerPath.length];
           if (c5 && c5 !== "/" && c5 !== ".") return next(layerError);
           debug("trim prefix (%s) from url %s", layerPath, req.url);
           removed = layerPath;
@@ -68922,7 +68922,7 @@ var require_router = __commonJS({
     };
     proto.use = function use(fn) {
       var offset = 0;
-      var path28 = "/";
+      var path30 = "/";
       if (typeof fn !== "function") {
         var arg = fn;
         while (Array.isArray(arg) && arg.length !== 0) {
@@ -68930,7 +68930,7 @@ var require_router = __commonJS({
         }
         if (typeof arg !== "function") {
           offset = 1;
-          path28 = fn;
+          path30 = fn;
         }
       }
       var callbacks = flatten(slice.call(arguments, offset));
@@ -68942,8 +68942,8 @@ var require_router = __commonJS({
         if (typeof fn !== "function") {
           throw new TypeError("Router.use() requires a middleware function but got a " + gettype(fn));
         }
-        debug("use %o %s", path28, fn.name || "<anonymous>");
-        var layer = new Layer(path28, {
+        debug("use %o %s", path30, fn.name || "<anonymous>");
+        var layer = new Layer(path30, {
           sensitive: this.caseSensitive,
           strict: false,
           end: false
@@ -68953,9 +68953,9 @@ var require_router = __commonJS({
       }
       return this;
     };
-    proto.route = function route(path28) {
-      var route2 = new Route(path28);
-      var layer = new Layer(path28, {
+    proto.route = function route(path30) {
+      var route2 = new Route(path30);
+      var layer = new Layer(path30, {
         sensitive: this.caseSensitive,
         strict: this.strict,
         end: true
@@ -68965,8 +68965,8 @@ var require_router = __commonJS({
       return route2;
     };
     methods2.concat("all").forEach(function(method) {
-      proto[method] = function(path28) {
-        var route = this.route(path28);
+      proto[method] = function(path30) {
+        var route = this.route(path30);
         route[method].apply(route, slice.call(arguments, 1));
         return this;
       };
@@ -69002,9 +69002,9 @@ var require_router = __commonJS({
       }
       return toString.call(obj2).replace(objectRegExp, "$1");
     }
-    function matchLayer(layer, path28) {
+    function matchLayer(layer, path30) {
       try {
-        return layer.match(path28);
+        return layer.match(path30);
       } catch (err) {
         return err;
       }
@@ -69122,13 +69122,13 @@ var require_view = __commonJS({
   "../node_modules/express/lib/view.js"(exports2, module2) {
     "use strict";
     var debug = require_src3()("express:view");
-    var path28 = require("path");
+    var path30 = require("path");
     var fs2 = require("fs");
-    var dirname = path28.dirname;
-    var basename = path28.basename;
-    var extname = path28.extname;
-    var join6 = path28.join;
-    var resolve = path28.resolve;
+    var dirname = path30.dirname;
+    var basename = path30.basename;
+    var extname = path30.extname;
+    var join6 = path30.join;
+    var resolve = path30.resolve;
     module2.exports = View;
     function View(name2, options) {
       var opts = options || {};
@@ -69157,17 +69157,17 @@ var require_view = __commonJS({
       this.path = this.lookup(fileName);
     }
     View.prototype.lookup = function lookup(name2) {
-      var path29;
+      var path31;
       var roots = [].concat(this.root);
       debug('lookup "%s"', name2);
-      for (var i5 = 0; i5 < roots.length && !path29; i5++) {
+      for (var i5 = 0; i5 < roots.length && !path31; i5++) {
         var root5 = roots[i5];
         var loc = resolve(root5, name2);
         var dir = dirname(loc);
         var file2 = basename(loc);
-        path29 = this.resolve(dir, file2);
+        path31 = this.resolve(dir, file2);
       }
-      return path29;
+      return path31;
     };
     View.prototype.render = function render2(options, callback) {
       debug('render "%s"', this.path);
@@ -69175,21 +69175,21 @@ var require_view = __commonJS({
     };
     View.prototype.resolve = function resolve2(dir, file2) {
       var ext = this.ext;
-      var path29 = join6(dir, file2);
-      var stat = tryStat(path29);
-      if (stat && stat.isFile()) {
-        return path29;
+      var path31 = join6(dir, file2);
+      var stat2 = tryStat(path31);
+      if (stat2 && stat2.isFile()) {
+        return path31;
       }
-      path29 = join6(dir, basename(file2, ext), "index" + ext);
-      stat = tryStat(path29);
-      if (stat && stat.isFile()) {
-        return path29;
+      path31 = join6(dir, basename(file2, ext), "index" + ext);
+      stat2 = tryStat(path31);
+      if (stat2 && stat2.isFile()) {
+        return path31;
       }
     };
-    function tryStat(path29) {
-      debug('stat "%s"', path29);
+    function tryStat(path31) {
+      debug('stat "%s"', path31);
       try {
-        return fs2.statSync(path29);
+        return fs2.statSync(path31);
       } catch (e5) {
         return void 0;
       }
@@ -69876,9 +69876,9 @@ var require_etag = __commonJS({
       }
       return obj2 && typeof obj2 === "object" && "ctime" in obj2 && toString.call(obj2.ctime) === "[object Date]" && "mtime" in obj2 && toString.call(obj2.mtime) === "[object Date]" && "ino" in obj2 && typeof obj2.ino === "number" && "size" in obj2 && typeof obj2.size === "number";
     }
-    function stattag(stat) {
-      var mtime = stat.mtime.getTime().toString(16);
-      var size = stat.size.toString(16);
+    function stattag(stat2) {
+      var mtime = stat2.mtime.getTime().toString(16);
+      var size = stat2.size.toString(16);
       return '"' + size + "-" + mtime + '"';
     }
   }
@@ -69967,7 +69967,7 @@ var require_types = __commonJS({
 // ../node_modules/mime/mime.js
 var require_mime = __commonJS({
   "../node_modules/mime/mime.js"(exports2, module2) {
-    var path28 = require("path");
+    var path30 = require("path");
     var fs2 = require("fs");
     function Mime() {
       this.types = /* @__PURE__ */ Object.create(null);
@@ -69997,8 +69997,8 @@ var require_mime = __commonJS({
       this.define(map6);
       this._loading = null;
     };
-    Mime.prototype.lookup = function(path29, fallback2) {
-      var ext = path29.replace(/^.*[\.\/\\]/, "").toLowerCase();
+    Mime.prototype.lookup = function(path31, fallback2) {
+      var ext = path31.replace(/^.*[\.\/\\]/, "").toLowerCase();
       return this.types[ext] || fallback2 || this.default_type;
     };
     Mime.prototype.extension = function(mimeType) {
@@ -70232,28 +70232,28 @@ var require_send = __commonJS({
     var ms = require_ms5();
     var onFinished = require_on_finished();
     var parseRange = require_range_parser();
-    var path28 = require("path");
+    var path30 = require("path");
     var statuses = require_statuses();
     var Stream = require("stream");
     var util = require("util");
-    var extname = path28.extname;
-    var join6 = path28.join;
-    var normalize2 = path28.normalize;
-    var resolve = path28.resolve;
-    var sep3 = path28.sep;
+    var extname = path30.extname;
+    var join6 = path30.join;
+    var normalize2 = path30.normalize;
+    var resolve = path30.resolve;
+    var sep3 = path30.sep;
     var BYTES_RANGE_REGEXP = /^ *bytes=/;
     var MAX_MAXAGE = 60 * 60 * 24 * 365 * 1e3;
     var UP_PATH_REGEXP = /(?:^|[\\/])\.\.(?:[\\/]|$)/;
     module2.exports = send;
     module2.exports.mime = mime;
-    function send(req, path29, options) {
-      return new SendStream(req, path29, options);
+    function send(req, path31, options) {
+      return new SendStream(req, path31, options);
     }
-    function SendStream(req, path29, options) {
+    function SendStream(req, path31, options) {
       Stream.call(this);
       var opts = options || {};
       this.options = opts;
-      this.path = path29;
+      this.path = path31;
       this.req = req;
       this._acceptRanges = opts.acceptRanges !== void 0 ? Boolean(opts.acceptRanges) : true;
       this._cacheControl = opts.cacheControl !== void 0 ? Boolean(opts.cacheControl) : true;
@@ -70299,8 +70299,8 @@ var require_send = __commonJS({
       this._index = index2;
       return this;
     }, "send.index: pass index as option");
-    SendStream.prototype.root = function root5(path29) {
-      this._root = resolve(String(path29));
+    SendStream.prototype.root = function root5(path31) {
+      this._root = resolve(String(path31));
       debug("root %s", this._root);
       return this;
     };
@@ -70413,10 +70413,10 @@ var require_send = __commonJS({
       var lastModified = this.res.getHeader("Last-Modified");
       return parseHttpDate(lastModified) <= parseHttpDate(ifRange);
     };
-    SendStream.prototype.redirect = function redirect(path29) {
+    SendStream.prototype.redirect = function redirect(path31) {
       var res = this.res;
       if (hasListeners(this, "directory")) {
-        this.emit("directory", res, path29);
+        this.emit("directory", res, path31);
         return;
       }
       if (this.hasTrailingSlash()) {
@@ -70436,42 +70436,42 @@ var require_send = __commonJS({
     SendStream.prototype.pipe = function pipe2(res) {
       var root5 = this._root;
       this.res = res;
-      var path29 = decode5(this.path);
-      if (path29 === -1) {
+      var path31 = decode5(this.path);
+      if (path31 === -1) {
         this.error(400);
         return res;
       }
-      if (~path29.indexOf("\0")) {
+      if (~path31.indexOf("\0")) {
         this.error(400);
         return res;
       }
       var parts;
       if (root5 !== null) {
-        if (path29) {
-          path29 = normalize2("." + sep3 + path29);
+        if (path31) {
+          path31 = normalize2("." + sep3 + path31);
         }
-        if (UP_PATH_REGEXP.test(path29)) {
-          debug('malicious path "%s"', path29);
+        if (UP_PATH_REGEXP.test(path31)) {
+          debug('malicious path "%s"', path31);
           this.error(403);
           return res;
         }
-        parts = path29.split(sep3);
-        path29 = normalize2(join6(root5, path29));
+        parts = path31.split(sep3);
+        path31 = normalize2(join6(root5, path31));
       } else {
-        if (UP_PATH_REGEXP.test(path29)) {
-          debug('malicious path "%s"', path29);
+        if (UP_PATH_REGEXP.test(path31)) {
+          debug('malicious path "%s"', path31);
           this.error(403);
           return res;
         }
-        parts = normalize2(path29).split(sep3);
-        path29 = resolve(path29);
+        parts = normalize2(path31).split(sep3);
+        path31 = resolve(path31);
       }
       if (containsDotFile(parts)) {
         var access = this._dotfiles;
         if (access === void 0) {
           access = parts[parts.length - 1][0] === "." ? this._hidden ? "allow" : "ignore" : "allow";
         }
-        debug('%s dotfile "%s"', access, path29);
+        debug('%s dotfile "%s"', access, path31);
         switch (access) {
           case "allow":
             break;
@@ -70485,14 +70485,14 @@ var require_send = __commonJS({
         }
       }
       if (this._index.length && this.hasTrailingSlash()) {
-        this.sendIndex(path29);
+        this.sendIndex(path31);
         return res;
       }
-      this.sendFile(path29);
+      this.sendFile(path31);
       return res;
     };
-    SendStream.prototype.send = function send2(path29, stat) {
-      var len = stat.size;
+    SendStream.prototype.send = function send2(path31, stat2) {
+      var len = stat2.size;
       var options = this.options;
       var opts = {};
       var res = this.res;
@@ -70503,9 +70503,9 @@ var require_send = __commonJS({
         this.headersAlreadySent();
         return;
       }
-      debug('pipe "%s"', path29);
-      this.setHeader(path29, stat);
-      this.type(path29);
+      debug('pipe "%s"', path31);
+      this.setHeader(path31, stat2);
+      this.type(path31);
       if (this.isConditionalGET()) {
         if (this.isPreconditionFailure()) {
           this.error(412);
@@ -70554,36 +70554,36 @@ var require_send = __commonJS({
         res.end();
         return;
       }
-      this.stream(path29, opts);
+      this.stream(path31, opts);
     };
-    SendStream.prototype.sendFile = function sendFile(path29) {
+    SendStream.prototype.sendFile = function sendFile(path31) {
       var i5 = 0;
       var self = this;
-      debug('stat "%s"', path29);
-      fs2.stat(path29, function onstat(err, stat) {
-        if (err && err.code === "ENOENT" && !extname(path29) && path29[path29.length - 1] !== sep3) {
+      debug('stat "%s"', path31);
+      fs2.stat(path31, function onstat(err, stat2) {
+        if (err && err.code === "ENOENT" && !extname(path31) && path31[path31.length - 1] !== sep3) {
           return next(err);
         }
         if (err) return self.onStatError(err);
-        if (stat.isDirectory()) return self.redirect(path29);
-        self.emit("file", path29, stat);
-        self.send(path29, stat);
+        if (stat2.isDirectory()) return self.redirect(path31);
+        self.emit("file", path31, stat2);
+        self.send(path31, stat2);
       });
       function next(err) {
         if (self._extensions.length <= i5) {
           return err ? self.onStatError(err) : self.error(404);
         }
-        var p3 = path29 + "." + self._extensions[i5++];
+        var p3 = path31 + "." + self._extensions[i5++];
         debug('stat "%s"', p3);
-        fs2.stat(p3, function(err2, stat) {
+        fs2.stat(p3, function(err2, stat2) {
           if (err2) return next(err2);
-          if (stat.isDirectory()) return next();
-          self.emit("file", p3, stat);
-          self.send(p3, stat);
+          if (stat2.isDirectory()) return next();
+          self.emit("file", p3, stat2);
+          self.send(p3, stat2);
         });
       }
     };
-    SendStream.prototype.sendIndex = function sendIndex(path29) {
+    SendStream.prototype.sendIndex = function sendIndex(path31) {
       var i5 = -1;
       var self = this;
       function next(err) {
@@ -70591,21 +70591,21 @@ var require_send = __commonJS({
           if (err) return self.onStatError(err);
           return self.error(404);
         }
-        var p3 = join6(path29, self._index[i5]);
+        var p3 = join6(path31, self._index[i5]);
         debug('stat "%s"', p3);
-        fs2.stat(p3, function(err2, stat) {
+        fs2.stat(p3, function(err2, stat2) {
           if (err2) return next(err2);
-          if (stat.isDirectory()) return next();
-          self.emit("file", p3, stat);
-          self.send(p3, stat);
+          if (stat2.isDirectory()) return next();
+          self.emit("file", p3, stat2);
+          self.send(p3, stat2);
         });
       }
       next();
     };
-    SendStream.prototype.stream = function stream(path29, options) {
+    SendStream.prototype.stream = function stream(path31, options) {
       var self = this;
       var res = this.res;
-      var stream2 = fs2.createReadStream(path29, options);
+      var stream2 = fs2.createReadStream(path31, options);
       this.emit("stream", stream2);
       stream2.pipe(res);
       function cleanup() {
@@ -70620,10 +70620,10 @@ var require_send = __commonJS({
         self.emit("end");
       });
     };
-    SendStream.prototype.type = function type(path29) {
+    SendStream.prototype.type = function type(path31) {
       var res = this.res;
       if (res.getHeader("Content-Type")) return;
-      var type2 = mime.lookup(path29);
+      var type2 = mime.lookup(path31);
       if (!type2) {
         debug("no content-type");
         return;
@@ -70632,9 +70632,9 @@ var require_send = __commonJS({
       debug("content-type %s", type2);
       res.setHeader("Content-Type", type2 + (charset ? "; charset=" + charset : ""));
     };
-    SendStream.prototype.setHeader = function setHeader(path29, stat) {
+    SendStream.prototype.setHeader = function setHeader(path31, stat2) {
       var res = this.res;
-      this.emit("headers", res, path29, stat);
+      this.emit("headers", res, path31, stat2);
       if (this._acceptRanges && !res.getHeader("Accept-Ranges")) {
         debug("accept ranges");
         res.setHeader("Accept-Ranges", "bytes");
@@ -70648,12 +70648,12 @@ var require_send = __commonJS({
         res.setHeader("Cache-Control", cacheControl);
       }
       if (this._lastModified && !res.getHeader("Last-Modified")) {
-        var modified = stat.mtime.toUTCString();
+        var modified = stat2.mtime.toUTCString();
         debug("modified %s", modified);
         res.setHeader("Last-Modified", modified);
       }
       if (this._etag && !res.getHeader("ETag")) {
-        var val = etag(stat);
+        var val = etag(stat2);
         debug("etag %s", val);
         res.setHeader("ETag", val);
       }
@@ -70693,9 +70693,9 @@ var require_send = __commonJS({
       }
       return err instanceof Error ? createError(status, err, { expose: false }) : createError(status, err);
     }
-    function decode5(path29) {
+    function decode5(path31) {
       try {
-        return decodeURIComponent(path29);
+        return decodeURIComponent(path31);
       } catch (err) {
         return -1;
       }
@@ -71604,10 +71604,10 @@ var require_utils4 = __commonJS({
     var querystring = require("querystring");
     exports2.etag = createETagGenerator({ weak: false });
     exports2.wetag = createETagGenerator({ weak: true });
-    exports2.isAbsolute = function(path28) {
-      if ("/" === path28[0]) return true;
-      if (":" === path28[1] && ("\\" === path28[2] || "/" === path28[2])) return true;
-      if ("\\\\" === path28.substring(0, 2)) return true;
+    exports2.isAbsolute = function(path30) {
+      if ("/" === path30[0]) return true;
+      if (":" === path30[1] && ("\\" === path30[2] || "/" === path30[2])) return true;
+      if ("\\\\" === path30.substring(0, 2)) return true;
     };
     exports2.flatten = deprecate2.function(
       flatten,
@@ -71819,7 +71819,7 @@ var require_application = __commonJS({
     };
     app2.use = function use(fn) {
       var offset = 0;
-      var path28 = "/";
+      var path30 = "/";
       if (typeof fn !== "function") {
         var arg = fn;
         while (Array.isArray(arg) && arg.length !== 0) {
@@ -71827,7 +71827,7 @@ var require_application = __commonJS({
         }
         if (typeof arg !== "function") {
           offset = 1;
-          path28 = fn;
+          path30 = fn;
         }
       }
       var fns = flatten(slice.call(arguments, offset));
@@ -71838,12 +71838,12 @@ var require_application = __commonJS({
       var router2 = this._router;
       fns.forEach(function(fn2) {
         if (!fn2 || !fn2.handle || !fn2.set) {
-          return router2.use(path28, fn2);
+          return router2.use(path30, fn2);
         }
-        debug(".use app under %s", path28);
-        fn2.mountpath = path28;
+        debug(".use app under %s", path30);
+        fn2.mountpath = path30;
         fn2.parent = this;
-        router2.use(path28, function mounted_app(req, res, next) {
+        router2.use(path30, function mounted_app(req, res, next) {
           var orig = req.app;
           fn2.handle(req, res, function(err) {
             setPrototypeOf(req, orig.request);
@@ -71855,9 +71855,9 @@ var require_application = __commonJS({
       }, this);
       return this;
     };
-    app2.route = function route(path28) {
+    app2.route = function route(path30) {
       this.lazyrouter();
-      return this._router.route(path28);
+      return this._router.route(path30);
     };
     app2.engine = function engine(ext, fn) {
       if (typeof fn !== "function") {
@@ -71908,7 +71908,7 @@ var require_application = __commonJS({
       }
       return this;
     };
-    app2.path = function path28() {
+    app2.path = function path30() {
       return this.parent ? this.parent.path() + this.mountpath : "";
     };
     app2.enabled = function enabled(setting) {
@@ -71924,19 +71924,19 @@ var require_application = __commonJS({
       return this.set(setting, false);
     };
     methods2.forEach(function(method) {
-      app2[method] = function(path28) {
+      app2[method] = function(path30) {
         if (method === "get" && arguments.length === 1) {
-          return this.set(path28);
+          return this.set(path30);
         }
         this.lazyrouter();
-        var route = this._router.route(path28);
+        var route = this._router.route(path30);
         route[method].apply(route, slice.call(arguments, 1));
         return this;
       };
     });
-    app2.all = function all(path28) {
+    app2.all = function all(path30) {
       this.lazyrouter();
-      var route = this._router.route(path28);
+      var route = this._router.route(path30);
       var args = slice.call(arguments, 1);
       for (var i5 = 0; i5 < methods2.length; i5++) {
         route[methods2[i5]].apply(route, args);
@@ -72554,11 +72554,11 @@ var require_mime_types2 = __commonJS({
       }
       return exts[0];
     }
-    function lookup(path28) {
-      if (!path28 || typeof path28 !== "string") {
+    function lookup(path30) {
+      if (!path30 || typeof path30 !== "string") {
         return false;
       }
-      var extension2 = extname("x." + path28).toLowerCase().substr(1);
+      var extension2 = extname("x." + path30).toLowerCase().substr(1);
       if (!extension2) {
         return false;
       }
@@ -72785,7 +72785,7 @@ var require_request = __commonJS({
       var subdomains2 = !isIP2(hostname5) ? hostname5.split(".").reverse() : [hostname5];
       return subdomains2.slice(offset);
     });
-    defineGetter(req, "path", function path28() {
+    defineGetter(req, "path", function path30() {
       return parse6(this).pathname;
     });
     defineGetter(req, "hostname", function hostname5() {
@@ -73032,9 +73032,9 @@ var require_response = __commonJS({
     var encodeUrl = require_encodeurl();
     var escapeHtml3 = require_escape_html();
     var http = require("http");
-    var isAbsolute = require_utils4().isAbsolute;
+    var isAbsolute2 = require_utils4().isAbsolute;
     var onFinished = require_on_finished();
-    var path28 = require("path");
+    var path30 = require("path");
     var statuses = require_statuses();
     var merge3 = require_utils_merge();
     var sign2 = require_cookie_signature().sign;
@@ -73043,9 +73043,9 @@ var require_response = __commonJS({
     var setCharset = require_utils4().setCharset;
     var cookie = require_cookie();
     var send = require_send();
-    var extname = path28.extname;
+    var extname = path30.extname;
     var mime = send.mime;
-    var resolve = path28.resolve;
+    var resolve = path30.resolve;
     var vary = require_vary();
     var res = Object.create(http.ServerResponse.prototype);
     module2.exports = res;
@@ -73222,26 +73222,26 @@ var require_response = __commonJS({
       this.type("txt");
       return this.send(body);
     };
-    res.sendFile = function sendFile(path29, options, callback) {
+    res.sendFile = function sendFile(path31, options, callback) {
       var done = callback;
       var req = this.req;
       var res2 = this;
       var next = req.next;
       var opts = options || {};
-      if (!path29) {
+      if (!path31) {
         throw new TypeError("path argument is required to res.sendFile");
       }
-      if (typeof path29 !== "string") {
+      if (typeof path31 !== "string") {
         throw new TypeError("path must be a string to res.sendFile");
       }
       if (typeof options === "function") {
         done = options;
         opts = {};
       }
-      if (!opts.root && !isAbsolute(path29)) {
+      if (!opts.root && !isAbsolute2(path31)) {
         throw new TypeError("path must be absolute or specify root to res.sendFile");
       }
-      var pathname = encodeURI(path29);
+      var pathname = encodeURI(path31);
       var file2 = send(req, pathname, opts);
       sendfile(res2, file2, opts, function(err) {
         if (done) return done(err);
@@ -73251,7 +73251,7 @@ var require_response = __commonJS({
         }
       });
     };
-    res.sendfile = function(path29, options, callback) {
+    res.sendfile = function(path31, options, callback) {
       var done = callback;
       var req = this.req;
       var res2 = this;
@@ -73261,7 +73261,7 @@ var require_response = __commonJS({
         done = options;
         opts = {};
       }
-      var file2 = send(req, path29, opts);
+      var file2 = send(req, path31, opts);
       sendfile(res2, file2, opts, function(err) {
         if (done) return done(err);
         if (err && err.code === "EISDIR") return next();
@@ -73274,7 +73274,7 @@ var require_response = __commonJS({
       res.sendfile,
       "res.sendfile: Use res.sendFile instead"
     );
-    res.download = function download(path29, filename, options, callback) {
+    res.download = function download(path31, filename, options, callback) {
       var done = callback;
       var name2 = filename;
       var opts = options || null;
@@ -73291,7 +73291,7 @@ var require_response = __commonJS({
         opts = filename;
       }
       var headers = {
-        "Content-Disposition": contentDisposition(name2 || path29)
+        "Content-Disposition": contentDisposition(name2 || path31)
       };
       if (opts && opts.headers) {
         var keys = Object.keys(opts.headers);
@@ -73304,7 +73304,7 @@ var require_response = __commonJS({
       }
       opts = Object.create(opts);
       opts.headers = headers;
-      var fullPath = !opts.root ? resolve(path29) : path29;
+      var fullPath = !opts.root ? resolve(path31) : path31;
       return this.sendFile(fullPath, opts, done);
     };
     res.contentType = res.type = function contentType(type) {
@@ -73605,11 +73605,11 @@ var require_serve_static = __commonJS({
         }
         var forwardError = !fallthrough;
         var originalUrl = parseUrl2.original(req);
-        var path28 = parseUrl2(req).pathname;
-        if (path28 === "/" && originalUrl.pathname.substr(-1) !== "/") {
-          path28 = "";
+        var path30 = parseUrl2(req).pathname;
+        if (path30 === "/" && originalUrl.pathname.substr(-1) !== "/") {
+          path30 = "";
         }
-        var stream = send(req, path28, opts);
+        var stream = send(req, path30, opts);
         stream.on("directory", onDirectory);
         if (setHeaders) {
           stream.on("headers", setHeaders);
@@ -77136,10 +77136,10 @@ var init_hex_encoding = __esm({
 });
 
 // ../node_modules/@smithy/core/dist-es/submodules/serde/util-body-length/calculateBodyLength.js
-var import_node_fs16, calculateBodyLength;
+var import_node_fs17, calculateBodyLength;
 var init_calculateBodyLength = __esm({
   "../node_modules/@smithy/core/dist-es/submodules/serde/util-body-length/calculateBodyLength.js"() {
-    import_node_fs16 = require("node:fs");
+    import_node_fs17 = require("node:fs");
     calculateBodyLength = (body) => {
       if (!body) {
         return 0;
@@ -77152,11 +77152,11 @@ var init_calculateBodyLength = __esm({
         return body.size;
       } else if (typeof body.start === "number" && typeof body.end === "number") {
         return body.end + 1 - body.start;
-      } else if (body instanceof import_node_fs16.ReadStream) {
+      } else if (body instanceof import_node_fs17.ReadStream) {
         if (body.path != null) {
-          return (0, import_node_fs16.lstatSync)(body.path).size;
+          return (0, import_node_fs17.lstatSync)(body.path).size;
         } else if (typeof body.fd === "number") {
-          return (0, import_node_fs16.fstatSync)(body.fd).size;
+          return (0, import_node_fs17.fstatSync)(body.fd).size;
         }
       }
       throw new Error(`Body Length computation failed for ${body}`);
@@ -77455,11 +77455,11 @@ var init_types = __esm({
 });
 
 // ../node_modules/@smithy/core/dist-es/submodules/config/shared-ini-file-loader/getHomeDir.js
-var import_node_os10, import_node_path21, homeDirCache, getHomeDirCacheKey, getHomeDir;
+var import_node_os10, import_node_path24, homeDirCache, getHomeDirCacheKey, getHomeDir;
 var init_getHomeDir = __esm({
   "../node_modules/@smithy/core/dist-es/submodules/config/shared-ini-file-loader/getHomeDir.js"() {
     import_node_os10 = require("node:os");
-    import_node_path21 = require("node:path");
+    import_node_path24 = require("node:path");
     homeDirCache = {};
     getHomeDirCacheKey = () => {
       if (process && process.geteuid) {
@@ -77468,7 +77468,7 @@ var init_getHomeDir = __esm({
       return "DEFAULT";
     };
     getHomeDir = () => {
-      const { HOME, USERPROFILE, HOMEPATH, HOMEDRIVE = `C:${import_node_path21.sep}` } = process.env;
+      const { HOME, USERPROFILE, HOMEPATH, HOMEDRIVE = `C:${import_node_path24.sep}` } = process.env;
       if (HOME)
         return HOME;
       if (USERPROFILE)
@@ -77494,25 +77494,25 @@ var init_getProfileName = __esm({
 });
 
 // ../node_modules/@smithy/core/dist-es/submodules/config/shared-ini-file-loader/getSSOTokenFilepath.js
-var import_node_crypto22, import_node_path22, getSSOTokenFilepath;
+var import_node_crypto22, import_node_path25, getSSOTokenFilepath;
 var init_getSSOTokenFilepath = __esm({
   "../node_modules/@smithy/core/dist-es/submodules/config/shared-ini-file-loader/getSSOTokenFilepath.js"() {
     import_node_crypto22 = require("node:crypto");
-    import_node_path22 = require("node:path");
+    import_node_path25 = require("node:path");
     init_getHomeDir();
     getSSOTokenFilepath = (id2) => {
       const hasher = (0, import_node_crypto22.createHash)("sha1");
       const cacheName = hasher.update(id2).digest("hex");
-      return (0, import_node_path22.join)(getHomeDir(), ".aws", "sso", "cache", `${cacheName}.json`);
+      return (0, import_node_path25.join)(getHomeDir(), ".aws", "sso", "cache", `${cacheName}.json`);
     };
   }
 });
 
 // ../node_modules/@smithy/core/dist-es/submodules/config/shared-ini-file-loader/getSSOTokenFromFile.js
-var import_promises2, tokenIntercept, getSSOTokenFromFile;
+var import_promises3, tokenIntercept, getSSOTokenFromFile;
 var init_getSSOTokenFromFile = __esm({
   "../node_modules/@smithy/core/dist-es/submodules/config/shared-ini-file-loader/getSSOTokenFromFile.js"() {
-    import_promises2 = require("node:fs/promises");
+    import_promises3 = require("node:fs/promises");
     init_getSSOTokenFilepath();
     tokenIntercept = {};
     getSSOTokenFromFile = async (id2) => {
@@ -77520,7 +77520,7 @@ var init_getSSOTokenFromFile = __esm({
         return tokenIntercept[id2];
       }
       const ssoTokenFilepath = getSSOTokenFilepath(id2);
-      const ssoTokenText = await (0, import_promises2.readFile)(ssoTokenFilepath, "utf8");
+      const ssoTokenText = await (0, import_promises3.readFile)(ssoTokenFilepath, "utf8");
       return JSON.parse(ssoTokenText);
     };
   }
@@ -77558,24 +77558,24 @@ var init_getConfigData = __esm({
 });
 
 // ../node_modules/@smithy/core/dist-es/submodules/config/shared-ini-file-loader/getConfigFilepath.js
-var import_node_path23, ENV_CONFIG_PATH, getConfigFilepath;
+var import_node_path26, ENV_CONFIG_PATH, getConfigFilepath;
 var init_getConfigFilepath = __esm({
   "../node_modules/@smithy/core/dist-es/submodules/config/shared-ini-file-loader/getConfigFilepath.js"() {
-    import_node_path23 = require("node:path");
+    import_node_path26 = require("node:path");
     init_getHomeDir();
     ENV_CONFIG_PATH = "AWS_CONFIG_FILE";
-    getConfigFilepath = () => process.env[ENV_CONFIG_PATH] || (0, import_node_path23.join)(getHomeDir(), ".aws", "config");
+    getConfigFilepath = () => process.env[ENV_CONFIG_PATH] || (0, import_node_path26.join)(getHomeDir(), ".aws", "config");
   }
 });
 
 // ../node_modules/@smithy/core/dist-es/submodules/config/shared-ini-file-loader/getCredentialsFilepath.js
-var import_node_path24, ENV_CREDENTIALS_PATH, getCredentialsFilepath;
+var import_node_path27, ENV_CREDENTIALS_PATH, getCredentialsFilepath;
 var init_getCredentialsFilepath = __esm({
   "../node_modules/@smithy/core/dist-es/submodules/config/shared-ini-file-loader/getCredentialsFilepath.js"() {
-    import_node_path24 = require("node:path");
+    import_node_path27 = require("node:path");
     init_getHomeDir();
     ENV_CREDENTIALS_PATH = "AWS_SHARED_CREDENTIALS_FILE";
-    getCredentialsFilepath = () => process.env[ENV_CREDENTIALS_PATH] || (0, import_node_path24.join)(getHomeDir(), ".aws", "credentials");
+    getCredentialsFilepath = () => process.env[ENV_CREDENTIALS_PATH] || (0, import_node_path27.join)(getHomeDir(), ".aws", "credentials");
   }
 });
 
@@ -77636,29 +77636,29 @@ var init_parseIni = __esm({
 });
 
 // ../node_modules/@smithy/core/dist-es/submodules/config/shared-ini-file-loader/readFile.js
-var import_promises3, filePromises, fileIntercept, readFile2;
+var import_promises4, filePromises, fileIntercept, readFile2;
 var init_readFile = __esm({
   "../node_modules/@smithy/core/dist-es/submodules/config/shared-ini-file-loader/readFile.js"() {
-    import_promises3 = require("node:fs/promises");
+    import_promises4 = require("node:fs/promises");
     filePromises = {};
     fileIntercept = {};
-    readFile2 = (path28, options) => {
-      if (fileIntercept[path28] !== void 0) {
-        return fileIntercept[path28];
+    readFile2 = (path30, options) => {
+      if (fileIntercept[path30] !== void 0) {
+        return fileIntercept[path30];
       }
-      if (!filePromises[path28] || options?.ignoreCache) {
-        filePromises[path28] = (0, import_promises3.readFile)(path28, "utf8");
+      if (!filePromises[path30] || options?.ignoreCache) {
+        filePromises[path30] = (0, import_promises4.readFile)(path30, "utf8");
       }
-      return filePromises[path28];
+      return filePromises[path30];
     };
   }
 });
 
 // ../node_modules/@smithy/core/dist-es/submodules/config/shared-ini-file-loader/loadSharedConfigFiles.js
-var import_node_path25, swallowError, loadSharedConfigFiles;
+var import_node_path28, swallowError, loadSharedConfigFiles;
 var init_loadSharedConfigFiles = __esm({
   "../node_modules/@smithy/core/dist-es/submodules/config/shared-ini-file-loader/loadSharedConfigFiles.js"() {
-    import_node_path25 = require("node:path");
+    import_node_path28 = require("node:path");
     init_getConfigData();
     init_getConfigFilepath();
     init_getCredentialsFilepath();
@@ -77673,11 +77673,11 @@ var init_loadSharedConfigFiles = __esm({
       const relativeHomeDirPrefix = "~/";
       let resolvedFilepath = filepath;
       if (filepath.startsWith(relativeHomeDirPrefix)) {
-        resolvedFilepath = (0, import_node_path25.join)(homeDir, filepath.slice(2));
+        resolvedFilepath = (0, import_node_path28.join)(homeDir, filepath.slice(2));
       }
       let resolvedConfigFilepath = configFilepath;
       if (configFilepath.startsWith(relativeHomeDirPrefix)) {
-        resolvedConfigFilepath = (0, import_node_path25.join)(homeDir, configFilepath.slice(2));
+        resolvedConfigFilepath = (0, import_node_path28.join)(homeDir, configFilepath.slice(2));
       }
       const parsedFiles = await Promise.all([
         readFile2(resolvedConfigFilepath, {
@@ -77761,8 +77761,8 @@ var init_externalDataInterceptor = __esm({
       getFileRecord() {
         return fileIntercept;
       },
-      interceptFile(path28, contents) {
-        fileIntercept[path28] = Promise.resolve(contents);
+      interceptFile(path30, contents) {
+        fileIntercept[path30] = Promise.resolve(contents);
       },
       getTokenRecord() {
         return tokenIntercept;
@@ -77777,11 +77777,11 @@ var init_externalDataInterceptor = __esm({
 // ../node_modules/@smithy/core/dist-es/submodules/config/node-config-provider/getSelectorName.js
 function getSelectorName(functionString) {
   try {
-    const constants2 = new Set(Array.from(functionString.match(/([A-Z_]){3,}/g) ?? []));
-    constants2.delete("CONFIG");
-    constants2.delete("CONFIG_PREFIX_SEPARATOR");
-    constants2.delete("ENV");
-    return [...constants2].join(", ");
+    const constants3 = new Set(Array.from(functionString.match(/([A-Z_]){3,}/g) ?? []));
+    constants3.delete("CONFIG");
+    constants3.delete("CONFIG_PREFIX_SEPARATOR");
+    constants3.delete("ENV");
+    return [...constants3].join(", ");
   } catch (e5) {
     return functionString;
   }
@@ -78229,13 +78229,13 @@ var init_resolveDefaultsModeConfig = __esm({
       }
       return { hostname: "169.254.169.254", path: "/" };
     };
-    imdsHttpGet = async ({ hostname: hostname5, path: path28 }) => {
+    imdsHttpGet = async ({ hostname: hostname5, path: path30 }) => {
       const { request } = await import("node:http");
       return new Promise((resolve, reject) => {
         const req = request({
           method: "GET",
           hostname: hostname5.replace(/^\[(.+)]$/, "$1"),
-          path: path28,
+          path: path30,
           timeout: 1e3,
           signal: AbortSignal.timeout(1e3)
         });
@@ -78484,8 +78484,8 @@ var init_createConfigValueProvider = __esm({
               return endpoint.url.href;
             }
             if ("hostname" in endpoint) {
-              const { protocol, hostname: hostname5, port, path: path28 } = endpoint;
-              return `${protocol}//${hostname5}${port ? ":" + port : ""}${path28}`;
+              const { protocol, hostname: hostname5, port, path: path30 } = endpoint;
+              return `${protocol}//${hostname5}${port ? ":" + port : ""}${path30}`;
             }
           }
           return endpoint;
@@ -78900,18 +78900,18 @@ var getAttrPathList;
 var init_getAttrPathList = __esm({
   "../node_modules/@smithy/core/dist-es/submodules/endpoints/util-endpoints/lib/getAttrPathList.js"() {
     init_types2();
-    getAttrPathList = (path28) => {
-      const parts = path28.split(".");
+    getAttrPathList = (path30) => {
+      const parts = path30.split(".");
       const pathList = [];
       for (const part of parts) {
         const squareBracketIndex = part.indexOf("[");
         if (squareBracketIndex !== -1) {
           if (part.indexOf("]") !== part.length - 1) {
-            throw new EndpointError(`Path: '${path28}' does not end with ']'`);
+            throw new EndpointError(`Path: '${path30}' does not end with ']'`);
           }
           const arrayIndex = part.slice(squareBracketIndex + 1, -1);
           if (Number.isNaN(parseInt(arrayIndex))) {
-            throw new EndpointError(`Invalid array index: '${arrayIndex}' in path: '${path28}'`);
+            throw new EndpointError(`Invalid array index: '${arrayIndex}' in path: '${path30}'`);
           }
           if (squareBracketIndex !== 0) {
             pathList.push(part.slice(0, squareBracketIndex));
@@ -78932,9 +78932,9 @@ var init_getAttr = __esm({
   "../node_modules/@smithy/core/dist-es/submodules/endpoints/util-endpoints/lib/getAttr.js"() {
     init_types2();
     init_getAttrPathList();
-    getAttr = (value2, path28) => getAttrPathList(path28).reduce((acc, index) => {
+    getAttr = (value2, path30) => getAttrPathList(path30).reduce((acc, index) => {
       if (typeof acc !== "object") {
-        throw new EndpointError(`Index '${index}' in '${path28}' not found in '${JSON.stringify(value2)}'`);
+        throw new EndpointError(`Index '${index}' in '${path30}' not found in '${JSON.stringify(value2)}'`);
       } else if (Array.isArray(acc)) {
         const i5 = parseInt(index);
         return acc[i5 < 0 ? acc.length + i5 : i5];
@@ -78995,8 +78995,8 @@ var init_parseURL = __esm({
             return value2;
           }
           if (typeof value2 === "object" && "hostname" in value2) {
-            const { hostname: hostname6, port, protocol: protocol2 = "", path: path28 = "", query = {} } = value2;
-            const url2 = new URL(`${protocol2}//${hostname6}${port ? `:${port}` : ""}${path28}`);
+            const { hostname: hostname6, port, protocol: protocol2 = "", path: path30 = "", query = {} } = value2;
+            const url2 = new URL(`${protocol2}//${hostname6}${port ? `:${port}` : ""}${path30}`);
             url2.search = Object.entries(query).map(([k5, v]) => `${k5}=${v}`).join("&");
             return url2;
           }
@@ -81105,13 +81105,13 @@ function __disposeResources(env3) {
   }
   return next();
 }
-function __rewriteRelativeImportExtension(path28, preserveJsx) {
-  if (typeof path28 === "string" && /^\.\.?\//.test(path28)) {
-    return path28.replace(/\.(tsx)$|((?:\.d)?)((?:\.[^./]+?)?)\.([cm]?)ts$/i, function(m3, tsx, d5, ext, cm) {
+function __rewriteRelativeImportExtension(path30, preserveJsx) {
+  if (typeof path30 === "string" && /^\.\.?\//.test(path30)) {
+    return path30.replace(/\.(tsx)$|((?:\.d)?)((?:\.[^./]+?)?)\.([cm]?)ts$/i, function(m3, tsx, d5, ext, cm) {
       return tsx ? preserveJsx ? ".jsx" : ".js" : d5 && (!ext || !cm) ? m3 : d5 + ext + "." + cm.toLowerCase() + "js";
     });
   }
-  return path28;
+  return path30;
 }
 var extendStatics, __assign, __createBinding, __setModuleDefault, ownKeys2, _SuppressedError, tslib_es6_default;
 var init_tslib_es6 = __esm({
@@ -82965,11 +82965,11 @@ var init_HttpBindingProtocol = __esm({
           const opTraits = translateTraits(operationSchema.traits);
           if (opTraits.http) {
             request.method = opTraits.http[0];
-            const [path28, search] = opTraits.http[1].split("?");
+            const [path30, search] = opTraits.http[1].split("?");
             if (request.path == "/") {
-              request.path = path28;
+              request.path = path30;
             } else {
-              request.path += path28;
+              request.path += path30;
             }
             const traitSearchParams = new URLSearchParams(search ?? "");
             for (const [key, value2] of traitSearchParams) {
@@ -83370,8 +83370,8 @@ var init_requestBuilder = __esm({
         return this;
       }
       p(memberName, labelValueProvider, uriLabel, isGreedyLabel) {
-        this.resolvePathStack.push((path28) => {
-          this.path = resolvedPath(path28, this.input, memberName, labelValueProvider, uriLabel, isGreedyLabel);
+        this.resolvePathStack.push((path30) => {
+          this.path = resolvedPath(path30, this.input, memberName, labelValueProvider, uriLabel, isGreedyLabel);
         });
         return this;
       }
@@ -85438,9 +85438,9 @@ var init_createPaginator = __esm({
       command = withCommand(command) ?? command;
       return await client.send(command, ...args);
     };
-    get = (fromObject, path28) => {
+    get = (fromObject, path30) => {
       let cursor3 = fromObject;
-      const pathComponents = path28.split(".");
+      const pathComponents = path30.split(".");
       for (const step of pathComponents) {
         if (!cursor3 || typeof cursor3 !== "object") {
           return void 0;
@@ -86226,19 +86226,19 @@ var init_getRuntimeUserAgentPair = __esm({
 });
 
 // ../node_modules/@aws-sdk/core/dist-es/submodules/client/util-user-agent-node/getNodeModulesParentDirs.js
-var import_node_path26, getNodeModulesParentDirs;
+var import_node_path29, getNodeModulesParentDirs;
 var init_getNodeModulesParentDirs = __esm({
   "../node_modules/@aws-sdk/core/dist-es/submodules/client/util-user-agent-node/getNodeModulesParentDirs.js"() {
-    import_node_path26 = require("node:path");
+    import_node_path29 = require("node:path");
     getNodeModulesParentDirs = (dirname) => {
       const cwd = process.cwd();
       if (!dirname) {
         return [cwd];
       }
-      const normalizedPath = (0, import_node_path26.normalize)(dirname);
-      const parts = normalizedPath.split(import_node_path26.sep);
+      const normalizedPath = (0, import_node_path29.normalize)(dirname);
+      const parts = normalizedPath.split(import_node_path29.sep);
       const nodeModulesIndex = parts.indexOf("node_modules");
-      const parentDir = nodeModulesIndex !== -1 ? parts.slice(0, nodeModulesIndex).join(import_node_path26.sep) : normalizedPath;
+      const parentDir = nodeModulesIndex !== -1 ? parts.slice(0, nodeModulesIndex).join(import_node_path29.sep) : normalizedPath;
       if (cwd === parentDir) {
         return [cwd];
       }
@@ -86285,16 +86285,16 @@ var init_getSanitizedDevTypeScriptVersion = __esm({
 });
 
 // ../node_modules/@aws-sdk/core/dist-es/submodules/client/util-user-agent-node/getTypeScriptUserAgentPair.js
-var import_promises4, import_node_path27, tscVersion, TS_PACKAGE_JSON, getTypeScriptUserAgentPair;
+var import_promises5, import_node_path30, tscVersion, TS_PACKAGE_JSON, getTypeScriptUserAgentPair;
 var init_getTypeScriptUserAgentPair = __esm({
   "../node_modules/@aws-sdk/core/dist-es/submodules/client/util-user-agent-node/getTypeScriptUserAgentPair.js"() {
     init_config2();
-    import_promises4 = require("node:fs/promises");
-    import_node_path27 = require("node:path");
+    import_promises5 = require("node:fs/promises");
+    import_node_path30 = require("node:path");
     init_getNodeModulesParentDirs();
     init_getSanitizedDevTypeScriptVersion();
     init_getSanitizedTypeScriptVersion();
-    TS_PACKAGE_JSON = (0, import_node_path27.join)("node_modules", "typescript", "package.json");
+    TS_PACKAGE_JSON = (0, import_node_path30.join)("node_modules", "typescript", "package.json");
     getTypeScriptUserAgentPair = async () => {
       if (tscVersion === null) {
         return void 0;
@@ -86315,8 +86315,8 @@ var init_getTypeScriptUserAgentPair = __esm({
       let versionFromApp;
       for (const nodeModulesParentDir of nodeModulesParentDirs) {
         try {
-          const appPackageJsonPath = (0, import_node_path27.join)(nodeModulesParentDir, "package.json");
-          const packageJson = await (0, import_promises4.readFile)(appPackageJsonPath, "utf-8");
+          const appPackageJsonPath = (0, import_node_path30.join)(nodeModulesParentDir, "package.json");
+          const packageJson = await (0, import_promises5.readFile)(appPackageJsonPath, "utf-8");
           const { dependencies, devDependencies } = JSON.parse(packageJson);
           const version4 = devDependencies?.typescript ?? dependencies?.typescript;
           if (typeof version4 !== "string") {
@@ -86334,8 +86334,8 @@ var init_getTypeScriptUserAgentPair = __esm({
       let versionFromNodeModules;
       for (const nodeModulesParentDir of nodeModulesParentDirs) {
         try {
-          const tsPackageJsonPath = (0, import_node_path27.join)(nodeModulesParentDir, TS_PACKAGE_JSON);
-          const packageJson = await (0, import_promises4.readFile)(tsPackageJsonPath, "utf-8");
+          const tsPackageJsonPath = (0, import_node_path30.join)(nodeModulesParentDir, TS_PACKAGE_JSON);
+          const packageJson = await (0, import_promises5.readFile)(tsPackageJsonPath, "utf-8");
           const { version: version4 } = JSON.parse(packageJson);
           const sanitizedVersion2 = getSanitizedTypeScriptVersion(version4);
           if (typeof sanitizedVersion2 !== "string") {
@@ -89040,10 +89040,10 @@ ${longDate}
 ${credentialScope}
 ${toHex2(hashedRequest)}`;
       }
-      getCanonicalPath({ path: path28 }) {
+      getCanonicalPath({ path: path30 }) {
         if (this.uriEscapePath) {
           const normalizedPathSegments = [];
-          for (const pathSegment of path28.split("/")) {
+          for (const pathSegment of path30.split("/")) {
             if (pathSegment?.length === 0)
               continue;
             if (pathSegment === ".")
@@ -89054,11 +89054,11 @@ ${toHex2(hashedRequest)}`;
               normalizedPathSegments.push(pathSegment);
             }
           }
-          const normalizedPath = `${path28?.startsWith("/") ? "/" : ""}${normalizedPathSegments.join("/")}${normalizedPathSegments.length > 0 && path28?.endsWith("/") ? "/" : ""}`;
+          const normalizedPath = `${path30?.startsWith("/") ? "/" : ""}${normalizedPathSegments.join("/")}${normalizedPathSegments.length > 0 && path30?.endsWith("/") ? "/" : ""}`;
           const doubleEncoded = escapeUri2(normalizedPath);
           return doubleEncoded.replace(/%2F/g, "/");
         }
-        return path28;
+        return path30;
       }
       validateResolvedCredentials(credentials) {
         if (typeof credentials !== "object" || typeof credentials.accessKeyId !== "string" || typeof credentials.secretAccessKey !== "string") {
@@ -89706,15 +89706,15 @@ var init_arn = __esm({
 // ../node_modules/@aws-sdk/core/dist-es/submodules/util/util-format-url/format-url.js
 function formatUrl(request) {
   const { port, query } = request;
-  let { protocol, path: path28, hostname: hostname5 } = request;
+  let { protocol, path: path30, hostname: hostname5 } = request;
   if (protocol && protocol.slice(-1) !== ":") {
     protocol += ":";
   }
   if (port) {
     hostname5 += `:${port}`;
   }
-  if (path28 && path28.charAt(0) !== "/") {
-    path28 = `/${path28}`;
+  if (path30 && path30.charAt(0) !== "/") {
+    path30 = `/${path30}`;
   }
   let queryString3 = query ? buildQueryString(query) : "";
   if (queryString3 && queryString3[0] !== "?") {
@@ -89730,7 +89730,7 @@ function formatUrl(request) {
   if (request.fragment) {
     fragment = `#${request.fragment}`;
   }
-  return `${protocol}//${auth2}${hostname5}${path28}${queryString3}${fragment}`;
+  return `${protocol}//${auth2}${hostname5}${path30}${queryString3}${fragment}`;
 }
 var init_format_url = __esm({
   "../node_modules/@aws-sdk/core/dist-es/submodules/util/util-format-url/format-url.js"() {
@@ -101976,12 +101976,12 @@ or increase socketAcquisitionWarningTimeout=(millis) in the NodeHttpHandler conf
             const password = request.password ?? "";
             auth2 = `${username}:${password}`;
           }
-          let path28 = request.path;
+          let path30 = request.path;
           if (queryString3) {
-            path28 += `?${queryString3}`;
+            path30 += `?${queryString3}`;
           }
           if (request.fragment) {
-            path28 += `#${request.fragment}`;
+            path30 += `#${request.fragment}`;
           }
           let hostname5 = request.hostname ?? "";
           if (hostname5[0] === "[" && hostname5.endsWith("]")) {
@@ -101993,7 +101993,7 @@ or increase socketAcquisitionWarningTimeout=(millis) in the NodeHttpHandler conf
             headers: request.headers,
             host: hostname5,
             method: request.method,
-            path: path28,
+            path: path30,
             port: request.port,
             agent,
             auth: auth2
@@ -102315,7 +102315,7 @@ or increase socketAcquisitionWarningTimeout=(millis) in the NodeHttpHandler conf
         return this.connectOptions === void 0 ? http22.connect(url2) : http22.connect(url2, this.connectOptions);
       }
     };
-    var { constants: constants2 } = http22;
+    var { constants: constants3 } = http22;
     var NodeHttp2Handler = class _NodeHttp2Handler {
       config;
       configProvider;
@@ -102396,17 +102396,17 @@ or increase socketAcquisitionWarningTimeout=(millis) in the NodeHttpHandler conf
             reject(err);
           };
           const queryString3 = query ? buildQueryString2(query) : "";
-          let path28 = request.path;
+          let path30 = request.path;
           if (queryString3) {
-            path28 += `?${queryString3}`;
+            path30 += `?${queryString3}`;
           }
           if (request.fragment) {
-            path28 += `#${request.fragment}`;
+            path30 += `#${request.fragment}`;
           }
           const clientHttp2Stream = session.request({
             ...request.headers,
-            [constants2.HTTP2_HEADER_PATH]: path28,
-            [constants2.HTTP2_HEADER_METHOD]: method
+            [constants3.HTTP2_HEADER_PATH]: path30,
+            [constants3.HTTP2_HEADER_METHOD]: method
           });
           if (effectiveRequestTimeout) {
             clientHttp2Stream.setTimeout(effectiveRequestTimeout, () => {
@@ -107559,17 +107559,17 @@ var init_HashCalculator = __esm({
 });
 
 // ../node_modules/@smithy/core/dist-es/submodules/checksum/hash-stream-node/fileStreamHasher.js
-var import_node_fs17, fileStreamHasher, isReadStream;
+var import_node_fs18, fileStreamHasher, isReadStream;
 var init_fileStreamHasher = __esm({
   "../node_modules/@smithy/core/dist-es/submodules/checksum/hash-stream-node/fileStreamHasher.js"() {
-    import_node_fs17 = require("node:fs");
+    import_node_fs18 = require("node:fs");
     init_HashCalculator();
     fileStreamHasher = (hashCtor, fileStream) => new Promise((resolve, reject) => {
       if (!isReadStream(fileStream)) {
         reject(new Error("Unable to calculate hash for non-file streams."));
         return;
       }
-      const fileStreamTee = (0, import_node_fs17.createReadStream)(fileStream.path, {
+      const fileStreamTee = (0, import_node_fs18.createReadStream)(fileStream.path, {
         start: fileStream.start,
         end: fileStream.end
       });
@@ -111544,8 +111544,8 @@ function isInstalledCliEntrypointPath(entrypointPath) {
   if (!entrypointPath) return false;
   if (isInstalledModulePath(entrypointPath)) return true;
   try {
-    const stat = (0, import_node_fs.lstatSync)(entrypointPath);
-    if (!stat.isSymbolicLink()) return false;
+    const stat2 = (0, import_node_fs.lstatSync)(entrypointPath);
+    if (!stat2.isSymbolicLink()) return false;
     const target = (0, import_node_fs.readlinkSync)(entrypointPath);
     const resolvedTarget = import_node_path2.default.isAbsolute(target) ? target : import_node_path2.default.resolve(import_node_path2.default.dirname(entrypointPath), target);
     return isInstalledModulePath(resolvedTarget);
@@ -112034,6 +112034,7 @@ var REPOSITORY_READ_DEFAULT_BOUNDS = {
   concurrentReadsPerScope: 4
 };
 var REPOSITORY_READ_OPERATION_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$/;
+var PROJECT_RESOURCE_READ_CAPABILITY = "projectResourceReads";
 
 // ../packages/contract/dist/report-draft.js
 var REPORT_DRAFT_KINDS = [
@@ -114197,13 +114198,13 @@ function assertHasProtocol(url2) {
     throw new BetterAuthError(`Invalid base URL: ${url2}. Please provide a valid base URL.`, { cause: error64 });
   }
 }
-function withPath(url2, path28 = "/api/auth") {
+function withPath(url2, path30 = "/api/auth") {
   assertHasProtocol(url2);
   if (checkHasPath(url2)) return url2;
   const trimmedUrl = trimTrailingSlashes(url2);
-  if (!path28 || path28 === "/") return trimmedUrl;
-  path28 = path28.startsWith("/") ? path28 : `/${path28}`;
-  return `${trimmedUrl}${path28}`;
+  if (!path30 || path30 === "/") return trimmedUrl;
+  path30 = path30.startsWith("/") ? path30 : `/${path30}`;
+  return `${trimmedUrl}${path30}`;
 }
 function validateProxyHeader(header, type) {
   if (!header || header.trim() === "") return false;
@@ -114223,26 +114224,26 @@ function validateProxyHeader(header, type) {
   }
   return false;
 }
-function getBaseURL(url2, path28, request, loadEnv2, trustedProxyHeaders) {
-  if (url2) return withPath(url2, path28);
+function getBaseURL(url2, path30, request, loadEnv2, trustedProxyHeaders) {
+  if (url2) return withPath(url2, path30);
   if (loadEnv2 !== false) {
     const fromEnv2 = env.BETTER_AUTH_URL || env.NEXT_PUBLIC_BETTER_AUTH_URL || env.PUBLIC_BETTER_AUTH_URL || env.NUXT_PUBLIC_BETTER_AUTH_URL || env.NUXT_PUBLIC_AUTH_URL || (env.BASE_URL !== "/" ? env.BASE_URL : void 0);
-    if (fromEnv2) return withPath(fromEnv2, path28);
+    if (fromEnv2) return withPath(fromEnv2, path30);
   }
   const fromRequest = request?.headers.get("x-forwarded-host");
   const fromRequestProto = request?.headers.get("x-forwarded-proto");
   if (fromRequest && fromRequestProto && trustedProxyHeaders) {
     if (validateProxyHeader(fromRequestProto, "proto") && validateProxyHeader(fromRequest, "host")) try {
-      return withPath(`${fromRequestProto}://${fromRequest}`, path28);
+      return withPath(`${fromRequestProto}://${fromRequest}`, path30);
     } catch (_error) {
     }
   }
   if (request) {
     const url3 = getOrigin(request.url);
     if (!url3) throw new BetterAuthError("Could not get origin from request. Please provide a valid base URL.");
-    return withPath(url3, path28);
+    return withPath(url3, path30);
   }
-  if (typeof window !== "undefined" && window.location) return withPath(window.location.origin, path28);
+  if (typeof window !== "undefined" && window.location) return withPath(window.location.origin, path30);
 }
 function getOrigin(url2) {
   try {
@@ -117805,9 +117806,9 @@ function parseCookieCachePayload(value2) {
   if (parsed === null) return null;
   const result2 = cookieCachePayloadSchema.safeParse(parsed);
   if (result2.success) return result2.data;
-  logger.warn("Cookie cache payload failed schema validation", { issues: result2.error.issues.map(({ code, path: path28 }) => ({
+  logger.warn("Cookie cache payload failed schema validation", { issues: result2.error.issues.map(({ code, path: path30 }) => ({
     code,
-    path: path28
+    path: path30
   })) });
   return null;
 }
@@ -118184,7 +118185,7 @@ function fromError(error64, validating) {
 }
 
 // ../node_modules/better-call/dist/context.mjs
-var createInternalContext = async (context, { options, path: path28 }) => {
+var createInternalContext = async (context, { options, path: path30 }) => {
   const headers = new Headers();
   let responseStatus = void 0;
   const { data, error: error64 } = await runValidation(options, context);
@@ -118196,7 +118197,7 @@ var createInternalContext = async (context, { options, path: path28 }) => {
     ...context,
     body: data.body,
     query: data.query,
-    path: context.path || path28 || "virtual:",
+    path: context.path || path30 || "virtual:",
     context: "context" in context && context.context ? context.context : {},
     returned: void 0,
     headers: context?.headers,
@@ -118418,16 +118419,16 @@ function toResponse(data, init2) {
 // ../node_modules/better-call/dist/endpoint.mjs
 init_error();
 function createEndpoint(pathOrOptions, handlerOrOptions, handlerOrNever) {
-  const path28 = typeof pathOrOptions === "string" ? pathOrOptions : void 0;
+  const path30 = typeof pathOrOptions === "string" ? pathOrOptions : void 0;
   const options = typeof handlerOrOptions === "object" ? handlerOrOptions : pathOrOptions;
   const handler = typeof handlerOrOptions === "function" ? handlerOrOptions : handlerOrNever;
   if ((options.method === "GET" || options.method === "HEAD") && options.body) throw new BetterCallError("Body is not allowed with GET or HEAD methods");
-  if (path28 && /\/{2,}/.test(path28)) throw new BetterCallError("Path cannot contain consecutive slashes");
+  if (path30 && /\/{2,}/.test(path30)) throw new BetterCallError("Path cannot contain consecutive slashes");
   const internalHandler = async (...inputCtx) => {
     const context = inputCtx[0] || {};
     const { data: internalContext, error: validationError } = await tryCatch(createInternalContext(context, {
       options,
-      path: path28
+      path: path30
     }));
     if (validationError) {
       if (!(validationError instanceof ValidationError)) throw validationError;
@@ -118466,7 +118467,7 @@ function createEndpoint(pathOrOptions, handlerOrOptions, handlerOrNever) {
     } : response;
   };
   internalHandler.options = options;
-  internalHandler.path = path28;
+  internalHandler.path = path30;
   return internalHandler;
 }
 function combineMiddleware(local, configured) {
@@ -118475,8 +118476,8 @@ function combineMiddleware(local, configured) {
 createEndpoint.create = (opts) => {
   function createConfiguredEndpoint(...args) {
     if (args.length === 3) {
-      const [path28, options2, handler2] = args;
-      return createEndpoint(path28, {
+      const [path30, options2, handler2] = args;
+      return createEndpoint(path30, {
         ...options2,
         use: combineMiddleware(options2.use, opts?.use)
       }, handler2);
@@ -118738,39 +118739,39 @@ function createRouter() {
     static: new NullProtoObj()
   };
 }
-function scanFirstGroup(path28) {
+function scanFirstGroup(path30) {
   let i5 = 0;
   let depth = 0;
-  for (; i5 < path28.length; i5++) {
-    const c5 = path28.charCodeAt(i5);
+  for (; i5 < path30.length; i5++) {
+    const c5 = path30.charCodeAt(i5);
     if (c5 === 92) i5++;
     else if (c5 === 40) depth++;
     else if (c5 === 41 && depth > 0) depth--;
     else if (c5 === 123 && depth === 0) break;
   }
-  if (i5 >= path28.length) return;
+  if (i5 >= path30.length) return;
   let j5 = i5 + 1;
   depth = 0;
-  for (; j5 < path28.length; j5++) {
-    const c5 = path28.charCodeAt(j5);
+  for (; j5 < path30.length; j5++) {
+    const c5 = path30.charCodeAt(j5);
     if (c5 === 92) j5++;
     else if (c5 === 40) depth++;
     else if (c5 === 41 && depth > 0) depth--;
     else if (c5 === 125 && depth === 0) break;
   }
-  if (j5 >= path28.length) return;
-  const mod = path28[j5 + 1];
+  if (j5 >= path30.length) return;
+  const mod = path30[j5 + 1];
   const hasMod = mod === "?" || mod === "+" || mod === "*";
   return [
-    path28.slice(0, i5),
-    path28.slice(i5 + 1, j5),
-    path28.slice(j5 + (hasMod ? 2 : 1)),
+    path30.slice(0, i5),
+    path30.slice(i5 + 1, j5),
+    path30.slice(j5 + (hasMod ? 2 : 1)),
     hasMod ? mod : void 0
   ];
 }
-function expandGroupDelimiters(path28) {
-  if (!path28.includes("{")) return;
-  const group4 = scanFirstGroup(path28);
+function expandGroupDelimiters(path30) {
+  if (!path30.includes("{")) return;
+  const group4 = scanFirstGroup(path30);
   if (!group4) return;
   const [pre, body, suf, mod] = group4;
   if (!mod) return [pre + body + suf];
@@ -118840,9 +118841,9 @@ function replaceSegmentWildcards(segment, unnamedStart, toGroupKey = toUnnamedGr
   }
   return [replaced, nextIndex];
 }
-function encodeEscapes(path28) {
-  if (!path28.includes("\\")) return path28;
-  return path28.replace(/\\([:(){}])/g, (_, c5) => "\uFFFD" + "ABCDE"[":(){}".indexOf(c5)]);
+function encodeEscapes(path30) {
+  if (!path30.includes("\\")) return path30;
+  return path30.replace(/\\([:(){}])/g, (_, c5) => "\uFFFD" + "ABCDE"[":(){}".indexOf(c5)]);
 }
 function segmentKey(segment) {
   if (segment.startsWith("**")) return 2;
@@ -118871,22 +118872,22 @@ function expandModifiers(segments) {
     return m3[2] === "+" ? [wc] : [wc, without];
   }
 }
-function normalizePath(path28) {
-  if (!path28.includes("/.")) return path28;
+function normalizePath(path30) {
+  if (!path30.includes("/.")) return path30;
   const r5 = [];
-  for (const s of path28.split("/")) if (s === ".") continue;
+  for (const s of path30.split("/")) if (s === ".") continue;
   else if (s === ".." && r5.length > 1) r5.pop();
   else r5.push(s);
   return r5.join("/") || "/";
 }
-function splitPath(path28) {
-  const s = path28.split("/");
+function splitPath(path30) {
+  const s = path30.split("/");
   s.shift();
   if (s[s.length - 1] === "") s.pop();
   return s;
 }
-function splitRoute(path28) {
-  const s = splitPath(path28);
+function splitRoute(path30) {
+  const s = splitPath(path30);
   while (s[s.length - 1] === "") s.pop();
   return s;
 }
@@ -118902,16 +118903,16 @@ function getMatchParams(segments, paramsMap) {
   }
   return params;
 }
-function addRoute(ctx, method = "", path28, data) {
+function addRoute(ctx, method = "", path30, data) {
   method = method.toUpperCase();
-  if (path28.charCodeAt(0) !== 47) path28 = `/${path28}`;
-  const groupExpanded = expandGroupDelimiters(path28);
+  if (path30.charCodeAt(0) !== 47) path30 = `/${path30}`;
+  const groupExpanded = expandGroupDelimiters(path30);
   if (groupExpanded) {
     for (const expandedPath of groupExpanded) addRoute(ctx, method, expandedPath, data);
     return;
   }
-  path28 = encodeEscapes(path28);
-  const segments = splitRoute(path28);
+  path30 = encodeEscapes(path30);
+  const segments = splitRoute(path30);
   const expanded = expandModifiers(segments);
   if (expanded) {
     for (const p3 of expanded) addRoute(ctx, method, p3, data);
@@ -119002,15 +119003,15 @@ function getParamRegexp(segment, unnamedStart = 0) {
   const regex = _s5.replace(/:([\w-]+)(?:\(([^)]*)\))?/g, (_, id2, p3) => `(?<${toGroupName(id2)}>${p3 || "[^/]+"})`).replace(/\((?![?<])/g, () => `(?<${toUnnamedGroupKey(_i++)}>`).replace(/\uFFFE(.)/g, (_, c5) => /[.*+?^${}()|[\]\\]/.test(c5) ? `\\${c5}` : c5);
   return [new RegExp(`^${regex}$`), _i];
 }
-function findRoute(ctx, method = "", path28, opts) {
-  if (opts?.normalize) path28 = normalizePath(path28);
-  if (path28.charCodeAt(path28.length - 1) === 47) path28 = path28.slice(0, -1);
-  const staticNode = ctx.static[path28];
+function findRoute(ctx, method = "", path30, opts) {
+  if (opts?.normalize) path30 = normalizePath(path30);
+  if (path30.charCodeAt(path30.length - 1) === 47) path30 = path30.slice(0, -1);
+  const staticNode = ctx.static[path30];
   if (staticNode && staticNode.methods) {
     const staticMatch = staticNode.methods[method] || staticNode.methods[""];
     if (staticMatch !== void 0) return staticMatch[0];
   }
-  const segments = splitPath(path28);
+  const segments = splitPath(path30);
   const match = _lookupTree(ctx.root, method, segments, 0);
   if (match === void 0) return;
   if (opts?.params === false) return match;
@@ -119072,10 +119073,10 @@ function _selectMatcher(methods2, method, segments, dynamicTerminal, optionalOnl
   }
   return best;
 }
-function findAllRoutes(ctx, method = "", path28, opts) {
-  if (opts?.normalize) path28 = normalizePath(path28);
-  if (path28.charCodeAt(path28.length - 1) === 47) path28 = path28.slice(0, -1);
-  const segments = splitPath(path28);
+function findAllRoutes(ctx, method = "", path30, opts) {
+  if (opts?.normalize) path30 = normalizePath(path30);
+  if (path30.charCodeAt(path30.length - 1) === 47) path30 = path30.slice(0, -1);
+  const segments = splitPath(path30);
   const matches = _findAll(ctx.root, method, segments, 0);
   if (opts?.params === false) return matches;
   return matches.map((m3) => {
@@ -119159,25 +119160,25 @@ var createRouter$1 = (endpoints, config4) => {
     const methods2 = Array.isArray(endpoint.options?.method) ? endpoint.options.method : [endpoint.options?.method];
     for (const method of methods2) addRoute(router2, method, endpoint.path, endpoint);
   }
-  if (config4?.routerMiddleware?.length) for (const { path: path28, middleware } of config4.routerMiddleware) addRoute(middlewareRouter, "*", path28, middleware);
+  if (config4?.routerMiddleware?.length) for (const { path: path30, middleware } of config4.routerMiddleware) addRoute(middlewareRouter, "*", path30, middleware);
   const basePath = config4?.basePath && config4.basePath !== "/" ? config4.basePath.replace(/\/+$/, "") : "";
   const processRequest = async (request) => {
     const url2 = new URL(request.url);
     const pathname = url2.pathname;
-    let path28;
+    let path30;
     if (basePath) {
       if (!pathname.startsWith(`${basePath}/`)) return new Response(null, {
         status: 404,
         statusText: "Not Found"
       });
-      path28 = pathname.slice(basePath.length);
-    } else path28 = pathname;
-    if (path28.length === 0 || /\/{2,}/.test(path28)) return new Response(null, {
+      path30 = pathname.slice(basePath.length);
+    } else path30 = pathname;
+    if (path30.length === 0 || /\/{2,}/.test(path30)) return new Response(null, {
       status: 404,
       statusText: "Not Found"
     });
-    const route = findRoute(router2, request.method, path28);
-    if (path28.endsWith("/") !== route?.data?.path?.endsWith("/") && !config4?.skipTrailingSlashes) return new Response(null, {
+    const route = findRoute(router2, request.method, path30);
+    if (path30.endsWith("/") !== route?.data?.path?.endsWith("/") && !config4?.skipTrailingSlashes) return new Response(null, {
       status: 404,
       statusText: "Not Found"
     });
@@ -119195,7 +119196,7 @@ var createRouter$1 = (endpoints, config4) => {
     try {
       const allowedMediaTypes = handler.options.metadata?.allowedMediaTypes || config4?.allowedMediaTypes;
       const context = {
-        path: path28,
+        path: path30,
         method: request.method,
         headers: request.headers,
         params: route.params ? { ...route.params } : {},
@@ -119206,7 +119207,7 @@ var createRouter$1 = (endpoints, config4) => {
         asResponse: true,
         context: config4?.routerContext
       };
-      const middlewareRoutes = findAllRoutes(middlewareRouter, "*", path28);
+      const middlewareRoutes = findAllRoutes(middlewareRouter, "*", path30);
       if (middlewareRoutes?.length) for (const { data: middleware, params } of middlewareRoutes) {
         const res = await middleware({
           ...context,
@@ -120200,8 +120201,8 @@ function wrapEndpointHandler(handler, options) {
 }
 function createAuthEndpoint(...args) {
   if (args.length === 3) {
-    const [path28, options2, handler2] = args;
-    return createEndpointWithAuthContext(path28, options2, wrapEndpointHandler(handler2, options2));
+    const [path30, options2, handler2] = args;
+    return createEndpointWithAuthContext(path30, options2, wrapEndpointHandler(handler2, options2));
   }
   const [options, handler] = args;
   return createEndpointWithAuthContext(options, wrapEndpointHandler(handler, options));
@@ -120221,10 +120222,10 @@ createAuthEndpoint.serverOnly = (options, handler) => createAuthEndpoint(withSer
 var CONTROL_CHARACTER_PATTERN = /[\u0000-\u001f\u007f-\u009f]/;
 var RELATIVE_URL_PARSER_ORIGIN = "https://better-auth.invalid";
 var ENCODED_PATH_SEPARATOR_PATTERN = /%2[fF]|%5[cC]/;
-var normalizePath2 = (path28) => {
-  let decoded = path28;
+var normalizePath2 = (path30) => {
+  let decoded = path30;
   try {
-    decoded = decodeURIComponent(path28);
+    decoded = decodeURIComponent(path30);
   } catch {
   }
   const segments = [];
@@ -120251,18 +120252,18 @@ var parseCustomSchemeOrigin = (value2) => {
     }
   }
   const pathEnd = rest.search(/[?#]/);
-  const path28 = normalizePath2(pathEnd === -1 ? rest : rest.slice(0, pathEnd));
+  const path30 = normalizePath2(pathEnd === -1 ? rest : rest.slice(0, pathEnd));
   return {
     scheme,
     authority: authority.toLowerCase(),
-    path: path28
+    path: path30
   };
 };
 var isSafeRelativeURL = (value2) => {
   if (!value2.startsWith("/") || value2.startsWith("//") || value2.includes("\\") || CONTROL_CHARACTER_PATTERN.test(value2)) return false;
   const pathEnd = value2.search(/[?#]/);
-  const path28 = pathEnd === -1 ? value2 : value2.slice(0, pathEnd);
-  if (ENCODED_PATH_SEPARATOR_PATTERN.test(path28)) return false;
+  const path30 = pathEnd === -1 ? value2 : value2.slice(0, pathEnd);
+  if (ENCODED_PATH_SEPARATOR_PATTERN.test(path30)) return false;
   try {
     return new URL(value2, RELATIVE_URL_PARSER_ORIGIN).origin === RELATIVE_URL_PARSER_ORIGIN;
   } catch {
@@ -120585,8 +120586,8 @@ function getIP(req, options) {
   if (isTest() || isDevelopment()) return LOCALHOST_IP;
   return null;
 }
-function createRateLimitKey(ip, path28) {
-  return `${ip}|${path28}`;
+function createRateLimitKey(ip, path30) {
+  return `${ip}|${path30}`;
 }
 
 // ../node_modules/better-auth/dist/api/rate-limiter/index.mjs
@@ -120817,7 +120818,7 @@ var ipWarningLogged = false;
 var NO_TRUSTED_IP_KEY = "no-trusted-ip";
 async function resolveRateLimitConfig(req, ctx) {
   const basePath = new URL(ctx.baseURL).pathname;
-  const path28 = normalizePathname(req.url, basePath);
+  const path30 = normalizePathname(req.url, basePath);
   let currentWindow = ctx.rateLimit.window;
   let currentMax = ctx.rateLimit.max;
   const ip = getIP(req, ctx.options);
@@ -120826,14 +120827,14 @@ async function resolveRateLimitConfig(req, ctx) {
     ctx.logger.warn("Rate limiting could not determine a client IP and is falling back to a single shared per-path bucket. Ensure your runtime forwards a trusted client IP header, then set `advanced.ipAddress.ipAddressHeaders` or `advanced.ipAddress.trustedProxies` so the address can be resolved.");
     ipWarningLogged = true;
   }
-  const key = createRateLimitKey(ip ?? NO_TRUSTED_IP_KEY, path28);
-  const specialRule = getDefaultSpecialRules().find((rule) => rule.pathMatcher(path28));
+  const key = createRateLimitKey(ip ?? NO_TRUSTED_IP_KEY, path30);
+  const specialRule = getDefaultSpecialRules().find((rule) => rule.pathMatcher(path30));
   if (specialRule) {
     currentWindow = specialRule.window;
     currentMax = specialRule.max;
   }
   for (const plugin of ctx.options.plugins || []) if (plugin.rateLimit) {
-    const matchedRule = plugin.rateLimit.find((rule) => rule.pathMatcher(path28));
+    const matchedRule = plugin.rateLimit.find((rule) => rule.pathMatcher(path30));
     if (matchedRule) {
       currentWindow = matchedRule.window;
       currentMax = matchedRule.max;
@@ -120842,8 +120843,8 @@ async function resolveRateLimitConfig(req, ctx) {
   }
   if (ctx.rateLimit.customRules) {
     const _path = Object.keys(ctx.rateLimit.customRules).find((p3) => {
-      if (p3.includes("*")) return wildcardMatch(p3)(path28);
-      return p3 === path28;
+      if (p3.includes("*")) return wildcardMatch(p3)(path30);
+      return p3 === path30;
     });
     if (_path) {
       const customRule = ctx.rateLimit.customRules[_path];
@@ -120879,14 +120880,14 @@ async function onRequestRateLimit(req, ctx) {
 }
 function getDefaultSpecialRules() {
   return [{
-    pathMatcher(path28) {
-      return path28.startsWith("/sign-in") || path28.startsWith("/sign-up") || path28.startsWith("/change-password") || path28.startsWith("/change-email");
+    pathMatcher(path30) {
+      return path30.startsWith("/sign-in") || path30.startsWith("/sign-up") || path30.startsWith("/change-password") || path30.startsWith("/change-email");
     },
     window: 10,
     max: 3
   }, {
-    pathMatcher(path28) {
-      return path28 === "/request-password-reset" || path28 === "/send-verification-email" || path28.startsWith("/forget-password") || path28 === "/email-otp/send-verification-otp" || path28 === "/email-otp/request-password-reset";
+    pathMatcher(path30) {
+      return path30 === "/request-password-reset" || path30 === "/send-verification-email" || path30.startsWith("/forget-password") || path30 === "/email-otp/send-verification-otp" || path30 === "/email-otp/request-password-reset";
     },
     window: 60,
     max: 3
@@ -123498,20 +123499,20 @@ var methods = [
   "patch",
   "delete"
 ];
-function parseMethodModifier(path28) {
-  if (!path28.startsWith("@")) return {
+function parseMethodModifier(path30) {
+  if (!path30.startsWith("@")) return {
     method: void 0,
-    path: path28
+    path: path30
   };
-  const separator = path28.indexOf("/");
-  const method = path28.slice(1, separator === -1 ? void 0 : separator);
+  const separator = path30.indexOf("/");
+  const method = path30.slice(1, separator === -1 ? void 0 : separator);
   if (!methods.includes(method)) return {
     method: void 0,
-    path: path28
+    path: path30
   };
   return {
     method,
-    path: separator === -1 ? path28 : path28.slice(separator + 1)
+    path: separator === -1 ? path30 : path30.slice(separator + 1)
   };
 }
 var isReservedPathSegment = (value2) => value2 === "." || value2 === "..";
@@ -123532,7 +123533,7 @@ function getURL$1(url2, option) {
   const { path: requestPath } = parseMethodModifier(url2);
   if (requestPath !== url2) url2 = `/${requestPath}`;
   if (!basePath.endsWith("/")) basePath += "/";
-  let [path28, urlQuery] = url2.replace(basePath, "").split("?");
+  let [path30, urlQuery] = url2.replace(basePath, "").split("?");
   const queryParams = new URLSearchParams(urlQuery);
   for (const [key, value2] of Object.entries(query || {})) {
     if (value2 == null) continue;
@@ -123546,18 +123547,18 @@ function getURL$1(url2, option) {
   }
   const pathParams = /* @__PURE__ */ new Map();
   if (params) if (Array.isArray(params)) {
-    const paramPaths = path28.split("/").filter((p3) => p3.startsWith(":"));
+    const paramPaths = path30.split("/").filter((p3) => p3.startsWith(":"));
     for (const [index, key] of paramPaths.entries()) {
       const value2 = params[index];
       pathParams.set(key, String(value2));
     }
   } else for (const [key, value2] of Object.entries(params)) pathParams.set(`:${key}`, String(value2));
-  path28 = path28.split("/").map((segment) => resolvePathSegment(segment, pathParams)).join("/");
-  path28 = path28.replace(/^\/+/, "");
+  path30 = path30.split("/").map((segment) => resolvePathSegment(segment, pathParams)).join("/");
+  path30 = path30.replace(/^\/+/, "");
   let queryParamString = queryParams.toString();
   queryParamString = queryParamString.length > 0 ? `?${queryParamString}`.replace(/\+/g, "%20") : "";
-  if (!basePath.startsWith("http")) return `${basePath}${path28}${queryParamString}`;
-  return new URL(`${path28}${queryParamString}`, basePath);
+  if (!basePath.startsWith("http")) return `${basePath}${path30}${queryParamString}`;
+  return new URL(`${path30}${queryParamString}`, basePath);
 }
 var getAuthHeader = async (options) => {
   const headers = {};
@@ -130457,15 +130458,15 @@ function checkEndpointConflicts(options, logger3) {
   options.plugins?.forEach((plugin) => {
     if (plugin.endpoints) {
       for (const [key, endpoint] of Object.entries(plugin.endpoints)) if (endpoint && "path" in endpoint && typeof endpoint.path === "string") {
-        const path28 = endpoint.path;
+        const path30 = endpoint.path;
         let methods2 = [];
         if (endpoint.options && "method" in endpoint.options) {
           if (Array.isArray(endpoint.options.method)) methods2 = endpoint.options.method;
           else if (typeof endpoint.options.method === "string") methods2 = [endpoint.options.method];
         }
         if (methods2.length === 0) methods2 = ["*"];
-        if (!endpointRegistry.has(path28)) endpointRegistry.set(path28, []);
-        endpointRegistry.get(path28).push({
+        if (!endpointRegistry.has(path30)) endpointRegistry.set(path30, []);
+        endpointRegistry.get(path30).push({
           pluginId: plugin.id,
           endpointKey: key,
           methods: methods2
@@ -130474,7 +130475,7 @@ function checkEndpointConflicts(options, logger3) {
     }
   });
   const conflicts = [];
-  for (const [path28, entries] of endpointRegistry.entries()) if (entries.length > 1) {
+  for (const [path30, entries] of endpointRegistry.entries()) if (entries.length > 1) {
     const methodMap = /* @__PURE__ */ new Map();
     let hasConflict = false;
     for (const entry of entries) for (const method of entry.methods) {
@@ -130489,7 +130490,7 @@ function checkEndpointConflicts(options, logger3) {
       const conflictingMethods = [];
       for (const [method, plugins] of methodMap.entries()) if (plugins.length > 1 || method === "*" && entries.length > 1 || method !== "*" && methodMap.has("*")) conflictingMethods.push(method);
       conflicts.push({
-        path: path28,
+        path: path30,
         plugins: uniquePlugins,
         conflictingMethods
       });
@@ -133069,64 +133070,64 @@ var emailOTP = (options) => {
     }] },
     rateLimit: [
       {
-        pathMatcher(path28) {
-          return path28 === "/email-otp/send-verification-otp";
+        pathMatcher(path30) {
+          return path30 === "/email-otp/send-verification-otp";
         },
         window: opts.rateLimit?.window || 60,
         max: opts.rateLimit?.max || 3
       },
       {
-        pathMatcher(path28) {
-          return path28 === "/email-otp/check-verification-otp";
+        pathMatcher(path30) {
+          return path30 === "/email-otp/check-verification-otp";
         },
         window: opts.rateLimit?.window || 60,
         max: opts.rateLimit?.max || 3
       },
       {
-        pathMatcher(path28) {
-          return path28 === "/email-otp/verify-email";
+        pathMatcher(path30) {
+          return path30 === "/email-otp/verify-email";
         },
         window: opts.rateLimit?.window || 60,
         max: opts.rateLimit?.max || 3
       },
       {
-        pathMatcher(path28) {
-          return path28 === "/sign-in/email-otp";
+        pathMatcher(path30) {
+          return path30 === "/sign-in/email-otp";
         },
         window: opts.rateLimit?.window || 60,
         max: opts.rateLimit?.max || 3
       },
       {
-        pathMatcher(path28) {
-          return path28 === "/email-otp/request-password-reset";
+        pathMatcher(path30) {
+          return path30 === "/email-otp/request-password-reset";
         },
         window: opts.rateLimit?.window || 60,
         max: opts.rateLimit?.max || 3
       },
       {
-        pathMatcher(path28) {
-          return path28 === "/email-otp/reset-password";
+        pathMatcher(path30) {
+          return path30 === "/email-otp/reset-password";
         },
         window: opts.rateLimit?.window || 60,
         max: opts.rateLimit?.max || 3
       },
       {
-        pathMatcher(path28) {
-          return path28 === "/forget-password/email-otp";
+        pathMatcher(path30) {
+          return path30 === "/forget-password/email-otp";
         },
         window: opts.rateLimit?.window || 60,
         max: opts.rateLimit?.max || 3
       },
       {
-        pathMatcher(path28) {
-          return path28 === "/email-otp/request-email-change";
+        pathMatcher(path30) {
+          return path30 === "/email-otp/request-email-change";
         },
         window: opts.rateLimit?.window || 60,
         max: opts.rateLimit?.max || 3
       },
       {
-        pathMatcher(path28) {
-          return path28 === "/email-otp/change-email";
+        pathMatcher(path30) {
+          return path30 === "/email-otp/change-email";
         },
         window: opts.rateLimit?.window || 60,
         max: opts.rateLimit?.max || 3
@@ -135348,7 +135349,7 @@ var projectDtoSchema = external_exports.object({ "id": external_exports.string()
 var projectStatusDtoSchema = external_exports.object({ "id": external_exports.string(), "workspaceId": external_exports.string(), "projectId": external_exports.string(), "key": external_exports.string(), "name": external_exports.string(), "type": statusTypeSchema, "position": external_exports.int().min(0), "isDefault": external_exports.boolean(), "isTerminal": external_exports.boolean() });
 var projectTagDtoSchema = external_exports.object({ "id": external_exports.string(), "projectId": external_exports.string(), "label": external_exports.string(), "color": external_exports.string().nullable(), "active": external_exports.boolean() });
 var projectResourceAccessModeSchema = external_exports.enum(["read", "read_write"]);
-var projectResourceSourceDtoSchema = external_exports.object({ "id": external_exports.string(), "executionTargetId": external_exports.string().nullable(), "sourceKind": external_exports.string(), "descriptor": external_exports.record(external_exports.string(), external_exports.unknown()), "launchDefaults": external_exports.record(external_exports.string(), agentLaunchConfigDtoSchema), "observedRevision": external_exports.string().nullable(), "observedContentDigest": external_exports.string().nullable(), "latchHostLink": external_exports.exactOptional(external_exports.object({ "sourceRevision": external_exports.int().min(1), "state": external_exports.enum(["unlinked", "linked", "ambiguous"]), "canVerify": external_exports.boolean(), "canUnlink": external_exports.boolean(), "hostPublicKey": external_exports.exactOptional(external_exports.string().min(64).max(64)) })) });
+var projectResourceSourceDtoSchema = external_exports.object({ "id": external_exports.string(), "executionTargetId": external_exports.string().nullable(), "sourceKind": external_exports.string(), "descriptor": external_exports.record(external_exports.string(), external_exports.unknown()), "launchDefaults": external_exports.record(external_exports.string(), agentLaunchConfigDtoSchema), "observedRevision": external_exports.string().nullable(), "observedContentDigest": external_exports.string().nullable(), "latchHostLink": external_exports.exactOptional(external_exports.object({ "sourceRevision": external_exports.int().min(1), "state": external_exports.enum(["unlinked", "linked", "ambiguous"]), "canVerify": external_exports.boolean(), "canUnlink": external_exports.boolean(), "hostPublicKey": external_exports.exactOptional(external_exports.string().min(64).max(64)), "sharedRootId": external_exports.exactOptional(external_exports.string().min(64).max(64)), "canUnlinkSharedRoot": external_exports.exactOptional(external_exports.boolean()) })) });
 var projectResourceDtoSchema = external_exports.object({ "id": external_exports.string(), "workspaceId": external_exports.string(), "projectId": external_exports.string(), "executionTargetId": external_exports.string().nullable(), "resourceKey": external_exports.string(), "type": external_exports.string(), "label": external_exports.string().nullable(), "path": external_exports.string(), "isPrimary": external_exports.boolean(), "accessMode": projectResourceAccessModeSchema, "status": external_exports.enum(["active", "missing", "archived"]), "observedAt": dateTimeSchema.nullable(), "observationSource": external_exports.literal("client").nullable(), "createdAt": dateTimeSchema, "updatedAt": dateTimeSchema, "revision": external_exports.int().min(1), "sources": external_exports.array(projectResourceSourceDtoSchema) });
 var missionCreatorTokenDtoSchema = external_exports.object({ "tokenId": external_exports.string(), "label": external_exports.string() });
 var objectiveRunQueueEntryDtoSchema = external_exports.object({ "id": external_exports.string(), "queueId": external_exports.string(), "queueName": external_exports.string(), "position": external_exports.int().min(1), "state": external_exports.enum(["waiting", "blocked", "dispatched", "running"]), "blockedReason": external_exports.string().nullable(), "waitingReason": external_exports.enum(["mission_busy", "resource_disconnected", "retry_pending"]).nullable(), "waitingOnObjectiveId": external_exports.string().nullable(), "waitingOnObjectiveDisplayId": external_exports.string().nullable(), "attemptCount": external_exports.int().min(0), "precededBy": external_exports.null() });
@@ -135381,6 +135382,10 @@ var createProjectTagBodySchema = external_exports.object({ "label": external_exp
 var updateProjectTagBodySchema = external_exports.object({ "label": external_exports.exactOptional(external_exports.string()), "color": external_exports.exactOptional(external_exports.string().nullable()), "active": external_exports.exactOptional(external_exports.boolean()) });
 var reorderBoardColumnBodySchema = external_exports.object({ "statusId": external_exports.string(), "orderedMissionIds": external_exports.array(external_exports.string()).refine(hasUniqueItems, { error: "Expected unique items" }) });
 var repositoryReadOperationSchema = external_exports.enum(["observe", "tree", "branches", "worktrees", "git_status", "diff", "read_file", "search_text"]);
+var projectResourceReadCatalogSchema = external_exports.array(external_exports.object({ "id": external_exports.string(), "resourceKey": external_exports.string(), "label": external_exports.string().nullable(), "hasGitSource": external_exports.boolean(), "sources": external_exports.array(external_exports.object({ "sourceId": external_exports.string(), "sourceRevision": external_exports.int().min(1), "executionTargetId": external_exports.string(), "targetLabel": external_exports.string(), "availability": external_exports.enum(["ready", "target_offline", "unsupported"]) })) }));
+var projectResourceReadRequestSchema = external_exports.union([external_exports.strictObject({ "operation": external_exports.literal("git_status"), "resourceKey": external_exports.string().min(1), "sourceId": external_exports.string(), "sourceRevision": external_exports.int().min(1), "executionTargetId": external_exports.string() }), external_exports.strictObject({ "operation": external_exports.literal("diff"), "resourceKey": external_exports.string().min(1), "sourceId": external_exports.string(), "sourceRevision": external_exports.int().min(1), "executionTargetId": external_exports.string(), "relativePath": external_exports.string().min(1).max(1024), "scope": external_exports.enum(["staged", "unstaged", "all"]) }), external_exports.strictObject({ "operation": external_exports.literal("list_directory"), "resourceKey": external_exports.string().min(1), "sourceId": external_exports.string(), "sourceRevision": external_exports.int().min(1), "executionTargetId": external_exports.string(), "relativePath": external_exports.exactOptional(external_exports.string().max(1024)), "offset": external_exports.exactOptional(external_exports.int().min(0).max(9999)) }), external_exports.strictObject({ "operation": external_exports.literal("read_file"), "resourceKey": external_exports.string().min(1), "sourceId": external_exports.string(), "sourceRevision": external_exports.int().min(1), "executionTargetId": external_exports.string(), "relativePath": external_exports.string().min(1).max(1024) })]);
+var repositoryDirectoryDataSchema = external_exports.object({ "relativePath": external_exports.string(), "entries": external_exports.array(external_exports.object({ "name": external_exports.string(), "relativePath": external_exports.string(), "type": external_exports.enum(["directory", "file"]) })).max(100), "nextOffset": external_exports.int().min(0).max(9999).nullable() });
+var projectResourceReadResultSchema = external_exports.object({ "outcome": external_exports.enum(["ok", "unavailable", "target_offline", "unsupported", "timeout", "denied", "binary", "oversized", "not_found", "not_git_repository"]), "message": external_exports.string().nullable(), "observedAt": dateTimeSchema, "branch": external_exports.string().nullable(), "truncated": external_exports.boolean(), "data": jsonValueSchema });
 var repositoryReadRequestSchema = external_exports.union([external_exports.object({ "operation": external_exports.enum(["observe", "branches", "worktrees", "git_status"]), "operationId": external_exports.string().min(8).max(128), "executionTargetId": external_exports.string(), "projectId": external_exports.string(), "resourceKey": external_exports.string() }), external_exports.object({ "operation": external_exports.literal("tree"), "operationId": external_exports.string().min(8).max(128), "executionTargetId": external_exports.string(), "projectId": external_exports.string(), "resourceKey": external_exports.string(), "relativePath": external_exports.exactOptional(external_exports.string().nullable()), "maxEntries": external_exports.exactOptional(external_exports.int().min(1).nullable()) }), external_exports.object({ "operation": external_exports.literal("diff"), "operationId": external_exports.string().min(8).max(128), "executionTargetId": external_exports.string(), "projectId": external_exports.string(), "resourceKey": external_exports.string(), "scope": external_exports.enum(["unstaged", "staged", "all"]), "relativePaths": external_exports.exactOptional(external_exports.array(external_exports.string()).max(50).nullable()) }), external_exports.object({ "operation": external_exports.literal("read_file"), "operationId": external_exports.string().min(8).max(128), "executionTargetId": external_exports.string(), "projectId": external_exports.string(), "resourceKey": external_exports.string(), "relativePath": external_exports.string(), "startLine": external_exports.exactOptional(external_exports.int().min(1).nullable()), "endLine": external_exports.exactOptional(external_exports.int().min(1).nullable()) }), external_exports.object({ "operation": external_exports.literal("search_text"), "operationId": external_exports.string().min(8).max(128), "executionTargetId": external_exports.string(), "projectId": external_exports.string(), "resourceKey": external_exports.string(), "query": external_exports.string().min(1).max(256), "relativePath": external_exports.exactOptional(external_exports.string().nullable()), "caseSensitive": external_exports.exactOptional(external_exports.boolean()) })]);
 var repositoryReadResultSchema = external_exports.object({ "operationId": external_exports.string(), "operation": repositoryReadOperationSchema, "binding": external_exports.object({ "executionTargetId": external_exports.string(), "projectId": external_exports.string(), "resourceKey": external_exports.string() }), "outcome": external_exports.enum(["ok", "unavailable", "target_offline", "timeout", "denied", "binary", "oversized", "not_found"]), "head": external_exports.string().nullable(), "branch": external_exports.string().nullable(), "observedAt": dateTimeSchema, "bytes": external_exports.int().min(0), "truncated": external_exports.boolean(), "data": jsonValueSchema });
 var createProjectStatusBodySchema = external_exports.object({ "name": external_exports.string(), "type": statusTypeSchema, "isDefault": external_exports.exactOptional(external_exports.boolean()) });
@@ -135393,7 +135398,7 @@ var missionListSchema = external_exports.array(missionDtoSchema);
 var projectResourceListSchema = external_exports.array(projectResourceDtoSchema);
 var createProjectResourceBodySchema = external_exports.object({ "directoryPath": external_exports.exactOptional(external_exports.string()), "path": external_exports.exactOptional(external_exports.string()), "sourceUrl": external_exports.exactOptional(external_exports.string()), "resourceKey": external_exports.exactOptional(external_exports.string().nullable()), "label": external_exports.exactOptional(external_exports.string().nullable()), "isPrimary": external_exports.exactOptional(external_exports.boolean()), "executionTargetId": external_exports.exactOptional(external_exports.string().nullable()), "accessMode": external_exports.exactOptional(projectResourceAccessModeSchema) });
 var updateProjectResourceBodySchema = external_exports.object({ "resourceKey": external_exports.exactOptional(external_exports.string().nullable()), "isPrimary": external_exports.exactOptional(external_exports.boolean()), "accessMode": external_exports.exactOptional(projectResourceAccessModeSchema) });
-var updateProjectResourceLatchHostBodySchema = external_exports.strictObject({ "sourceRevision": external_exports.int().min(1), "hostPublicKey": external_exports.string().min(64).max(64).nullable() });
+var updateProjectResourceLatchHostBodySchema = external_exports.strictObject({ "sourceRevision": external_exports.int().min(1), "hostPublicKey": external_exports.string().min(64).max(64).nullable(), "sharedRootId": external_exports.exactOptional(external_exports.string().min(64).max(64).nullable()) });
 var updateProjectResourceSourceBodySchema = external_exports.object({ "launchDefaults": external_exports.record(external_exports.string(), agentLaunchConfigInputSchema) });
 var missionSearchDateFieldSchema = external_exports.enum(["createdAt", "updatedAt", "dueDatetime"]);
 var missionSearchMatchKindSchema = external_exports.enum(["title", "displayId", "objective", "event", "delivery", "constraints", "notes"]);
@@ -135908,6 +135913,8 @@ var patchProjectsByIdResourcesByResourceIdPathParamsSchema = external_exports.ob
 var deleteProjectsByIdResourcesByResourceIdSourcesBySourceIdPathParamsSchema = external_exports.object({ "id": external_exports.string(), "resourceId": external_exports.string(), "sourceId": external_exports.string() });
 var patchProjectsByIdResourcesByResourceIdSourcesBySourceIdPathParamsSchema = external_exports.object({ "id": external_exports.string(), "resourceId": external_exports.string(), "sourceId": external_exports.string() });
 var putProjectsByIdResourcesByResourceIdSourcesBySourceIdLatchHostPathParamsSchema = external_exports.object({ "id": external_exports.string(), "resourceId": external_exports.string(), "sourceId": external_exports.string() });
+var getProjectsByIdResourceReadsPathParamsSchema = external_exports.object({ "id": external_exports.string() });
+var postProjectsByIdResourceReadsPathParamsSchema = external_exports.object({ "id": external_exports.string() });
 var postProjectsByIdRepositoryReadsPathParamsSchema = external_exports.object({ "id": external_exports.string() });
 var getProjectsByIdRepositoryPathParamsSchema = external_exports.object({ "id": external_exports.string() });
 var getProjectsByIdRepositoryQueryParamsSchema = external_exports.object({ "executionTargetId": external_exports.exactOptional(external_exports.string()), "resourceKey": external_exports.exactOptional(external_exports.string()) });
@@ -139100,7 +139107,7 @@ var apiOperations = {
     responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: projectResourceDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
   },
   /**
-   * PUT /api/projects/{id}/resources/{resourceId}/sources/{sourceId}/latch-host: Verify or revoke a resource source's Latch host link
+   * PUT /api/projects/{id}/resources/{resourceId}/sources/{sourceId}/latch-host: Verify or revoke a resource source's Latch host or shared root link
    */
   putProjectsByIdResourcesByResourceIdSourcesBySourceIdLatchHost: {
     operationId: "putProjectsByIdResourcesByResourceIdSourcesBySourceIdLatchHost",
@@ -139117,6 +139124,44 @@ var apiOperations = {
     parameters: { path: putProjectsByIdResourcesByResourceIdSourcesBySourceIdLatchHostPathParamsSchema, query: null, header: null },
     requestBody: { required: true, content: { "application/json": { kind: "json", schema: updateProjectResourceLatchHostBodySchema } } },
     responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: okResponseSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * GET /api/projects/{id}/resource-reads: List project resources and their eligible runner-backed checkout sources
+   */
+  getProjectsByIdResourceReads: {
+    operationId: "getProjectsByIdResourceReads",
+    method: "GET",
+    path: "/api/projects/{id}/resource-reads",
+    tags: ["projects"],
+    deprecated: false,
+    permission: "project:read",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: getProjectsByIdResourceReadsPathParamsSchema, query: null, header: null },
+    requestBody: null,
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: projectResourceReadCatalogSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "500": apiResponses.InternalError }
+  },
+  /**
+   * POST /api/projects/{id}/resource-reads: Read Git status, a file diff, a directory page or a text preview on a project checkout
+   */
+  postProjectsByIdResourceReads: {
+    operationId: "postProjectsByIdResourceReads",
+    method: "POST",
+    path: "/api/projects/{id}/resource-reads",
+    tags: ["projects"],
+    deprecated: false,
+    permission: "project:read",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: postProjectsByIdResourceReadsPathParamsSchema, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: projectResourceReadRequestSchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: projectResourceReadResultSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
   },
   /**
    * POST /api/projects/{id}/repository-reads: Run a bounded read-only repository read on an execution target
@@ -141844,8 +141889,8 @@ function fromNodeHeaders(nodeHeaders) {
 // app.ts
 var import_cors = __toESM(require_lib3(), 1);
 var import_express7 = __toESM(require_express2(), 1);
-var import_node_fs22 = require("node:fs");
-var import_node_path33 = __toESM(require("node:path"), 1);
+var import_node_fs23 = require("node:fs");
+var import_node_path36 = __toESM(require("node:path"), 1);
 var import_node_url6 = require("node:url");
 
 // ../cli/src/config.ts
@@ -147264,8 +147309,8 @@ function planReopenToQueueHead(rows, reopenedId) {
 }
 
 // ../packages/core/service/projects.ts
-var import_node_fs15 = require("node:fs");
-var import_node_path18 = __toESM(require("node:path"), 1);
+var import_node_fs16 = require("node:fs");
+var import_node_path21 = __toESM(require("node:path"), 1);
 
 // ../packages/core/service/local-target/git-run.ts
 var import_node_child_process = require("node:child_process");
@@ -147641,12 +147686,12 @@ function purgeManagedWorktrees({
 
 // ../packages/core/service/local-target/branch-actions-git.ts
 function resolveActionCheckout(input2) {
-  const path28 = resolveBranchCheckoutPath({
+  const path30 = resolveBranchCheckoutPath({
     repoPath: input2.primaryRepoPath,
     branchName: input2.branchName,
     worktreePathHint: input2.worktreePath
   });
-  if (path28) return { ok: true, path: path28 };
+  if (path30) return { ok: true, path: path30 };
   return {
     ok: false,
     code: "BRANCH_NO_WORKTREE",
@@ -148003,6 +148048,21 @@ function resolveContainedRepositoryPath(root5, relative) {
   }
   return { ok: true, absolutePath: realCandidate, relativePath: checked.relativePath, realRoot };
 }
+function resolveProjectPreviewPath(root5, relative) {
+  const resolved = resolveContainedRepositoryPath(root5, relative);
+  if (!resolved.ok) return resolved;
+  const candidate = import_node_path12.default.join(resolved.realRoot, resolved.relativePath);
+  const ancestors = resolved.relativePath.split("/");
+  const extra = configuredSensitiveGlobs();
+  const excluded = ancestors.some((_, index) => {
+    const prefix = ancestors.slice(0, index + 1).join("/");
+    return prefix.toLowerCase() === ".overlord/tmp" || isSensitiveRepositoryPath(prefix, extra);
+  });
+  if (resolved.absolutePath !== candidate || excluded) {
+    return { ok: false, outcome: "denied", message: "This path is excluded." };
+  }
+  return resolved;
+}
 function statOrNull(absolutePath) {
   try {
     return (0, import_node_fs7.statSync)(absolutePath);
@@ -148086,7 +148146,15 @@ async function inspectRepositoryRoot(repoPath, deadline) {
   const [head, branch, prefix] = await Promise.all([
     gitLine(realRoot, ["rev-parse", "--verify", "--quiet", "HEAD"], deadline),
     gitLine(realRoot, ["branch", "--show-current"], deadline),
-    gitLine(realRoot, ["rev-parse", "--show-prefix"], deadline)
+    runInspectionGit({
+      cwd: realRoot,
+      args: ["rev-parse", "--show-prefix"],
+      timeoutMs: deadline.remaining(),
+      maxBytes: 8192,
+      signal: deadline.signal
+    }).then(
+      (result2) => result2.exitCode === 0 && !result2.truncated ? result2.stdout.toString("utf8").replace(/\r?\n$/, "") : null
+    )
   ]);
   return {
     ok: true,
@@ -148094,7 +148162,7 @@ async function inspectRepositoryRoot(repoPath, deadline) {
     isGitRepository: true,
     head,
     branch,
-    prefix: prefix ?? "",
+    prefix,
     filterArgs: neutralizedFilterArgs(realRoot)
   };
 }
@@ -148187,7 +148255,7 @@ async function readGitStatusGit(input2, signal) {
   const deadline = new ReadDeadline(REPOSITORY_READ_TARGET_BOUNDS.commandTimeoutMs, signal);
   const root5 = await inspectRepositoryRoot(input2.repoPath, deadline);
   if (!root5.ok) return root5;
-  if (!root5.isGitRepository) {
+  if (!root5.isGitRepository || input2.requireExactRoot && root5.prefix !== "") {
     return {
       ok: false,
       code: "NOT_GIT_REPOSITORY",
@@ -148220,7 +148288,7 @@ async function readGitStatusGit(input2, signal) {
   if (run.exitCode !== 0 && !run.truncated) {
     return { ok: false, code: "GIT_COMMAND_FAILED", message: "git status failed on the target." };
   }
-  const parsed = parseStatusV2(run.stdout, limit2, root5.prefix);
+  const parsed = parseStatusV2(run.stdout, limit2, root5.prefix ?? "");
   return value(
     { head: parsed.data.head ?? root5.head, branch: parsed.data.branch ?? root5.branch },
     parsed.data,
@@ -148234,9 +148302,17 @@ function cutUtf8(text, maxBytes) {
   while (end > 0 && (buffer[end] & 192) === 128) end -= 1;
   return buffer.subarray(0, end).toString("utf8");
 }
-function readPrefix(absolutePath, bytes) {
-  const fd = (0, import_node_fs8.openSync)(absolutePath, "r");
+function readPrefix(absolutePath, bytes, expected) {
+  const fd = (0, import_node_fs8.openSync)(
+    absolutePath,
+    expected ? import_node_fs8.constants.O_RDONLY | import_node_fs8.constants.O_NOFOLLOW | import_node_fs8.constants.O_NONBLOCK : "r"
+  );
   try {
+    if (expected) {
+      const opened = (0, import_node_fs8.fstatSync)(fd);
+      if (!opened.isFile() || opened.dev !== expected.dev || opened.ino !== expected.ino)
+        return null;
+    }
     const buffer = Buffer.alloc(bytes);
     let offset = 0;
     while (offset < bytes) {
@@ -148251,13 +148327,16 @@ function readPrefix(absolutePath, bytes) {
 }
 var utf8Decoder = new TextDecoder("utf-8", { fatal: true });
 async function readRepositoryFileGit(input2, signal) {
-  const deadline = new ReadDeadline(REPOSITORY_READ_TARGET_BOUNDS.commandTimeoutMs, signal);
-  const root5 = await inspectRepositoryRoot(input2.repoPath, deadline);
+  const root5 = input2.filesystemOnly ? { ok: true, realRoot: input2.repoPath, head: null, branch: null } : await inspectRepositoryRoot(
+    input2.repoPath,
+    new ReadDeadline(REPOSITORY_READ_TARGET_BOUNDS.commandTimeoutMs, signal)
+  );
   if (!root5.ok) return root5;
   if (typeof input2.relativePath !== "string" || input2.relativePath.trim() === "") {
     return value(root5, null, { outcome: "denied", message: "A file path is required." });
   }
-  const contained = resolveContainedRepositoryPath(root5.realRoot, input2.relativePath);
+  const resolve = input2.filesystemOnly ? resolveProjectPreviewPath : resolveContainedRepositoryPath;
+  const contained = resolve(root5.realRoot, input2.relativePath);
   if (!contained.ok)
     return value(root5, null, { outcome: contained.outcome, message: contained.message });
   const stats = statOrNull(contained.absolutePath);
@@ -148283,8 +148362,23 @@ async function readRepositoryFileGit(input2, signal) {
       message: "The file is too large to read; only its size is reported."
     });
   }
-  const raw = readPrefix(contained.absolutePath, totalBytes);
-  if (raw.subarray(0, 8192).includes(0)) {
+  const raw = readPrefix(
+    contained.absolutePath,
+    totalBytes,
+    input2.filesystemOnly ? stats : void 0
+  );
+  if (input2.filesystemOnly) {
+    const current = resolve(root5.realRoot, input2.relativePath);
+    const after = current.ok ? statOrNull(current.absolutePath) : null;
+    if (!raw || !current.ok || current.absolutePath !== contained.absolutePath || after?.dev !== stats.dev || after?.ino !== stats.ino) {
+      return value(root5, null, {
+        outcome: "denied",
+        message: "The file changed while it was being read."
+      });
+    }
+  }
+  if (!raw) return value(root5, null, { outcome: "unavailable" });
+  if ((input2.filesystemOnly ? raw : raw.subarray(0, 8192)).includes(0)) {
     return value(root5, metadataOnly, { outcome: "binary", message: "The file is binary." });
   }
   let text;
@@ -148487,7 +148581,7 @@ async function readCurrentDiffGit(input2, signal) {
   if (!root5.ok) return root5;
   const observedAt = () => (/* @__PURE__ */ new Date()).toISOString();
   const base = { head: root5.head, branch: root5.branch, truncated: false };
-  if (!root5.isGitRepository) {
+  if (!root5.isGitRepository || input2.requireExactRoot && root5.prefix !== "") {
     return {
       ok: false,
       code: "NOT_GIT_REPOSITORY",
@@ -148587,12 +148681,95 @@ function gatherCommitMessageDiff(worktreePath) {
   return { ok: true, diff: collectWorktreeChanges(worktreePath) };
 }
 
+// ../packages/core/service/local-target/project-resource-read.ts
+var import_node_fs10 = require("node:fs");
+var import_node_path13 = __toESM(require("node:path"), 1);
+var DIRECTORY_PAGE_SIZE = 100;
+var PROJECT_DIRECTORY_SCAN_LIMIT = 1e4;
+function readResult(outcome, data = null, truncated = false) {
+  return {
+    outcome,
+    data,
+    truncated,
+    head: null,
+    branch: null,
+    observedAt: (/* @__PURE__ */ new Date()).toISOString()
+  };
+}
+function listDirectory(input2) {
+  const folder = resolveProjectPreviewPath(input2.repoPath, input2.relativePath);
+  if (!folder.ok) return readResult(folder.outcome);
+  const identity = statOrNull(folder.absolutePath);
+  if (!identity?.isDirectory()) return readResult("not_found");
+  const extra = configuredSensitiveGlobs();
+  const offset = input2.offset ?? 0;
+  const entries = [];
+  let index = 0;
+  let truncated = false;
+  let nextOffset = null;
+  const directory = (0, import_node_fs10.opendirSync)(folder.absolutePath);
+  try {
+    while (true) {
+      const entry = directory.readSync();
+      if (!entry) break;
+      if (index >= PROJECT_DIRECTORY_SCAN_LIMIT) {
+        truncated = true;
+        break;
+      }
+      index += 1;
+      if (index <= offset) continue;
+      const relativePath = import_node_path13.default.posix.join(folder.relativePath, entry.name);
+      const checked = normalizeRepositoryRelativePath(relativePath);
+      if (!entry.isFile() && !entry.isDirectory() || !checked.ok || checked.relativePath !== relativePath || isSensitiveRepositoryPath(relativePath, extra) || relativePath.toLowerCase() === ".overlord/tmp")
+        continue;
+      if (entries.length === DIRECTORY_PAGE_SIZE) {
+        nextOffset = index - 1;
+        break;
+      }
+      entries.push({
+        name: entry.name,
+        relativePath,
+        type: entry.isDirectory() ? "directory" : "file"
+      });
+    }
+  } finally {
+    directory.closeSync();
+  }
+  const current = resolveProjectPreviewPath(input2.repoPath, input2.relativePath);
+  const after = current.ok ? statOrNull(current.absolutePath) : null;
+  if (!current.ok || current.absolutePath !== folder.absolutePath || after?.dev !== identity.dev || after.ino !== identity.ino) {
+    return readResult("denied");
+  }
+  return readResult("ok", { relativePath: folder.relativePath, entries, nextOffset }, truncated);
+}
+async function readProjectResource(input2) {
+  switch (input2.operation) {
+    case "git_status":
+      return readGitStatusGit({ ...input2, requireExactRoot: true, maxEntriesPerClass: 50 });
+    case "diff": {
+      const candidate = resolveProjectPreviewPath(input2.repoPath, input2.relativePath);
+      if (!candidate.ok && candidate.outcome !== "not_found") return readResult(candidate.outcome);
+      return readCurrentDiffGit({
+        ...input2,
+        relativePaths: [input2.relativePath],
+        requireExactRoot: true
+      });
+    }
+    case "read_file":
+      return readRepositoryFileGit({ ...input2, filesystemOnly: true });
+    case "list_directory":
+      return listDirectory(input2);
+    default:
+      return readResult("unavailable");
+  }
+}
+
 // ../packages/core/service/local-target/in-process-provider.ts
-var import_node_fs14 = require("node:fs");
+var import_node_fs15 = require("node:fs");
 
 // ../packages/core/repository/git-tree.ts
 var import_node_child_process2 = require("node:child_process");
-var import_node_path13 = __toESM(require("node:path"), 1);
+var import_node_path14 = __toESM(require("node:path"), 1);
 var RepositoryReadError = class extends Error {
   code;
   constructor(code, message2) {
@@ -148623,17 +148800,17 @@ function gitPath(cwd, args) {
   }
 }
 function addDirectoryAncestors(paths2, filePath) {
-  let parent = import_node_path13.default.posix.dirname(filePath);
+  let parent = import_node_path14.default.posix.dirname(filePath);
   while (parent !== "." && parent !== "/") {
     paths2.add(parent);
-    parent = import_node_path13.default.posix.dirname(parent);
+    parent = import_node_path14.default.posix.dirname(parent);
   }
 }
 function toEntry(entryPath, type) {
-  const parentPath = import_node_path13.default.posix.dirname(entryPath);
+  const parentPath = import_node_path14.default.posix.dirname(entryPath);
   return {
     path: entryPath,
-    name: import_node_path13.default.posix.basename(entryPath),
+    name: import_node_path14.default.posix.basename(entryPath),
     type,
     parentPath: parentPath === "." ? null : parentPath,
     depth: entryPath.split("/").length - 1
@@ -148644,7 +148821,7 @@ function compareEntries(a5, b5) {
   return a5.path < b5.path ? -1 : 1;
 }
 function readRepositoryTree(rootPath, options = {}) {
-  const resolvedRoot = import_node_path13.default.resolve(rootPath);
+  const resolvedRoot = import_node_path14.default.resolve(rootPath);
   const gitRoot = gitPath(resolvedRoot, ["rev-parse", "--show-toplevel"]);
   if (!gitRoot) {
     throw new RepositoryReadError(
@@ -148669,7 +148846,7 @@ function readRepositoryTree(rootPath, options = {}) {
   const truncated = entries.length > maxEntries;
   return {
     rootPath: resolvedRoot,
-    gitRoot: import_node_path13.default.resolve(gitRoot),
+    gitRoot: import_node_path14.default.resolve(gitRoot),
     branch: gitPath(gitRoot, ["branch", "--show-current"]),
     commit: gitPath(gitRoot, ["rev-parse", "--short", "HEAD"]),
     entries: truncated ? entries.slice(0, maxEntries) : entries,
@@ -148677,36 +148854,21 @@ function readRepositoryTree(rootPath, options = {}) {
   };
 }
 
-// ../packages/core/service/latch-discovery.ts
-var import_node_child_process3 = require("node:child_process");
-var import_node_fs10 = require("node:fs");
-var import_node_os6 = __toESM(require("node:os"), 1);
-var import_node_path14 = __toESM(require("node:path"), 1);
-
-// ../packages/core/service/latch-environment.ts
-var UTF8_LOCALE_PATTERN = /utf-?8/i;
-function isUtf8Locale(value2) {
-  return typeof value2 === "string" && UTF8_LOCALE_PATTERN.test(value2);
-}
-function latchChildEnvironment({
-  baseEnv = process.env,
-  platform: platform4 = process.platform
-} = {}) {
-  const effective = baseEnv.LC_ALL ?? baseEnv.LC_CTYPE ?? baseEnv.LANG;
-  if (isUtf8Locale(effective)) return { ...baseEnv };
-  const env3 = {
-    ...baseEnv,
-    // macOS ships the bare `UTF-8` locale; glibc systems ship `C.UTF-8`.
-    LC_CTYPE: platform4 === "darwin" ? "UTF-8" : "C.UTF-8"
-  };
-  if (env3.LC_ALL !== void 0 && !isUtf8Locale(env3.LC_ALL)) delete env3.LC_ALL;
-  return env3;
-}
-
 // ../packages/core/service/strings.ts
 function trimmedOrNull(value2) {
   return typeof value2 === "string" && value2.trim() ? value2.trim() : null;
 }
+
+// ../packages/core/service/latch/gateway.ts
+var import_node_fs12 = require("node:fs");
+var import_node_os7 = __toESM(require("node:os"), 1);
+var import_node_path16 = __toESM(require("node:path"), 1);
+
+// ../packages/core/service/latch/discovery.ts
+var import_node_child_process3 = require("node:child_process");
+var import_node_fs11 = require("node:fs");
+var import_node_os6 = __toESM(require("node:os"), 1);
+var import_node_path15 = __toESM(require("node:path"), 1);
 
 // ../packages/core/service/terminal-profile-types.ts
 var DEFAULT_VIEWER_OPEN_AS = "window";
@@ -148892,14 +149054,37 @@ function launchSessionSnapshotFromMetadata(metadata) {
   };
 }
 
-// ../packages/core/service/latch-discovery.ts
+// ../packages/core/service/latch/environment.ts
+var UTF8_LOCALE_PATTERN = /utf-?8/i;
+function isUtf8Locale(value2) {
+  return typeof value2 === "string" && UTF8_LOCALE_PATTERN.test(value2);
+}
+function latchChildEnvironment({
+  baseEnv = process.env,
+  platform: platform4 = process.platform
+} = {}) {
+  const effective = baseEnv.LC_ALL ?? baseEnv.LC_CTYPE ?? baseEnv.LANG;
+  if (isUtf8Locale(effective)) return { ...baseEnv };
+  const env3 = {
+    ...baseEnv,
+    // macOS ships the bare `UTF-8` locale; glibc systems ship `C.UTF-8`.
+    LC_CTYPE: platform4 === "darwin" ? "UTF-8" : "C.UTF-8"
+  };
+  if (env3.LC_ALL !== void 0 && !isUtf8Locale(env3.LC_ALL)) delete env3.LC_ALL;
+  return env3;
+}
+
+// ../packages/core/service/latch/discovery.ts
 var SUPPORTED_LATCH_PROTOCOL_VERSION = 2;
 var REQUIRED_LATCH_CAPABILITIES = ["create"];
 var LATCH_STANDALONE_INSTALL_COMMAND = "curl -fsSL https://raw.githubusercontent.com/jchaselubitz/Latch/main/scripts/install-cli.sh | bash";
 var LATCH_DISCOVERY_CACHE_FILENAME = "latch-discovery.json";
 function defaultLatchDiscoveryCachePath() {
-  const home = process.env.OVLD_HOME?.trim() || import_node_path14.default.join(import_node_os6.default.homedir(), ".ovld");
-  return import_node_path14.default.join(home, LATCH_DISCOVERY_CACHE_FILENAME);
+  const home = process.env.OVLD_HOME?.trim() || import_node_path15.default.join(import_node_os6.default.homedir(), ".ovld");
+  return latchDiscoveryCachePath(home);
+}
+function latchDiscoveryCachePath(dataDir = resolveGlobalDataDir()) {
+  return import_node_path15.default.join(dataDir, LATCH_DISCOVERY_CACHE_FILENAME);
 }
 function asBoolean(value2) {
   return value2 === true;
@@ -149003,20 +149188,20 @@ function resolveLatchExecutablePathFromEnvironment({
   homeDirectory = import_node_os6.default.homedir(),
   platform: platform4 = process.platform,
   resolveOnPath = resolveLatchExecutableOnPath,
-  fileExists = import_node_fs10.existsSync
+  fileExists = import_node_fs11.existsSync
 }) {
   const name2 = trimmedOrNull(executable) ?? DEFAULT_LATCH_EXECUTABLE;
-  if (import_node_path14.default.isAbsolute(name2) || name2.includes("/") || name2.includes("\\")) {
-    return fileExists(name2) ? import_node_path14.default.resolve(name2) : null;
+  if (import_node_path15.default.isAbsolute(name2) || name2.includes("/") || name2.includes("\\")) {
+    return fileExists(name2) ? import_node_path15.default.resolve(name2) : null;
   }
   const resolvedOnPath = resolveOnPath(name2);
   if (resolvedOnPath) return resolvedOnPath;
   const fallbacks = [
-    import_node_path14.default.join(homeDirectory, ".local", "bin", name2),
+    import_node_path15.default.join(homeDirectory, ".local", "bin", name2),
     ...platform4 === "darwin" ? [`/opt/homebrew/bin/${name2}`, `/usr/local/bin/${name2}`] : []
   ];
   const fallback2 = fallbacks.find(fileExists);
-  return fallback2 ? import_node_path14.default.resolve(fallback2) : null;
+  return fallback2 ? import_node_path15.default.resolve(fallback2) : null;
 }
 function resolveLatchExecutablePath(executable) {
   return resolveLatchExecutablePathFromEnvironment({ executable });
@@ -149098,7 +149283,7 @@ function latchDiscoveryCacheKey({
 function readBinaryMtimeMs(resolvedPath2) {
   if (!resolvedPath2) return null;
   try {
-    return (0, import_node_fs10.statSync)(resolvedPath2).mtimeMs;
+    return (0, import_node_fs11.statSync)(resolvedPath2).mtimeMs;
   } catch {
     return null;
   }
@@ -149113,15 +149298,15 @@ function isLatchDiscoveryCacheFresh({
     return resolvePath(result2.executable) === null;
   }
   const pathStill = result2.resolvedPath;
-  if (!pathStill || !(0, import_node_fs10.existsSync)(pathStill)) return false;
+  if (!pathStill || !(0, import_node_fs11.existsSync)(pathStill)) return false;
   const mtime = readBinaryMtimeMs(pathStill);
   if (mtime === null || entry.binaryMtimeMs === null) return false;
   return mtime === entry.binaryMtimeMs;
 }
 function readLatchDiscoveryCacheFile(filePath) {
-  if (!(0, import_node_fs10.existsSync)(filePath)) return { version: 2, entries: {} };
+  if (!(0, import_node_fs11.existsSync)(filePath)) return { version: 2, entries: {} };
   try {
-    const parsed = JSON.parse((0, import_node_fs10.readFileSync)(filePath, "utf8"));
+    const parsed = JSON.parse((0, import_node_fs11.readFileSync)(filePath, "utf8"));
     if (parsed.version !== 2 || !parsed.entries || typeof parsed.entries !== "object") {
       return { version: 2, entries: {} };
     }
@@ -149134,8 +149319,8 @@ function writeLatchDiscoveryCacheFile({
   filePath,
   cache: cache8
 }) {
-  (0, import_node_fs10.mkdirSync)(import_node_path14.default.dirname(filePath), { recursive: true });
-  (0, import_node_fs10.writeFileSync)(filePath, `${JSON.stringify(cache8, null, 2)}
+  (0, import_node_fs11.mkdirSync)(import_node_path15.default.dirname(filePath), { recursive: true });
+  (0, import_node_fs11.writeFileSync)(filePath, `${JSON.stringify(cache8, null, 2)}
 `, { mode: 384 });
 }
 function discoverLatchForExecutionTarget({
@@ -149166,62 +149351,7 @@ function discoverLatchForExecutionTarget({
   return result2;
 }
 
-// ../packages/core/service/latch-host-identity.ts
-var import_node_child_process4 = require("node:child_process");
-var import_node_crypto12 = require("node:crypto");
-var import_node_util = require("node:util");
-
-// ../packages/core/service/latch-binary.ts
-var import_node_fs11 = require("node:fs");
-var cache3 = /* @__PURE__ */ new Map();
-function resolveLatchBinaryPath(executable, resolve = resolveLatchExecutablePath) {
-  const name2 = trimmedOrNull(executable) ?? DEFAULT_LATCH_EXECUTABLE;
-  const cached3 = cache3.get(name2);
-  if (cached3) {
-    if ((0, import_node_fs11.existsSync)(cached3)) return cached3;
-    cache3.delete(name2);
-  }
-  const resolved = resolve(name2);
-  if (resolved) cache3.set(name2, resolved);
-  return resolved;
-}
-function latchBinaryMissingMessage(executable) {
-  const name2 = trimmedOrNull(executable) ?? DEFAULT_LATCH_EXECUTABLE;
-  return `Latch executable "${name2}" was not found on this device (checked PATH, ~/.local/bin, and the Homebrew prefixes).`;
-}
-
-// ../packages/core/service/latch-host-identity.ts
-var READ_LATCH_HOST_IDENTITY = "readLatchHostIdentity";
-var execFileAsync = (0, import_node_util.promisify)(import_node_child_process4.execFile);
-function isLatchHostPublicKey(value2) {
-  return typeof value2 === "string" && /^[0-9a-f]{64}$/.test(value2) && !/^0+$/.test(value2);
-}
-function latchHostKeyDigest(key) {
-  return (0, import_node_crypto12.createHash)("sha256").update(Buffer.from(key, "hex")).digest("hex");
-}
-async function readLatchHostIdentity() {
-  const binary2 = resolveLatchBinaryPath();
-  if (!binary2) return null;
-  try {
-    const { stdout } = await execFileAsync(binary2, ["remote-access", "status", "--json"], {
-      env: latchChildEnvironment(),
-      timeout: 5e3,
-      maxBuffer: 16384
-    });
-    const status = JSON.parse(stdout);
-    return status?.formatVersion === 2 && status.enabled === true && isLatchHostPublicKey(status.publicKey) ? { hostKeyDigest: latchHostKeyDigest(status.publicKey) } : null;
-  } catch {
-    return null;
-  }
-}
-
-// ../packages/core/service/latch-session.ts
-var import_node_child_process5 = require("node:child_process");
-
-// ../packages/core/service/latch-gateway.ts
-var import_node_fs12 = require("node:fs");
-var import_node_os7 = __toESM(require("node:os"), 1);
-var import_node_path15 = __toESM(require("node:path"), 1);
+// ../packages/core/service/latch/gateway.ts
 var DEFAULT_LATCH_GATEWAY_URL = "http://127.0.0.1:4610";
 var LATCH_GATEWAY_SUBPROTOCOL_PREFIX = "latch.v2.";
 var LATCH_SERVE_TOKEN_FILENAME = "serve.token";
@@ -149238,7 +149368,7 @@ function isLoopbackHostname(hostname5) {
   return /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(host);
 }
 function latchHomeDirectory(env3 = process.env) {
-  return trimmedOrNull(env3.LATCH_HOME) ?? import_node_path15.default.join(import_node_os7.default.homedir(), ".latch");
+  return trimmedOrNull(env3.LATCH_HOME) ?? import_node_path16.default.join(import_node_os7.default.homedir(), ".latch");
 }
 var LATCH_REMOTE_LINK_RUNTIME_PATH = ["remote-access", "runtime"];
 var LATCH_REMOTE_LINK_READY_FILENAME = "remote-link-gateway-ready.json";
@@ -149276,9 +149406,9 @@ function readGatewayToken(tokenFile, files) {
   return token;
 }
 function remoteLinkGatewayConfig(env3, files) {
-  const runtime = import_node_path15.default.join(latchHomeDirectory(env3), ...LATCH_REMOTE_LINK_RUNTIME_PATH);
-  const readyFile = import_node_path15.default.join(runtime, LATCH_REMOTE_LINK_READY_FILENAME);
-  const tokenFile = import_node_path15.default.join(runtime, LATCH_REMOTE_LINK_TOKEN_FILENAME);
+  const runtime = import_node_path16.default.join(latchHomeDirectory(env3), ...LATCH_REMOTE_LINK_RUNTIME_PATH);
+  const readyFile = import_node_path16.default.join(runtime, LATCH_REMOTE_LINK_READY_FILENAME);
+  const tokenFile = import_node_path16.default.join(runtime, LATCH_REMOTE_LINK_TOKEN_FILENAME);
   if (!files.fileExists(readyFile) || !files.fileExists(tokenFile)) return null;
   try {
     const ready = JSON.parse(files.readFile(readyFile));
@@ -149304,7 +149434,7 @@ function resolveLatchGatewayCandidates({
   const inlineToken = trimmedOrNull(env3.LATCH_GATEWAY_TOKEN);
   if (inlineToken) return [{ baseUrl, token: inlineToken }];
   const explicitTokenFile = trimmedOrNull(env3.LATCH_SERVE_TOKEN_FILE);
-  const tokenFile = explicitTokenFile ?? import_node_path15.default.join(latchHomeDirectory(env3), LATCH_SERVE_TOKEN_FILENAME);
+  const tokenFile = explicitTokenFile ?? import_node_path16.default.join(latchHomeDirectory(env3), LATCH_SERVE_TOKEN_FILENAME);
   if (explicitUrl || explicitTokenFile) {
     return [{ baseUrl, token: readGatewayToken(tokenFile, files) }];
   }
@@ -149429,130 +149559,11 @@ function latchConversationSubprotocol(gateway) {
   return `${LATCH_GATEWAY_SUBPROTOCOL_PREFIX}${gateway.token}`;
 }
 
-// ../packages/core/service/latch-launch.ts
-var PROVIDER_SESSION_METADATA_KEY = "providerSession";
-function parseExecutionProviderSession(value2) {
-  if (!value2 || typeof value2 !== "object" || Array.isArray(value2)) return null;
-  return providerSessionFromMetadata({ [PROVIDER_SESSION_METADATA_KEY]: value2 });
-}
-function providerSessionFromMetadata(metadata) {
-  const raw = metadata?.[PROVIDER_SESSION_METADATA_KEY];
-  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
-  const cast = raw;
-  if (trimmedOrNull(cast.provider)?.toLowerCase() !== "latch") return null;
-  const providerSessionId = trimmedOrNull(cast.providerSessionId);
-  if (!providerSessionId) return null;
-  return {
-    provider: "latch",
-    providerSessionId,
-    sessionName: trimmedOrNull(cast.sessionName),
-    executionTargetId: trimmedOrNull(cast.executionTargetId),
-    agentSessionId: trimmedOrNull(cast.agentSessionId),
-    createdAt: trimmedOrNull(cast.createdAt) ?? "",
-    lastObservedState: trimmedOrNull(cast.lastObservedState) ?? "running",
-    ...cast.endedAt !== void 0 ? { endedAt: trimmedOrNull(cast.endedAt) } : {},
-    ...cast.endReason !== void 0 ? { endReason: trimmedOrNull(cast.endReason) } : {},
-    ...cast.endRequestedAt !== void 0 ? { endRequestedAt: trimmedOrNull(cast.endRequestedAt) } : {},
-    ...cast.lastObservedAt !== void 0 ? { lastObservedAt: trimmedOrNull(cast.lastObservedAt) } : {}
-  };
-}
-function mergeProviderSessionIntoMetadata({
-  metadataJson,
-  providerSession
-}) {
-  let parsed = {};
-  if (metadataJson?.trim()) {
-    try {
-      const value2 = JSON.parse(metadataJson);
-      if (value2 && typeof value2 === "object" && !Array.isArray(value2)) {
-        parsed = value2;
-      }
-    } catch {
-      parsed = {};
-    }
-  }
-  return JSON.stringify({
-    ...parsed,
-    [PROVIDER_SESSION_METADATA_KEY]: providerSession
-  });
-}
-function stripProviderSessionFromMetadata({
-  metadataJson
-}) {
-  let parsed = {};
-  if (metadataJson?.trim()) {
-    try {
-      const value2 = JSON.parse(metadataJson);
-      if (value2 && typeof value2 === "object" && !Array.isArray(value2)) {
-        parsed = { ...value2 };
-      }
-    } catch {
-      parsed = {};
-    }
-  }
-  delete parsed[PROVIDER_SESSION_METADATA_KEY];
-  return JSON.stringify(parsed);
-}
-function latchViewerFlagForKind(kind) {
-  switch (trimmedOrNull(kind)?.toLowerCase()) {
-    case "iterm":
-    case "iterm2":
-      return "iterm";
-    default:
-      return null;
-  }
-}
-var LATCH_OPEN_AS_MIN_PRODUCT_VERSION = "0.2608140931.0";
-function compareLatchProductVersions(a5, b5) {
-  const parts = (value2) => value2.trim().split(".").map((segment) => {
-    const parsed = Number.parseInt(segment, 10);
-    return Number.isFinite(parsed) ? parsed : 0;
-  });
-  const left = parts(a5);
-  const right = parts(b5);
-  const length = Math.max(left.length, right.length);
-  for (let index = 0; index < length; index += 1) {
-    const diff = (left[index] ?? 0) - (right[index] ?? 0);
-    if (diff !== 0) return diff;
-  }
-  return 0;
-}
-function latchSupportsOpenAs(productVersion) {
-  const version4 = trimmedOrNull(productVersion);
-  if (!version4) return false;
-  return compareLatchProductVersions(version4, LATCH_OPEN_AS_MIN_PRODUCT_VERSION) >= 0;
-}
-var LATCH_OPEN_BACKGROUND_MIN_PRODUCT_VERSION = "0.2609181007.0";
-function latchSupportsOpenBackground(productVersion) {
-  const version4 = trimmedOrNull(productVersion);
-  if (!version4) return false;
-  return compareLatchProductVersions(version4, LATCH_OPEN_BACKGROUND_MIN_PRODUCT_VERSION) >= 0;
-}
-function buildLatchOpenArgs({
-  providerSessionId,
-  viewer,
-  openAs,
-  background,
-  productVersion
-}) {
-  const args = ["open", providerSessionId, "--with", viewer];
-  if (openAs && latchSupportsOpenAs(productVersion)) {
-    args.push("--as", parseViewerOpenAs(openAs));
-  }
-  if (typeof background === "boolean" && latchSupportsOpenBackground(productVersion)) {
-    args.push(background ? "--background" : "--foreground");
-  }
-  args.push("--json");
-  return args;
-}
-
-// ../packages/core/service/latch-session-absent.ts
+// ../packages/core/service/latch/session-errors.ts
 function isLatchSessionAbsentMessage(text) {
   const normalized = text.replace(/\r/g, "").trim();
   return /(?:error:\s*)?no session(?: named)? `[^`]+`/i.test(normalized);
 }
-
-// ../packages/core/service/latch-session.ts
 var LatchSessionCommandError = class extends Error {
   constructor(message2) {
     super(message2);
@@ -149569,136 +149580,8 @@ function latchSessionCommandError(detail) {
   const message2 = detail || "Latch command failed.";
   return isLatchSessionAbsentMessage(message2) ? new LatchSessionAbsentError(message2) : new LatchSessionCommandError(message2);
 }
-function parseState2(value2) {
-  switch (trimmedOrNull(value2)) {
-    case "running":
-      return "running";
-    case "exited":
-      return "exited";
-    case "stopping":
-      return "stopping";
-    case "lost":
-      return "lost";
-    default:
-      return null;
-  }
-}
-async function runLatchJson({
-  executable,
-  args
-}) {
-  const binary2 = resolveLatchBinaryPath(executable);
-  if (!binary2) throw new LatchSessionCommandError(latchBinaryMissingMessage(executable));
-  const result2 = await new Promise((resolve, reject) => {
-    (0, import_node_child_process5.execFile)(
-      binary2,
-      args,
-      {
-        encoding: "utf8",
-        timeout: 1e4,
-        maxBuffer: 1024 * 1024,
-        env: latchChildEnvironment()
-      },
-      (error64, stdout, stderr) => {
-        if (error64) {
-          const detail = (stderr || stdout || error64.message).trim().slice(0, 500);
-          reject(latchSessionCommandError(detail));
-          return;
-        }
-        resolve({ stdout, stderr });
-      }
-    );
-  });
-  try {
-    const parsed = JSON.parse(result2.stdout);
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-      throw new Error("not an object");
-    }
-    return parsed;
-  } catch {
-    throw new LatchSessionCommandError("Latch returned an invalid JSON response.");
-  }
-}
-async function inspectLatchSession({
-  executable = "latch",
-  providerSessionId
-}) {
-  const sessionId = trimmedOrNull(providerSessionId);
-  if (!sessionId) throw new LatchSessionCommandError("A Latch session id is required.");
-  const report2 = await runLatchJson({
-    executable: trimmedOrNull(executable) ?? "latch",
-    args: ["inspect", sessionId, "--json"]
-  });
-  const state2 = parseState2(report2.state);
-  if (!state2) throw new LatchSessionCommandError("Latch returned an unsupported session state.");
-  const exit = report2.exit && typeof report2.exit === "object" && !Array.isArray(report2.exit) ? report2.exit : null;
-  return {
-    providerSessionId: trimmedOrNull(report2.id) ?? sessionId,
-    name: trimmedOrNull(report2.name) ?? sessionId,
-    state: state2,
-    exitCode: typeof exit?.code === "number" && Number.isFinite(exit.code) ? exit.code : null,
-    endedAt: typeof exit?.exitedAt === "string" ? exit.exitedAt : typeof exit?.exited_at === "string" ? exit.exited_at : null,
-    inspectedAt: (/* @__PURE__ */ new Date()).toISOString()
-  };
-}
-async function readLatchProductVersion(executable) {
-  try {
-    return trimmedOrNull(
-      (await runLatchJson({ executable, args: ["capabilities", "--json"] })).productVersion
-    );
-  } catch {
-    return null;
-  }
-}
-async function openLatchSession({
-  executable = "latch",
-  providerSessionId,
-  viewerKind,
-  openAs
-}) {
-  const sessionId = trimmedOrNull(providerSessionId);
-  if (!sessionId) throw new LatchSessionCommandError("A Latch session id is required.");
-  const viewer = latchViewerFlagForKind(viewerKind);
-  if (!viewer) {
-    throw new LatchSessionCommandError(`Latch cannot open the configured viewer "${viewerKind}".`);
-  }
-  const exe = trimmedOrNull(executable) ?? "latch";
-  const report2 = await runLatchJson({
-    executable: exe,
-    args: buildLatchOpenArgs({
-      providerSessionId: sessionId,
-      viewer,
-      openAs,
-      productVersion: openAs ? await readLatchProductVersion(exe) : null
-    })
-  });
-  if (report2.opened !== true) {
-    throw new LatchSessionCommandError(`Latch did not open the ${viewer} viewer.`);
-  }
-  return {
-    providerSessionId: trimmedOrNull(report2.id) ?? sessionId,
-    viewer: trimmedOrNull(report2.viewer) ?? viewer,
-    opened: true,
-    behavior: trimmedOrNull(report2.behavior) ? parseViewerOpenAs(report2.behavior) : null
-  };
-}
-async function stopLatchSession({
-  executable = "latch",
-  providerSessionId
-}) {
-  const sessionId = trimmedOrNull(providerSessionId);
-  if (!sessionId) throw new LatchSessionCommandError("A Latch session id is required.");
-  const report2 = await runLatchJson({
-    executable: trimmedOrNull(executable) ?? "latch",
-    args: ["stop", sessionId, "--json"]
-  });
-  const state2 = parseState2(report2.state);
-  if (!state2) throw new LatchSessionCommandError("Latch returned an unsupported session state.");
-  return {
-    providerSessionId: trimmedOrNull(report2.id) ?? sessionId,
-    state: state2
-  };
-}
+
+// ../packages/core/service/latch/conversation.ts
 var DEFAULT_LATCH_SEND_WAIT_MS = 3e4;
 var LATCH_CONVERSATION_SNAPSHOT_TIMEOUT_MS = 1e4;
 var LATCH_OPERATION_RESULT_TIMEOUT_MS = 3e4;
@@ -149997,6 +149880,346 @@ function runConversationOperation({
   });
 }
 
+// ../packages/core/service/latch/host-identity.ts
+var import_node_child_process4 = require("node:child_process");
+var import_node_crypto12 = require("node:crypto");
+var import_promises2 = require("node:fs/promises");
+var import_node_path17 = require("node:path");
+var import_node_util = require("node:util");
+
+// ../packages/core/service/latch/binary.ts
+var import_node_fs13 = require("node:fs");
+var cache3 = /* @__PURE__ */ new Map();
+function resolveLatchBinaryPath(executable, resolve = resolveLatchExecutablePath) {
+  const name2 = trimmedOrNull(executable) ?? DEFAULT_LATCH_EXECUTABLE;
+  const cached3 = cache3.get(name2);
+  if (cached3) {
+    if ((0, import_node_fs13.existsSync)(cached3)) return cached3;
+    cache3.delete(name2);
+  }
+  const resolved = resolve(name2);
+  if (resolved) cache3.set(name2, resolved);
+  return resolved;
+}
+function latchBinaryMissingMessage(executable) {
+  const name2 = trimmedOrNull(executable) ?? DEFAULT_LATCH_EXECUTABLE;
+  return `Latch executable "${name2}" was not found on this device (checked PATH, ~/.local/bin, and the Homebrew prefixes).`;
+}
+
+// ../packages/core/service/latch/host-identity.ts
+var READ_LATCH_HOST_IDENTITY = "readLatchHostIdentity";
+var execFileAsync = (0, import_node_util.promisify)(import_node_child_process4.execFile);
+function isLatchSharedRootId(value2) {
+  return typeof value2 === "string" && /^[0-9a-f]{64}$/.test(value2);
+}
+function isLatchHostPublicKey(value2) {
+  return typeof value2 === "string" && /^[0-9a-f]{64}$/.test(value2) && !/^0+$/.test(value2);
+}
+function latchHostKeyDigest(key) {
+  return (0, import_node_crypto12.createHash)("sha256").update(Buffer.from(key, "hex")).digest("hex");
+}
+async function readLatchHostIdentity({
+  sharedRootId,
+  sourceDirectory
+} = {}) {
+  const binary2 = resolveLatchBinaryPath();
+  if (!binary2) return null;
+  const read = async (command, maxBuffer) => {
+    const { stdout } = await execFileAsync(binary2, ["remote-access", command, "--json"], {
+      env: latchChildEnvironment(),
+      timeout: 5e3,
+      maxBuffer
+    });
+    return JSON.parse(stdout);
+  };
+  try {
+    const status = await read("status", 16384);
+    if (status?.formatVersion !== 2 || status.enabled !== true || !isLatchHostPublicKey(status.publicKey))
+      return null;
+    const hostKeyDigest = latchHostKeyDigest(status.publicKey);
+    if (sharedRootId === void 0) return { hostKeyDigest };
+    if (!isLatchSharedRootId(sharedRootId) || !sourceDirectory || !(0, import_node_path17.isAbsolute)(sourceDirectory))
+      return null;
+    const roots = await read("shared-roots", 1048576);
+    if (!Array.isArray(roots)) return null;
+    const matches = roots.filter((root6) => root6?.rootId === sharedRootId);
+    if (matches.length !== 1) return null;
+    const [root5] = matches;
+    const path30 = await (0, import_promises2.realpath)(sourceDirectory);
+    if (root5.path !== path30 || typeof root5.deviceId !== "string" || !Number.isSafeInteger(root5.grantRevision) || root5.grantRevision < 1)
+      return null;
+    const directory = await (0, import_promises2.stat)(path30, { bigint: true });
+    const identity = root5.identity;
+    if (!directory.isDirectory() || !Number.isSafeInteger(identity?.device) || !Number.isSafeInteger(identity?.inode) || directory.dev !== BigInt(identity.device) || directory.ino !== BigInt(identity.inode))
+      return null;
+    if (identity.created !== null) {
+      const { secs_since_epoch, nanos_since_epoch } = identity.created;
+      if (!Number.isSafeInteger(secs_since_epoch) || !Number.isSafeInteger(nanos_since_epoch) || directory.birthtimeNs !== BigInt(secs_since_epoch) * 1000000000n + BigInt(nanos_since_epoch))
+        return null;
+    }
+    const devices = await read("devices", 1048576);
+    if (!Array.isArray(devices) || !devices.some(
+      (device) => device?.deviceId === root5.deviceId && device.revoked === false && device.permission === "control" && device.grantRevision === root5.grantRevision
+    ))
+      return null;
+    return { hostKeyDigest, verifiedSharedRootId: sharedRootId };
+  } catch {
+    return null;
+  }
+}
+
+// ../packages/core/service/latch/session.ts
+var import_node_child_process5 = require("node:child_process");
+
+// ../packages/core/service/latch/launch.ts
+var PROVIDER_SESSION_METADATA_KEY = "providerSession";
+function parseExecutionProviderSession(value2) {
+  if (!value2 || typeof value2 !== "object" || Array.isArray(value2)) return null;
+  return providerSessionFromMetadata({ [PROVIDER_SESSION_METADATA_KEY]: value2 });
+}
+function providerSessionFromMetadata(metadata) {
+  const raw = metadata?.[PROVIDER_SESSION_METADATA_KEY];
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const cast = raw;
+  if (trimmedOrNull(cast.provider)?.toLowerCase() !== "latch") return null;
+  const providerSessionId = trimmedOrNull(cast.providerSessionId);
+  if (!providerSessionId) return null;
+  return {
+    provider: "latch",
+    providerSessionId,
+    sessionName: trimmedOrNull(cast.sessionName),
+    executionTargetId: trimmedOrNull(cast.executionTargetId),
+    agentSessionId: trimmedOrNull(cast.agentSessionId),
+    createdAt: trimmedOrNull(cast.createdAt) ?? "",
+    lastObservedState: trimmedOrNull(cast.lastObservedState) ?? "running",
+    ...cast.endedAt !== void 0 ? { endedAt: trimmedOrNull(cast.endedAt) } : {},
+    ...cast.endReason !== void 0 ? { endReason: trimmedOrNull(cast.endReason) } : {},
+    ...cast.endRequestedAt !== void 0 ? { endRequestedAt: trimmedOrNull(cast.endRequestedAt) } : {},
+    ...cast.lastObservedAt !== void 0 ? { lastObservedAt: trimmedOrNull(cast.lastObservedAt) } : {}
+  };
+}
+function mergeProviderSessionIntoMetadata({
+  metadataJson,
+  providerSession
+}) {
+  let parsed = {};
+  if (metadataJson?.trim()) {
+    try {
+      const value2 = JSON.parse(metadataJson);
+      if (value2 && typeof value2 === "object" && !Array.isArray(value2)) {
+        parsed = value2;
+      }
+    } catch {
+      parsed = {};
+    }
+  }
+  return JSON.stringify({
+    ...parsed,
+    [PROVIDER_SESSION_METADATA_KEY]: providerSession
+  });
+}
+function stripProviderSessionFromMetadata({
+  metadataJson
+}) {
+  let parsed = {};
+  if (metadataJson?.trim()) {
+    try {
+      const value2 = JSON.parse(metadataJson);
+      if (value2 && typeof value2 === "object" && !Array.isArray(value2)) {
+        parsed = { ...value2 };
+      }
+    } catch {
+      parsed = {};
+    }
+  }
+  delete parsed[PROVIDER_SESSION_METADATA_KEY];
+  return JSON.stringify(parsed);
+}
+function latchViewerFlagForKind(kind) {
+  switch (trimmedOrNull(kind)?.toLowerCase()) {
+    case "iterm":
+    case "iterm2":
+      return "iterm";
+    default:
+      return null;
+  }
+}
+var LATCH_OPEN_AS_MIN_PRODUCT_VERSION = "0.2608140931.0";
+function compareLatchProductVersions(a5, b5) {
+  const parts = (value2) => value2.trim().split(".").map((segment) => {
+    const parsed = Number.parseInt(segment, 10);
+    return Number.isFinite(parsed) ? parsed : 0;
+  });
+  const left = parts(a5);
+  const right = parts(b5);
+  const length = Math.max(left.length, right.length);
+  for (let index = 0; index < length; index += 1) {
+    const diff = (left[index] ?? 0) - (right[index] ?? 0);
+    if (diff !== 0) return diff;
+  }
+  return 0;
+}
+function latchSupportsOpenAs(productVersion) {
+  const version4 = trimmedOrNull(productVersion);
+  if (!version4) return false;
+  return compareLatchProductVersions(version4, LATCH_OPEN_AS_MIN_PRODUCT_VERSION) >= 0;
+}
+var LATCH_OPEN_BACKGROUND_MIN_PRODUCT_VERSION = "0.2609181007.0";
+function latchSupportsOpenBackground(productVersion) {
+  const version4 = trimmedOrNull(productVersion);
+  if (!version4) return false;
+  return compareLatchProductVersions(version4, LATCH_OPEN_BACKGROUND_MIN_PRODUCT_VERSION) >= 0;
+}
+function buildLatchOpenArgs({
+  providerSessionId,
+  viewer,
+  openAs,
+  background,
+  productVersion
+}) {
+  const args = ["open", providerSessionId, "--with", viewer];
+  if (openAs && latchSupportsOpenAs(productVersion)) {
+    args.push("--as", parseViewerOpenAs(openAs));
+  }
+  if (typeof background === "boolean" && latchSupportsOpenBackground(productVersion)) {
+    args.push(background ? "--background" : "--foreground");
+  }
+  args.push("--json");
+  return args;
+}
+
+// ../packages/core/service/latch/session.ts
+function parseState2(value2) {
+  switch (trimmedOrNull(value2)) {
+    case "running":
+      return "running";
+    case "exited":
+      return "exited";
+    case "stopping":
+      return "stopping";
+    case "lost":
+      return "lost";
+    default:
+      return null;
+  }
+}
+async function runLatchJson({
+  executable,
+  args
+}) {
+  const binary2 = resolveLatchBinaryPath(executable);
+  if (!binary2) throw new LatchSessionCommandError(latchBinaryMissingMessage(executable));
+  const result2 = await new Promise((resolve, reject) => {
+    (0, import_node_child_process5.execFile)(
+      binary2,
+      args,
+      {
+        encoding: "utf8",
+        timeout: 1e4,
+        maxBuffer: 1024 * 1024,
+        env: latchChildEnvironment()
+      },
+      (error64, stdout, stderr) => {
+        if (error64) {
+          const detail = (stderr || stdout || error64.message).trim().slice(0, 500);
+          reject(latchSessionCommandError(detail));
+          return;
+        }
+        resolve({ stdout, stderr });
+      }
+    );
+  });
+  try {
+    const parsed = JSON.parse(result2.stdout);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      throw new Error("not an object");
+    }
+    return parsed;
+  } catch {
+    throw new LatchSessionCommandError("Latch returned an invalid JSON response.");
+  }
+}
+async function inspectLatchSession({
+  executable = "latch",
+  providerSessionId
+}) {
+  const sessionId = trimmedOrNull(providerSessionId);
+  if (!sessionId) throw new LatchSessionCommandError("A Latch session id is required.");
+  const report2 = await runLatchJson({
+    executable: trimmedOrNull(executable) ?? "latch",
+    args: ["inspect", sessionId, "--json"]
+  });
+  const state2 = parseState2(report2.state);
+  if (!state2) throw new LatchSessionCommandError("Latch returned an unsupported session state.");
+  const exit = report2.exit && typeof report2.exit === "object" && !Array.isArray(report2.exit) ? report2.exit : null;
+  return {
+    providerSessionId: trimmedOrNull(report2.id) ?? sessionId,
+    name: trimmedOrNull(report2.name) ?? sessionId,
+    state: state2,
+    exitCode: typeof exit?.code === "number" && Number.isFinite(exit.code) ? exit.code : null,
+    endedAt: typeof exit?.exitedAt === "string" ? exit.exitedAt : typeof exit?.exited_at === "string" ? exit.exited_at : null,
+    inspectedAt: (/* @__PURE__ */ new Date()).toISOString()
+  };
+}
+async function readLatchProductVersion(executable) {
+  try {
+    return trimmedOrNull(
+      (await runLatchJson({ executable, args: ["capabilities", "--json"] })).productVersion
+    );
+  } catch {
+    return null;
+  }
+}
+async function openLatchSession({
+  executable = "latch",
+  providerSessionId,
+  viewerKind,
+  openAs
+}) {
+  const sessionId = trimmedOrNull(providerSessionId);
+  if (!sessionId) throw new LatchSessionCommandError("A Latch session id is required.");
+  const viewer = latchViewerFlagForKind(viewerKind);
+  if (!viewer) {
+    throw new LatchSessionCommandError(`Latch cannot open the configured viewer "${viewerKind}".`);
+  }
+  const exe = trimmedOrNull(executable) ?? "latch";
+  const report2 = await runLatchJson({
+    executable: exe,
+    args: buildLatchOpenArgs({
+      providerSessionId: sessionId,
+      viewer,
+      openAs,
+      productVersion: openAs ? await readLatchProductVersion(exe) : null
+    })
+  });
+  if (report2.opened !== true) {
+    throw new LatchSessionCommandError(`Latch did not open the ${viewer} viewer.`);
+  }
+  return {
+    providerSessionId: trimmedOrNull(report2.id) ?? sessionId,
+    viewer: trimmedOrNull(report2.viewer) ?? viewer,
+    opened: true,
+    behavior: trimmedOrNull(report2.behavior) ? parseViewerOpenAs(report2.behavior) : null
+  };
+}
+async function stopLatchSession({
+  executable = "latch",
+  providerSessionId
+}) {
+  const sessionId = trimmedOrNull(providerSessionId);
+  if (!sessionId) throw new LatchSessionCommandError("A Latch session id is required.");
+  const report2 = await runLatchJson({
+    executable: trimmedOrNull(executable) ?? "latch",
+    args: ["stop", sessionId, "--json"]
+  });
+  const state2 = parseState2(report2.state);
+  if (!state2) throw new LatchSessionCommandError("Latch returned an unsupported session state.");
+  return {
+    providerSessionId: trimmedOrNull(report2.id) ?? sessionId,
+    state: state2
+  };
+}
+
 // ../packages/core/service/local-target/doctor-checks.ts
 var import_node_child_process6 = require("node:child_process");
 function commandOnPath(command, args) {
@@ -150016,8 +150239,8 @@ function runLocalTargetDoctorChecks() {
 
 // ../packages/core/service/local-target/project-metadata.ts
 var import_node_child_process7 = require("node:child_process");
-var import_node_fs13 = require("node:fs");
-var import_node_path16 = __toESM(require("node:path"), 1);
+var import_node_fs14 = require("node:fs");
+var import_node_path18 = __toESM(require("node:path"), 1);
 var PROJECT_JSON_VERSION = 3;
 var PROJECT_JSON_WARNING = "STRICTLY PROTECTED: This file is managed exclusively by Overlord. Agents and users must not edit, replace, stage, commit, or delete it. Re-link the resource with Overlord to change it.";
 var INSTRUCTION_BLOCK_START = "<!-- OVERLORD PROJECT METADATA PROTECTION: START -->";
@@ -150030,8 +150253,8 @@ replace, stage, commit, delete, or revert it. If its link metadata needs to
 change, use Overlord's resource-linking command instead.
 ${INSTRUCTION_BLOCK_END}`;
 function writeIfChanged(filePath, content) {
-  if (!(0, import_node_fs13.existsSync)(filePath) || (0, import_node_fs13.readFileSync)(filePath, "utf8") !== content) {
-    (0, import_node_fs13.writeFileSync)(filePath, content);
+  if (!(0, import_node_fs14.existsSync)(filePath) || (0, import_node_fs14.readFileSync)(filePath, "utf8") !== content) {
+    (0, import_node_fs14.writeFileSync)(filePath, content);
   }
 }
 function replaceManagedBlock(content, block) {
@@ -150045,14 +150268,14 @@ function replaceManagedBlock(content, block) {
 }
 function ensureAgentInstructions(checkoutPath) {
   for (const filename of ["AGENTS.md", "CLAUDE.md"]) {
-    const instructionPath = import_node_path16.default.join(checkoutPath, filename);
-    const existing = (0, import_node_fs13.existsSync)(instructionPath) ? (0, import_node_fs13.readFileSync)(instructionPath, "utf8") : "";
+    const instructionPath = import_node_path18.default.join(checkoutPath, filename);
+    const existing = (0, import_node_fs14.existsSync)(instructionPath) ? (0, import_node_fs14.readFileSync)(instructionPath, "utf8") : "";
     writeIfChanged(instructionPath, replaceManagedBlock(existing, PROJECT_METADATA_INSTRUCTION));
   }
 }
 function ensureGitignore(checkoutPath) {
-  const gitignorePath = import_node_path16.default.join(checkoutPath, ".gitignore");
-  const existing = (0, import_node_fs13.existsSync)(gitignorePath) ? (0, import_node_fs13.readFileSync)(gitignorePath, "utf8") : "";
+  const gitignorePath = import_node_path18.default.join(checkoutPath, ".gitignore");
+  const existing = (0, import_node_fs14.existsSync)(gitignorePath) ? (0, import_node_fs14.readFileSync)(gitignorePath, "utf8") : "";
   const existingPatterns = new Set(
     existing.split(/\r?\n/).map((line2) => line2.trim().replace(/^\//, "")).filter(Boolean)
   );
@@ -150061,7 +150284,7 @@ function ensureGitignore(checkoutPath) {
   );
   if (additions.length === 0) return;
   const separator = existing.length === 0 || existing.endsWith("\n") ? "" : "\n";
-  (0, import_node_fs13.writeFileSync)(gitignorePath, `${existing}${separator}${additions.join("\n")}
+  (0, import_node_fs14.writeFileSync)(gitignorePath, `${existing}${separator}${additions.join("\n")}
 `);
 }
 function resolveGitRoot(directoryPath) {
@@ -150122,8 +150345,8 @@ function selectPrimaryProjectEntry(projects) {
   return latestLinkedAt(projects);
 }
 function parseProjectJson(projectJsonPath) {
-  if (!(0, import_node_fs13.existsSync)(projectJsonPath)) return null;
-  const parsed = JSON.parse((0, import_node_fs13.readFileSync)(projectJsonPath, "utf8"));
+  if (!(0, import_node_fs14.existsSync)(projectJsonPath)) return null;
+  const parsed = JSON.parse((0, import_node_fs14.readFileSync)(projectJsonPath, "utf8"));
   const fromArray = Array.isArray(parsed.projects) ? parsed.projects.map((entry) => parseProjectEntry(entry)).filter((entry) => entry !== null) : [];
   const fromTopLevel = parseProjectEntry(parsed);
   const projects = fromArray.length > 0 ? fromArray : fromTopLevel ? [fromTopLevel] : [];
@@ -150198,12 +150421,12 @@ function writeProjectJson({
   executionTargetId,
   isPrimary
 }) {
-  const overlordDir = import_node_path16.default.join(directoryPath, ".overlord");
-  (0, import_node_fs13.mkdirSync)(overlordDir, { recursive: true });
-  (0, import_node_fs13.mkdirSync)(import_node_path16.default.join(overlordDir, "tmp"), { recursive: true });
-  (0, import_node_fs13.mkdirSync)(import_node_path16.default.join(overlordDir, "logs"), { recursive: true });
+  const overlordDir = import_node_path18.default.join(directoryPath, ".overlord");
+  (0, import_node_fs14.mkdirSync)(overlordDir, { recursive: true });
+  (0, import_node_fs14.mkdirSync)(import_node_path18.default.join(overlordDir, "tmp"), { recursive: true });
+  (0, import_node_fs14.mkdirSync)(import_node_path18.default.join(overlordDir, "logs"), { recursive: true });
   protectProjectMetadata(directoryPath);
-  const projectJsonPath = import_node_path16.default.join(overlordDir, "project.json");
+  const projectJsonPath = import_node_path18.default.join(overlordDir, "project.json");
   const existing = parseProjectJson(projectJsonPath);
   const existingProjects = existing?.projects ?? [];
   const existingEntry = existingProjects.find((entry) => entry.projectId === projectId);
@@ -150230,7 +150453,7 @@ function writeProjectJson({
   ];
   const primary = selectPrimaryProjectEntry(projects) ?? nextEntry;
   const primaryResourceIds = primary.resourceIdsByExecutionTarget ?? {};
-  (0, import_node_fs13.writeFileSync)(
+  (0, import_node_fs14.writeFileSync)(
     projectJsonPath,
     `${JSON.stringify(
       {
@@ -150295,6 +150518,9 @@ var InProcessProvider = class {
     this.target = target;
   }
   target;
+  readProjectResource(input2) {
+    return this.#read(readProjectResource(input2));
+  }
   // ---- routed (WS-D 1) -------------------------------------------------
   /**
    * Observe whether the linked checkout exists on this machine. Byte-identical
@@ -150304,7 +150530,7 @@ var InProcessProvider = class {
    */
   async observeResource(input2) {
     const observedAt = (/* @__PURE__ */ new Date()).toISOString();
-    const state2 = (0, import_node_fs14.existsSync)(input2.path) ? "available" : "missing";
+    const state2 = (0, import_node_fs15.existsSync)(input2.path) ? "available" : "missing";
     return ok2(this.target, { state: state2, observedAt });
   }
   /**
@@ -150504,8 +150730,8 @@ var InProcessProvider = class {
       );
     }
   }
-  async readLatchHostIdentity() {
-    const identity = await readLatchHostIdentity();
+  async readLatchHostIdentity(input2) {
+    const identity = await readLatchHostIdentity(input2);
     if (identity) return ok2(this.target, identity);
     return fail(
       this.target,
@@ -150637,6 +150863,9 @@ var UnavailableProvider = class {
   target;
   code;
   message;
+  readProjectResource(_input) {
+    return this.#fail();
+  }
   // A CapabilityFailure is assignable to CapabilityResult<T> for any T (the
   // failure branch is generic-independent), so one helper serves every method.
   #fail() {
@@ -150710,874 +150939,20 @@ var UnavailableProvider = class {
   }
 };
 
-// ../packages/core/service/records.ts
-function asRecord(value2) {
-  return value2 && typeof value2 === "object" && !Array.isArray(value2) ? value2 : {};
-}
-function parseMetadataJson(json2) {
-  try {
-    return asRecord(JSON.parse(json2));
-  } catch {
-    return {};
-  }
-}
+// ../packages/core/service/project-resource-read-bindings.ts
+var import_node_path19 = __toESM(require("node:path"), 1);
 
-// ../packages/core/service/live-activity-jobs.ts
-var LIVE_ACTIVITY_DISPATCH_JOB_TYPE = "overlord.live_activity.dispatch.v1";
-var LIVE_ACTIVITY_START_JOB_TYPE = "overlord.live_activity.start.v1";
-async function enqueueLiveActivityDispatchJob({
-  db,
-  workspaceId: workspaceId2,
-  profileId,
-  now: now2 = nowIso()
-}) {
-  const result2 = await enqueueWorkerJob({
-    db,
-    workspaceId: workspaceId2,
-    type: LIVE_ACTIVITY_DISPATCH_JOB_TYPE,
-    dedupeBy: { field: "profileId", value: profileId },
-    payload: { profileId },
-    priority: 40,
-    maxAttempts: 5,
-    now: now2
-  });
-  return result2.enqueued;
-}
-async function enqueueLiveActivityRefreshForMission({
-  db,
-  workspaceId: workspaceId2,
-  missionId,
-  now: now2 = nowIso()
-}) {
-  const profileId = await missionOwnerProfileId({ db, workspaceId: workspaceId2, missionId });
-  return profileId ? enqueueLiveActivityDispatchJob({ db, workspaceId: workspaceId2, profileId, now: now2 }) : false;
-}
-async function enqueueLiveActivityStartJob({
-  db,
-  workspaceId: workspaceId2,
-  profileId,
-  missionId,
-  now: now2 = nowIso()
-}) {
-  const result2 = await enqueueWorkerJob({
-    db,
-    workspaceId: workspaceId2,
-    type: LIVE_ACTIVITY_START_JOB_TYPE,
-    dedupeBy: { field: "profileId", value: profileId },
-    payload: { profileId, missionId },
-    priority: 40,
-    maxAttempts: 5,
-    now: now2
-  });
-  return result2.enqueued;
-}
-async function enqueueLiveActivityStartForMission({
-  db,
-  workspaceId: workspaceId2,
-  missionId,
-  now: now2 = nowIso()
-}) {
-  const profileId = await missionOwnerProfileId({ db, workspaceId: workspaceId2, missionId });
-  if (!profileId) return false;
-  await enqueueLiveActivityDispatchJob({ db, workspaceId: workspaceId2, profileId, now: now2 });
-  return enqueueLiveActivityStartJob({ db, workspaceId: workspaceId2, profileId, missionId, now: now2 });
-}
-
-// ../packages/core/service/agent-session/pure/window.ts
-var AWAY_DECISION_WINDOW_SECONDS = 30 * 60;
-
-// ../packages/core/service/agent-session/credential.ts
-var import_node_crypto13 = require("node:crypto");
-var SESSION_CHANNEL_TOKEN_PREFIX = "osc_";
-var SESSION_CHANNEL_TOKEN_HASH_ALGORITHM = "sha256";
-var SESSION_CHANNEL_LEASE_SECONDS = 180;
-var SESSION_CHANNEL_ABSOLUTE_LIFETIME_SECONDS = 60 * 60 * 24;
-function hashSessionChannelToken(rawToken) {
-  return (0, import_node_crypto13.createHash)(SESSION_CHANNEL_TOKEN_HASH_ALGORITHM).update(rawToken).digest("hex");
-}
-function generateSessionChannelToken() {
-  const prefix = `${SESSION_CHANNEL_TOKEN_PREFIX}${(0, import_node_crypto13.randomBytes)(4).toString("hex")}`;
-  const secret = `${prefix}${(0, import_node_crypto13.randomBytes)(32).toString("base64url")}`;
-  return { secret, prefix, hash: hashSessionChannelToken(secret) };
-}
-function addSeconds(iso2, seconds2) {
-  return new Date(new Date(iso2).getTime() + seconds2 * 1e3).toISOString();
-}
-function renewedExpiry({
-  now: now2,
-  createdAt,
-  leaseSeconds = SESSION_CHANNEL_LEASE_SECONDS
-}) {
-  const ceiling = new Date(
-    new Date(createdAt).getTime() + SESSION_CHANNEL_ABSOLUTE_LIFETIME_SECONDS * 1e3
-  );
-  const renewed = new Date(new Date(now2).getTime() + leaseSeconds * 1e3);
-  return (renewed < ceiling ? renewed : ceiling).toISOString();
-}
-
-// ../packages/core/service/agent-session/requests.ts
-var WAITER_LEASE_SECONDS = 20;
-var MAX_REQUEST_SUMMARY_LENGTH = 2e3;
-var MAX_REQUEST_OPTIONS = 12;
-var AGENT_REQUEST_KINDS = vocabulary()([
-  "question",
-  "permission",
-  "choice",
-  "retry"
-]);
-var RELEASE_REASONS = [
-  "timeout",
-  "local_activity",
-  "policy",
-  "interrupt",
-  "channel_ended"
-];
-var APPLICATION_STATES = ["emitted", "applied", "not_applied", "unknown"];
-var REQUEST_COLUMNS = `
-  id, workspace_id, project_id, mission_id, objective_id, channel_id, session_id,
-  kind, native_request_id, native_call_id, summary, details_json, options_json,
-  allows_free_text, status, resolution_json, resolved_by_workspace_user_id, resolved_at,
-  expires_at, window_expires_at, window_basis, first_viewed_at, released_reason,
-  waiter_lease_id, waiter_lease_expires_at, application_state, application_observed_at,
-  created_at, updated_at, revision
-`;
-function boundedSummary(value2) {
-  const trimmed = value2.trim();
-  if (!trimmed) throw new ServiceError("Request summary is required", "invalid_request", 400);
-  return trimmed.length <= MAX_REQUEST_SUMMARY_LENGTH ? trimmed : `${trimmed.slice(0, MAX_REQUEST_SUMMARY_LENGTH - 1)}\u2026`;
-}
-function boundedOptions(options) {
-  if (!options || options.length === 0) return "[]";
-  if (options.length > MAX_REQUEST_OPTIONS) {
-    throw new ServiceError(
-      `A request may carry at most ${MAX_REQUEST_OPTIONS} options`,
-      "invalid_request",
-      400
-    );
-  }
-  return JSON.stringify(
-    options.map((option) => ({
-      optionId: String(option.optionId).slice(0, 64),
-      label: String(option.label).slice(0, 200),
-      kind: String(option.kind).slice(0, 64)
-    }))
-  );
-}
-async function getRequest2({
-  ctx,
-  requestId
-}) {
-  const row = await ctx.db.get(
-    `SELECT ${REQUEST_COLUMNS} FROM agent_requests
-       WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
-    [requestId, ctx.workspace.id]
-  );
-  if (!row) throw new ServiceError("Request not found", "request_not_found", 404);
-  return row;
-}
-async function createRequest({
-  ctx,
-  channel,
-  kind,
-  summary,
-  details = {},
-  options = [],
-  allowsFreeText = false,
-  nativeRequestId = null,
-  nativeCallId = null,
-  sourceEventId = null,
-  windowExpiresAt = null,
-  windowBasis = null,
-  expiresAt = null
-}) {
-  if (nativeRequestId) {
-    const existing = await ctx.db.get(
-      `SELECT ${REQUEST_COLUMNS} FROM agent_requests
-         WHERE channel_id = ? AND native_request_id = ? AND deleted_at IS NULL`,
-      [channel.id, nativeRequestId]
-    );
-    if (existing) return existing;
-  }
-  const now2 = nowIso();
-  const id2 = newId();
-  await ctx.db.transaction(async (tx) => {
-    const txCtx = { ...ctx, db: tx };
-    await tx.run(
-      `INSERT INTO agent_requests (
-           id, workspace_id, project_id, mission_id, objective_id, channel_id, session_id,
-           source_event_id, kind, native_request_id, native_call_id,
-           summary, details_json, formatter_version, options_json, allows_free_text,
-           status, expires_at, window_expires_at, window_basis, application_state,
-           created_at, updated_at, revision
-         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, 'open', ?, ?, ?, 'pending', ?, ?, 1)`,
-      [
-        id2,
-        channel.workspace_id,
-        channel.project_id,
-        channel.mission_id,
-        channel.objective_id,
-        channel.id,
-        channel.session_id,
-        sourceEventId,
-        kind,
-        nativeRequestId,
-        nativeCallId,
-        boundedSummary(summary),
-        JSON.stringify(details ?? {}),
-        boundedOptions(options),
-        allowsFreeText ? 1 : 0,
-        expiresAt,
-        windowExpiresAt,
-        windowBasis,
-        now2,
-        now2
-      ]
-    );
-    await recordChange({
-      ctx: txCtx,
-      entityType: "agent_request",
-      entityId: id2,
-      operation: "insert",
-      entityRevision: 1,
-      projectId: channel.project_id,
-      missionId: channel.mission_id,
-      objectiveId: channel.objective_id
-    });
-  });
-  return await getRequest2({ ctx, requestId: id2 });
-}
-async function acquireWaiterLease({
-  ctx,
-  requestId,
-  leaseId = newId(),
-  leaseSeconds = WAITER_LEASE_SECONDS
-}) {
-  const now2 = nowIso();
-  const leaseExpiresAt = addSeconds(now2, leaseSeconds);
-  const updated = await ctx.db.run(
-    `UPDATE agent_requests
-        SET waiter_lease_id = ?, waiter_lease_expires_at = ?, updated_at = ?
-      WHERE id = ? AND workspace_id = ? AND status = 'open' AND deleted_at IS NULL
-        AND (
-          waiter_lease_id IS NULL
-          OR waiter_lease_id = ?
-          OR waiter_lease_expires_at IS NULL
-          OR waiter_lease_expires_at <= ?
-        )`,
-    [leaseId, leaseExpiresAt, now2, requestId, ctx.workspace.id, leaseId, now2]
-  );
-  if (updated.changes === 0) {
-    throw new ServiceError(
-      "Request is not open, or another waiter holds its lease",
-      "waiter_lease_unavailable",
-      409
-    );
-  }
-  return { leaseId, leaseExpiresAt, request: await getRequest2({ ctx, requestId }) };
-}
-async function releaseRequestToTerminal({
-  ctx,
-  requestId,
-  reason
-}) {
-  const now2 = nowIso();
-  const existing = await getRequest2({ ctx, requestId });
-  const released = await ctx.db.transaction(async (tx) => {
-    const txCtx = { ...ctx, db: tx };
-    const updated = await tx.run(
-      `UPDATE agent_requests
-          SET status = 'released_to_terminal', released_reason = ?,
-              waiter_lease_id = NULL, waiter_lease_expires_at = NULL,
-              updated_at = ?, revision = ?
-        WHERE id = ? AND status = 'open' AND revision = ?`,
-      [reason, now2, existing.revision + 1, requestId, existing.revision]
-    );
-    if (updated.changes === 0) return false;
-    await recordChange({
-      ctx: txCtx,
-      entityType: "agent_request",
-      entityId: requestId,
-      operation: "update",
-      entityRevision: existing.revision + 1,
-      projectId: existing.project_id,
-      missionId: existing.mission_id,
-      objectiveId: existing.objective_id,
-      changedFields: ["status", "released_reason"]
-    });
-    return true;
-  });
-  return { released, request: await getRequest2({ ctx, requestId }) };
-}
-async function markRequestResolvedElsewhere({
-  ctx,
-  requestId
-}) {
-  return releaseRequestToTerminal({ ctx, requestId, reason: "local_activity" }).then(
-    async (result2) => {
-      if (result2.released) {
-        await ctx.db.run(
-          `UPDATE agent_requests SET released_reason = 'resolved_elsewhere' WHERE id = ?`,
-          [requestId]
-        );
-        return { changed: true, request: await getRequest2({ ctx, requestId }) };
-      }
-      return { changed: false, request: result2.request };
-    }
-  );
-}
-async function resolveRequest({
-  ctx,
-  requestId,
-  resolution,
-  expectedRevision: expectedRevision2
-}) {
-  if (!ctx.actorWorkspaceUserId) {
-    throw new ServiceError(
-      "A request resolution requires an identified human actor",
-      "resolver_required",
-      403
-    );
-  }
-  return await ctx.db.transaction(async (tx) => {
-    const txCtx = { ...ctx, db: tx };
-    const existing = await getRequest2({ ctx: txCtx, requestId });
-    if (expectedRevision2 !== void 0 && expectedRevision2 !== existing.revision) {
-      throw new ServiceError("Request changed since it was read", "agent_request_conflict", 409);
-    }
-    const now2 = nowIso();
-    const isQuestion = existing.kind === "question" || existing.kind === "choice";
-    const updated = await tx.run(
-      `UPDATE agent_requests
-          SET status = 'resolved', resolution_json = ?, resolved_by_workspace_user_id = ?,
-              resolved_at = ?, waiter_lease_id = NULL, waiter_lease_expires_at = NULL,
-              application_state = CASE WHEN kind IN ('question', 'choice') THEN 'emitted' ELSE application_state END,
-              application_observed_at = CASE WHEN kind IN ('question', 'choice') THEN NULL ELSE application_observed_at END,
-              updated_at = ?, revision = ?
-        WHERE id = ? AND status = 'open' AND revision = ?`,
-      [
-        JSON.stringify(resolution),
-        ctx.actorWorkspaceUserId,
-        now2,
-        now2,
-        existing.revision + 1,
-        requestId,
-        existing.revision
-      ]
-    );
-    if (updated.changes === 0) {
-      return { resolved: false, request: await getRequest2({ ctx: txCtx, requestId }) };
-    }
-    await recordChange({
-      ctx: txCtx,
-      entityType: "agent_request",
-      entityId: requestId,
-      operation: "update",
-      entityRevision: existing.revision + 1,
-      projectId: existing.project_id,
-      missionId: existing.mission_id,
-      objectiveId: existing.objective_id,
-      changedFields: [
-        "status",
-        "resolution_json",
-        "resolved_by_workspace_user_id",
-        ...isQuestion ? ["application_state"] : []
-      ]
-    });
-    if (isQuestion && existing.mission_id && existing.project_id && existing.session_id) {
-      const details = parseMetadataJson(existing.details_json);
-      const optionId = typeof resolution.optionId === "string" ? resolution.optionId : null;
-      const options = parseOptions(existing.options_json);
-      const option = optionId ? options.find((candidate) => candidate.optionId === optionId) : null;
-      const text = typeof resolution.text === "string" ? resolution.text.trim() : "";
-      const answerEventId = newId();
-      await tx.run(
-        `INSERT INTO mission_events
-             (id, workspace_id, project_id, mission_id, objective_id, session_id,
-              type, phase, summary, payload_json, source, actor_workspace_user_id, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, 'answer', 'execute', ?, ?, ?, ?, ?)`,
-        [
-          answerEventId,
-          ctx.workspace.id,
-          existing.project_id,
-          existing.mission_id,
-          existing.objective_id,
-          existing.session_id,
-          (option?.label ?? text) || "Answer received",
-          JSON.stringify({
-            agentRequestId: existing.id,
-            ...optionId ? { optionId } : {},
-            ...typeof details.missionEventId === "string" ? { missionEventId: details.missionEventId } : {}
-          }),
-          ctx.source,
-          ctx.actorWorkspaceUserId,
-          now2
-        ]
-      );
-      await recordChange({
-        ctx: txCtx,
-        entityType: "mission_event",
-        entityId: answerEventId,
-        operation: "insert",
-        projectId: existing.project_id,
-        missionId: existing.mission_id,
-        objectiveId: existing.objective_id
-      });
-      await tx.run(
-        `UPDATE agent_sessions
-            SET phase = 'execute', updated_at = ?, revision = revision + 1
-          WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
-        [now2, existing.session_id, ctx.workspace.id]
-      );
-      await tx.run(
-        `DELETE FROM mission_status_seen WHERE mission_id = ? AND status_id = 'blocking_question'`,
-        [existing.mission_id]
-      );
-      await enqueueWebhookEvent(txCtx, {
-        type: "mission.unblocked",
-        projectId: existing.project_id,
-        entity: {
-          missionId: existing.mission_id,
-          objectiveId: existing.objective_id,
-          sessionId: existing.session_id
-        }
-      });
-      await enqueueLiveActivityRefreshForMission({
-        db: tx,
-        workspaceId: ctx.workspace.id,
-        missionId: existing.mission_id,
-        now: now2
-      });
-    }
-    return { resolved: true, request: await getRequest2({ ctx: txCtx, requestId }) };
-  });
-}
-function parseOptions(value2) {
-  try {
-    const parsed = JSON.parse(value2);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
-async function recordRequestApplication({
-  ctx,
-  requestId,
-  applicationState
-}) {
-  const now2 = nowIso();
-  await ctx.db.run(
-    `UPDATE agent_requests
-        SET application_state = ?, application_observed_at = ?, updated_at = ?
-      WHERE id = ? AND workspace_id = ?`,
-    [applicationState, now2, now2, requestId, ctx.workspace.id]
-  );
-}
-function dismissalTimestamp(value2) {
-  return value2 instanceof Date ? value2.toISOString() : String(value2);
-}
-async function readRequestDismissals({
-  db,
-  workspaceUserIds,
-  requests
-}) {
-  const result2 = /* @__PURE__ */ new Map();
-  if (workspaceUserIds.length === 0 || requests.length === 0) return result2;
-  const revisionById = new Map(requests.map((request) => [request.id, request.revision]));
-  const ids = [...revisionById.keys()];
-  const rows = await db.all(
-    `SELECT agent_request_id, dismissed_revision, dismissed_at FROM agent_request_dismissals
-      WHERE workspace_user_id IN (${workspaceUserIds.map(() => "?").join(", ")})
-        AND agent_request_id IN (${ids.map(() => "?").join(", ")})`,
-    [...workspaceUserIds, ...ids]
-  );
-  for (const row of rows) {
-    if (Number(row.dismissed_revision) !== revisionById.get(row.agent_request_id)) continue;
-    result2.set(row.agent_request_id, {
-      dismissedRevision: Number(row.dismissed_revision),
-      dismissedAt: dismissalTimestamp(row.dismissed_at)
-    });
-  }
-  return result2;
-}
-async function setRequestDismissal({
-  ctx,
-  requestId,
-  dismissed,
-  expectedRevision: expectedRevision2
-}) {
-  const workspaceUserId = ctx.actorWorkspaceUserId;
-  if (!workspaceUserId) {
-    throw new ServiceError(
-      "Dismissing a request requires an identified workspace member",
-      "actor_required",
-      403
-    );
-  }
-  return await ctx.db.transaction(async (tx) => {
-    const txCtx = { ...ctx, db: tx };
-    const request = await getRequest2({ ctx: txCtx, requestId });
-    const current = await tx.get(
-      `SELECT dismissed_revision FROM agent_request_dismissals
-        WHERE agent_request_id = ? AND workspace_user_id = ?`,
-      [requestId, workspaceUserId]
-    );
-    let changed = false;
-    if (dismissed) {
-      if (request.status !== "open") {
-        throw new ServiceError(
-          "Only an open request can be dismissed",
-          "agent_request_not_open",
-          409
-        );
-      }
-      if (expectedRevision2 !== void 0 && expectedRevision2 !== request.revision) {
-        throw new ServiceError("Request changed since it was read", "agent_request_conflict", 409);
-      }
-      if (!current || Number(current.dismissed_revision) !== request.revision) {
-        await tx.run(
-          `INSERT INTO agent_request_dismissals
-               (agent_request_id, workspace_user_id, dismissed_revision, dismissed_at)
-             VALUES (?, ?, ?, ?)
-             ON CONFLICT (agent_request_id, workspace_user_id)
-             DO UPDATE SET dismissed_revision = excluded.dismissed_revision,
-                           dismissed_at = excluded.dismissed_at`,
-          [requestId, workspaceUserId, request.revision, nowIso()]
-        );
-        changed = true;
-      }
-    } else if (current) {
-      await tx.run(
-        `DELETE FROM agent_request_dismissals
-          WHERE agent_request_id = ? AND workspace_user_id = ?`,
-        [requestId, workspaceUserId]
-      );
-      changed = Number(current.dismissed_revision) === request.revision;
-    }
-    if (changed) {
-      await recordChange({
-        ctx: txCtx,
-        entityType: "agent_request",
-        entityId: requestId,
-        operation: "update",
-        entityRevision: request.revision,
-        projectId: request.project_id,
-        missionId: request.mission_id,
-        objectiveId: request.objective_id,
-        changedFields: ["dismissal"]
-      });
-    }
-    const dismissals = await readRequestDismissals({
-      db: tx,
-      workspaceUserIds: [workspaceUserId],
-      requests: [request]
-    });
-    return { changed, request, dismissal: dismissals.get(requestId) ?? null };
-  });
-}
-
-// ../packages/core/service/agent-session/answer-delivery.ts
-var MAX_DELIVERY_FAILURE_MESSAGE_LENGTH = 300;
-var ANSWER_DELIVERY_DEADLINE_MS = 5 * 6e4;
-function boundedMessage(value2) {
-  if (typeof value2 !== "string") return null;
-  const trimmed = value2.trim();
-  if (!trimmed) return null;
-  return trimmed.length <= MAX_DELIVERY_FAILURE_MESSAGE_LENGTH ? trimmed : `${trimmed.slice(0, MAX_DELIVERY_FAILURE_MESSAGE_LENGTH - 1)}\u2026`;
-}
-function readAnswerDelivery(request) {
-  const raw = parseMetadataJson(request.details_json).delivery;
-  const record2 = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
-  const attempt = typeof record2.attempt === "number" && Number.isInteger(record2.attempt) && record2.attempt >= 1 ? record2.attempt : 1;
-  return {
-    attempt,
-    failureCode: typeof record2.failureCode === "string" ? record2.failureCode : null,
-    failureMessage: boundedMessage(record2.failureMessage)
-  };
-}
-function detailsWithDelivery(request, record2) {
-  return JSON.stringify({ ...parseMetadataJson(request.details_json), delivery: record2 });
-}
-var OPERATION_ATTEMPT_SEPARATOR = ".";
-function answerOperationId(requestId, attempt) {
-  return attempt <= 1 ? requestId : `${requestId}${OPERATION_ATTEMPT_SEPARATOR}${attempt}`;
-}
-function parseAnswerOperationId(operationId) {
-  const value2 = operationId.trim();
-  if (!value2) return null;
-  const separator = value2.lastIndexOf(OPERATION_ATTEMPT_SEPARATOR);
-  if (separator === -1) return { requestId: value2, attempt: 1 };
-  const suffix = value2.slice(separator + 1);
-  if (!/^[1-9]\d{0,3}$/.test(suffix)) return null;
-  return { requestId: value2.slice(0, separator), attempt: Number(suffix) };
-}
-function failureCodeFromMessage(code, message2) {
-  if (code === "LATCH_SESSION_ABSENT") return "session_absent";
-  if (/gateway|latch serve|not reachable|token/i.test(message2)) return "gateway_unavailable";
-  if (/deadline/i.test(message2)) return "deadline_passed";
-  return "delivery_failed";
-}
-function answerDeliveryOutcomeFromResult(result2) {
-  if (result2.ok) {
-    const status = result2.value?.status;
-    const reason = boundedMessage(result2.value?.reason);
-    if (status === "accepted") return { state: "applied", failureCode: null, failureMessage: null };
-    if (status === "refused") {
-      return {
-        state: "not_applied",
-        failureCode: /exited|unknown conversation|no such session/i.test(reason ?? "") ? "session_ended" : /deadline/i.test(reason ?? "") ? "deadline_passed" : "latch_refused",
-        failureMessage: reason ?? "Latch did not accept the answer for this session."
-      };
-    }
-    return {
-      state: "unknown",
-      failureCode: "unconfirmed",
-      failureMessage: reason ?? "Latch did not confirm that the answer was delivered."
-    };
-  }
-  if (result2.code === "LOCAL_TARGET_TIMEOUT") return null;
-  const details = result2.details && typeof result2.details === "object" && !Array.isArray(result2.details) ? result2.details : {};
-  if (typeof details.status === "string") {
-    if (details.status === "cancelled") {
-      return {
-        state: "not_applied",
-        failureCode: "not_dispatched",
-        failureMessage: "The execution machine did not pick up the answer. Check that its runner is online."
-      };
-    }
-    return {
-      state: "unknown",
-      failureCode: "runner_lost",
-      failureMessage: "The execution machine took the answer and did not report back. It may have been delivered."
-    };
-  }
-  return {
-    state: "not_applied",
-    failureCode: failureCodeFromMessage(result2.code, result2.message),
-    failureMessage: boundedMessage(result2.message) ?? "The answer could not be delivered."
-  };
-}
-async function recordAnswerDeliveryOutcome({
-  ctx,
-  requestId,
-  attempt,
-  outcome
-}) {
-  if (outcome.state === "emitted") return { changed: false };
-  const row = await ctx.db.get(
-    `SELECT id, workspace_id, project_id, mission_id, objective_id, details_json, revision,
-            application_state, status
-       FROM agent_requests WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
-    [requestId, ctx.workspace.id]
-  );
-  if (!row || row.status !== "resolved" || row.application_state !== "emitted") {
-    return { changed: false };
-  }
-  const current = readAnswerDelivery(row);
-  if (current.attempt !== attempt) return { changed: false };
-  const now2 = nowIso();
-  const updated = await ctx.db.run(
-    `UPDATE agent_requests
-        SET application_state = ?, application_observed_at = ?, details_json = ?, updated_at = ?
-      WHERE id = ? AND workspace_id = ? AND status = 'resolved'
-        AND application_state = 'emitted' AND revision = ?`,
-    [
-      outcome.state,
-      now2,
-      detailsWithDelivery(row, {
-        attempt,
-        failureCode: outcome.failureCode,
-        failureMessage: outcome.failureMessage
-      }),
-      now2,
-      requestId,
-      ctx.workspace.id,
-      row.revision
-    ]
-  );
-  if (updated.changes === 0) return { changed: false };
-  await recordChange({
-    ctx,
-    entityType: "agent_request",
-    entityId: requestId,
-    operation: "update",
-    entityRevision: row.revision,
-    projectId: row.project_id,
-    missionId: row.mission_id,
-    objectiveId: row.objective_id,
-    changedFields: ["application_state"]
-  });
-  return { changed: true };
-}
-async function recordAnswerDeliveryResult({
-  ctx,
-  operationId,
-  result: result2
-}) {
-  const parsed = parseAnswerOperationId(operationId);
-  const outcome = answerDeliveryOutcomeFromResult(result2);
-  if (!parsed || !outcome) return { changed: false };
-  return await recordAnswerDeliveryOutcome({
-    ctx,
-    requestId: parsed.requestId,
-    attempt: parsed.attempt,
-    outcome
-  });
-}
-async function beginAnswerRedelivery({
-  ctx,
-  requestId,
-  expectedAttempt,
-  confirmUnconfirmed = false
-}) {
-  const request = await getRequest2({ ctx, requestId });
-  if (request.kind !== "question" && request.kind !== "choice") {
-    throw new ServiceError("Only an answer can be redelivered", "request_not_deliverable", 409);
-  }
-  const current = readAnswerDelivery(request);
-  if (current.attempt !== expectedAttempt) {
-    throw new ServiceError(
-      "Delivery changed since it was read",
-      "agent_request_delivery_conflict",
-      409
-    );
-  }
-  if (request.status !== "resolved") {
-    throw new ServiceError("The request has no recorded answer", "request_not_deliverable", 409);
-  }
-  if (request.application_state === "unknown") {
-    if (!confirmUnconfirmed) {
-      throw new ServiceError(
-        "The previous delivery may have reached the agent. Check the session, then confirm.",
-        "delivery_confirmation_required",
-        409
-      );
-    }
-  } else if (request.application_state !== "not_applied") {
-    throw new ServiceError(
-      request.application_state === "applied" ? "The answer was already delivered" : "A delivery is already in progress",
-      "agent_request_delivery_conflict",
-      409
-    );
-  }
-  const attempt = current.attempt + 1;
-  if (attempt > 9999) {
-    throw new ServiceError("Too many delivery attempts", "request_not_deliverable", 409);
-  }
-  const now2 = nowIso();
-  const updated = await ctx.db.run(
-    `UPDATE agent_requests
-        SET application_state = 'emitted', application_observed_at = NULL, details_json = ?,
-            updated_at = ?, revision = ?
-      WHERE id = ? AND workspace_id = ? AND status = 'resolved'
-        AND application_state = ? AND revision = ?`,
-    [
-      detailsWithDelivery(request, { attempt, failureCode: null, failureMessage: null }),
-      now2,
-      request.revision + 1,
-      requestId,
-      ctx.workspace.id,
-      request.application_state,
-      request.revision
-    ]
-  );
-  if (updated.changes === 0) {
-    throw new ServiceError(
-      "Delivery changed since it was read",
-      "agent_request_delivery_conflict",
-      409
-    );
-  }
-  await recordChange({
-    ctx,
-    entityType: "agent_request",
-    entityId: requestId,
-    operation: "update",
-    entityRevision: request.revision + 1,
-    projectId: request.project_id,
-    missionId: request.mission_id,
-    objectiveId: request.objective_id,
-    changedFields: ["application_state"]
-  });
-  return {
-    request: await getRequest2({ ctx, requestId }),
-    attempt,
-    previousAttempt: current.attempt
-  };
-}
-function answerTextFromResolution(request) {
-  const resolution = request.resolution_json ? parseMetadataJson(request.resolution_json) : {};
-  const text = typeof resolution.text === "string" ? resolution.text.trim() : "";
-  if (text) return text;
-  const optionId = typeof resolution.optionId === "string" ? resolution.optionId.trim() : "";
-  if (optionId) {
-    try {
-      const options = JSON.parse(request.options_json);
-      if (Array.isArray(options)) {
-        const match = options.find(
-          (option) => option !== null && typeof option === "object" && option.optionId === optionId
-        );
-        if (typeof match?.label === "string" && match.label.trim()) return match.label.trim();
-      }
-    } catch {
-    }
-  }
-  return "Answer received";
-}
-
-// ../packages/core/service/local-target/types.ts
-var LOCAL_TARGET_ERROR_CODES = [
-  "LOCAL_TARGET_REQUIRED",
-  "LOCAL_TARGET_UNREACHABLE",
-  "RESOURCE_MISSING",
-  "NOT_GIT_REPOSITORY",
-  "PERMISSION_DENIED",
-  "GIT_COMMAND_FAILED",
-  "CAPABILITY_NOT_IMPLEMENTED",
-  "LOCAL_TARGET_TIMEOUT",
-  "LOCAL_TARGET_UNSUPPORTED",
-  "TARGET_OPERATION_FAILED",
-  "LATCH_SESSION_ABSENT",
-  "UNKNOWN"
-];
-function toLocalTargetErrorCode(value2) {
-  return typeof value2 === "string" && LOCAL_TARGET_ERROR_CODES.includes(value2) ? value2 : "UNKNOWN";
-}
-var LOCAL_TARGET_CAPABILITY_NAMES = [
-  "writeProjectMetadata",
-  "observeResource",
-  "readRepositoryTree",
-  "listBranches",
-  "prepareBranch",
-  "listWorktrees",
-  "removeWorktree",
-  "purgeMergedWorktrees",
-  "performBranchAction",
-  "readCurrentDiff",
-  "readGitStatus",
-  "readRepositoryFile",
-  "searchRepositoryText",
-  "generateCommitMessageFromLocalDiff",
-  "launchAgent",
-  "discoverLatch",
-  "readLatchHostIdentity",
-  "inspectLatchSession",
-  "openLatchSession",
-  "stopLatchSession",
-  "sendLatchMessage",
-  "doctor"
-];
-function isQueueableCapabilityName(value2) {
-  return typeof value2 === "string" && value2 !== "launchAgent" && LOCAL_TARGET_CAPABILITY_NAMES.includes(value2);
-}
+// ../packages/core/service/execution-target-runners.ts
+var import_node_util2 = require("node:util");
 
 // ../packages/core/service/execution-targets.ts
 var import_node_os9 = require("node:os");
 
 // ../packages/core/service/devices.ts
-var import_node_crypto14 = require("node:crypto");
+var import_node_crypto13 = require("node:crypto");
 var import_node_os8 = require("node:os");
 function deviceFingerprint() {
-  return (0, import_node_crypto14.createHash)("sha256").update(`${(0, import_node_os8.hostname)()}:${(0, import_node_os8.platform)()}`).digest("hex").slice(0, 32);
+  return (0, import_node_crypto13.createHash)("sha256").update(`${(0, import_node_os8.hostname)()}:${(0, import_node_os8.platform)()}`).digest("hex").slice(0, 32);
 }
 function callerDeviceFingerprint() {
   return deviceFingerprint();
@@ -152300,1538 +151675,6 @@ async function executionTargetInWorkspace({
   if (!row) {
     throw new ServiceError("Execution target not found", "execution_target_not_found", 404);
   }
-}
-
-// ../packages/core/service/latch-provider-session.ts
-function parseMetadata(value2) {
-  if (!value2?.trim()) return {};
-  try {
-    const parsed = JSON.parse(value2);
-    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
-  } catch {
-    return {};
-  }
-}
-async function bindProviderSessionAgentSession({
-  ctx,
-  executionRequestId,
-  agentSessionId
-}) {
-  const row = await ctx.db.get(
-    `SELECT metadata_json FROM execution_requests WHERE id = ? AND deleted_at IS NULL`,
-    [executionRequestId]
-  );
-  if (!row) return;
-  const providerSession = providerSessionFromMetadata(parseMetadata(row.metadata_json));
-  if (!providerSession || providerSession.agentSessionId === agentSessionId) return;
-  await ctx.db.run(
-    `UPDATE execution_requests SET metadata_json = ?, updated_at = ?, revision = revision + 1
-      WHERE id = ? AND deleted_at IS NULL`,
-    [
-      mergeProviderSessionIntoMetadata({
-        metadataJson: row.metadata_json,
-        providerSession: { ...providerSession, agentSessionId }
-      }),
-      nowIso(),
-      executionRequestId
-    ]
-  );
-}
-async function resolveLatchSessionForAgentSession({
-  ctx,
-  sessionId
-}) {
-  const rows = await ctx.db.all(
-    `SELECT metadata_json, claimed_by_execution_target_id, execution_target_id
-       FROM execution_requests
-      WHERE workspace_id = ? AND launched_session_id = ? AND deleted_at IS NULL
-      ORDER BY updated_at DESC, created_at DESC`,
-    [ctx.workspace.id, sessionId]
-  );
-  for (const row of rows) {
-    const providerSession = providerSessionFromMetadata(parseMetadata(row.metadata_json));
-    const targetId = providerSession?.executionTargetId ?? row.claimed_by_execution_target_id ?? row.execution_target_id;
-    if (!providerSession || !targetId) continue;
-    return {
-      targetId,
-      providerSessionId: providerSession.providerSessionId,
-      lastObservedState: providerSession.lastObservedState
-    };
-  }
-  return null;
-}
-async function forgetLatchProviderSession({
-  ctx,
-  missionId,
-  executionRequestId,
-  providerSessionId,
-  backgroundObservation
-}) {
-  const sessionId = providerSessionId.trim();
-  if (!sessionId) {
-    throw new ServiceError("A Latch session id is required.", "validation_error");
-  }
-  return ctx.db.transaction(async (tx) => {
-    const rows = await tx.all(
-      executionRequestId ? `SELECT id, project_id, mission_id, objective_id, metadata_json, updated_at, revision,
-                  COALESCE(claimed_by_execution_target_id, execution_target_id) AS target_id
-             FROM execution_requests
-            WHERE id = ? AND mission_id = ? AND workspace_id = ? AND deleted_at IS NULL` : `SELECT id, project_id, mission_id, objective_id, metadata_json, updated_at, revision,
-                  COALESCE(claimed_by_execution_target_id, execution_target_id) AS target_id
-             FROM execution_requests
-            WHERE mission_id = ? AND workspace_id = ? AND deleted_at IS NULL
-            ORDER BY updated_at DESC, created_at DESC`,
-      executionRequestId ? [executionRequestId, missionId, ctx.workspace.id] : [missionId, ctx.workspace.id]
-    );
-    const row = rows.find((candidate) => {
-      const mapped2 = providerSessionFromMetadata(parseMetadata(candidate.metadata_json));
-      return mapped2?.providerSessionId === sessionId;
-    });
-    if (!row) return { forgotten: false, executionRequestId: executionRequestId ?? null };
-    const previous = parseMetadata(row.metadata_json);
-    const mapped = providerSessionFromMetadata(previous);
-    if (backgroundObservation && (!mapped || (mapped.executionTargetId ?? row.target_id) !== backgroundObservation.executionTargetId || mapped.lastObservedState === "exited" || mapped.lastObservedAt && mapped.lastObservedAt > backgroundObservation.startedAt || mapped.endRequestedAt && mapped.endRequestedAt > backgroundObservation.startedAt))
-      return { forgotten: false, executionRequestId: row.id };
-    const stripped = parseMetadata(
-      stripProviderSessionFromMetadata({ metadataJson: row.metadata_json })
-    );
-    if (mapped?.lastObservedState === "exited")
-      stripped.endedTerminalSession = {
-        ...mapped,
-        endedAt: mapped.endedAt ?? row.updated_at,
-        endReason: mapped.endReason ?? "unknown"
-      };
-    const metadataJson = JSON.stringify(stripped);
-    const revision3 = row.revision + 1;
-    const updated = await tx.run(
-      `UPDATE execution_requests SET metadata_json = ?, updated_at = ?, revision = ?
-        WHERE id = ? AND revision = ? AND deleted_at IS NULL`,
-      [metadataJson, nowIso(), revision3, row.id, row.revision]
-    );
-    if (updated.changes === 0) {
-      throw new ServiceError(
-        "Execution request changed while forgetting the Latch session",
-        "execution_request_conflict",
-        409
-      );
-    }
-    await recordChange({
-      ctx: { ...ctx, db: tx },
-      entityType: "execution_request",
-      entityId: row.id,
-      operation: "update",
-      entityRevision: revision3,
-      projectId: row.project_id,
-      missionId: row.mission_id,
-      objectiveId: row.objective_id,
-      changedFields: ["metadata_json"]
-    });
-    return { forgotten: true, executionRequestId: row.id };
-  });
-}
-async function forgetAbsentLatchProviderSessions({
-  ctx,
-  projectId,
-  executionTargetId,
-  providerSessionId
-}) {
-  const rows = await ctx.db.all(
-    `SELECT id, mission_id, metadata_json FROM execution_requests
-     WHERE workspace_id = ? AND project_id = ? AND mission_id IS NOT NULL
-       AND COALESCE(claimed_by_execution_target_id, execution_target_id) = ?
-       AND deleted_at IS NULL`,
-    [ctx.workspace.id, projectId, executionTargetId]
-  );
-  for (const row of rows) {
-    if (providerSessionFromMetadata(parseMetadata(row.metadata_json))?.providerSessionId !== providerSessionId)
-      continue;
-    await forgetLatchProviderSession({
-      ctx,
-      missionId: row.mission_id,
-      executionRequestId: row.id,
-      providerSessionId
-    });
-  }
-}
-
-// ../packages/core/service/local-target-mutations.ts
-var LOCAL_TARGET_MUTATION_METADATA_KEY = "overlord.localTargetMutation";
-function localTargetMutationCapabilitySql(dialect) {
-  return dialect === "postgres" ? `er.metadata_json->'${LOCAL_TARGET_MUTATION_METADATA_KEY}'->>'capability'` : `json_extract(er.metadata_json, '$."${LOCAL_TARGET_MUTATION_METADATA_KEY}".capability')`;
-}
-var LOCAL_TARGET_MUTATION_REQUESTED_SOURCE = "local_target_mutation";
-var LOCAL_TARGET_MUTATION_READ_TIMEOUT_MS = 3e4;
-var LOCAL_TARGET_MUTATION_WRITE_TIMEOUT_MS = 12e4;
-var DEFAULT_RESULT_POLL_INTERVAL_MS = 250;
-var TERMINAL_WITHOUT_RESULT = ["failed", "cleared", "cancelled", "expired"];
-function buildLocalTargetMutationMetadata({
-  kind,
-  capability,
-  input: input2,
-  resourceKey = null
-}) {
-  const key = resourceKey?.trim();
-  return {
-    [LOCAL_TARGET_MUTATION_METADATA_KEY]: {
-      kind,
-      capability,
-      input: input2,
-      ...key ? { resourceKey: key } : {}
-    }
-  };
-}
-function parseLocalTargetMutation(metadataJson) {
-  const metadata = typeof metadataJson === "string" ? parseMetadataJson(metadataJson) : metadataJson;
-  const raw = metadata[LOCAL_TARGET_MUTATION_METADATA_KEY];
-  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
-  const payload = raw;
-  const kind = payload.kind;
-  const capability = payload.capability;
-  if (kind !== "branch_action" && kind !== "worktree_purge" && kind !== "capability_call") {
-    return null;
-  }
-  if (!isQueueableCapabilityName(capability)) return null;
-  const input2 = payload.input && typeof payload.input === "object" && !Array.isArray(payload.input) ? payload.input : {};
-  const resourceKey = typeof payload.resourceKey === "string" && payload.resourceKey.trim() ? payload.resourceKey.trim() : void 0;
-  const result2 = payload.result;
-  const parsedResult = result2 && typeof result2 === "object" && !Array.isArray(result2) ? result2 : void 0;
-  return {
-    kind,
-    capability,
-    input: input2,
-    ...resourceKey ? { resourceKey } : {},
-    ...parsedResult ? { result: parsedResult } : {}
-  };
-}
-function storedResultToCapabilityResult(target, stored) {
-  if (stored.ok) return { ok: true, value: stored.value, target };
-  return fail(
-    target,
-    toLocalTargetErrorCode(stored.code),
-    stored.message,
-    stored.details === void 0 ? void 0 : stored.details
-  );
-}
-async function resolveMutationObjectiveId({
-  ctx,
-  missionId
-}) {
-  const row = await ctx.db.get(
-    `SELECT id FROM objectives
-        WHERE mission_id = ? AND workspace_id = ? AND deleted_at IS NULL
-        ORDER BY position ASC
-        LIMIT 1`,
-    [missionId, ctx.workspace.id]
-  );
-  if (!row) {
-    throw new ServiceError(
-      "Mission has no objectives to anchor a local-target mutation request.",
-      "no_objective_for_mutation",
-      409
-    );
-  }
-  return row.id;
-}
-async function createLocalTargetMutationRequest({
-  ctx,
-  projectId,
-  missionId = null,
-  executionTargetId,
-  kind,
-  capability,
-  input: input2,
-  operationId = null,
-  resourceKey = null,
-  backgroundProbeKey = null,
-  eventSummary
-}) {
-  const mission = missionId === null ? null : await resolveMissionId(ctx, missionId);
-  const resolvedProjectId = await resolveProjectId(ctx, projectId);
-  const objectiveId = mission === null ? null : await resolveMutationObjectiveId({ ctx, missionId: mission.id });
-  const idempotencyKey = operationId?.trim() || null;
-  if (idempotencyKey !== null) {
-    const existing = await ctx.db.get(
-      `SELECT id, created_at FROM execution_requests
-        WHERE workspace_id = ? AND idempotency_key = ? AND deleted_at IS NULL`,
-      [ctx.workspace.id, idempotencyKey]
-    );
-    if (existing) return { id: existing.id, reused: true, createdAt: existing.created_at };
-  }
-  const now2 = nowIso();
-  const id2 = newId();
-  const metadata = buildLocalTargetMutationMetadata({ kind, capability, input: input2, resourceKey });
-  await ctx.db.transaction(async (tx) => {
-    const txCtx = { ...ctx, db: tx };
-    await txCtx.db.run(
-      `INSERT INTO execution_requests
-           (id, workspace_id, project_id, mission_id, objective_id, execution_target_id,
-            requested_agent, requested_model, requested_reasoning_effort, launch_mode,
-            launch_flags_json, requested_source, idempotency_key, status,
-            requested_by_workspace_user_id, resolved_resource_id, resolved_working_directory,
-            metadata_json, created_at, updated_at, revision, background_probe_key)
-         VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, NULL, 'run', '{}', ?, ?, 'queued', ?, NULL, NULL, ?, ?, ?, 1, ?)`,
-      [
-        id2,
-        ctx.workspace.id,
-        resolvedProjectId,
-        mission?.id ?? null,
-        objectiveId,
-        executionTargetId,
-        LOCAL_TARGET_MUTATION_REQUESTED_SOURCE,
-        idempotencyKey,
-        ctx.actorWorkspaceUserId,
-        JSON.stringify(metadata),
-        now2,
-        now2,
-        backgroundProbeKey
-      ]
-    );
-    if (backgroundProbeKey === null)
-      await recordChange({
-        ctx: txCtx,
-        entityType: "execution_request",
-        entityId: id2,
-        operation: "insert",
-        entityRevision: 1,
-        projectId: resolvedProjectId,
-        missionId: mission?.id ?? null,
-        objectiveId,
-        changedFields: ["status", "requested_source", "metadata_json"]
-      });
-    if (mission !== null && objectiveId !== null) {
-      await txCtx.db.run(
-        `INSERT INTO mission_events
-             (id, workspace_id, project_id, mission_id, objective_id, type, phase, summary,
-              payload_json, source, actor_workspace_user_id, created_at)
-           VALUES (?, ?, ?, ?, ?, 'execution_requested', 'execute', ?, ?, 'webapp', ?, ?)`,
-        [
-          newId(),
-          ctx.workspace.id,
-          resolvedProjectId,
-          mission.id,
-          objectiveId,
-          eventSummary ?? `Delegated ${kind.replace("_", " ")} on remote execution target.`,
-          JSON.stringify({ executionRequestId: id2, kind, capability }),
-          ctx.actorWorkspaceUserId,
-          now2
-        ]
-      );
-    }
-  });
-  return { id: id2, reused: false, createdAt: now2 };
-}
-function sleep(ms, signal = null) {
-  return new Promise((resolve) => {
-    const timer = setTimeout(done, ms);
-    function done() {
-      clearTimeout(timer);
-      signal?.removeEventListener("abort", done);
-      resolve();
-    }
-    signal?.addEventListener("abort", done, { once: true });
-  });
-}
-async function readLocalTargetMutationResult({
-  ctx,
-  requestId,
-  target
-}) {
-  const row = await ctx.db.get(
-    `SELECT status, metadata_json, last_error
-       FROM execution_requests
-      WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
-    [requestId, ctx.workspace.id]
-  );
-  if (!row) {
-    return fail(target, "TARGET_OPERATION_FAILED", "The queued capability call no longer exists.", {
-      executionRequestId: requestId
-    });
-  }
-  const stored = parseLocalTargetMutation(row.metadata_json)?.result;
-  if (stored) return storedResultToCapabilityResult(target, stored);
-  if (TERMINAL_WITHOUT_RESULT.includes(row.status)) {
-    return fail(
-      target,
-      "TARGET_OPERATION_FAILED",
-      row.last_error ?? `The queued capability call ended as ${row.status} without a result.`,
-      { executionRequestId: requestId, status: row.status }
-    );
-  }
-  return null;
-}
-async function waitForLocalTargetMutationResult({
-  ctx,
-  requestId,
-  target,
-  timeoutMs = LOCAL_TARGET_MUTATION_READ_TIMEOUT_MS,
-  pollIntervalMs = DEFAULT_RESULT_POLL_INTERVAL_MS,
-  createListener,
-  signal = null
-}) {
-  const deadline = Date.now() + Math.max(0, timeoutMs);
-  for (; ; ) {
-    const result2 = await readLocalTargetMutationResult({ ctx, requestId, target });
-    if (result2) return result2;
-    const remaining = deadline - Date.now();
-    if (signal?.aborted) {
-      return fail(
-        target,
-        "LOCAL_TARGET_TIMEOUT",
-        "The caller stopped waiting. The operation may still be running on the target.",
-        { executionRequestId: requestId, cancelled: true }
-      );
-    }
-    if (remaining <= 0) {
-      return fail(
-        target,
-        "LOCAL_TARGET_TIMEOUT",
-        "The execution target has not reported a result yet. The operation is still running there.",
-        { executionRequestId: requestId, timeoutMs }
-      );
-    }
-    const waitMs = Math.min(remaining, pollIntervalMs);
-    const listener = createListener ? await createListener({ requestId, timeoutMs: remaining }) : null;
-    if (listener) {
-      try {
-        await (signal ? Promise.race([listener.wait(), sleep(remaining, signal)]) : listener.wait());
-      } finally {
-        await listener.close();
-      }
-    } else {
-      await sleep(waitMs, signal);
-    }
-  }
-}
-async function completeLocalTargetMutationRequest({
-  ctx,
-  requestId,
-  result: result2
-}) {
-  const row = await ctx.db.get(
-    `SELECT id, workspace_id, project_id, mission_id, objective_id, status, revision, metadata_json,
-            background_probe_key, requested_by_workspace_user_id,
-            claimed_by_runner_registration_id, claimed_by_execution_target_id,
-            requested_source, COALESCE(claimed_by_execution_target_id, execution_target_id) AS target_id
-       FROM execution_requests
-      WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
-    [requestId, ctx.workspace.id]
-  );
-  if (!row) {
-    throw new ServiceError("Execution request not found", "execution_request_not_found", 404);
-  }
-  if (row.requested_source !== LOCAL_TARGET_MUTATION_REQUESTED_SOURCE) {
-    throw new ServiceError(
-      "Execution request is not a local-target mutation.",
-      "not_local_target_mutation",
-      409
-    );
-  }
-  const mutation = parseLocalTargetMutation(row.metadata_json);
-  if (row.background_probe_key && mutation?.result) return mutation;
-  if (row.status !== "launching" && row.status !== "claimed") {
-    throw new ServiceError(
-      `Cannot complete local-target mutation from status ${row.status}.`,
-      "invalid_execution_request_transition",
-      409
-    );
-  }
-  if (!mutation) {
-    throw new ServiceError(
-      "Execution request is missing local-target mutation metadata.",
-      "invalid_local_target_mutation",
-      409
-    );
-  }
-  if (mutation.capability === READ_LATCH_HOST_IDENTITY) {
-    const targetId = row.claimed_by_execution_target_id;
-    const registered = targetId && row.claimed_by_runner_registration_id && await ctx.db.get(
-      `SELECT registration.id
-         FROM execution_target_runner_registrations registration
-         JOIN execution_targets target
-           ON target.id = registration.execution_target_id AND target.workspace_id = registration.workspace_id
-         JOIN workspace_user_execution_targets access
-           ON access.execution_target_id = target.id AND access.workspace_id = target.workspace_id
-          AND access.workspace_user_id = target.owner_workspace_user_id
-          AND access.access_status = 'active' AND access.deleted_at IS NULL
-        WHERE registration.id = ? AND registration.workspace_id = ? AND registration.execution_target_id = ?
-          AND registration.relation = 'native' AND registration.deleted_at IS NULL
-          AND target.status = 'active' AND target.type = 'local' AND target.deleted_at IS NULL
-          AND target.owner_workspace_user_id = ?`,
-      [
-        row.claimed_by_runner_registration_id,
-        ctx.workspace.id,
-        targetId,
-        ctx.actorWorkspaceUserId
-      ]
-    );
-    if (!ctx.actorWorkspaceUserId || ctx.actorWorkspaceUserId !== row.requested_by_workspace_user_id || !registered || await findActingDeviceExecutionTargetId({ ctx }) !== targetId) {
-      throw new ServiceError(
-        "Latch host identity must come from the target owner\u2019s native runner.",
-        "latch_host_unverified",
-        403
-      );
-    }
-    const key = result2.ok ? result2.value?.hostKeyDigest : null;
-    result2 = isLatchHostPublicKey(key) ? {
-      ok: true,
-      value: { hostKeyDigest: key },
-      target: { executionTargetId: targetId, deviceLabel: null, transport: "runner_queue" }
-    } : fail(
-      { executionTargetId: targetId, deviceLabel: null, transport: "runner_queue" },
-      "TARGET_OPERATION_FAILED",
-      "Latch Remote Link identity is unavailable."
-    );
-  }
-  const storedResult = result2.ok ? { ok: true, value: result2.value } : {
-    ok: false,
-    code: result2.code,
-    message: result2.message,
-    ...result2.details !== void 0 ? { details: result2.details } : {}
-  };
-  const metadata = parseMetadataJson(row.metadata_json);
-  metadata[LOCAL_TARGET_MUTATION_METADATA_KEY] = {
-    ...mutation,
-    result: storedResult
-  };
-  const now2 = nowIso();
-  const revision3 = row.revision + 1;
-  const nextStatus = result2.ok ? "launched" : "failed";
-  const lastError = result2.ok ? null : result2.message;
-  return ctx.db.transaction(async (tx) => {
-    const txCtx = { ...ctx, db: tx };
-    const updated = await txCtx.db.run(
-      `UPDATE execution_requests
-          SET status = ?,
-              metadata_json = ?,
-              last_error = ?,
-              launch_completed_at = ?,
-              updated_at = ?,
-              revision = ?
-        WHERE id = ? AND status = ? AND revision = ?`,
-      [
-        nextStatus,
-        JSON.stringify(metadata),
-        lastError,
-        now2,
-        now2,
-        revision3,
-        row.id,
-        row.status,
-        row.revision
-      ]
-    );
-    if (updated.changes === 0) {
-      if (row.background_probe_key) {
-        const current = await tx.get(
-          "SELECT metadata_json FROM execution_requests WHERE id = ? AND workspace_id = ?",
-          [row.id, ctx.workspace.id]
-        );
-        const completed = current && parseLocalTargetMutation(current.metadata_json);
-        if (completed?.result) return completed;
-      }
-      throw new ServiceError(
-        "Execution request changed while completing local-target mutation.",
-        "execution_request_conflict",
-        409
-      );
-    }
-    if (row.background_probe_key === null)
-      await recordChange({
-        ctx: txCtx,
-        entityType: "execution_request",
-        entityId: row.id,
-        operation: "update",
-        entityRevision: revision3,
-        projectId: row.project_id,
-        missionId: row.mission_id,
-        objectiveId: row.objective_id,
-        changedFields: ["status", "metadata_json", "last_error", "launch_completed_at"]
-      });
-    if (row.mission_id !== null && row.objective_id !== null) {
-      await txCtx.db.run(
-        `INSERT INTO mission_events
-             (id, workspace_id, project_id, mission_id, objective_id, type, phase, summary,
-              payload_json, source, actor_workspace_user_id, created_at)
-           VALUES (?, ?, ?, ?, ?, 'update', 'execute', ?, ?, 'runner', NULL, ?)`,
-        [
-          newId(),
-          ctx.workspace.id,
-          row.project_id,
-          row.mission_id,
-          row.objective_id,
-          result2.ok ? `Completed ${mutation.kind.replace("_", " ")} on execution target.` : `Local-target mutation failed: ${result2.message}`,
-          JSON.stringify({ executionRequestId: row.id, result: storedResult }),
-          now2
-        ]
-      );
-    }
-    if (row.background_probe_key === null && mutation.capability === "inspectLatchSession" && !result2.ok && result2.code === "LATCH_SESSION_ABSENT" && row.target_id && typeof mutation.input.providerSessionId === "string") {
-      await forgetAbsentLatchProviderSessions({
-        ctx: txCtx,
-        projectId: row.project_id,
-        executionTargetId: row.target_id,
-        providerSessionId: mutation.input.providerSessionId
-      });
-    }
-    await recordAnswerDeliveryOutcome2({ ctx: txCtx, mutation, result: result2 });
-    return { ...mutation, result: storedResult };
-  });
-}
-async function recordAnswerDeliveryOutcome2({
-  ctx,
-  mutation,
-  result: result2
-}) {
-  if (mutation.capability !== "sendLatchMessage") return;
-  const operationId = typeof mutation.input.operationId === "string" ? mutation.input.operationId.trim() : "";
-  if (!operationId) return;
-  await recordAnswerDeliveryResult({
-    ctx,
-    operationId,
-    result: result2
-  });
-}
-async function recordAnswerDeliveryForTerminalRequest({
-  ctx,
-  metadataJson,
-  status,
-  executionRequestId
-}) {
-  const mutation = metadataJson ? parseLocalTargetMutation(metadataJson) : null;
-  if (!mutation || mutation.result) return;
-  await recordAnswerDeliveryOutcome2({
-    ctx,
-    mutation,
-    result: fail(
-      { executionTargetId: null, deviceLabel: null, transport: "runner_queue" },
-      "TARGET_OPERATION_FAILED",
-      `The queued capability call ended as ${status} without a result.`,
-      { executionRequestId, status }
-    )
-  });
-}
-async function cancelQueuedLocalTargetMutation({
-  ctx,
-  requestId
-}) {
-  const now2 = nowIso();
-  return await ctx.db.transaction(async (tx) => {
-    const txCtx = { ...ctx, db: tx };
-    const row = await tx.get(
-      `SELECT id, project_id, mission_id, objective_id, revision, metadata_json, background_probe_key
-         FROM execution_requests
-        WHERE id = ? AND workspace_id = ? AND requested_source = ?
-          AND status = 'queued' AND deleted_at IS NULL`,
-      [requestId, ctx.workspace.id, LOCAL_TARGET_MUTATION_REQUESTED_SOURCE]
-    );
-    if (!row) return { cancelled: false };
-    const updated = await tx.run(
-      `UPDATE execution_requests
-          SET status = 'cancelled', last_error = ?, updated_at = ?, revision = ?
-        WHERE id = ? AND status = 'queued' AND revision = ?`,
-      ["Withdrawn before any runner claimed it.", now2, row.revision + 1, row.id, row.revision]
-    );
-    if (updated.changes === 0) return { cancelled: false };
-    if (row.background_probe_key === null)
-      await recordChange({
-        ctx: txCtx,
-        entityType: "execution_request",
-        entityId: row.id,
-        operation: "update",
-        entityRevision: row.revision + 1,
-        projectId: row.project_id,
-        missionId: row.mission_id,
-        objectiveId: row.objective_id,
-        changedFields: ["status", "last_error"]
-      });
-    await recordAnswerDeliveryForTerminalRequest({
-      ctx: txCtx,
-      metadataJson: row.metadata_json,
-      status: "cancelled",
-      executionRequestId: row.id
-    });
-    return { cancelled: true };
-  });
-}
-
-// ../packages/core/service/local-target/runner-queue-provider.ts
-var READ_CAPABILITIES = /* @__PURE__ */ new Set([
-  "observeResource",
-  "readRepositoryTree",
-  "listBranches",
-  "listWorktrees",
-  "readCurrentDiff",
-  "readGitStatus",
-  "readRepositoryFile",
-  "searchRepositoryText",
-  "generateCommitMessageFromLocalDiff",
-  "discoverLatch",
-  "readLatchHostIdentity",
-  "inspectLatchSession",
-  "doctor"
-]);
-function mutationKindFor(capability) {
-  if (capability === "performBranchAction") return "branch_action";
-  if (capability === "purgeMergedWorktrees" || capability === "removeWorktree") {
-    return "worktree_purge";
-  }
-  return "capability_call";
-}
-var RunnerQueueProvider = class {
-  constructor(target, queue) {
-    this.queue = queue;
-    this.target = { ...target, transport: "runner_queue" };
-  }
-  queue;
-  target;
-  /**
-   * Queue one capability call on this target and wait for its result.
-   *
-   * `operationId` doubles as the queue's idempotency key: two calls with the
-   * same id resolve to one job, so a retry after a `LOCAL_TARGET_TIMEOUT` waits
-   * on the original rather than doing the work twice.
-   */
-  async #call(capability, input2, options = {}) {
-    const executionTargetId = this.target.executionTargetId;
-    if (!executionTargetId) {
-      return fail(
-        this.target,
-        "LOCAL_TARGET_REQUIRED",
-        "This operation must run on a declared execution target, and none is selected."
-      );
-    }
-    const timeoutMs = options.timeoutMs ?? (READ_CAPABILITIES.has(capability) ? this.queue.readTimeoutMs ?? LOCAL_TARGET_MUTATION_READ_TIMEOUT_MS : this.queue.writeTimeoutMs ?? LOCAL_TARGET_MUTATION_WRITE_TIMEOUT_MS);
-    let requestId;
-    try {
-      const queued = await createLocalTargetMutationRequest({
-        ctx: this.queue.ctx,
-        projectId: this.queue.projectId,
-        missionId: this.queue.missionId ?? null,
-        executionTargetId,
-        kind: mutationKindFor(capability),
-        capability,
-        input: input2,
-        operationId: options.operationId ?? this.queue.operationId ?? null,
-        resourceKey: this.queue.resourceKey ?? null
-      });
-      requestId = queued.id;
-    } catch (error64) {
-      return fail(
-        this.target,
-        "TARGET_OPERATION_FAILED",
-        error64 instanceof ServiceError || error64 instanceof Error ? error64.message : "Could not queue the operation for this execution target."
-      );
-    }
-    const result2 = await waitForLocalTargetMutationResult({
-      ctx: this.queue.ctx,
-      requestId,
-      target: this.target,
-      timeoutMs,
-      ...this.queue.pollIntervalMs === void 0 ? {} : { pollIntervalMs: this.queue.pollIntervalMs },
-      createListener: this.queue.createCompletionListener ?? null,
-      signal: this.queue.signal ?? null
-    });
-    if (capability === "readLatchHostIdentity" && !result2.ok) {
-      await cancelQueuedLocalTargetMutation({ ctx: this.queue.ctx, requestId });
-    }
-    return result2;
-  }
-  writeProjectMetadata(input2) {
-    return this.#call("writeProjectMetadata", { ...input2 });
-  }
-  observeResource(input2) {
-    return this.#call("observeResource", { ...input2 });
-  }
-  readRepositoryTree(input2) {
-    return this.#call("readRepositoryTree", { ...input2 });
-  }
-  listBranches(input2) {
-    return this.#call("listBranches", { ...input2 });
-  }
-  prepareBranch(input2) {
-    return this.#call("prepareBranch", { ...input2 });
-  }
-  listWorktrees(input2) {
-    return this.#call("listWorktrees", { ...input2 });
-  }
-  removeWorktree(input2) {
-    return this.#call("removeWorktree", { ...input2 });
-  }
-  purgeMergedWorktrees(input2) {
-    return this.#call("purgeMergedWorktrees", { ...input2 });
-  }
-  performBranchAction(input2) {
-    return this.#call("performBranchAction", { ...input2 });
-  }
-  readCurrentDiff(input2) {
-    return this.#call("readCurrentDiff", { ...input2 });
-  }
-  readGitStatus(input2) {
-    return this.#call("readGitStatus", { ...input2 });
-  }
-  readRepositoryFile(input2) {
-    return this.#call("readRepositoryFile", { ...input2 });
-  }
-  searchRepositoryText(input2) {
-    return this.#call("searchRepositoryText", { ...input2 });
-  }
-  generateCommitMessageFromLocalDiff(input2) {
-    return this.#call("generateCommitMessageFromLocalDiff", { ...input2 });
-  }
-  /**
-   * Launching an agent has its own claim path on the same queue — the runner
-   * spawns it directly from the claimed request. Routing it through the generic
-   * dispatcher too would let a launch and a queued job race for one request, so
-   * this transport declines it outright.
-   */
-  launchAgent(_input) {
-    return Promise.resolve(
-      fail(
-        this.target,
-        "LOCAL_TARGET_UNSUPPORTED",
-        "Agent launch is queued as an execution request, not as a local-target capability call."
-      )
-    );
-  }
-  discoverLatch(input2) {
-    return this.#call("discoverLatch", { ...input2 });
-  }
-  readLatchHostIdentity() {
-    return this.#call("readLatchHostIdentity", {});
-  }
-  inspectLatchSession(input2) {
-    return this.#call("inspectLatchSession", { ...input2 });
-  }
-  openLatchSession(input2) {
-    return this.#call("openLatchSession", { ...input2 });
-  }
-  stopLatchSession(input2) {
-    return this.#call("stopLatchSession", { ...input2 });
-  }
-  /**
-   * Answer delivery. The caller's `operationId` is the idempotency key on both
-   * ends — the queue's, so a retry never queues a second job, and Latch's, so a
-   * redelivered message is never applied twice. `waitForIdleMs` extends the
-   * deadline because the runner may legitimately wait for the agent to go idle
-   * before it can send.
-   */
-  sendLatchMessage(input2) {
-    const waitForIdleMs = typeof input2.waitForIdleMs === "number" ? input2.waitForIdleMs : 0;
-    return this.#call(
-      "sendLatchMessage",
-      { ...input2 },
-      {
-        operationId: input2.operationId,
-        timeoutMs: (this.queue.writeTimeoutMs ?? LOCAL_TARGET_MUTATION_WRITE_TIMEOUT_MS) + Math.max(0, waitForIdleMs)
-      }
-    );
-  }
-  doctor() {
-    return this.#call("doctor", {});
-  }
-};
-
-// ../packages/core/service/local-target/default-registry.ts
-function createDefaultLocalTargetRegistry({
-  callerExecutionTargetId = null,
-  runnerQueue = null
-}) {
-  const registry2 = new LocalTargetProviderRegistry();
-  registry2.register((target) => {
-    if (target.type !== "local" || !target.executionTargetId) return null;
-    const isCallerTarget = callerExecutionTargetId !== null && target.executionTargetId === callerExecutionTargetId;
-    if (isCallerTarget) {
-      return new InProcessProvider(targetMetadata(target, "in_process"));
-    }
-    if (target.reachable === false) {
-      return new UnavailableProvider(
-        targetMetadata(target, "fake"),
-        "LOCAL_TARGET_UNREACHABLE",
-        "The selected execution target is offline. Start a runner on that device or choose another target."
-      );
-    }
-    if (!runnerQueue) {
-      return new UnavailableProvider(
-        targetMetadata(target, "fake"),
-        "LOCAL_TARGET_UNREACHABLE",
-        "Reaching another execution target needs the runner queue, which this caller cannot write to."
-      );
-    }
-    return new RunnerQueueProvider(targetMetadata(target, "runner_queue"), runnerQueue);
-  });
-  return registry2;
-}
-function resolveDefaultLocalTargetProvider({
-  target,
-  options
-}) {
-  return createDefaultLocalTargetRegistry(options).resolveOrUnavailable(target);
-}
-
-// ../packages/core/service/local-target/desktop-bridge.ts
-async function invokeLocalTargetCapability({
-  provider,
-  call
-}) {
-  switch (call.capability) {
-    case "readRepositoryTree":
-      return provider.readRepositoryTree(call.input);
-    case "listBranches":
-      return provider.listBranches(call.input);
-    case "observeResource":
-      return provider.observeResource(call.input);
-    case "listWorktrees":
-      return provider.listWorktrees(call.input);
-    case "deriveBranchStatus":
-      return ok2(provider.target, observeMissionBranchGit(call.input));
-    case "performBranchAction":
-      return provider.performBranchAction(call.input);
-    case "removeWorktree":
-      return provider.removeWorktree(call.input);
-    case "purgeMergedWorktrees":
-      return provider.purgeMergedWorktrees(call.input);
-    case "generateCommitMessageFromLocalDiff":
-      return provider.generateCommitMessageFromLocalDiff(call.input);
-    case "discoverLatch":
-      return provider.discoverLatch(call.input);
-    case "inspectLatchSession":
-      return provider.inspectLatchSession(call.input);
-    case "openLatchSession":
-      return provider.openLatchSession(call.input);
-    case "stopLatchSession":
-      return provider.stopLatchSession(call.input);
-    case "sendLatchMessage":
-      return provider.sendLatchMessage(call.input);
-    case "writeProjectMetadata":
-      return provider.writeProjectMetadata(call.input);
-    default:
-      return fail(
-        provider.target,
-        "CAPABILITY_NOT_IMPLEMENTED",
-        "Unknown local-target capability."
-      );
-  }
-}
-
-// ../packages/core/service/local-target/resource-status.ts
-function isCoLocatedBackend(source) {
-  const dialect = typeof source === "string" ? source : source.dialect;
-  return dialect === "sqlite";
-}
-function resolveBackendResourceProvider(coLocatedWithCheckout, target) {
-  return coLocatedWithCheckout ? new InProcessProvider(target) : new UnavailableProvider(
-    target,
-    "LOCAL_TARGET_REQUIRED",
-    "The backend is not co-located with this checkout; resource availability must be observed by a local target."
-  );
-}
-function deriveResourceStatus(provider, resource) {
-  if (resource.status === "archived") return Promise.resolve("archived");
-  return provider.observeResource({
-    resourceId: resource.resourceId,
-    path: resource.path
-  }).then(
-    (observation) => mapObservationToResourceStatus(resource.status, observation.ok ? observation.value : null)
-  );
-}
-function mapObservationToResourceStatus(lifecycleStatus, observation) {
-  if (lifecycleStatus === "archived") return "archived";
-  if (!observation) return lifecycleStatus;
-  if (observation.state === "available") return "active";
-  if (observation.state === "missing") return "missing";
-  return lifecycleStatus;
-}
-
-// ../packages/core/service/project-resource-key.ts
-var import_node_path17 = __toESM(require("node:path"), 1);
-function deriveProjectResourceKey2({
-  resourceKey,
-  label,
-  directoryPath
-}) {
-  const explicit = resourceKey?.trim();
-  if (explicit) return slugify3(explicit);
-  const labelKey = label?.trim();
-  if (labelKey) return slugify3(labelKey);
-  return slugify3(import_node_path17.default.basename(import_node_path17.default.resolve(directoryPath)));
-}
-
-// ../packages/core/service/projects.ts
-async function seedDefaultProjectStatuses(db, { workspaceId: workspaceId2, projectId, now: now2 }) {
-  for (const status of DEFAULT_STATUSES) {
-    await db.run(
-      `INSERT INTO project_statuses
-         (id, workspace_id, project_id, key, name, type, position, is_default, is_terminal,
-          created_at, updated_at, revision)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
-      [
-        newId(),
-        workspaceId2,
-        projectId,
-        status.key,
-        status.name,
-        status.type,
-        status.position,
-        bindBool(db.dialect, status.isDefault),
-        bindBool(db.dialect, status.isTerminal),
-        now2,
-        now2
-      ]
-    );
-  }
-}
-var LOCAL_SOURCE_FIRST_ORDER = "CASE WHEN prs.source_kind = 'local_checkout' THEN 0 ELSE 1 END";
-var PRIMARY_RESOURCE_REPAIR_HINT = "Run `ovld add-cwd` from your project checkout or link a directory in project settings.";
-function objectiveResourceRepairHint(resourceKey) {
-  return `Run \`ovld add-cwd --key ${resourceKey}\` from the intended checkout on this device.`;
-}
-function backendResourceProvider(ctx, executionTargetId) {
-  return resolveBackendResourceProvider(isCoLocatedBackend(ctx.db), {
-    executionTargetId,
-    deviceLabel: null,
-    transport: "in_process"
-  });
-}
-async function preferredExecutionTargetIdForDiscovery({
-  ctx
-}) {
-  try {
-    return await findActingDeviceExecutionTargetId({ ctx });
-  } catch {
-    return null;
-  }
-}
-async function createProject({
-  ctx,
-  name: name2,
-  description,
-  slug: slugInput
-}) {
-  const trimmedName = name2.trim();
-  if (!trimmedName) {
-    throw new ServiceError("Project name is required", "validation_error");
-  }
-  const now2 = nowIso();
-  const id2 = newId();
-  const slug = slugInput?.trim() ? slugify3(slugInput) : slugify3(trimmedName);
-  await ctx.db.transaction(async (tx) => {
-    const txCtx = { ...ctx, db: tx };
-    const maxPosition = await tx.get(
-      `SELECT COALESCE(MAX(position), 0) AS max_position FROM projects
-          WHERE workspace_id = ? AND deleted_at IS NULL`,
-      [ctx.workspace.id]
-    );
-    const position = maxPosition.max_position + 1;
-    await txCtx.db.run(
-      `INSERT INTO projects
-           (id, workspace_id, slug, name, description, status, settings_json,
-            created_by_workspace_user_id, created_at, updated_at, revision, position)
-         VALUES (?, ?, ?, ?, ?, 'active', '{}', ?, ?, ?, 1, ?)`,
-      [
-        id2,
-        ctx.workspace.id,
-        slug,
-        trimmedName,
-        description?.trim() || null,
-        ctx.actorWorkspaceUserId,
-        now2,
-        now2,
-        position
-      ]
-    );
-    await seedDefaultProjectStatuses(txCtx.db, {
-      workspaceId: txCtx.workspace.id,
-      projectId: id2,
-      now: now2
-    });
-    await recordChange({
-      ctx: txCtx,
-      entityType: "project",
-      entityId: id2,
-      operation: "insert",
-      entityRevision: 1,
-      projectId: id2
-    });
-  });
-  return await getProject({ ctx, projectId: id2 });
-}
-async function getProject({
-  ctx,
-  projectId
-}) {
-  const id2 = await resolveProjectId(ctx, projectId);
-  const row = await ctx.db.get(
-    `SELECT id, slug, name, description, status, created_at, updated_at
-       FROM projects WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
-    [id2, ctx.workspace.id]
-  );
-  if (!row) {
-    throw new ServiceError("Project not found", "project_not_found", 404);
-  }
-  return {
-    id: row.id,
-    slug: row.slug,
-    name: row.name,
-    description: row.description,
-    status: row.status,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at
-  };
-}
-async function tryGetProject({
-  ctx,
-  projectId
-}) {
-  try {
-    return await getProject({ ctx, projectId });
-  } catch (error64) {
-    if (error64 instanceof ServiceError && error64.code === "project_not_found") return null;
-    throw error64;
-  }
-}
-async function listProjectStatuses({
-  ctx,
-  projectId
-}) {
-  const resolvedProjectId = await resolveProjectId(ctx, projectId);
-  const rows = await ctx.db.all(
-    `SELECT id, project_id, key, name, type, position, is_default, is_terminal
-       FROM project_statuses
-      WHERE project_id = ? AND deleted_at IS NULL
-      ORDER BY position ASC`,
-    [resolvedProjectId]
-  );
-  return rows.map((row) => ({
-    id: row.id,
-    projectId: row.project_id,
-    key: row.key,
-    name: row.name,
-    type: row.type,
-    position: row.position,
-    isDefault: row.is_default === true || row.is_default === 1,
-    isTerminal: row.is_terminal === true || row.is_terminal === 1
-  }));
-}
-async function listProjectResources({
-  ctx,
-  projectId
-}) {
-  const resolvedProjectId = await resolveProjectId(ctx, projectId);
-  const rows = await ctx.db.all(
-    `SELECT pr.id, pr.project_id, prs.execution_target_id, pr.resource_key, prs.source_kind,
-            prs.descriptor_json, pr.label, pr.is_primary, pr.access_mode, pr.status
-       FROM project_resources pr
-       LEFT JOIN project_resource_sources prs ON prs.resource_id = pr.id AND prs.deleted_at IS NULL
-       WHERE pr.project_id = ? AND pr.deleted_at IS NULL
-       ORDER BY pr.is_primary DESC, pr.created_at ASC, ${LOCAL_SOURCE_FIRST_ORDER}`,
-    [resolvedProjectId]
-  );
-  const firstRowPerResource = /* @__PURE__ */ new Map();
-  for (const row of rows) {
-    if (!firstRowPerResource.has(row.id)) firstRowPerResource.set(row.id, row);
-  }
-  return await Promise.all(
-    [...firstRowPerResource.values()].map((row) => rowToProjectResourceSummary(ctx, row))
-  );
-}
-async function findProjectResourceRow({
-  ctx,
-  projectId,
-  resourceKey = null,
-  primaryOnly = false,
-  executionTargetId = null
-}) {
-  const resolvedProjectId = await resolveProjectId(ctx, projectId);
-  const conditions = ["pr.project_id = ?", "pr.deleted_at IS NULL"];
-  const params = [resolvedProjectId];
-  if (primaryOnly) {
-    conditions.push("pr.is_primary = ?");
-    params.push(bindBool(ctx.db.dialect, true));
-  }
-  if (resourceKey !== null) {
-    conditions.push("pr.resource_key = ?");
-    params.push(resourceKey);
-  }
-  const orderBy = [LOCAL_SOURCE_FIRST_ORDER];
-  if (executionTargetId !== null) {
-    conditions.push("(prs.execution_target_id = ? OR prs.execution_target_id IS NULL)");
-    params.push(executionTargetId);
-    orderBy.push("CASE WHEN prs.execution_target_id = ? THEN 0 ELSE 1 END");
-    params.push(executionTargetId);
-  }
-  orderBy.push("pr.created_at ASC");
-  return await ctx.db.get(
-    `SELECT pr.id, pr.project_id, prs.execution_target_id, pr.resource_key, prs.source_kind,
-            prs.descriptor_json, pr.label, pr.is_primary, pr.access_mode, pr.status
-       FROM project_resources pr
-       LEFT JOIN project_resource_sources prs ON prs.resource_id = pr.id AND prs.deleted_at IS NULL
-      WHERE ${conditions.join(" AND ")}
-      ORDER BY ${orderBy.join(", ")}
-      LIMIT 1`,
-    params
-  );
-}
-async function findPrimaryProjectResource({
-  ctx,
-  projectId,
-  executionTargetId = null
-}) {
-  const row = await findProjectResourceRow({
-    ctx,
-    projectId,
-    primaryOnly: true,
-    executionTargetId
-  });
-  return row ? await rowToProjectResourceSummary(ctx, row) : null;
-}
-async function assertPrimaryResourceConnected({
-  ctx,
-  projectId,
-  executionTargetId = null
-}) {
-  const primary = await findPrimaryProjectResource({ ctx, projectId, executionTargetId });
-  if (!primary) {
-    throw new ServiceError(
-      `No primary resource is linked for this project. ${PRIMARY_RESOURCE_REPAIR_HINT}`,
-      "primary_resource_not_connected",
-      409
-    );
-  }
-  if (primary.status === "missing") {
-    throw new ServiceError(
-      `Primary working directory is missing (${primary.path}). ${PRIMARY_RESOURCE_REPAIR_HINT}`,
-      "primary_resource_not_connected",
-      409
-    );
-  }
-  if (primary.type !== "local_directory") {
-    throw new ServiceError(
-      `Primary resource type "${primary.type}" is not supported for local agent runs yet.`,
-      "primary_resource_not_connected",
-      409
-    );
-  }
-  return {
-    resource: primary,
-    workingDirectory: import_node_path18.default.resolve(primary.path)
-  };
-}
-function normalizeAccessMode(value2) {
-  return value2 === "read" ? "read" : "read_write";
-}
-function rowToProjectResourceSummary(ctx, row) {
-  const descriptor = row.descriptor_json ? JSON.parse(row.descriptor_json) : {};
-  const resourcePath = descriptor.path ?? "";
-  return deriveResourceStatus(backendResourceProvider(ctx, row.execution_target_id), {
-    resourceId: row.id,
-    status: row.status,
-    path: resourcePath
-  }).then((status) => ({
-    id: row.id,
-    projectId: row.project_id,
-    executionTargetId: row.execution_target_id,
-    resourceKey: row.resource_key,
-    type: row.source_kind === "local_checkout" ? "local_directory" : row.source_kind ?? "remote_directory",
-    label: row.label,
-    path: resourcePath,
-    isPrimary: isTruthyFlag(row.is_primary),
-    accessMode: normalizeAccessMode(row.access_mode),
-    status
-  }));
-}
-async function projectHasResourceKey({
-  ctx,
-  projectId,
-  resourceKey
-}) {
-  const resolvedProjectId = await resolveProjectId(ctx, projectId);
-  const normalizedKey = resourceKey.trim();
-  if (!normalizedKey) return false;
-  const row = await ctx.db.get(
-    `SELECT 1 AS ok FROM project_resources
-        WHERE project_id = ? AND resource_key = ? AND deleted_at IS NULL
-        LIMIT 1`,
-    [resolvedProjectId, normalizedKey]
-  );
-  return Boolean(row);
-}
-async function assertProjectResourceKeyExists({
-  ctx,
-  projectId,
-  resourceKey
-}) {
-  const normalizedKey = resourceKey.trim();
-  if (!normalizedKey) return;
-  const exists = await projectHasResourceKey({ ctx, projectId, resourceKey: normalizedKey });
-  if (!exists) {
-    throw new ServiceError(
-      `Project resource key "${normalizedKey}" is not linked to this project.`,
-      "project_resource_key_not_found",
-      409
-    );
-  }
-}
-async function findProjectResourceByKey({
-  ctx,
-  projectId,
-  resourceKey,
-  executionTargetId = null
-}) {
-  const normalizedKey = resourceKey.trim();
-  if (!normalizedKey) return null;
-  const row = await findProjectResourceRow({
-    ctx,
-    projectId,
-    resourceKey: normalizedKey,
-    executionTargetId
-  });
-  return row ? await rowToProjectResourceSummary(ctx, row) : null;
-}
-async function assertObjectiveResourceConnected({
-  ctx,
-  projectId,
-  resourceKey,
-  executionTargetId = null
-}) {
-  const normalizedKey = resourceKey.trim();
-  const resource = await findProjectResourceByKey({
-    ctx,
-    projectId,
-    resourceKey: normalizedKey,
-    executionTargetId
-  });
-  if (!resource) {
-    throw new ServiceError(
-      `Objective resource "${normalizedKey}" is not linked on this execution target. ${objectiveResourceRepairHint(normalizedKey)}`,
-      "objective_resource_not_connected",
-      409
-    );
-  }
-  if (resource.status === "missing") {
-    throw new ServiceError(
-      `Objective resource "${normalizedKey}" working directory is missing (${resource.path}). ${objectiveResourceRepairHint(normalizedKey)}`,
-      "objective_resource_not_connected",
-      409
-    );
-  }
-  if (resource.type !== "local_directory") {
-    throw new ServiceError(
-      `Objective resource "${normalizedKey}" type "${resource.type}" is not supported for local agent runs yet.`,
-      "objective_resource_not_connected",
-      409
-    );
-  }
-  return {
-    resource,
-    workingDirectory: import_node_path18.default.resolve(resource.path)
-  };
-}
-async function resolveCwdProjectResource({
-  ctx,
-  projectId,
-  executionTargetId = null,
-  workingDirectory = process.cwd()
-}) {
-  const resolvedProjectId = await resolveProjectId(ctx, projectId);
-  const preferredExecutionTargetId = executionTargetId ?? await preferredExecutionTargetIdForDiscovery({ ctx });
-  let current = import_node_path18.default.resolve(workingDirectory);
-  while (true) {
-    const projectJsonPath = import_node_path18.default.join(current, ".overlord", "project.json");
-    try {
-      const links = readProjectJsonLinks(projectJsonPath, { preferredExecutionTargetId });
-      const raw = links.find((link) => link.projectId === resolvedProjectId);
-      if (raw) {
-        const row = await ctx.db.get(
-          `SELECT pr.id, pr.project_id, prs.execution_target_id, pr.resource_key, prs.source_kind,
-                  prs.descriptor_json, pr.label, pr.is_primary, pr.access_mode, pr.status
-             FROM project_resources pr
-             LEFT JOIN project_resource_sources prs ON prs.resource_id = pr.id AND prs.deleted_at IS NULL
-            WHERE pr.id = ? AND pr.project_id = ? AND pr.deleted_at IS NULL
-            ORDER BY ${LOCAL_SOURCE_FIRST_ORDER},
-                     CASE WHEN prs.execution_target_id = ? THEN 0 WHEN prs.execution_target_id IS NULL THEN 1 ELSE 2 END
-            LIMIT 1`,
-          [raw.resourceId, resolvedProjectId, preferredExecutionTargetId]
-        );
-        if (!row || row.source_kind !== "local_checkout") return null;
-        const resource = await rowToProjectResourceSummary(ctx, row);
-        if (resource.status === "missing") return null;
-        return {
-          resource,
-          workingDirectory: import_node_path18.default.resolve(resource.path)
-        };
-      }
-    } catch {
-    }
-    const parent = import_node_path18.default.dirname(current);
-    if (parent === current) break;
-    current = parent;
-  }
-  return null;
-}
-async function resolveObjectiveWorkingDirectory({
-  ctx,
-  projectId,
-  objectiveResourceKey = null,
-  explicitWorkingDirectory,
-  executionTargetId = null
-}) {
-  if (explicitWorkingDirectory?.trim()) {
-    const resolved = import_node_path18.default.resolve(explicitWorkingDirectory);
-    if (ctx.db.dialect === "sqlite" && !(0, import_node_fs15.existsSync)(resolved)) {
-      throw new ServiceError(
-        `Working directory does not exist: ${resolved}`,
-        "working_directory_missing"
-      );
-    }
-    return { workingDirectory: resolved, resourceId: null };
-  }
-  const boundKey = objectiveResourceKey?.trim();
-  if (boundKey) {
-    const connected = await assertObjectiveResourceConnected({
-      ctx,
-      projectId,
-      resourceKey: boundKey,
-      executionTargetId
-    });
-    return {
-      workingDirectory: connected.workingDirectory,
-      resourceId: connected.resource.id
-    };
-  }
-  try {
-    const connected = await assertPrimaryResourceConnected({ ctx, projectId, executionTargetId });
-    return {
-      workingDirectory: connected.workingDirectory,
-      resourceId: connected.resource.id
-    };
-  } catch (error64) {
-    if (!(error64 instanceof ServiceError) || error64.code !== "primary_resource_not_connected") {
-      throw error64;
-    }
-    const cwdResource = await resolveCwdProjectResource({
-      ctx,
-      projectId,
-      executionTargetId
-    });
-    if (cwdResource) {
-      return {
-        workingDirectory: cwdResource.workingDirectory,
-        resourceId: cwdResource.resource.id
-      };
-    }
-    throw error64;
-  }
-}
-async function assertLaunchResourceConnected({
-  ctx,
-  projectId,
-  objectiveResourceKey = null,
-  executionTargetId = null
-}) {
-  const boundKey = objectiveResourceKey?.trim();
-  if (boundKey) {
-    return assertObjectiveResourceConnected({
-      ctx,
-      projectId,
-      resourceKey: boundKey,
-      executionTargetId
-    });
-  }
-  return assertPrimaryResourceConnected({ ctx, projectId, executionTargetId });
-}
-async function discoverProject({
-  ctx,
-  workingDirectory,
-  projectId
-}) {
-  if (projectId) {
-    const resolvedProjectId = await resolveProjectId(ctx, projectId);
-    const project = await getProject({ ctx, projectId: resolvedProjectId });
-    const resources = await listProjectResources({ ctx, projectId: resolvedProjectId });
-    const primary = resources.find((r5) => r5.isPrimary) ?? resources[0];
-    return {
-      projectId: project.id,
-      projectName: project.name,
-      resourceId: primary?.id ?? null,
-      resourcePath: primary?.path ?? null,
-      isPrimary: primary?.isPrimary ?? false,
-      linkedProjects: [
-        {
-          projectId: project.id,
-          projectName: project.name,
-          resourceId: primary?.id ?? null,
-          resourceKey: primary?.resourceKey ?? null,
-          isPrimary: primary?.isPrimary ?? false
-        }
-      ]
-    };
-  }
-  const cwd = import_node_path18.default.resolve(workingDirectory ?? process.cwd());
-  let current = cwd;
-  const preferredExecutionTargetId = await preferredExecutionTargetIdForDiscovery({ ctx });
-  while (true) {
-    const projectJsonPath = import_node_path18.default.join(current, ".overlord", "project.json");
-    try {
-      const links = readProjectJsonLinks(projectJsonPath, { preferredExecutionTargetId });
-      if (links.length > 0) {
-        const selectedLink = selectPrimaryProjectLink(links);
-        const orderedLinks = [
-          ...selectedLink ? [selectedLink] : [],
-          ...links.filter((link) => link.projectId !== selectedLink?.projectId)
-        ];
-        let chosenProject = null;
-        let chosenLink = selectedLink;
-        for (const link of orderedLinks) {
-          const project = await tryGetProject({ ctx, projectId: link.projectId });
-          if (project) {
-            chosenProject = project;
-            chosenLink = link;
-            break;
-          }
-        }
-        if (chosenProject && chosenLink) {
-          const resource = await ctx.db.get(
-            `SELECT pr.id, ${jsonTextFieldSql("prs.descriptor_json", "path", ctx.db.dialect)} AS path, pr.is_primary, pr.resource_key
-             FROM project_resources pr
-             LEFT JOIN project_resource_sources prs
-               ON prs.resource_id = pr.id AND prs.deleted_at IS NULL AND prs.source_kind = 'local_checkout'
-             WHERE pr.id = ? AND pr.project_id = ? AND pr.deleted_at IS NULL
-             ORDER BY CASE WHEN prs.execution_target_id = ? THEN 0 WHEN prs.execution_target_id IS NULL THEN 1 ELSE 2 END
-             LIMIT 1`,
-            [chosenLink.resourceId, chosenLink.projectId, preferredExecutionTargetId]
-          );
-          const linkedProjects = [];
-          for (const link of links) {
-            const project = link.projectId === chosenProject.id ? chosenProject : await tryGetProject({ ctx, projectId: link.projectId });
-            linkedProjects.push({
-              projectId: project?.id ?? link.projectId,
-              projectName: project?.name ?? link.projectName ?? link.projectId,
-              resourceId: link.resourceId,
-              resourceKey: link.resourceKey,
-              isPrimary: link.isPrimary
-            });
-          }
-          return {
-            projectId: chosenProject.id,
-            projectName: chosenProject.name,
-            resourceId: resource?.id ?? chosenLink.resourceId,
-            resourcePath: resource?.path ?? current,
-            isPrimary: resource ? isTruthyFlag(resource.is_primary) : chosenLink.isPrimary,
-            linkedProjects
-          };
-        }
-      }
-    } catch {
-    }
-    const parent = import_node_path18.default.dirname(current);
-    if (parent === current) break;
-    current = parent;
-  }
-  throw new ServiceError(
-    `No linked Overlord project found for ${cwd}. Run \`ovld add-cwd\` or \`ovld create-project\`.`,
-    "project_not_found",
-    404
-  );
 }
 
 // ../packages/core/service/agent-session/pure/redact.ts
@@ -154848,6 +152691,2897 @@ async function deleteRunQueue(db, queueId, moveEntriesTo) {
     await enqueueRunQueueDispatch(tx, queue.project_id, queue.workspace_id);
     return { removed: true, projectId: queue.project_id };
   });
+}
+
+// ../packages/core/service/execution-target-runners.ts
+var RUNNER_HEARTBEAT_STALE_MS = 5 * 60 * 1e3;
+var LIVE_RUNNER_HEALTH = ["healthy", "degraded"];
+function isStaleHeartbeat(lastHeartbeatAt, now2) {
+  if (!lastHeartbeatAt) return true;
+  const last = Date.parse(lastHeartbeatAt);
+  const current = Date.parse(now2);
+  if (Number.isNaN(last) || Number.isNaN(current)) return true;
+  return current - last > RUNNER_HEARTBEAT_STALE_MS;
+}
+function isRunnerRelation(value2) {
+  return value2 === "native" || value2 === "adopted";
+}
+function notRegistered(message2) {
+  return new ServiceError(message2, NO_EXECUTION_TARGET_REGISTERED, 409);
+}
+async function resolveExplicitTarget({
+  ctx,
+  executionTargetId
+}) {
+  const row = await ctx.db.get(
+    `SELECT et.id, et.device_id, et.type, et.status, et.label, d.fingerprint
+       FROM execution_targets et
+       LEFT JOIN devices d
+         ON d.id = et.device_id
+        AND d.workspace_id = et.workspace_id
+        AND d.deleted_at IS NULL
+      WHERE et.id = ? AND et.workspace_id = ? AND et.deleted_at IS NULL`,
+    [executionTargetId, ctx.workspace.id]
+  );
+  if (!row) {
+    throw notRegistered(
+      `Execution target ${executionTargetId} does not exist in this workspace. A runner never creates one \u2014 register the machine with \`ovld add-et\` and pass its id.`
+    );
+  }
+  if (row.type !== "local") {
+    throw notRegistered(
+      `Execution target ${executionTargetId} is a ${row.type} target. Only local targets are served by a device runner.`
+    );
+  }
+  if (row.status !== "active") {
+    throw notRegistered(
+      `Execution target "${row.label}" is ${row.status}. Enable it before a runner can serve it.`
+    );
+  }
+  if (!ctx.actorWorkspaceUserId) {
+    throw notRegistered("This runner has no workspace membership to claim work with.");
+  }
+  const access = await ctx.db.get(
+    `SELECT id FROM workspace_user_execution_targets
+        WHERE workspace_id = ? AND workspace_user_id = ? AND execution_target_id = ?
+          AND access_status = 'active' AND deleted_at IS NULL`,
+    [ctx.workspace.id, ctx.actorWorkspaceUserId, row.id]
+  );
+  if (!access) {
+    throw notRegistered(
+      `You do not have access to execution target "${row.label}", so this runner cannot serve it.`
+    );
+  }
+  return row;
+}
+async function assertTargetEnabled({
+  ctx,
+  executionTargetId
+}) {
+  const row = await ctx.db.get(
+    `SELECT status, label FROM execution_targets
+        WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
+    [executionTargetId, ctx.workspace.id]
+  );
+  if (row && row.status !== "active") {
+    throw notRegistered(
+      `Execution target "${row.label}" is ${row.status}. Enable it before a runner can serve it.`
+    );
+  }
+}
+async function resolveRunnerTarget({
+  ctx,
+  input: input2,
+  actingTarget
+}) {
+  const explicitId = trimmedOrNull(input2.executionTargetId);
+  if (!explicitId) {
+    const target = actingTarget ?? await resolveClaimingDeviceTarget({ ctx });
+    await assertTargetEnabled({ ctx, executionTargetId: target.executionTargetId });
+    return {
+      executionTargetId: target.executionTargetId,
+      deviceId: target.deviceId,
+      relation: input2.relation ?? "native",
+      matchesActingDevice: true
+    };
+  }
+  const row = await resolveExplicitTarget({ ctx, executionTargetId: explicitId });
+  const acting = actingTarget === void 0 ? await findActingDeviceTarget({ ctx }) : actingTarget;
+  const isOwnMachine = acting !== null && acting?.executionTargetId === row.id;
+  return {
+    executionTargetId: row.id,
+    deviceId: row.device_id,
+    relation: input2.relation ?? (isOwnMachine ? "native" : "adopted"),
+    matchesActingDevice: isOwnMachine
+  };
+}
+async function recordRunnerHeartbeat({
+  ctx,
+  executionTargetId,
+  runnerInstanceId,
+  relation,
+  label,
+  runnerVersion,
+  capabilities: capabilities2,
+  supportedAgents,
+  health = "healthy",
+  lastErrorCode = null
+}) {
+  return ctx.db.transaction(async (db) => {
+    ctx = { ...ctx, db };
+    const capabilitiesJson = JSON.stringify(capabilities2 ?? {});
+    const supportedAgentsJson = JSON.stringify(supportedAgents ?? []);
+    const existing = await ctx.db.get(
+      `SELECT id, revision, health, last_heartbeat_at, execution_target_id, relation, label,
+            runner_version, capabilities_json, supported_agents_json, last_error_code
+       FROM execution_target_runner_registrations
+        WHERE workspace_id = ? AND runner_instance_id = ? AND deleted_at IS NULL${db.dialect === "postgres" ? " FOR UPDATE" : ""}`,
+      [ctx.workspace.id, runnerInstanceId]
+    );
+    const now2 = nowIso();
+    const reconnected = !existing || existing.health !== health && health === "healthy" || isStaleHeartbeat(existing.last_heartbeat_at, now2);
+    if (existing) {
+      const changedFields = [];
+      if (existing.execution_target_id !== executionTargetId)
+        changedFields.push("execution_target_id");
+      if (existing.relation !== relation) changedFields.push("relation");
+      if (existing.label !== trimmedOrNull(label)) changedFields.push("label");
+      if (existing.runner_version !== trimmedOrNull(runnerVersion))
+        changedFields.push("runner_version");
+      const jsonChanged = (stored, value2) => {
+        try {
+          return !(0, import_node_util2.isDeepStrictEqual)(JSON.parse(stored), value2);
+        } catch {
+          return true;
+        }
+      };
+      if (jsonChanged(existing.capabilities_json, capabilities2 ?? {}))
+        changedFields.push("capabilities");
+      if (jsonChanged(existing.supported_agents_json, supportedAgents ?? []))
+        changedFields.push("supported_agents");
+      if (existing.health !== health) changedFields.push("health");
+      if (existing.last_error_code !== lastErrorCode) changedFields.push("last_error_code");
+      await ctx.db.run(
+        `UPDATE execution_target_runner_registrations
+          SET execution_target_id = ?, relation = ?, label = ?, runner_version = ?,
+              capabilities_json = ?, supported_agents_json = ?, health = ?,
+              last_heartbeat_at = ?, last_error_code = ?, updated_at = ?,
+              revision = revision + 1
+        WHERE id = ?`,
+        [
+          executionTargetId,
+          relation,
+          trimmedOrNull(label),
+          trimmedOrNull(runnerVersion),
+          capabilitiesJson,
+          supportedAgentsJson,
+          health,
+          now2,
+          lastErrorCode,
+          now2,
+          existing.id
+        ]
+      );
+      if (changedFields.length || reconnected)
+        await recordChange({
+          ctx,
+          entityType: "execution_target_runner_registration",
+          entityId: existing.id,
+          operation: "update",
+          entityRevision: existing.revision + 1,
+          changedFields: [...changedFields, "last_heartbeat_at"]
+        });
+      if (reconnected) await enqueueRunQueueDispatchForWorkspace(ctx.db, ctx.workspace.id);
+      return {
+        id: existing.id,
+        executionTargetId,
+        runnerInstanceId,
+        relation,
+        label: trimmedOrNull(label),
+        runnerVersion: trimmedOrNull(runnerVersion),
+        supportedAgents: supportedAgents ?? [],
+        health,
+        lastHeartbeatAt: now2,
+        lastErrorCode
+      };
+    }
+    const id2 = newId();
+    await ctx.db.run(
+      `INSERT INTO execution_target_runner_registrations
+        (id, workspace_id, execution_target_id, runner_instance_id, relation, label,
+         runner_version, capabilities_json, supported_agents_json, health,
+         last_heartbeat_at, last_error_code, created_at, updated_at, revision)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+      [
+        id2,
+        ctx.workspace.id,
+        executionTargetId,
+        runnerInstanceId,
+        relation,
+        trimmedOrNull(label),
+        trimmedOrNull(runnerVersion),
+        capabilitiesJson,
+        supportedAgentsJson,
+        health,
+        now2,
+        lastErrorCode,
+        now2,
+        now2
+      ]
+    );
+    await recordChange({
+      ctx,
+      entityType: "execution_target_runner_registration",
+      entityId: id2,
+      operation: "insert",
+      entityRevision: 1
+    });
+    if (reconnected) await enqueueRunQueueDispatchForWorkspace(ctx.db, ctx.workspace.id);
+    return {
+      id: id2,
+      executionTargetId,
+      runnerInstanceId,
+      relation,
+      label: trimmedOrNull(label),
+      runnerVersion: trimmedOrNull(runnerVersion),
+      supportedAgents: supportedAgents ?? [],
+      health,
+      lastHeartbeatAt: now2,
+      lastErrorCode
+    };
+  });
+}
+async function listRunnerRegistrations({
+  ctx,
+  executionTargetIds
+}) {
+  const result2 = /* @__PURE__ */ new Map();
+  const ids = [...new Set(executionTargetIds.filter(Boolean))];
+  if (!ids.length) return result2;
+  const rows = await ctx.db.all(
+    `SELECT id, execution_target_id, runner_instance_id, relation, label, runner_version,
+            supported_agents_json, health, last_heartbeat_at, last_error_code
+       FROM execution_target_runner_registrations
+      WHERE workspace_id = ? AND deleted_at IS NULL AND execution_target_id IN (${ids.map(() => "?").join(", ")})
+      ORDER BY last_heartbeat_at DESC, created_at ASC`,
+    [ctx.workspace.id, ...ids]
+  );
+  for (const row of rows) {
+    let supportedAgents = [];
+    try {
+      const parsed = JSON.parse(row.supported_agents_json);
+      supportedAgents = Array.isArray(parsed) ? parsed.filter((value2) => typeof value2 === "string") : [];
+    } catch {
+    }
+    const registrations = result2.get(row.execution_target_id) ?? [];
+    registrations.push({
+      id: row.id,
+      executionTargetId: row.execution_target_id,
+      runnerInstanceId: row.runner_instance_id,
+      relation: row.relation,
+      label: row.label,
+      runnerVersion: row.runner_version,
+      supportedAgents,
+      health: row.health,
+      lastHeartbeatAt: row.last_heartbeat_at,
+      lastErrorCode: row.last_error_code
+    });
+    result2.set(row.execution_target_id, registrations);
+  }
+  return result2;
+}
+function emptyLiveness() {
+  return {
+    hasRegistration: false,
+    live: false,
+    lastHeartbeatAt: null,
+    nativeCount: 0,
+    adoptedCount: 0
+  };
+}
+async function readRunnerLiveness({
+  ctx,
+  executionTargetIds,
+  now: now2 = Date.now()
+}) {
+  const liveness = /* @__PURE__ */ new Map();
+  const unique = [...new Set(executionTargetIds.filter((id2) => id2))];
+  if (unique.length === 0) return liveness;
+  const placeholders = unique.map(() => "?").join(", ");
+  const rows = await ctx.db.all(
+    `SELECT execution_target_id, relation, health, last_heartbeat_at
+       FROM execution_target_runner_registrations
+      WHERE workspace_id = ? AND deleted_at IS NULL
+        AND execution_target_id IN (${placeholders})`,
+    [ctx.workspace.id, ...unique]
+  );
+  for (const row of rows) {
+    const entry = liveness.get(row.execution_target_id) ?? emptyLiveness();
+    entry.hasRegistration = true;
+    if (row.relation === "adopted") entry.adoptedCount += 1;
+    else entry.nativeCount += 1;
+    const heartbeat = row.last_heartbeat_at;
+    if (heartbeat && (!entry.lastHeartbeatAt || heartbeat > entry.lastHeartbeatAt)) {
+      entry.lastHeartbeatAt = heartbeat;
+    }
+    const healthy = LIVE_RUNNER_HEALTH.includes(row.health);
+    const recent = heartbeat !== null && now2 - new Date(heartbeat).getTime() < RUNNER_HEARTBEAT_STALE_MS;
+    if (healthy && recent) entry.live = true;
+    liveness.set(row.execution_target_id, entry);
+  }
+  return liveness;
+}
+
+// ../packages/core/service/records.ts
+function asRecord(value2) {
+  return value2 && typeof value2 === "object" && !Array.isArray(value2) ? value2 : {};
+}
+function parseMetadataJson(json2) {
+  try {
+    return asRecord(JSON.parse(json2));
+  } catch {
+    return {};
+  }
+}
+
+// ../packages/core/service/project-resource-read-bindings.ts
+var READ_PROJECT_RESOURCE = "readProjectResource";
+var PROJECT_RESOURCE_READ_JOB_KEY = "project-resource-read";
+var PROJECT_RESOURCE_READ_TIMEOUT_MS = 3e4;
+async function listProjectResourceReadCatalog(ctx, projectId) {
+  const rows = await ctx.db.all(
+    `SELECT pr.id AS resource_id, pr.resource_key, pr.label,
+            CASE WHEN EXISTS (
+              SELECT 1 FROM project_resource_sources git
+               WHERE git.resource_id = pr.id AND git.project_id = pr.project_id
+                 AND git.workspace_id = pr.workspace_id AND git.deleted_at IS NULL
+                 AND git.source_kind = 'git' AND git.execution_target_id IS NULL
+            ) THEN 1 ELSE 0 END AS has_git,
+            s.id AS source_id, s.revision AS source_revision, t.id AS target_id, t.label AS target_label
+       FROM project_resources pr
+       LEFT JOIN (
+         project_resource_sources s
+         JOIN execution_targets t
+           ON t.id = s.execution_target_id AND t.workspace_id = s.workspace_id
+          AND t.type = 'local' AND t.status = 'active' AND t.deleted_at IS NULL
+         JOIN workspace_user_execution_targets access
+           ON access.execution_target_id = t.id AND access.workspace_id = t.workspace_id
+          AND access.workspace_user_id = ? AND access.access_status = 'active'
+          AND access.deleted_at IS NULL
+         JOIN workspace_users member
+           ON member.id = access.workspace_user_id AND member.workspace_id = t.workspace_id
+          AND member.status = 'active' AND member.deleted_at IS NULL
+       ) ON s.resource_id = pr.id AND s.project_id = pr.project_id
+        AND s.workspace_id = pr.workspace_id AND s.source_kind = 'local_checkout'
+        AND s.deleted_at IS NULL
+      WHERE pr.workspace_id = ? AND pr.project_id = ? AND pr.deleted_at IS NULL
+        AND pr.status <> 'archived'
+      ORDER BY pr.resource_key, t.label, t.id`,
+    [ctx.actorWorkspaceUserId, ctx.workspace.id, projectId]
+  );
+  const targetIds = [...new Set(rows.flatMap((row) => row.target_id ? [row.target_id] : []))];
+  const live = /* @__PURE__ */ new Map();
+  if (targetIds.length > 0) {
+    const registrations = await ctx.db.all(
+      `SELECT r.execution_target_id, r.capabilities_json
+         FROM execution_target_runner_registrations r
+        WHERE r.workspace_id = ? AND r.deleted_at IS NULL AND r.relation = 'native'
+          AND r.health IN ('healthy', 'degraded') AND r.last_heartbeat_at >= ?
+          AND r.execution_target_id IN (${targetIds.map(() => "?").join(", ")})`,
+      [
+        ctx.workspace.id,
+        new Date(Date.now() - RUNNER_HEARTBEAT_STALE_MS).toISOString(),
+        ...targetIds
+      ]
+    );
+    for (const registration of registrations) {
+      const capabilities2 = typeof registration.capabilities_json === "string" ? parseMetadataJson(registration.capabilities_json) : asRecord(registration.capabilities_json);
+      const supported2 = capabilities2[PROJECT_RESOURCE_READ_CAPABILITY] === true;
+      live.set(
+        registration.execution_target_id,
+        supported2 || live.get(registration.execution_target_id) === true
+      );
+    }
+  }
+  const resources = /* @__PURE__ */ new Map();
+  for (const row of rows) {
+    let resource = resources.get(row.resource_id);
+    if (!resource) {
+      resource = {
+        id: row.resource_id,
+        resourceKey: row.resource_key,
+        label: row.label,
+        hasGitSource: Boolean(row.has_git),
+        sources: []
+      };
+      resources.set(row.resource_id, resource);
+    }
+    if (row.source_id && row.source_revision !== null && row.target_id && row.target_label !== null) {
+      const supported2 = live.get(row.target_id);
+      resource.sources.push({
+        sourceId: row.source_id,
+        sourceRevision: row.source_revision,
+        executionTargetId: row.target_id,
+        targetLabel: row.target_label,
+        availability: supported2 === void 0 ? "target_offline" : supported2 ? "ready" : "unsupported"
+      });
+    }
+  }
+  return [...resources.values()];
+}
+async function resolveProjectResourceReadSource({
+  ctx,
+  projectId,
+  source,
+  actor = ctx.actorWorkspaceUserId
+}) {
+  if (!actor) return null;
+  const row = await ctx.db.get(
+    `SELECT pr.id AS resource_id, s.descriptor_json
+       FROM project_resource_sources s
+       JOIN projects p ON p.id = s.project_id AND p.workspace_id = s.workspace_id AND p.deleted_at IS NULL
+       JOIN project_resources pr ON pr.id = s.resource_id AND pr.project_id = s.project_id
+        AND pr.workspace_id = s.workspace_id AND pr.deleted_at IS NULL AND pr.status <> 'archived'
+       JOIN execution_targets t ON t.id = s.execution_target_id AND t.workspace_id = s.workspace_id
+        AND t.type = 'local' AND t.status = 'active' AND t.deleted_at IS NULL
+       JOIN workspace_user_execution_targets access
+         ON access.execution_target_id = t.id AND access.workspace_id = t.workspace_id
+        AND access.workspace_user_id = ? AND access.access_status = 'active' AND access.deleted_at IS NULL
+       JOIN workspace_users member
+         ON member.id = access.workspace_user_id AND member.workspace_id = t.workspace_id
+        AND member.status = 'active' AND member.deleted_at IS NULL
+      WHERE s.workspace_id = ? AND s.project_id = ? AND pr.resource_key = ?
+        AND s.execution_target_id = ? AND s.id = ? AND s.revision = ?
+        AND s.source_kind = 'local_checkout' AND s.deleted_at IS NULL`,
+    [
+      actor,
+      ctx.workspace.id,
+      projectId,
+      source.resourceKey,
+      source.executionTargetId,
+      source.sourceId,
+      source.sourceRevision
+    ]
+  );
+  if (!row) return null;
+  const roles = await ctx.db.all(
+    `SELECT role_key FROM role_assignments
+      WHERE workspace_id = ? AND workspace_user_id = ? AND deleted_at IS NULL`,
+    [ctx.workspace.id, actor]
+  );
+  if (!defaultAuthorizer.can(
+    makeActor(
+      actor,
+      roles.map((row2) => row2.role_key)
+    ),
+    PERMISSIONS.PROJECT_READ
+  ).allowed) {
+    return null;
+  }
+  const descriptor = typeof row.descriptor_json === "string" ? parseMetadataJson(row.descriptor_json) : asRecord(row.descriptor_json);
+  return typeof descriptor.path === "string" && (import_node_path19.default.posix.isAbsolute(descriptor.path) || import_node_path19.default.win32.isAbsolute(descriptor.path)) ? { resourceId: row.resource_id, repoPath: descriptor.path } : null;
+}
+
+// ../packages/core/service/live-activity-jobs.ts
+var LIVE_ACTIVITY_DISPATCH_JOB_TYPE = "overlord.live_activity.dispatch.v1";
+var LIVE_ACTIVITY_START_JOB_TYPE = "overlord.live_activity.start.v1";
+async function enqueueLiveActivityDispatchJob({
+  db,
+  workspaceId: workspaceId2,
+  profileId,
+  now: now2 = nowIso()
+}) {
+  const result2 = await enqueueWorkerJob({
+    db,
+    workspaceId: workspaceId2,
+    type: LIVE_ACTIVITY_DISPATCH_JOB_TYPE,
+    dedupeBy: { field: "profileId", value: profileId },
+    payload: { profileId },
+    priority: 40,
+    maxAttempts: 5,
+    now: now2
+  });
+  return result2.enqueued;
+}
+async function enqueueLiveActivityRefreshForMission({
+  db,
+  workspaceId: workspaceId2,
+  missionId,
+  now: now2 = nowIso()
+}) {
+  const profileId = await missionOwnerProfileId({ db, workspaceId: workspaceId2, missionId });
+  return profileId ? enqueueLiveActivityDispatchJob({ db, workspaceId: workspaceId2, profileId, now: now2 }) : false;
+}
+async function enqueueLiveActivityStartJob({
+  db,
+  workspaceId: workspaceId2,
+  profileId,
+  missionId,
+  now: now2 = nowIso()
+}) {
+  const result2 = await enqueueWorkerJob({
+    db,
+    workspaceId: workspaceId2,
+    type: LIVE_ACTIVITY_START_JOB_TYPE,
+    dedupeBy: { field: "profileId", value: profileId },
+    payload: { profileId, missionId },
+    priority: 40,
+    maxAttempts: 5,
+    now: now2
+  });
+  return result2.enqueued;
+}
+async function enqueueLiveActivityStartForMission({
+  db,
+  workspaceId: workspaceId2,
+  missionId,
+  now: now2 = nowIso()
+}) {
+  const profileId = await missionOwnerProfileId({ db, workspaceId: workspaceId2, missionId });
+  if (!profileId) return false;
+  await enqueueLiveActivityDispatchJob({ db, workspaceId: workspaceId2, profileId, now: now2 });
+  return enqueueLiveActivityStartJob({ db, workspaceId: workspaceId2, profileId, missionId, now: now2 });
+}
+
+// ../packages/core/service/agent-session/pure/window.ts
+var AWAY_DECISION_WINDOW_SECONDS = 30 * 60;
+
+// ../packages/core/service/agent-session/credential.ts
+var import_node_crypto14 = require("node:crypto");
+var SESSION_CHANNEL_TOKEN_PREFIX = "osc_";
+var SESSION_CHANNEL_TOKEN_HASH_ALGORITHM = "sha256";
+var SESSION_CHANNEL_LEASE_SECONDS = 180;
+var SESSION_CHANNEL_ABSOLUTE_LIFETIME_SECONDS = 60 * 60 * 24;
+function hashSessionChannelToken(rawToken) {
+  return (0, import_node_crypto14.createHash)(SESSION_CHANNEL_TOKEN_HASH_ALGORITHM).update(rawToken).digest("hex");
+}
+function generateSessionChannelToken() {
+  const prefix = `${SESSION_CHANNEL_TOKEN_PREFIX}${(0, import_node_crypto14.randomBytes)(4).toString("hex")}`;
+  const secret = `${prefix}${(0, import_node_crypto14.randomBytes)(32).toString("base64url")}`;
+  return { secret, prefix, hash: hashSessionChannelToken(secret) };
+}
+function addSeconds(iso2, seconds2) {
+  return new Date(new Date(iso2).getTime() + seconds2 * 1e3).toISOString();
+}
+function renewedExpiry({
+  now: now2,
+  createdAt,
+  leaseSeconds = SESSION_CHANNEL_LEASE_SECONDS
+}) {
+  const ceiling = new Date(
+    new Date(createdAt).getTime() + SESSION_CHANNEL_ABSOLUTE_LIFETIME_SECONDS * 1e3
+  );
+  const renewed = new Date(new Date(now2).getTime() + leaseSeconds * 1e3);
+  return (renewed < ceiling ? renewed : ceiling).toISOString();
+}
+
+// ../packages/core/service/agent-session/requests.ts
+var WAITER_LEASE_SECONDS = 20;
+var MAX_REQUEST_SUMMARY_LENGTH = 2e3;
+var MAX_REQUEST_OPTIONS = 12;
+var AGENT_REQUEST_KINDS = vocabulary()([
+  "question",
+  "permission",
+  "choice",
+  "retry"
+]);
+var RELEASE_REASONS = [
+  "timeout",
+  "local_activity",
+  "policy",
+  "interrupt",
+  "channel_ended"
+];
+var APPLICATION_STATES = ["emitted", "applied", "not_applied", "unknown"];
+var REQUEST_COLUMNS = `
+  id, workspace_id, project_id, mission_id, objective_id, channel_id, session_id,
+  kind, native_request_id, native_call_id, summary, details_json, options_json,
+  allows_free_text, status, resolution_json, resolved_by_workspace_user_id, resolved_at,
+  expires_at, window_expires_at, window_basis, first_viewed_at, released_reason,
+  waiter_lease_id, waiter_lease_expires_at, application_state, application_observed_at,
+  created_at, updated_at, revision
+`;
+function boundedSummary(value2) {
+  const trimmed = value2.trim();
+  if (!trimmed) throw new ServiceError("Request summary is required", "invalid_request", 400);
+  return trimmed.length <= MAX_REQUEST_SUMMARY_LENGTH ? trimmed : `${trimmed.slice(0, MAX_REQUEST_SUMMARY_LENGTH - 1)}\u2026`;
+}
+function boundedOptions(options) {
+  if (!options || options.length === 0) return "[]";
+  if (options.length > MAX_REQUEST_OPTIONS) {
+    throw new ServiceError(
+      `A request may carry at most ${MAX_REQUEST_OPTIONS} options`,
+      "invalid_request",
+      400
+    );
+  }
+  return JSON.stringify(
+    options.map((option) => ({
+      optionId: String(option.optionId).slice(0, 64),
+      label: String(option.label).slice(0, 200),
+      kind: String(option.kind).slice(0, 64)
+    }))
+  );
+}
+async function getRequest2({
+  ctx,
+  requestId
+}) {
+  const row = await ctx.db.get(
+    `SELECT ${REQUEST_COLUMNS} FROM agent_requests
+       WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
+    [requestId, ctx.workspace.id]
+  );
+  if (!row) throw new ServiceError("Request not found", "request_not_found", 404);
+  return row;
+}
+async function createRequest({
+  ctx,
+  channel,
+  kind,
+  summary,
+  details = {},
+  options = [],
+  allowsFreeText = false,
+  nativeRequestId = null,
+  nativeCallId = null,
+  sourceEventId = null,
+  windowExpiresAt = null,
+  windowBasis = null,
+  expiresAt = null
+}) {
+  if (nativeRequestId) {
+    const existing = await ctx.db.get(
+      `SELECT ${REQUEST_COLUMNS} FROM agent_requests
+         WHERE channel_id = ? AND native_request_id = ? AND deleted_at IS NULL`,
+      [channel.id, nativeRequestId]
+    );
+    if (existing) return existing;
+  }
+  const now2 = nowIso();
+  const id2 = newId();
+  await ctx.db.transaction(async (tx) => {
+    const txCtx = { ...ctx, db: tx };
+    await tx.run(
+      `INSERT INTO agent_requests (
+           id, workspace_id, project_id, mission_id, objective_id, channel_id, session_id,
+           source_event_id, kind, native_request_id, native_call_id,
+           summary, details_json, formatter_version, options_json, allows_free_text,
+           status, expires_at, window_expires_at, window_basis, application_state,
+           created_at, updated_at, revision
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, 'open', ?, ?, ?, 'pending', ?, ?, 1)`,
+      [
+        id2,
+        channel.workspace_id,
+        channel.project_id,
+        channel.mission_id,
+        channel.objective_id,
+        channel.id,
+        channel.session_id,
+        sourceEventId,
+        kind,
+        nativeRequestId,
+        nativeCallId,
+        boundedSummary(summary),
+        JSON.stringify(details ?? {}),
+        boundedOptions(options),
+        allowsFreeText ? 1 : 0,
+        expiresAt,
+        windowExpiresAt,
+        windowBasis,
+        now2,
+        now2
+      ]
+    );
+    await recordChange({
+      ctx: txCtx,
+      entityType: "agent_request",
+      entityId: id2,
+      operation: "insert",
+      entityRevision: 1,
+      projectId: channel.project_id,
+      missionId: channel.mission_id,
+      objectiveId: channel.objective_id
+    });
+  });
+  return await getRequest2({ ctx, requestId: id2 });
+}
+async function acquireWaiterLease({
+  ctx,
+  requestId,
+  leaseId = newId(),
+  leaseSeconds = WAITER_LEASE_SECONDS
+}) {
+  const now2 = nowIso();
+  const leaseExpiresAt = addSeconds(now2, leaseSeconds);
+  const updated = await ctx.db.run(
+    `UPDATE agent_requests
+        SET waiter_lease_id = ?, waiter_lease_expires_at = ?, updated_at = ?
+      WHERE id = ? AND workspace_id = ? AND status = 'open' AND deleted_at IS NULL
+        AND (
+          waiter_lease_id IS NULL
+          OR waiter_lease_id = ?
+          OR waiter_lease_expires_at IS NULL
+          OR waiter_lease_expires_at <= ?
+        )`,
+    [leaseId, leaseExpiresAt, now2, requestId, ctx.workspace.id, leaseId, now2]
+  );
+  if (updated.changes === 0) {
+    throw new ServiceError(
+      "Request is not open, or another waiter holds its lease",
+      "waiter_lease_unavailable",
+      409
+    );
+  }
+  return { leaseId, leaseExpiresAt, request: await getRequest2({ ctx, requestId }) };
+}
+async function releaseRequestToTerminal({
+  ctx,
+  requestId,
+  reason
+}) {
+  const now2 = nowIso();
+  const existing = await getRequest2({ ctx, requestId });
+  const released = await ctx.db.transaction(async (tx) => {
+    const txCtx = { ...ctx, db: tx };
+    const updated = await tx.run(
+      `UPDATE agent_requests
+          SET status = 'released_to_terminal', released_reason = ?,
+              waiter_lease_id = NULL, waiter_lease_expires_at = NULL,
+              updated_at = ?, revision = ?
+        WHERE id = ? AND status = 'open' AND revision = ?`,
+      [reason, now2, existing.revision + 1, requestId, existing.revision]
+    );
+    if (updated.changes === 0) return false;
+    await recordChange({
+      ctx: txCtx,
+      entityType: "agent_request",
+      entityId: requestId,
+      operation: "update",
+      entityRevision: existing.revision + 1,
+      projectId: existing.project_id,
+      missionId: existing.mission_id,
+      objectiveId: existing.objective_id,
+      changedFields: ["status", "released_reason"]
+    });
+    return true;
+  });
+  return { released, request: await getRequest2({ ctx, requestId }) };
+}
+async function markRequestResolvedElsewhere({
+  ctx,
+  requestId
+}) {
+  return releaseRequestToTerminal({ ctx, requestId, reason: "local_activity" }).then(
+    async (result2) => {
+      if (result2.released) {
+        await ctx.db.run(
+          `UPDATE agent_requests SET released_reason = 'resolved_elsewhere' WHERE id = ?`,
+          [requestId]
+        );
+        return { changed: true, request: await getRequest2({ ctx, requestId }) };
+      }
+      return { changed: false, request: result2.request };
+    }
+  );
+}
+async function resolveRequest({
+  ctx,
+  requestId,
+  resolution,
+  expectedRevision: expectedRevision2
+}) {
+  if (!ctx.actorWorkspaceUserId) {
+    throw new ServiceError(
+      "A request resolution requires an identified human actor",
+      "resolver_required",
+      403
+    );
+  }
+  return await ctx.db.transaction(async (tx) => {
+    const txCtx = { ...ctx, db: tx };
+    const existing = await getRequest2({ ctx: txCtx, requestId });
+    if (expectedRevision2 !== void 0 && expectedRevision2 !== existing.revision) {
+      throw new ServiceError("Request changed since it was read", "agent_request_conflict", 409);
+    }
+    const now2 = nowIso();
+    const isQuestion = existing.kind === "question" || existing.kind === "choice";
+    const updated = await tx.run(
+      `UPDATE agent_requests
+          SET status = 'resolved', resolution_json = ?, resolved_by_workspace_user_id = ?,
+              resolved_at = ?, waiter_lease_id = NULL, waiter_lease_expires_at = NULL,
+              application_state = CASE WHEN kind IN ('question', 'choice') THEN 'emitted' ELSE application_state END,
+              application_observed_at = CASE WHEN kind IN ('question', 'choice') THEN NULL ELSE application_observed_at END,
+              updated_at = ?, revision = ?
+        WHERE id = ? AND status = 'open' AND revision = ?`,
+      [
+        JSON.stringify(resolution),
+        ctx.actorWorkspaceUserId,
+        now2,
+        now2,
+        existing.revision + 1,
+        requestId,
+        existing.revision
+      ]
+    );
+    if (updated.changes === 0) {
+      return { resolved: false, request: await getRequest2({ ctx: txCtx, requestId }) };
+    }
+    await recordChange({
+      ctx: txCtx,
+      entityType: "agent_request",
+      entityId: requestId,
+      operation: "update",
+      entityRevision: existing.revision + 1,
+      projectId: existing.project_id,
+      missionId: existing.mission_id,
+      objectiveId: existing.objective_id,
+      changedFields: [
+        "status",
+        "resolution_json",
+        "resolved_by_workspace_user_id",
+        ...isQuestion ? ["application_state"] : []
+      ]
+    });
+    if (isQuestion && existing.mission_id && existing.project_id && existing.session_id) {
+      const details = parseMetadataJson(existing.details_json);
+      const optionId = typeof resolution.optionId === "string" ? resolution.optionId : null;
+      const options = parseOptions(existing.options_json);
+      const option = optionId ? options.find((candidate) => candidate.optionId === optionId) : null;
+      const text = typeof resolution.text === "string" ? resolution.text.trim() : "";
+      const answerEventId = newId();
+      await tx.run(
+        `INSERT INTO mission_events
+             (id, workspace_id, project_id, mission_id, objective_id, session_id,
+              type, phase, summary, payload_json, source, actor_workspace_user_id, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, 'answer', 'execute', ?, ?, ?, ?, ?)`,
+        [
+          answerEventId,
+          ctx.workspace.id,
+          existing.project_id,
+          existing.mission_id,
+          existing.objective_id,
+          existing.session_id,
+          (option?.label ?? text) || "Answer received",
+          JSON.stringify({
+            agentRequestId: existing.id,
+            ...optionId ? { optionId } : {},
+            ...typeof details.missionEventId === "string" ? { missionEventId: details.missionEventId } : {}
+          }),
+          ctx.source,
+          ctx.actorWorkspaceUserId,
+          now2
+        ]
+      );
+      await recordChange({
+        ctx: txCtx,
+        entityType: "mission_event",
+        entityId: answerEventId,
+        operation: "insert",
+        projectId: existing.project_id,
+        missionId: existing.mission_id,
+        objectiveId: existing.objective_id
+      });
+      await tx.run(
+        `UPDATE agent_sessions
+            SET phase = 'execute', updated_at = ?, revision = revision + 1
+          WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
+        [now2, existing.session_id, ctx.workspace.id]
+      );
+      await tx.run(
+        `DELETE FROM mission_status_seen WHERE mission_id = ? AND status_id = 'blocking_question'`,
+        [existing.mission_id]
+      );
+      await enqueueWebhookEvent(txCtx, {
+        type: "mission.unblocked",
+        projectId: existing.project_id,
+        entity: {
+          missionId: existing.mission_id,
+          objectiveId: existing.objective_id,
+          sessionId: existing.session_id
+        }
+      });
+      await enqueueLiveActivityRefreshForMission({
+        db: tx,
+        workspaceId: ctx.workspace.id,
+        missionId: existing.mission_id,
+        now: now2
+      });
+    }
+    return { resolved: true, request: await getRequest2({ ctx: txCtx, requestId }) };
+  });
+}
+function parseOptions(value2) {
+  try {
+    const parsed = JSON.parse(value2);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+async function recordRequestApplication({
+  ctx,
+  requestId,
+  applicationState
+}) {
+  const now2 = nowIso();
+  await ctx.db.run(
+    `UPDATE agent_requests
+        SET application_state = ?, application_observed_at = ?, updated_at = ?
+      WHERE id = ? AND workspace_id = ?`,
+    [applicationState, now2, now2, requestId, ctx.workspace.id]
+  );
+}
+function dismissalTimestamp(value2) {
+  return value2 instanceof Date ? value2.toISOString() : String(value2);
+}
+async function readRequestDismissals({
+  db,
+  workspaceUserIds,
+  requests
+}) {
+  const result2 = /* @__PURE__ */ new Map();
+  if (workspaceUserIds.length === 0 || requests.length === 0) return result2;
+  const revisionById = new Map(requests.map((request) => [request.id, request.revision]));
+  const ids = [...revisionById.keys()];
+  const rows = await db.all(
+    `SELECT agent_request_id, dismissed_revision, dismissed_at FROM agent_request_dismissals
+      WHERE workspace_user_id IN (${workspaceUserIds.map(() => "?").join(", ")})
+        AND agent_request_id IN (${ids.map(() => "?").join(", ")})`,
+    [...workspaceUserIds, ...ids]
+  );
+  for (const row of rows) {
+    if (Number(row.dismissed_revision) !== revisionById.get(row.agent_request_id)) continue;
+    result2.set(row.agent_request_id, {
+      dismissedRevision: Number(row.dismissed_revision),
+      dismissedAt: dismissalTimestamp(row.dismissed_at)
+    });
+  }
+  return result2;
+}
+async function setRequestDismissal({
+  ctx,
+  requestId,
+  dismissed,
+  expectedRevision: expectedRevision2
+}) {
+  const workspaceUserId = ctx.actorWorkspaceUserId;
+  if (!workspaceUserId) {
+    throw new ServiceError(
+      "Dismissing a request requires an identified workspace member",
+      "actor_required",
+      403
+    );
+  }
+  return await ctx.db.transaction(async (tx) => {
+    const txCtx = { ...ctx, db: tx };
+    const request = await getRequest2({ ctx: txCtx, requestId });
+    const current = await tx.get(
+      `SELECT dismissed_revision FROM agent_request_dismissals
+        WHERE agent_request_id = ? AND workspace_user_id = ?`,
+      [requestId, workspaceUserId]
+    );
+    let changed = false;
+    if (dismissed) {
+      if (request.status !== "open") {
+        throw new ServiceError(
+          "Only an open request can be dismissed",
+          "agent_request_not_open",
+          409
+        );
+      }
+      if (expectedRevision2 !== void 0 && expectedRevision2 !== request.revision) {
+        throw new ServiceError("Request changed since it was read", "agent_request_conflict", 409);
+      }
+      if (!current || Number(current.dismissed_revision) !== request.revision) {
+        await tx.run(
+          `INSERT INTO agent_request_dismissals
+               (agent_request_id, workspace_user_id, dismissed_revision, dismissed_at)
+             VALUES (?, ?, ?, ?)
+             ON CONFLICT (agent_request_id, workspace_user_id)
+             DO UPDATE SET dismissed_revision = excluded.dismissed_revision,
+                           dismissed_at = excluded.dismissed_at`,
+          [requestId, workspaceUserId, request.revision, nowIso()]
+        );
+        changed = true;
+      }
+    } else if (current) {
+      await tx.run(
+        `DELETE FROM agent_request_dismissals
+          WHERE agent_request_id = ? AND workspace_user_id = ?`,
+        [requestId, workspaceUserId]
+      );
+      changed = Number(current.dismissed_revision) === request.revision;
+    }
+    if (changed) {
+      await recordChange({
+        ctx: txCtx,
+        entityType: "agent_request",
+        entityId: requestId,
+        operation: "update",
+        entityRevision: request.revision,
+        projectId: request.project_id,
+        missionId: request.mission_id,
+        objectiveId: request.objective_id,
+        changedFields: ["dismissal"]
+      });
+    }
+    const dismissals = await readRequestDismissals({
+      db: tx,
+      workspaceUserIds: [workspaceUserId],
+      requests: [request]
+    });
+    return { changed, request, dismissal: dismissals.get(requestId) ?? null };
+  });
+}
+
+// ../packages/core/service/agent-session/answer-delivery.ts
+var MAX_DELIVERY_FAILURE_MESSAGE_LENGTH = 300;
+var ANSWER_DELIVERY_DEADLINE_MS = 5 * 6e4;
+function boundedMessage(value2) {
+  if (typeof value2 !== "string") return null;
+  const trimmed = value2.trim();
+  if (!trimmed) return null;
+  return trimmed.length <= MAX_DELIVERY_FAILURE_MESSAGE_LENGTH ? trimmed : `${trimmed.slice(0, MAX_DELIVERY_FAILURE_MESSAGE_LENGTH - 1)}\u2026`;
+}
+function readAnswerDelivery(request) {
+  const raw = parseMetadataJson(request.details_json).delivery;
+  const record2 = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
+  const attempt = typeof record2.attempt === "number" && Number.isInteger(record2.attempt) && record2.attempt >= 1 ? record2.attempt : 1;
+  return {
+    attempt,
+    failureCode: typeof record2.failureCode === "string" ? record2.failureCode : null,
+    failureMessage: boundedMessage(record2.failureMessage)
+  };
+}
+function detailsWithDelivery(request, record2) {
+  return JSON.stringify({ ...parseMetadataJson(request.details_json), delivery: record2 });
+}
+var OPERATION_ATTEMPT_SEPARATOR = ".";
+function answerOperationId(requestId, attempt) {
+  return attempt <= 1 ? requestId : `${requestId}${OPERATION_ATTEMPT_SEPARATOR}${attempt}`;
+}
+function parseAnswerOperationId(operationId) {
+  const value2 = operationId.trim();
+  if (!value2) return null;
+  const separator = value2.lastIndexOf(OPERATION_ATTEMPT_SEPARATOR);
+  if (separator === -1) return { requestId: value2, attempt: 1 };
+  const suffix = value2.slice(separator + 1);
+  if (!/^[1-9]\d{0,3}$/.test(suffix)) return null;
+  return { requestId: value2.slice(0, separator), attempt: Number(suffix) };
+}
+function failureCodeFromMessage(code, message2) {
+  if (code === "LATCH_SESSION_ABSENT") return "session_absent";
+  if (/gateway|latch serve|not reachable|token/i.test(message2)) return "gateway_unavailable";
+  if (/deadline/i.test(message2)) return "deadline_passed";
+  return "delivery_failed";
+}
+function answerDeliveryOutcomeFromResult(result2) {
+  if (result2.ok) {
+    const status = result2.value?.status;
+    const reason = boundedMessage(result2.value?.reason);
+    if (status === "accepted") return { state: "applied", failureCode: null, failureMessage: null };
+    if (status === "refused") {
+      return {
+        state: "not_applied",
+        failureCode: /exited|unknown conversation|no such session/i.test(reason ?? "") ? "session_ended" : /deadline/i.test(reason ?? "") ? "deadline_passed" : "latch_refused",
+        failureMessage: reason ?? "Latch did not accept the answer for this session."
+      };
+    }
+    return {
+      state: "unknown",
+      failureCode: "unconfirmed",
+      failureMessage: reason ?? "Latch did not confirm that the answer was delivered."
+    };
+  }
+  if (result2.code === "LOCAL_TARGET_TIMEOUT") return null;
+  const details = result2.details && typeof result2.details === "object" && !Array.isArray(result2.details) ? result2.details : {};
+  if (typeof details.status === "string") {
+    if (details.status === "cancelled") {
+      return {
+        state: "not_applied",
+        failureCode: "not_dispatched",
+        failureMessage: "The execution machine did not pick up the answer. Check that its runner is online."
+      };
+    }
+    return {
+      state: "unknown",
+      failureCode: "runner_lost",
+      failureMessage: "The execution machine took the answer and did not report back. It may have been delivered."
+    };
+  }
+  return {
+    state: "not_applied",
+    failureCode: failureCodeFromMessage(result2.code, result2.message),
+    failureMessage: boundedMessage(result2.message) ?? "The answer could not be delivered."
+  };
+}
+async function recordAnswerDeliveryOutcome({
+  ctx,
+  requestId,
+  attempt,
+  outcome
+}) {
+  if (outcome.state === "emitted") return { changed: false };
+  const row = await ctx.db.get(
+    `SELECT id, workspace_id, project_id, mission_id, objective_id, details_json, revision,
+            application_state, status
+       FROM agent_requests WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
+    [requestId, ctx.workspace.id]
+  );
+  if (!row || row.status !== "resolved" || row.application_state !== "emitted") {
+    return { changed: false };
+  }
+  const current = readAnswerDelivery(row);
+  if (current.attempt !== attempt) return { changed: false };
+  const now2 = nowIso();
+  const updated = await ctx.db.run(
+    `UPDATE agent_requests
+        SET application_state = ?, application_observed_at = ?, details_json = ?, updated_at = ?
+      WHERE id = ? AND workspace_id = ? AND status = 'resolved'
+        AND application_state = 'emitted' AND revision = ?`,
+    [
+      outcome.state,
+      now2,
+      detailsWithDelivery(row, {
+        attempt,
+        failureCode: outcome.failureCode,
+        failureMessage: outcome.failureMessage
+      }),
+      now2,
+      requestId,
+      ctx.workspace.id,
+      row.revision
+    ]
+  );
+  if (updated.changes === 0) return { changed: false };
+  await recordChange({
+    ctx,
+    entityType: "agent_request",
+    entityId: requestId,
+    operation: "update",
+    entityRevision: row.revision,
+    projectId: row.project_id,
+    missionId: row.mission_id,
+    objectiveId: row.objective_id,
+    changedFields: ["application_state"]
+  });
+  return { changed: true };
+}
+async function recordAnswerDeliveryResult({
+  ctx,
+  operationId,
+  result: result2
+}) {
+  const parsed = parseAnswerOperationId(operationId);
+  const outcome = answerDeliveryOutcomeFromResult(result2);
+  if (!parsed || !outcome) return { changed: false };
+  return await recordAnswerDeliveryOutcome({
+    ctx,
+    requestId: parsed.requestId,
+    attempt: parsed.attempt,
+    outcome
+  });
+}
+async function beginAnswerRedelivery({
+  ctx,
+  requestId,
+  expectedAttempt,
+  confirmUnconfirmed = false
+}) {
+  const request = await getRequest2({ ctx, requestId });
+  if (request.kind !== "question" && request.kind !== "choice") {
+    throw new ServiceError("Only an answer can be redelivered", "request_not_deliverable", 409);
+  }
+  const current = readAnswerDelivery(request);
+  if (current.attempt !== expectedAttempt) {
+    throw new ServiceError(
+      "Delivery changed since it was read",
+      "agent_request_delivery_conflict",
+      409
+    );
+  }
+  if (request.status !== "resolved") {
+    throw new ServiceError("The request has no recorded answer", "request_not_deliverable", 409);
+  }
+  if (request.application_state === "unknown") {
+    if (!confirmUnconfirmed) {
+      throw new ServiceError(
+        "The previous delivery may have reached the agent. Check the session, then confirm.",
+        "delivery_confirmation_required",
+        409
+      );
+    }
+  } else if (request.application_state !== "not_applied") {
+    throw new ServiceError(
+      request.application_state === "applied" ? "The answer was already delivered" : "A delivery is already in progress",
+      "agent_request_delivery_conflict",
+      409
+    );
+  }
+  const attempt = current.attempt + 1;
+  if (attempt > 9999) {
+    throw new ServiceError("Too many delivery attempts", "request_not_deliverable", 409);
+  }
+  const now2 = nowIso();
+  const updated = await ctx.db.run(
+    `UPDATE agent_requests
+        SET application_state = 'emitted', application_observed_at = NULL, details_json = ?,
+            updated_at = ?, revision = ?
+      WHERE id = ? AND workspace_id = ? AND status = 'resolved'
+        AND application_state = ? AND revision = ?`,
+    [
+      detailsWithDelivery(request, { attempt, failureCode: null, failureMessage: null }),
+      now2,
+      request.revision + 1,
+      requestId,
+      ctx.workspace.id,
+      request.application_state,
+      request.revision
+    ]
+  );
+  if (updated.changes === 0) {
+    throw new ServiceError(
+      "Delivery changed since it was read",
+      "agent_request_delivery_conflict",
+      409
+    );
+  }
+  await recordChange({
+    ctx,
+    entityType: "agent_request",
+    entityId: requestId,
+    operation: "update",
+    entityRevision: request.revision + 1,
+    projectId: request.project_id,
+    missionId: request.mission_id,
+    objectiveId: request.objective_id,
+    changedFields: ["application_state"]
+  });
+  return {
+    request: await getRequest2({ ctx, requestId }),
+    attempt,
+    previousAttempt: current.attempt
+  };
+}
+function answerTextFromResolution(request) {
+  const resolution = request.resolution_json ? parseMetadataJson(request.resolution_json) : {};
+  const text = typeof resolution.text === "string" ? resolution.text.trim() : "";
+  if (text) return text;
+  const optionId = typeof resolution.optionId === "string" ? resolution.optionId.trim() : "";
+  if (optionId) {
+    try {
+      const options = JSON.parse(request.options_json);
+      if (Array.isArray(options)) {
+        const match = options.find(
+          (option) => option !== null && typeof option === "object" && option.optionId === optionId
+        );
+        if (typeof match?.label === "string" && match.label.trim()) return match.label.trim();
+      }
+    } catch {
+    }
+  }
+  return "Answer received";
+}
+
+// ../packages/core/service/local-target/types.ts
+var LOCAL_TARGET_ERROR_CODES = [
+  "LOCAL_TARGET_REQUIRED",
+  "LOCAL_TARGET_UNREACHABLE",
+  "RESOURCE_MISSING",
+  "NOT_GIT_REPOSITORY",
+  "PERMISSION_DENIED",
+  "GIT_COMMAND_FAILED",
+  "CAPABILITY_NOT_IMPLEMENTED",
+  "LOCAL_TARGET_TIMEOUT",
+  "LOCAL_TARGET_UNSUPPORTED",
+  "TARGET_OPERATION_FAILED",
+  "LATCH_SESSION_ABSENT",
+  "UNKNOWN"
+];
+function toLocalTargetErrorCode(value2) {
+  return typeof value2 === "string" && LOCAL_TARGET_ERROR_CODES.includes(value2) ? value2 : "UNKNOWN";
+}
+var LOCAL_TARGET_CAPABILITY_NAMES = [
+  "writeProjectMetadata",
+  "observeResource",
+  "readRepositoryTree",
+  "listBranches",
+  "prepareBranch",
+  "listWorktrees",
+  "removeWorktree",
+  "purgeMergedWorktrees",
+  "performBranchAction",
+  "readCurrentDiff",
+  "readGitStatus",
+  "readProjectResource",
+  "readRepositoryFile",
+  "searchRepositoryText",
+  "generateCommitMessageFromLocalDiff",
+  "launchAgent",
+  "discoverLatch",
+  "readLatchHostIdentity",
+  "inspectLatchSession",
+  "openLatchSession",
+  "stopLatchSession",
+  "sendLatchMessage",
+  "doctor"
+];
+function isQueueableCapabilityName(value2) {
+  return typeof value2 === "string" && value2 !== "launchAgent" && LOCAL_TARGET_CAPABILITY_NAMES.includes(value2);
+}
+
+// ../packages/core/service/latch-provider-session.ts
+function parseMetadata(value2) {
+  if (!value2?.trim()) return {};
+  try {
+    const parsed = JSON.parse(value2);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+async function bindProviderSessionAgentSession({
+  ctx,
+  executionRequestId,
+  agentSessionId
+}) {
+  const row = await ctx.db.get(
+    `SELECT metadata_json FROM execution_requests WHERE id = ? AND deleted_at IS NULL`,
+    [executionRequestId]
+  );
+  if (!row) return;
+  const providerSession = providerSessionFromMetadata(parseMetadata(row.metadata_json));
+  if (!providerSession || providerSession.agentSessionId === agentSessionId) return;
+  await ctx.db.run(
+    `UPDATE execution_requests SET metadata_json = ?, updated_at = ?, revision = revision + 1
+      WHERE id = ? AND deleted_at IS NULL`,
+    [
+      mergeProviderSessionIntoMetadata({
+        metadataJson: row.metadata_json,
+        providerSession: { ...providerSession, agentSessionId }
+      }),
+      nowIso(),
+      executionRequestId
+    ]
+  );
+}
+async function resolveLatchSessionForAgentSession({
+  ctx,
+  sessionId
+}) {
+  const rows = await ctx.db.all(
+    `SELECT metadata_json, claimed_by_execution_target_id, execution_target_id
+       FROM execution_requests
+      WHERE workspace_id = ? AND launched_session_id = ? AND deleted_at IS NULL
+      ORDER BY updated_at DESC, created_at DESC`,
+    [ctx.workspace.id, sessionId]
+  );
+  for (const row of rows) {
+    const providerSession = providerSessionFromMetadata(parseMetadata(row.metadata_json));
+    const targetId = providerSession?.executionTargetId ?? row.claimed_by_execution_target_id ?? row.execution_target_id;
+    if (!providerSession || !targetId) continue;
+    return {
+      targetId,
+      providerSessionId: providerSession.providerSessionId,
+      lastObservedState: providerSession.lastObservedState
+    };
+  }
+  return null;
+}
+async function forgetLatchProviderSession({
+  ctx,
+  missionId,
+  executionRequestId,
+  providerSessionId,
+  backgroundObservation
+}) {
+  const sessionId = providerSessionId.trim();
+  if (!sessionId) {
+    throw new ServiceError("A Latch session id is required.", "validation_error");
+  }
+  return ctx.db.transaction(async (tx) => {
+    const rows = await tx.all(
+      executionRequestId ? `SELECT id, project_id, mission_id, objective_id, metadata_json, updated_at, revision,
+                  COALESCE(claimed_by_execution_target_id, execution_target_id) AS target_id
+             FROM execution_requests
+            WHERE id = ? AND mission_id = ? AND workspace_id = ? AND deleted_at IS NULL` : `SELECT id, project_id, mission_id, objective_id, metadata_json, updated_at, revision,
+                  COALESCE(claimed_by_execution_target_id, execution_target_id) AS target_id
+             FROM execution_requests
+            WHERE mission_id = ? AND workspace_id = ? AND deleted_at IS NULL
+            ORDER BY updated_at DESC, created_at DESC`,
+      executionRequestId ? [executionRequestId, missionId, ctx.workspace.id] : [missionId, ctx.workspace.id]
+    );
+    const row = rows.find((candidate) => {
+      const mapped2 = providerSessionFromMetadata(parseMetadata(candidate.metadata_json));
+      return mapped2?.providerSessionId === sessionId;
+    });
+    if (!row) return { forgotten: false, executionRequestId: executionRequestId ?? null };
+    const previous = parseMetadata(row.metadata_json);
+    const mapped = providerSessionFromMetadata(previous);
+    if (backgroundObservation && (!mapped || (mapped.executionTargetId ?? row.target_id) !== backgroundObservation.executionTargetId || mapped.lastObservedState === "exited" || mapped.lastObservedAt && mapped.lastObservedAt > backgroundObservation.startedAt || mapped.endRequestedAt && mapped.endRequestedAt > backgroundObservation.startedAt))
+      return { forgotten: false, executionRequestId: row.id };
+    const stripped = parseMetadata(
+      stripProviderSessionFromMetadata({ metadataJson: row.metadata_json })
+    );
+    if (mapped?.lastObservedState === "exited")
+      stripped.endedTerminalSession = {
+        ...mapped,
+        endedAt: mapped.endedAt ?? row.updated_at,
+        endReason: mapped.endReason ?? "unknown"
+      };
+    const metadataJson = JSON.stringify(stripped);
+    const revision3 = row.revision + 1;
+    const updated = await tx.run(
+      `UPDATE execution_requests SET metadata_json = ?, updated_at = ?, revision = ?
+        WHERE id = ? AND revision = ? AND deleted_at IS NULL`,
+      [metadataJson, nowIso(), revision3, row.id, row.revision]
+    );
+    if (updated.changes === 0) {
+      throw new ServiceError(
+        "Execution request changed while forgetting the Latch session",
+        "execution_request_conflict",
+        409
+      );
+    }
+    await recordChange({
+      ctx: { ...ctx, db: tx },
+      entityType: "execution_request",
+      entityId: row.id,
+      operation: "update",
+      entityRevision: revision3,
+      projectId: row.project_id,
+      missionId: row.mission_id,
+      objectiveId: row.objective_id,
+      changedFields: ["metadata_json"]
+    });
+    return { forgotten: true, executionRequestId: row.id };
+  });
+}
+async function forgetAbsentLatchProviderSessions({
+  ctx,
+  projectId,
+  executionTargetId,
+  providerSessionId
+}) {
+  const rows = await ctx.db.all(
+    `SELECT id, mission_id, metadata_json FROM execution_requests
+     WHERE workspace_id = ? AND project_id = ? AND mission_id IS NOT NULL
+       AND COALESCE(claimed_by_execution_target_id, execution_target_id) = ?
+       AND deleted_at IS NULL`,
+    [ctx.workspace.id, projectId, executionTargetId]
+  );
+  for (const row of rows) {
+    if (providerSessionFromMetadata(parseMetadata(row.metadata_json))?.providerSessionId !== providerSessionId)
+      continue;
+    await forgetLatchProviderSession({
+      ctx,
+      missionId: row.mission_id,
+      executionRequestId: row.id,
+      providerSessionId
+    });
+  }
+}
+
+// ../packages/core/service/local-target-mutations.ts
+var LOCAL_TARGET_MUTATION_METADATA_KEY = "overlord.localTargetMutation";
+function localTargetMutationCapabilitySql(dialect) {
+  return dialect === "postgres" ? `er.metadata_json->'${LOCAL_TARGET_MUTATION_METADATA_KEY}'->>'capability'` : `json_extract(er.metadata_json, '$."${LOCAL_TARGET_MUTATION_METADATA_KEY}".capability')`;
+}
+var LOCAL_TARGET_MUTATION_REQUESTED_SOURCE = "local_target_mutation";
+var LOCAL_TARGET_MUTATION_READ_TIMEOUT_MS = 3e4;
+var LOCAL_TARGET_MUTATION_WRITE_TIMEOUT_MS = 12e4;
+var DEFAULT_RESULT_POLL_INTERVAL_MS = 250;
+var TERMINAL_WITHOUT_RESULT = ["failed", "cleared", "cancelled", "expired"];
+function buildLocalTargetMutationMetadata({
+  kind,
+  capability,
+  input: input2,
+  resourceKey = null
+}) {
+  const key = resourceKey?.trim();
+  return {
+    [LOCAL_TARGET_MUTATION_METADATA_KEY]: {
+      kind,
+      capability,
+      input: input2,
+      ...key ? { resourceKey: key } : {}
+    }
+  };
+}
+function parseLocalTargetMutation(metadataJson) {
+  const metadata = typeof metadataJson === "string" ? parseMetadataJson(metadataJson) : metadataJson;
+  const raw = metadata[LOCAL_TARGET_MUTATION_METADATA_KEY];
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const payload = raw;
+  const kind = payload.kind;
+  const capability = payload.capability;
+  if (kind !== "branch_action" && kind !== "worktree_purge" && kind !== "capability_call") {
+    return null;
+  }
+  if (!isQueueableCapabilityName(capability)) return null;
+  const input2 = payload.input && typeof payload.input === "object" && !Array.isArray(payload.input) ? payload.input : {};
+  const resourceKey = typeof payload.resourceKey === "string" && payload.resourceKey.trim() ? payload.resourceKey.trim() : void 0;
+  const result2 = payload.result;
+  const parsedResult = result2 && typeof result2 === "object" && !Array.isArray(result2) ? result2 : void 0;
+  return {
+    kind,
+    capability,
+    input: input2,
+    ...resourceKey ? { resourceKey } : {},
+    ...parsedResult ? { result: parsedResult } : {}
+  };
+}
+function storedResultToCapabilityResult(target, stored) {
+  if (stored.ok) return { ok: true, value: stored.value, target };
+  return fail(
+    target,
+    toLocalTargetErrorCode(stored.code),
+    stored.message,
+    stored.details === void 0 ? void 0 : stored.details
+  );
+}
+async function resolveMutationObjectiveId({
+  ctx,
+  missionId
+}) {
+  const row = await ctx.db.get(
+    `SELECT id FROM objectives
+        WHERE mission_id = ? AND workspace_id = ? AND deleted_at IS NULL
+        ORDER BY position ASC
+        LIMIT 1`,
+    [missionId, ctx.workspace.id]
+  );
+  if (!row) {
+    throw new ServiceError(
+      "Mission has no objectives to anchor a local-target mutation request.",
+      "no_objective_for_mutation",
+      409
+    );
+  }
+  return row.id;
+}
+async function createLocalTargetMutationRequest({
+  ctx,
+  projectId,
+  missionId = null,
+  executionTargetId,
+  kind,
+  capability,
+  input: input2,
+  operationId = null,
+  resourceKey = null,
+  backgroundProbeKey = null,
+  eventSummary
+}) {
+  const mission = missionId === null ? null : await resolveMissionId(ctx, missionId);
+  const resolvedProjectId = await resolveProjectId(ctx, projectId);
+  const objectiveId = mission === null ? null : await resolveMutationObjectiveId({ ctx, missionId: mission.id });
+  const idempotencyKey = operationId?.trim() || null;
+  if (idempotencyKey !== null) {
+    const existing = await ctx.db.get(
+      `SELECT id, created_at FROM execution_requests
+        WHERE workspace_id = ? AND idempotency_key = ? AND deleted_at IS NULL`,
+      [ctx.workspace.id, idempotencyKey]
+    );
+    if (existing) return { id: existing.id, reused: true, createdAt: existing.created_at };
+  }
+  const now2 = nowIso();
+  const id2 = newId();
+  const metadata = buildLocalTargetMutationMetadata({ kind, capability, input: input2, resourceKey });
+  await ctx.db.transaction(async (tx) => {
+    const txCtx = { ...ctx, db: tx };
+    await txCtx.db.run(
+      `INSERT INTO execution_requests
+           (id, workspace_id, project_id, mission_id, objective_id, execution_target_id,
+            requested_agent, requested_model, requested_reasoning_effort, launch_mode,
+            launch_flags_json, requested_source, idempotency_key, status,
+            requested_by_workspace_user_id, resolved_resource_id, resolved_working_directory,
+            metadata_json, created_at, updated_at, revision, background_probe_key)
+         VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, NULL, 'run', '{}', ?, ?, 'queued', ?, NULL, NULL, ?, ?, ?, 1, ?)`,
+      [
+        id2,
+        ctx.workspace.id,
+        resolvedProjectId,
+        mission?.id ?? null,
+        objectiveId,
+        executionTargetId,
+        LOCAL_TARGET_MUTATION_REQUESTED_SOURCE,
+        idempotencyKey,
+        ctx.actorWorkspaceUserId,
+        JSON.stringify(metadata),
+        now2,
+        now2,
+        backgroundProbeKey
+      ]
+    );
+    if (backgroundProbeKey === null)
+      await recordChange({
+        ctx: txCtx,
+        entityType: "execution_request",
+        entityId: id2,
+        operation: "insert",
+        entityRevision: 1,
+        projectId: resolvedProjectId,
+        missionId: mission?.id ?? null,
+        objectiveId,
+        changedFields: ["status", "requested_source", "metadata_json"]
+      });
+    if (mission !== null && objectiveId !== null) {
+      await txCtx.db.run(
+        `INSERT INTO mission_events
+             (id, workspace_id, project_id, mission_id, objective_id, type, phase, summary,
+              payload_json, source, actor_workspace_user_id, created_at)
+           VALUES (?, ?, ?, ?, ?, 'execution_requested', 'execute', ?, ?, 'webapp', ?, ?)`,
+        [
+          newId(),
+          ctx.workspace.id,
+          resolvedProjectId,
+          mission.id,
+          objectiveId,
+          eventSummary ?? `Delegated ${kind.replace("_", " ")} on remote execution target.`,
+          JSON.stringify({ executionRequestId: id2, kind, capability }),
+          ctx.actorWorkspaceUserId,
+          now2
+        ]
+      );
+    }
+  });
+  return { id: id2, reused: false, createdAt: now2 };
+}
+function sleep(ms, signal = null) {
+  return new Promise((resolve) => {
+    const timer = setTimeout(done, ms);
+    function done() {
+      clearTimeout(timer);
+      signal?.removeEventListener("abort", done);
+      resolve();
+    }
+    signal?.addEventListener("abort", done, { once: true });
+  });
+}
+async function readLocalTargetMutationResult({
+  ctx,
+  requestId,
+  target
+}) {
+  const row = await ctx.db.get(
+    `SELECT status, metadata_json, last_error
+       FROM execution_requests
+      WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
+    [requestId, ctx.workspace.id]
+  );
+  if (!row) {
+    return fail(target, "TARGET_OPERATION_FAILED", "The queued capability call no longer exists.", {
+      executionRequestId: requestId
+    });
+  }
+  const stored = parseLocalTargetMutation(row.metadata_json)?.result;
+  if (stored) return storedResultToCapabilityResult(target, stored);
+  if (TERMINAL_WITHOUT_RESULT.includes(row.status)) {
+    return fail(
+      target,
+      "TARGET_OPERATION_FAILED",
+      row.last_error ?? `The queued capability call ended as ${row.status} without a result.`,
+      { executionRequestId: requestId, status: row.status }
+    );
+  }
+  return null;
+}
+async function waitForLocalTargetMutationResult({
+  ctx,
+  requestId,
+  target,
+  timeoutMs = LOCAL_TARGET_MUTATION_READ_TIMEOUT_MS,
+  pollIntervalMs = DEFAULT_RESULT_POLL_INTERVAL_MS,
+  createListener,
+  signal = null
+}) {
+  const deadline = Date.now() + Math.max(0, timeoutMs);
+  for (; ; ) {
+    const result2 = await readLocalTargetMutationResult({ ctx, requestId, target });
+    if (result2) return result2;
+    const remaining = deadline - Date.now();
+    if (signal?.aborted) {
+      return fail(
+        target,
+        "LOCAL_TARGET_TIMEOUT",
+        "The caller stopped waiting. The operation may still be running on the target.",
+        { executionRequestId: requestId, cancelled: true }
+      );
+    }
+    if (remaining <= 0) {
+      return fail(
+        target,
+        "LOCAL_TARGET_TIMEOUT",
+        "The execution target has not reported a result yet. The operation is still running there.",
+        { executionRequestId: requestId, timeoutMs }
+      );
+    }
+    const waitMs = Math.min(remaining, pollIntervalMs);
+    const listener = createListener ? await createListener({ requestId, timeoutMs: remaining }) : null;
+    if (listener) {
+      try {
+        await (signal ? Promise.race([listener.wait(), sleep(remaining, signal)]) : listener.wait());
+      } finally {
+        await listener.close();
+      }
+    } else {
+      await sleep(waitMs, signal);
+    }
+  }
+}
+async function completeLocalTargetMutationRequest({
+  ctx,
+  requestId,
+  result: result2
+}) {
+  const row = await ctx.db.get(
+    `SELECT id, workspace_id, project_id, mission_id, objective_id, status, revision, metadata_json,
+            background_probe_key, requested_by_workspace_user_id,
+            claimed_by_runner_registration_id, claimed_by_execution_target_id,
+            requested_source, COALESCE(claimed_by_execution_target_id, execution_target_id) AS target_id
+       FROM execution_requests
+      WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
+    [requestId, ctx.workspace.id]
+  );
+  if (!row) {
+    throw new ServiceError("Execution request not found", "execution_request_not_found", 404);
+  }
+  if (row.requested_source !== LOCAL_TARGET_MUTATION_REQUESTED_SOURCE) {
+    throw new ServiceError(
+      "Execution request is not a local-target mutation.",
+      "not_local_target_mutation",
+      409
+    );
+  }
+  const mutation = parseLocalTargetMutation(row.metadata_json);
+  if (row.background_probe_key && row.background_probe_key !== PROJECT_RESOURCE_READ_JOB_KEY && mutation?.result)
+    return mutation;
+  const targetId = row.claimed_by_execution_target_id;
+  const privateResourceRead = row.background_probe_key === PROJECT_RESOURCE_READ_JOB_KEY;
+  const latchIdentity = mutation?.capability === READ_LATCH_HOST_IDENTITY;
+  const canComplete = row.status === "launching" || row.status === "claimed";
+  const acknowledgeLateRead = privateResourceRead && !mutation && ["cancelled", "launched", "failed"].includes(row.status);
+  if (!canComplete && !acknowledgeLateRead) {
+    throw new ServiceError(
+      `Cannot complete local-target mutation from status ${row.status}.`,
+      "invalid_execution_request_transition",
+      409
+    );
+  }
+  if (latchIdentity || privateResourceRead) {
+    const registered = targetId && row.claimed_by_runner_registration_id && await ctx.db.get(
+      `SELECT registration.id
+         FROM execution_target_runner_registrations registration
+         JOIN execution_targets target
+           ON target.id = registration.execution_target_id AND target.workspace_id = registration.workspace_id
+         JOIN workspace_user_execution_targets access
+           ON access.execution_target_id = target.id AND access.workspace_id = target.workspace_id
+          AND access.workspace_user_id = target.owner_workspace_user_id
+          AND access.access_status = 'active' AND access.deleted_at IS NULL
+        WHERE registration.id = ? AND registration.workspace_id = ? AND registration.execution_target_id = ?
+          AND registration.relation = 'native' AND registration.deleted_at IS NULL
+          AND target.status = 'active' AND target.type = 'local' AND target.deleted_at IS NULL
+          AND target.owner_workspace_user_id = ?`,
+      [
+        row.claimed_by_runner_registration_id,
+        ctx.workspace.id,
+        targetId,
+        ctx.actorWorkspaceUserId
+      ]
+    );
+    if (!ctx.actorWorkspaceUserId || latchIdentity && ctx.actorWorkspaceUserId !== row.requested_by_workspace_user_id || !registered || await findActingDeviceExecutionTargetId({ ctx }) !== targetId) {
+      throw new ServiceError(
+        latchIdentity ? "Latch host identity must come from the target owner\u2019s native runner." : "Project resource reads must come from the target owner\u2019s native runner.",
+        latchIdentity ? "latch_host_unverified" : "project_resource_runner_unverified",
+        403
+      );
+    }
+  }
+  if (acknowledgeLateRead) return null;
+  if (!mutation) {
+    throw new ServiceError(
+      "Execution request is missing local-target mutation metadata.",
+      "invalid_local_target_mutation",
+      409
+    );
+  }
+  if (mutation.capability === READ_LATCH_HOST_IDENTITY) {
+    const value2 = result2.ok ? result2.value : null;
+    const requestedRoot = mutation.input.sharedRootId;
+    const rootVerified = isLatchSharedRootId(requestedRoot) && requestedRoot === value2?.verifiedSharedRootId;
+    result2 = isLatchHostPublicKey(value2?.hostKeyDigest) && (requestedRoot === void 0 || rootVerified) ? {
+      ok: true,
+      value: {
+        hostKeyDigest: value2.hostKeyDigest,
+        ...rootVerified ? { verifiedSharedRootId: requestedRoot } : {}
+      },
+      target: { executionTargetId: targetId, deviceLabel: null, transport: "runner_queue" }
+    } : fail(
+      { executionTargetId: targetId, deviceLabel: null, transport: "runner_queue" },
+      "TARGET_OPERATION_FAILED",
+      "Latch Remote Link identity is unavailable."
+    );
+  }
+  const storedResult = result2.ok ? { ok: true, value: result2.value } : {
+    ok: false,
+    code: result2.code,
+    message: result2.message,
+    ...result2.details !== void 0 ? { details: result2.details } : {}
+  };
+  const metadata = parseMetadataJson(row.metadata_json);
+  metadata[LOCAL_TARGET_MUTATION_METADATA_KEY] = {
+    ...mutation,
+    result: storedResult
+  };
+  const now2 = nowIso();
+  const revision3 = row.revision + 1;
+  const nextStatus = result2.ok ? "launched" : "failed";
+  const lastError = result2.ok ? null : result2.message;
+  return ctx.db.transaction(async (tx) => {
+    const txCtx = { ...ctx, db: tx };
+    const updated = await txCtx.db.run(
+      `UPDATE execution_requests
+          SET status = ?,
+              metadata_json = ?,
+              last_error = ?,
+              launch_completed_at = ?,
+              updated_at = ?,
+              revision = ?
+        WHERE id = ? AND status = ? AND revision = ?`,
+      [
+        nextStatus,
+        JSON.stringify(metadata),
+        lastError,
+        now2,
+        now2,
+        revision3,
+        row.id,
+        row.status,
+        row.revision
+      ]
+    );
+    if (updated.changes === 0) {
+      if (row.background_probe_key) {
+        const current = await tx.get(
+          "SELECT metadata_json, status FROM execution_requests WHERE id = ? AND workspace_id = ?",
+          [row.id, ctx.workspace.id]
+        );
+        const completed = current && parseLocalTargetMutation(current.metadata_json);
+        if (privateResourceRead && !completed && current?.status === "cancelled") return null;
+        if (!privateResourceRead && completed?.result) return completed;
+      }
+      throw new ServiceError(
+        "Execution request changed while completing local-target mutation.",
+        "execution_request_conflict",
+        409
+      );
+    }
+    if (row.background_probe_key === null)
+      await recordChange({
+        ctx: txCtx,
+        entityType: "execution_request",
+        entityId: row.id,
+        operation: "update",
+        entityRevision: revision3,
+        projectId: row.project_id,
+        missionId: row.mission_id,
+        objectiveId: row.objective_id,
+        changedFields: ["status", "metadata_json", "last_error", "launch_completed_at"]
+      });
+    if (row.mission_id !== null && row.objective_id !== null) {
+      await txCtx.db.run(
+        `INSERT INTO mission_events
+             (id, workspace_id, project_id, mission_id, objective_id, type, phase, summary,
+              payload_json, source, actor_workspace_user_id, created_at)
+           VALUES (?, ?, ?, ?, ?, 'update', 'execute', ?, ?, 'runner', NULL, ?)`,
+        [
+          newId(),
+          ctx.workspace.id,
+          row.project_id,
+          row.mission_id,
+          row.objective_id,
+          result2.ok ? `Completed ${mutation.kind.replace("_", " ")} on execution target.` : `Local-target mutation failed: ${result2.message}`,
+          JSON.stringify({ executionRequestId: row.id, result: storedResult }),
+          now2
+        ]
+      );
+    }
+    if (row.background_probe_key === null && mutation.capability === "inspectLatchSession" && !result2.ok && result2.code === "LATCH_SESSION_ABSENT" && row.target_id && typeof mutation.input.providerSessionId === "string") {
+      await forgetAbsentLatchProviderSessions({
+        ctx: txCtx,
+        projectId: row.project_id,
+        executionTargetId: row.target_id,
+        providerSessionId: mutation.input.providerSessionId
+      });
+    }
+    await recordAnswerDeliveryOutcome2({ ctx: txCtx, mutation, result: result2 });
+    return { ...mutation, result: storedResult };
+  });
+}
+async function recordAnswerDeliveryOutcome2({
+  ctx,
+  mutation,
+  result: result2
+}) {
+  if (mutation.capability !== "sendLatchMessage") return;
+  const operationId = typeof mutation.input.operationId === "string" ? mutation.input.operationId.trim() : "";
+  if (!operationId) return;
+  await recordAnswerDeliveryResult({
+    ctx,
+    operationId,
+    result: result2
+  });
+}
+async function recordAnswerDeliveryForTerminalRequest({
+  ctx,
+  metadataJson,
+  status,
+  executionRequestId
+}) {
+  const mutation = metadataJson ? parseLocalTargetMutation(metadataJson) : null;
+  if (!mutation || mutation.result) return;
+  await recordAnswerDeliveryOutcome2({
+    ctx,
+    mutation,
+    result: fail(
+      { executionTargetId: null, deviceLabel: null, transport: "runner_queue" },
+      "TARGET_OPERATION_FAILED",
+      `The queued capability call ended as ${status} without a result.`,
+      { executionRequestId, status }
+    )
+  });
+}
+async function cancelQueuedLocalTargetMutation({
+  ctx,
+  requestId
+}) {
+  const now2 = nowIso();
+  return await ctx.db.transaction(async (tx) => {
+    const txCtx = { ...ctx, db: tx };
+    const row = await tx.get(
+      `SELECT id, project_id, mission_id, objective_id, revision, metadata_json, background_probe_key
+         FROM execution_requests
+        WHERE id = ? AND workspace_id = ? AND requested_source = ?
+          AND status = 'queued' AND deleted_at IS NULL`,
+      [requestId, ctx.workspace.id, LOCAL_TARGET_MUTATION_REQUESTED_SOURCE]
+    );
+    if (!row) return { cancelled: false };
+    const updated = await tx.run(
+      `UPDATE execution_requests
+          SET status = 'cancelled', last_error = ?, updated_at = ?, revision = ?
+        WHERE id = ? AND status = 'queued' AND revision = ?`,
+      ["Withdrawn before any runner claimed it.", now2, row.revision + 1, row.id, row.revision]
+    );
+    if (updated.changes === 0) return { cancelled: false };
+    if (row.background_probe_key === null)
+      await recordChange({
+        ctx: txCtx,
+        entityType: "execution_request",
+        entityId: row.id,
+        operation: "update",
+        entityRevision: row.revision + 1,
+        projectId: row.project_id,
+        missionId: row.mission_id,
+        objectiveId: row.objective_id,
+        changedFields: ["status", "last_error"]
+      });
+    await recordAnswerDeliveryForTerminalRequest({
+      ctx: txCtx,
+      metadataJson: row.metadata_json,
+      status: "cancelled",
+      executionRequestId: row.id
+    });
+    return { cancelled: true };
+  });
+}
+async function clearProjectResourceReadJob({
+  ctx,
+  requestId
+}) {
+  await ctx.db.run(
+    `UPDATE execution_requests
+        SET metadata_json = '{}', resolved_working_directory = NULL,
+            status = CASE WHEN status IN ('queued', 'claimed', 'launching') THEN 'cancelled' ELSE status END,
+            revision = revision + 1, updated_at = ?
+      WHERE workspace_id = ? AND id = ? AND background_probe_key = ?
+        AND requested_by_workspace_user_id = ? AND deleted_at IS NULL`,
+    [nowIso(), ctx.workspace.id, requestId, PROJECT_RESOURCE_READ_JOB_KEY, ctx.actorWorkspaceUserId]
+  );
+}
+
+// ../packages/core/service/local-target/runner-queue-provider.ts
+var READ_CAPABILITIES = /* @__PURE__ */ new Set([
+  "observeResource",
+  "readRepositoryTree",
+  "listBranches",
+  "listWorktrees",
+  "readCurrentDiff",
+  "readGitStatus",
+  "readProjectResource",
+  "readRepositoryFile",
+  "searchRepositoryText",
+  "generateCommitMessageFromLocalDiff",
+  "discoverLatch",
+  "readLatchHostIdentity",
+  "inspectLatchSession",
+  "doctor"
+]);
+function mutationKindFor(capability) {
+  if (capability === "performBranchAction") return "branch_action";
+  if (capability === "purgeMergedWorktrees" || capability === "removeWorktree") {
+    return "worktree_purge";
+  }
+  return "capability_call";
+}
+var RunnerQueueProvider = class {
+  constructor(target, queue) {
+    this.queue = queue;
+    this.target = { ...target, transport: "runner_queue" };
+  }
+  queue;
+  readProjectResource(input2) {
+    return this.#call("readProjectResource", { ...input2 });
+  }
+  target;
+  /**
+   * Queue one capability call on this target and wait for its result.
+   *
+   * `operationId` doubles as the queue's idempotency key: two calls with the
+   * same id resolve to one job, so a retry after a `LOCAL_TARGET_TIMEOUT` waits
+   * on the original rather than doing the work twice.
+   */
+  async #call(capability, input2, options = {}) {
+    const executionTargetId = this.target.executionTargetId;
+    if (!executionTargetId) {
+      return fail(
+        this.target,
+        "LOCAL_TARGET_REQUIRED",
+        "This operation must run on a declared execution target, and none is selected."
+      );
+    }
+    const timeoutMs = options.timeoutMs ?? (READ_CAPABILITIES.has(capability) ? this.queue.readTimeoutMs ?? LOCAL_TARGET_MUTATION_READ_TIMEOUT_MS : this.queue.writeTimeoutMs ?? LOCAL_TARGET_MUTATION_WRITE_TIMEOUT_MS);
+    let requestId;
+    try {
+      const queued = await createLocalTargetMutationRequest({
+        ctx: this.queue.ctx,
+        projectId: this.queue.projectId,
+        missionId: this.queue.missionId ?? null,
+        executionTargetId,
+        kind: mutationKindFor(capability),
+        capability,
+        input: input2,
+        operationId: options.operationId ?? this.queue.operationId ?? null,
+        resourceKey: this.queue.resourceKey ?? null,
+        backgroundProbeKey: capability === "readProjectResource" ? PROJECT_RESOURCE_READ_JOB_KEY : null
+      });
+      requestId = queued.id;
+    } catch (error64) {
+      return fail(
+        this.target,
+        "TARGET_OPERATION_FAILED",
+        error64 instanceof ServiceError || error64 instanceof Error ? error64.message : "Could not queue the operation for this execution target."
+      );
+    }
+    try {
+      const result2 = await waitForLocalTargetMutationResult({
+        ctx: this.queue.ctx,
+        requestId,
+        target: this.target,
+        timeoutMs,
+        ...this.queue.pollIntervalMs === void 0 ? {} : { pollIntervalMs: this.queue.pollIntervalMs },
+        createListener: this.queue.createCompletionListener ?? null,
+        signal: this.queue.signal ?? null
+      });
+      if (capability === "readLatchHostIdentity" && !result2.ok) {
+        await cancelQueuedLocalTargetMutation({ ctx: this.queue.ctx, requestId });
+      }
+      return result2;
+    } finally {
+      if (capability === "readProjectResource") {
+        await clearProjectResourceReadJob({ ctx: this.queue.ctx, requestId });
+      }
+    }
+  }
+  writeProjectMetadata(input2) {
+    return this.#call("writeProjectMetadata", { ...input2 });
+  }
+  observeResource(input2) {
+    return this.#call("observeResource", { ...input2 });
+  }
+  readRepositoryTree(input2) {
+    return this.#call("readRepositoryTree", { ...input2 });
+  }
+  listBranches(input2) {
+    return this.#call("listBranches", { ...input2 });
+  }
+  prepareBranch(input2) {
+    return this.#call("prepareBranch", { ...input2 });
+  }
+  listWorktrees(input2) {
+    return this.#call("listWorktrees", { ...input2 });
+  }
+  removeWorktree(input2) {
+    return this.#call("removeWorktree", { ...input2 });
+  }
+  purgeMergedWorktrees(input2) {
+    return this.#call("purgeMergedWorktrees", { ...input2 });
+  }
+  performBranchAction(input2) {
+    return this.#call("performBranchAction", { ...input2 });
+  }
+  readCurrentDiff(input2) {
+    return this.#call("readCurrentDiff", { ...input2 });
+  }
+  readGitStatus(input2) {
+    return this.#call("readGitStatus", { ...input2 });
+  }
+  readRepositoryFile(input2) {
+    return this.#call("readRepositoryFile", { ...input2 });
+  }
+  searchRepositoryText(input2) {
+    return this.#call("searchRepositoryText", { ...input2 });
+  }
+  generateCommitMessageFromLocalDiff(input2) {
+    return this.#call("generateCommitMessageFromLocalDiff", { ...input2 });
+  }
+  /**
+   * Launching an agent has its own claim path on the same queue — the runner
+   * spawns it directly from the claimed request. Routing it through the generic
+   * dispatcher too would let a launch and a queued job race for one request, so
+   * this transport declines it outright.
+   */
+  launchAgent(_input) {
+    return Promise.resolve(
+      fail(
+        this.target,
+        "LOCAL_TARGET_UNSUPPORTED",
+        "Agent launch is queued as an execution request, not as a local-target capability call."
+      )
+    );
+  }
+  discoverLatch(input2) {
+    return this.#call("discoverLatch", { ...input2 });
+  }
+  readLatchHostIdentity({
+    sharedRootId
+  } = {}) {
+    return this.#call("readLatchHostIdentity", sharedRootId === void 0 ? {} : { sharedRootId });
+  }
+  inspectLatchSession(input2) {
+    return this.#call("inspectLatchSession", { ...input2 });
+  }
+  openLatchSession(input2) {
+    return this.#call("openLatchSession", { ...input2 });
+  }
+  stopLatchSession(input2) {
+    return this.#call("stopLatchSession", { ...input2 });
+  }
+  /**
+   * Answer delivery. The caller's `operationId` is the idempotency key on both
+   * ends — the queue's, so a retry never queues a second job, and Latch's, so a
+   * redelivered message is never applied twice. `waitForIdleMs` extends the
+   * deadline because the runner may legitimately wait for the agent to go idle
+   * before it can send.
+   */
+  sendLatchMessage(input2) {
+    const waitForIdleMs = typeof input2.waitForIdleMs === "number" ? input2.waitForIdleMs : 0;
+    return this.#call(
+      "sendLatchMessage",
+      { ...input2 },
+      {
+        operationId: input2.operationId,
+        timeoutMs: (this.queue.writeTimeoutMs ?? LOCAL_TARGET_MUTATION_WRITE_TIMEOUT_MS) + Math.max(0, waitForIdleMs)
+      }
+    );
+  }
+  doctor() {
+    return this.#call("doctor", {});
+  }
+};
+
+// ../packages/core/service/local-target/default-registry.ts
+function createDefaultLocalTargetRegistry({
+  callerExecutionTargetId = null,
+  runnerQueue = null
+}) {
+  const registry2 = new LocalTargetProviderRegistry();
+  registry2.register((target) => {
+    if (target.type !== "local" || !target.executionTargetId) return null;
+    const isCallerTarget = callerExecutionTargetId !== null && target.executionTargetId === callerExecutionTargetId;
+    if (isCallerTarget) {
+      return new InProcessProvider(targetMetadata(target, "in_process"));
+    }
+    if (target.reachable === false) {
+      return new UnavailableProvider(
+        targetMetadata(target, "fake"),
+        "LOCAL_TARGET_UNREACHABLE",
+        "The selected execution target is offline. Start a runner on that device or choose another target."
+      );
+    }
+    if (!runnerQueue) {
+      return new UnavailableProvider(
+        targetMetadata(target, "fake"),
+        "LOCAL_TARGET_UNREACHABLE",
+        "Reaching another execution target needs the runner queue, which this caller cannot write to."
+      );
+    }
+    return new RunnerQueueProvider(targetMetadata(target, "runner_queue"), runnerQueue);
+  });
+  return registry2;
+}
+function resolveDefaultLocalTargetProvider({
+  target,
+  options
+}) {
+  return createDefaultLocalTargetRegistry(options).resolveOrUnavailable(target);
+}
+
+// ../packages/core/service/local-target/desktop-bridge.ts
+async function invokeLocalTargetCapability({
+  provider,
+  call
+}) {
+  switch (call.capability) {
+    case "readRepositoryTree":
+      return provider.readRepositoryTree(call.input);
+    case "listBranches":
+      return provider.listBranches(call.input);
+    case "observeResource":
+      return provider.observeResource(call.input);
+    case "listWorktrees":
+      return provider.listWorktrees(call.input);
+    case "deriveBranchStatus":
+      return ok2(provider.target, observeMissionBranchGit(call.input));
+    case "performBranchAction":
+      return provider.performBranchAction(call.input);
+    case "removeWorktree":
+      return provider.removeWorktree(call.input);
+    case "purgeMergedWorktrees":
+      return provider.purgeMergedWorktrees(call.input);
+    case "generateCommitMessageFromLocalDiff":
+      return provider.generateCommitMessageFromLocalDiff(call.input);
+    case "discoverLatch":
+      return provider.discoverLatch(call.input);
+    case "inspectLatchSession":
+      return provider.inspectLatchSession(call.input);
+    case "openLatchSession":
+      return provider.openLatchSession(call.input);
+    case "stopLatchSession":
+      return provider.stopLatchSession(call.input);
+    case "sendLatchMessage":
+      return provider.sendLatchMessage(call.input);
+    case "writeProjectMetadata":
+      return provider.writeProjectMetadata(call.input);
+    default:
+      return fail(
+        provider.target,
+        "CAPABILITY_NOT_IMPLEMENTED",
+        "Unknown local-target capability."
+      );
+  }
+}
+
+// ../packages/core/service/local-target/resource-status.ts
+function isCoLocatedBackend(source) {
+  const dialect = typeof source === "string" ? source : source.dialect;
+  return dialect === "sqlite";
+}
+function resolveBackendResourceProvider(coLocatedWithCheckout, target) {
+  return coLocatedWithCheckout ? new InProcessProvider(target) : new UnavailableProvider(
+    target,
+    "LOCAL_TARGET_REQUIRED",
+    "The backend is not co-located with this checkout; resource availability must be observed by a local target."
+  );
+}
+function deriveResourceStatus(provider, resource) {
+  if (resource.status === "archived") return Promise.resolve("archived");
+  return provider.observeResource({
+    resourceId: resource.resourceId,
+    path: resource.path
+  }).then(
+    (observation) => mapObservationToResourceStatus(resource.status, observation.ok ? observation.value : null)
+  );
+}
+function mapObservationToResourceStatus(lifecycleStatus, observation) {
+  if (lifecycleStatus === "archived") return "archived";
+  if (!observation) return lifecycleStatus;
+  if (observation.state === "available") return "active";
+  if (observation.state === "missing") return "missing";
+  return lifecycleStatus;
+}
+
+// ../packages/core/service/project-resource-key.ts
+var import_node_path20 = __toESM(require("node:path"), 1);
+function deriveProjectResourceKey2({
+  resourceKey,
+  label,
+  directoryPath
+}) {
+  const explicit = resourceKey?.trim();
+  if (explicit) return slugify3(explicit);
+  const labelKey = label?.trim();
+  if (labelKey) return slugify3(labelKey);
+  return slugify3(import_node_path20.default.basename(import_node_path20.default.resolve(directoryPath)));
+}
+
+// ../packages/core/service/projects.ts
+async function seedDefaultProjectStatuses(db, { workspaceId: workspaceId2, projectId, now: now2 }) {
+  for (const status of DEFAULT_STATUSES) {
+    await db.run(
+      `INSERT INTO project_statuses
+         (id, workspace_id, project_id, key, name, type, position, is_default, is_terminal,
+          created_at, updated_at, revision)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+      [
+        newId(),
+        workspaceId2,
+        projectId,
+        status.key,
+        status.name,
+        status.type,
+        status.position,
+        bindBool(db.dialect, status.isDefault),
+        bindBool(db.dialect, status.isTerminal),
+        now2,
+        now2
+      ]
+    );
+  }
+}
+var LOCAL_SOURCE_FIRST_ORDER = "CASE WHEN prs.source_kind = 'local_checkout' THEN 0 ELSE 1 END";
+var PRIMARY_RESOURCE_REPAIR_HINT = "Run `ovld add-cwd` from your project checkout or link a directory in project settings.";
+function objectiveResourceRepairHint(resourceKey) {
+  return `Run \`ovld add-cwd --key ${resourceKey}\` from the intended checkout on this device.`;
+}
+function backendResourceProvider(ctx, executionTargetId) {
+  return resolveBackendResourceProvider(isCoLocatedBackend(ctx.db), {
+    executionTargetId,
+    deviceLabel: null,
+    transport: "in_process"
+  });
+}
+async function preferredExecutionTargetIdForDiscovery({
+  ctx
+}) {
+  try {
+    return await findActingDeviceExecutionTargetId({ ctx });
+  } catch {
+    return null;
+  }
+}
+async function createProject({
+  ctx,
+  name: name2,
+  description,
+  slug: slugInput
+}) {
+  const trimmedName = name2.trim();
+  if (!trimmedName) {
+    throw new ServiceError("Project name is required", "validation_error");
+  }
+  const now2 = nowIso();
+  const id2 = newId();
+  const slug = slugInput?.trim() ? slugify3(slugInput) : slugify3(trimmedName);
+  await ctx.db.transaction(async (tx) => {
+    const txCtx = { ...ctx, db: tx };
+    const maxPosition = await tx.get(
+      `SELECT COALESCE(MAX(position), 0) AS max_position FROM projects
+          WHERE workspace_id = ? AND deleted_at IS NULL`,
+      [ctx.workspace.id]
+    );
+    const position = maxPosition.max_position + 1;
+    await txCtx.db.run(
+      `INSERT INTO projects
+           (id, workspace_id, slug, name, description, status, settings_json,
+            created_by_workspace_user_id, created_at, updated_at, revision, position)
+         VALUES (?, ?, ?, ?, ?, 'active', '{}', ?, ?, ?, 1, ?)`,
+      [
+        id2,
+        ctx.workspace.id,
+        slug,
+        trimmedName,
+        description?.trim() || null,
+        ctx.actorWorkspaceUserId,
+        now2,
+        now2,
+        position
+      ]
+    );
+    await seedDefaultProjectStatuses(txCtx.db, {
+      workspaceId: txCtx.workspace.id,
+      projectId: id2,
+      now: now2
+    });
+    await recordChange({
+      ctx: txCtx,
+      entityType: "project",
+      entityId: id2,
+      operation: "insert",
+      entityRevision: 1,
+      projectId: id2
+    });
+  });
+  return await getProject({ ctx, projectId: id2 });
+}
+async function getProject({
+  ctx,
+  projectId
+}) {
+  const id2 = await resolveProjectId(ctx, projectId);
+  const row = await ctx.db.get(
+    `SELECT id, slug, name, description, status, created_at, updated_at
+       FROM projects WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
+    [id2, ctx.workspace.id]
+  );
+  if (!row) {
+    throw new ServiceError("Project not found", "project_not_found", 404);
+  }
+  return {
+    id: row.id,
+    slug: row.slug,
+    name: row.name,
+    description: row.description,
+    status: row.status,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  };
+}
+async function tryGetProject({
+  ctx,
+  projectId
+}) {
+  try {
+    return await getProject({ ctx, projectId });
+  } catch (error64) {
+    if (error64 instanceof ServiceError && error64.code === "project_not_found") return null;
+    throw error64;
+  }
+}
+async function listProjectStatuses({
+  ctx,
+  projectId
+}) {
+  const resolvedProjectId = await resolveProjectId(ctx, projectId);
+  const rows = await ctx.db.all(
+    `SELECT id, project_id, key, name, type, position, is_default, is_terminal
+       FROM project_statuses
+      WHERE project_id = ? AND deleted_at IS NULL
+      ORDER BY position ASC`,
+    [resolvedProjectId]
+  );
+  return rows.map((row) => ({
+    id: row.id,
+    projectId: row.project_id,
+    key: row.key,
+    name: row.name,
+    type: row.type,
+    position: row.position,
+    isDefault: row.is_default === true || row.is_default === 1,
+    isTerminal: row.is_terminal === true || row.is_terminal === 1
+  }));
+}
+async function listProjectResources({
+  ctx,
+  projectId
+}) {
+  const resolvedProjectId = await resolveProjectId(ctx, projectId);
+  const rows = await ctx.db.all(
+    `SELECT pr.id, pr.project_id, prs.execution_target_id, pr.resource_key, prs.source_kind,
+            prs.descriptor_json, pr.label, pr.is_primary, pr.access_mode, pr.status
+       FROM project_resources pr
+       LEFT JOIN project_resource_sources prs ON prs.resource_id = pr.id AND prs.deleted_at IS NULL
+       WHERE pr.project_id = ? AND pr.deleted_at IS NULL
+       ORDER BY pr.is_primary DESC, pr.created_at ASC, ${LOCAL_SOURCE_FIRST_ORDER}`,
+    [resolvedProjectId]
+  );
+  const firstRowPerResource = /* @__PURE__ */ new Map();
+  for (const row of rows) {
+    if (!firstRowPerResource.has(row.id)) firstRowPerResource.set(row.id, row);
+  }
+  return await Promise.all(
+    [...firstRowPerResource.values()].map((row) => rowToProjectResourceSummary(ctx, row))
+  );
+}
+async function findProjectResourceRow({
+  ctx,
+  projectId,
+  resourceKey = null,
+  primaryOnly = false,
+  executionTargetId = null
+}) {
+  const resolvedProjectId = await resolveProjectId(ctx, projectId);
+  const conditions = ["pr.project_id = ?", "pr.deleted_at IS NULL"];
+  const params = [resolvedProjectId];
+  if (primaryOnly) {
+    conditions.push("pr.is_primary = ?");
+    params.push(bindBool(ctx.db.dialect, true));
+  }
+  if (resourceKey !== null) {
+    conditions.push("pr.resource_key = ?");
+    params.push(resourceKey);
+  }
+  const orderBy = [LOCAL_SOURCE_FIRST_ORDER];
+  if (executionTargetId !== null) {
+    conditions.push("(prs.execution_target_id = ? OR prs.execution_target_id IS NULL)");
+    params.push(executionTargetId);
+    orderBy.push("CASE WHEN prs.execution_target_id = ? THEN 0 ELSE 1 END");
+    params.push(executionTargetId);
+  }
+  orderBy.push("pr.created_at ASC");
+  return await ctx.db.get(
+    `SELECT pr.id, pr.project_id, prs.execution_target_id, pr.resource_key, prs.source_kind,
+            prs.descriptor_json, pr.label, pr.is_primary, pr.access_mode, pr.status
+       FROM project_resources pr
+       LEFT JOIN project_resource_sources prs ON prs.resource_id = pr.id AND prs.deleted_at IS NULL
+      WHERE ${conditions.join(" AND ")}
+      ORDER BY ${orderBy.join(", ")}
+      LIMIT 1`,
+    params
+  );
+}
+async function findPrimaryProjectResource({
+  ctx,
+  projectId,
+  executionTargetId = null
+}) {
+  const row = await findProjectResourceRow({
+    ctx,
+    projectId,
+    primaryOnly: true,
+    executionTargetId
+  });
+  return row ? await rowToProjectResourceSummary(ctx, row) : null;
+}
+async function assertPrimaryResourceConnected({
+  ctx,
+  projectId,
+  executionTargetId = null
+}) {
+  const primary = await findPrimaryProjectResource({ ctx, projectId, executionTargetId });
+  if (!primary) {
+    throw new ServiceError(
+      `No primary resource is linked for this project. ${PRIMARY_RESOURCE_REPAIR_HINT}`,
+      "primary_resource_not_connected",
+      409
+    );
+  }
+  if (primary.status === "missing") {
+    throw new ServiceError(
+      `Primary working directory is missing (${primary.path}). ${PRIMARY_RESOURCE_REPAIR_HINT}`,
+      "primary_resource_not_connected",
+      409
+    );
+  }
+  if (primary.type !== "local_directory") {
+    throw new ServiceError(
+      `Primary resource type "${primary.type}" is not supported for local agent runs yet.`,
+      "primary_resource_not_connected",
+      409
+    );
+  }
+  return {
+    resource: primary,
+    workingDirectory: import_node_path21.default.resolve(primary.path)
+  };
+}
+function normalizeAccessMode(value2) {
+  return value2 === "read" ? "read" : "read_write";
+}
+function rowToProjectResourceSummary(ctx, row) {
+  const descriptor = row.descriptor_json ? JSON.parse(row.descriptor_json) : {};
+  const resourcePath = descriptor.path ?? "";
+  return deriveResourceStatus(backendResourceProvider(ctx, row.execution_target_id), {
+    resourceId: row.id,
+    status: row.status,
+    path: resourcePath
+  }).then((status) => ({
+    id: row.id,
+    projectId: row.project_id,
+    executionTargetId: row.execution_target_id,
+    resourceKey: row.resource_key,
+    type: row.source_kind === "local_checkout" ? "local_directory" : row.source_kind ?? "remote_directory",
+    label: row.label,
+    path: resourcePath,
+    isPrimary: isTruthyFlag(row.is_primary),
+    accessMode: normalizeAccessMode(row.access_mode),
+    status
+  }));
+}
+async function projectHasResourceKey({
+  ctx,
+  projectId,
+  resourceKey
+}) {
+  const resolvedProjectId = await resolveProjectId(ctx, projectId);
+  const normalizedKey = resourceKey.trim();
+  if (!normalizedKey) return false;
+  const row = await ctx.db.get(
+    `SELECT 1 AS ok FROM project_resources
+        WHERE project_id = ? AND resource_key = ? AND deleted_at IS NULL
+        LIMIT 1`,
+    [resolvedProjectId, normalizedKey]
+  );
+  return Boolean(row);
+}
+async function assertProjectResourceKeyExists({
+  ctx,
+  projectId,
+  resourceKey
+}) {
+  const normalizedKey = resourceKey.trim();
+  if (!normalizedKey) return;
+  const exists = await projectHasResourceKey({ ctx, projectId, resourceKey: normalizedKey });
+  if (!exists) {
+    throw new ServiceError(
+      `Project resource key "${normalizedKey}" is not linked to this project.`,
+      "project_resource_key_not_found",
+      409
+    );
+  }
+}
+async function findProjectResourceByKey({
+  ctx,
+  projectId,
+  resourceKey,
+  executionTargetId = null
+}) {
+  const normalizedKey = resourceKey.trim();
+  if (!normalizedKey) return null;
+  const row = await findProjectResourceRow({
+    ctx,
+    projectId,
+    resourceKey: normalizedKey,
+    executionTargetId
+  });
+  return row ? await rowToProjectResourceSummary(ctx, row) : null;
+}
+async function assertObjectiveResourceConnected({
+  ctx,
+  projectId,
+  resourceKey,
+  executionTargetId = null
+}) {
+  const normalizedKey = resourceKey.trim();
+  const resource = await findProjectResourceByKey({
+    ctx,
+    projectId,
+    resourceKey: normalizedKey,
+    executionTargetId
+  });
+  if (!resource) {
+    throw new ServiceError(
+      `Objective resource "${normalizedKey}" is not linked on this execution target. ${objectiveResourceRepairHint(normalizedKey)}`,
+      "objective_resource_not_connected",
+      409
+    );
+  }
+  if (resource.status === "missing") {
+    throw new ServiceError(
+      `Objective resource "${normalizedKey}" working directory is missing (${resource.path}). ${objectiveResourceRepairHint(normalizedKey)}`,
+      "objective_resource_not_connected",
+      409
+    );
+  }
+  if (resource.type !== "local_directory") {
+    throw new ServiceError(
+      `Objective resource "${normalizedKey}" type "${resource.type}" is not supported for local agent runs yet.`,
+      "objective_resource_not_connected",
+      409
+    );
+  }
+  return {
+    resource,
+    workingDirectory: import_node_path21.default.resolve(resource.path)
+  };
+}
+async function resolveCwdProjectResource({
+  ctx,
+  projectId,
+  executionTargetId = null,
+  workingDirectory = process.cwd()
+}) {
+  const resolvedProjectId = await resolveProjectId(ctx, projectId);
+  const preferredExecutionTargetId = executionTargetId ?? await preferredExecutionTargetIdForDiscovery({ ctx });
+  let current = import_node_path21.default.resolve(workingDirectory);
+  while (true) {
+    const projectJsonPath = import_node_path21.default.join(current, ".overlord", "project.json");
+    try {
+      const links = readProjectJsonLinks(projectJsonPath, { preferredExecutionTargetId });
+      const raw = links.find((link) => link.projectId === resolvedProjectId);
+      if (raw) {
+        const row = await ctx.db.get(
+          `SELECT pr.id, pr.project_id, prs.execution_target_id, pr.resource_key, prs.source_kind,
+                  prs.descriptor_json, pr.label, pr.is_primary, pr.access_mode, pr.status
+             FROM project_resources pr
+             LEFT JOIN project_resource_sources prs ON prs.resource_id = pr.id AND prs.deleted_at IS NULL
+            WHERE pr.id = ? AND pr.project_id = ? AND pr.deleted_at IS NULL
+            ORDER BY ${LOCAL_SOURCE_FIRST_ORDER},
+                     CASE WHEN prs.execution_target_id = ? THEN 0 WHEN prs.execution_target_id IS NULL THEN 1 ELSE 2 END
+            LIMIT 1`,
+          [raw.resourceId, resolvedProjectId, preferredExecutionTargetId]
+        );
+        if (!row || row.source_kind !== "local_checkout") return null;
+        const resource = await rowToProjectResourceSummary(ctx, row);
+        if (resource.status === "missing") return null;
+        return {
+          resource,
+          workingDirectory: import_node_path21.default.resolve(resource.path)
+        };
+      }
+    } catch {
+    }
+    const parent = import_node_path21.default.dirname(current);
+    if (parent === current) break;
+    current = parent;
+  }
+  return null;
+}
+async function resolveObjectiveWorkingDirectory({
+  ctx,
+  projectId,
+  objectiveResourceKey = null,
+  explicitWorkingDirectory,
+  executionTargetId = null
+}) {
+  if (explicitWorkingDirectory?.trim()) {
+    const resolved = import_node_path21.default.resolve(explicitWorkingDirectory);
+    if (ctx.db.dialect === "sqlite" && !(0, import_node_fs16.existsSync)(resolved)) {
+      throw new ServiceError(
+        `Working directory does not exist: ${resolved}`,
+        "working_directory_missing"
+      );
+    }
+    return { workingDirectory: resolved, resourceId: null };
+  }
+  const boundKey = objectiveResourceKey?.trim();
+  if (boundKey) {
+    const connected = await assertObjectiveResourceConnected({
+      ctx,
+      projectId,
+      resourceKey: boundKey,
+      executionTargetId
+    });
+    return {
+      workingDirectory: connected.workingDirectory,
+      resourceId: connected.resource.id
+    };
+  }
+  try {
+    const connected = await assertPrimaryResourceConnected({ ctx, projectId, executionTargetId });
+    return {
+      workingDirectory: connected.workingDirectory,
+      resourceId: connected.resource.id
+    };
+  } catch (error64) {
+    if (!(error64 instanceof ServiceError) || error64.code !== "primary_resource_not_connected") {
+      throw error64;
+    }
+    const cwdResource = await resolveCwdProjectResource({
+      ctx,
+      projectId,
+      executionTargetId
+    });
+    if (cwdResource) {
+      return {
+        workingDirectory: cwdResource.workingDirectory,
+        resourceId: cwdResource.resource.id
+      };
+    }
+    throw error64;
+  }
+}
+async function assertLaunchResourceConnected({
+  ctx,
+  projectId,
+  objectiveResourceKey = null,
+  executionTargetId = null
+}) {
+  const boundKey = objectiveResourceKey?.trim();
+  if (boundKey) {
+    return assertObjectiveResourceConnected({
+      ctx,
+      projectId,
+      resourceKey: boundKey,
+      executionTargetId
+    });
+  }
+  return assertPrimaryResourceConnected({ ctx, projectId, executionTargetId });
+}
+async function discoverProject({
+  ctx,
+  workingDirectory,
+  projectId
+}) {
+  if (projectId) {
+    const resolvedProjectId = await resolveProjectId(ctx, projectId);
+    const project = await getProject({ ctx, projectId: resolvedProjectId });
+    const resources = await listProjectResources({ ctx, projectId: resolvedProjectId });
+    const primary = resources.find((r5) => r5.isPrimary) ?? resources[0];
+    return {
+      projectId: project.id,
+      projectName: project.name,
+      resourceId: primary?.id ?? null,
+      resourcePath: primary?.path ?? null,
+      isPrimary: primary?.isPrimary ?? false,
+      linkedProjects: [
+        {
+          projectId: project.id,
+          projectName: project.name,
+          resourceId: primary?.id ?? null,
+          resourceKey: primary?.resourceKey ?? null,
+          isPrimary: primary?.isPrimary ?? false
+        }
+      ]
+    };
+  }
+  const cwd = import_node_path21.default.resolve(workingDirectory ?? process.cwd());
+  let current = cwd;
+  const preferredExecutionTargetId = await preferredExecutionTargetIdForDiscovery({ ctx });
+  while (true) {
+    const projectJsonPath = import_node_path21.default.join(current, ".overlord", "project.json");
+    try {
+      const links = readProjectJsonLinks(projectJsonPath, { preferredExecutionTargetId });
+      if (links.length > 0) {
+        const selectedLink = selectPrimaryProjectLink(links);
+        const orderedLinks = [
+          ...selectedLink ? [selectedLink] : [],
+          ...links.filter((link) => link.projectId !== selectedLink?.projectId)
+        ];
+        let chosenProject = null;
+        let chosenLink = selectedLink;
+        for (const link of orderedLinks) {
+          const project = await tryGetProject({ ctx, projectId: link.projectId });
+          if (project) {
+            chosenProject = project;
+            chosenLink = link;
+            break;
+          }
+        }
+        if (chosenProject && chosenLink) {
+          const resource = await ctx.db.get(
+            `SELECT pr.id, ${jsonTextFieldSql("prs.descriptor_json", "path", ctx.db.dialect)} AS path, pr.is_primary, pr.resource_key
+             FROM project_resources pr
+             LEFT JOIN project_resource_sources prs
+               ON prs.resource_id = pr.id AND prs.deleted_at IS NULL AND prs.source_kind = 'local_checkout'
+             WHERE pr.id = ? AND pr.project_id = ? AND pr.deleted_at IS NULL
+             ORDER BY CASE WHEN prs.execution_target_id = ? THEN 0 WHEN prs.execution_target_id IS NULL THEN 1 ELSE 2 END
+             LIMIT 1`,
+            [chosenLink.resourceId, chosenLink.projectId, preferredExecutionTargetId]
+          );
+          const linkedProjects = [];
+          for (const link of links) {
+            const project = link.projectId === chosenProject.id ? chosenProject : await tryGetProject({ ctx, projectId: link.projectId });
+            linkedProjects.push({
+              projectId: project?.id ?? link.projectId,
+              projectName: project?.name ?? link.projectName ?? link.projectId,
+              resourceId: link.resourceId,
+              resourceKey: link.resourceKey,
+              isPrimary: link.isPrimary
+            });
+          }
+          return {
+            projectId: chosenProject.id,
+            projectName: chosenProject.name,
+            resourceId: resource?.id ?? chosenLink.resourceId,
+            resourcePath: resource?.path ?? current,
+            isPrimary: resource ? isTruthyFlag(resource.is_primary) : chosenLink.isPrimary,
+            linkedProjects
+          };
+        }
+      }
+    } catch {
+    }
+    const parent = import_node_path21.default.dirname(current);
+    if (parent === current) break;
+    current = parent;
+  }
+  throw new ServiceError(
+    `No linked Overlord project found for ${cwd}. Run \`ovld add-cwd\` or \`ovld create-project\`.`,
+    "project_not_found",
+    404
+  );
 }
 
 // ../packages/core/service/missions.ts
@@ -156122,7 +156856,7 @@ async function findBindableChannelForMission({
 }
 
 // ../packages/core/service/agent-session/pure/evidence-path.ts
-var import_node_path19 = __toESM(require("node:path"), 1);
+var import_node_path22 = __toESM(require("node:path"), 1);
 var MAX_EVIDENCE_PATH_LENGTH = 2e3;
 function hasControlCharacters(value2) {
   for (let index = 0; index < value2.length; index += 1) {
@@ -156142,10 +156876,10 @@ function isExactEvidencePath(value2) {
   if (value2.length === 0 || value2.length > MAX_EVIDENCE_PATH_LENGTH || value2 !== value2.trim() || hasUnsafePathCharacters(value2)) {
     return false;
   }
-  const slashPath = import_node_path19.default.sep === "\\" ? value2.replace(/\\/g, "/") : value2;
-  if (import_node_path19.default.posix.isAbsolute(slashPath) || /^[a-z]:/i.test(slashPath)) return false;
+  const slashPath = import_node_path22.default.sep === "\\" ? value2.replace(/\\/g, "/") : value2;
+  if (import_node_path22.default.posix.isAbsolute(slashPath) || /^[a-z]:/i.test(slashPath)) return false;
   if (slashPath === "." || slashPath === ".." || slashPath.startsWith("../")) return false;
-  return import_node_path19.default.posix.normalize(slashPath) === slashPath;
+  return import_node_path22.default.posix.normalize(slashPath) === slashPath;
 }
 
 // ../packages/core/service/notifications/notifications.ts
@@ -158533,326 +159267,6 @@ async function publishDeliverySummary({
   };
 }
 
-// ../packages/core/service/execution-target-runners.ts
-var import_node_util2 = require("node:util");
-var RUNNER_HEARTBEAT_STALE_MS = 5 * 60 * 1e3;
-var LIVE_RUNNER_HEALTH = ["healthy", "degraded"];
-function isStaleHeartbeat(lastHeartbeatAt, now2) {
-  if (!lastHeartbeatAt) return true;
-  const last = Date.parse(lastHeartbeatAt);
-  const current = Date.parse(now2);
-  if (Number.isNaN(last) || Number.isNaN(current)) return true;
-  return current - last > RUNNER_HEARTBEAT_STALE_MS;
-}
-function isRunnerRelation(value2) {
-  return value2 === "native" || value2 === "adopted";
-}
-function notRegistered(message2) {
-  return new ServiceError(message2, NO_EXECUTION_TARGET_REGISTERED, 409);
-}
-async function resolveExplicitTarget({
-  ctx,
-  executionTargetId
-}) {
-  const row = await ctx.db.get(
-    `SELECT et.id, et.device_id, et.type, et.status, et.label, d.fingerprint
-       FROM execution_targets et
-       LEFT JOIN devices d
-         ON d.id = et.device_id
-        AND d.workspace_id = et.workspace_id
-        AND d.deleted_at IS NULL
-      WHERE et.id = ? AND et.workspace_id = ? AND et.deleted_at IS NULL`,
-    [executionTargetId, ctx.workspace.id]
-  );
-  if (!row) {
-    throw notRegistered(
-      `Execution target ${executionTargetId} does not exist in this workspace. A runner never creates one \u2014 register the machine with \`ovld add-et\` and pass its id.`
-    );
-  }
-  if (row.type !== "local") {
-    throw notRegistered(
-      `Execution target ${executionTargetId} is a ${row.type} target. Only local targets are served by a device runner.`
-    );
-  }
-  if (row.status !== "active") {
-    throw notRegistered(
-      `Execution target "${row.label}" is ${row.status}. Enable it before a runner can serve it.`
-    );
-  }
-  if (!ctx.actorWorkspaceUserId) {
-    throw notRegistered("This runner has no workspace membership to claim work with.");
-  }
-  const access = await ctx.db.get(
-    `SELECT id FROM workspace_user_execution_targets
-        WHERE workspace_id = ? AND workspace_user_id = ? AND execution_target_id = ?
-          AND access_status = 'active' AND deleted_at IS NULL`,
-    [ctx.workspace.id, ctx.actorWorkspaceUserId, row.id]
-  );
-  if (!access) {
-    throw notRegistered(
-      `You do not have access to execution target "${row.label}", so this runner cannot serve it.`
-    );
-  }
-  return row;
-}
-async function assertTargetEnabled({
-  ctx,
-  executionTargetId
-}) {
-  const row = await ctx.db.get(
-    `SELECT status, label FROM execution_targets
-        WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
-    [executionTargetId, ctx.workspace.id]
-  );
-  if (row && row.status !== "active") {
-    throw notRegistered(
-      `Execution target "${row.label}" is ${row.status}. Enable it before a runner can serve it.`
-    );
-  }
-}
-async function resolveRunnerTarget({
-  ctx,
-  input: input2,
-  actingTarget
-}) {
-  const explicitId = trimmedOrNull(input2.executionTargetId);
-  if (!explicitId) {
-    const target = actingTarget ?? await resolveClaimingDeviceTarget({ ctx });
-    await assertTargetEnabled({ ctx, executionTargetId: target.executionTargetId });
-    return {
-      executionTargetId: target.executionTargetId,
-      deviceId: target.deviceId,
-      relation: input2.relation ?? "native",
-      matchesActingDevice: true
-    };
-  }
-  const row = await resolveExplicitTarget({ ctx, executionTargetId: explicitId });
-  const acting = actingTarget === void 0 ? await findActingDeviceTarget({ ctx }) : actingTarget;
-  const isOwnMachine = acting !== null && acting?.executionTargetId === row.id;
-  return {
-    executionTargetId: row.id,
-    deviceId: row.device_id,
-    relation: input2.relation ?? (isOwnMachine ? "native" : "adopted"),
-    matchesActingDevice: isOwnMachine
-  };
-}
-async function recordRunnerHeartbeat({
-  ctx,
-  executionTargetId,
-  runnerInstanceId,
-  relation,
-  label,
-  runnerVersion,
-  capabilities: capabilities2,
-  supportedAgents,
-  health = "healthy",
-  lastErrorCode = null
-}) {
-  return ctx.db.transaction(async (db) => {
-    ctx = { ...ctx, db };
-    const capabilitiesJson = JSON.stringify(capabilities2 ?? {});
-    const supportedAgentsJson = JSON.stringify(supportedAgents ?? []);
-    const existing = await ctx.db.get(
-      `SELECT id, revision, health, last_heartbeat_at, execution_target_id, relation, label,
-            runner_version, capabilities_json, supported_agents_json, last_error_code
-       FROM execution_target_runner_registrations
-        WHERE workspace_id = ? AND runner_instance_id = ? AND deleted_at IS NULL${db.dialect === "postgres" ? " FOR UPDATE" : ""}`,
-      [ctx.workspace.id, runnerInstanceId]
-    );
-    const now2 = nowIso();
-    const reconnected = !existing || existing.health !== health && health === "healthy" || isStaleHeartbeat(existing.last_heartbeat_at, now2);
-    if (existing) {
-      const changedFields = [];
-      if (existing.execution_target_id !== executionTargetId)
-        changedFields.push("execution_target_id");
-      if (existing.relation !== relation) changedFields.push("relation");
-      if (existing.label !== trimmedOrNull(label)) changedFields.push("label");
-      if (existing.runner_version !== trimmedOrNull(runnerVersion))
-        changedFields.push("runner_version");
-      const jsonChanged = (stored, value2) => {
-        try {
-          return !(0, import_node_util2.isDeepStrictEqual)(JSON.parse(stored), value2);
-        } catch {
-          return true;
-        }
-      };
-      if (jsonChanged(existing.capabilities_json, capabilities2 ?? {}))
-        changedFields.push("capabilities");
-      if (jsonChanged(existing.supported_agents_json, supportedAgents ?? []))
-        changedFields.push("supported_agents");
-      if (existing.health !== health) changedFields.push("health");
-      if (existing.last_error_code !== lastErrorCode) changedFields.push("last_error_code");
-      await ctx.db.run(
-        `UPDATE execution_target_runner_registrations
-          SET execution_target_id = ?, relation = ?, label = ?, runner_version = ?,
-              capabilities_json = ?, supported_agents_json = ?, health = ?,
-              last_heartbeat_at = ?, last_error_code = ?, updated_at = ?,
-              revision = revision + 1
-        WHERE id = ?`,
-        [
-          executionTargetId,
-          relation,
-          trimmedOrNull(label),
-          trimmedOrNull(runnerVersion),
-          capabilitiesJson,
-          supportedAgentsJson,
-          health,
-          now2,
-          lastErrorCode,
-          now2,
-          existing.id
-        ]
-      );
-      if (changedFields.length || reconnected)
-        await recordChange({
-          ctx,
-          entityType: "execution_target_runner_registration",
-          entityId: existing.id,
-          operation: "update",
-          entityRevision: existing.revision + 1,
-          changedFields: [...changedFields, "last_heartbeat_at"]
-        });
-      if (reconnected) await enqueueRunQueueDispatchForWorkspace(ctx.db, ctx.workspace.id);
-      return {
-        id: existing.id,
-        executionTargetId,
-        runnerInstanceId,
-        relation,
-        label: trimmedOrNull(label),
-        runnerVersion: trimmedOrNull(runnerVersion),
-        supportedAgents: supportedAgents ?? [],
-        health,
-        lastHeartbeatAt: now2,
-        lastErrorCode
-      };
-    }
-    const id2 = newId();
-    await ctx.db.run(
-      `INSERT INTO execution_target_runner_registrations
-        (id, workspace_id, execution_target_id, runner_instance_id, relation, label,
-         runner_version, capabilities_json, supported_agents_json, health,
-         last_heartbeat_at, last_error_code, created_at, updated_at, revision)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
-      [
-        id2,
-        ctx.workspace.id,
-        executionTargetId,
-        runnerInstanceId,
-        relation,
-        trimmedOrNull(label),
-        trimmedOrNull(runnerVersion),
-        capabilitiesJson,
-        supportedAgentsJson,
-        health,
-        now2,
-        lastErrorCode,
-        now2,
-        now2
-      ]
-    );
-    await recordChange({
-      ctx,
-      entityType: "execution_target_runner_registration",
-      entityId: id2,
-      operation: "insert",
-      entityRevision: 1
-    });
-    if (reconnected) await enqueueRunQueueDispatchForWorkspace(ctx.db, ctx.workspace.id);
-    return {
-      id: id2,
-      executionTargetId,
-      runnerInstanceId,
-      relation,
-      label: trimmedOrNull(label),
-      runnerVersion: trimmedOrNull(runnerVersion),
-      supportedAgents: supportedAgents ?? [],
-      health,
-      lastHeartbeatAt: now2,
-      lastErrorCode
-    };
-  });
-}
-async function listRunnerRegistrations({
-  ctx,
-  executionTargetIds
-}) {
-  const result2 = /* @__PURE__ */ new Map();
-  const ids = [...new Set(executionTargetIds.filter(Boolean))];
-  if (!ids.length) return result2;
-  const rows = await ctx.db.all(
-    `SELECT id, execution_target_id, runner_instance_id, relation, label, runner_version,
-            supported_agents_json, health, last_heartbeat_at, last_error_code
-       FROM execution_target_runner_registrations
-      WHERE workspace_id = ? AND deleted_at IS NULL AND execution_target_id IN (${ids.map(() => "?").join(", ")})
-      ORDER BY last_heartbeat_at DESC, created_at ASC`,
-    [ctx.workspace.id, ...ids]
-  );
-  for (const row of rows) {
-    let supportedAgents = [];
-    try {
-      const parsed = JSON.parse(row.supported_agents_json);
-      supportedAgents = Array.isArray(parsed) ? parsed.filter((value2) => typeof value2 === "string") : [];
-    } catch {
-    }
-    const registrations = result2.get(row.execution_target_id) ?? [];
-    registrations.push({
-      id: row.id,
-      executionTargetId: row.execution_target_id,
-      runnerInstanceId: row.runner_instance_id,
-      relation: row.relation,
-      label: row.label,
-      runnerVersion: row.runner_version,
-      supportedAgents,
-      health: row.health,
-      lastHeartbeatAt: row.last_heartbeat_at,
-      lastErrorCode: row.last_error_code
-    });
-    result2.set(row.execution_target_id, registrations);
-  }
-  return result2;
-}
-function emptyLiveness() {
-  return {
-    hasRegistration: false,
-    live: false,
-    lastHeartbeatAt: null,
-    nativeCount: 0,
-    adoptedCount: 0
-  };
-}
-async function readRunnerLiveness({
-  ctx,
-  executionTargetIds,
-  now: now2 = Date.now()
-}) {
-  const liveness = /* @__PURE__ */ new Map();
-  const unique = [...new Set(executionTargetIds.filter((id2) => id2))];
-  if (unique.length === 0) return liveness;
-  const placeholders = unique.map(() => "?").join(", ");
-  const rows = await ctx.db.all(
-    `SELECT execution_target_id, relation, health, last_heartbeat_at
-       FROM execution_target_runner_registrations
-      WHERE workspace_id = ? AND deleted_at IS NULL
-        AND execution_target_id IN (${placeholders})`,
-    [ctx.workspace.id, ...unique]
-  );
-  for (const row of rows) {
-    const entry = liveness.get(row.execution_target_id) ?? emptyLiveness();
-    entry.hasRegistration = true;
-    if (row.relation === "adopted") entry.adoptedCount += 1;
-    else entry.nativeCount += 1;
-    const heartbeat = row.last_heartbeat_at;
-    if (heartbeat && (!entry.lastHeartbeatAt || heartbeat > entry.lastHeartbeatAt)) {
-      entry.lastHeartbeatAt = heartbeat;
-    }
-    const healthy = LIVE_RUNNER_HEALTH.includes(row.health);
-    const recent = heartbeat !== null && now2 - new Date(heartbeat).getTime() < RUNNER_HEARTBEAT_STALE_MS;
-    if (healthy && recent) entry.live = true;
-    liveness.set(row.execution_target_id, entry);
-  }
-  return liveness;
-}
-
 // ../packages/core/service/objective-parallelism.ts
 async function missionAllowsParallelObjectives({
   ctx,
@@ -160137,13 +160551,16 @@ async function claimNextExecutionRequest({
     "o.deleted_at IS NULL",
     `(er.requested_source = ? OR o.state IN (${LAUNCHABLE_OBJECTIVE_STATES2.map(() => "?").join(", ")}))`,
     "(er.execution_target_id IS NULL OR er.execution_target_id = ?)",
-    "(er.background_probe_key IS NULL OR er.created_at >= ?)"
+    `(er.background_probe_key IS NULL OR
+      (er.background_probe_key = ? AND er.created_at >= ?) OR er.created_at >= ?)`
   ];
   const params = [
     ctx.workspace.id,
     LOCAL_TARGET_MUTATION_REQUESTED_SOURCE,
     ...LAUNCHABLE_OBJECTIVE_STATES2,
     target.executionTargetId,
+    PROJECT_RESOURCE_READ_JOB_KEY,
+    new Date(Date.now() - PROJECT_RESOURCE_READ_TIMEOUT_MS).toISOString(),
     new Date(Date.now() - TERMINAL_PROBE_TIMEOUT_MS).toISOString()
   ];
   const capability = localTargetMutationCapabilitySql(ctx.db.dialect);
@@ -160163,6 +160580,18 @@ async function claimNextExecutionRequest({
     conditions.push(`COALESCE(${capability}, '') <> ?`);
     params.push(READ_LATCH_HOST_IDENTITY);
   }
+  if (isOwnNativeRunner && runnerInput.capabilities?.[PROJECT_RESOURCE_READ_CAPABILITY] === true) {
+    conditions.push(`(COALESCE(${capability}, '') <> ? OR EXISTS (
+      SELECT 1 FROM execution_targets owner_target
+       WHERE owner_target.id = er.execution_target_id
+         AND owner_target.workspace_id = er.workspace_id
+         AND owner_target.owner_workspace_user_id = ?
+    ))`);
+    params.push(READ_PROJECT_RESOURCE, requester);
+  } else {
+    conditions.push(`COALESCE(${capability}, '') <> ?`);
+    params.push(READ_PROJECT_RESOURCE);
+  }
   if (projectId) {
     conditions.push("er.project_id = ?");
     params.push(await resolveProjectId(ctx, projectId));
@@ -160173,7 +160602,7 @@ async function claimNextExecutionRequest({
       `SELECT er.id, er.workspace_id, er.project_id, er.mission_id, er.objective_id,
                 er.execution_target_id, er.status, er.revision, er.launch_flags_json,
                 er.launched_session_id, er.resolved_working_directory, er.metadata_json,
-                er.background_probe_key,
+                er.background_probe_key, er.requested_by_workspace_user_id,
                 o.resource_key
            FROM execution_requests er
            LEFT JOIN objectives o ON o.id = er.objective_id
@@ -160186,15 +160615,34 @@ async function claimNextExecutionRequest({
     let workingDirectory;
     let resourceId;
     try {
-      ({ workingDirectory, resourceId } = await resolveWorkingDirectory({
-        ctx: txCtx,
-        projectId: candidate.project_id,
-        // A mission-less capability call names its resource in the queued
-        // metadata (a repository read of `mobile` must not resolve `primary`).
-        objectiveResourceKey: candidate.resource_key ?? parseLocalTargetMutation(candidate.metadata_json)?.resourceKey,
-        explicitWorkingDirectory: candidate.resolved_working_directory,
-        executionTargetId: candidate.execution_target_id ?? target.executionTargetId
-      }));
+      const mutation = parseLocalTargetMutation(candidate.metadata_json);
+      if (mutation?.capability === READ_PROJECT_RESOURCE) {
+        const source = await resolveProjectResourceReadSource({
+          ctx: txCtx,
+          projectId: candidate.project_id,
+          source: mutation.input,
+          actor: candidate.requested_by_workspace_user_id
+        });
+        if (!source || mutation.input.executionTargetId !== target.executionTargetId) {
+          await markExecutionFailed({
+            ctx: txCtx,
+            requestId: candidate.id,
+            error: "The project resource source is no longer available."
+          });
+          return null;
+        }
+        ({ repoPath: workingDirectory, resourceId } = source);
+      } else {
+        ({ workingDirectory, resourceId } = await resolveWorkingDirectory({
+          ctx: txCtx,
+          projectId: candidate.project_id,
+          // A mission-less capability call names its resource in the queued
+          // metadata (a repository read of `mobile` must not resolve `primary`).
+          objectiveResourceKey: candidate.resource_key ?? mutation?.resourceKey,
+          explicitWorkingDirectory: candidate.resolved_working_directory,
+          executionTargetId: candidate.execution_target_id ?? target.executionTargetId
+        }));
+      }
     } catch (error64) {
       if (error64 instanceof ServiceError && (error64.code === "primary_resource_not_connected" || error64.code === "objective_resource_not_connected" || error64.code === "working_directory_missing")) {
         await markExecutionFailed({ ctx: txCtx, requestId: candidate.id, error: error64.message });
@@ -160807,8 +161255,8 @@ var GENERIC = /* @__PURE__ */ new Set([
   "index.md"
 ]);
 var compare = (a5, b5) => a5 < b5 ? -1 : a5 > b5 ? 1 : 0;
-function normalizeItemPath(path28) {
-  const value2 = path28.replace(/\\/g, "/").replace(/^(?:\.\/)+/, "").replace(/\/+/g, "/").replace(/\/$/, "");
+function normalizeItemPath(path30) {
+  const value2 = path30.replace(/\\/g, "/").replace(/^(?:\.\/)+/, "").replace(/\/+/g, "/").replace(/\/$/, "");
   return !value2 || value2.startsWith("/") || /^[A-Za-z]:/.test(value2) || value2.split("/").some((p3) => p3 === ".." || p3 === ".") ? null : value2;
 }
 function matchProjectItem(text, paths2) {
@@ -160816,11 +161264,11 @@ function matchProjectItem(text, paths2) {
     text.match(/[A-Za-z0-9_@.~-]+(?:[\\/][A-Za-z0-9_@.~-]+)*/g)?.map((t) => t.replace(/\\/g, "/").replace(/\.+$/, "")) ?? []
   );
   const matches = [];
-  for (const path28 of [
+  for (const path30 of [
     ...new Set(paths2.map(normalizeItemPath).filter((p3) => p3 !== null))
   ].sort(compare)) {
-    const parts = path28.split("/");
-    let score2 = tokens.has(path28) ? 3 : 0;
+    const parts = path30.split("/");
+    let score2 = tokens.has(path30) ? 3 : 0;
     for (let n3 = 2; n3 < parts.length && score2 < 2; n3++) {
       const prefix = parts.slice(0, n3).join("/");
       if ([...tokens].some((t) => t === prefix || t.startsWith(prefix + "/"))) score2 = 2;
@@ -160828,7 +161276,7 @@ function matchProjectItem(text, paths2) {
     const base = parts.at(-1);
     if (!score2 && !GENERIC.has(base.toLowerCase()) && [...tokens].some((t) => t.split("/").at(-1) === base))
       score2 = 1;
-    if (score2) matches.push({ path: path28, score: score2 });
+    if (score2) matches.push({ path: path30, score: score2 });
   }
   matches.sort((a5, b5) => b5.score - a5.score || compare(a5.path, b5.path));
   const score = matches[0]?.score ?? 0;
@@ -161286,8 +161734,8 @@ function parseOperation(value2, index) {
       const parsed = CONTENT_SCHEMAS[kind].safeParse(op2.content);
       if (!parsed.success) {
         const issue2 = parsed.error.issues[0];
-        const path28 = issue2?.path.length ? `.${issue2.path.join(".")}` : "";
-        throw invalid2(`${field}.content${path28}: ${issue2?.message ?? `invalid ${kind} content`}`);
+        const path30 = issue2?.path.length ? `.${issue2.path.join(".")}` : "";
+        throw invalid2(`${field}.content${path30}: ${issue2?.message ?? `invalid ${kind} content`}`);
       }
       return { op: "upsert", entryId, kind, content: parsed.data };
     }
@@ -165627,7 +166075,7 @@ var OBJECTIVE_REOPENABLE_STATES2 = Object.freeze([
 ]);
 
 // repository.ts
-var import_node_path31 = __toESM(require("node:path"), 1);
+var import_node_path34 = __toESM(require("node:path"), 1);
 
 // ../packages/core/service/mission-branch-observations.ts
 var OBSERVED_BRANCH_STATUSES = /* @__PURE__ */ new Set([
@@ -166267,22 +166715,26 @@ async function loadOwnedSources({
     [since, workspaceUserId, workspaceId2, projectId, ...sourceId ? [sourceId] : []]
   );
 }
-function currentHostKey(source, workspaceUserId) {
+function currentBinding(source, workspaceUserId) {
   const saved = parseMetadataJson(source.latch_host_binding_json ?? "{}");
-  return saved.sourceRevision === source.revision && saved.workspaceUserId === workspaceUserId && isLatchHostPublicKey(saved.hostPublicKey) ? saved.hostPublicKey : null;
+  return saved.sourceRevision === source.revision && saved.workspaceUserId === workspaceUserId && isLatchHostPublicKey(saved.hostPublicKey) ? {
+    hostPublicKey: saved.hostPublicKey,
+    sharedRootId: isLatchSharedRootId(saved.sharedRootId) ? saved.sharedRootId : void 0
+  } : null;
 }
 async function loadProjectResourceLatchHosts(scope2) {
   const sources = await loadOwnedSources(scope2);
   const hostCounts = /* @__PURE__ */ new Map();
   for (const source of sources) {
-    const key = currentHostKey(source, scope2.workspaceUserId);
+    const key = currentBinding(source, scope2.workspaceUserId)?.hostPublicKey;
     if (!key || !source.has_access || Number(source.native_runners) === 0) continue;
     const group4 = `${source.resource_id}:${key}`;
     hostCounts.set(group4, (hostCounts.get(group4) ?? 0) + 1);
   }
   const links = /* @__PURE__ */ new Map();
   for (const source of sources) {
-    const key = currentHostKey(source, scope2.workspaceUserId);
+    const binding = currentBinding(source, scope2.workspaceUserId);
+    const key = binding?.hostPublicKey;
     const canVerify = Boolean(source.has_access) && Number(source.live_native_runners) === 1;
     if (!source.has_access || Number(source.native_runners) === 0) continue;
     const ambiguous = Number(source.live_native_runners) > 1 || Boolean(key && (hostCounts.get(`${source.resource_id}:${key}`) ?? 0) > 1);
@@ -166290,8 +166742,10 @@ async function loadProjectResourceLatchHosts(scope2) {
       sourceRevision: source.revision,
       state: ambiguous ? "ambiguous" : key ? "linked" : "unlinked",
       canVerify,
-      canUnlink: key !== null,
-      ...!ambiguous && key ? { hostPublicKey: key } : {}
+      canUnlink: Boolean(key),
+      ...!ambiguous && key ? { hostPublicKey: key } : {},
+      ...binding?.sharedRootId ? { canUnlinkSharedRoot: true } : {},
+      ...!ambiguous && binding?.sharedRootId ? { sharedRootId: binding.sharedRootId } : {}
     });
   }
   return links;
@@ -166315,7 +166769,7 @@ async function setProjectResourceLatchHost({
   requireProjectInScope(ctx, projectId);
   const { db, actorWorkspaceUserId: workspaceUserId } = ctx;
   const workspaceId2 = ctx.workspace.id;
-  const { hostPublicKey, sourceRevision } = body;
+  const { hostPublicKey, sharedRootId, sourceRevision } = body;
   const missing = () => new ServiceError(
     "Eligible project resource source not found",
     "project_resource_source_not_found",
@@ -166324,6 +166778,14 @@ async function setProjectResourceLatchHost({
   if (!workspaceUserId) throw missing();
   if (hostPublicKey !== null && !isLatchHostPublicKey(hostPublicKey)) {
     throw new ServiceError("Invalid Latch host public key", "invalid_latch_host_public_key");
+  }
+  const removeRoot = sharedRootId === null;
+  const rootToVerify = sharedRootId ?? void 0;
+  if (removeRoot && hostPublicKey !== null || rootToVerify !== void 0 && (!isLatchSharedRootId(rootToVerify) || hostPublicKey === null)) {
+    throw new ServiceError(
+      "Provide a shared root ID with its Latch host key, or null for both.",
+      "invalid_latch_shared_root"
+    );
   }
   const load = async (client) => {
     const [source2] = await loadOwnedSources({
@@ -166337,7 +166799,16 @@ async function setProjectResourceLatchHost({
     return source2;
   };
   const receiptKey = `${workspaceUserId}:${sourceId}:${sourceRevision}`;
-  const requestHash = (0, import_node_crypto20.createHash)("sha256").update(JSON.stringify([projectId, resourceId, sourceId, sourceRevision, hostPublicKey])).digest("hex");
+  const requestHash = (0, import_node_crypto20.createHash)("sha256").update(
+    JSON.stringify([
+      projectId,
+      resourceId,
+      sourceId,
+      sourceRevision,
+      hostPublicKey,
+      ...sharedRootId === void 0 ? [] : [sharedRootId]
+    ])
+  ).digest("hex");
   const accepted = async (client) => Boolean(
     await client.get(
       `SELECT id FROM idempotency_keys
@@ -166368,8 +166839,17 @@ async function setProjectResourceLatchHost({
       },
       { ctx, projectId, resourceKey: source.resource_key, signal }
     );
-    const result2 = await provider.readLatchHostIdentity();
-    if (!result2.ok || result2.value.hostKeyDigest !== latchHostKeyDigest(hostPublicKey) || signal?.aborted) {
+    const result2 = await provider.readLatchHostIdentity(
+      rootToVerify === void 0 ? void 0 : { sharedRootId: rootToVerify }
+    );
+    if (rootToVerify !== void 0 && (!result2.ok || result2.value.verifiedSharedRootId !== rootToVerify)) {
+      throw new ServiceError(
+        "The runner could not verify this shared root and its active Control grant.",
+        "latch_shared_root_unverified",
+        409
+      );
+    }
+    if (!result2.ok || result2.value.hostKeyDigest !== latchHostKeyDigest(hostPublicKey)) {
       throw new ServiceError(
         "The native runner did not verify the expected Latch host key.",
         "latch_host_unverified",
@@ -166381,10 +166861,16 @@ async function setProjectResourceLatchHost({
     const current = await load(tx);
     if (await accepted(tx)) return;
     check4(current);
-    if (current.execution_target_id !== source.execution_target_id) throw sourceConflict();
+    if (signal?.aborted || current.execution_target_id !== source.execution_target_id)
+      throw sourceConflict();
     const now2 = nowIso();
-    const saved = hostPublicKey === null ? null : JSON.stringify({
-      hostPublicKey,
+    const previous = currentBinding(current, workspaceUserId);
+    if (removeRoot && !previous?.sharedRootId) throw sourceConflict();
+    const nextHost = removeRoot ? previous?.hostPublicKey ?? null : hostPublicKey;
+    const nextRoot = sharedRootId === void 0 && previous?.hostPublicKey === nextHost ? previous?.sharedRootId : sharedRootId ?? void 0;
+    const saved = nextHost === null ? null : JSON.stringify({
+      hostPublicKey: nextHost,
+      sharedRootId: nextRoot,
       sourceRevision: current.revision + 1,
       workspaceUserId
     });
@@ -168363,10 +168849,10 @@ function appJwt(config4) {
   signer.end();
   return `${signingInput}.${signer.sign(config4.privateKey, "base64url")}`;
 }
-async function githubFetch(path28, token, init2 = {}) {
+async function githubFetch(path30, token, init2 = {}) {
   let response;
   try {
-    response = await fetch(`${GITHUB_API}${path28}`, {
+    response = await fetch(`${GITHUB_API}${path30}`, {
       method: init2.method ?? "GET",
       headers: {
         Accept: "application/vnd.github+json",
@@ -168917,7 +169403,7 @@ async function createMissionGitHubPullRequest(missionId, body) {
 }
 
 // branch-planning.ts
-var import_node_path20 = __toESM(require("node:path"), 1);
+var import_node_path23 = __toESM(require("node:path"), 1);
 var TITLE_SLUG_MAX = 48;
 function stripCombiningMarks(value2) {
   return value2.normalize("NFKD").replace(/[\u0300-\u036f]/g, "");
@@ -168951,7 +169437,7 @@ function missionWorktreePath({
   branch
 }) {
   const key = resourceKey.trim() || "project";
-  return import_node_path20.default.join(worktreeRoot, projectSlug || "project", key, branchLeaf(branch));
+  return import_node_path23.default.join(worktreeRoot, projectSlug || "project", key, branchLeaf(branch));
 }
 function normalizeRemoteRef(ref) {
   return ref.replace(/^origin\//, "").replace(/^refs\/heads\//, "").replace(/^refs\/remotes\/origin\//, "");
@@ -169131,12 +169617,12 @@ function deferredWorkItemDto(entry, item) {
 }
 
 // inbox-attachments.ts
-var import_node_path30 = __toESM(require("node:path"), 1);
+var import_node_path33 = __toESM(require("node:path"), 1);
 
 // storage.ts
 var import_node_crypto27 = require("node:crypto");
-var import_node_fs19 = require("node:fs");
-var import_node_path29 = __toESM(require("node:path"), 1);
+var import_node_fs20 = require("node:fs");
+var import_node_path32 = __toESM(require("node:path"), 1);
 var import_node_url5 = require("node:url");
 
 // organizations.ts
@@ -169519,8 +170005,8 @@ async function deleteOrganizationIfEmpty(organizationId, client) {
 // storage-backends.ts
 var import_client_s3 = __toESM(require_dist_cjs21(), 1);
 var import_s3_request_presigner = __toESM(require_dist_cjs22(), 1);
-var import_node_fs18 = require("node:fs");
-var import_node_path28 = __toESM(require("node:path"), 1);
+var import_node_fs19 = require("node:fs");
+var import_node_path31 = __toESM(require("node:path"), 1);
 var DEFAULT_PRESIGN_TTL_SECONDS = 300;
 var MIN_PRESIGN_TTL_SECONDS = 60;
 var MAX_PRESIGN_TTL_SECONDS = 300;
@@ -169571,9 +170057,9 @@ function requireWellFormedStorageKey(key) {
 }
 function resolveLocalObjectPath(root5, key) {
   requireWellFormedStorageKey(key);
-  const resolvedRoot = import_node_path28.default.resolve(root5);
-  const absolutePath = import_node_path28.default.resolve(resolvedRoot, key);
-  if (!absolutePath.startsWith(`${resolvedRoot}${import_node_path28.default.sep}`)) {
+  const resolvedRoot = import_node_path31.default.resolve(root5);
+  const absolutePath = import_node_path31.default.resolve(resolvedRoot, key);
+  if (!absolutePath.startsWith(`${resolvedRoot}${import_node_path31.default.sep}`)) {
     throw new ApiError(404, "File not found");
   }
   return absolutePath;
@@ -169597,18 +170083,18 @@ function createLocalFsBackend({
   if (!bucket.local_path) {
     throw new ApiError(500, `Bucket '${bucket.bucket_key}' is missing a local_path`);
   }
-  const root5 = import_node_path28.default.isAbsolute(bucket.local_path) ? bucket.local_path : import_node_path28.default.resolve(repoRoot2, bucket.local_path);
+  const root5 = import_node_path31.default.isAbsolute(bucket.local_path) ? bucket.local_path : import_node_path31.default.resolve(repoRoot2, bucket.local_path);
   return {
     async put({ key, bytes }) {
       const absolutePath = resolveLocalObjectPath(root5, key);
-      if (!(0, import_node_fs18.existsSync)(root5)) (0, import_node_fs18.mkdirSync)(root5, { recursive: true });
-      (0, import_node_fs18.mkdirSync)(import_node_path28.default.dirname(absolutePath), { recursive: true });
-      (0, import_node_fs18.writeFileSync)(absolutePath, bytes);
+      if (!(0, import_node_fs19.existsSync)(root5)) (0, import_node_fs19.mkdirSync)(root5, { recursive: true });
+      (0, import_node_fs19.mkdirSync)(import_node_path31.default.dirname(absolutePath), { recursive: true });
+      (0, import_node_fs19.writeFileSync)(absolutePath, bytes);
     },
     async getStream({ key }) {
       const absolutePath = resolveLocalObjectPath(root5, key);
-      if (!(0, import_node_fs18.existsSync)(absolutePath)) throw new ApiError(404, "File not found");
-      return (0, import_node_fs18.createReadStream)(absolutePath);
+      if (!(0, import_node_fs19.existsSync)(absolutePath)) throw new ApiError(404, "File not found");
+      return (0, import_node_fs19.createReadStream)(absolutePath);
     }
   };
 }
@@ -169742,7 +170228,7 @@ function isStorageBucketKey(value2) {
 var WORKSPACE_BUCKET_KEYS = Object.keys(STORAGE_BUCKETS).filter((key) => STORAGE_BUCKETS[key].scope === "workspace");
 
 // storage.ts
-var repoRoot = import_node_path29.default.resolve(import_node_path29.default.dirname((0, import_node_url5.fileURLToPath)(__overlord_import_meta_url)), "..");
+var repoRoot = import_node_path32.default.resolve(import_node_path32.default.dirname((0, import_node_url5.fileURLToPath)(__overlord_import_meta_url)), "..");
 var MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 var MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024;
 var MAX_ATTACHMENT_LABEL = "25 MB";
@@ -169804,7 +170290,7 @@ function isOrganizationImageKey(organizationId, storageKey) {
   const prefix = `organization-files/${organizationId}/images/`;
   if (!storageKey.startsWith(prefix)) return false;
   const name2 = storageKey.slice(prefix.length);
-  const ext = import_node_path29.default.extname(name2);
+  const ext = import_node_path32.default.extname(name2);
   if (!Object.hasOwn(CONTENT_TYPE_BY_EXTENSION, ext)) return false;
   return UUID_PATTERN2.test(name2.slice(0, name2.length - ext.length));
 }
@@ -169865,7 +170351,7 @@ async function uploadUserImage(input2, explicitWorkspaceId) {
     (id2, ext) => userImageObjectKey(userId, id2, ext)
   );
   const now2 = nowIso();
-  const filename = input2.filename.trim() || `image${import_node_path29.default.extname(written.storageKey)}`;
+  const filename = input2.filename.trim() || `image${import_node_path32.default.extname(written.storageKey)}`;
   return requireDatabaseClient().transaction(async (tx) => {
     await tx.run(
       `INSERT INTO user_images (
@@ -169924,7 +170410,7 @@ async function uploadWorkspaceImage(input2, explicitWorkspaceId) {
     (id2, ext) => workspaceImageObjectKey(workspaceId2, id2, ext)
   );
   const now2 = nowIso();
-  const filename = input2.filename.trim() || `image${import_node_path29.default.extname(written.storageKey)}`;
+  const filename = input2.filename.trim() || `image${import_node_path32.default.extname(written.storageKey)}`;
   return requireDatabaseClient().transaction(async (tx) => {
     await tx.run(
       `INSERT INTO workspace_images (
@@ -169990,7 +170476,7 @@ async function uploadOrganizationImage(input2) {
     input2,
     (id2, ext) => organizationImageObjectKey(organizationId, id2, ext)
   );
-  const filename = input2.filename.trim() || `image${import_node_path29.default.extname(written.storageKey)}`;
+  const filename = input2.filename.trim() || `image${import_node_path32.default.extname(written.storageKey)}`;
   return {
     id: written.id,
     bucketKey: bucket.bucket_key,
@@ -170034,7 +170520,7 @@ function assertAttachmentBytes(bytes) {
   }
 }
 function attachmentExtension(filename) {
-  const ext = import_node_path29.default.extname(filename).toLowerCase();
+  const ext = import_node_path32.default.extname(filename).toLowerCase();
   return /^\.[a-z0-9]{1,12}$/.test(ext) ? ext : "";
 }
 function toObjectiveAttachmentDto(row) {
@@ -170072,7 +170558,7 @@ async function writeAttachmentObject(bucket, workspaceId2, input2) {
     storageBucketId: bucket.id,
     storageKey,
     contentType,
-    filename: input2.filename.trim() || `attachment${import_node_path29.default.extname(storageKey)}`,
+    filename: input2.filename.trim() || `attachment${import_node_path32.default.extname(storageKey)}`,
     sizeBytes: input2.bytes.length,
     checksum: (0, import_node_crypto27.createHash)("sha256").update(input2.bytes).digest("hex")
   };
@@ -170324,9 +170810,9 @@ async function finalizeStoredObject({
     if (!bucket.local_path) {
       throw new ApiError(500, `Bucket '${bucket.bucket_key}' is missing a local_path`);
     }
-    const root5 = import_node_path29.default.isAbsolute(bucket.local_path) ? bucket.local_path : import_node_path29.default.resolve(repoRoot, bucket.local_path);
+    const root5 = import_node_path32.default.isAbsolute(bucket.local_path) ? bucket.local_path : import_node_path32.default.resolve(repoRoot, bucket.local_path);
     const absolutePath = resolveLocalObjectPath(root5, storageKey);
-    if (!(0, import_node_fs19.existsSync)(absolutePath)) throw new ApiError(404, "File not found");
+    if (!(0, import_node_fs20.existsSync)(absolutePath)) throw new ApiError(404, "File not found");
     return { absolutePath, contentType, filename, forceDownload };
   }
   return {
@@ -170345,7 +170831,7 @@ async function resolveStoredObject(bucketKey, storageKey, permission) {
       throw new ApiError(404, "File not found");
     }
     const bucket2 = await resolveOrganizationBucket(organizationId, bucketKey);
-    const ext = import_node_path29.default.extname(storageKey).toLowerCase();
+    const ext = import_node_path32.default.extname(storageKey).toLowerCase();
     return finalizeStoredObject({
       bucket: bucket2,
       storageKey,
@@ -170545,7 +171031,7 @@ async function copyInboxAttachmentsToWorkspace(inboxItemId, targetWorkspaceId) {
       const storageKey = attachmentObjectKey(
         targetWorkspaceId,
         attachment.id,
-        import_node_path30.default.extname(source.key)
+        import_node_path33.default.extname(source.key)
       );
       await backend.put({
         key: storageKey,
@@ -171485,7 +171971,7 @@ async function listWorktrees() {
   return [];
 }
 async function removeWorktree(body) {
-  const target = typeof body.path === "string" ? import_node_path31.default.resolve(body.path.trim()) : "";
+  const target = typeof body.path === "string" ? import_node_path34.default.resolve(body.path.trim()) : "";
   if (!target) throw new ApiError(400, "A worktree path is required.");
   if (body.clientExecuted === true) {
     const primaryRepoPath = typeof body.primaryRepoPath === "string" ? body.primaryRepoPath.trim() : "";
@@ -177697,8 +178183,8 @@ var import_node_crypto28 = require("node:crypto");
 
 // sql-studio/sql-studio.ts
 var import_node_child_process8 = require("node:child_process");
-var import_node_fs20 = require("node:fs");
-var import_node_path32 = __toESM(require("node:path"), 1);
+var import_node_fs21 = require("node:fs");
+var import_node_path35 = __toESM(require("node:path"), 1);
 function publicHost(host) {
   return host === "0.0.0.0" ? "127.0.0.1" : host;
 }
@@ -177711,11 +178197,11 @@ function sqlStudioUrl({
   return `http://${publicHost(host)}:${port}`;
 }
 function resolveBinary(binary2) {
-  if (import_node_path32.default.isAbsolute(binary2)) {
-    return (0, import_node_fs20.existsSync)(binary2) ? binary2 : null;
+  if (import_node_path35.default.isAbsolute(binary2)) {
+    return (0, import_node_fs21.existsSync)(binary2) ? binary2 : null;
   }
   if (binary2.includes("/")) {
-    return (0, import_node_fs20.existsSync)(binary2) ? binary2 : null;
+    return (0, import_node_fs21.existsSync)(binary2) ? binary2 : null;
   }
   return binary2;
 }
@@ -182901,8 +183387,8 @@ var Receiving = class {
     const searchParams = new URLSearchParams();
     if (options.html_format !== void 0) searchParams.set("html_format", options.html_format);
     const queryString3 = searchParams.toString();
-    const path28 = queryString3 ? `/emails/receiving/${id2}?${queryString3}` : `/emails/receiving/${id2}`;
-    return await this.resend.get(path28);
+    const path30 = queryString3 ? `/emails/receiving/${id2}?${queryString3}` : `/emails/receiving/${id2}`;
+    return await this.resend.get(path30);
   }
   async list(options = {}) {
     const queryString3 = buildPaginationQuery(options);
@@ -183290,9 +183776,9 @@ var Resend = class {
       "Content-Type": "application/json"
     });
   }
-  async fetchRequest(path28, options = {}) {
+  async fetchRequest(path30, options = {}) {
     try {
-      const response = await fetch(`${this.baseUrl}${path28}`, options);
+      const response = await fetch(`${this.baseUrl}${path30}`, options);
       if (!response.ok) try {
         const rawError = await response.text();
         return {
@@ -183346,7 +183832,7 @@ var Resend = class {
       };
     }
   }
-  async post(path28, entity, options = {}) {
+  async post(path30, entity, options = {}) {
     const headers = new Headers(this.headers);
     const isFormData = typeof FormData !== "undefined" && entity instanceof FormData;
     if (isFormData) headers.delete("Content-Type");
@@ -183358,9 +183844,9 @@ var Resend = class {
       ...options,
       headers
     };
-    return this.fetchRequest(path28, requestOptions2);
+    return this.fetchRequest(path30, requestOptions2);
   }
-  async get(path28, options = {}) {
+  async get(path30, options = {}) {
     const headers = new Headers(this.headers);
     if (options.headers) for (const [key, value2] of new Headers(options.headers).entries()) headers.set(key, value2);
     const requestOptions2 = {
@@ -183368,9 +183854,9 @@ var Resend = class {
       ...options,
       headers
     };
-    return this.fetchRequest(path28, requestOptions2);
+    return this.fetchRequest(path30, requestOptions2);
   }
-  async put(path28, entity, options = {}) {
+  async put(path30, entity, options = {}) {
     const headers = new Headers(this.headers);
     if (options.headers) for (const [key, value2] of new Headers(options.headers).entries()) headers.set(key, value2);
     const requestOptions2 = {
@@ -183379,9 +183865,9 @@ var Resend = class {
       ...options,
       headers
     };
-    return this.fetchRequest(path28, requestOptions2);
+    return this.fetchRequest(path30, requestOptions2);
   }
-  async patch(path28, entity, options = {}) {
+  async patch(path30, entity, options = {}) {
     const headers = new Headers(this.headers);
     if (options.headers) for (const [key, value2] of new Headers(options.headers).entries()) headers.set(key, value2);
     const requestOptions2 = {
@@ -183390,9 +183876,9 @@ var Resend = class {
       ...options,
       headers
     };
-    return this.fetchRequest(path28, requestOptions2);
+    return this.fetchRequest(path30, requestOptions2);
   }
-  async delete(path28, query, options = {}) {
+  async delete(path30, query, options = {}) {
     const headers = new Headers(this.headers);
     if (options.headers) for (const [key, value2] of new Headers(options.headers).entries()) headers.set(key, value2);
     const requestOptions2 = {
@@ -183401,7 +183887,7 @@ var Resend = class {
       ...options,
       headers
     };
-    return this.fetchRequest(path28, requestOptions2);
+    return this.fetchRequest(path30, requestOptions2);
   }
 };
 
@@ -189562,9 +190048,9 @@ var ChatProposals = class _ChatProposals extends ChatStore {
 // ../packages/core/service/chat/conversations.ts
 var Conversations = class _Conversations extends ChatStore {
   /** Resolve HTTP observations through the same private owner gate as domain reads. */
-  async observeHttp(owner, method, path28, request, response) {
-    if (path28.includes("/diagnostics")) return;
-    const [family, id2] = path28.split("/").filter(Boolean);
+  async observeHttp(owner, method, path30, request, response) {
+    if (path30.includes("/diagnostics")) return;
+    const [family, id2] = path30.split("/").filter(Boolean);
     let threadId;
     if (family === "threads" && id2) threadId = id2;
     else if (id2) {
@@ -189583,7 +190069,7 @@ var Conversations = class _Conversations extends ChatStore {
     } catch {
       return;
     }
-    await this.diagnostic(threadId, "http.exchange", { method, path: path28, request, response });
+    await this.diagnostic(threadId, "http.exchange", { method, path: path30, request, response });
   }
   async diagnostics(owner, threadId, after) {
     if (!Number.isSafeInteger(after) || after < 0) throw new ChatError("invalid_request");
@@ -190757,60 +191243,60 @@ var FIND_FEATURE_MISSIONS_DECLARATION = {
     ["projectId", "workspace", "featureNodeId"]
   )
 };
-function validateToolArguments(schema2, value2, path28 = "arguments") {
+function validateToolArguments(schema2, value2, path30 = "arguments") {
   switch (schema2.type) {
     case void 0:
       return null;
     // Any JSON value; the reviewed tool's own validator bounds its size.
     case "object": {
-      if (!value2 || typeof value2 !== "object" || Array.isArray(value2)) return `${path28}_not_object`;
+      if (!value2 || typeof value2 !== "object" || Array.isArray(value2)) return `${path30}_not_object`;
       const record2 = value2;
       for (const key of schema2.required ?? [])
-        if (record2[key] === void 0 || record2[key] === null) return `${path28}.${key}_required`;
+        if (record2[key] === void 0 || record2[key] === null) return `${path30}.${key}_required`;
       if (schema2.maxProperties !== void 0 && Object.keys(record2).length > schema2.maxProperties)
-        return `${path28}_too_many_properties`;
+        return `${path30}_too_many_properties`;
       for (const [key, item] of Object.entries(record2)) {
         const declared = schema2.properties?.[key];
         const child = declared ?? (typeof schema2.additionalProperties === "object" ? schema2.additionalProperties : null);
         if (!child) {
-          if (schema2.additionalProperties === false) return `${path28}.${key}_not_allowed`;
+          if (schema2.additionalProperties === false) return `${path30}.${key}_not_allowed`;
           continue;
         }
         if (declared && (item === void 0 || item === null)) continue;
-        const error64 = validateToolArguments(child, item, `${path28}.${key}`);
+        const error64 = validateToolArguments(child, item, `${path30}.${key}`);
         if (error64) return error64;
       }
       return null;
     }
     case "number":
-      if (typeof value2 !== "number" || !Number.isFinite(value2)) return `${path28}_not_number`;
-      if (schema2.minimum !== void 0 && value2 < schema2.minimum) return `${path28}_too_small`;
-      if (schema2.maximum !== void 0 && value2 > schema2.maximum) return `${path28}_too_large`;
+      if (typeof value2 !== "number" || !Number.isFinite(value2)) return `${path30}_not_number`;
+      if (schema2.minimum !== void 0 && value2 < schema2.minimum) return `${path30}_too_small`;
+      if (schema2.maximum !== void 0 && value2 > schema2.maximum) return `${path30}_too_large`;
       return null;
     case "string":
-      if (typeof value2 !== "string") return `${path28}_not_string`;
+      if (typeof value2 !== "string") return `${path30}_not_string`;
       if (schema2.minLength !== void 0 && value2.length < schema2.minLength)
-        return `${path28}_too_short`;
+        return `${path30}_too_short`;
       if (schema2.maxLength !== void 0 && value2.length > schema2.maxLength)
-        return `${path28}_too_long`;
-      if (schema2.enum && !schema2.enum.includes(value2)) return `${path28}_not_allowed_value`;
-      if (schema2.pattern && !new RegExp(schema2.pattern).test(value2)) return `${path28}_bad_format`;
+        return `${path30}_too_long`;
+      if (schema2.enum && !schema2.enum.includes(value2)) return `${path30}_not_allowed_value`;
+      if (schema2.pattern && !new RegExp(schema2.pattern).test(value2)) return `${path30}_bad_format`;
       return null;
     case "integer":
-      if (!Number.isSafeInteger(value2)) return `${path28}_not_integer`;
+      if (!Number.isSafeInteger(value2)) return `${path30}_not_integer`;
       if (schema2.minimum !== void 0 && value2 < schema2.minimum)
-        return `${path28}_too_small`;
+        return `${path30}_too_small`;
       if (schema2.maximum !== void 0 && value2 > schema2.maximum)
-        return `${path28}_too_large`;
+        return `${path30}_too_large`;
       return null;
     case "boolean":
-      return typeof value2 === "boolean" ? null : `${path28}_not_boolean`;
+      return typeof value2 === "boolean" ? null : `${path30}_not_boolean`;
     case "array":
-      if (!Array.isArray(value2)) return `${path28}_not_array`;
+      if (!Array.isArray(value2)) return `${path30}_not_array`;
       if (schema2.maxItems !== void 0 && value2.length > schema2.maxItems)
-        return `${path28}_too_many`;
+        return `${path30}_too_many`;
       for (let i5 = 0; i5 < value2.length; i5++) {
-        const error64 = schema2.items ? validateToolArguments(schema2.items, value2[i5], `${path28}.${i5}`) : null;
+        const error64 = schema2.items ? validateToolArguments(schema2.items, value2[i5], `${path30}.${i5}`) : null;
         if (error64) return error64;
       }
       return null;
@@ -193460,7 +193946,7 @@ var workspace = {
 };
 var uuid3 = (description) => ({ type: "string", description, pattern: UUID });
 var nodeId = uuid3("Node UUID.");
-var path26 = {
+var path28 = {
   type: "string",
   description: "Workspace-relative document path.",
   minLength: 1,
@@ -193517,7 +194003,7 @@ var READS = [
   {
     name: "read_file",
     description: "Read one Knowledgebase document by path, with its metadata and expected_version (pass that to edit_file).",
-    inputSchema: object2({ workspace, path: path26 }, ["workspace", "path"])
+    inputSchema: object2({ workspace, path: path28 }, ["workspace", "path"])
   },
   {
     name: "get_related",
@@ -193547,7 +194033,7 @@ var READS = [
     inputSchema: object2(
       {
         workspace,
-        path: path26,
+        path: path28,
         node_id: nodeId,
         direction: { type: "string", enum: ["outgoing", "incoming", "both"] }
       },
@@ -193634,7 +194120,7 @@ var WRITES = {
     inputSchema: object2(
       {
         workspace,
-        path: path26,
+        path: path28,
         expected_version: {
           type: "string",
           description: 'Always "new" (create only).',
@@ -193655,7 +194141,7 @@ var WRITES = {
     inputSchema: object2(
       {
         workspace,
-        path: path26,
+        path: path28,
         old_text: { type: "string", maxLength: BODY_CHARS },
         new_text: { type: "string", maxLength: BODY_CHARS },
         expected_version: { type: "string", minLength: 1, maxLength: 200 }
@@ -197157,7 +197643,10 @@ async function updateProjectResourceLatchHost({
   });
   const parsed = updateProjectResourceLatchHostBodySchema.safeParse(body);
   if (!parsed.success)
-    throw new ApiError(400, "Provide a source revision and a Latch host public key or null.");
+    throw new ApiError(
+      400,
+      "Provide a source revision and valid Latch host or shared root fields."
+    );
   const ctx = await buildWebappServiceContextForWorkspace(
     scope2.workspaceId,
     void 0,
@@ -197470,7 +197959,9 @@ async function completeRunnerMutationRequest({
     });
   }
   const request = await getExecutionRequest({ ctx, id: requestId });
-  return serviceSummaryToDto(request);
+  const dto = serviceSummaryToDto(request);
+  const isResourceRead = (completed ?? parseLocalTargetMutation(request.metadata))?.capability === READ_PROJECT_RESOURCE;
+  return isResourceRead ? { ...dto, metadata: {}, workingDirectory: null } : dto;
 }
 var BRANCH_AUTOMATION_ACTIONS = {
   create: true,
@@ -197880,10 +198371,10 @@ async function pruneChangeFeedBatch(db, options = {}) {
 
 // ext/everhour/service.ts
 var EVERHOUR_BASE_URL = "https://api.everhour.com";
-async function everhourFetch(apiKey, path28, init2 = {}) {
+async function everhourFetch(apiKey, path30, init2 = {}) {
   let res;
   try {
-    res = await fetch(`${EVERHOUR_BASE_URL}${path28}`, {
+    res = await fetch(`${EVERHOUR_BASE_URL}${path30}`, {
       method: init2.method ?? "GET",
       headers: {
         "X-Api-Key": apiKey,
@@ -199198,12 +199689,12 @@ function createGitHubUserOAuth(connections) {
       nextUrl: nextMatch?.[1] ?? null
     };
   }
-  async function githubUserFetch(path28, token, init2 = {}) {
-    return (await githubUserFetchUrl(path28, token, init2)).data;
+  async function githubUserFetch(path30, token, init2 = {}) {
+    return (await githubUserFetchUrl(path30, token, init2)).data;
   }
-  async function githubUserFetchAll(path28, token) {
+  async function githubUserFetchAll(path30, token) {
     const rows = [];
-    let nextUrl = path28;
+    let nextUrl = path30;
     const visited = /* @__PURE__ */ new Set();
     while (nextUrl) {
       const canonical = new URL(nextUrl, GITHUB_API3).toString();
@@ -199557,8 +200048,8 @@ var byKey = new Map(
 function operationFor(method, openapiPath) {
   return byKey.get(`${method.toUpperCase()} ${openapiPath}`) ?? null;
 }
-function templateSegments(path28) {
-  return path28.split("/").slice(1);
+function templateSegments(path30) {
+  return path30.split("/").slice(1);
 }
 function bindPathParameters(operation2, requestPath) {
   const template = templateSegments(operation2.path);
@@ -199599,7 +200090,7 @@ function matchOperation(method, requestPath) {
 }
 
 // http/conformance-report.ts
-var import_node_fs21 = require("node:fs");
+var import_node_fs22 = require("node:fs");
 var CONFORMANCE_REPORT_ENV = "OVERLORD_API_CONFORMANCE_REPORT";
 function conformanceReportPath(env3 = process.env) {
   const value2 = env3[CONFORMANCE_REPORT_ENV]?.trim();
@@ -199608,7 +200099,7 @@ function conformanceReportPath(env3 = process.env) {
 function recordConformance(record2) {
   const file2 = conformanceReportPath();
   if (!file2) return;
-  (0, import_node_fs21.appendFileSync)(file2, `${JSON.stringify(record2)}
+  (0, import_node_fs22.appendFileSync)(file2, `${JSON.stringify(record2)}
 `);
 }
 
@@ -199680,9 +200171,9 @@ function deferMalformedBody(parser) {
     });
   };
 }
-function issuePath(path28, prefix = "") {
+function issuePath(path30, prefix = "") {
   let out = prefix;
-  for (const segment of path28) {
+  for (const segment of path30) {
     if (typeof segment === "number") out += `[${segment}]`;
     else out += out ? `.${String(segment)}` : String(segment);
   }
@@ -201769,8 +202260,8 @@ var OWN_JSON_BODY_PREFIXES = [
   AGENT_REQUEST_HUMAN_ROUTE_PREFIX,
   AGENT_SESSION_INPUT_HUMAN_ROUTE_PREFIX
 ];
-function agentSessionRoutesOwnJsonBody(path28) {
-  return OWN_JSON_BODY_PREFIXES.some((prefix) => path28 === prefix || path28.startsWith(`${prefix}/`));
+function agentSessionRoutesOwnJsonBody(path30) {
+  return OWN_JSON_BODY_PREFIXES.some((prefix) => path30 === prefix || path30.startsWith(`${prefix}/`));
 }
 async function prepareMissionSessionChannel(_missionRef, _body) {
   sessionControlsGone();
@@ -202213,8 +202704,8 @@ function extractBearerToken(req) {
   return token || null;
 }
 function usesNonBrowserAuthSurface(req) {
-  const path28 = req.path || req.url || req.originalUrl;
-  return path28 === "/protocol" || path28.startsWith("/protocol/") || path28 === "/runner" || path28.startsWith("/runner/") || path28 === "/mcp" || path28.startsWith("/mcp/");
+  const path30 = req.path || req.url || req.originalUrl;
+  return path30 === "/protocol" || path30.startsWith("/protocol/") || path30 === "/runner" || path30.startsWith("/runner/") || path30 === "/mcp" || path30.startsWith("/mcp/");
 }
 function isLoopbackAddress(addr) {
   if (!addr) return false;
@@ -202374,7 +202865,7 @@ var ChangeFeedRetentionWorker = class extends PollLoop {
 
 // chat.ts
 var import_express6 = __toESM(require_express2(), 1);
-var import_promises5 = require("node:timers/promises");
+var import_promises6 = require("node:timers/promises");
 
 // ../packages/core/service/chat/notifications.ts
 var PLATFORMS = ["ios", "web", "desktop"];
@@ -202762,7 +203253,7 @@ function createChatRouter(options) {
           heartbeatAt = Date.now();
         }
         if (!page.hasMore)
-          await (0, import_promises5.setTimeout)(options.streamPollMs ?? 500, void 0, { signal: controller.signal });
+          await (0, import_promises6.setTimeout)(options.streamPollMs ?? 500, void 0, { signal: controller.signal });
         page = await service.events(caller, id2, after);
       }
     })().catch(async (error64) => {
@@ -206235,8 +206726,8 @@ var ALLOWED = [
 ];
 function projectAutomationRouteGuard(req, res, next) {
   if (getActiveTokenProjectIds() === null) return next();
-  const path28 = req.originalUrl.split("?")[0] ?? "";
-  if (ALLOWED.some(([method, pattern]) => req.method === method && pattern.test(path28)))
+  const path30 = req.originalUrl.split("?")[0] ?? "";
+  if (ALLOWED.some(([method, pattern]) => req.method === method && pattern.test(path30)))
     return next();
   res.status(404).json({ error: "Not found" });
 }
@@ -206280,6 +206771,151 @@ async function postProjectRepositoryRead({
     signal: signal ?? null,
     queueOptions: { createCompletionListener: createCompletionListenerFactory() }
   });
+}
+
+// project-resource-reads.ts
+async function projectReadContext(projectId) {
+  const { workspaceId: workspaceId2, workspaceUserId } = await requireProjectPermission({
+    projectId,
+    permission: PERMISSIONS.PROJECT_READ
+  });
+  return buildWebappServiceContextForWorkspace(workspaceId2, void 0, workspaceUserId);
+}
+async function getProjectResourceReadCatalog(projectId) {
+  return listProjectResourceReadCatalog(await projectReadContext(projectId), projectId);
+}
+function normalizePaths(request) {
+  function normalize2(value2) {
+    const checked = normalizeRepositoryRelativePath(value2);
+    if (!checked.ok || value2 !== void 0 && checked.relativePath !== value2) {
+      throw new ServiceError("Use an exact resource-relative path.", "invalid_request", 400);
+    }
+    return checked.relativePath;
+  }
+  switch (request.operation) {
+    case "list_directory":
+      return { ...request, relativePath: normalize2(request.relativePath) };
+    case "read_file":
+      if (!normalize2(request.relativePath)) {
+        throw new ServiceError("A file path is required.", "invalid_request", 400);
+      }
+      return request;
+    case "diff":
+      if (!normalize2(request.relativePath)) {
+        throw new ServiceError("A changed file path is required.", "invalid_request", 400);
+      }
+      return request;
+    case "git_status":
+      return request;
+  }
+}
+var outcomeMessages = {
+  target_offline: "The owning runner is offline.",
+  unsupported: "Update the native runner to read this checkout.",
+  timeout: "The runner did not answer in time.",
+  unavailable: "The resource could not be read.",
+  denied: "The runner could not safely read this path.",
+  binary: "This file is binary or is not valid UTF-8.",
+  oversized: "This file exceeds the preview size limit.",
+  not_found: "This path is no longer available.",
+  not_git_repository: "The linked directory is not a Git worktree root."
+};
+function unavailable2(outcome) {
+  return {
+    outcome,
+    message: outcomeMessages[outcome],
+    observedAt: (/* @__PURE__ */ new Date()).toISOString(),
+    branch: null,
+    truncated: false,
+    data: null
+  };
+}
+function sourceNotFound() {
+  throw new ServiceError("Project resource source not found or changed.", "not_found", 404);
+}
+async function postProjectResourceRead({
+  projectId,
+  body,
+  signal
+}) {
+  const ctx = await projectReadContext(projectId);
+  const parsed = projectResourceReadRequestSchema.safeParse(body);
+  if (!parsed.success) {
+    throw new ServiceError(
+      "A valid project source and read operation are required.",
+      "invalid_request",
+      400
+    );
+  }
+  const request = normalizePaths(parsed.data);
+  const deadline = Date.now() + PROJECT_RESOURCE_READ_TIMEOUT_MS;
+  const release2 = await repositoryReadLimiter.acquire(
+    `user:${ctx.actorWorkspaceUserId}`,
+    PROJECT_RESOURCE_READ_TIMEOUT_MS,
+    signal
+  );
+  if (!release2) return unavailable2("timeout");
+  try {
+    const source = await resolveProjectResourceReadSource({ ctx, projectId, source: request });
+    if (!source) sourceNotFound();
+    const catalog = await listProjectResourceReadCatalog(ctx, projectId);
+    const binding = catalog.find((resource) => resource.id === source.resourceId)?.sources.find(
+      (entry) => entry.sourceId === request.sourceId && entry.sourceRevision === request.sourceRevision
+    );
+    if (!binding) sourceNotFound();
+    if (binding.availability !== "ready") return unavailable2(binding.availability);
+    if (signal.aborted || Date.now() >= deadline) return unavailable2("timeout");
+    const provider = new RunnerQueueProvider(
+      targetMetadata(
+        { executionTargetId: request.executionTargetId, type: "local", reachable: true },
+        "runner_queue"
+      ),
+      {
+        ctx,
+        projectId,
+        resourceKey: request.resourceKey,
+        signal,
+        readTimeoutMs: Math.max(1, deadline - Date.now()),
+        createCompletionListener: createCompletionListenerFactory()
+      }
+    );
+    const answer = await provider.readProjectResource({
+      ...request,
+      repoPath: "",
+      resourceId: source.resourceId
+    });
+    const currentCtx = await projectReadContext(projectId);
+    if (currentCtx.actorWorkspaceUserId !== ctx.actorWorkspaceUserId || !await resolveProjectResourceReadSource({ ctx: currentCtx, projectId, source: request })) {
+      sourceNotFound();
+    }
+    if (!answer.ok) {
+      switch (answer.code) {
+        case "NOT_GIT_REPOSITORY":
+          return unavailable2("not_git_repository");
+        case "LOCAL_TARGET_TIMEOUT":
+          return unavailable2("timeout");
+        case "LOCAL_TARGET_UNREACHABLE":
+          return unavailable2("target_offline");
+        case "RESOURCE_MISSING":
+          return unavailable2("not_found");
+        case "PERMISSION_DENIED":
+          return unavailable2("denied");
+        default:
+          return unavailable2("unavailable");
+      }
+    }
+    const { outcome, branch, observedAt, truncated, data } = answer.value;
+    return {
+      outcome,
+      branch,
+      observedAt,
+      truncated,
+      data,
+      message: outcome === "ok" ? null : outcomeMessages[outcome]
+    };
+  } finally {
+    release2();
+  }
 }
 
 // run-queue.ts
@@ -206822,7 +207458,7 @@ var terminalSessionObserver = new TerminalSessionObserver();
 
 // webhook-security.ts
 var import_node_crypto53 = require("node:crypto");
-var import_promises6 = __toESM(require("node:dns/promises"), 1);
+var import_promises7 = __toESM(require("node:dns/promises"), 1);
 var import_node_net = require("node:net");
 function signWebhookPayload(secret, rawBody) {
   const timestamp2 = Math.floor(Date.now() / 1e3);
@@ -206905,7 +207541,7 @@ async function assertPublicWebhookTarget(url2) {
   assertNotPrivateAddressLiteral(url2);
   const hostname5 = urlHostAddress(url2);
   if ((0, import_node_net.isIP)(hostname5)) return;
-  const records = await import_promises6.default.lookup(hostname5, { all: true });
+  const records = await import_promises7.default.lookup(hostname5, { all: true });
   for (const record2 of records) {
     if (record2.family === 4 && isPrivateIPv4(record2.address)) {
       throw new ApiError(
@@ -207629,8 +208265,8 @@ async function getAuthorizedWorkspaceDiscovery() {
 }
 
 // app.ts
-var here2 = import_node_path33.default.dirname((0, import_node_url6.fileURLToPath)(__overlord_import_meta_url));
-var distDir = process.env.OVERLORD_WEBAPP_DIST ? import_node_path33.default.resolve(process.env.OVERLORD_WEBAPP_DIST) : import_node_path33.default.resolve(here2, "..", "dist");
+var here2 = import_node_path36.default.dirname((0, import_node_url6.fileURLToPath)(__overlord_import_meta_url));
+var distDir = process.env.OVERLORD_WEBAPP_DIST ? import_node_path36.default.resolve(process.env.OVERLORD_WEBAPP_DIST) : import_node_path36.default.resolve(here2, "..", "dist");
 var MIN_BACKEND_NODE_MAJOR = 24;
 function assertSupportedBackendNodeVersion() {
   const major = Number.parseInt(process.versions.node.split(".")[0] ?? "", 10);
@@ -208685,6 +209321,28 @@ app.post(
   })
 );
 app.get(
+  "/api/projects/:id/resource-reads",
+  handle3((req, res) => {
+    res.setHeader("Cache-Control", "private, no-store");
+    return getProjectResourceReadCatalog(req.params.id);
+  })
+);
+app.post(
+  "/api/projects/:id/resource-reads",
+  handle3((req, res) => {
+    res.setHeader("Cache-Control", "private, no-store");
+    const controller = new AbortController();
+    res.on("close", () => {
+      if (!res.writableEnded) controller.abort();
+    });
+    return postProjectResourceRead({
+      projectId: req.params.id,
+      body: req.body,
+      signal: controller.signal
+    });
+  })
+);
+app.get(
   "/api/projects/:id/repository",
   handle3((req) => {
     const executionTargetId = queryString(req, "executionTargetId", { first: false });
@@ -209278,11 +209936,11 @@ app.post(
     requires: PERMISSIONS.PROJECT_UPDATE
   })
 );
-if (resolveServeSpa({ dialect: DATABASE_DIALECT }) && (0, import_node_fs22.existsSync)(distDir)) {
+if (resolveServeSpa({ dialect: DATABASE_DIALECT }) && (0, import_node_fs23.existsSync)(distDir)) {
   app.use(import_express7.default.static(distDir));
   app.get("*", (req, res, next) => {
     if (req.path.startsWith("/api/")) return next();
-    res.sendFile(import_node_path33.default.join(distDir, "index.html"));
+    res.sendFile(import_node_path36.default.join(distDir, "index.html"));
   });
 }
 installRequestValidation(app);
