@@ -82,3 +82,45 @@ describe('Markdown full formatting', () => {
     assert.match(html, /<pre[^>]*><code>const a = \*\*1\*\*;<\/code><\/pre>/);
   });
 });
+
+describe('Markdown underscore emphasis', () => {
+  const render = (text: string) => renderToStaticMarkup(createElement(Markdown, { text }));
+
+  it('keeps snake_case identifiers literal', () => {
+    const html = render('The rule in app.request_outstanding_items. Also my_var_name and a_b_c.');
+    assert.doesNotMatch(html, /<em/);
+    assert.match(html, /app\.request_outstanding_items\./);
+    assert.match(html, /my_var_name/);
+  });
+
+  it('keeps snake_case literal in headings', () => {
+    const html = render('# app.request_outstanding_items.');
+    assert.doesNotMatch(html, /<em/);
+    assert.match(html, /app\.request_outstanding_items\./);
+  });
+
+  it('italicizes underscore text bookended by spaces', () => {
+    const html = render('an _italic phrase_ here');
+    assert.match(html, /<em[^>]*>italic phrase<\/em>/);
+  });
+
+  it('italicizes at the start and end of text and next to punctuation', () => {
+    assert.match(render('_start_ of line'), /<em[^>]*>start<\/em>/);
+    assert.match(render('end of _line_'), /<em[^>]*>line<\/em>/);
+    assert.match(render('see (_this_), ok'), /<em[^>]*>this<\/em>/);
+  });
+
+  it('does not treat intraword __dunder__ underscores as bold', () => {
+    const html = render('call foo__bar__baz now');
+    assert.doesNotMatch(html, /<strong/);
+    assert.match(html, /foo__bar__baz/);
+  });
+
+  it('still bolds __text__ bookended by spaces', () => {
+    assert.match(render('a __bold__ b'), /<strong[^>]*>bold<\/strong>/);
+  });
+
+  it('still honors asterisk emphasis inside words', () => {
+    assert.match(render('un*frigging*believable'), /<em[^>]*>frigging<\/em>/);
+  });
+});

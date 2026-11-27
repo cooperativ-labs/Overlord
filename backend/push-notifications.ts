@@ -64,6 +64,19 @@ const CATEGORY_VERBS: Record<PushNotificationCategory, string> = Object.fromEntr
   PUSH_NOTIFICATION_CATEGORIES.map(category => [category, NOTIFICATION_CATALOG[category].verb])
 ) as Record<PushNotificationCategory, string>;
 
+/**
+ * Leading glyph per push category, so the kind of notification reads at a glance
+ * on the lock screen. APNs cannot render SF Symbols, so these are the emoji
+ * counterparts of the in-app drawer icons (blocked = alert triangle, failed =
+ * stop, review/delivered = check). Fixed, code-owned text like the verbs.
+ */
+const CATEGORY_ICONS: Record<PushNotificationCategory, string> = {
+  agent_question: '\u26A0\uFE0F',
+  mission_failed: '\u{1F6D1}',
+  mission_awaiting_review: '\u2705',
+  mission_complete: '\u{1F3C1}'
+} as Record<PushNotificationCategory, string>;
+
 export type PushNotificationPresentation = {
   title: string;
   body: string;
@@ -76,6 +89,11 @@ export type PushNotificationPresentation = {
   category: PushNotificationCategory;
   deepLink: string;
 };
+
+function pushBody(category: PushNotificationCategory, body: string): string {
+  const icon = CATEGORY_ICONS[category];
+  return icon ? `${icon} ${body}` : body;
+}
 
 // ---- Device token registration -------------------------------------------
 
@@ -417,7 +435,7 @@ export async function buildPushNotificationPresentation({
   });
   return {
     title: bounded(mission.project_name.trim() || 'Project', PROJECT_NAME_MAX_LENGTH),
-    body: notificationBody(subject, CATEGORY_VERBS[category]),
+    body: pushBody(category, notificationBody(subject, CATEGORY_VERBS[category])),
     badge,
     missionId: mission.id,
     objectiveId: objective?.id ?? null,

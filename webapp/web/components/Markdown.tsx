@@ -22,26 +22,32 @@ type InlineToken =
 
 // Ordered so the earliest match at each position wins (code before emphasis so
 // `**` inside backticks is left literal).
+//
+// Underscore emphasis only applies at a word boundary: the opening `_`/`__`
+// must not follow a letter, digit or underscore, and the closing one must not
+// precede one. That keeps snake_case identifiers (`app.request_outstanding_items`)
+// literal. Patterns are global so the lookbehind sees the text before `lastIndex`.
 const INLINE_PATTERNS: Array<{ kind: InlineToken['kind']; re: RegExp }> = [
-  { kind: 'code', re: /`([^`]+)`/ },
-  { kind: 'link', re: /\[([^\]]+)\]\(([^)\s]+)\)/ },
-  { kind: 'strong', re: /\*\*(\*[^*]+\*)\*\*/ },
-  { kind: 'strong', re: /\*\*(.+?)\*\*/ },
-  { kind: 'strong', re: /__(.+?)__/ },
-  { kind: 'del', re: /~~(.+?)~~/ },
-  { kind: 'em', re: /\*([^*]+)\*/ },
-  { kind: 'em', re: /_([^_]+)_/ }
+  { kind: 'code', re: /`([^`]+)`/g },
+  { kind: 'link', re: /\[([^\]]+)\]\(([^)\s]+)\)/g },
+  { kind: 'strong', re: /\*\*(\*[^*]+\*)\*\*/g },
+  { kind: 'strong', re: /\*\*(.+?)\*\*/g },
+  { kind: 'strong', re: /(?<![\p{L}\p{N}_])__(.+?)__(?![\p{L}\p{N}_])/gu },
+  { kind: 'del', re: /~~(.+?)~~/g },
+  { kind: 'em', re: /\*([^*]+)\*/g },
+  { kind: 'em', re: /(?<![\p{L}\p{N}_])_([^_]+)_(?![\p{L}\p{N}_])/gu }
 ];
 
 function parseInline(text: string): InlineToken[] {
   const tokens: InlineToken[] = [];
-  let rest = text;
+  let pos = 0;
 
-  while (rest.length > 0) {
+  while (pos < text.length) {
     let best: { index: number; length: number; token: InlineToken } | null = null;
 
     for (const { kind, re } of INLINE_PATTERNS) {
-      const match = re.exec(rest);
+      re.lastIndex = pos;
+      const match = re.exec(text);
       if (!match) continue;
       if (best && match.index >= best.index) continue;
       const token: InlineToken =
@@ -52,15 +58,15 @@ function parseInline(text: string): InlineToken[] {
     }
 
     if (!best) {
-      tokens.push({ kind: 'text', value: rest });
+      tokens.push({ kind: 'text', value: text.slice(pos) });
       break;
     }
 
-    if (best.index > 0) {
-      tokens.push({ kind: 'text', value: rest.slice(0, best.index) });
+    if (best.index > pos) {
+      tokens.push({ kind: 'text', value: text.slice(pos, best.index) });
     }
     tokens.push(best.token);
-    rest = rest.slice(best.index + best.length);
+    pos = best.index + best.length;
   }
 
   return tokens;

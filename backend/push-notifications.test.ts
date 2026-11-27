@@ -385,7 +385,7 @@ test('an objective-scoped push leads with the objective display id and title', a
   );
   assert.equal(
     presentation.body,
-    `${mission.displayId}.${objective.displayKey}: Phase C: Activity surfaces needs your input`
+    `⚠️ ${mission.displayId}.${objective.displayKey}: Phase C: Activity surfaces needs your input`
   );
   assert.equal(
     presentation.deepLink,
