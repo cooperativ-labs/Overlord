@@ -24984,7 +24984,7 @@ var require_pg_pool = __commonJS({
     function throwOnDoubleRelease() {
       throw new Error("Release called on client which has already been released to the pool.");
     }
-    function promisify2(Promise2, callback) {
+    function promisify3(Promise2, callback) {
       if (callback) {
         return { callback, result: void 0 };
       }
@@ -25122,7 +25122,7 @@ var require_pg_pool = __commonJS({
           const err = new Error("Cannot use a pool after calling end on the pool");
           return cb ? cb(err) : this.Promise.reject(err);
         }
-        const response = promisify2(this.Promise, cb);
+        const response = promisify3(this.Promise, cb);
         const result2 = response.result;
         if (this._isFull() || this._idle.length) {
           if (this._idle.length) {
@@ -25307,7 +25307,7 @@ var require_pg_pool = __commonJS({
       }
       query(text, values, cb) {
         if (typeof text === "function") {
-          const response2 = promisify2(this.Promise, text);
+          const response2 = promisify3(this.Promise, text);
           setImmediate(function() {
             return response2.callback(new Error("Passing a function as the first parameter to pool.query is not supported"));
           });
@@ -25317,7 +25317,7 @@ var require_pg_pool = __commonJS({
           cb = values;
           values = void 0;
         }
-        const response = promisify2(this.Promise, cb);
+        const response = promisify3(this.Promise, cb);
         cb = response.callback;
         this.connect((err, client) => {
           if (err) {
@@ -25362,7 +25362,7 @@ var require_pg_pool = __commonJS({
           return cb ? cb(err) : this.Promise.reject(err);
         }
         this.ending = true;
-        const promised = promisify2(this.Promise, cb);
+        const promised = promisify3(this.Promise, cb);
         this._endCallback = promised.callback;
         this._pulseQueue();
         return promised.result;
@@ -77494,14 +77494,14 @@ var init_getProfileName = __esm({
 });
 
 // ../node_modules/@smithy/core/dist-es/submodules/config/shared-ini-file-loader/getSSOTokenFilepath.js
-var import_node_crypto20, import_node_path22, getSSOTokenFilepath;
+var import_node_crypto22, import_node_path22, getSSOTokenFilepath;
 var init_getSSOTokenFilepath = __esm({
   "../node_modules/@smithy/core/dist-es/submodules/config/shared-ini-file-loader/getSSOTokenFilepath.js"() {
-    import_node_crypto20 = require("node:crypto");
+    import_node_crypto22 = require("node:crypto");
     import_node_path22 = require("node:path");
     init_getHomeDir();
     getSSOTokenFilepath = (id2) => {
-      const hasher = (0, import_node_crypto20.createHash)("sha1");
+      const hasher = (0, import_node_crypto22.createHash)("sha1");
       const cacheName = hasher.update(id2).digest("hex");
       return (0, import_node_path22.join)(getHomeDir(), ".aws", "sso", "cache", `${cacheName}.json`);
     };
@@ -79672,10 +79672,10 @@ function castSourceData(toCast, encoding) {
   }
   return fromArrayBuffer(toCast);
 }
-var import_node_crypto21, Hash;
+var import_node_crypto23, Hash;
 var init_hash_node = __esm({
   "../node_modules/@smithy/core/dist-es/submodules/serde/hash-node/hash-node.js"() {
-    import_node_crypto21 = require("node:crypto");
+    import_node_crypto23 = require("node:crypto");
     init_buffer_from();
     init_toUint8Array();
     Hash = class {
@@ -79694,7 +79694,7 @@ var init_hash_node = __esm({
         return Promise.resolve(this.hash.digest());
       }
       reset() {
-        this.hash = this.secret ? (0, import_node_crypto21.createHmac)(this.algorithmIdentifier, castSourceData(this.secret)) : (0, import_node_crypto21.createHash)(this.algorithmIdentifier);
+        this.hash = this.secret ? (0, import_node_crypto23.createHmac)(this.algorithmIdentifier, castSourceData(this.secret)) : (0, import_node_crypto23.createHash)(this.algorithmIdentifier);
       }
     };
   }
@@ -80588,10 +80588,10 @@ __export(serde_exports, {
   toUtf8: () => toUtf8,
   v4: () => v4
 });
-var import_node_crypto22, Uint8ArrayBlobAdapter, _getRandomValues, v4, generateIdempotencyToken;
+var import_node_crypto24, Uint8ArrayBlobAdapter, _getRandomValues, v4, generateIdempotencyToken;
 var init_serde = __esm({
   "../node_modules/@smithy/core/dist-es/submodules/serde/index.js"() {
-    import_node_crypto22 = require("node:crypto");
+    import_node_crypto24 = require("node:crypto");
     init_fromBase64();
     init_toBase64();
     init_Uint8ArrayBlobAdapter();
@@ -80628,7 +80628,7 @@ var init_serde = __esm({
     init_stream_collector();
     Uint8ArrayBlobAdapter = class extends bindUint8ArrayBlobAdapter(toUtf8, fromUtf8, toBase64, fromBase64) {
     };
-    _getRandomValues = import_node_crypto22.getRandomValues;
+    _getRandomValues = import_node_crypto24.getRandomValues;
     v4 = bindV4(_getRandomValues);
     generateIdempotencyToken = v4;
   }
@@ -105525,7 +105525,7 @@ var require_dist_cjs16 = __commonJS({
     var { setCredentialFeature: setCredentialFeature2 } = (init_client3(), __toCommonJS(client_exports2));
     var { CredentialsProviderError: CredentialsProviderError2, readFile: readFile4, parseKnownFiles: parseKnownFiles2, getProfileName: getProfileName2 } = (init_config2(), __toCommonJS(config_exports));
     var { HttpRequest: HttpRequest2 } = (init_protocols(), __toCommonJS(protocols_exports));
-    var { createHash: createHash34, createPrivateKey, createPublicKey, sign: sign2 } = require("node:crypto");
+    var { createHash: createHash36, createPrivateKey, createPublicKey, sign: sign2 } = require("node:crypto");
     var { promises } = require("node:fs");
     var { homedir: homedir2 } = require("node:os");
     var { dirname, join: join6 } = require("node:path");
@@ -105686,7 +105686,7 @@ var require_dist_cjs16 = __commonJS({
       getTokenFilePath() {
         const directory = process.env.AWS_LOGIN_CACHE_DIRECTORY ?? join6(homedir2(), ".aws", "login", "cache");
         const loginSessionBytes = Buffer.from(this.loginSession, "utf8");
-        const loginSessionSha256 = createHash34("sha256").update(loginSessionBytes).digest("hex");
+        const loginSessionSha256 = createHash36("sha256").update(loginSessionBytes).digest("hex");
         return join6(directory, `${loginSessionSha256}.json`);
       }
       derToRawSignature(derSignature) {
@@ -107007,7 +107007,7 @@ var require_dist_cjs17 = __commonJS({
   "../node_modules/@aws-sdk/credential-provider-process/dist-cjs/index.js"(exports2) {
     var { externalDataInterceptor: externalDataInterceptor2, CredentialsProviderError: CredentialsProviderError2, parseKnownFiles: parseKnownFiles2, getProfileName: getProfileName2 } = (init_config2(), __toCommonJS(config_exports));
     var { exec } = require("node:child_process");
-    var { promisify: promisify2 } = require("node:util");
+    var { promisify: promisify3 } = require("node:util");
     var { setCredentialFeature: setCredentialFeature2 } = (init_client3(), __toCommonJS(client_exports2));
     var getValidatedProcessCredentials = (profileName, data, profiles) => {
       if (data.Version !== 1) {
@@ -107043,7 +107043,7 @@ var require_dist_cjs17 = __commonJS({
       if (profiles[profileName]) {
         const credentialProcess = profile["credential_process"];
         if (credentialProcess !== void 0) {
-          const execPromise = promisify2(externalDataInterceptor2?.getTokenRecord?.().exec ?? exec);
+          const execPromise = promisify3(externalDataInterceptor2?.getTokenRecord?.().exec ?? exec);
           try {
             const { stdout } = await execPromise(credentialProcess);
             let data;
@@ -107715,7 +107715,7 @@ var init_Md5Js = __esm({
 function buildNativeClass() {
   return class Md5Node {
     digestLength = 16;
-    hash = (0, import_node_crypto23.createHash)("md5");
+    hash = (0, import_node_crypto25.createHash)("md5");
     update(data) {
       this.hash.update(toUint8Array2(data));
     }
@@ -107724,19 +107724,19 @@ function buildNativeClass() {
       return new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength);
     }
     reset() {
-      this.hash = (0, import_node_crypto23.createHash)("md5");
+      this.hash = (0, import_node_crypto25.createHash)("md5");
     }
   };
 }
-var import_node_crypto23, hasNativeCrypto, Md5Node;
+var import_node_crypto25, hasNativeCrypto, Md5Node;
 var init_Md5Node = __esm({
   "../node_modules/@smithy/core/dist-es/submodules/checksum/md5/Md5Node.js"() {
-    import_node_crypto23 = require("node:crypto");
+    import_node_crypto25 = require("node:crypto");
     init_serde();
     init_Md5Js();
     hasNativeCrypto = (() => {
       try {
-        (0, import_node_crypto23.createHash)("md5");
+        (0, import_node_crypto25.createHash)("md5");
         return true;
       } catch {
         return false;
@@ -108080,7 +108080,7 @@ function buildNativeClass3() {
       this.finished = false;
     }
     createHash() {
-      return this.secret ? (0, import_node_crypto24.createHmac)("sha256", toBuffer(this.secret)) : (0, import_node_crypto24.createHash)("sha256");
+      return this.secret ? (0, import_node_crypto26.createHmac)("sha256", toBuffer(this.secret)) : (0, import_node_crypto26.createHash)("sha256");
     }
   };
 }
@@ -108093,14 +108093,14 @@ function toBuffer(data) {
   }
   return Buffer.from(data);
 }
-var import_node_crypto24, hasNativeCrypto2, Sha256Node;
+var import_node_crypto26, hasNativeCrypto2, Sha256Node;
 var init_Sha256Node = __esm({
   "../node_modules/@smithy/core/dist-es/submodules/checksum/sha256/Sha256Node.js"() {
-    import_node_crypto24 = require("node:crypto");
+    import_node_crypto26 = require("node:crypto");
     init_Sha256Js();
     hasNativeCrypto2 = (() => {
       try {
-        (0, import_node_crypto24.createHash)("sha256");
+        (0, import_node_crypto26.createHash)("sha256");
         return true;
       } catch {
         return false;
@@ -135348,7 +135348,7 @@ var projectDtoSchema = external_exports.object({ "id": external_exports.string()
 var projectStatusDtoSchema = external_exports.object({ "id": external_exports.string(), "workspaceId": external_exports.string(), "projectId": external_exports.string(), "key": external_exports.string(), "name": external_exports.string(), "type": statusTypeSchema, "position": external_exports.int().min(0), "isDefault": external_exports.boolean(), "isTerminal": external_exports.boolean() });
 var projectTagDtoSchema = external_exports.object({ "id": external_exports.string(), "projectId": external_exports.string(), "label": external_exports.string(), "color": external_exports.string().nullable(), "active": external_exports.boolean() });
 var projectResourceAccessModeSchema = external_exports.enum(["read", "read_write"]);
-var projectResourceSourceDtoSchema = external_exports.object({ "id": external_exports.string(), "executionTargetId": external_exports.string().nullable(), "sourceKind": external_exports.string(), "descriptor": external_exports.record(external_exports.string(), external_exports.unknown()), "launchDefaults": external_exports.record(external_exports.string(), agentLaunchConfigDtoSchema), "observedRevision": external_exports.string().nullable(), "observedContentDigest": external_exports.string().nullable() });
+var projectResourceSourceDtoSchema = external_exports.object({ "id": external_exports.string(), "executionTargetId": external_exports.string().nullable(), "sourceKind": external_exports.string(), "descriptor": external_exports.record(external_exports.string(), external_exports.unknown()), "launchDefaults": external_exports.record(external_exports.string(), agentLaunchConfigDtoSchema), "observedRevision": external_exports.string().nullable(), "observedContentDigest": external_exports.string().nullable(), "latchHostLink": external_exports.exactOptional(external_exports.object({ "sourceRevision": external_exports.int().min(1), "state": external_exports.enum(["unlinked", "linked", "ambiguous"]), "canVerify": external_exports.boolean(), "canUnlink": external_exports.boolean(), "hostPublicKey": external_exports.exactOptional(external_exports.string().min(64).max(64)) })) });
 var projectResourceDtoSchema = external_exports.object({ "id": external_exports.string(), "workspaceId": external_exports.string(), "projectId": external_exports.string(), "executionTargetId": external_exports.string().nullable(), "resourceKey": external_exports.string(), "type": external_exports.string(), "label": external_exports.string().nullable(), "path": external_exports.string(), "isPrimary": external_exports.boolean(), "accessMode": projectResourceAccessModeSchema, "status": external_exports.enum(["active", "missing", "archived"]), "observedAt": dateTimeSchema.nullable(), "observationSource": external_exports.literal("client").nullable(), "createdAt": dateTimeSchema, "updatedAt": dateTimeSchema, "revision": external_exports.int().min(1), "sources": external_exports.array(projectResourceSourceDtoSchema) });
 var missionCreatorTokenDtoSchema = external_exports.object({ "tokenId": external_exports.string(), "label": external_exports.string() });
 var objectiveRunQueueEntryDtoSchema = external_exports.object({ "id": external_exports.string(), "queueId": external_exports.string(), "queueName": external_exports.string(), "position": external_exports.int().min(1), "state": external_exports.enum(["waiting", "blocked", "dispatched", "running"]), "blockedReason": external_exports.string().nullable(), "waitingReason": external_exports.enum(["mission_busy", "resource_disconnected", "retry_pending"]).nullable(), "waitingOnObjectiveId": external_exports.string().nullable(), "waitingOnObjectiveDisplayId": external_exports.string().nullable(), "attemptCount": external_exports.int().min(0), "precededBy": external_exports.null() });
@@ -135393,6 +135393,7 @@ var missionListSchema = external_exports.array(missionDtoSchema);
 var projectResourceListSchema = external_exports.array(projectResourceDtoSchema);
 var createProjectResourceBodySchema = external_exports.object({ "directoryPath": external_exports.exactOptional(external_exports.string()), "path": external_exports.exactOptional(external_exports.string()), "sourceUrl": external_exports.exactOptional(external_exports.string()), "resourceKey": external_exports.exactOptional(external_exports.string().nullable()), "label": external_exports.exactOptional(external_exports.string().nullable()), "isPrimary": external_exports.exactOptional(external_exports.boolean()), "executionTargetId": external_exports.exactOptional(external_exports.string().nullable()), "accessMode": external_exports.exactOptional(projectResourceAccessModeSchema) });
 var updateProjectResourceBodySchema = external_exports.object({ "resourceKey": external_exports.exactOptional(external_exports.string().nullable()), "isPrimary": external_exports.exactOptional(external_exports.boolean()), "accessMode": external_exports.exactOptional(projectResourceAccessModeSchema) });
+var updateProjectResourceLatchHostBodySchema = external_exports.strictObject({ "sourceRevision": external_exports.int().min(1), "hostPublicKey": external_exports.string().min(64).max(64).nullable() });
 var updateProjectResourceSourceBodySchema = external_exports.object({ "launchDefaults": external_exports.record(external_exports.string(), agentLaunchConfigInputSchema) });
 var missionSearchDateFieldSchema = external_exports.enum(["createdAt", "updatedAt", "dueDatetime"]);
 var missionSearchMatchKindSchema = external_exports.enum(["title", "displayId", "objective", "event", "delivery", "constraints", "notes"]);
@@ -135566,7 +135567,7 @@ var entityChangeOperationSchema = external_exports.enum(["insert", "update", "de
 var entityChangeDtoSchema = external_exports.object({ "seq": external_exports.int().min(1), "workspaceId": external_exports.string(), "entityType": external_exports.string(), "entityId": external_exports.string(), "operation": entityChangeOperationSchema, "projectId": external_exports.string().nullable(), "missionId": external_exports.string().nullable(), "objectiveId": external_exports.string().nullable(), "changedFields": external_exports.array(external_exports.string()), "occurredAt": dateTimeSchema });
 var syncChangesDtoSchema = external_exports.object({ "changes": external_exports.array(entityChangeDtoSchema), "cursor": external_exports.int().min(0), "hasMore": external_exports.boolean() });
 var realtimeChangeEventDtoSchema = external_exports.object({ "type": external_exports.literal("change"), "changes": external_exports.array(entityChangeDtoSchema), "cursor": external_exports.int().min(0) });
-var realtimeStreamEventSchema = external_exports.union([external_exports.object({ "type": external_exports.literal("hello"), "cursor": external_exports.int().min(0) }), realtimeChangeEventDtoSchema, external_exports.object({ "type": external_exports.literal("refresh") }), external_exports.object({ "type": external_exports.literal("snapshot_required"), "cursor": external_exports.int().min(0) })]);
+var realtimeStreamEventSchema = external_exports.union([external_exports.object({ "type": external_exports.literal("hello"), "cursor": external_exports.int().min(0), "replayComplete": external_exports.exactOptional(external_exports.literal(true)) }), realtimeChangeEventDtoSchema, external_exports.object({ "type": external_exports.literal("refresh") }), external_exports.object({ "type": external_exports.literal("snapshot_required"), "cursor": external_exports.int().min(0) })]);
 var oAuthScopeSchema = external_exports.enum(["overlord.workspace.read", "overlord.mission.read", "overlord.mission.write", "overlord.session.write"]);
 var oAuthProtectedResourceMetadataSchema = external_exports.object({ "resource": external_exports.string(), "authorization_servers": external_exports.array(external_exports.string()), "bearer_methods_supported": external_exports.array(external_exports.literal("header")), "resource_documentation": external_exports.string(), "scopes_supported": external_exports.array(oAuthScopeSchema) });
 var oAuthAuthorizationServerMetadataSchema = external_exports.object({ "issuer": external_exports.string(), "authorization_endpoint": external_exports.string(), "token_endpoint": external_exports.string(), "registration_endpoint": external_exports.string(), "revocation_endpoint": external_exports.string(), "response_types_supported": external_exports.array(external_exports.literal("code")), "grant_types_supported": external_exports.array(external_exports.literal("authorization_code")), "code_challenge_methods_supported": external_exports.array(external_exports.literal("S256")), "token_endpoint_auth_methods_supported": external_exports.array(external_exports.literal("none")), "scopes_supported": external_exports.array(oAuthScopeSchema) });
@@ -135863,7 +135864,7 @@ var postUploadsByBucketKeyHeaderParamsSchema = external_exports.object({ "x-uplo
 var getStorageByBucketKeyByStorageKeyPathParamsSchema = external_exports.object({ "bucketKey": external_exports.string(), "storageKey": external_exports.string() });
 var getStreamQueryParamsSchema = external_exports.object({ "after": external_exports.exactOptional(external_exports.string()) });
 var getStreamHeaderParamsSchema = external_exports.object({ "last-event-id": external_exports.exactOptional(external_exports.string()) });
-var getRealtimeQueryParamsSchema = external_exports.object({ "after": external_exports.exactOptional(external_exports.string()) });
+var getRealtimeQueryParamsSchema = external_exports.object({ "after": external_exports.exactOptional(external_exports.string()), "replayComplete": external_exports.exactOptional(external_exports.literal("1")) });
 var getRealtimeHeaderParamsSchema = external_exports.object({ "last-event-id": external_exports.exactOptional(external_exports.string()) });
 var getSyncBaselineResponse200Schema = external_exports.object({ "cursor": external_exports.int().min(0) });
 var getSyncChangesQueryParamsSchema = external_exports.object({ "after": external_exports.string() });
@@ -135906,6 +135907,7 @@ var deleteProjectsByIdResourcesByResourceIdPathParamsSchema = external_exports.o
 var patchProjectsByIdResourcesByResourceIdPathParamsSchema = external_exports.object({ "id": external_exports.string(), "resourceId": external_exports.string() });
 var deleteProjectsByIdResourcesByResourceIdSourcesBySourceIdPathParamsSchema = external_exports.object({ "id": external_exports.string(), "resourceId": external_exports.string(), "sourceId": external_exports.string() });
 var patchProjectsByIdResourcesByResourceIdSourcesBySourceIdPathParamsSchema = external_exports.object({ "id": external_exports.string(), "resourceId": external_exports.string(), "sourceId": external_exports.string() });
+var putProjectsByIdResourcesByResourceIdSourcesBySourceIdLatchHostPathParamsSchema = external_exports.object({ "id": external_exports.string(), "resourceId": external_exports.string(), "sourceId": external_exports.string() });
 var postProjectsByIdRepositoryReadsPathParamsSchema = external_exports.object({ "id": external_exports.string() });
 var getProjectsByIdRepositoryPathParamsSchema = external_exports.object({ "id": external_exports.string() });
 var getProjectsByIdRepositoryQueryParamsSchema = external_exports.object({ "executionTargetId": external_exports.exactOptional(external_exports.string()), "resourceKey": external_exports.exactOptional(external_exports.string()) });
@@ -139096,6 +139098,25 @@ var apiOperations = {
     parameters: { path: patchProjectsByIdResourcesByResourceIdSourcesBySourceIdPathParamsSchema, query: null, header: null },
     requestBody: { required: true, content: { "application/json": { kind: "json", schema: updateProjectResourceSourceBodySchema } } },
     responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: projectResourceDtoSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
+  },
+  /**
+   * PUT /api/projects/{id}/resources/{resourceId}/sources/{sourceId}/latch-host: Verify or revoke a resource source's Latch host link
+   */
+  putProjectsByIdResourcesByResourceIdSourcesBySourceIdLatchHost: {
+    operationId: "putProjectsByIdResourcesByResourceIdSourcesBySourceIdLatchHost",
+    method: "PUT",
+    path: "/api/projects/{id}/resources/{resourceId}/sources/{sourceId}/latch-host",
+    tags: ["project-resources"],
+    deprecated: false,
+    permission: "project:update",
+    permissionCandidates: [],
+    edition: "both",
+    consumers: ["webapp"],
+    extension: null,
+    security: [{ "sessionCookie": [] }, { "sessionBearer": [] }, { "userToken": [] }],
+    parameters: { path: putProjectsByIdResourcesByResourceIdSourcesBySourceIdLatchHostPathParamsSchema, query: null, header: null },
+    requestBody: { required: true, content: { "application/json": { kind: "json", schema: updateProjectResourceLatchHostBodySchema } } },
+    responses: { "200": { headers: [], content: { "application/json": { kind: "json", schema: okResponseSchema } } }, "400": apiResponses.BadRequest, "401": apiResponses.Unauthorized, "403": apiResponses.Forbidden, "404": apiResponses.NotFound, "409": apiResponses.Conflict, "413": apiResponses.PayloadTooLarge, "500": apiResponses.InternalError }
   },
   /**
    * POST /api/projects/{id}/repository-reads: Run a bounded read-only repository read on an execution target
@@ -143818,14 +143839,16 @@ async function withCommittedFeed(client, read) {
     return read(tx);
   });
 }
+async function readCommittedFeedBounds(tx) {
+  const row = await tx.get(
+    `SELECT (SELECT MAX(seq) FROM entity_changes) AS seq, retained_through FROM entity_change_retention WHERE id = 1`
+  );
+  if (!row) throw new Error("Change-feed retention boundary is missing");
+  const retainedThrough = Number(row.retained_through);
+  return { highWaterMark: Math.max(Number(row.seq ?? 0), retainedThrough), retainedThrough };
+}
 async function currentMaxSeq(client = requireDatabaseClient()) {
-  return withCommittedFeed(client, async (tx) => {
-    const row = await tx.get(
-      `SELECT (SELECT MAX(seq) FROM entity_changes) AS seq, retained_through FROM entity_change_retention WHERE id = 1`
-    );
-    if (!row) throw new Error("Change-feed retention boundary is missing");
-    return Math.max(Number(row.seq ?? 0), Number(row.retained_through));
-  });
+  return withCommittedFeed(client, async (tx) => (await readCommittedFeedBounds(tx)).highWaterMark);
 }
 
 // ../packages/core/service/errors.ts
@@ -149143,8 +149166,10 @@ function discoverLatchForExecutionTarget({
   return result2;
 }
 
-// ../packages/core/service/latch-session.ts
+// ../packages/core/service/latch-host-identity.ts
 var import_node_child_process4 = require("node:child_process");
+var import_node_crypto12 = require("node:crypto");
+var import_node_util = require("node:util");
 
 // ../packages/core/service/latch-binary.ts
 var import_node_fs11 = require("node:fs");
@@ -149164,6 +149189,34 @@ function latchBinaryMissingMessage(executable) {
   const name2 = trimmedOrNull(executable) ?? DEFAULT_LATCH_EXECUTABLE;
   return `Latch executable "${name2}" was not found on this device (checked PATH, ~/.local/bin, and the Homebrew prefixes).`;
 }
+
+// ../packages/core/service/latch-host-identity.ts
+var READ_LATCH_HOST_IDENTITY = "readLatchHostIdentity";
+var execFileAsync = (0, import_node_util.promisify)(import_node_child_process4.execFile);
+function isLatchHostPublicKey(value2) {
+  return typeof value2 === "string" && /^[0-9a-f]{64}$/.test(value2) && !/^0+$/.test(value2);
+}
+function latchHostKeyDigest(key) {
+  return (0, import_node_crypto12.createHash)("sha256").update(Buffer.from(key, "hex")).digest("hex");
+}
+async function readLatchHostIdentity() {
+  const binary2 = resolveLatchBinaryPath();
+  if (!binary2) return null;
+  try {
+    const { stdout } = await execFileAsync(binary2, ["remote-access", "status", "--json"], {
+      env: latchChildEnvironment(),
+      timeout: 5e3,
+      maxBuffer: 16384
+    });
+    const status = JSON.parse(stdout);
+    return status?.formatVersion === 2 && status.enabled === true && isLatchHostPublicKey(status.publicKey) ? { hostKeyDigest: latchHostKeyDigest(status.publicKey) } : null;
+  } catch {
+    return null;
+  }
+}
+
+// ../packages/core/service/latch-session.ts
+var import_node_child_process5 = require("node:child_process");
 
 // ../packages/core/service/latch-gateway.ts
 var import_node_fs12 = require("node:fs");
@@ -149537,7 +149590,7 @@ async function runLatchJson({
   const binary2 = resolveLatchBinaryPath(executable);
   if (!binary2) throw new LatchSessionCommandError(latchBinaryMissingMessage(executable));
   const result2 = await new Promise((resolve, reject) => {
-    (0, import_node_child_process4.execFile)(
+    (0, import_node_child_process5.execFile)(
       binary2,
       args,
       {
@@ -149945,10 +149998,10 @@ function runConversationOperation({
 }
 
 // ../packages/core/service/local-target/doctor-checks.ts
-var import_node_child_process5 = require("node:child_process");
+var import_node_child_process6 = require("node:child_process");
 function commandOnPath(command, args) {
   try {
-    const detail = (0, import_node_child_process5.execFileSync)(command, args, {
+    const detail = (0, import_node_child_process6.execFileSync)(command, args, {
       encoding: "utf8",
       stdio: ["ignore", "pipe", "ignore"]
     }).trim();
@@ -149962,7 +150015,7 @@ function runLocalTargetDoctorChecks() {
 }
 
 // ../packages/core/service/local-target/project-metadata.ts
-var import_node_child_process6 = require("node:child_process");
+var import_node_child_process7 = require("node:child_process");
 var import_node_fs13 = require("node:fs");
 var import_node_path16 = __toESM(require("node:path"), 1);
 var PROJECT_JSON_VERSION = 3;
@@ -150013,7 +150066,7 @@ function ensureGitignore(checkoutPath) {
 }
 function resolveGitRoot(directoryPath) {
   try {
-    return (0, import_node_child_process6.execFileSync)("git", ["-C", directoryPath, "rev-parse", "--show-toplevel"], {
+    return (0, import_node_child_process7.execFileSync)("git", ["-C", directoryPath, "rev-parse", "--show-toplevel"], {
       encoding: "utf8",
       stdio: ["ignore", "pipe", "ignore"]
     }).trim();
@@ -150451,6 +150504,15 @@ var InProcessProvider = class {
       );
     }
   }
+  async readLatchHostIdentity() {
+    const identity = await readLatchHostIdentity();
+    if (identity) return ok2(this.target, identity);
+    return fail(
+      this.target,
+      "TARGET_OPERATION_FAILED",
+      "Latch Remote Link has no identity on this runner."
+    );
+  }
   async inspectLatchSession(input2) {
     try {
       return ok2(this.target, await inspectLatchSession(input2));
@@ -150628,6 +150690,9 @@ var UnavailableProvider = class {
   discoverLatch(_input) {
     return this.#fail();
   }
+  readLatchHostIdentity() {
+    return this.#fail();
+  }
   inspectLatchSession(_input) {
     return this.#fail();
   }
@@ -150722,17 +150787,17 @@ async function enqueueLiveActivityStartForMission({
 var AWAY_DECISION_WINDOW_SECONDS = 30 * 60;
 
 // ../packages/core/service/agent-session/credential.ts
-var import_node_crypto12 = require("node:crypto");
+var import_node_crypto13 = require("node:crypto");
 var SESSION_CHANNEL_TOKEN_PREFIX = "osc_";
 var SESSION_CHANNEL_TOKEN_HASH_ALGORITHM = "sha256";
 var SESSION_CHANNEL_LEASE_SECONDS = 180;
 var SESSION_CHANNEL_ABSOLUTE_LIFETIME_SECONDS = 60 * 60 * 24;
 function hashSessionChannelToken(rawToken) {
-  return (0, import_node_crypto12.createHash)(SESSION_CHANNEL_TOKEN_HASH_ALGORITHM).update(rawToken).digest("hex");
+  return (0, import_node_crypto13.createHash)(SESSION_CHANNEL_TOKEN_HASH_ALGORITHM).update(rawToken).digest("hex");
 }
 function generateSessionChannelToken() {
-  const prefix = `${SESSION_CHANNEL_TOKEN_PREFIX}${(0, import_node_crypto12.randomBytes)(4).toString("hex")}`;
-  const secret = `${prefix}${(0, import_node_crypto12.randomBytes)(32).toString("base64url")}`;
+  const prefix = `${SESSION_CHANNEL_TOKEN_PREFIX}${(0, import_node_crypto13.randomBytes)(4).toString("hex")}`;
+  const secret = `${prefix}${(0, import_node_crypto13.randomBytes)(32).toString("base64url")}`;
   return { secret, prefix, hash: hashSessionChannelToken(secret) };
 }
 function addSeconds(iso2, seconds2) {
@@ -151494,6 +151559,7 @@ var LOCAL_TARGET_CAPABILITY_NAMES = [
   "generateCommitMessageFromLocalDiff",
   "launchAgent",
   "discoverLatch",
+  "readLatchHostIdentity",
   "inspectLatchSession",
   "openLatchSession",
   "stopLatchSession",
@@ -151504,902 +151570,14 @@ function isQueueableCapabilityName(value2) {
   return typeof value2 === "string" && value2 !== "launchAgent" && LOCAL_TARGET_CAPABILITY_NAMES.includes(value2);
 }
 
-// ../packages/core/service/latch-provider-session.ts
-function parseMetadata(value2) {
-  if (!value2?.trim()) return {};
-  try {
-    const parsed = JSON.parse(value2);
-    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
-  } catch {
-    return {};
-  }
-}
-async function bindProviderSessionAgentSession({
-  ctx,
-  executionRequestId,
-  agentSessionId
-}) {
-  const row = await ctx.db.get(
-    `SELECT metadata_json FROM execution_requests WHERE id = ? AND deleted_at IS NULL`,
-    [executionRequestId]
-  );
-  if (!row) return;
-  const providerSession = providerSessionFromMetadata(parseMetadata(row.metadata_json));
-  if (!providerSession || providerSession.agentSessionId === agentSessionId) return;
-  await ctx.db.run(
-    `UPDATE execution_requests SET metadata_json = ?, updated_at = ?, revision = revision + 1
-      WHERE id = ? AND deleted_at IS NULL`,
-    [
-      mergeProviderSessionIntoMetadata({
-        metadataJson: row.metadata_json,
-        providerSession: { ...providerSession, agentSessionId }
-      }),
-      nowIso(),
-      executionRequestId
-    ]
-  );
-}
-async function resolveLatchSessionForAgentSession({
-  ctx,
-  sessionId
-}) {
-  const rows = await ctx.db.all(
-    `SELECT metadata_json, claimed_by_execution_target_id, execution_target_id
-       FROM execution_requests
-      WHERE workspace_id = ? AND launched_session_id = ? AND deleted_at IS NULL
-      ORDER BY updated_at DESC, created_at DESC`,
-    [ctx.workspace.id, sessionId]
-  );
-  for (const row of rows) {
-    const providerSession = providerSessionFromMetadata(parseMetadata(row.metadata_json));
-    const targetId = providerSession?.executionTargetId ?? row.claimed_by_execution_target_id ?? row.execution_target_id;
-    if (!providerSession || !targetId) continue;
-    return {
-      targetId,
-      providerSessionId: providerSession.providerSessionId,
-      lastObservedState: providerSession.lastObservedState
-    };
-  }
-  return null;
-}
-async function forgetLatchProviderSession({
-  ctx,
-  missionId,
-  executionRequestId,
-  providerSessionId,
-  backgroundObservation
-}) {
-  const sessionId = providerSessionId.trim();
-  if (!sessionId) {
-    throw new ServiceError("A Latch session id is required.", "validation_error");
-  }
-  return ctx.db.transaction(async (tx) => {
-    const rows = await tx.all(
-      executionRequestId ? `SELECT id, project_id, mission_id, objective_id, metadata_json, updated_at, revision,
-                  COALESCE(claimed_by_execution_target_id, execution_target_id) AS target_id
-             FROM execution_requests
-            WHERE id = ? AND mission_id = ? AND workspace_id = ? AND deleted_at IS NULL` : `SELECT id, project_id, mission_id, objective_id, metadata_json, updated_at, revision,
-                  COALESCE(claimed_by_execution_target_id, execution_target_id) AS target_id
-             FROM execution_requests
-            WHERE mission_id = ? AND workspace_id = ? AND deleted_at IS NULL
-            ORDER BY updated_at DESC, created_at DESC`,
-      executionRequestId ? [executionRequestId, missionId, ctx.workspace.id] : [missionId, ctx.workspace.id]
-    );
-    const row = rows.find((candidate) => {
-      const mapped2 = providerSessionFromMetadata(parseMetadata(candidate.metadata_json));
-      return mapped2?.providerSessionId === sessionId;
-    });
-    if (!row) return { forgotten: false, executionRequestId: executionRequestId ?? null };
-    const previous = parseMetadata(row.metadata_json);
-    const mapped = providerSessionFromMetadata(previous);
-    if (backgroundObservation && (!mapped || (mapped.executionTargetId ?? row.target_id) !== backgroundObservation.executionTargetId || mapped.lastObservedState === "exited" || mapped.lastObservedAt && mapped.lastObservedAt > backgroundObservation.startedAt || mapped.endRequestedAt && mapped.endRequestedAt > backgroundObservation.startedAt))
-      return { forgotten: false, executionRequestId: row.id };
-    const stripped = parseMetadata(
-      stripProviderSessionFromMetadata({ metadataJson: row.metadata_json })
-    );
-    if (mapped?.lastObservedState === "exited")
-      stripped.endedTerminalSession = {
-        ...mapped,
-        endedAt: mapped.endedAt ?? row.updated_at,
-        endReason: mapped.endReason ?? "unknown"
-      };
-    const metadataJson = JSON.stringify(stripped);
-    const revision3 = row.revision + 1;
-    const updated = await tx.run(
-      `UPDATE execution_requests SET metadata_json = ?, updated_at = ?, revision = ?
-        WHERE id = ? AND revision = ? AND deleted_at IS NULL`,
-      [metadataJson, nowIso(), revision3, row.id, row.revision]
-    );
-    if (updated.changes === 0) {
-      throw new ServiceError(
-        "Execution request changed while forgetting the Latch session",
-        "execution_request_conflict",
-        409
-      );
-    }
-    await recordChange({
-      ctx: { ...ctx, db: tx },
-      entityType: "execution_request",
-      entityId: row.id,
-      operation: "update",
-      entityRevision: revision3,
-      projectId: row.project_id,
-      missionId: row.mission_id,
-      objectiveId: row.objective_id,
-      changedFields: ["metadata_json"]
-    });
-    return { forgotten: true, executionRequestId: row.id };
-  });
-}
-async function forgetAbsentLatchProviderSessions({
-  ctx,
-  projectId,
-  executionTargetId,
-  providerSessionId
-}) {
-  const rows = await ctx.db.all(
-    `SELECT id, mission_id, metadata_json FROM execution_requests
-     WHERE workspace_id = ? AND project_id = ? AND mission_id IS NOT NULL
-       AND COALESCE(claimed_by_execution_target_id, execution_target_id) = ?
-       AND deleted_at IS NULL`,
-    [ctx.workspace.id, projectId, executionTargetId]
-  );
-  for (const row of rows) {
-    if (providerSessionFromMetadata(parseMetadata(row.metadata_json))?.providerSessionId !== providerSessionId)
-      continue;
-    await forgetLatchProviderSession({
-      ctx,
-      missionId: row.mission_id,
-      executionRequestId: row.id,
-      providerSessionId
-    });
-  }
-}
-
-// ../packages/core/service/local-target-mutations.ts
-var LOCAL_TARGET_MUTATION_METADATA_KEY = "overlord.localTargetMutation";
-var LOCAL_TARGET_MUTATION_REQUESTED_SOURCE = "local_target_mutation";
-var LOCAL_TARGET_MUTATION_READ_TIMEOUT_MS = 3e4;
-var LOCAL_TARGET_MUTATION_WRITE_TIMEOUT_MS = 12e4;
-var DEFAULT_RESULT_POLL_INTERVAL_MS = 250;
-var TERMINAL_WITHOUT_RESULT = ["failed", "cleared", "cancelled", "expired"];
-function buildLocalTargetMutationMetadata({
-  kind,
-  capability,
-  input: input2,
-  resourceKey = null
-}) {
-  const key = resourceKey?.trim();
-  return {
-    [LOCAL_TARGET_MUTATION_METADATA_KEY]: {
-      kind,
-      capability,
-      input: input2,
-      ...key ? { resourceKey: key } : {}
-    }
-  };
-}
-function parseLocalTargetMutation(metadataJson) {
-  const metadata = typeof metadataJson === "string" ? parseMetadataJson(metadataJson) : metadataJson;
-  const raw = metadata[LOCAL_TARGET_MUTATION_METADATA_KEY];
-  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
-  const payload = raw;
-  const kind = payload.kind;
-  const capability = payload.capability;
-  if (kind !== "branch_action" && kind !== "worktree_purge" && kind !== "capability_call") {
-    return null;
-  }
-  if (!isQueueableCapabilityName(capability)) return null;
-  const input2 = payload.input && typeof payload.input === "object" && !Array.isArray(payload.input) ? payload.input : {};
-  const resourceKey = typeof payload.resourceKey === "string" && payload.resourceKey.trim() ? payload.resourceKey.trim() : void 0;
-  const result2 = payload.result;
-  const parsedResult = result2 && typeof result2 === "object" && !Array.isArray(result2) ? result2 : void 0;
-  return {
-    kind,
-    capability,
-    input: input2,
-    ...resourceKey ? { resourceKey } : {},
-    ...parsedResult ? { result: parsedResult } : {}
-  };
-}
-function storedResultToCapabilityResult(target, stored) {
-  if (stored.ok) return { ok: true, value: stored.value, target };
-  return fail(
-    target,
-    toLocalTargetErrorCode(stored.code),
-    stored.message,
-    stored.details === void 0 ? void 0 : stored.details
-  );
-}
-async function resolveMutationObjectiveId({
-  ctx,
-  missionId
-}) {
-  const row = await ctx.db.get(
-    `SELECT id FROM objectives
-        WHERE mission_id = ? AND workspace_id = ? AND deleted_at IS NULL
-        ORDER BY position ASC
-        LIMIT 1`,
-    [missionId, ctx.workspace.id]
-  );
-  if (!row) {
-    throw new ServiceError(
-      "Mission has no objectives to anchor a local-target mutation request.",
-      "no_objective_for_mutation",
-      409
-    );
-  }
-  return row.id;
-}
-async function createLocalTargetMutationRequest({
-  ctx,
-  projectId,
-  missionId = null,
-  executionTargetId,
-  kind,
-  capability,
-  input: input2,
-  operationId = null,
-  resourceKey = null,
-  backgroundProbeKey = null,
-  eventSummary
-}) {
-  const mission = missionId === null ? null : await resolveMissionId(ctx, missionId);
-  const resolvedProjectId = await resolveProjectId(ctx, projectId);
-  const objectiveId = mission === null ? null : await resolveMutationObjectiveId({ ctx, missionId: mission.id });
-  const idempotencyKey = operationId?.trim() || null;
-  if (idempotencyKey !== null) {
-    const existing = await ctx.db.get(
-      `SELECT id, created_at FROM execution_requests
-        WHERE workspace_id = ? AND idempotency_key = ? AND deleted_at IS NULL`,
-      [ctx.workspace.id, idempotencyKey]
-    );
-    if (existing) return { id: existing.id, reused: true, createdAt: existing.created_at };
-  }
-  const now2 = nowIso();
-  const id2 = newId();
-  const metadata = buildLocalTargetMutationMetadata({ kind, capability, input: input2, resourceKey });
-  await ctx.db.transaction(async (tx) => {
-    const txCtx = { ...ctx, db: tx };
-    await txCtx.db.run(
-      `INSERT INTO execution_requests
-           (id, workspace_id, project_id, mission_id, objective_id, execution_target_id,
-            requested_agent, requested_model, requested_reasoning_effort, launch_mode,
-            launch_flags_json, requested_source, idempotency_key, status,
-            requested_by_workspace_user_id, resolved_resource_id, resolved_working_directory,
-            metadata_json, created_at, updated_at, revision, background_probe_key)
-         VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, NULL, 'run', '{}', ?, ?, 'queued', ?, NULL, NULL, ?, ?, ?, 1, ?)`,
-      [
-        id2,
-        ctx.workspace.id,
-        resolvedProjectId,
-        mission?.id ?? null,
-        objectiveId,
-        executionTargetId,
-        LOCAL_TARGET_MUTATION_REQUESTED_SOURCE,
-        idempotencyKey,
-        ctx.actorWorkspaceUserId,
-        JSON.stringify(metadata),
-        now2,
-        now2,
-        backgroundProbeKey
-      ]
-    );
-    if (backgroundProbeKey === null)
-      await recordChange({
-        ctx: txCtx,
-        entityType: "execution_request",
-        entityId: id2,
-        operation: "insert",
-        entityRevision: 1,
-        projectId: resolvedProjectId,
-        missionId: mission?.id ?? null,
-        objectiveId,
-        changedFields: ["status", "requested_source", "metadata_json"]
-      });
-    if (mission !== null && objectiveId !== null) {
-      await txCtx.db.run(
-        `INSERT INTO mission_events
-             (id, workspace_id, project_id, mission_id, objective_id, type, phase, summary,
-              payload_json, source, actor_workspace_user_id, created_at)
-           VALUES (?, ?, ?, ?, ?, 'execution_requested', 'execute', ?, ?, 'webapp', ?, ?)`,
-        [
-          newId(),
-          ctx.workspace.id,
-          resolvedProjectId,
-          mission.id,
-          objectiveId,
-          eventSummary ?? `Delegated ${kind.replace("_", " ")} on remote execution target.`,
-          JSON.stringify({ executionRequestId: id2, kind, capability }),
-          ctx.actorWorkspaceUserId,
-          now2
-        ]
-      );
-    }
-  });
-  return { id: id2, reused: false, createdAt: now2 };
-}
-function sleep(ms, signal = null) {
-  return new Promise((resolve) => {
-    const timer = setTimeout(done, ms);
-    function done() {
-      clearTimeout(timer);
-      signal?.removeEventListener("abort", done);
-      resolve();
-    }
-    signal?.addEventListener("abort", done, { once: true });
-  });
-}
-async function readLocalTargetMutationResult({
-  ctx,
-  requestId,
-  target
-}) {
-  const row = await ctx.db.get(
-    `SELECT status, metadata_json, last_error
-       FROM execution_requests
-      WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
-    [requestId, ctx.workspace.id]
-  );
-  if (!row) {
-    return fail(target, "TARGET_OPERATION_FAILED", "The queued capability call no longer exists.", {
-      executionRequestId: requestId
-    });
-  }
-  const stored = parseLocalTargetMutation(row.metadata_json)?.result;
-  if (stored) return storedResultToCapabilityResult(target, stored);
-  if (TERMINAL_WITHOUT_RESULT.includes(row.status)) {
-    return fail(
-      target,
-      "TARGET_OPERATION_FAILED",
-      row.last_error ?? `The queued capability call ended as ${row.status} without a result.`,
-      { executionRequestId: requestId, status: row.status }
-    );
-  }
-  return null;
-}
-async function waitForLocalTargetMutationResult({
-  ctx,
-  requestId,
-  target,
-  timeoutMs = LOCAL_TARGET_MUTATION_READ_TIMEOUT_MS,
-  pollIntervalMs = DEFAULT_RESULT_POLL_INTERVAL_MS,
-  createListener,
-  signal = null
-}) {
-  const deadline = Date.now() + Math.max(0, timeoutMs);
-  for (; ; ) {
-    const result2 = await readLocalTargetMutationResult({ ctx, requestId, target });
-    if (result2) return result2;
-    const remaining = deadline - Date.now();
-    if (signal?.aborted) {
-      return fail(
-        target,
-        "LOCAL_TARGET_TIMEOUT",
-        "The caller stopped waiting. The operation may still be running on the target.",
-        { executionRequestId: requestId, cancelled: true }
-      );
-    }
-    if (remaining <= 0) {
-      return fail(
-        target,
-        "LOCAL_TARGET_TIMEOUT",
-        "The execution target has not reported a result yet. The operation is still running there.",
-        { executionRequestId: requestId, timeoutMs }
-      );
-    }
-    const waitMs = Math.min(remaining, pollIntervalMs);
-    const listener = createListener ? await createListener({ requestId, timeoutMs: remaining }) : null;
-    if (listener) {
-      try {
-        await (signal ? Promise.race([listener.wait(), sleep(remaining, signal)]) : listener.wait());
-      } finally {
-        await listener.close();
-      }
-    } else {
-      await sleep(waitMs, signal);
-    }
-  }
-}
-async function completeLocalTargetMutationRequest({
-  ctx,
-  requestId,
-  result: result2
-}) {
-  const row = await ctx.db.get(
-    `SELECT id, workspace_id, project_id, mission_id, objective_id, status, revision, metadata_json,
-            background_probe_key,
-            requested_source, COALESCE(claimed_by_execution_target_id, execution_target_id) AS target_id
-       FROM execution_requests
-      WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
-    [requestId, ctx.workspace.id]
-  );
-  if (!row) {
-    throw new ServiceError("Execution request not found", "execution_request_not_found", 404);
-  }
-  if (row.requested_source !== LOCAL_TARGET_MUTATION_REQUESTED_SOURCE) {
-    throw new ServiceError(
-      "Execution request is not a local-target mutation.",
-      "not_local_target_mutation",
-      409
-    );
-  }
-  const mutation = parseLocalTargetMutation(row.metadata_json);
-  if (row.background_probe_key && mutation?.result) return mutation;
-  if (row.status !== "launching" && row.status !== "claimed") {
-    throw new ServiceError(
-      `Cannot complete local-target mutation from status ${row.status}.`,
-      "invalid_execution_request_transition",
-      409
-    );
-  }
-  if (!mutation) {
-    throw new ServiceError(
-      "Execution request is missing local-target mutation metadata.",
-      "invalid_local_target_mutation",
-      409
-    );
-  }
-  const storedResult = result2.ok ? { ok: true, value: result2.value } : {
-    ok: false,
-    code: result2.code,
-    message: result2.message,
-    ...result2.details !== void 0 ? { details: result2.details } : {}
-  };
-  const metadata = parseMetadataJson(row.metadata_json);
-  metadata[LOCAL_TARGET_MUTATION_METADATA_KEY] = {
-    ...mutation,
-    result: storedResult
-  };
-  const now2 = nowIso();
-  const revision3 = row.revision + 1;
-  const nextStatus = result2.ok ? "launched" : "failed";
-  const lastError = result2.ok ? null : result2.message;
-  return ctx.db.transaction(async (tx) => {
-    const txCtx = { ...ctx, db: tx };
-    const updated = await txCtx.db.run(
-      `UPDATE execution_requests
-          SET status = ?,
-              metadata_json = ?,
-              last_error = ?,
-              launch_completed_at = ?,
-              updated_at = ?,
-              revision = ?
-        WHERE id = ? AND status = ? AND revision = ?`,
-      [
-        nextStatus,
-        JSON.stringify(metadata),
-        lastError,
-        now2,
-        now2,
-        revision3,
-        row.id,
-        row.status,
-        row.revision
-      ]
-    );
-    if (updated.changes === 0) {
-      if (row.background_probe_key) {
-        const current = await tx.get(
-          "SELECT metadata_json FROM execution_requests WHERE id = ? AND workspace_id = ?",
-          [row.id, ctx.workspace.id]
-        );
-        const completed = current && parseLocalTargetMutation(current.metadata_json);
-        if (completed?.result) return completed;
-      }
-      throw new ServiceError(
-        "Execution request changed while completing local-target mutation.",
-        "execution_request_conflict",
-        409
-      );
-    }
-    if (row.background_probe_key === null)
-      await recordChange({
-        ctx: txCtx,
-        entityType: "execution_request",
-        entityId: row.id,
-        operation: "update",
-        entityRevision: revision3,
-        projectId: row.project_id,
-        missionId: row.mission_id,
-        objectiveId: row.objective_id,
-        changedFields: ["status", "metadata_json", "last_error", "launch_completed_at"]
-      });
-    if (row.mission_id !== null && row.objective_id !== null) {
-      await txCtx.db.run(
-        `INSERT INTO mission_events
-             (id, workspace_id, project_id, mission_id, objective_id, type, phase, summary,
-              payload_json, source, actor_workspace_user_id, created_at)
-           VALUES (?, ?, ?, ?, ?, 'update', 'execute', ?, ?, 'runner', NULL, ?)`,
-        [
-          newId(),
-          ctx.workspace.id,
-          row.project_id,
-          row.mission_id,
-          row.objective_id,
-          result2.ok ? `Completed ${mutation.kind.replace("_", " ")} on execution target.` : `Local-target mutation failed: ${result2.message}`,
-          JSON.stringify({ executionRequestId: row.id, result: storedResult }),
-          now2
-        ]
-      );
-    }
-    if (row.background_probe_key === null && mutation.capability === "inspectLatchSession" && !result2.ok && result2.code === "LATCH_SESSION_ABSENT" && row.target_id && typeof mutation.input.providerSessionId === "string") {
-      await forgetAbsentLatchProviderSessions({
-        ctx: txCtx,
-        projectId: row.project_id,
-        executionTargetId: row.target_id,
-        providerSessionId: mutation.input.providerSessionId
-      });
-    }
-    await recordAnswerDeliveryOutcome2({ ctx: txCtx, mutation, result: result2 });
-    return { ...mutation, result: storedResult };
-  });
-}
-async function recordAnswerDeliveryOutcome2({
-  ctx,
-  mutation,
-  result: result2
-}) {
-  if (mutation.capability !== "sendLatchMessage") return;
-  const operationId = typeof mutation.input.operationId === "string" ? mutation.input.operationId.trim() : "";
-  if (!operationId) return;
-  await recordAnswerDeliveryResult({
-    ctx,
-    operationId,
-    result: result2
-  });
-}
-async function recordAnswerDeliveryForTerminalRequest({
-  ctx,
-  metadataJson,
-  status,
-  executionRequestId
-}) {
-  const mutation = metadataJson ? parseLocalTargetMutation(metadataJson) : null;
-  if (!mutation || mutation.result) return;
-  await recordAnswerDeliveryOutcome2({
-    ctx,
-    mutation,
-    result: fail(
-      { executionTargetId: null, deviceLabel: null, transport: "runner_queue" },
-      "TARGET_OPERATION_FAILED",
-      `The queued capability call ended as ${status} without a result.`,
-      { executionRequestId, status }
-    )
-  });
-}
-async function cancelQueuedLocalTargetMutation({
-  ctx,
-  requestId
-}) {
-  const now2 = nowIso();
-  return await ctx.db.transaction(async (tx) => {
-    const txCtx = { ...ctx, db: tx };
-    const row = await tx.get(
-      `SELECT id, project_id, mission_id, objective_id, revision, metadata_json, background_probe_key
-         FROM execution_requests
-        WHERE id = ? AND workspace_id = ? AND requested_source = ?
-          AND status = 'queued' AND deleted_at IS NULL`,
-      [requestId, ctx.workspace.id, LOCAL_TARGET_MUTATION_REQUESTED_SOURCE]
-    );
-    if (!row) return { cancelled: false };
-    const updated = await tx.run(
-      `UPDATE execution_requests
-          SET status = 'cancelled', last_error = ?, updated_at = ?, revision = ?
-        WHERE id = ? AND status = 'queued' AND revision = ?`,
-      ["Withdrawn before any runner claimed it.", now2, row.revision + 1, row.id, row.revision]
-    );
-    if (updated.changes === 0) return { cancelled: false };
-    if (row.background_probe_key === null)
-      await recordChange({
-        ctx: txCtx,
-        entityType: "execution_request",
-        entityId: row.id,
-        operation: "update",
-        entityRevision: row.revision + 1,
-        projectId: row.project_id,
-        missionId: row.mission_id,
-        objectiveId: row.objective_id,
-        changedFields: ["status", "last_error"]
-      });
-    await recordAnswerDeliveryForTerminalRequest({
-      ctx: txCtx,
-      metadataJson: row.metadata_json,
-      status: "cancelled",
-      executionRequestId: row.id
-    });
-    return { cancelled: true };
-  });
-}
-
-// ../packages/core/service/local-target/runner-queue-provider.ts
-var READ_CAPABILITIES = /* @__PURE__ */ new Set([
-  "observeResource",
-  "readRepositoryTree",
-  "listBranches",
-  "listWorktrees",
-  "readCurrentDiff",
-  "readGitStatus",
-  "readRepositoryFile",
-  "searchRepositoryText",
-  "generateCommitMessageFromLocalDiff",
-  "discoverLatch",
-  "inspectLatchSession",
-  "doctor"
-]);
-function mutationKindFor(capability) {
-  if (capability === "performBranchAction") return "branch_action";
-  if (capability === "purgeMergedWorktrees" || capability === "removeWorktree") {
-    return "worktree_purge";
-  }
-  return "capability_call";
-}
-var RunnerQueueProvider = class {
-  constructor(target, queue) {
-    this.queue = queue;
-    this.target = { ...target, transport: "runner_queue" };
-  }
-  queue;
-  target;
-  /**
-   * Queue one capability call on this target and wait for its result.
-   *
-   * `operationId` doubles as the queue's idempotency key: two calls with the
-   * same id resolve to one job, so a retry after a `LOCAL_TARGET_TIMEOUT` waits
-   * on the original rather than doing the work twice.
-   */
-  async #call(capability, input2, options = {}) {
-    const executionTargetId = this.target.executionTargetId;
-    if (!executionTargetId) {
-      return fail(
-        this.target,
-        "LOCAL_TARGET_REQUIRED",
-        "This operation must run on a declared execution target, and none is selected."
-      );
-    }
-    const timeoutMs = options.timeoutMs ?? (READ_CAPABILITIES.has(capability) ? this.queue.readTimeoutMs ?? LOCAL_TARGET_MUTATION_READ_TIMEOUT_MS : this.queue.writeTimeoutMs ?? LOCAL_TARGET_MUTATION_WRITE_TIMEOUT_MS);
-    let requestId;
-    try {
-      const queued = await createLocalTargetMutationRequest({
-        ctx: this.queue.ctx,
-        projectId: this.queue.projectId,
-        missionId: this.queue.missionId ?? null,
-        executionTargetId,
-        kind: mutationKindFor(capability),
-        capability,
-        input: input2,
-        operationId: options.operationId ?? this.queue.operationId ?? null,
-        resourceKey: this.queue.resourceKey ?? null
-      });
-      requestId = queued.id;
-    } catch (error64) {
-      return fail(
-        this.target,
-        "TARGET_OPERATION_FAILED",
-        error64 instanceof ServiceError || error64 instanceof Error ? error64.message : "Could not queue the operation for this execution target."
-      );
-    }
-    return await waitForLocalTargetMutationResult({
-      ctx: this.queue.ctx,
-      requestId,
-      target: this.target,
-      timeoutMs,
-      ...this.queue.pollIntervalMs === void 0 ? {} : { pollIntervalMs: this.queue.pollIntervalMs },
-      createListener: this.queue.createCompletionListener ?? null,
-      signal: this.queue.signal ?? null
-    });
-  }
-  writeProjectMetadata(input2) {
-    return this.#call("writeProjectMetadata", { ...input2 });
-  }
-  observeResource(input2) {
-    return this.#call("observeResource", { ...input2 });
-  }
-  readRepositoryTree(input2) {
-    return this.#call("readRepositoryTree", { ...input2 });
-  }
-  listBranches(input2) {
-    return this.#call("listBranches", { ...input2 });
-  }
-  prepareBranch(input2) {
-    return this.#call("prepareBranch", { ...input2 });
-  }
-  listWorktrees(input2) {
-    return this.#call("listWorktrees", { ...input2 });
-  }
-  removeWorktree(input2) {
-    return this.#call("removeWorktree", { ...input2 });
-  }
-  purgeMergedWorktrees(input2) {
-    return this.#call("purgeMergedWorktrees", { ...input2 });
-  }
-  performBranchAction(input2) {
-    return this.#call("performBranchAction", { ...input2 });
-  }
-  readCurrentDiff(input2) {
-    return this.#call("readCurrentDiff", { ...input2 });
-  }
-  readGitStatus(input2) {
-    return this.#call("readGitStatus", { ...input2 });
-  }
-  readRepositoryFile(input2) {
-    return this.#call("readRepositoryFile", { ...input2 });
-  }
-  searchRepositoryText(input2) {
-    return this.#call("searchRepositoryText", { ...input2 });
-  }
-  generateCommitMessageFromLocalDiff(input2) {
-    return this.#call("generateCommitMessageFromLocalDiff", { ...input2 });
-  }
-  /**
-   * Launching an agent has its own claim path on the same queue — the runner
-   * spawns it directly from the claimed request. Routing it through the generic
-   * dispatcher too would let a launch and a queued job race for one request, so
-   * this transport declines it outright.
-   */
-  launchAgent(_input) {
-    return Promise.resolve(
-      fail(
-        this.target,
-        "LOCAL_TARGET_UNSUPPORTED",
-        "Agent launch is queued as an execution request, not as a local-target capability call."
-      )
-    );
-  }
-  discoverLatch(input2) {
-    return this.#call("discoverLatch", { ...input2 });
-  }
-  inspectLatchSession(input2) {
-    return this.#call("inspectLatchSession", { ...input2 });
-  }
-  openLatchSession(input2) {
-    return this.#call("openLatchSession", { ...input2 });
-  }
-  stopLatchSession(input2) {
-    return this.#call("stopLatchSession", { ...input2 });
-  }
-  /**
-   * Answer delivery. The caller's `operationId` is the idempotency key on both
-   * ends — the queue's, so a retry never queues a second job, and Latch's, so a
-   * redelivered message is never applied twice. `waitForIdleMs` extends the
-   * deadline because the runner may legitimately wait for the agent to go idle
-   * before it can send.
-   */
-  sendLatchMessage(input2) {
-    const waitForIdleMs = typeof input2.waitForIdleMs === "number" ? input2.waitForIdleMs : 0;
-    return this.#call(
-      "sendLatchMessage",
-      { ...input2 },
-      {
-        operationId: input2.operationId,
-        timeoutMs: (this.queue.writeTimeoutMs ?? LOCAL_TARGET_MUTATION_WRITE_TIMEOUT_MS) + Math.max(0, waitForIdleMs)
-      }
-    );
-  }
-  doctor() {
-    return this.#call("doctor", {});
-  }
-};
-
-// ../packages/core/service/local-target/default-registry.ts
-function createDefaultLocalTargetRegistry({
-  callerExecutionTargetId = null,
-  runnerQueue = null
-}) {
-  const registry2 = new LocalTargetProviderRegistry();
-  registry2.register((target) => {
-    if (target.type !== "local" || !target.executionTargetId) return null;
-    const isCallerTarget = callerExecutionTargetId !== null && target.executionTargetId === callerExecutionTargetId;
-    if (isCallerTarget) {
-      return new InProcessProvider(targetMetadata(target, "in_process"));
-    }
-    if (target.reachable === false) {
-      return new UnavailableProvider(
-        targetMetadata(target, "fake"),
-        "LOCAL_TARGET_UNREACHABLE",
-        "The selected execution target is offline. Start a runner on that device or choose another target."
-      );
-    }
-    if (!runnerQueue) {
-      return new UnavailableProvider(
-        targetMetadata(target, "fake"),
-        "LOCAL_TARGET_UNREACHABLE",
-        "Reaching another execution target needs the runner queue, which this caller cannot write to."
-      );
-    }
-    return new RunnerQueueProvider(targetMetadata(target, "runner_queue"), runnerQueue);
-  });
-  return registry2;
-}
-function resolveDefaultLocalTargetProvider({
-  target,
-  options
-}) {
-  return createDefaultLocalTargetRegistry(options).resolveOrUnavailable(target);
-}
-
-// ../packages/core/service/local-target/desktop-bridge.ts
-async function invokeLocalTargetCapability({
-  provider,
-  call
-}) {
-  switch (call.capability) {
-    case "readRepositoryTree":
-      return provider.readRepositoryTree(call.input);
-    case "listBranches":
-      return provider.listBranches(call.input);
-    case "observeResource":
-      return provider.observeResource(call.input);
-    case "listWorktrees":
-      return provider.listWorktrees(call.input);
-    case "deriveBranchStatus":
-      return ok2(provider.target, observeMissionBranchGit(call.input));
-    case "performBranchAction":
-      return provider.performBranchAction(call.input);
-    case "removeWorktree":
-      return provider.removeWorktree(call.input);
-    case "purgeMergedWorktrees":
-      return provider.purgeMergedWorktrees(call.input);
-    case "generateCommitMessageFromLocalDiff":
-      return provider.generateCommitMessageFromLocalDiff(call.input);
-    case "discoverLatch":
-      return provider.discoverLatch(call.input);
-    case "inspectLatchSession":
-      return provider.inspectLatchSession(call.input);
-    case "openLatchSession":
-      return provider.openLatchSession(call.input);
-    case "stopLatchSession":
-      return provider.stopLatchSession(call.input);
-    case "sendLatchMessage":
-      return provider.sendLatchMessage(call.input);
-    case "writeProjectMetadata":
-      return provider.writeProjectMetadata(call.input);
-    default:
-      return fail(
-        provider.target,
-        "CAPABILITY_NOT_IMPLEMENTED",
-        "Unknown local-target capability."
-      );
-  }
-}
-
-// ../packages/core/service/local-target/resource-status.ts
-function isCoLocatedBackend(source) {
-  const dialect = typeof source === "string" ? source : source.dialect;
-  return dialect === "sqlite";
-}
-function resolveBackendResourceProvider(coLocatedWithCheckout, target) {
-  return coLocatedWithCheckout ? new InProcessProvider(target) : new UnavailableProvider(
-    target,
-    "LOCAL_TARGET_REQUIRED",
-    "The backend is not co-located with this checkout; resource availability must be observed by a local target."
-  );
-}
-function deriveResourceStatus(provider, resource) {
-  if (resource.status === "archived") return Promise.resolve("archived");
-  return provider.observeResource({
-    resourceId: resource.resourceId,
-    path: resource.path
-  }).then(
-    (observation) => mapObservationToResourceStatus(resource.status, observation.ok ? observation.value : null)
-  );
-}
-function mapObservationToResourceStatus(lifecycleStatus, observation) {
-  if (lifecycleStatus === "archived") return "archived";
-  if (!observation) return lifecycleStatus;
-  if (observation.state === "available") return "active";
-  if (observation.state === "missing") return "missing";
-  return lifecycleStatus;
-}
-
 // ../packages/core/service/execution-targets.ts
 var import_node_os9 = require("node:os");
 
 // ../packages/core/service/devices.ts
-var import_node_crypto13 = require("node:crypto");
+var import_node_crypto14 = require("node:crypto");
 var import_node_os8 = require("node:os");
 function deviceFingerprint() {
-  return (0, import_node_crypto13.createHash)("sha256").update(`${(0, import_node_os8.hostname)()}:${(0, import_node_os8.platform)()}`).digest("hex").slice(0, 32);
+  return (0, import_node_crypto14.createHash)("sha256").update(`${(0, import_node_os8.hostname)()}:${(0, import_node_os8.platform)()}`).digest("hex").slice(0, 32);
 }
 function callerDeviceFingerprint() {
   return deviceFingerprint();
@@ -153122,6 +152300,946 @@ async function executionTargetInWorkspace({
   if (!row) {
     throw new ServiceError("Execution target not found", "execution_target_not_found", 404);
   }
+}
+
+// ../packages/core/service/latch-provider-session.ts
+function parseMetadata(value2) {
+  if (!value2?.trim()) return {};
+  try {
+    const parsed = JSON.parse(value2);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+async function bindProviderSessionAgentSession({
+  ctx,
+  executionRequestId,
+  agentSessionId
+}) {
+  const row = await ctx.db.get(
+    `SELECT metadata_json FROM execution_requests WHERE id = ? AND deleted_at IS NULL`,
+    [executionRequestId]
+  );
+  if (!row) return;
+  const providerSession = providerSessionFromMetadata(parseMetadata(row.metadata_json));
+  if (!providerSession || providerSession.agentSessionId === agentSessionId) return;
+  await ctx.db.run(
+    `UPDATE execution_requests SET metadata_json = ?, updated_at = ?, revision = revision + 1
+      WHERE id = ? AND deleted_at IS NULL`,
+    [
+      mergeProviderSessionIntoMetadata({
+        metadataJson: row.metadata_json,
+        providerSession: { ...providerSession, agentSessionId }
+      }),
+      nowIso(),
+      executionRequestId
+    ]
+  );
+}
+async function resolveLatchSessionForAgentSession({
+  ctx,
+  sessionId
+}) {
+  const rows = await ctx.db.all(
+    `SELECT metadata_json, claimed_by_execution_target_id, execution_target_id
+       FROM execution_requests
+      WHERE workspace_id = ? AND launched_session_id = ? AND deleted_at IS NULL
+      ORDER BY updated_at DESC, created_at DESC`,
+    [ctx.workspace.id, sessionId]
+  );
+  for (const row of rows) {
+    const providerSession = providerSessionFromMetadata(parseMetadata(row.metadata_json));
+    const targetId = providerSession?.executionTargetId ?? row.claimed_by_execution_target_id ?? row.execution_target_id;
+    if (!providerSession || !targetId) continue;
+    return {
+      targetId,
+      providerSessionId: providerSession.providerSessionId,
+      lastObservedState: providerSession.lastObservedState
+    };
+  }
+  return null;
+}
+async function forgetLatchProviderSession({
+  ctx,
+  missionId,
+  executionRequestId,
+  providerSessionId,
+  backgroundObservation
+}) {
+  const sessionId = providerSessionId.trim();
+  if (!sessionId) {
+    throw new ServiceError("A Latch session id is required.", "validation_error");
+  }
+  return ctx.db.transaction(async (tx) => {
+    const rows = await tx.all(
+      executionRequestId ? `SELECT id, project_id, mission_id, objective_id, metadata_json, updated_at, revision,
+                  COALESCE(claimed_by_execution_target_id, execution_target_id) AS target_id
+             FROM execution_requests
+            WHERE id = ? AND mission_id = ? AND workspace_id = ? AND deleted_at IS NULL` : `SELECT id, project_id, mission_id, objective_id, metadata_json, updated_at, revision,
+                  COALESCE(claimed_by_execution_target_id, execution_target_id) AS target_id
+             FROM execution_requests
+            WHERE mission_id = ? AND workspace_id = ? AND deleted_at IS NULL
+            ORDER BY updated_at DESC, created_at DESC`,
+      executionRequestId ? [executionRequestId, missionId, ctx.workspace.id] : [missionId, ctx.workspace.id]
+    );
+    const row = rows.find((candidate) => {
+      const mapped2 = providerSessionFromMetadata(parseMetadata(candidate.metadata_json));
+      return mapped2?.providerSessionId === sessionId;
+    });
+    if (!row) return { forgotten: false, executionRequestId: executionRequestId ?? null };
+    const previous = parseMetadata(row.metadata_json);
+    const mapped = providerSessionFromMetadata(previous);
+    if (backgroundObservation && (!mapped || (mapped.executionTargetId ?? row.target_id) !== backgroundObservation.executionTargetId || mapped.lastObservedState === "exited" || mapped.lastObservedAt && mapped.lastObservedAt > backgroundObservation.startedAt || mapped.endRequestedAt && mapped.endRequestedAt > backgroundObservation.startedAt))
+      return { forgotten: false, executionRequestId: row.id };
+    const stripped = parseMetadata(
+      stripProviderSessionFromMetadata({ metadataJson: row.metadata_json })
+    );
+    if (mapped?.lastObservedState === "exited")
+      stripped.endedTerminalSession = {
+        ...mapped,
+        endedAt: mapped.endedAt ?? row.updated_at,
+        endReason: mapped.endReason ?? "unknown"
+      };
+    const metadataJson = JSON.stringify(stripped);
+    const revision3 = row.revision + 1;
+    const updated = await tx.run(
+      `UPDATE execution_requests SET metadata_json = ?, updated_at = ?, revision = ?
+        WHERE id = ? AND revision = ? AND deleted_at IS NULL`,
+      [metadataJson, nowIso(), revision3, row.id, row.revision]
+    );
+    if (updated.changes === 0) {
+      throw new ServiceError(
+        "Execution request changed while forgetting the Latch session",
+        "execution_request_conflict",
+        409
+      );
+    }
+    await recordChange({
+      ctx: { ...ctx, db: tx },
+      entityType: "execution_request",
+      entityId: row.id,
+      operation: "update",
+      entityRevision: revision3,
+      projectId: row.project_id,
+      missionId: row.mission_id,
+      objectiveId: row.objective_id,
+      changedFields: ["metadata_json"]
+    });
+    return { forgotten: true, executionRequestId: row.id };
+  });
+}
+async function forgetAbsentLatchProviderSessions({
+  ctx,
+  projectId,
+  executionTargetId,
+  providerSessionId
+}) {
+  const rows = await ctx.db.all(
+    `SELECT id, mission_id, metadata_json FROM execution_requests
+     WHERE workspace_id = ? AND project_id = ? AND mission_id IS NOT NULL
+       AND COALESCE(claimed_by_execution_target_id, execution_target_id) = ?
+       AND deleted_at IS NULL`,
+    [ctx.workspace.id, projectId, executionTargetId]
+  );
+  for (const row of rows) {
+    if (providerSessionFromMetadata(parseMetadata(row.metadata_json))?.providerSessionId !== providerSessionId)
+      continue;
+    await forgetLatchProviderSession({
+      ctx,
+      missionId: row.mission_id,
+      executionRequestId: row.id,
+      providerSessionId
+    });
+  }
+}
+
+// ../packages/core/service/local-target-mutations.ts
+var LOCAL_TARGET_MUTATION_METADATA_KEY = "overlord.localTargetMutation";
+function localTargetMutationCapabilitySql(dialect) {
+  return dialect === "postgres" ? `er.metadata_json->'${LOCAL_TARGET_MUTATION_METADATA_KEY}'->>'capability'` : `json_extract(er.metadata_json, '$."${LOCAL_TARGET_MUTATION_METADATA_KEY}".capability')`;
+}
+var LOCAL_TARGET_MUTATION_REQUESTED_SOURCE = "local_target_mutation";
+var LOCAL_TARGET_MUTATION_READ_TIMEOUT_MS = 3e4;
+var LOCAL_TARGET_MUTATION_WRITE_TIMEOUT_MS = 12e4;
+var DEFAULT_RESULT_POLL_INTERVAL_MS = 250;
+var TERMINAL_WITHOUT_RESULT = ["failed", "cleared", "cancelled", "expired"];
+function buildLocalTargetMutationMetadata({
+  kind,
+  capability,
+  input: input2,
+  resourceKey = null
+}) {
+  const key = resourceKey?.trim();
+  return {
+    [LOCAL_TARGET_MUTATION_METADATA_KEY]: {
+      kind,
+      capability,
+      input: input2,
+      ...key ? { resourceKey: key } : {}
+    }
+  };
+}
+function parseLocalTargetMutation(metadataJson) {
+  const metadata = typeof metadataJson === "string" ? parseMetadataJson(metadataJson) : metadataJson;
+  const raw = metadata[LOCAL_TARGET_MUTATION_METADATA_KEY];
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const payload = raw;
+  const kind = payload.kind;
+  const capability = payload.capability;
+  if (kind !== "branch_action" && kind !== "worktree_purge" && kind !== "capability_call") {
+    return null;
+  }
+  if (!isQueueableCapabilityName(capability)) return null;
+  const input2 = payload.input && typeof payload.input === "object" && !Array.isArray(payload.input) ? payload.input : {};
+  const resourceKey = typeof payload.resourceKey === "string" && payload.resourceKey.trim() ? payload.resourceKey.trim() : void 0;
+  const result2 = payload.result;
+  const parsedResult = result2 && typeof result2 === "object" && !Array.isArray(result2) ? result2 : void 0;
+  return {
+    kind,
+    capability,
+    input: input2,
+    ...resourceKey ? { resourceKey } : {},
+    ...parsedResult ? { result: parsedResult } : {}
+  };
+}
+function storedResultToCapabilityResult(target, stored) {
+  if (stored.ok) return { ok: true, value: stored.value, target };
+  return fail(
+    target,
+    toLocalTargetErrorCode(stored.code),
+    stored.message,
+    stored.details === void 0 ? void 0 : stored.details
+  );
+}
+async function resolveMutationObjectiveId({
+  ctx,
+  missionId
+}) {
+  const row = await ctx.db.get(
+    `SELECT id FROM objectives
+        WHERE mission_id = ? AND workspace_id = ? AND deleted_at IS NULL
+        ORDER BY position ASC
+        LIMIT 1`,
+    [missionId, ctx.workspace.id]
+  );
+  if (!row) {
+    throw new ServiceError(
+      "Mission has no objectives to anchor a local-target mutation request.",
+      "no_objective_for_mutation",
+      409
+    );
+  }
+  return row.id;
+}
+async function createLocalTargetMutationRequest({
+  ctx,
+  projectId,
+  missionId = null,
+  executionTargetId,
+  kind,
+  capability,
+  input: input2,
+  operationId = null,
+  resourceKey = null,
+  backgroundProbeKey = null,
+  eventSummary
+}) {
+  const mission = missionId === null ? null : await resolveMissionId(ctx, missionId);
+  const resolvedProjectId = await resolveProjectId(ctx, projectId);
+  const objectiveId = mission === null ? null : await resolveMutationObjectiveId({ ctx, missionId: mission.id });
+  const idempotencyKey = operationId?.trim() || null;
+  if (idempotencyKey !== null) {
+    const existing = await ctx.db.get(
+      `SELECT id, created_at FROM execution_requests
+        WHERE workspace_id = ? AND idempotency_key = ? AND deleted_at IS NULL`,
+      [ctx.workspace.id, idempotencyKey]
+    );
+    if (existing) return { id: existing.id, reused: true, createdAt: existing.created_at };
+  }
+  const now2 = nowIso();
+  const id2 = newId();
+  const metadata = buildLocalTargetMutationMetadata({ kind, capability, input: input2, resourceKey });
+  await ctx.db.transaction(async (tx) => {
+    const txCtx = { ...ctx, db: tx };
+    await txCtx.db.run(
+      `INSERT INTO execution_requests
+           (id, workspace_id, project_id, mission_id, objective_id, execution_target_id,
+            requested_agent, requested_model, requested_reasoning_effort, launch_mode,
+            launch_flags_json, requested_source, idempotency_key, status,
+            requested_by_workspace_user_id, resolved_resource_id, resolved_working_directory,
+            metadata_json, created_at, updated_at, revision, background_probe_key)
+         VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, NULL, 'run', '{}', ?, ?, 'queued', ?, NULL, NULL, ?, ?, ?, 1, ?)`,
+      [
+        id2,
+        ctx.workspace.id,
+        resolvedProjectId,
+        mission?.id ?? null,
+        objectiveId,
+        executionTargetId,
+        LOCAL_TARGET_MUTATION_REQUESTED_SOURCE,
+        idempotencyKey,
+        ctx.actorWorkspaceUserId,
+        JSON.stringify(metadata),
+        now2,
+        now2,
+        backgroundProbeKey
+      ]
+    );
+    if (backgroundProbeKey === null)
+      await recordChange({
+        ctx: txCtx,
+        entityType: "execution_request",
+        entityId: id2,
+        operation: "insert",
+        entityRevision: 1,
+        projectId: resolvedProjectId,
+        missionId: mission?.id ?? null,
+        objectiveId,
+        changedFields: ["status", "requested_source", "metadata_json"]
+      });
+    if (mission !== null && objectiveId !== null) {
+      await txCtx.db.run(
+        `INSERT INTO mission_events
+             (id, workspace_id, project_id, mission_id, objective_id, type, phase, summary,
+              payload_json, source, actor_workspace_user_id, created_at)
+           VALUES (?, ?, ?, ?, ?, 'execution_requested', 'execute', ?, ?, 'webapp', ?, ?)`,
+        [
+          newId(),
+          ctx.workspace.id,
+          resolvedProjectId,
+          mission.id,
+          objectiveId,
+          eventSummary ?? `Delegated ${kind.replace("_", " ")} on remote execution target.`,
+          JSON.stringify({ executionRequestId: id2, kind, capability }),
+          ctx.actorWorkspaceUserId,
+          now2
+        ]
+      );
+    }
+  });
+  return { id: id2, reused: false, createdAt: now2 };
+}
+function sleep(ms, signal = null) {
+  return new Promise((resolve) => {
+    const timer = setTimeout(done, ms);
+    function done() {
+      clearTimeout(timer);
+      signal?.removeEventListener("abort", done);
+      resolve();
+    }
+    signal?.addEventListener("abort", done, { once: true });
+  });
+}
+async function readLocalTargetMutationResult({
+  ctx,
+  requestId,
+  target
+}) {
+  const row = await ctx.db.get(
+    `SELECT status, metadata_json, last_error
+       FROM execution_requests
+      WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
+    [requestId, ctx.workspace.id]
+  );
+  if (!row) {
+    return fail(target, "TARGET_OPERATION_FAILED", "The queued capability call no longer exists.", {
+      executionRequestId: requestId
+    });
+  }
+  const stored = parseLocalTargetMutation(row.metadata_json)?.result;
+  if (stored) return storedResultToCapabilityResult(target, stored);
+  if (TERMINAL_WITHOUT_RESULT.includes(row.status)) {
+    return fail(
+      target,
+      "TARGET_OPERATION_FAILED",
+      row.last_error ?? `The queued capability call ended as ${row.status} without a result.`,
+      { executionRequestId: requestId, status: row.status }
+    );
+  }
+  return null;
+}
+async function waitForLocalTargetMutationResult({
+  ctx,
+  requestId,
+  target,
+  timeoutMs = LOCAL_TARGET_MUTATION_READ_TIMEOUT_MS,
+  pollIntervalMs = DEFAULT_RESULT_POLL_INTERVAL_MS,
+  createListener,
+  signal = null
+}) {
+  const deadline = Date.now() + Math.max(0, timeoutMs);
+  for (; ; ) {
+    const result2 = await readLocalTargetMutationResult({ ctx, requestId, target });
+    if (result2) return result2;
+    const remaining = deadline - Date.now();
+    if (signal?.aborted) {
+      return fail(
+        target,
+        "LOCAL_TARGET_TIMEOUT",
+        "The caller stopped waiting. The operation may still be running on the target.",
+        { executionRequestId: requestId, cancelled: true }
+      );
+    }
+    if (remaining <= 0) {
+      return fail(
+        target,
+        "LOCAL_TARGET_TIMEOUT",
+        "The execution target has not reported a result yet. The operation is still running there.",
+        { executionRequestId: requestId, timeoutMs }
+      );
+    }
+    const waitMs = Math.min(remaining, pollIntervalMs);
+    const listener = createListener ? await createListener({ requestId, timeoutMs: remaining }) : null;
+    if (listener) {
+      try {
+        await (signal ? Promise.race([listener.wait(), sleep(remaining, signal)]) : listener.wait());
+      } finally {
+        await listener.close();
+      }
+    } else {
+      await sleep(waitMs, signal);
+    }
+  }
+}
+async function completeLocalTargetMutationRequest({
+  ctx,
+  requestId,
+  result: result2
+}) {
+  const row = await ctx.db.get(
+    `SELECT id, workspace_id, project_id, mission_id, objective_id, status, revision, metadata_json,
+            background_probe_key, requested_by_workspace_user_id,
+            claimed_by_runner_registration_id, claimed_by_execution_target_id,
+            requested_source, COALESCE(claimed_by_execution_target_id, execution_target_id) AS target_id
+       FROM execution_requests
+      WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
+    [requestId, ctx.workspace.id]
+  );
+  if (!row) {
+    throw new ServiceError("Execution request not found", "execution_request_not_found", 404);
+  }
+  if (row.requested_source !== LOCAL_TARGET_MUTATION_REQUESTED_SOURCE) {
+    throw new ServiceError(
+      "Execution request is not a local-target mutation.",
+      "not_local_target_mutation",
+      409
+    );
+  }
+  const mutation = parseLocalTargetMutation(row.metadata_json);
+  if (row.background_probe_key && mutation?.result) return mutation;
+  if (row.status !== "launching" && row.status !== "claimed") {
+    throw new ServiceError(
+      `Cannot complete local-target mutation from status ${row.status}.`,
+      "invalid_execution_request_transition",
+      409
+    );
+  }
+  if (!mutation) {
+    throw new ServiceError(
+      "Execution request is missing local-target mutation metadata.",
+      "invalid_local_target_mutation",
+      409
+    );
+  }
+  if (mutation.capability === READ_LATCH_HOST_IDENTITY) {
+    const targetId = row.claimed_by_execution_target_id;
+    const registered = targetId && row.claimed_by_runner_registration_id && await ctx.db.get(
+      `SELECT registration.id
+         FROM execution_target_runner_registrations registration
+         JOIN execution_targets target
+           ON target.id = registration.execution_target_id AND target.workspace_id = registration.workspace_id
+         JOIN workspace_user_execution_targets access
+           ON access.execution_target_id = target.id AND access.workspace_id = target.workspace_id
+          AND access.workspace_user_id = target.owner_workspace_user_id
+          AND access.access_status = 'active' AND access.deleted_at IS NULL
+        WHERE registration.id = ? AND registration.workspace_id = ? AND registration.execution_target_id = ?
+          AND registration.relation = 'native' AND registration.deleted_at IS NULL
+          AND target.status = 'active' AND target.type = 'local' AND target.deleted_at IS NULL
+          AND target.owner_workspace_user_id = ?`,
+      [
+        row.claimed_by_runner_registration_id,
+        ctx.workspace.id,
+        targetId,
+        ctx.actorWorkspaceUserId
+      ]
+    );
+    if (!ctx.actorWorkspaceUserId || ctx.actorWorkspaceUserId !== row.requested_by_workspace_user_id || !registered || await findActingDeviceExecutionTargetId({ ctx }) !== targetId) {
+      throw new ServiceError(
+        "Latch host identity must come from the target owner\u2019s native runner.",
+        "latch_host_unverified",
+        403
+      );
+    }
+    const key = result2.ok ? result2.value?.hostKeyDigest : null;
+    result2 = isLatchHostPublicKey(key) ? {
+      ok: true,
+      value: { hostKeyDigest: key },
+      target: { executionTargetId: targetId, deviceLabel: null, transport: "runner_queue" }
+    } : fail(
+      { executionTargetId: targetId, deviceLabel: null, transport: "runner_queue" },
+      "TARGET_OPERATION_FAILED",
+      "Latch Remote Link identity is unavailable."
+    );
+  }
+  const storedResult = result2.ok ? { ok: true, value: result2.value } : {
+    ok: false,
+    code: result2.code,
+    message: result2.message,
+    ...result2.details !== void 0 ? { details: result2.details } : {}
+  };
+  const metadata = parseMetadataJson(row.metadata_json);
+  metadata[LOCAL_TARGET_MUTATION_METADATA_KEY] = {
+    ...mutation,
+    result: storedResult
+  };
+  const now2 = nowIso();
+  const revision3 = row.revision + 1;
+  const nextStatus = result2.ok ? "launched" : "failed";
+  const lastError = result2.ok ? null : result2.message;
+  return ctx.db.transaction(async (tx) => {
+    const txCtx = { ...ctx, db: tx };
+    const updated = await txCtx.db.run(
+      `UPDATE execution_requests
+          SET status = ?,
+              metadata_json = ?,
+              last_error = ?,
+              launch_completed_at = ?,
+              updated_at = ?,
+              revision = ?
+        WHERE id = ? AND status = ? AND revision = ?`,
+      [
+        nextStatus,
+        JSON.stringify(metadata),
+        lastError,
+        now2,
+        now2,
+        revision3,
+        row.id,
+        row.status,
+        row.revision
+      ]
+    );
+    if (updated.changes === 0) {
+      if (row.background_probe_key) {
+        const current = await tx.get(
+          "SELECT metadata_json FROM execution_requests WHERE id = ? AND workspace_id = ?",
+          [row.id, ctx.workspace.id]
+        );
+        const completed = current && parseLocalTargetMutation(current.metadata_json);
+        if (completed?.result) return completed;
+      }
+      throw new ServiceError(
+        "Execution request changed while completing local-target mutation.",
+        "execution_request_conflict",
+        409
+      );
+    }
+    if (row.background_probe_key === null)
+      await recordChange({
+        ctx: txCtx,
+        entityType: "execution_request",
+        entityId: row.id,
+        operation: "update",
+        entityRevision: revision3,
+        projectId: row.project_id,
+        missionId: row.mission_id,
+        objectiveId: row.objective_id,
+        changedFields: ["status", "metadata_json", "last_error", "launch_completed_at"]
+      });
+    if (row.mission_id !== null && row.objective_id !== null) {
+      await txCtx.db.run(
+        `INSERT INTO mission_events
+             (id, workspace_id, project_id, mission_id, objective_id, type, phase, summary,
+              payload_json, source, actor_workspace_user_id, created_at)
+           VALUES (?, ?, ?, ?, ?, 'update', 'execute', ?, ?, 'runner', NULL, ?)`,
+        [
+          newId(),
+          ctx.workspace.id,
+          row.project_id,
+          row.mission_id,
+          row.objective_id,
+          result2.ok ? `Completed ${mutation.kind.replace("_", " ")} on execution target.` : `Local-target mutation failed: ${result2.message}`,
+          JSON.stringify({ executionRequestId: row.id, result: storedResult }),
+          now2
+        ]
+      );
+    }
+    if (row.background_probe_key === null && mutation.capability === "inspectLatchSession" && !result2.ok && result2.code === "LATCH_SESSION_ABSENT" && row.target_id && typeof mutation.input.providerSessionId === "string") {
+      await forgetAbsentLatchProviderSessions({
+        ctx: txCtx,
+        projectId: row.project_id,
+        executionTargetId: row.target_id,
+        providerSessionId: mutation.input.providerSessionId
+      });
+    }
+    await recordAnswerDeliveryOutcome2({ ctx: txCtx, mutation, result: result2 });
+    return { ...mutation, result: storedResult };
+  });
+}
+async function recordAnswerDeliveryOutcome2({
+  ctx,
+  mutation,
+  result: result2
+}) {
+  if (mutation.capability !== "sendLatchMessage") return;
+  const operationId = typeof mutation.input.operationId === "string" ? mutation.input.operationId.trim() : "";
+  if (!operationId) return;
+  await recordAnswerDeliveryResult({
+    ctx,
+    operationId,
+    result: result2
+  });
+}
+async function recordAnswerDeliveryForTerminalRequest({
+  ctx,
+  metadataJson,
+  status,
+  executionRequestId
+}) {
+  const mutation = metadataJson ? parseLocalTargetMutation(metadataJson) : null;
+  if (!mutation || mutation.result) return;
+  await recordAnswerDeliveryOutcome2({
+    ctx,
+    mutation,
+    result: fail(
+      { executionTargetId: null, deviceLabel: null, transport: "runner_queue" },
+      "TARGET_OPERATION_FAILED",
+      `The queued capability call ended as ${status} without a result.`,
+      { executionRequestId, status }
+    )
+  });
+}
+async function cancelQueuedLocalTargetMutation({
+  ctx,
+  requestId
+}) {
+  const now2 = nowIso();
+  return await ctx.db.transaction(async (tx) => {
+    const txCtx = { ...ctx, db: tx };
+    const row = await tx.get(
+      `SELECT id, project_id, mission_id, objective_id, revision, metadata_json, background_probe_key
+         FROM execution_requests
+        WHERE id = ? AND workspace_id = ? AND requested_source = ?
+          AND status = 'queued' AND deleted_at IS NULL`,
+      [requestId, ctx.workspace.id, LOCAL_TARGET_MUTATION_REQUESTED_SOURCE]
+    );
+    if (!row) return { cancelled: false };
+    const updated = await tx.run(
+      `UPDATE execution_requests
+          SET status = 'cancelled', last_error = ?, updated_at = ?, revision = ?
+        WHERE id = ? AND status = 'queued' AND revision = ?`,
+      ["Withdrawn before any runner claimed it.", now2, row.revision + 1, row.id, row.revision]
+    );
+    if (updated.changes === 0) return { cancelled: false };
+    if (row.background_probe_key === null)
+      await recordChange({
+        ctx: txCtx,
+        entityType: "execution_request",
+        entityId: row.id,
+        operation: "update",
+        entityRevision: row.revision + 1,
+        projectId: row.project_id,
+        missionId: row.mission_id,
+        objectiveId: row.objective_id,
+        changedFields: ["status", "last_error"]
+      });
+    await recordAnswerDeliveryForTerminalRequest({
+      ctx: txCtx,
+      metadataJson: row.metadata_json,
+      status: "cancelled",
+      executionRequestId: row.id
+    });
+    return { cancelled: true };
+  });
+}
+
+// ../packages/core/service/local-target/runner-queue-provider.ts
+var READ_CAPABILITIES = /* @__PURE__ */ new Set([
+  "observeResource",
+  "readRepositoryTree",
+  "listBranches",
+  "listWorktrees",
+  "readCurrentDiff",
+  "readGitStatus",
+  "readRepositoryFile",
+  "searchRepositoryText",
+  "generateCommitMessageFromLocalDiff",
+  "discoverLatch",
+  "readLatchHostIdentity",
+  "inspectLatchSession",
+  "doctor"
+]);
+function mutationKindFor(capability) {
+  if (capability === "performBranchAction") return "branch_action";
+  if (capability === "purgeMergedWorktrees" || capability === "removeWorktree") {
+    return "worktree_purge";
+  }
+  return "capability_call";
+}
+var RunnerQueueProvider = class {
+  constructor(target, queue) {
+    this.queue = queue;
+    this.target = { ...target, transport: "runner_queue" };
+  }
+  queue;
+  target;
+  /**
+   * Queue one capability call on this target and wait for its result.
+   *
+   * `operationId` doubles as the queue's idempotency key: two calls with the
+   * same id resolve to one job, so a retry after a `LOCAL_TARGET_TIMEOUT` waits
+   * on the original rather than doing the work twice.
+   */
+  async #call(capability, input2, options = {}) {
+    const executionTargetId = this.target.executionTargetId;
+    if (!executionTargetId) {
+      return fail(
+        this.target,
+        "LOCAL_TARGET_REQUIRED",
+        "This operation must run on a declared execution target, and none is selected."
+      );
+    }
+    const timeoutMs = options.timeoutMs ?? (READ_CAPABILITIES.has(capability) ? this.queue.readTimeoutMs ?? LOCAL_TARGET_MUTATION_READ_TIMEOUT_MS : this.queue.writeTimeoutMs ?? LOCAL_TARGET_MUTATION_WRITE_TIMEOUT_MS);
+    let requestId;
+    try {
+      const queued = await createLocalTargetMutationRequest({
+        ctx: this.queue.ctx,
+        projectId: this.queue.projectId,
+        missionId: this.queue.missionId ?? null,
+        executionTargetId,
+        kind: mutationKindFor(capability),
+        capability,
+        input: input2,
+        operationId: options.operationId ?? this.queue.operationId ?? null,
+        resourceKey: this.queue.resourceKey ?? null
+      });
+      requestId = queued.id;
+    } catch (error64) {
+      return fail(
+        this.target,
+        "TARGET_OPERATION_FAILED",
+        error64 instanceof ServiceError || error64 instanceof Error ? error64.message : "Could not queue the operation for this execution target."
+      );
+    }
+    const result2 = await waitForLocalTargetMutationResult({
+      ctx: this.queue.ctx,
+      requestId,
+      target: this.target,
+      timeoutMs,
+      ...this.queue.pollIntervalMs === void 0 ? {} : { pollIntervalMs: this.queue.pollIntervalMs },
+      createListener: this.queue.createCompletionListener ?? null,
+      signal: this.queue.signal ?? null
+    });
+    if (capability === "readLatchHostIdentity" && !result2.ok) {
+      await cancelQueuedLocalTargetMutation({ ctx: this.queue.ctx, requestId });
+    }
+    return result2;
+  }
+  writeProjectMetadata(input2) {
+    return this.#call("writeProjectMetadata", { ...input2 });
+  }
+  observeResource(input2) {
+    return this.#call("observeResource", { ...input2 });
+  }
+  readRepositoryTree(input2) {
+    return this.#call("readRepositoryTree", { ...input2 });
+  }
+  listBranches(input2) {
+    return this.#call("listBranches", { ...input2 });
+  }
+  prepareBranch(input2) {
+    return this.#call("prepareBranch", { ...input2 });
+  }
+  listWorktrees(input2) {
+    return this.#call("listWorktrees", { ...input2 });
+  }
+  removeWorktree(input2) {
+    return this.#call("removeWorktree", { ...input2 });
+  }
+  purgeMergedWorktrees(input2) {
+    return this.#call("purgeMergedWorktrees", { ...input2 });
+  }
+  performBranchAction(input2) {
+    return this.#call("performBranchAction", { ...input2 });
+  }
+  readCurrentDiff(input2) {
+    return this.#call("readCurrentDiff", { ...input2 });
+  }
+  readGitStatus(input2) {
+    return this.#call("readGitStatus", { ...input2 });
+  }
+  readRepositoryFile(input2) {
+    return this.#call("readRepositoryFile", { ...input2 });
+  }
+  searchRepositoryText(input2) {
+    return this.#call("searchRepositoryText", { ...input2 });
+  }
+  generateCommitMessageFromLocalDiff(input2) {
+    return this.#call("generateCommitMessageFromLocalDiff", { ...input2 });
+  }
+  /**
+   * Launching an agent has its own claim path on the same queue — the runner
+   * spawns it directly from the claimed request. Routing it through the generic
+   * dispatcher too would let a launch and a queued job race for one request, so
+   * this transport declines it outright.
+   */
+  launchAgent(_input) {
+    return Promise.resolve(
+      fail(
+        this.target,
+        "LOCAL_TARGET_UNSUPPORTED",
+        "Agent launch is queued as an execution request, not as a local-target capability call."
+      )
+    );
+  }
+  discoverLatch(input2) {
+    return this.#call("discoverLatch", { ...input2 });
+  }
+  readLatchHostIdentity() {
+    return this.#call("readLatchHostIdentity", {});
+  }
+  inspectLatchSession(input2) {
+    return this.#call("inspectLatchSession", { ...input2 });
+  }
+  openLatchSession(input2) {
+    return this.#call("openLatchSession", { ...input2 });
+  }
+  stopLatchSession(input2) {
+    return this.#call("stopLatchSession", { ...input2 });
+  }
+  /**
+   * Answer delivery. The caller's `operationId` is the idempotency key on both
+   * ends — the queue's, so a retry never queues a second job, and Latch's, so a
+   * redelivered message is never applied twice. `waitForIdleMs` extends the
+   * deadline because the runner may legitimately wait for the agent to go idle
+   * before it can send.
+   */
+  sendLatchMessage(input2) {
+    const waitForIdleMs = typeof input2.waitForIdleMs === "number" ? input2.waitForIdleMs : 0;
+    return this.#call(
+      "sendLatchMessage",
+      { ...input2 },
+      {
+        operationId: input2.operationId,
+        timeoutMs: (this.queue.writeTimeoutMs ?? LOCAL_TARGET_MUTATION_WRITE_TIMEOUT_MS) + Math.max(0, waitForIdleMs)
+      }
+    );
+  }
+  doctor() {
+    return this.#call("doctor", {});
+  }
+};
+
+// ../packages/core/service/local-target/default-registry.ts
+function createDefaultLocalTargetRegistry({
+  callerExecutionTargetId = null,
+  runnerQueue = null
+}) {
+  const registry2 = new LocalTargetProviderRegistry();
+  registry2.register((target) => {
+    if (target.type !== "local" || !target.executionTargetId) return null;
+    const isCallerTarget = callerExecutionTargetId !== null && target.executionTargetId === callerExecutionTargetId;
+    if (isCallerTarget) {
+      return new InProcessProvider(targetMetadata(target, "in_process"));
+    }
+    if (target.reachable === false) {
+      return new UnavailableProvider(
+        targetMetadata(target, "fake"),
+        "LOCAL_TARGET_UNREACHABLE",
+        "The selected execution target is offline. Start a runner on that device or choose another target."
+      );
+    }
+    if (!runnerQueue) {
+      return new UnavailableProvider(
+        targetMetadata(target, "fake"),
+        "LOCAL_TARGET_UNREACHABLE",
+        "Reaching another execution target needs the runner queue, which this caller cannot write to."
+      );
+    }
+    return new RunnerQueueProvider(targetMetadata(target, "runner_queue"), runnerQueue);
+  });
+  return registry2;
+}
+function resolveDefaultLocalTargetProvider({
+  target,
+  options
+}) {
+  return createDefaultLocalTargetRegistry(options).resolveOrUnavailable(target);
+}
+
+// ../packages/core/service/local-target/desktop-bridge.ts
+async function invokeLocalTargetCapability({
+  provider,
+  call
+}) {
+  switch (call.capability) {
+    case "readRepositoryTree":
+      return provider.readRepositoryTree(call.input);
+    case "listBranches":
+      return provider.listBranches(call.input);
+    case "observeResource":
+      return provider.observeResource(call.input);
+    case "listWorktrees":
+      return provider.listWorktrees(call.input);
+    case "deriveBranchStatus":
+      return ok2(provider.target, observeMissionBranchGit(call.input));
+    case "performBranchAction":
+      return provider.performBranchAction(call.input);
+    case "removeWorktree":
+      return provider.removeWorktree(call.input);
+    case "purgeMergedWorktrees":
+      return provider.purgeMergedWorktrees(call.input);
+    case "generateCommitMessageFromLocalDiff":
+      return provider.generateCommitMessageFromLocalDiff(call.input);
+    case "discoverLatch":
+      return provider.discoverLatch(call.input);
+    case "inspectLatchSession":
+      return provider.inspectLatchSession(call.input);
+    case "openLatchSession":
+      return provider.openLatchSession(call.input);
+    case "stopLatchSession":
+      return provider.stopLatchSession(call.input);
+    case "sendLatchMessage":
+      return provider.sendLatchMessage(call.input);
+    case "writeProjectMetadata":
+      return provider.writeProjectMetadata(call.input);
+    default:
+      return fail(
+        provider.target,
+        "CAPABILITY_NOT_IMPLEMENTED",
+        "Unknown local-target capability."
+      );
+  }
+}
+
+// ../packages/core/service/local-target/resource-status.ts
+function isCoLocatedBackend(source) {
+  const dialect = typeof source === "string" ? source : source.dialect;
+  return dialect === "sqlite";
+}
+function resolveBackendResourceProvider(coLocatedWithCheckout, target) {
+  return coLocatedWithCheckout ? new InProcessProvider(target) : new UnavailableProvider(
+    target,
+    "LOCAL_TARGET_REQUIRED",
+    "The backend is not co-located with this checkout; resource availability must be observed by a local target."
+  );
+}
+function deriveResourceStatus(provider, resource) {
+  if (resource.status === "archived") return Promise.resolve("archived");
+  return provider.observeResource({
+    resourceId: resource.resourceId,
+    path: resource.path
+  }).then(
+    (observation) => mapObservationToResourceStatus(resource.status, observation.ok ? observation.value : null)
+  );
+}
+function mapObservationToResourceStatus(lifecycleStatus, observation) {
+  if (lifecycleStatus === "archived") return "archived";
+  if (!observation) return lifecycleStatus;
+  if (observation.state === "available") return "active";
+  if (observation.state === "missing") return "missing";
+  return lifecycleStatus;
 }
 
 // ../packages/core/service/project-resource-key.ts
@@ -155574,7 +155692,7 @@ async function moveMissionToExecute({
 }
 
 // ../packages/core/service/protocol.ts
-var import_node_crypto17 = require("node:crypto");
+var import_node_crypto18 = require("node:crypto");
 
 // ../packages/core/service/agent-session/channels.ts
 var CHANNEL_COLUMNS = `
@@ -156647,7 +156765,7 @@ function applyDeliveryPresentation({
 }
 
 // ../packages/core/service/delivery-finalization.ts
-var import_node_crypto14 = require("node:crypto");
+var import_node_crypto15 = require("node:crypto");
 var OPERATION_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$/;
 var DELIVERY_OPERATION_CONFLICT = "delivery_operation_conflict";
 var DELIVERY_ALREADY_ACCEPTED = "delivery_already_accepted";
@@ -156682,7 +156800,7 @@ function canonicalize(value2) {
   return value2;
 }
 function finalizationRequestDigest(kind, semantic) {
-  const hash2 = (0, import_node_crypto14.createHash)("sha256").update(canonicalJson({ kind, semantic })).digest("hex");
+  const hash2 = (0, import_node_crypto15.createHash)("sha256").update(canonicalJson({ kind, semantic })).digest("hex");
   return `${DIGEST_VERSION}:${hash2}`;
 }
 var RECEIPT_COLUMNS = `id, workspace_id, project_id, mission_id, objective_id, delivery_id,
@@ -156850,7 +156968,7 @@ async function readDeliveryReceipt({
 }
 
 // ../packages/core/service/delivery-summary-publication.ts
-var import_node_crypto15 = require("node:crypto");
+var import_node_crypto16 = require("node:crypto");
 
 // ../packages/core/service/mission-narrative.ts
 function isSummaryEnabled(value2) {
@@ -158259,7 +158377,7 @@ async function readDeliverySummaryContext({
   };
 }
 function publishDigest(publicationId, semantic) {
-  return `v1:${(0, import_node_crypto15.createHash)("sha256").update(canonicalJson({ kind: "publish_delivery_summary", publicationId, semantic })).digest("hex")}`;
+  return `v1:${(0, import_node_crypto16.createHash)("sha256").update(canonicalJson({ kind: "publish_delivery_summary", publicationId, semantic })).digest("hex")}`;
 }
 async function publishDeliverySummary({
   ctx,
@@ -158416,7 +158534,7 @@ async function publishDeliverySummary({
 }
 
 // ../packages/core/service/execution-target-runners.ts
-var import_node_util = require("node:util");
+var import_node_util2 = require("node:util");
 var RUNNER_HEARTBEAT_STALE_MS = 5 * 60 * 1e3;
 var LIVE_RUNNER_HEALTH = ["healthy", "degraded"];
 function isStaleHeartbeat(lastHeartbeatAt, now2) {
@@ -158504,7 +158622,8 @@ async function resolveRunnerTarget({
     return {
       executionTargetId: target.executionTargetId,
       deviceId: target.deviceId,
-      relation: input2.relation ?? "native"
+      relation: input2.relation ?? "native",
+      matchesActingDevice: true
     };
   }
   const row = await resolveExplicitTarget({ ctx, executionTargetId: explicitId });
@@ -158513,7 +158632,8 @@ async function resolveRunnerTarget({
   return {
     executionTargetId: row.id,
     deviceId: row.device_id,
-    relation: input2.relation ?? (isOwnMachine ? "native" : "adopted")
+    relation: input2.relation ?? (isOwnMachine ? "native" : "adopted"),
+    matchesActingDevice: isOwnMachine
   };
 }
 async function recordRunnerHeartbeat({
@@ -158551,7 +158671,7 @@ async function recordRunnerHeartbeat({
         changedFields.push("runner_version");
       const jsonChanged = (stored, value2) => {
         try {
-          return !(0, import_node_util.isDeepStrictEqual)(JSON.parse(stored), value2);
+          return !(0, import_node_util2.isDeepStrictEqual)(JSON.parse(stored), value2);
         } catch {
           return true;
         }
@@ -160026,6 +160146,23 @@ async function claimNextExecutionRequest({
     target.executionTargetId,
     new Date(Date.now() - TERMINAL_PROBE_TIMEOUT_MS).toISOString()
   ];
+  const capability = localTargetMutationCapabilitySql(ctx.db.dialect);
+  const requester = ctx.actorWorkspaceUserId;
+  const isOwnNativeRunner = requester !== null && registration?.relation === "native" && target.matchesActingDevice;
+  if (isOwnNativeRunner) {
+    conditions.push(`(COALESCE(${capability}, '') <> ? OR
+      (er.requested_by_workspace_user_id = ? AND EXISTS (
+        SELECT 1 FROM execution_targets owner_target
+         WHERE owner_target.id = er.execution_target_id
+           AND owner_target.workspace_id = er.workspace_id
+           AND owner_target.owner_workspace_user_id = er.requested_by_workspace_user_id
+           AND owner_target.status = 'active' AND owner_target.deleted_at IS NULL
+      )))`);
+    params.push(READ_LATCH_HOST_IDENTITY, requester);
+  } else {
+    conditions.push(`COALESCE(${capability}, '') <> ?`);
+    params.push(READ_LATCH_HOST_IDENTITY);
+  }
   if (projectId) {
     conditions.push("er.project_id = ?");
     params.push(await resolveProjectId(ctx, projectId));
@@ -161100,7 +161237,7 @@ function formatProjectResourcesInstructions(projectResources) {
 }
 
 // ../packages/core/service/report-draft.ts
-var import_node_crypto16 = require("node:crypto");
+var import_node_crypto17 = require("node:crypto");
 init_zod();
 var REPORT_DRAFT_CONFLICT = "report_draft_conflict";
 var REPORT_DRAFT_OPERATION_CONFLICT = "report_draft_operation_conflict";
@@ -161232,7 +161369,7 @@ function parseReportDraftInput(value2, mode) {
   return { ...operationId ? { operationId } : {}, expectedRevision: expectedRevision2, operations: operations2 };
 }
 function reportDraftBatchDigest(semantic) {
-  const hash2 = (0, import_node_crypto16.createHash)("sha256").update(canonicalJson({ kind: "report_draft_batch", semantic })).digest("hex");
+  const hash2 = (0, import_node_crypto17.createHash)("sha256").update(canonicalJson({ kind: "report_draft_batch", semantic })).digest("hex");
   return `${DIGEST_VERSION2}:${hash2}`;
 }
 var DRAFT_COLUMNS = `d.id, d.workspace_id, d.project_id, d.mission_id, d.objective_id, d.session_id,
@@ -163017,7 +163154,7 @@ async function connectSession({
   };
 }
 function promptHash(prompt) {
-  return (0, import_node_crypto17.createHash)("sha256").update(prompt).digest("hex");
+  return (0, import_node_crypto18.createHash)("sha256").update(prompt).digest("hex");
 }
 function objectiveFromSession(objectives, session) {
   if (!session) return void 0;
@@ -165712,9 +165849,9 @@ function mergeMissionBranchObservation({
 }
 
 // ../packages/core/service/mission-reference-search.ts
-var import_node_crypto18 = require("node:crypto");
+var import_node_crypto19 = require("node:crypto");
 function referenceDigest(reference) {
-  return (0, import_node_crypto18.createHash)("sha256").update(reference).digest("hex").slice(0, 24);
+  return (0, import_node_crypto19.createHash)("sha256").update(reference).digest("hex").slice(0, 24);
 }
 function encodeCursor(body) {
   return Buffer.from(JSON.stringify(body), "utf8").toString("base64url");
@@ -166085,6 +166222,217 @@ function scheduleInputFromSummary(summary) {
   };
 }
 
+// ../packages/core/service/project-resource-latch-host.ts
+var import_node_crypto20 = require("node:crypto");
+async function loadOwnedSources({
+  db,
+  workspaceId: workspaceId2,
+  workspaceUserId,
+  projectId,
+  sourceId = null
+}) {
+  const since = new Date(Date.now() - RUNNER_HEARTBEAT_STALE_MS).toISOString();
+  return db.all(
+    `SELECT source.id, source.resource_id, resource.resource_key, source.execution_target_id,
+            source.revision, source.latch_host_binding_json,
+            (SELECT COUNT(*) FROM execution_target_runner_registrations runner
+              WHERE runner.workspace_id = target.workspace_id AND runner.execution_target_id = target.id
+                AND runner.relation = 'native' AND runner.deleted_at IS NULL) AS native_runners,
+            (SELECT COUNT(*) FROM execution_target_runner_registrations runner
+              WHERE runner.workspace_id = target.workspace_id AND runner.execution_target_id = target.id
+                AND runner.relation = 'native' AND runner.deleted_at IS NULL
+                AND runner.health IN ('healthy', 'degraded') AND runner.last_heartbeat_at >= ?) AS live_native_runners,
+            CASE WHEN target.status = 'active' AND EXISTS (
+              SELECT 1 FROM workspace_user_execution_targets access
+               WHERE access.execution_target_id = target.id AND access.workspace_id = target.workspace_id
+                 AND access.workspace_user_id = target.owner_workspace_user_id
+                 AND access.access_status = 'active' AND access.deleted_at IS NULL
+            ) THEN 1 ELSE 0 END AS has_access
+       FROM project_resource_sources source
+       JOIN project_resources resource ON resource.id = source.resource_id
+        AND resource.workspace_id = source.workspace_id AND resource.project_id = source.project_id
+        AND resource.status = 'active' AND resource.deleted_at IS NULL
+       JOIN projects project ON project.id = source.project_id
+        AND project.workspace_id = source.workspace_id AND project.deleted_at IS NULL
+       JOIN execution_targets target ON target.id = source.execution_target_id
+        AND target.workspace_id = source.workspace_id AND target.type = 'local'
+        AND target.deleted_at IS NULL AND target.owner_workspace_user_id = ?
+       JOIN workspace_users owner ON owner.id = target.owner_workspace_user_id
+        AND owner.workspace_id = source.workspace_id AND owner.status = 'active' AND owner.deleted_at IS NULL
+       JOIN devices device ON device.id = target.device_id AND device.workspace_id = target.workspace_id
+        AND device.deleted_at IS NULL AND device.status = 'active' AND device.platform <> 'browser'
+      WHERE source.workspace_id = ? AND source.project_id = ?
+        AND source.source_kind = 'local_checkout' AND source.deleted_at IS NULL
+        ${sourceId ? "AND source.id = ?" : ""}`,
+    [since, workspaceUserId, workspaceId2, projectId, ...sourceId ? [sourceId] : []]
+  );
+}
+function currentHostKey(source, workspaceUserId) {
+  const saved = parseMetadataJson(source.latch_host_binding_json ?? "{}");
+  return saved.sourceRevision === source.revision && saved.workspaceUserId === workspaceUserId && isLatchHostPublicKey(saved.hostPublicKey) ? saved.hostPublicKey : null;
+}
+async function loadProjectResourceLatchHosts(scope2) {
+  const sources = await loadOwnedSources(scope2);
+  const hostCounts = /* @__PURE__ */ new Map();
+  for (const source of sources) {
+    const key = currentHostKey(source, scope2.workspaceUserId);
+    if (!key || !source.has_access || Number(source.native_runners) === 0) continue;
+    const group4 = `${source.resource_id}:${key}`;
+    hostCounts.set(group4, (hostCounts.get(group4) ?? 0) + 1);
+  }
+  const links = /* @__PURE__ */ new Map();
+  for (const source of sources) {
+    const key = currentHostKey(source, scope2.workspaceUserId);
+    const canVerify = Boolean(source.has_access) && Number(source.live_native_runners) === 1;
+    if (!source.has_access || Number(source.native_runners) === 0) continue;
+    const ambiguous = Number(source.live_native_runners) > 1 || Boolean(key && (hostCounts.get(`${source.resource_id}:${key}`) ?? 0) > 1);
+    links.set(source.id, {
+      sourceRevision: source.revision,
+      state: ambiguous ? "ambiguous" : key ? "linked" : "unlinked",
+      canVerify,
+      canUnlink: key !== null,
+      ...!ambiguous && key ? { hostPublicKey: key } : {}
+    });
+  }
+  return links;
+}
+var IDEMPOTENCY_SCOPE = "api.project-resource.latch-host";
+function sourceConflict() {
+  return new ServiceError(
+    "The source changed. Refresh settings and try again.",
+    "project_resource_source_conflict",
+    409
+  );
+}
+async function setProjectResourceLatchHost({
+  ctx,
+  projectId,
+  resourceId,
+  sourceId,
+  body,
+  signal
+}) {
+  requireProjectInScope(ctx, projectId);
+  const { db, actorWorkspaceUserId: workspaceUserId } = ctx;
+  const workspaceId2 = ctx.workspace.id;
+  const { hostPublicKey, sourceRevision } = body;
+  const missing = () => new ServiceError(
+    "Eligible project resource source not found",
+    "project_resource_source_not_found",
+    404
+  );
+  if (!workspaceUserId) throw missing();
+  if (hostPublicKey !== null && !isLatchHostPublicKey(hostPublicKey)) {
+    throw new ServiceError("Invalid Latch host public key", "invalid_latch_host_public_key");
+  }
+  const load = async (client) => {
+    const [source2] = await loadOwnedSources({
+      workspaceId: workspaceId2,
+      workspaceUserId,
+      db: client,
+      projectId,
+      sourceId
+    });
+    if (!source2 || source2.resource_id !== resourceId) throw missing();
+    return source2;
+  };
+  const receiptKey = `${workspaceUserId}:${sourceId}:${sourceRevision}`;
+  const requestHash = (0, import_node_crypto20.createHash)("sha256").update(JSON.stringify([projectId, resourceId, sourceId, sourceRevision, hostPublicKey])).digest("hex");
+  const accepted = async (client) => Boolean(
+    await client.get(
+      `SELECT id FROM idempotency_keys
+        WHERE workspace_id = ? AND scope = ? AND key = ? AND actor_workspace_user_id = ?
+          AND request_hash = ? AND status = 'completed' AND expires_at > ?`,
+      [workspaceId2, IDEMPOTENCY_SCOPE, receiptKey, workspaceUserId, requestHash, nowIso()]
+    )
+  );
+  const check4 = (source2) => {
+    if (source2.revision !== sourceRevision) throw sourceConflict();
+    if (hostPublicKey !== null && (!source2.has_access || Number(source2.live_native_runners) !== 1)) {
+      throw new ServiceError(
+        "Host verification requires one active native runner on this target.",
+        "latch_host_runner_unavailable",
+        409
+      );
+    }
+  };
+  const source = await load(db);
+  if (await accepted(db)) return { ok: true };
+  check4(source);
+  if (hostPublicKey !== null) {
+    const provider = new RunnerQueueProvider(
+      {
+        executionTargetId: source.execution_target_id,
+        transport: "runner_queue",
+        deviceLabel: null
+      },
+      { ctx, projectId, resourceKey: source.resource_key, signal }
+    );
+    const result2 = await provider.readLatchHostIdentity();
+    if (!result2.ok || result2.value.hostKeyDigest !== latchHostKeyDigest(hostPublicKey) || signal?.aborted) {
+      throw new ServiceError(
+        "The native runner did not verify the expected Latch host key.",
+        "latch_host_unverified",
+        409
+      );
+    }
+  }
+  await db.transaction(async (tx) => {
+    const current = await load(tx);
+    if (await accepted(tx)) return;
+    check4(current);
+    if (current.execution_target_id !== source.execution_target_id) throw sourceConflict();
+    const now2 = nowIso();
+    const saved = hostPublicKey === null ? null : JSON.stringify({
+      hostPublicKey,
+      sourceRevision: current.revision + 1,
+      workspaceUserId
+    });
+    const update = await tx.run(
+      `UPDATE project_resource_sources
+          SET latch_host_binding_json = ?, revision = revision + 1, updated_at = ?
+        WHERE id = ? AND revision = ? AND deleted_at IS NULL`,
+      [saved, now2, sourceId, current.revision]
+    );
+    if (update.changes !== 1) {
+      if (await accepted(tx)) return;
+      throw sourceConflict();
+    }
+    const resource = await tx.get(
+      `UPDATE project_resources SET revision = revision + 1, updated_at = ?
+        WHERE id = ? AND status = 'active' AND deleted_at IS NULL RETURNING revision`,
+      [now2, resourceId]
+    );
+    if (!resource) throw sourceConflict();
+    await recordChange({
+      ctx: { ...ctx, db: tx },
+      entityType: "project_resource",
+      entityId: resourceId,
+      entityRevision: resource.revision,
+      operation: "update",
+      projectId,
+      changedFields: ["sources.latch_host_binding"]
+    });
+    await tx.run(
+      `INSERT INTO idempotency_keys
+          (id, workspace_id, scope, key, request_hash, status, actor_workspace_user_id, expires_at, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, 'completed', ?, ?, ?, ?)`,
+      [
+        newId(),
+        workspaceId2,
+        IDEMPOTENCY_SCOPE,
+        receiptKey,
+        requestHash,
+        workspaceUserId,
+        new Date(Date.now() + 864e5).toISOString(),
+        now2,
+        now2
+      ]
+    );
+  });
+  return { ok: true };
+}
+
 // automation/commit-message-automation.ts
 var MAX_DIFF_CHARS = 12e3;
 var SYSTEM_INSTRUCTION2 = [
@@ -166114,6 +166462,9 @@ ${diff}`,
   });
   return message2?.trim() || null;
 }
+
+// realtime.ts
+var import_node_events = require("node:events");
 
 // execution/pg-listen.ts
 async function connectWithTimeout({
@@ -166669,6 +167020,8 @@ async function listOrganizationAdminProfileIds(organizationId, client = requireD
 
 // realtime.ts
 var CHANGE_BATCH_LIMIT = 500;
+var REPLAY_PENDING_BATCH_LIMIT = 100;
+var REPLAY_PENDING_BYTE_LIMIT = 1024 * 1024;
 var POSTGRES_WAKE_CHANNEL = "overlord_entity_changes";
 var POLL_INTERVAL_MS = 500;
 var RECONCILIATION_MS = 5e3;
@@ -166739,13 +167092,9 @@ async function readChangesAfter(afterSeq, workspaceIds, limit2 = CHANGE_BATCH_LI
   const normalizedLimit = Math.max(1, Math.min(requestedLimit, CHANGE_BATCH_LIMIT));
   const client = requireDatabaseClient();
   return withCommittedFeed(client, async (client2) => {
-    const scanThroughSeq = Math.max(normalizedAfter, await currentMaxSeq(client2));
-    const state2 = await client2.get(
-      `SELECT retained_through FROM entity_change_retention WHERE id = 1`
-    );
-    if (!state2) throw new Error("Change-feed retention boundary is missing");
-    if (normalizedAfter < Number(state2.retained_through))
-      throw new ExpiredChangeCursor(scanThroughSeq);
+    const { highWaterMark, retainedThrough } = await readCommittedFeedBounds(client2);
+    const scanThroughSeq = Math.max(normalizedAfter, highWaterMark);
+    if (normalizedAfter < retainedThrough) throw new ExpiredChangeCursor(scanThroughSeq);
     const authorizedWorkspaceIds = [...new Set(workspaceIds.filter(Boolean))];
     if (authorizedWorkspaceIds.length === 0 || scanThroughSeq === normalizedAfter) {
       return { changes: [], cursor: scanThroughSeq, hasMore: false };
@@ -166865,6 +167214,7 @@ var RealtimeHub = class extends PollLoop {
     return this.clients.size > 0 && (this.wakePending || !this.stopListening || performance.now() - this.lastPassAt >= RECONCILIATION_MS);
   }
   addClient(res, options) {
+    if (res.destroyed || res.writableEnded) return;
     res.writeHead(200, {
       "Content-Type": "text/event-stream",
       "Cache-Control": "no-cache, no-transform",
@@ -166878,26 +167228,20 @@ var RealtimeHub = class extends PollLoop {
       projectIds: options.projectIds === null || options.projectIds === void 0 ? null : new Set(options.projectIds),
       lastCursor: options.afterSeq ?? this.cursor,
       replaying: options.afterSeq !== void 0,
-      pending: []
+      pending: [],
+      pendingBytes: 0,
+      refreshPending: false,
+      closed: new AbortController(),
+      onClose: () => this.removeClient(res)
     };
     const firstClient = this.clients.size === 0;
     this.clients.set(res, client);
-    this.send(res, "hello", { type: "hello", cursor: this.cursor });
+    res.once("close", client.onClose);
+    const signalReplayCompletion = options.signalReplayCompletion && client.replaying;
+    if (!signalReplayCompletion) this.send(res, "hello", { type: "hello", cursor: this.cursor });
     if (options.afterSeq !== void 0) {
-      void this.sendCatchUp(res, options.afterSeq).then((cursor3) => {
-        const current = this.clients.get(res);
-        if (!current) return;
-        for (const pending of current.pending) {
-          const changes = pending.changes.filter((change) => change.seq > cursor3);
-          if (changes.length)
-            this.send(res, "change", { type: "change", changes, cursor: pending.cursor });
-          cursor3 = Math.max(cursor3, pending.cursor);
-        }
-        current.lastCursor = cursor3;
-        current.pending = [];
-        current.replaying = false;
-      }).catch((error64) => {
-        if (!this.clients.has(res)) return;
+      void this.sendCatchUp(client, Boolean(signalReplayCompletion)).catch((error64) => {
+        if (client.closed.signal.aborted) return;
         if (error64 instanceof ExpiredChangeCursor) {
           this.send(res, "snapshot_required", {
             type: "snapshot_required",
@@ -166913,7 +167257,12 @@ var RealtimeHub = class extends PollLoop {
     if (firstClient && this.postgres) void this.pollNow();
   }
   removeClient(res) {
+    const client = this.clients.get(res);
+    if (!client) return;
     this.clients.delete(res);
+    res.off("close", client.onClose);
+    client.pending.length = 0;
+    client.closed.abort();
   }
   /**
    * Force every subscriber to refetch. Used for server-state changes that do not
@@ -166922,7 +167271,7 @@ var RealtimeHub = class extends PollLoop {
    */
   refreshAll() {
     for (const client of this.clients.values()) {
-      if (client.projectIds === null) this.send(client.response, "refresh", { type: "refresh" });
+      if (client.projectIds === null) this.sendRefresh(client);
     }
   }
   async initializeCursor() {
@@ -166941,13 +167290,9 @@ var RealtimeHub = class extends PollLoop {
       return;
     }
     const pass2 = await withCommittedFeed(client, async (tx) => {
-      const state2 = await tx.get(
-        `SELECT retained_through FROM entity_change_retention WHERE id = 1`
-      );
-      if (!state2) throw new Error("Change-feed retention boundary is missing");
-      const retainedThrough = Number(state2.retained_through);
+      const { highWaterMark, retainedThrough } = await readCommittedFeedBounds(tx);
       if (this.cursor < retainedThrough) {
-        return { expired: true, retainedThrough, cursor: await currentMaxSeq(tx) };
+        return { expired: true, retainedThrough, cursor: highWaterMark };
       }
       return {
         expired: false,
@@ -166986,14 +167331,15 @@ var RealtimeHub = class extends PollLoop {
       this.lastDataVersion = version4;
       if (rows.length === 0) {
         for (const client2 of this.clients.values()) {
-          if (client2.projectIds === null)
-            this.send(client2.response, "refresh", { type: "refresh" });
+          if (client2.projectIds === null) this.sendRefresh(client2);
         }
       }
     }
   }
   heartbeat() {
-    for (const { response } of this.clients.values()) response.write(": ping\n\n");
+    for (const { response } of this.clients.values()) {
+      if (!response.writableNeedDrain) response.write(": ping\n\n");
+    }
   }
   broadcastChanges(rows, cursor3) {
     for (const client of this.clients.values()) {
@@ -167001,15 +167347,22 @@ var RealtimeHub = class extends PollLoop {
         (row) => row.seq > client.lastCursor && client.workspaceIds.has(row.workspace_id) && (client.projectIds === null || row.project_id !== null && client.projectIds.has(row.project_id))
       ).map(entityChangeDtoFromRow);
       if (changes.length > 0) {
+        const res = client.response;
         if (client.replaying) {
-          client.pending.push({ changes, cursor: cursor3 });
-          if (client.pending.length > 100) {
-            this.removeClient(client.response);
-            client.response.end();
+          const bytes = Buffer.byteLength(JSON.stringify(changes));
+          if (client.pending.length >= REPLAY_PENDING_BATCH_LIMIT || client.pendingBytes + bytes > REPLAY_PENDING_BYTE_LIMIT) {
+            this.removeClient(res);
+            res.destroy();
+          } else {
+            client.pending.push({ changes, cursor: cursor3, bytes });
+            client.pendingBytes += bytes;
           }
+        } else if (res.writableNeedDrain) {
+          this.removeClient(res);
+          res.destroy();
         } else {
           client.lastCursor = cursor3;
-          this.send(client.response, "change", { type: "change", changes, cursor: cursor3 });
+          this.send(res, "change", { type: "change", changes, cursor: cursor3 });
         }
       }
     }
@@ -167017,35 +167370,73 @@ var RealtimeHub = class extends PollLoop {
   reconnectClientsForAuthorizationChange() {
     for (const { response } of [...this.clients.values()]) {
       this.removeClient(response);
-      response.end();
+      if (response.writableNeedDrain) response.destroy();
+      else response.end();
     }
   }
-  async sendCatchUp(res, afterSeq) {
-    let cursor3 = afterSeq;
-    while (this.clients.has(res)) {
-      const client = this.clients.get(res);
+  async sendCatchUp(client, signalReplayCompletion) {
+    const { response: res, closed, workspaceIds, projectIds } = client;
+    const workspaces = [...workspaceIds];
+    const projects = projectIds === null ? null : [...projectIds];
+    while (true) {
+      while (res.writableNeedDrain && !closed.signal.aborted)
+        await (0, import_node_events.once)(res, "drain", { signal: closed.signal });
+      if (closed.signal.aborted) return;
       const batch = await readChangesAfter(
-        cursor3,
-        [...client.workspaceIds],
+        client.lastCursor,
+        workspaces,
         CHANGE_BATCH_LIMIT,
-        client.projectIds === null ? null : [...client.projectIds]
+        projects
       );
-      if (!this.clients.has(res)) return cursor3;
+      while (res.writableNeedDrain && !closed.signal.aborted)
+        await (0, import_node_events.once)(res, "drain", { signal: closed.signal });
+      if (closed.signal.aborted) return;
       if (batch.changes.length > 0) {
         this.send(res, "change", { type: "change", changes: batch.changes, cursor: batch.cursor });
       }
-      cursor3 = batch.cursor;
-      if (!batch.hasMore) return cursor3;
+      client.lastCursor = batch.cursor;
+      while (client.pending[0] && client.pending[0].cursor <= batch.cursor) {
+        client.pendingBytes -= client.pending.shift().bytes;
+      }
+      if (!batch.hasMore) break;
     }
-    return cursor3;
+    while (true) {
+      while (res.writableNeedDrain && !closed.signal.aborted)
+        await (0, import_node_events.once)(res, "drain", { signal: closed.signal });
+      if (closed.signal.aborted) return;
+      const pending = client.pending.shift();
+      if (!pending) break;
+      client.pendingBytes -= pending.bytes;
+      const changes = pending.changes.filter((change) => change.seq > client.lastCursor);
+      if (changes.length > 0)
+        this.send(res, "change", { type: "change", changes, cursor: pending.cursor });
+      client.lastCursor = Math.max(client.lastCursor, pending.cursor);
+    }
+    client.replaying = false;
+    if (signalReplayCompletion) {
+      this.send(res, "hello", { type: "hello", cursor: client.lastCursor, replayComplete: true });
+    }
+  }
+  sendRefresh(client) {
+    const { response: res, closed } = client;
+    if (!res.writableNeedDrain) {
+      this.send(res, "refresh", { type: "refresh" });
+    } else if (!client.refreshPending) {
+      client.refreshPending = true;
+      void (0, import_node_events.once)(res, "drain", { signal: closed.signal }).then(() => {
+        client.refreshPending = false;
+        if (!closed.signal.aborted) this.sendRefresh(client);
+      }).catch((error64) => {
+        if (!closed.signal.aborted) this.onPollError(error64);
+      });
+    }
   }
   send(res, event, data) {
-    res.write(`event: ${event}
-`);
     const cursor3 = typeof data === "object" && data && "cursor" in data ? Number(data.cursor) : NaN;
-    if (Number.isFinite(cursor3) && event === "change") res.write(`id: ${cursor3}
-`);
-    res.write(`data: ${JSON.stringify(data)}
+    const id2 = Number.isFinite(cursor3) && event === "change" ? `id: ${cursor3}
+` : "";
+    res.write(`event: ${event}
+${id2}data: ${JSON.stringify(data)}
 
 `);
   }
@@ -167938,7 +168329,7 @@ async function recordBranchActionActivityFromMutation({
 }
 
 // ext/github/service.ts
-var import_node_crypto19 = require("node:crypto");
+var import_node_crypto21 = require("node:crypto");
 var GITHUB_API = "https://api.github.com";
 var STATE_TTL_MS = 10 * 60 * 1e3;
 function githubAppConfig() {
@@ -167967,7 +168358,7 @@ function appJwt(config4) {
     JSON.stringify({ iat: now2 - 60, exp: now2 + 9 * 60, iss: config4.appId })
   );
   const signingInput = `${encodedHeader}.${encodedPayload}`;
-  const signer = (0, import_node_crypto19.createSign)("RSA-SHA256");
+  const signer = (0, import_node_crypto21.createSign)("RSA-SHA256");
   signer.update(signingInput);
   signer.end();
   return `${signingInput}.${signer.sign(config4.privateKey, "base64url")}`;
@@ -168006,16 +168397,16 @@ async function githubFetch(path28, token, init2 = {}) {
 }
 function signedInstallState(workspaceId2, privateKey) {
   const payload = base64url3(JSON.stringify({ workspaceId: workspaceId2, expiresAt: Date.now() + STATE_TTL_MS }));
-  const mac3 = (0, import_node_crypto19.createHmac)("sha256", privateKey).update(payload).digest("base64url");
+  const mac3 = (0, import_node_crypto21.createHmac)("sha256", privateKey).update(payload).digest("base64url");
   return `${payload}.${mac3}`;
 }
 function verifyInstallState(value2, privateKey) {
   const [payload, suppliedMac, ...extra] = value2?.split(".") ?? [];
   if (!payload || !suppliedMac || extra.length)
     throw new ApiError(400, "Invalid GitHub installation state.");
-  const expectedMac = (0, import_node_crypto19.createHmac)("sha256", privateKey).update(payload).digest("base64url");
+  const expectedMac = (0, import_node_crypto21.createHmac)("sha256", privateKey).update(payload).digest("base64url");
   const sameLength = suppliedMac.length === expectedMac.length;
-  if (!sameLength || !(0, import_node_crypto19.timingSafeEqual)(Buffer.from(suppliedMac), Buffer.from(expectedMac))) {
+  if (!sameLength || !(0, import_node_crypto21.timingSafeEqual)(Buffer.from(suppliedMac), Buffer.from(expectedMac))) {
     throw new ApiError(400, "Invalid GitHub installation state.");
   }
   let decoded;
@@ -168743,7 +169134,7 @@ function deferredWorkItemDto(entry, item) {
 var import_node_path30 = __toESM(require("node:path"), 1);
 
 // storage.ts
-var import_node_crypto25 = require("node:crypto");
+var import_node_crypto27 = require("node:crypto");
 var import_node_fs19 = require("node:fs");
 var import_node_path29 = __toESM(require("node:path"), 1);
 var import_node_url5 = require("node:url");
@@ -169442,7 +169833,7 @@ async function writeImageObject(bucket, input2, storageKeyFor) {
     sizeBytes: input2.bytes.length,
     // extensionForImage refused every other content type.
     contentType,
-    checksum: (0, import_node_crypto25.createHash)("sha256").update(input2.bytes).digest("hex"),
+    checksum: (0, import_node_crypto27.createHash)("sha256").update(input2.bytes).digest("hex"),
     publicUrl: publicUrlFor(bucket.bucket_key, storageKey)
   };
 }
@@ -169683,7 +170074,7 @@ async function writeAttachmentObject(bucket, workspaceId2, input2) {
     contentType,
     filename: input2.filename.trim() || `attachment${import_node_path29.default.extname(storageKey)}`,
     sizeBytes: input2.bytes.length,
-    checksum: (0, import_node_crypto25.createHash)("sha256").update(input2.bytes).digest("hex")
+    checksum: (0, import_node_crypto27.createHash)("sha256").update(input2.bytes).digest("hex")
   };
 }
 async function insertAttachmentRow(tx, written, scope2, createdByWorkspaceUserId) {
@@ -171894,7 +172285,7 @@ async function listProjectResources2(projectId) {
   );
   const sources = await db.all(
     `SELECT id, resource_id, execution_target_id, source_kind, descriptor_json,
-            observed_revision, observed_content_digest
+            observed_revision, observed_content_digest, revision
        FROM project_resource_sources
       WHERE project_id = ? AND deleted_at IS NULL`,
     [projectId]
@@ -171905,12 +172296,26 @@ async function listProjectResources2(projectId) {
     bucket.push(source);
     sourcesByResourceId.set(source.resource_id, bucket);
   }
-  const observations = await loadTargetResourceObservations({
-    ctx: await buildWebappServiceContextForWorkspace(project.workspaceId, db, workspaceUserId),
-    resourceIds: rows.map((row) => row.id)
-  });
+  const ctx = await buildWebappServiceContextForWorkspace(project.workspaceId, db, workspaceUserId);
+  const [latchHosts, observations] = await Promise.all([
+    loadProjectResourceLatchHosts({
+      db,
+      workspaceId: project.workspaceId,
+      workspaceUserId,
+      projectId
+    }),
+    loadTargetResourceObservations({ ctx, resourceIds: rows.map((row) => row.id) })
+  ]);
   return await Promise.all(
-    rows.map((row) => toProjectResourceDto(row, observations, sourcesByResourceId.get(row.id) ?? []))
+    rows.map(async (row) => {
+      const sourceRows = sourcesByResourceId.get(row.id) ?? [];
+      const resource = await toProjectResourceDto(row, observations, sourceRows);
+      for (const [index, source] of resource.sources.entries()) {
+        const link = latchHosts.get(source.id);
+        if (link?.sourceRevision === sourceRows[index]?.revision) source.latchHostLink = link;
+      }
+      return resource;
+    })
   );
 }
 async function findProjectResourceSource({
@@ -177288,10 +177693,10 @@ var missionSubcommands = {
 };
 
 // workspaces.ts
-var import_node_crypto26 = require("node:crypto");
+var import_node_crypto28 = require("node:crypto");
 
 // sql-studio/sql-studio.ts
-var import_node_child_process7 = require("node:child_process");
+var import_node_child_process8 = require("node:child_process");
 var import_node_fs20 = require("node:fs");
 var import_node_path32 = __toESM(require("node:path"), 1);
 function publicHost(host) {
@@ -177333,7 +177738,7 @@ function startSqlStudio(config4) {
     "sqlite",
     config4.databasePath
   ];
-  const launched = (0, import_node_child_process7.spawn)(binary2, args, {
+  const launched = (0, import_node_child_process8.spawn)(binary2, args, {
     stdio: ["ignore", "pipe", "pipe"]
   });
   let child = launched;
@@ -183685,9 +184090,9 @@ var INVITATION_HASH_ALGORITHM = "sha256";
 var INVITATION_TTL_DAYS = 14;
 var WORKSPACE_ROLE_KEYS = /* @__PURE__ */ new Set(["ADMIN", "MANAGER", "MEMBER"]);
 function generateInvitationSecret() {
-  const prefix = `${INVITATION_TOKEN_SCHEME}_${(0, import_node_crypto26.randomBytes)(4).toString("hex")}`;
-  const secret = `${prefix}${(0, import_node_crypto26.randomBytes)(24).toString("hex")}`;
-  const hash2 = (0, import_node_crypto26.createHash)(INVITATION_HASH_ALGORITHM).update(secret).digest("hex");
+  const prefix = `${INVITATION_TOKEN_SCHEME}_${(0, import_node_crypto28.randomBytes)(4).toString("hex")}`;
+  const secret = `${prefix}${(0, import_node_crypto28.randomBytes)(24).toString("hex")}`;
+  const hash2 = (0, import_node_crypto28.createHash)(INVITATION_HASH_ALGORITHM).update(secret).digest("hex");
   return { secret, prefix, hash: hash2 };
 }
 var INVITATION_COLUMNS = "id, workspace_id, email, role_key, token_prefix, status, invited_by_workspace_user_id, expires_at, created_at, revision";
@@ -183857,7 +184262,7 @@ async function acceptWorkspaceInvitation(body) {
   if (!rawToken) throw new ApiError(400, "Invitation token is required");
   const profileId = getActiveProfileId();
   if (!profileId) throw new ApiError(401, "Authentication required");
-  const tokenHash = (0, import_node_crypto26.createHash)(INVITATION_HASH_ALGORITHM).update(rawToken).digest("hex");
+  const tokenHash = (0, import_node_crypto28.createHash)(INVITATION_HASH_ALGORITHM).update(rawToken).digest("hex");
   const client = requireDatabaseClient();
   const outcome = await client.transaction(async (tx) => {
     const invitation = await tx.get(
@@ -185158,7 +185563,7 @@ function compactSearchResponse(value2) {
 }
 
 // ../mcp/tasks.ts
-var import_node_crypto27 = require("node:crypto");
+var import_node_crypto29 = require("node:crypto");
 var McpTaskError = class extends Error {
   code;
   constructor(code, message2) {
@@ -185200,7 +185605,7 @@ var McpTaskStore = class {
   constructor(options = {}) {
     this.limits = { ...DEFAULT_MCP_TASK_LIMITS, ...options.limits };
     this.now = options.now ?? Date.now;
-    this.newId = options.newId ?? import_node_crypto27.randomUUID;
+    this.newId = options.newId ?? import_node_crypto29.randomUUID;
     this.onSettled = options.onSettled;
   }
   /**
@@ -186965,7 +187370,7 @@ async function handleMcpPost(req, res, next) {
 }
 
 // ../packages/core/service/chat/conversations.ts
-var import_node_crypto31 = require("node:crypto");
+var import_node_crypto33 = require("node:crypto");
 
 // ../packages/core/service/chat/performance.ts
 var import_node_async_hooks3 = require("node:async_hooks");
@@ -187110,7 +187515,7 @@ var UNCERTAIN_WRITE_RESULT = {
 };
 
 // ../packages/core/service/chat/proposals.ts
-var import_node_crypto30 = require("node:crypto");
+var import_node_crypto32 = require("node:crypto");
 
 // ../packages/core/service/chat/access.ts
 var ChatAccess = class {
@@ -187231,12 +187636,12 @@ function assignmentCatalogProjection(value2) {
 }
 
 // ../packages/core/service/chat/runs.ts
-var import_node_crypto29 = require("node:crypto");
-var import_node_util3 = require("node:util");
+var import_node_crypto31 = require("node:crypto");
+var import_node_util4 = require("node:util");
 
 // ../packages/core/service/chat/store.ts
-var import_node_crypto28 = require("node:crypto");
-var import_node_util2 = require("node:util");
+var import_node_crypto30 = require("node:crypto");
+var import_node_util3 = require("node:util");
 var ChatError = class extends ServiceError {
   /**
    * @param detail Optional specific reason for the assistant's own tool results (for example
@@ -187429,7 +187834,7 @@ var ChatStore = class _ChatStore {
     await this.db.run(
       `INSERT INTO chat_events (id, thread_id, seq, kind, run_id, attempt_id, fence, payload_json, dependency_set_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
-        (0, import_node_crypto28.randomUUID)(),
+        (0, import_node_crypto30.randomUUID)(),
         threadId,
         t.last_event_seq,
         payload.kind,
@@ -187506,7 +187911,7 @@ var ChatStore = class _ChatStore {
       await this.db.run(
         `INSERT INTO chat_source_refs (id, thread_id, source_kind, scope_key, connection_id, locator_json, access_state, access_checked_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, 'unknown', ?, ?, ?) ON CONFLICT (thread_id, scope_key) DO NOTHING`,
         [
-          (0, import_node_crypto28.randomUUID)(),
+          (0, import_node_crypto30.randomUUID)(),
           threadId,
           source.locator.kind,
           source.scopeKey,
@@ -187521,7 +187926,7 @@ var ChatStore = class _ChatStore {
         "SELECT id, locator_json FROM chat_source_refs WHERE thread_id = ? AND scope_key = ?",
         [threadId, source.scopeKey]
       );
-      if (!(0, import_node_util2.isDeepStrictEqual)(identity(JSON.parse(row.locator_json)), identity(source.locator)))
+      if (!(0, import_node_util3.isDeepStrictEqual)(identity(JSON.parse(row.locator_json)), identity(source.locator)))
         throw new ChatError("invalid_request");
       ids.push(row.id);
     }
@@ -187678,14 +188083,14 @@ var ChatStore = class _ChatStore {
         throw new ChatError("source_access_lost");
     }
     const authorizationRevision = (await this.thread(threadId)).authorization_revision;
-    const digest6 = (0, import_node_crypto28.createHash)("sha256").update(JSON.stringify({ ids, authorizationRevision })).digest("hex");
+    const digest6 = (0, import_node_crypto30.createHash)("sha256").update(JSON.stringify({ ids, authorizationRevision })).digest("hex");
     const old = await this.db.get(
       "SELECT id, invalidated_at FROM chat_dependency_sets WHERE thread_id = ? AND digest = ?",
       [threadId, digest6]
     );
     if (old?.invalidated_at) throw new ChatError("source_access_lost");
     if (old) return old.id;
-    const id2 = (0, import_node_crypto28.randomUUID)();
+    const id2 = (0, import_node_crypto30.randomUUID)();
     await this.db.run(
       "INSERT INTO chat_dependency_sets (id, thread_id, digest, created_at) VALUES (?, ?, ?, ?)",
       [id2, threadId, digest6, this.timestamp()]
@@ -187773,7 +188178,7 @@ var ChatStore = class _ChatStore {
     await this.db.run(
       `INSERT INTO chat_notifications (id, owner_profile_id, organization_id, thread_id, run_id, question_id, type, transition_key, event_seq, state, due_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?) ON CONFLICT (owner_profile_id, thread_id, run_id, type, transition_key) DO NOTHING`,
       [
-        (0, import_node_crypto28.randomUUID)(),
+        (0, import_node_crypto30.randomUUID)(),
         t.owner_profile_id,
         t.organization_id,
         t.id,
@@ -187926,7 +188331,7 @@ var ChatRuns = class _ChatRuns extends ChatStore {
             );
           }
         }
-        const id2 = (0, import_node_crypto29.randomUUID)(), fence = r5.current_fence + 1, now2 = s.timestamp();
+        const id2 = (0, import_node_crypto31.randomUUID)(), fence = r5.current_fence + 1, now2 = s.timestamp();
         await tx.run(
           "UPDATE chat_runs SET state = 'running', current_fence = ?, active_attempt_id = ?, updated_at = ?, revision = revision + 1 WHERE id = ?",
           [fence, id2, now2, r5.id]
@@ -188153,7 +188558,7 @@ var ChatRuns = class _ChatRuns extends ChatStore {
         [a5.runId, turn]
       );
       if (old.length) {
-        if (!(0, import_node_util3.isDeepStrictEqual)(
+        if (!(0, import_node_util4.isDeepStrictEqual)(
           old.map((o3) => [
             o3.operation_id,
             o3.provider_call_id,
@@ -188184,7 +188589,7 @@ var ChatRuns = class _ChatRuns extends ChatStore {
         requiredText(req.providerCallId, 200);
         const args = JSON.stringify(req.arguments);
         if (Buffer.byteLength(args) > 64 * 1024) throw new ChatError("limit_exceeded");
-        const callId = (0, import_node_crypto29.randomUUID)();
+        const callId = (0, import_node_crypto31.randomUUID)();
         await s.db.run(
           `INSERT INTO chat_tool_calls (id, run_id, attempt_id, operation_id, turn_index, call_order, provider_call_id, tool_id, policy_version, arguments_json, state, requested_fence, writer_fence, dependency_set_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, 'requested', ?, ?, ?, ?, ?)`,
           [
@@ -188354,8 +188759,8 @@ var ChatRuns = class _ChatRuns extends ChatStore {
         [messageId, a5.runId]
       );
       if (messageId && !old) throw new ChatError("invalid_request");
-      const id2 = old ? old.id : (0, import_node_crypto29.randomUUID)();
-      const blocks = old ? JSON.parse(old.blocks_json) : [{ id: (0, import_node_crypto29.randomUUID)(), kind: "text", text: "", evidenceIds: [], fallbackText: "" }];
+      const id2 = old ? old.id : (0, import_node_crypto31.randomUUID)();
+      const blocks = old ? JSON.parse(old.blocks_json) : [{ id: (0, import_node_crypto31.randomUUID)(), kind: "text", text: "", evidenceIds: [], fallbackText: "" }];
       const block = blocks[0];
       if (!block || block.kind !== "text") throw new ChatError("invalid_request");
       if (block.text.length + text.length > s.limits.messageMaxChars)
@@ -188406,7 +188811,7 @@ var ChatRuns = class _ChatRuns extends ChatStore {
         "SELECT COUNT(*) AS n FROM chat_questions WHERE run_id = ?",
         [a5.runId]
       );
-      const id2 = (0, import_node_crypto29.randomUUID)(), now2 = s.timestamp();
+      const id2 = (0, import_node_crypto31.randomUUID)(), now2 = s.timestamp();
       await s.db.run(
         `INSERT INTO chat_questions (id, thread_id, run_id, ordinal, state, prompt, options_json, allow_free_text, dependency_set_id, created_at, updated_at) VALUES (?, ?, ?, ?, 'open', ?, ?, ?, ?, ?, ?)`,
         [
@@ -188489,7 +188894,7 @@ var ChatRuns = class _ChatRuns extends ChatStore {
       );
       const evidence = [];
       for (const [i5, source] of sources.entries()) {
-        const evidenceId = (0, import_node_crypto29.randomUUID)();
+        const evidenceId = (0, import_node_crypto31.randomUUID)();
         await s.db.run(
           `INSERT INTO chat_evidence (id, thread_id, run_id, tool_call_id, source_ref_id, label, excerpt, excerpt_truncated, source_revision, observed_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
@@ -188547,7 +188952,7 @@ var ChatRuns = class _ChatRuns extends ChatStore {
       }));
       const others = blocks.filter((b5) => b5.kind !== "evidence");
       others.push({
-        id: (0, import_node_crypto29.randomUUID)(),
+        id: (0, import_node_crypto31.randomUUID)(),
         kind: "evidence",
         evidence,
         fallbackText: `Sources: ${evidence.map((e5) => e5.label).join("; ")}`.slice(0, 4e3)
@@ -188590,7 +188995,7 @@ var ChatRuns = class _ChatRuns extends ChatStore {
       if (regressed) throw new ChatError("invalid_request");
       await s.db.run(
         "INSERT INTO chat_thread_summaries (id, thread_id, summary_revision, summary_json, covers_through_message_id, dependency_set_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-        [(0, import_node_crypto29.randomUUID)(), a5.threadId, Number(last?.n ?? 0) + 1, json2, latest.id, deps, s.timestamp()]
+        [(0, import_node_crypto31.randomUUID)(), a5.threadId, Number(last?.n ?? 0) + 1, json2, latest.id, deps, s.timestamp()]
       );
     });
   }
@@ -188899,7 +189304,7 @@ var ChatProposals = class _ChatProposals extends ChatStore {
       await runs.assertLease(a5);
       const destinationSet = await s.dependencySet(a5.threadId, sourceIds);
       const dependencySetId = await s.generationDependencies(a5.threadId, destinationSet);
-      const id2 = body.proposalId ?? (0, import_node_crypto30.randomUUID)();
+      const id2 = body.proposalId ?? (0, import_node_crypto32.randomUUID)();
       let next = 1;
       if (body.proposalId) {
         const old = await tx.get(
@@ -188942,10 +189347,10 @@ var ChatProposals = class _ChatProposals extends ChatStore {
         id: a5.id,
         fence: a5.fence
       });
-      const messageId = (0, import_node_crypto30.randomUUID)();
+      const messageId = (0, import_node_crypto32.randomUUID)();
       const blocks = [
         {
-          id: (0, import_node_crypto30.randomUUID)(),
+          id: (0, import_node_crypto32.randomUUID)(),
           kind: "proposal",
           proposalId: id2,
           revision: next,
@@ -189057,7 +189462,7 @@ var ChatProposals = class _ChatProposals extends ChatStore {
           [scope2.project.id]
         );
       }
-      const receiptId = (0, import_node_crypto30.randomUUID)();
+      const receiptId = (0, import_node_crypto32.randomUUID)();
       for (const [i5, m3] of missions.entries()) {
         const scope2 = scopes[i5];
         await s.destination(owner, m3.projectId);
@@ -189123,7 +189528,7 @@ var ChatProposals = class _ChatProposals extends ChatStore {
               expected,
               owner.profileId,
               key,
-              (0, import_node_crypto30.createHash)("sha256").update(JSON.stringify({ id: id2, expected })).digest("hex"),
+              (0, import_node_crypto32.createHash)("sha256").update(JSON.stringify({ id: id2, expected })).digest("hex"),
               thread.authorization_revision,
               s.timestamp()
             ]
@@ -189203,7 +189608,7 @@ var Conversations = class _Conversations extends ChatStore {
     if (message2 !== void 0 && (!message2 || typeof message2 !== "object" || Array.isArray(message2)))
       throw new ChatError("invalid_request");
     return this.db.transaction(async (tx) => {
-      const s = new _Conversations(tx, this.options), id2 = (0, import_node_crypto31.randomUUID)(), now2 = s.timestamp();
+      const s = new _Conversations(tx, this.options), id2 = (0, import_node_crypto33.randomUUID)(), now2 = s.timestamp();
       await s.access(owner);
       await tx.run(
         "INSERT INTO chat_threads (id, owner_profile_id, organization_id, last_activity_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
@@ -189319,10 +189724,10 @@ var Conversations = class _Conversations extends ChatStore {
       if (Number(count?.n) >= this.limits.concurrentRunsPerOwner)
         throw new ChatError("limit_exceeded");
     }
-    const messageId = (0, import_node_crypto31.randomUUID)(), runId = active?.id ?? (0, import_node_crypto31.randomUUID)(), now2 = this.timestamp();
+    const messageId = (0, import_node_crypto33.randomUUID)(), runId = active?.id ?? (0, import_node_crypto33.randomUUID)(), now2 = this.timestamp();
     const messageCreatedAt = await this.createdAt("chat_messages", id2);
     const blocks = [
-      { id: (0, import_node_crypto31.randomUUID)(), kind: "text", text: body.text, fallbackText: body.text, evidenceIds: [] }
+      { id: (0, import_node_crypto33.randomUUID)(), kind: "text", text: body.text, fallbackText: body.text, evidenceIds: [] }
     ];
     await this.db.run(
       `INSERT INTO chat_messages (id, thread_id, role, state, blocks_json, answers_question_id, client_request_id, created_at, updated_at) VALUES (?, ?, 'user', 'complete', ?, ?, ?, ?, ?)`,
@@ -189447,7 +189852,7 @@ var Conversations = class _Conversations extends ChatStore {
       );
       if (Number(count?.n) >= s.limits.concurrentRunsPerOwner)
         throw new ChatError("limit_exceeded");
-      const newId2 = (0, import_node_crypto31.randomUUID)();
+      const newId2 = (0, import_node_crypto33.randomUUID)();
       const inheritedGrant = storedKnowledgebaseWrite(r5.knowledgebase_write_json);
       await s.db.run(
         `INSERT INTO chat_runs (id, thread_id, trigger_message_id, continued_from_run_id, state, limits_json, knowledgebase_write_json, created_at, updated_at) VALUES (?, ?, ?, ?, 'queued', ?, ?, ?, ?)`,
@@ -189616,7 +190021,7 @@ async function postExecutionTargetObservations({
 }
 
 // ../packages/core/service/repository-reads.ts
-var import_node_crypto32 = require("node:crypto");
+var import_node_crypto34 = require("node:crypto");
 function invalid3(message2) {
   throw new ServiceError(message2, "invalid_request", 400);
 }
@@ -189802,7 +190207,7 @@ var defaultProviderFactory = ({ target, queue }) => new RunnerQueueProvider(
   queue
 );
 function repositoryReadIdempotencyKey(actorWorkspaceUserId, operationId) {
-  const digest6 = (0, import_node_crypto32.createHash)("sha256").update(`${actorWorkspaceUserId}
+  const digest6 = (0, import_node_crypto34.createHash)("sha256").update(`${actorWorkspaceUserId}
 ${operationId}`).digest("hex").slice(0, 48);
   return `repository-read:${digest6}`;
 }
@@ -191334,10 +191739,10 @@ function classifyGeminiError(error64) {
 }
 
 // chat/gemini-runtime.ts
-var import_node_crypto36 = require("node:crypto");
+var import_node_crypto38 = require("node:crypto");
 
 // chat-worker.ts
-var import_node_crypto33 = require("node:crypto");
+var import_node_crypto35 = require("node:crypto");
 var ChatRuntimeFailure = class extends Error {
   constructor(failureCode) {
     super(failureCode);
@@ -191368,7 +191773,7 @@ var ChatWorker = class extends PollLoop {
   concurrency;
   lastRetentionAt = 0;
   active = /* @__PURE__ */ new Map();
-  id = (0, import_node_crypto33.randomUUID)();
+  id = (0, import_node_crypto35.randomUUID)();
   async stop() {
     const pass2 = super.stop();
     for (const job of this.active.values()) job.controller.abort();
@@ -191443,7 +191848,7 @@ var ChatWorker = class extends PollLoop {
 };
 
 // chat/gemini-diagnostics.ts
-var import_node_crypto34 = require("node:crypto");
+var import_node_crypto36 = require("node:crypto");
 var RunMetrics = class extends ChatPerformance {
   providerRounds = 0;
   providerRequests = 0;
@@ -191532,7 +191937,7 @@ function instrumentGeminiClient(client, hooks) {
   const { record: record2, metrics } = hooks;
   return {
     async stream(request) {
-      const exchangeId = (0, import_node_crypto34.randomUUID)();
+      const exchangeId = (0, import_node_crypto36.randomUUID)();
       if (metrics) metrics.providerRequests++;
       const started = metrics ? performance.now() : 0;
       const contentBytes = hooks.contentBytes(request);
@@ -191595,7 +192000,7 @@ function instrumentGeminiClient(client, hooks) {
       }
     },
     async generate(request) {
-      const exchangeId = (0, import_node_crypto34.randomUUID)();
+      const exchangeId = (0, import_node_crypto36.randomUUID)();
       if (metrics) metrics.summaryRounds++;
       const cached3 = hooks.staticUseFor(request);
       await record2("provider.request", {
@@ -191758,7 +192163,7 @@ ${text}`;
 }
 
 // chat/tool-manifest.ts
-var import_node_crypto35 = require("node:crypto");
+var import_node_crypto37 = require("node:crypto");
 var RELEVANCE_POLICY_VERSION = "expandable-families-v1";
 var TOOL_FAMILIES = ["status", "repository", "knowledgebase", "feature"];
 var EXPAND_CAPABILITIES_TOOL = "expand_capabilities";
@@ -191817,7 +192222,7 @@ function digest4(value2) {
       );
     return v;
   };
-  return (0, import_node_crypto35.createHash)("sha256").update(JSON.stringify(canonical(value2))).digest("hex");
+  return (0, import_node_crypto37.createHash)("sha256").update(JSON.stringify(canonical(value2))).digest("hex");
 }
 function createToolManifest(catalog, families) {
   const value2 = {
@@ -191885,7 +192290,7 @@ var GeminiChatRuntime = class {
       provider: "gemini",
       model,
       checkpointVersion: GEMINI_CHECKPOINT_VERSION,
-      configDigest: (0, import_node_crypto36.createHash)("sha256").update(
+      configDigest: (0, import_node_crypto38.createHash)("sha256").update(
         JSON.stringify({
           model,
           SYSTEM_PROMPT_VERSION,
@@ -192764,10 +193169,10 @@ function chatLimitsFromEnv(env3) {
 }
 
 // connections/keyring.ts
-var import_node_crypto38 = require("node:crypto");
+var import_node_crypto40 = require("node:crypto");
 
 // connections/crypto.ts
-var import_node_crypto37 = require("node:crypto");
+var import_node_crypto39 = require("node:crypto");
 var SecretEnvelopeError = class extends Error {
   constructor() {
     super("The stored secret cannot be decrypted.");
@@ -192784,8 +193189,8 @@ function sealSecret({
   key,
   aad
 }) {
-  const nonce = (0, import_node_crypto37.randomBytes)(12);
-  const cipher = (0, import_node_crypto37.createCipheriv)("aes-256-gcm", key, nonce);
+  const nonce = (0, import_node_crypto39.randomBytes)(12);
+  const cipher = (0, import_node_crypto39.createCipheriv)("aes-256-gcm", key, nonce);
   cipher.setAAD(Buffer.from(aad, "utf8"));
   const ciphertext = Buffer.concat([cipher.update(plaintext, "utf8"), cipher.final()]);
   const tag2 = cipher.getAuthTag();
@@ -192801,7 +193206,7 @@ function openSecret({
     throw new SecretEnvelopeError();
   }
   try {
-    const decipher = (0, import_node_crypto37.createDecipheriv)("aes-256-gcm", key, Buffer.from(nonceText, "base64url"));
+    const decipher = (0, import_node_crypto39.createDecipheriv)("aes-256-gcm", key, Buffer.from(nonceText, "base64url"));
     decipher.setAAD(Buffer.from(aad, "utf8"));
     decipher.setAuthTag(Buffer.from(tagText, "base64url"));
     return Buffer.concat([
@@ -192813,7 +193218,7 @@ function openSecret({
   }
 }
 function hashSecret(value2) {
-  return (0, import_node_crypto37.createHash)("sha256").update(value2).digest("hex");
+  return (0, import_node_crypto39.createHash)("sha256").update(value2).digest("hex");
 }
 
 // connections/keyring.ts
@@ -192832,7 +193237,7 @@ function platformKeyFromSecret(secret) {
   const trimmed = secret?.trim();
   if (!trimmed || trimmed.length < MIN_PLATFORM_SECRET_LENGTH) return null;
   const key = Buffer.from(
-    (0, import_node_crypto38.hkdfSync)(
+    (0, import_node_crypto40.hkdfSync)(
       "sha256",
       Buffer.from(trimmed, "utf8"),
       Buffer.from("overlord:account-connections", "utf8"),
@@ -192840,7 +193245,7 @@ function platformKeyFromSecret(secret) {
       32
     )
   );
-  const fingerprint = (0, import_node_crypto38.createHash)("sha256").update("overlord:account-connections:platform-key-id:v1:").update(key).digest("hex").slice(0, 16);
+  const fingerprint = (0, import_node_crypto40.createHash)("sha256").update("overlord:account-connections:platform-key-id:v1:").update(key).digest("hex").slice(0, 16);
   return { id: `${PLATFORM_KEY_ID_PREFIX}${fingerprint}`, key };
 }
 function keyRingFromEnv(env3) {
@@ -193432,7 +193837,7 @@ function validateJson(value2, at, depth, budget) {
 }
 
 // connections/service.ts
-var import_node_crypto41 = require("node:crypto");
+var import_node_crypto43 = require("node:crypto");
 
 // connections/credential-rows.ts
 var REFRESH_LEASE_MS = 15e3;
@@ -193565,7 +193970,7 @@ async function refreshLeased(db, row, lockOwner, options) {
 }
 
 // connections/oauth.ts
-var import_node_crypto39 = require("node:crypto");
+var import_node_crypto41 = require("node:crypto");
 var OAuthError = class extends Error {
   constructor(code) {
     super(code);
@@ -193579,8 +193984,8 @@ var METADATA_BYTES = 64 * 1024;
 var TOKEN_BYTES = 64 * 1024;
 var TIMEOUT_MS = 1e4;
 function pkcePair() {
-  const verifier = (0, import_node_crypto39.randomBytes)(32).toString("base64url");
-  return { verifier, challenge: (0, import_node_crypto39.createHash)("sha256").update(verifier).digest("base64url") };
+  const verifier = (0, import_node_crypto41.randomBytes)(32).toString("base64url");
+  return { verifier, challenge: (0, import_node_crypto41.createHash)("sha256").update(verifier).digest("base64url") };
 }
 function sameResource(a5, b5) {
   return a5.replace(/\/+$/, "") === b5.replace(/\/+$/, "");
@@ -193735,7 +194140,7 @@ var KnowledgebaseOAuth = class {
 };
 
 // connections/oauth-flow.ts
-var import_node_crypto40 = require("node:crypto");
+var import_node_crypto42 = require("node:crypto");
 
 // connections/authorizations.ts
 var AUTHORIZATION_TTL_MS = 10 * 60 * 1e3;
@@ -193790,16 +194195,16 @@ async function consumeAuthorization(tx, options) {
 
 // connections/oauth-flow.ts
 async function beginConnectionOAuth(db, options) {
-  const state2 = (0, import_node_crypto40.randomBytes)(32).toString("base64url");
+  const state2 = (0, import_node_crypto42.randomBytes)(32).toString("base64url");
   const { verifier, challenge } = pkcePair();
   const authorizeUrl = await options.authorizeUrl(state2, challenge);
-  const authorizationId = (0, import_node_crypto40.randomUUID)();
+  const authorizationId = (0, import_node_crypto42.randomUUID)();
   const expiresAt = options.timestamp(AUTHORIZATION_TTL_MS);
   const connectionId = await db.transaction(async (tx) => {
     const now2 = options.timestamp();
     let row = await options.findLiveRow(tx);
     if (!row) {
-      const id2 = (0, import_node_crypto40.randomUUID)();
+      const id2 = (0, import_node_crypto42.randomUUID)();
       await options.insertPendingRow(tx, id2, now2);
       row = await tx.get("SELECT * FROM account_connections WHERE id = ?", [id2]);
     }
@@ -193917,7 +194322,7 @@ var AccountConnections = class {
   }
   db;
   options;
-  lockOwner = (0, import_node_crypto41.randomUUID)();
+  lockOwner = (0, import_node_crypto43.randomUUID)();
   now() {
     return this.options.now?.() ?? Date.now();
   }
@@ -194729,7 +195134,7 @@ function provenance(text, connectionId, workspace2, maxSources) {
 }
 
 // connections/profile.ts
-var import_node_crypto42 = require("node:crypto");
+var import_node_crypto44 = require("node:crypto");
 var ProviderOAuthError = class extends Error {
   constructor(code) {
     super(code);
@@ -194763,7 +195168,7 @@ var ProfileConnections = class {
   db;
   ring;
   options;
-  lockOwner = (0, import_node_crypto42.randomUUID)();
+  lockOwner = (0, import_node_crypto44.randomUUID)();
   adapters;
   provider(provider) {
     return this.adapters.get(provider) ?? null;
@@ -194897,7 +195302,7 @@ var ProfileConnections = class {
       );
       return connectionDto(await this.row(profileId, existing.id));
     }
-    const id2 = (0, import_node_crypto42.randomUUID)();
+    const id2 = (0, import_node_crypto44.randomUUID)();
     const draft = { id: id2, owner_profile_id: profileId, organization_id: null, provider };
     await this.db.run(
       `INSERT INTO account_connections (id, owner_profile_id, organization_id, provider, server_url, state, credential_kind, credential_format, credential_ciphertext, credential_key_id, credential_revision, external_account_id, external_account_label, external_account_avatar_url, last_validated_at, connected_at, created_at, updated_at, revision) VALUES (?, ?, NULL, ?, ?, 'connected', 'api_key', 'connection-v1', ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, 1)`,
@@ -195586,7 +195991,7 @@ function createProfileConnectionCallbackHandler(options) {
 }
 
 // ../packages/core/service/end-latch-session.ts
-var import_node_crypto43 = require("node:crypto");
+var import_node_crypto45 = require("node:crypto");
 
 // ../packages/core/service/current-objective-attempt.ts
 var activeObjectiveAttemptSql = "o.state IN ('launching', 'executing', 'pending_delivery')";
@@ -195613,7 +196018,7 @@ async function endLatchSession({
   if (!row || !mapping) throw new ServiceError("Terminal session not found", "not_found", 404);
   const now2 = nowIso();
   const scope2 = "api.mission.terminal-session.end";
-  const requestHash = (0, import_node_crypto43.createHash)("sha256").update(JSON.stringify({ missionId, executionRequestId })).digest("hex");
+  const requestHash = (0, import_node_crypto45.createHash)("sha256").update(JSON.stringify({ missionId, executionRequestId })).digest("hex");
   await db.run(
     `INSERT INTO idempotency_keys
       (id, workspace_id, scope, key, request_hash, status, actor_workspace_user_id,
@@ -196736,6 +197141,36 @@ async function updateProjectExecutionTarget(projectId, body, client = requireDat
   } catch (error64) {
     rethrowNotFoundAs(error64, "Project not found");
   }
+}
+
+// execution/project-resource-latch-host.ts
+async function updateProjectResourceLatchHost({
+  projectId,
+  resourceId,
+  sourceId,
+  body,
+  signal
+}) {
+  const scope2 = await requireProjectPermission({
+    projectId,
+    permission: PERMISSIONS.PROJECT_UPDATE
+  });
+  const parsed = updateProjectResourceLatchHostBodySchema.safeParse(body);
+  if (!parsed.success)
+    throw new ApiError(400, "Provide a source revision and a Latch host public key or null.");
+  const ctx = await buildWebappServiceContextForWorkspace(
+    scope2.workspaceId,
+    void 0,
+    scope2.workspaceUserId
+  );
+  return setProjectResourceLatchHost({
+    ctx,
+    projectId,
+    resourceId,
+    sourceId,
+    body: parsed.data,
+    signal
+  });
 }
 
 // http/client-device.ts
@@ -199052,10 +199487,10 @@ async function buildServerMeta(args) {
 }
 
 // http/mission-read-response.ts
-var import_node_util4 = require("node:util");
+var import_node_util5 = require("node:util");
 var import_node_zlib = require("node:zlib");
-var compressBrotli = (0, import_node_util4.promisify)(import_node_zlib.brotliCompress);
-var compressGzip = (0, import_node_util4.promisify)(import_node_zlib.gzip);
+var compressBrotli = (0, import_node_util5.promisify)(import_node_zlib.brotliCompress);
+var compressGzip = (0, import_node_util5.promisify)(import_node_zlib.gzip);
 var MIN_COMPRESSION_BYTES = 1024;
 async function sendMissionReadResponse(res, payload, cacheControl) {
   res.set("Cache-Control", cacheControl);
@@ -202354,7 +202789,7 @@ function createChatRouter(options) {
 }
 
 // chat-notification-dispatcher.ts
-var import_node_crypto45 = require("node:crypto");
+var import_node_crypto47 = require("node:crypto");
 
 // ../packages/core/service/push-notification-jobs.ts
 var PUSH_NOTIFICATION_DISPATCH_JOB_TYPE = "overlord.push_notification.dispatch.v1";
@@ -202369,7 +202804,7 @@ function isPushNotificationMode(value2) {
 }
 
 // apns-client.ts
-var import_node_crypto44 = require("node:crypto");
+var import_node_crypto46 = require("node:crypto");
 var import_node_http2 = __toESM(require("node:http2"), 1);
 var SANDBOX_HOST = "https://api.sandbox.push.apple.com";
 var PRODUCTION_HOST = "https://api.push.apple.com";
@@ -202398,7 +202833,7 @@ function apnsJwt(config4) {
   const signingInput = `${b64url(JSON.stringify({ alg: "ES256", kid: config4.keyId }))}.${b64url(
     JSON.stringify({ iss: config4.teamId, iat: now2 })
   )}`;
-  const signer = (0, import_node_crypto44.createSign)("SHA256");
+  const signer = (0, import_node_crypto46.createSign)("SHA256");
   signer.update(signingInput);
   signer.end();
   const signature = signer.sign({ key: config4.privateKey, dsaEncoding: "ieee-p1363" });
@@ -202996,7 +203431,7 @@ var ChatNotificationDispatcher = class extends PollLoop {
   db;
   options;
   send;
-  workerId = `chat-notifications:${(0, import_node_crypto45.randomUUID)()}`;
+  workerId = `chat-notifications:${(0, import_node_crypto47.randomUUID)()}`;
   /** One claim/deliver pass. Returns how many candidates it processed. */
   async tick() {
     return await this.poll() ?? 0;
@@ -203632,7 +204067,7 @@ function boundComposeText(value2, maxChars) {
 var deliveryComposeWorker = new DeliveryComposeWorker();
 
 // desktop-oauth-handoff.ts
-var import_node_crypto46 = require("node:crypto");
+var import_node_crypto48 = require("node:crypto");
 var HANDOFF_TTL_MS = 6e4;
 var TICKET_PATTERN = /^[A-Za-z0-9_-]{32,128}$/;
 var handoffs = /* @__PURE__ */ new Map();
@@ -203643,7 +204078,7 @@ function discardExpiredHandoffs(now2 = Date.now()) {
 }
 function createOAuthHandoff(sessionToken, audience) {
   discardExpiredHandoffs();
-  const ticket = (0, import_node_crypto46.randomBytes)(32).toString("base64url");
+  const ticket = (0, import_node_crypto48.randomBytes)(32).toString("base64url");
   handoffs.set(ticket, { audience, sessionToken, expiresAt: Date.now() + HANDOFF_TTL_MS });
   return ticket;
 }
@@ -203689,7 +204124,7 @@ function beginDesktopGitHubOAuth(auth2, authBaseUrl2) {
 }
 
 // live-activities.ts
-var import_node_crypto47 = require("node:crypto");
+var import_node_crypto49 = require("node:crypto");
 var MAX_RUNNING = 2;
 var COMPLETION_HOLD_MS = 30 * 60 * 1e3;
 var START_TOKEN_MAX_LENGTH = 512;
@@ -204002,7 +204437,7 @@ async function buildLiveActivityContentState(db, profileId, now2 = /* @__PURE__ 
   };
 }
 function liveActivityContentHash(state2) {
-  return (0, import_node_crypto47.createHash)("sha256").update(
+  return (0, import_node_crypto49.createHash)("sha256").update(
     JSON.stringify(
       state2 && {
         running: state2.running,
@@ -204528,11 +204963,11 @@ async function markMissionSummarySeen(missionRef, body) {
 }
 
 // native-github-oauth.ts
-var import_node_crypto48 = require("node:crypto");
+var import_node_crypto50 = require("node:crypto");
 var FLOW_TTL_MS = 10 * 6e4;
 var RECOVERY_TTL_MS = 6e4;
 var MAX_FLOWS = 256;
-var digest5 = (value2) => (0, import_node_crypto48.createHash)("sha256").update(value2).digest("hex");
+var digest5 = (value2) => (0, import_node_crypto50.createHash)("sha256").update(value2).digest("hex");
 function cookieValue(request, name2) {
   const values = (request.headers.get("cookie") ?? "").split(";").map((value2) => value2.trim()).filter((value2) => value2.startsWith(`${name2}=`));
   return values.length === 1 ? values[0].slice(name2.length + 1) : void 0;
@@ -204601,7 +205036,7 @@ function createNativeGitHubOAuth(auth2, baseUrl, options = {}) {
         if (typeof payload.url !== "string") throw new Error("Missing GitHub authorization URL");
         const state2 = new URL(payload.url).searchParams.get("state");
         if (!state2) throw new Error("Missing GitHub OAuth state");
-        const marker = (0, import_node_crypto48.randomBytes)(32).toString("base64url");
+        const marker = (0, import_node_crypto50.randomBytes)(32).toString("base64url");
         const stateCookie = response.headers.getSetCookie().map((value2) => /^((?:__Secure-)?better-auth\.state)=([^;]+)/.exec(value2)).find(Boolean);
         const flow = {
           expiresAt: now2() + FLOW_TTL_MS,
@@ -204901,7 +205336,7 @@ var NotificationDispatcher = class extends WorkerJobPoller {
 var notificationDispatcher = new NotificationDispatcher();
 
 // oauth.ts
-var import_node_crypto49 = require("node:crypto");
+var import_node_crypto51 = require("node:crypto");
 var CLIENT_ID_PREFIX = "ovlc_";
 var AUTH_CODE_PREFIX = "ovla_";
 var AUTH_CODE_TTL_MS = 5 * 60 * 1e3;
@@ -204935,12 +205370,12 @@ function oauthSigningSecret() {
   return process.env.OVERLORD_OAUTH_SIGNING_SECRET?.trim() || process.env.BETTER_AUTH_SECRET?.trim() || "overlord-local-oauth-development-secret";
 }
 function signPayload(payload) {
-  return (0, import_node_crypto49.createHmac)("sha256", oauthSigningSecret()).update(payload).digest("base64url");
+  return (0, import_node_crypto51.createHmac)("sha256", oauthSigningSecret()).update(payload).digest("base64url");
 }
 function fixedTimeEqual(a5, b5) {
   const left = Buffer.from(a5);
   const right = Buffer.from(b5);
-  return left.length === right.length && (0, import_node_crypto49.timingSafeEqual)(left, right);
+  return left.length === right.length && (0, import_node_crypto51.timingSafeEqual)(left, right);
 }
 function jsonError(res, status, error64, description) {
   res.status(status).json({ error: error64, error_description: description });
@@ -205261,7 +205696,7 @@ async function handleOAuthApprove(req, res) {
       issuanceWorkspaceUserId: consent.issuanceWorkspace.workspaceUserId
     }
   );
-  const code = `${AUTH_CODE_PREFIX}${(0, import_node_crypto49.randomBytes)(32).toString("base64url")}`;
+  const code = `${AUTH_CODE_PREFIX}${(0, import_node_crypto51.randomBytes)(32).toString("base64url")}`;
   authorizationCodes.set(code, {
     clientId: parsed.clientId,
     redirectUri: parsed.redirectUri,
@@ -205305,7 +205740,7 @@ async function handleOAuthToken(req, res) {
     jsonError(res, 400, "invalid_target", "OAuth resource does not match the authorization code.");
     return;
   }
-  const challenge = (0, import_node_crypto49.createHash)("sha256").update(codeVerifier).digest("base64url");
+  const challenge = (0, import_node_crypto51.createHash)("sha256").update(codeVerifier).digest("base64url");
   if (!codeVerifier || challenge !== entry.codeChallenge) {
     await revokeOrphanedAccessToken(entry.accessToken);
     jsonError(res, 400, "invalid_grant", "PKCE verification failed.");
@@ -206168,7 +206603,7 @@ var RunQueueDispatchWorker = class extends WorkerJobPoller {
 var runQueueDispatchWorker = new RunQueueDispatchWorker();
 
 // ../packages/core/service/terminal-observation-probes.ts
-var import_node_crypto50 = require("node:crypto");
+var import_node_crypto52 = require("node:crypto");
 async function inspectTerminalInBackground({
   ctx,
   projectId,
@@ -206204,7 +206639,7 @@ async function inspectTerminalInBackground({
     );
     if (!anchor2) return null;
     const executable = launchSessionSnapshotFromMetadata(metadata)?.executionProvider.executable ?? "latch";
-    const backgroundProbeKey = (0, import_node_crypto50.createHash)("sha256").update(
+    const backgroundProbeKey = (0, import_node_crypto52.createHash)("sha256").update(
       JSON.stringify([
         ctx.workspace.id,
         projectId,
@@ -206386,12 +206821,12 @@ var TerminalSessionObserver = class extends PollLoop {
 var terminalSessionObserver = new TerminalSessionObserver();
 
 // webhook-security.ts
-var import_node_crypto51 = require("node:crypto");
+var import_node_crypto53 = require("node:crypto");
 var import_promises6 = __toESM(require("node:dns/promises"), 1);
 var import_node_net = require("node:net");
 function signWebhookPayload(secret, rawBody) {
   const timestamp2 = Math.floor(Date.now() / 1e3);
-  const signature = (0, import_node_crypto51.createHmac)("sha256", secret).update(`${timestamp2}.${rawBody}`).digest("hex");
+  const signature = (0, import_node_crypto53.createHmac)("sha256", secret).update(`${timestamp2}.${rawBody}`).digest("hex");
   return { header: `t=${timestamp2},v1=${signature}`, timestamp: timestamp2 };
 }
 function internalHostPatterns() {
@@ -206728,7 +207163,7 @@ async function recordSubscriptionFailure(client, subscriptionId, currentConsecut
 var webhookDispatcher = new WebhookDispatcher();
 
 // webhooks.ts
-var import_node_crypto52 = require("node:crypto");
+var import_node_crypto54 = require("node:crypto");
 var WEBHOOK_SECRET_SCHEME = "whsec";
 var SUBSCRIPTION_COLUMNS = "id, workspace_id, project_id, name, endpoint_url, secret, event_types_json, payload_mode, created_by_workspace_user_id, enabled, disabled_reason, consecutive_failures, last_success_at, last_failure_at, created_at, updated_at, revision";
 function parseEventTypes(json2) {
@@ -206761,7 +207196,7 @@ function toSubscriptionDto(row) {
   };
 }
 function generateWebhookSecret() {
-  return { secret: `${WEBHOOK_SECRET_SCHEME}_${(0, import_node_crypto52.randomBytes)(24).toString("hex")}` };
+  return { secret: `${WEBHOOK_SECRET_SCHEME}_${(0, import_node_crypto54.randomBytes)(24).toString("hex")}` };
 }
 function normalizeEventTypes(input2) {
   if (!Array.isArray(input2) || input2.length === 0) {
@@ -207874,10 +208309,10 @@ var streamRealtime = asyncRoute(async (req, res) => {
   const afterSeq = queryCursor(req, "after") ?? parseSeqCursor(req.headers["last-event-id"]) ?? void 0;
   realtime.addClient(res, {
     afterSeq,
+    signalReplayCompletion: req.route.path === "/realtime" && queryString(req, "replayComplete") === "1",
     workspaceIds,
     projectIds: getActiveTokenProjectIds()
   });
-  req.on("close", () => realtime.removeClient(res));
 });
 app.get("/api/stream", streamRealtime);
 app.get("/realtime", requireAuthenticatedSession, projectAutomationRouteGuard, streamRealtime);
@@ -208167,7 +208602,10 @@ app.delete(
 );
 app.get(
   "/api/projects/:id/resources",
-  handle3((req) => listProjectResources2(req.params.id))
+  handle3((req, res) => {
+    res.setHeader("Cache-Control", "private, no-store");
+    return listProjectResources2(req.params.id);
+  })
 );
 app.post(
   "/api/projects/:id/resources",
@@ -208210,6 +208648,25 @@ app.patch(
       req.params.sourceId,
       req.body
     ),
+    { mutates: true }
+  )
+);
+app.put(
+  "/api/projects/:id/resources/:resourceId/sources/:sourceId/latch-host",
+  handle3(
+    (req, res) => {
+      const controller = new AbortController();
+      res.on("close", () => {
+        if (!res.writableEnded) controller.abort();
+      });
+      return updateProjectResourceLatchHost({
+        projectId: req.params.id,
+        resourceId: req.params.resourceId,
+        sourceId: req.params.sourceId,
+        body: req.body,
+        signal: controller.signal
+      });
+    },
     { mutates: true }
   )
 );
